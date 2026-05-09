@@ -4,6 +4,7 @@ import {
   type DashboardOverview,
   type DashboardStats,
   formatCost,
+  formatDurationMilliseconds,
   formatRelativeTime,
   type GitHubIssueCacheRecord,
   type PipelineAnalyticsOverview,
@@ -80,17 +81,6 @@ function StatCard({ label, value, subtitle, tone = 'default', icon, onClick }: S
     );
   }
   return card;
-}
-
-function formatDuration(ms: number | null | undefined): string {
-  if (ms == null) return '—';
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  const minutes = Math.floor(ms / 60_000);
-  const seconds = Math.round((ms % 60_000) / 1000);
-  if (minutes < 60) return `${minutes}m ${seconds}s`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
 }
 
 function useOverviewView() {
@@ -284,20 +274,22 @@ function useOverviewView() {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <StatCard
                 label="Median Time To PR"
-                value={formatDuration(analytics?.timeToPr.medianMs)}
+                value={formatDurationMilliseconds(analytics?.timeToPr.medianMs)}
                 subtitle={`${analytics?.timeToPr.sampleSize ?? 0} shipped sample${analytics?.timeToPr.sampleSize === 1 ? '' : 's'}`}
                 icon={<Timer size={18} />}
               />
               <StatCard
                 label="P75 Time To PR"
-                value={formatDuration(analytics?.timeToPr.p75Ms)}
-                subtitle={`p95 ${formatDuration(analytics?.timeToPr.p95Ms)}`}
+                value={formatDurationMilliseconds(analytics?.timeToPr.p75Ms)}
+                subtitle={`p95 ${formatDurationMilliseconds(analytics?.timeToPr.p95Ms)}`}
                 icon={<Timer size={18} />}
               />
               <StatCard
                 label="Bottleneck Phase"
                 value={bottleneck ? bottleneck.phase.replace(/_/g, ' ') : '—'}
-                subtitle={bottleneck ? `avg ${formatDuration(bottleneck.averageMs)}` : 'no data'}
+                subtitle={
+                  bottleneck ? `avg ${formatDurationMilliseconds(bottleneck.averageMs)}` : 'no data'
+                }
                 tone={bottleneck ? 'agent' : 'default'}
                 icon={<Gauge size={18} />}
               />
@@ -332,10 +324,10 @@ function useOverviewView() {
                               <PhaseChip status={phase.phase} />
                             </TableCell>
                             <TableCell className="text-right text-[11px] text-primary">
-                              {formatDuration(phase.averageMs)}
+                              {formatDurationMilliseconds(phase.averageMs)}
                             </TableCell>
                             <TableCell className="text-right text-[11px] text-muted-foreground">
-                              {formatDuration(phase.p75Ms)}
+                              {formatDurationMilliseconds(phase.p75Ms)}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -379,7 +371,7 @@ function useOverviewView() {
                               </div>
                             </TableCell>
                             <TableCell className="text-right text-[11px] text-primary">
-                              {formatDuration(run.durationMs)}
+                              {formatDurationMilliseconds(run.durationMs)}
                             </TableCell>
                           </TableRow>
                         ))}
