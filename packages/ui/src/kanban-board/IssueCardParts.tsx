@@ -103,6 +103,7 @@ function issueCardToneClass({
   isPaused,
   isAwaiting,
   isActive,
+  isTodo,
   approvedAwaitingExecution,
 }: {
   isCreating: boolean;
@@ -113,6 +114,7 @@ function issueCardToneClass({
   isPaused: boolean;
   isAwaiting: boolean;
   isActive: boolean;
+  isTodo: boolean;
   approvedAwaitingExecution: boolean;
 }) {
   if (isCreating) return 'border-agent/30 bg-agent/[0.025] opacity-80';
@@ -150,6 +152,11 @@ function issueCardToneClass({
     return isSelected
       ? 'border-agent/70 bg-agent/[0.06]'
       : 'border-agent/40 bg-agent/[0.03] hover:border-agent/60';
+  }
+  if (isTodo) {
+    return isSelected
+      ? 'border-success/65 bg-success/[0.06]'
+      : 'border-success/30 bg-success/[0.025] hover:border-success/50';
   }
   return isSelected
     ? 'border-text-primary/60 bg-elevated'
@@ -671,6 +678,7 @@ function useDraggableCardView({
             isPaused,
             isAwaiting,
             isActive,
+            isTodo,
             approvedAwaitingExecution,
           }),
           isActive && 'shadow-[0_0_12px_rgba(56,189,248,0.18)]',
