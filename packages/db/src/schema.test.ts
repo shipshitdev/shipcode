@@ -72,6 +72,88 @@ function tableExists(db: DatabaseSync, name: string): boolean {
   return !!row;
 }
 
+function getColumns(db: DatabaseSync, table: string): Array<{ name: string; type: string }> {
+  return db
+    .prepare(`PRAGMA table_info(${table})`)
+    .all()
+    .map((row) => {
+      const r = row as { name: string; type: string };
+      return { name: r.name, type: r.type };
+    });
+}
+
+function columnExists(db: DatabaseSync, table: string, column: string): boolean {
+  return getColumns(db, table).some((r) => r.name === column);
+}
+
+function indexExists(db: DatabaseSync, name: string): boolean {
+  const row = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name=?").get(name);
+  return !!row;
+}
+
+const migrations = [
+  migrate,
+  migrateV2,
+  migrateV3,
+  migrateV4,
+  migrateV5,
+  migrateV6,
+  migrateV7,
+  migrateV8,
+  migrateV9,
+  migrateV10,
+  migrateV11,
+  migrateV12,
+  migrateV13,
+  migrateV14,
+  migrateV15,
+  migrateV16,
+  migrateV17,
+  migrateV18,
+  migrateV19,
+  migrateV20,
+  migrateV21,
+  migrateV22,
+  migrateV23,
+  migrateV24,
+  migrateV25,
+  migrateV26,
+  migrateV27,
+  migrateV28,
+  migrateV29,
+  migrateV30,
+  migrateV31,
+  migrateV32,
+  migrateV33,
+  migrateV34,
+  migrateV35,
+  migrateV36,
+  migrateV37,
+  migrateV38,
+  migrateV39,
+  migrateV40,
+  migrateV41,
+  migrateV42,
+  migrateV43,
+  migrateV44,
+  migrateV45,
+  migrateV46,
+  migrateV47,
+  migrateV48,
+  migrateV49,
+  migrateV50,
+  migrateV51,
+  migrateV52,
+  migrateV53,
+] as const;
+
+function migrateThrough(db: DatabaseSync, target: (db: DatabaseSync) => void): void {
+  for (const migration of migrations) {
+    migration(db);
+    if (migration === target) return;
+  }
+}
+
 describe('migrate', () => {
   let db: DatabaseSync;
 
@@ -220,47 +302,7 @@ describe('migrateV42', () => {
 
   beforeEach(() => {
     db = new DatabaseSync(':memory:');
-    migrate(db);
-    migrateV2(db);
-    migrateV3(db);
-    migrateV4(db);
-    migrateV5(db);
-    migrateV6(db);
-    migrateV7(db);
-    migrateV8(db);
-    migrateV9(db);
-    migrateV10(db);
-    migrateV11(db);
-    migrateV12(db);
-    migrateV13(db);
-    migrateV14(db);
-    migrateV15(db);
-    migrateV16(db);
-    migrateV17(db);
-    migrateV18(db);
-    migrateV19(db);
-    migrateV20(db);
-    migrateV21(db);
-    migrateV22(db);
-    migrateV23(db);
-    migrateV24(db);
-    migrateV25(db);
-    migrateV26(db);
-    migrateV27(db);
-    migrateV28(db);
-    migrateV29(db);
-    migrateV30(db);
-    migrateV31(db);
-    migrateV32(db);
-    migrateV33(db);
-    migrateV34(db);
-    migrateV35(db);
-    migrateV36(db);
-    migrateV37(db);
-    migrateV38(db);
-    migrateV39(db);
-    migrateV40(db);
-    migrateV41(db);
+    migrateThrough(db, migrateV41);
   });
 
   afterEach(() => {
@@ -286,48 +328,7 @@ describe('migrateV43', () => {
 
   beforeEach(() => {
     db = new DatabaseSync(':memory:');
-    migrate(db);
-    migrateV2(db);
-    migrateV3(db);
-    migrateV4(db);
-    migrateV5(db);
-    migrateV6(db);
-    migrateV7(db);
-    migrateV8(db);
-    migrateV9(db);
-    migrateV10(db);
-    migrateV11(db);
-    migrateV12(db);
-    migrateV13(db);
-    migrateV14(db);
-    migrateV15(db);
-    migrateV16(db);
-    migrateV17(db);
-    migrateV18(db);
-    migrateV19(db);
-    migrateV20(db);
-    migrateV21(db);
-    migrateV22(db);
-    migrateV23(db);
-    migrateV24(db);
-    migrateV25(db);
-    migrateV26(db);
-    migrateV27(db);
-    migrateV28(db);
-    migrateV29(db);
-    migrateV30(db);
-    migrateV31(db);
-    migrateV32(db);
-    migrateV33(db);
-    migrateV34(db);
-    migrateV35(db);
-    migrateV36(db);
-    migrateV37(db);
-    migrateV38(db);
-    migrateV39(db);
-    migrateV40(db);
-    migrateV41(db);
-    migrateV42(db);
+    migrateThrough(db, migrateV42);
   });
 
   afterEach(() => {
@@ -835,20 +836,10 @@ describe('migrateV36', () => {
     db.close();
   });
 
-  function getColumns(table: string): Array<{ name: string; type: string }> {
-    return db
-      .prepare(`PRAGMA table_info(${table})`)
-      .all()
-      .map((row) => {
-        const r = row as { name: string; type: string };
-        return { name: r.name, type: r.type };
-      });
-  }
-
   it('adds priority columns to github_issue_cache', () => {
     migrateV36(db);
 
-    const cols = getColumns('github_issue_cache');
+    const cols = getColumns(db, 'github_issue_cache');
     const names = cols.map((c) => c.name);
     expect(names).toContain('priority_rank');
     expect(names).toContain('priority_raw');
@@ -864,7 +855,7 @@ describe('migrateV36', () => {
     migrateV36(db);
     expect(() => migrateV36(db)).not.toThrow();
 
-    const cols = getColumns('github_issue_cache');
+    const cols = getColumns(db, 'github_issue_cache');
     const rankCount = cols.filter((c) => c.name === 'priority_rank').length;
     expect(rankCount).toBe(1);
   });
@@ -883,63 +874,20 @@ describe('migrateV37', () => {
 
   beforeEach(() => {
     db = new DatabaseSync(':memory:');
-    // Run the full migration chain so V37 sees every table it indexes.
-    migrate(db);
-    migrateV2(db);
-    migrateV3(db);
-    migrateV4(db);
-    migrateV5(db);
-    migrateV6(db);
-    migrateV7(db);
-    migrateV8(db);
-    migrateV9(db);
-    migrateV10(db);
-    migrateV11(db);
-    migrateV12(db);
-    migrateV13(db);
-    migrateV14(db);
-    migrateV15(db);
-    migrateV16(db);
-    migrateV17(db);
-    migrateV18(db);
-    migrateV19(db);
-    migrateV20(db);
-    migrateV21(db);
-    migrateV22(db);
-    migrateV23(db);
-    migrateV24(db);
-    migrateV25(db);
-    migrateV26(db);
-    migrateV27(db);
-    migrateV28(db);
-    migrateV29(db);
-    migrateV30(db);
-    migrateV31(db);
-    migrateV32(db);
-    migrateV33(db);
-    migrateV34(db);
-    migrateV35(db);
-    migrateV36(db);
+    migrateThrough(db, migrateV36);
   });
 
   afterEach(() => {
     db.close();
   });
 
-  function indexExists(name: string): boolean {
-    const row = db
-      .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name=?")
-      .get(name);
-    return !!row;
-  }
-
   it('adds FK indexes that were missing', () => {
     migrateV37(db);
 
-    expect(indexExists('idx_verifications_plan')).toBe(true);
-    expect(indexExists('idx_github_issues_thread')).toBe(true);
-    expect(indexExists('idx_notifications_project')).toBe(true);
-    expect(indexExists('idx_pipeline_checkpoints_project')).toBe(true);
+    expect(indexExists(db, 'idx_verifications_plan')).toBe(true);
+    expect(indexExists(db, 'idx_github_issues_thread')).toBe(true);
+    expect(indexExists(db, 'idx_notifications_project')).toBe(true);
+    expect(indexExists(db, 'idx_pipeline_checkpoints_project')).toBe(true);
   });
 
   it('is idempotent', () => {
@@ -961,60 +909,17 @@ describe('migrateV40', () => {
 
   beforeEach(() => {
     db = new DatabaseSync(':memory:');
-    migrate(db);
-    migrateV2(db);
-    migrateV3(db);
-    migrateV4(db);
-    migrateV5(db);
-    migrateV6(db);
-    migrateV7(db);
-    migrateV8(db);
-    migrateV9(db);
-    migrateV10(db);
-    migrateV11(db);
-    migrateV12(db);
-    migrateV13(db);
-    migrateV14(db);
-    migrateV15(db);
-    migrateV16(db);
-    migrateV17(db);
-    migrateV18(db);
-    migrateV19(db);
-    migrateV20(db);
-    migrateV21(db);
-    migrateV22(db);
-    migrateV23(db);
-    migrateV24(db);
-    migrateV25(db);
-    migrateV26(db);
-    migrateV27(db);
-    migrateV28(db);
-    migrateV29(db);
-    migrateV30(db);
-    migrateV31(db);
-    migrateV32(db);
-    migrateV33(db);
-    migrateV34(db);
-    migrateV35(db);
-    migrateV36(db);
-    migrateV37(db);
-    migrateV38(db);
-    migrateV39(db);
+    migrateThrough(db, migrateV39);
   });
 
   afterEach(() => {
     db.close();
   });
 
-  function columnExists(table: string, column: string): boolean {
-    const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-    return rows.some((r) => r.name === column);
-  }
-
   it('adds is_quick_mode column to github_issue_cache', () => {
-    expect(columnExists('github_issue_cache', 'is_quick_mode')).toBe(false);
+    expect(columnExists(db, 'github_issue_cache', 'is_quick_mode')).toBe(false);
     migrateV40(db);
-    expect(columnExists('github_issue_cache', 'is_quick_mode')).toBe(true);
+    expect(columnExists(db, 'github_issue_cache', 'is_quick_mode')).toBe(true);
   });
 
   it('defaults is_quick_mode to 0 for existing rows', () => {
@@ -1052,61 +957,17 @@ describe('migrateV41', () => {
 
   beforeEach(() => {
     db = new DatabaseSync(':memory:');
-    migrate(db);
-    migrateV2(db);
-    migrateV3(db);
-    migrateV4(db);
-    migrateV5(db);
-    migrateV6(db);
-    migrateV7(db);
-    migrateV8(db);
-    migrateV9(db);
-    migrateV10(db);
-    migrateV11(db);
-    migrateV12(db);
-    migrateV13(db);
-    migrateV14(db);
-    migrateV15(db);
-    migrateV16(db);
-    migrateV17(db);
-    migrateV18(db);
-    migrateV19(db);
-    migrateV20(db);
-    migrateV21(db);
-    migrateV22(db);
-    migrateV23(db);
-    migrateV24(db);
-    migrateV25(db);
-    migrateV26(db);
-    migrateV27(db);
-    migrateV28(db);
-    migrateV29(db);
-    migrateV30(db);
-    migrateV31(db);
-    migrateV32(db);
-    migrateV33(db);
-    migrateV34(db);
-    migrateV35(db);
-    migrateV36(db);
-    migrateV37(db);
-    migrateV38(db);
-    migrateV39(db);
-    migrateV40(db);
+    migrateThrough(db, migrateV40);
   });
 
   afterEach(() => {
     db.close();
   });
 
-  function columnExists(table: string, column: string): boolean {
-    const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-    return rows.some((r) => r.name === column);
-  }
-
   it('adds github_updated_at column to github_issue_cache', () => {
-    expect(columnExists('github_issue_cache', 'github_updated_at')).toBe(false);
+    expect(columnExists(db, 'github_issue_cache', 'github_updated_at')).toBe(false);
     migrateV41(db);
-    expect(columnExists('github_issue_cache', 'github_updated_at')).toBe(true);
+    expect(columnExists(db, 'github_issue_cache', 'github_updated_at')).toBe(true);
   });
 
   it('backfills github_updated_at from fetched_at for existing rows', () => {
