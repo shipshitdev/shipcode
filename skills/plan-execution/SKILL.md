@@ -70,10 +70,12 @@ Throughout execution:
 You can write runtime tests in `.shipcode/runtime-tests/`.
 These auto-run after your code changes against a live server when the project has runtime QA configured.
 Available env vars: `BASE_URL` (server origin), the project's port env var (e.g. `PORT`).
-Write tests that verify your implementation works at runtime — HTTP requests, API assertions, etc.
+Write tests that verify your implementation works at runtime — HTTP requests, API assertions, browser/frontend interactions, etc.
 Supported files: `*.test.ts`, `*.test.js` (run via `bun run`), `*.test.sh` (run via `bash`).
 Files execute in lexicographic order. These are ephemeral — they run once and are cleaned before commit.
-Only write runtime tests when the plan involves API endpoints, server routes, or runtime behavior that unit tests cannot cover.
+Only write runtime tests when the plan involves API endpoints, server routes, frontend flows, or runtime behavior that unit tests cannot cover.
+For frontend flows, prefer headless Playwright or the repository's existing browser test helper. Target `BASE_URL`, use stable user-visible selectors or project-standard test ids, and keep the flow focused on the changed feature.
+If the route is auth-gated, use the repository's existing test auth fixture, seeded session, or documented test account only. Do not automate real OAuth, open visible browser windows, hard-code personal credentials, or weaken production auth. If no safe test-auth path exists, surface that as a QA blocker instead of pretending the flow was tested.
 If the prompt includes a feature QA contract with visual assertions, add stable selectors (`data-testid` or an existing project-standard equivalent) for every target, container, and reference element involved. Visual QA will fail the run if required selectors are missing or if asserted geometry does not match.
 </runtime_tests>
 

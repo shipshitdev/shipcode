@@ -6,31 +6,11 @@ import log, { getEventLogPath, getLogDirectoryPath } from '../logger.service';
 import type { UpdateService } from '../update-service';
 import type { IpcHandlerDeps } from './types';
 
-const IS_E2E = process.env.SHIPCODE_E2E === '1';
-
 export function registerDeveloperHandlers(
   { ipcMain, mainWindow, processManager, resourceMonitor }: IpcHandlerDeps,
   updateService: UpdateService,
 ): void {
   ipcMain.handle('developer:get-info', async (): Promise<DeveloperInfo> => {
-    if (IS_E2E) {
-      return {
-        appVersion: app.getVersion(),
-        electronVersion: process.versions.electron,
-        nodeVersion: process.versions.node,
-        platform: process.platform,
-        osRelease: os.release(),
-        logDirectoryPath: getLogDirectoryPath(),
-        eventLogPath: getEventLogPath(),
-        cliVersions: {
-          claude: 'e2e',
-          codex: 'e2e',
-          git: 'e2e',
-          gh: 'e2e',
-        },
-      };
-    }
-
     const health = await checkSystemHealthWithAuth();
     return {
       appVersion: app.getVersion(),

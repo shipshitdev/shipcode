@@ -2,10 +2,10 @@
   "envFiles": [],
   "setupBeforeVerify": false,
   "setupCommands": ["bun install --frozen-lockfile"],
-  "testingContext": "This is a Turborepo + Bun monorepo. ShipCode verification runs `bun run verify:affected`, which maps changed files to workspace packages and runs only package-local typecheck/test scripts sequentially. Do not use full-root `bun run test` or installer builds in automated tasks.",
+  "testingContext": "This is a Turborepo + Bun monorepo. ShipCode verification runs `bun run verify:affected`, which maps changed files to workspace packages and runs only package-local typecheck/test scripts sequentially. Do not use full-root `bun run test` or installer builds in automated tasks. Runtime/browser QA is per issue worktree: if a task needs frontend proof, create focused `.shipcode/runtime-tests/*.test.ts` tests and use safe test-auth fixtures, not real OAuth or personal credentials.",
   "verifyCommands": ["bun run verify:affected"],
   "runtimeQa": {
-    "testCommands": ["bun run e2e:desktop"],
+    "testCommands": [],
     "discoverAgentTests": true
   },
   "version": 1

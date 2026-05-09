@@ -16,7 +16,7 @@ import {
   Textarea,
 } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, ExternalLink, Loader2, Send, Square, X } from 'lucide-react';
+import { Bot, ExternalLink, Loader2, Plus, Send, Square, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { type AssistantCli, useAppStore } from '../stores/app-store';
@@ -124,7 +124,7 @@ export function AssistantPanel() {
   const projectTab = useAppStore((state) => state.projectTab);
   const viewMode = useAppStore((state) => state.viewMode);
   const transcript = useAssistantTranscript(assistantThreadId);
-  const [isRunning, setIsRunning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
@@ -145,77 +145,82 @@ export function AssistantPanel() {
   const latestEvent = transcript[transcript.length - 1]?.event;
   const transcriptRunning = useMemo(() => {
     if (!assistantThreadId) return false;
-    if (isRunning) return true;
+    if (isSubmitting) return true;
     if (!latestEvent) return false;
     if (latestEvent.kind === 'done') return false;
     if (latestEvent.kind === 'lifecycle' && latestEvent.message.includes('process exited')) {
       return false;
     }
     return true;
-  }, [assistantThreadId, isRunning, latestEvent]);
+  }, [assistantThreadId, isSubmitting, latestEvent]);
 
   const runAssistant = useCallback(
     async (prompt: string) => {
       const trimmed = prompt.trim();
-      if (!trimmed || isRunning) return;
-      setIsRunning(true);
+      if (!trimmed || isSubmitting) return;
+      if (!activeProjectId) {
+        toast.error('Select a project before starting an assistant thread');
+        return;
+      }
+      setIsSubmitting(true);
       try {
-        const setup =
-          activeProjectId != null
-            ? await window.shipcode
-                .invoke<ProjectSetupDraft>('project:get-setup', { projectId: activeProjectId })
-                .catch(() => null)
-            : null;
-        const project =
-          activeProject ??
-          (activeProjectId != null
-            ? await window.shipcode
-                .invoke<Project | null>('project:get', { projectId: activeProjectId })
-                .catch(() => null)
-            : null);
-        const customSystemPrompt = buildAssistantSystemPrompt({
-          project,
-          activeIssueTitle: activeIssue?.title ?? null,
-          viewMode,
-          projectTab,
-          setup,
-        });
-        const cli = assistantCli;
-        const modelId =
-          cli === 'claude' ? settings?.prdRewriteClaudeModel : settings?.prdRewriteCodexModel;
-        const scopedPrompt = activeProjectId
-          ? trimmed
-          : `${customSystemPrompt}\n\nUser request:\n${trimmed}`;
-        const result = await window.shipcode.invoke<{ threadId: string }>('instant:run', {
-          projectId: activeProjectId ?? undefined,
-          prompt: scopedPrompt,
-          scope: activeProjectId ? 'custom' : 'user',
-          cli,
-          modelId: modelId ?? null,
-          reasoningEffort: 'medium',
-          customSystemPrompt,
-        });
-        setAssistantThread(result.threadId);
+        if (assistantThreadId && transcriptRunning) {
+          await window.shipcode.invoke('instant:shell-input', {
+            threadId: assistantThreadId,
+            data: `${trimmed}\n`,
+          });
+        } else {
+          const setup = await window.shipcode
+            .invoke<ProjectSetupDraft>('project:get-setup', { projectId: activeProjectId })
+            .catch(() => null);
+          const project =
+            activeProject ??
+            (await window.shipcode
+              .invoke<Project | null>('project:get', { projectId: activeProjectId })
+              .catch(() => null));
+          const customSystemPrompt = buildAssistantSystemPrompt({
+            project,
+            activeIssueTitle: activeIssue?.title ?? null,
+            viewMode,
+            projectTab,
+            setup,
+          });
+          const modelId =
+            assistantCli === 'claude'
+              ? settings?.prdRewriteClaudeModel
+              : settings?.prdRewriteCodexModel;
+          const initialPrompt = `${customSystemPrompt}\n\nUser request:\n${trimmed}`;
+          const result = await window.shipcode.invoke<{ threadId: string }>('instant:shell-start', {
+            projectId: activeProjectId,
+            cli: assistantCli,
+            modelId: modelId ?? null,
+            reasoningEffort: 'medium',
+            initialPrompt,
+          });
+          setAssistantThread(result.threadId);
+        }
         setAssistantDraft('');
         queryClient.invalidateQueries({ queryKey: ['dashboard', 'running'] });
       } catch (error) {
         toast.error('Assistant failed', error instanceof Error ? error.message : undefined);
       } finally {
-        setIsRunning(false);
+        setIsSubmitting(false);
       }
     },
     [
       activeIssue?.title,
       activeProject,
       activeProjectId,
+      assistantThreadId,
       assistantCli,
-      isRunning,
+      isSubmitting,
       projectTab,
       queryClient,
       setAssistantDraft,
       setAssistantThread,
       settings?.prdRewriteClaudeModel,
       settings?.prdRewriteCodexModel,
+      transcriptRunning,
       viewMode,
     ],
   );
@@ -236,15 +241,30 @@ export function AssistantPanel() {
     void window.shipcode.invoke('instant:cancel', { threadId: assistantThreadId });
   }, [assistantThreadId]);
 
+  const handleNewThread = useCallback(() => {
+    if (assistantThreadId && transcriptRunning) {
+      void window.shipcode.invoke('instant:cancel', { threadId: assistantThreadId });
+    }
+    setAssistantThread(null);
+  }, [assistantThreadId, setAssistantThread, transcriptRunning]);
+
   const handleOpenTerminal = useCallback(() => {
     if (!assistantThreadId || !activeProjectId) return;
     addTerminalPane(assistantThreadId, {
-      mode: 'replay',
+      mode: transcriptRunning ? 'live' : 'replay',
       title: 'ShipCode Assistant',
+      cli: assistantCli,
       state: transcriptRunning ? 'running' : 'exited',
     });
     openTerminalTab();
-  }, [activeProjectId, addTerminalPane, assistantThreadId, openTerminalTab, transcriptRunning]);
+  }, [
+    activeProjectId,
+    addTerminalPane,
+    assistantCli,
+    assistantThreadId,
+    openTerminalTab,
+    transcriptRunning,
+  ]);
 
   return (
     <aside className="flex w-[390px] shrink-0 flex-col border-l border-border bg-secondary">
@@ -278,6 +298,17 @@ export function AssistantPanel() {
             <SelectItem value="codex">Codex CLI</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-primary"
+          onClick={handleNewThread}
+          disabled={!assistantThreadId}
+          title="New assistant thread"
+        >
+          <Plus size={14} />
+        </Button>
         <Button
           type="button"
           variant="ghost"
@@ -395,11 +426,11 @@ export function AssistantPanel() {
               type="button"
               variant="default"
               size="sm"
-              disabled={!assistantDraft.trim() || isRunning}
+              disabled={!assistantDraft.trim() || isSubmitting || !activeProjectId}
               onClick={handleSubmit}
-              className={cn('h-7 gap-1.5 text-xs', isRunning && 'opacity-80')}
+              className={cn('h-7 gap-1.5 text-xs', isSubmitting && 'opacity-80')}
             >
-              {isRunning ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+              {isSubmitting ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
               Send
             </Button>
           </div>

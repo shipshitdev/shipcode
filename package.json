@@ -2,7 +2,6 @@
   "devDependencies": {
     "@biomejs/biome": "2.4.14",
     "@google/design.md": "0.1.1",
-    "@playwright/test": "^1.59.1",
     "@types/node": "25.6.2",
     "@vitest/coverage-v8": "4.1.5",
     "turbo": "^2.9.12",
@@ -27,7 +26,6 @@
     "dev:desktop": "turbo run dev --filter=@shipcode/desktop",
     "dev:docs": "turbo run dev --filter=@shipcode/docs",
     "dev:web": "turbo run dev --filter=@shipcode/web",
-    "e2e:desktop": "bun run --cwd apps/desktop e2e",
     "format:check": "bunx biome check . --linter-enabled=false --assist-enabled=false --files-ignore-unknown=true",
     "hooks:setup": "sh scripts/setup-git-hooks.sh",
     "lint:design": "bunx design.md lint DESIGN.md",
