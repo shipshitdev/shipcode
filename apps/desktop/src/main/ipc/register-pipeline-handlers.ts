@@ -7,6 +7,7 @@ import type {
   Thread,
 } from '@shipcode/shared';
 import {
+  clampError,
   clarificationAnswerSchema,
   EXECUTION_PHASES,
   PAUSABLE_PIPELINE_PHASES,
@@ -944,8 +945,7 @@ export function registerPipelineHandlers({
           timeout: 15_000,
         });
       } catch (error) {
-        const raw = error instanceof Error ? error.message : String(error);
-        const clamped = raw.split('\n')[0]?.slice(0, 280) ?? 'Unknown checkpoint restore error';
+        const clamped = clampError(error);
         emitTerminalEvent(threadId, {
           kind: 'error',
           message: `Auto Fix checkpoint restore failed: ${clamped}`,
@@ -1085,9 +1085,7 @@ export function registerPipelineHandlers({
 
       return { prNumber, prUrl };
     } catch (err) {
-      const raw = err instanceof Error ? err.message : String(err);
-      const clamped = raw.split('\n')[0]?.slice(0, 280) ?? 'Unknown error';
-      throw new Error(clamped);
+      throw new Error(clampError(err));
     } finally {
       createPrInFlight.delete(threadId);
     }
