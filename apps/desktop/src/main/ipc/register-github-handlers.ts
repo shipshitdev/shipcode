@@ -191,7 +191,7 @@ export function registerGitHubHandlers({
         }
 
         const ghCli = new GhCli(project.path);
-        const triageRules = queries.triageRules.list(projectId);
+        const triageRules = queries.triageRules?.list(projectId) ?? [];
         const githubRemoteRef = parseGithubRemote(project.gitRemote);
         let githubRepoFullName =
           project.githubRepoFullName ??

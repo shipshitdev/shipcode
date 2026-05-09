@@ -914,8 +914,10 @@ export function registerProjectHandlers({
   ipcMain.handle('project:list-triage-rules', (_event, { projectId }: { projectId: string }) => {
     const project = queries.projects.getById(projectId);
     if (!project) throw new Error(`Project ${projectId} not found`);
+    const triageRules = queries.triageRules;
+    if (!triageRules) throw new Error('Triage rules are unavailable');
     try {
-      return queries.triageRules.list(projectId);
+      return triageRules.list(projectId);
     } catch (err) {
       log.warn('[project:list-triage-rules] failed:', err);
       throw new Error(clampError(err));
@@ -923,10 +925,12 @@ export function registerProjectHandlers({
   });
 
   ipcMain.handle(
-    'project:replace-triage-rules',
+    'project:set-triage-rules',
     (_event, { projectId, rules }: { projectId: string; rules: TriageRuleDraft[] }) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
+      const triageRules = queries.triageRules;
+      if (!triageRules) throw new Error('Triage rules are unavailable');
       if (!Array.isArray(rules)) {
         throw new Error('Triage rules must be an array');
       }
@@ -934,9 +938,9 @@ export function registerProjectHandlers({
         throw new Error(`A project can have at most ${TRIAGE_RULE_LIMIT} triage rules`);
       }
       try {
-        return queries.triageRules.replaceForProject(projectId, rules);
+        return triageRules.replaceForProject(projectId, rules);
       } catch (err) {
-        log.warn('[project:replace-triage-rules] failed:', err);
+        log.warn('[project:set-triage-rules] failed:', err);
         throw new Error(clampError(err));
       }
     },

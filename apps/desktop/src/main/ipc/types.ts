@@ -63,7 +63,7 @@ export interface Queries {
   featureQaResults: FeatureQaResultQueries;
   projectFailures?: ProjectFailureQueries;
   taskGraphs?: TaskGraphQueries;
-  triageRules: TriageRuleQueries;
+  triageRules?: TriageRuleQueries;
 }
 
 export interface IpcHandlerDeps {
