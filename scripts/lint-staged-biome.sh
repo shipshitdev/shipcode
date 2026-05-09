@@ -57,4 +57,4 @@ elif [ "$BIOME_CMD" = "bunx biome" ]; then
 else
   xargs -0 npx @biomejs/biome check --write <"$STAGED_FILES_FILE"
 fi
-xargs -0 git add -- <"$STAGED_FILES_FILE"
+xargs -0 git add -f -- <"$STAGED_FILES_FILE"
