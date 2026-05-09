@@ -25,6 +25,7 @@ import type {
   SkillsQueries,
   TerminalEventQueries,
   ThreadQueries,
+  TriageRuleQueries,
   VerificationQueries,
 } from '@shipcode/db';
 import type { TaskGraphQueries } from '@shipcode/db/source';
@@ -62,6 +63,7 @@ export interface Queries {
   featureQaResults: FeatureQaResultQueries;
   projectFailures?: ProjectFailureQueries;
   taskGraphs?: TaskGraphQueries;
+  triageRules: TriageRuleQueries;
 }
 
 export interface IpcHandlerDeps {

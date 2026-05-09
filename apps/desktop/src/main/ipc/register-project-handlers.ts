@@ -30,6 +30,7 @@ import type {
   ProjectOpenTarget,
   ShipCodePlan,
   TerminalOpenTarget,
+  TriageRuleDraft,
 } from '@shipcode/shared';
 import {
   clampError,
@@ -39,6 +40,7 @@ import {
   parseUnifiedDiff,
   SHIPCODE_DEFAULT_LABELS,
   SHIPCODE_PIPELINE_LABELS,
+  TRIAGE_RULE_LIMIT,
   validateGithubProjectUrl,
 } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
@@ -908,6 +910,37 @@ export function registerProjectHandlers({
   ipcMain.handle('project:get', (_event, { projectId }: { projectId: string }) => {
     return enrichProjectPath(queries.projects.getById(projectId));
   });
+
+  ipcMain.handle('project:list-triage-rules', (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId);
+    if (!project) throw new Error(`Project ${projectId} not found`);
+    try {
+      return queries.triageRules.list(projectId);
+    } catch (err) {
+      log.warn('[project:list-triage-rules] failed:', err);
+      throw new Error(clampError(err));
+    }
+  });
+
+  ipcMain.handle(
+    'project:replace-triage-rules',
+    (_event, { projectId, rules }: { projectId: string; rules: TriageRuleDraft[] }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      if (!Array.isArray(rules)) {
+        throw new Error('Triage rules must be an array');
+      }
+      if (rules.length > TRIAGE_RULE_LIMIT) {
+        throw new Error(`A project can have at most ${TRIAGE_RULE_LIMIT} triage rules`);
+      }
+      try {
+        return queries.triageRules.replaceForProject(projectId, rules);
+      } catch (err) {
+        log.warn('[project:replace-triage-rules] failed:', err);
+        throw new Error(clampError(err));
+      }
+    },
+  );
 
   ipcMain.handle(
     'project:open-path',

@@ -22,6 +22,7 @@ export const PROJECT_TABS = [
   'pipeline',
   'models',
   'github',
+  'triage',
   'context',
   'notifications',
 ] as const;

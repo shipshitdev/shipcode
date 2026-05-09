@@ -72,6 +72,7 @@ import {
   SkillsQueries,
   TerminalEventQueries,
   ThreadQueries,
+  TriageRuleQueries,
   VerificationQueries,
 } from '@shipcode/db';
 import { TaskGraphQueries } from '@shipcode/db/source';
@@ -216,6 +217,7 @@ function createWindow() {
     featureQaResults: new FeatureQaResultQueries(db),
     projectFailures: new ProjectFailureQueries(db),
     taskGraphs: new TaskGraphQueries(db),
+    triageRules: new TriageRuleQueries(db),
   };
   threadQueries = queries.threads;
 
