@@ -56,7 +56,7 @@ import {
 } from './utils';
 
 const ISSUE_CARD_BASE_CLASS =
-  'group relative flex shrink-0 flex-col overflow-hidden rounded-md border bg-elevated p-2.5 text-left transition-colors outline-none';
+  'group relative flex shrink-0 flex-col overflow-hidden rounded-md border border-white/[0.04] bg-tertiary p-2.5 text-left transition-colors outline-none';
 
 function issueReferenceLabel(issue: GitHubIssueCacheRecord, isCreating: boolean): string {
   if (isCreating) return 'Creating';
@@ -117,50 +117,39 @@ function issueCardToneClass({
   isTodo: boolean;
   approvedAwaitingExecution: boolean;
 }) {
-  if (isCreating) return 'border-agent/30 bg-agent/[0.025] opacity-80';
+  const strip = 'border-l-[3px]';
+  if (isCreating) return `${strip} border-l-agent/40 opacity-80`;
   if (isCompleted) {
     return isSelected
-      ? 'border-success/65 bg-success/[0.08] opacity-90'
-      : 'border-success/35 bg-success/[0.04] opacity-80 hover:border-success/55 hover:bg-success/[0.055] hover:opacity-90';
+      ? `${strip} border-l-success/70`
+      : `${strip} border-l-success/45 opacity-85 hover:opacity-90`;
   }
   if (isClosed) {
     return isSelected
-      ? 'border-done/65 bg-done/[0.09] opacity-85'
-      : 'border-done/35 bg-done/[0.045] opacity-70 hover:border-done/55 hover:bg-done/[0.06] hover:opacity-80';
+      ? `${strip} border-l-done/60`
+      : `${strip} border-l-done/35 opacity-70 hover:opacity-80`;
   }
   if (isFailed) {
     return isSelected
-      ? 'border-danger/65 bg-danger/[0.09] opacity-85'
-      : 'border-danger/35 bg-danger/[0.045] opacity-70 hover:border-danger/55 hover:bg-danger/[0.06] hover:opacity-80';
+      ? `${strip} border-l-danger/70`
+      : `${strip} border-l-danger/50 hover:border-l-danger/65`;
   }
   if (isPaused) {
-    return isSelected
-      ? 'border-warning bg-warning/[0.07]'
-      : 'border-warning/30 bg-warning/[0.03] hover:border-warning/50';
+    return isSelected ? `${strip} border-l-warning/70` : `${strip} border-l-warning/45`;
   }
   if (approvedAwaitingExecution) {
-    return isSelected
-      ? 'border-agent/65 bg-agent/[0.08]'
-      : 'border-agent/35 bg-agent/[0.04] hover:border-agent/55 hover:bg-agent/[0.055]';
+    return isSelected ? `${strip} border-l-agent/70` : `${strip} border-l-agent/45`;
   }
   if (isAwaiting) {
-    return isSelected
-      ? 'border-warning bg-warning/[0.07]'
-      : 'border-warning/30 bg-warning/[0.03] hover:border-warning/50';
+    return isSelected ? `${strip} border-l-warning/70` : `${strip} border-l-warning/45`;
   }
   if (isActive) {
-    return isSelected
-      ? 'border-agent/70 bg-agent/[0.06]'
-      : 'border-agent/40 bg-agent/[0.03] hover:border-agent/60';
+    return isSelected ? `${strip} border-l-agent/80` : `${strip} border-l-agent/55`;
   }
   if (isTodo) {
-    return isSelected
-      ? 'border-success/65 bg-success/[0.06]'
-      : 'border-success/30 bg-success/[0.025] hover:border-success/50';
+    return isSelected ? `${strip} border-l-success/60` : `${strip} border-l-success/35`;
   }
-  return isSelected
-    ? 'border-text-primary/60 bg-elevated'
-    : 'border-border/50 hover:border-border-strong';
+  return isSelected ? 'border-border-strong' : 'hover:border-border-strong';
 }
 
 function IssueProgressBar({
@@ -179,7 +168,8 @@ function IssueProgressBar({
   if (
     status === ISSUE_PIPELINE_STATUS.todo ||
     status === ISSUE_PIPELINE_STATUS.queued ||
-    status === ISSUE_PIPELINE_STATUS.failed
+    status === ISSUE_PIPELINE_STATUS.failed ||
+    status === ISSUE_PIPELINE_STATUS.closed
   ) {
     return null;
   }
@@ -681,7 +671,6 @@ function useDraggableCardView({
             isTodo,
             approvedAwaitingExecution,
           }),
-          isActive && 'shadow-[0_0_12px_rgba(56,189,248,0.18)]',
           isFlashing && 'animate-card-flash ring-2 ring-agent/55',
           isKeyboardFocused && 'border-accent/80 ring-2 ring-accent/70',
           isDragging && 'opacity-50',
@@ -716,8 +705,7 @@ function useDraggableCardView({
             aria-hidden="true"
             className="issue-card-active-bg pointer-events-none absolute inset-0 rounded-[inherit]"
           >
-            <span className="absolute inset-0 bg-gradient-to-br from-agent/[0.05] via-agent/[0.02] to-transparent" />
-            <span className="absolute inset-0 animate-slide-progress-card bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
+            <span className="absolute inset-0 animate-slide-progress-card bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
           </div>
         )}
         <IssueProgressBar
@@ -1005,7 +993,7 @@ export function DragOverlayCard({
   return (
     <div
       className={cn(
-        'cursor-grabbing rounded-md border bg-secondary p-3 opacity-80 shadow-lg',
+        'cursor-grabbing rounded-md border border-white/[0.04] bg-secondary p-3 opacity-80 shadow-lg',
         dragOverlayBorderClass(presentationStatus, approvedAwaitingExecution),
       )}
     >
@@ -1030,13 +1018,14 @@ export function DragOverlayCard({
             <Loader2 size={10} className="animate-spin" />
             Creating
           </Badge>
-        ) : (
-          <PhaseChip
-            status={presentationStatus}
-            label={approvedAwaitingExecution ? 'Waiting for slot' : undefined}
-            className={approvedAwaitingExecution ? 'border-agent/25 bg-agent/10 text-agent' : ''}
-          />
-        )}
+        ) : approvedAwaitingExecution ? (
+          <Badge
+            variant="default"
+            className="border-agent/25 bg-agent/10 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-agent"
+          >
+            Waiting for slot
+          </Badge>
+        ) : null}
         <div className="ml-auto h-5" />
       </div>
     </div>

@@ -84,16 +84,17 @@ export function dragOverlayBorderClass(
   status: IssuePipelineStatus,
   approvedAwaitingExecution = false,
 ): string {
-  if (approvedAwaitingExecution) return 'border-agent';
-  if (status === ISSUE_PIPELINE_STATUS.failed) return 'border-danger';
+  const strip = 'border-l-[3px]';
+  if (approvedAwaitingExecution) return `${strip} border-l-agent/60`;
+  if (status === ISSUE_PIPELINE_STATUS.failed) return `${strip} border-l-danger/60`;
   if (
     status === ISSUE_PIPELINE_STATUS.approval ||
     status === ISSUE_PIPELINE_STATUS.clarifying ||
     status === ISSUE_PIPELINE_STATUS.paused
   ) {
-    return 'border-warning';
+    return `${strip} border-l-warning/60`;
   }
-  return 'border-accent';
+  return '';
 }
 
 export function resolveIssuePhaseChip(

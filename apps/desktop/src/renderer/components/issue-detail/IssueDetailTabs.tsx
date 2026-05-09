@@ -136,8 +136,8 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
       onValueChange={(value) => onActiveTabChange(value as IssueDetailTab)}
       className="flex min-h-0 flex-col"
     >
-      <div className="flex shrink-0 items-center overflow-x-auto mb-5">
-        <TabsList>
+      <div className="shrink-0 overflow-x-auto mb-5">
+        <TabsList className="w-full">
           {orderedTabs.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value}>
               {tab.label}

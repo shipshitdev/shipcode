@@ -4,11 +4,11 @@ import type { ReactNode } from 'react';
 
 type InAppNotificationTone = 'default' | 'success' | 'warning' | 'danger';
 
-const TONE_CLASS: Record<InAppNotificationTone, string> = {
-  default: 'border-border/90 bg-elevated',
-  success: 'border-success/80 bg-toast-success',
-  warning: 'border-amber-500/80 bg-toast-warning',
-  danger: 'border-danger/80 bg-toast-danger',
+const TONE_DOT_CLASS: Record<InAppNotificationTone, string> = {
+  default: 'bg-muted-foreground/50',
+  success: 'bg-success',
+  warning: 'bg-warning',
+  danger: 'bg-danger',
 };
 
 interface InAppNotificationProps {
@@ -44,11 +44,16 @@ export function InAppNotification({
   return (
     <div
       className={cn(
-        'group flex min-w-0 items-start gap-2 rounded-xl border px-3 py-2 shadow-lg backdrop-blur-md',
-        TONE_CLASS[tone],
+        'group flex min-w-0 items-start gap-2 rounded-xl border border-border/60 px-3 py-2 shadow-lg',
+        'bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] backdrop-blur-xl',
         className,
       )}
     >
+      {tone !== 'default' && (
+        <span
+          className={cn('mt-1.5 inline-block size-2 shrink-0 rounded-full', TONE_DOT_CLASS[tone])}
+        />
+      )}
       {onClick ? (
         <Button
           variant="ghost"

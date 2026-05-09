@@ -20,24 +20,18 @@ import { issueBodySnippet } from './issue-body-snippet';
 import type { IssuePhaseChip, PlanStepSummary } from './types';
 import { resolveIssuePriorityBadge } from './utils';
 
-function hoverCardToneClass(status: IssuePipelineStatus): string {
-  if (status === ISSUE_PIPELINE_STATUS.todo)
-    return 'border-success/40 bg-[color-mix(in_srgb,var(--success)_6%,var(--bg-elevated))]';
-  if (status === ISSUE_PIPELINE_STATUS.failed)
-    return 'border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,var(--bg-elevated))]';
+function statusDotClass(status: IssuePipelineStatus): string {
+  if (status === ISSUE_PIPELINE_STATUS.failed) return 'bg-danger';
   if (
     status === ISSUE_PIPELINE_STATUS.approval ||
     status === ISSUE_PIPELINE_STATUS.clarifying ||
     status === ISSUE_PIPELINE_STATUS.paused
   )
-    return 'border-warning/40 bg-[color-mix(in_srgb,var(--warning)_6%,var(--bg-elevated))]';
-  if (status === ISSUE_PIPELINE_STATUS.completed)
-    return 'border-success/40 bg-[color-mix(in_srgb,var(--success)_6%,var(--bg-elevated))]';
-  if (status === ISSUE_PIPELINE_STATUS.closed)
-    return 'border-done/40 bg-[color-mix(in_srgb,var(--done)_6%,var(--bg-elevated))]';
-  if (ACTIVE_STATUSES.includes(status))
-    return 'border-agent/40 bg-[color-mix(in_srgb,var(--agent)_6%,var(--bg-elevated))]';
-  return 'border-border bg-elevated';
+    return 'bg-warning';
+  if (status === ISSUE_PIPELINE_STATUS.completed) return 'bg-success';
+  if (status === ISSUE_PIPELINE_STATUS.closed) return 'bg-done';
+  if (ACTIVE_STATUSES.includes(status)) return 'bg-agent';
+  return 'bg-muted-foreground/50';
 }
 
 const HOVER_DELAY_MS = 350;
@@ -206,9 +200,9 @@ export function IssueHoverCard({
           sideOffset={8}
           align="start"
           className={cn(
-            'z-50 w-72 rounded-lg border p-3 shadow-xl',
+            'z-50 w-72 rounded-lg border border-border/60 p-3 shadow-xl',
+            'bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] backdrop-blur-xl',
             'animate-in fade-in-0 zoom-in-95 data-[side=right]:slide-in-from-left-2',
-            hoverCardToneClass(issue.pipelineStatus),
           )}
           onPointerEnter={handlePointerEnter}
           onPointerLeave={handlePointerLeave}
@@ -217,7 +211,13 @@ export function IssueHoverCard({
         >
           {/* Issue number + status */}
           <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="text-[11px] font-mono text-muted-foreground">
+            <span className="flex items-center gap-1.5 text-[11px] font-mono text-muted-foreground">
+              <span
+                className={cn(
+                  'inline-block size-2 rounded-full',
+                  statusDotClass(issue.pipelineStatus),
+                )}
+              />
               #{issue.issueNumber}
             </span>
             <PhaseChip status={issue.pipelineStatus} />

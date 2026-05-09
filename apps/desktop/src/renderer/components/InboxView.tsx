@@ -23,7 +23,7 @@ import {
   TableRow,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUpDown, Ban, Eye, Loader2 } from 'lucide-react';
+import { ArrowUpDown, Ban, Loader2, Maximize2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
@@ -272,7 +272,7 @@ function useInboxView() {
                     onClick={() => setQuickViewNotification(n)}
                     aria-label={`Quick view: ${n.title}`}
                   >
-                    <Eye size={13} />
+                    <Maximize2 size={14} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Quick view</TooltipContent>

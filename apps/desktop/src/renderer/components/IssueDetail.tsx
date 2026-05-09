@@ -44,6 +44,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
@@ -1159,21 +1160,6 @@ function useIssueDetailView() {
           <ArrowLeft size={18} strokeWidth={2.5} />
         </Button>
       </div>
-      {/* Archive button — top right */}
-      {(activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
-        activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.closed) && (
-        <div className="absolute right-3 top-3">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="text-muted-foreground"
-            onClick={() => setShowArchiveConfirm(true)}
-            title="Archive issue"
-          >
-            <Archive size={14} />
-          </Button>
-        </div>
-      )}
     </>
   );
 
@@ -1308,9 +1294,7 @@ function useIssueDetailView() {
                 type="button"
                 className={cn(
                   'flex items-center gap-1 font-medium transition-colors disabled:opacity-50',
-                  activeIssue.state === 'open'
-                    ? 'text-success'
-                    : 'text-muted-foreground hover:text-primary',
+                  activeIssue.state === 'open' ? 'text-success' : 'text-done hover:text-done/80',
                 )}
                 disabled={isTogglingState}
               >
@@ -1341,9 +1325,19 @@ function useIssueDetailView() {
                 disabled={activeIssue.state === 'closed'}
                 onClick={() => void handleToggleIssueState('closed')}
               >
-                <CircleCheck className="mr-2 size-3.5 text-muted-foreground" />
+                <CircleCheck className="mr-2 size-3.5 text-done" />
                 Close issue
               </DropdownMenuItem>
+              {(activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
+                activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.closed) && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setShowArchiveConfirm(true)}>
+                    <Archive className="mr-2 size-3.5 text-muted-foreground" />
+                    Archive issue
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </>
@@ -1379,7 +1373,7 @@ function useIssueDetailView() {
             ) : (
               <Copy className="size-3" />
             )}
-            <span className="max-w-[20ch] truncate">{issueBranchName}</span>
+            <span>{issueBranchName}</span>
           </button>
         </>
       )}
