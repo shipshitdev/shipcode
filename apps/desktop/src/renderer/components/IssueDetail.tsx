@@ -35,7 +35,6 @@ import {
   resolveRequireApprovalForIssue,
   resolveRevisionCount,
   resolveRevisionCountForIssue,
-  sanitizeResolvedModel,
 } from '@shipcode/shared';
 import { isAutomationIssue, PhaseChip, resolveIssuePriorityBadge } from '@shipcode/ui';
 import {
@@ -988,15 +987,6 @@ function useIssueDetailView() {
           }
         : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
   } as const;
-  const effectivePhaseResolvedModels = {
-    planner: sanitizeResolvedModel(thread?.plannerResolvedModel) ?? effectivePhaseProviders.planner,
-    reviewer:
-      sanitizeResolvedModel(thread?.reviewerResolvedModel) ?? effectivePhaseProviders.reviewer,
-    executor:
-      sanitizeResolvedModel(thread?.executorResolvedModel) ?? effectivePhaseProviders.executor,
-    verifier:
-      sanitizeResolvedModel(thread?.verifierResolvedModel) ?? effectivePhaseProviders.verifier,
-  } as const;
   const phaseSelectValues = {
     planner:
       activeIssue.plannerModelOverride || activeIssue.plannerModelIdOverride
@@ -1520,7 +1510,6 @@ function useIssueDetailView() {
       currentPhaseSelections={currentPhaseSelections}
       diffs={diffs}
       effectiveExpanded={effectiveExpanded}
-      effectivePhaseResolvedModels={effectivePhaseResolvedModels}
       executorEditable={executorEditable}
       hasPrFeedbackBlockers={hasPrFeedbackBlockers}
       integrationStatus={integrationStatus}
@@ -1687,7 +1676,6 @@ function useIssueDetailView() {
               checkpoints={checkpoints}
               currentPhaseReasoningEfforts={currentPhaseReasoningEfforts}
               currentPhaseSelections={currentPhaseSelections}
-              effectivePhaseResolvedModels={effectivePhaseResolvedModels}
               effectiveRequireApproval={effectiveRequireApproval}
               effectiveRevisionCount={effectiveRevisionCount}
               executorEditable={executorEditable}

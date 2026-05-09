@@ -29,7 +29,6 @@ interface IssueDetailTabsProps {
   currentPhaseSelections: Record<PhaseKey, PhaseSelection>;
   diffs: DiffRecord[];
   effectiveExpanded: string | null | undefined;
-  effectivePhaseResolvedModels: Record<PhaseKey, string>;
   executorEditable: boolean;
   hasPrFeedbackBlockers: boolean;
   integrationStatus?: IntegrationStatus;

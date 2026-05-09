@@ -400,7 +400,8 @@ export function rowToneFor(
   return 'default';
 }
 
-export function sectionToneFor(columnKey: ColumnKey, _sectionKey: string): RowTone {
+export function sectionToneFor(columnKey: ColumnKey, sectionKey: string): RowTone {
+  if (sectionKey === 'failed') return 'danger';
   if (columnKey === 'human') return 'warning';
   if (columnKey === 'agent') return 'agent';
   if (columnKey === 'done') return 'done';

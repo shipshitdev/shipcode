@@ -75,7 +75,7 @@ describe('TerminalTranscript', () => {
     const innerContainer = scrollContainer?.firstChild as HTMLDivElement | null;
 
     expect(innerContainer).not.toBeNull();
-    expect(innerContainer).toHaveClass('w-full', 'px-4', 'py-4');
+    expect(innerContainer).toHaveClass('w-full', 'p-4');
     expect(innerContainer).not.toHaveClass('mx-auto', 'max-w-5xl');
   });
 
@@ -129,6 +129,30 @@ describe('TerminalTranscript', () => {
     );
     expect(
       await screen.findByRole('button', { name: /copied failure output/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('copies the full console transcript from the transcript action', async () => {
+    renderTranscript(
+      <TerminalTranscript
+        events={[
+          makeTextEvent({ id: 'event-text', event: { kind: 'text', content: 'Step completed' } }),
+          makeToolEndEvent({ id: 'event-tool-failed' }),
+          makeRawErrorEvent({ id: 'event-raw-error' }),
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /copy console transcript/i }));
+
+    const copiedText = writeText.mock.calls[0]?.[0] as string;
+    expect(copiedText).toContain('Assistant\nStep completed');
+    expect(copiedText).toContain(
+      'Bash exit 1\nError: Cannot find module ./reference-portals.service',
+    );
+    expect(copiedText).toContain('ERROR codex_core::session: failed to record rollout items');
+    expect(
+      await screen.findByRole('button', { name: /copied console transcript/i }),
     ).toBeInTheDocument();
   });
 

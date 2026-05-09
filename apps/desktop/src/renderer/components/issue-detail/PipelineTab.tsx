@@ -111,7 +111,6 @@ function usePipelineTabView({
   checkpoints: PipelineCheckpoint[];
   currentPhaseReasoningEfforts: Record<PhaseKey, ReasoningEffort>;
   currentPhaseSelections: Record<PhaseKey, PhaseSelection>;
-  effectivePhaseResolvedModels: Record<PhaseKey, string>;
   effectiveRequireApproval: boolean;
   effectiveRevisionCount: number;
   executorEditable: boolean;
