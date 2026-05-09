@@ -59,7 +59,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     projectId: 'project-1',
     title: 'Test task',
     prompt: 'Do it',
-    status: 'awaiting_approval',
+    status: 'approval',
     kind: 'pipeline' as const,
     worktreeBranch: null,
     worktreePath: null,
@@ -130,7 +130,7 @@ describe('ChatNotificationService', () => {
       { getById: getProjectMock } as unknown as ProjectQueries,
     );
 
-    service.fire('awaiting_approval', makeThread());
+    service.fire('approval', makeThread());
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetch).toHaveBeenCalledTimes(2);
@@ -151,7 +151,7 @@ describe('ChatNotificationService', () => {
       telegramEnabled: false,
       chatNotificationEvents: {
         ...DEFAULT_SETTINGS.chatNotificationEvents,
-        awaitingApproval: false,
+        approval: false,
       },
     });
     const service = new ChatNotificationService(
@@ -159,7 +159,7 @@ describe('ChatNotificationService', () => {
       { getById: getProjectMock } as unknown as ProjectQueries,
     );
 
-    service.fire('awaiting_approval', makeThread());
+    service.fire('approval', makeThread());
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetch).not.toHaveBeenCalled();

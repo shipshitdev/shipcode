@@ -1,7 +1,7 @@
 import type { NotificationEventToggles, NotificationKind, NotificationRecord } from './types';
 
 export const ATTENTION_REQUIRED_NOTIFICATION_KINDS: NotificationKind[] = [
-  'awaiting_approval',
+  'approval',
   'failed',
   'completed',
   'verification_exhausted',
@@ -28,8 +28,8 @@ export function notificationEventFlagForKind(
   kind: NotificationKind,
 ): keyof NotificationEventToggles {
   switch (kind) {
-    case 'awaiting_approval':
-      return 'awaitingApproval';
+    case 'approval':
+      return 'approval';
     case 'failed':
       return 'failed';
     case 'completed':

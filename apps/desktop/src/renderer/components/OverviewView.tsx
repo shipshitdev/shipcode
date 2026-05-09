@@ -93,7 +93,7 @@ function formatDuration(ms: number | null | undefined): string {
   return `${hours}h ${minutes % 60}m`;
 }
 
-export function OverviewView() {
+function useOverviewView() {
   const queryClient = useQueryClient();
   const selectProject = useAppStore((s) => s.selectProject);
   const selectThread = useAppStore((s) => s.selectThread);
@@ -175,7 +175,7 @@ export function OverviewView() {
     <div className="flex flex-1 flex-col overflow-hidden">
       <PageHeader title="Overview" subtitle="Live view of every agent across every project." />
 
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto p-6">
         <div className="flex flex-col gap-6 max-w-5xl">
           {/* Stat cards */}
           <div className="flex gap-4">
@@ -544,4 +544,8 @@ export function OverviewView() {
       </div>
     </div>
   );
+}
+
+export function OverviewView() {
+  return useOverviewView();
 }

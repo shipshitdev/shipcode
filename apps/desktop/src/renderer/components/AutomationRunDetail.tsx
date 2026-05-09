@@ -28,13 +28,21 @@ import {
   getAutomationRunTotalTokens,
 } from '../features/automations/run-presentation';
 import { useAppStore } from '../stores/app-store';
+import { formatTimestamp } from './format-timestamp';
 import { ApprovalSection } from './issue-detail/ApprovalSection';
 import { DiffTab } from './issue-detail/DiffTab';
 import { ACTIVE_PHASES } from './issue-detail/helpers';
 import { PlanHistoryTab } from './issue-detail/PlanHistoryTab';
 import type { PlanRunGroup } from './issue-detail/tab-types';
 
-export function AutomationRunDetail() {
+const SHORT_TIMESTAMP_FORMAT = {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+} satisfies Intl.DateTimeFormatOptions;
+
+function useAutomationRunDetailView() {
   const threadId = useAppStore((s) => s.activeAutomationThreadId);
   const selectAutomationThread = useAppStore((s) => s.selectAutomationThread);
   const navigateToGitWorktree = useAppStore((s) => s.navigateToGitWorktree);
@@ -58,7 +66,7 @@ export function AutomationRunDetail() {
       const t = query.state.data;
       if (!t) return false;
       if (ACTIVE_PHASES.includes(t.status as PipelinePhase)) return 5_000;
-      if (t.status === PIPELINE_PHASE.awaitingApproval) return 5_000;
+      if (t.status === PIPELINE_PHASE.approval) return 5_000;
       return false;
     },
   });
@@ -113,11 +121,9 @@ export function AutomationRunDetail() {
   const latestPlan = plans[0] ?? null;
   const threadPhase = thread?.status;
   const approvedAwaitingExecution =
-    threadPhase === PIPELINE_PHASE.awaitingApproval && latestPlan?.status === 'approved';
+    threadPhase === PIPELINE_PHASE.approval && latestPlan?.status === 'approved';
   const hasApprovalDecision =
-    threadPhase === PIPELINE_PHASE.awaitingApproval &&
-    !!latestPlan &&
-    latestPlan.status !== 'approved';
+    threadPhase === PIPELINE_PHASE.approval && !!latestPlan && latestPlan.status !== 'approved';
   const canApprove = hasApprovalDecision && !!(latestPlan?.structured || latestPlan?.rawOutput);
 
   const handleClose = useCallback(() => selectAutomationThread(null), [selectAutomationThread]);
@@ -250,8 +256,8 @@ export function AutomationRunDetail() {
   const isFailed =
     thread?.status === PIPELINE_PHASE.failed || thread?.status === PIPELINE_PHASE.idle;
   const isCompleted = thread?.status === PIPELINE_PHASE.completed;
-  const isDone = !!thread?.doneAt;
-  const canMarkDone = (isFailed || isCompleted) && !isDone;
+  const isClosed = !!thread?.doneAt;
+  const canClose = (isFailed || isCompleted) && !isClosed;
   const hasError = !!thread?.lastError;
 
   return (
@@ -266,7 +272,7 @@ export function AutomationRunDetail() {
           aria-label="Back to board"
           className="rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="size-4" />
         </Button>
         <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-primary">
           {thread?.title ?? 'Automation run'}
@@ -282,7 +288,7 @@ export function AutomationRunDetail() {
             onClick={handlePause}
             disabled={isSubmitting}
           >
-            <Square className="h-3 w-3" />
+            <Square className="size-3" />
           </Button>
         )}
         {isPaused && (
@@ -295,7 +301,7 @@ export function AutomationRunDetail() {
             onClick={handleResume}
             disabled={isSubmitting}
           >
-            <Play className="h-3 w-3" />
+            <Play className="size-3" />
           </Button>
         )}
         {isFailed && (
@@ -305,11 +311,11 @@ export function AutomationRunDetail() {
             className="h-6 gap-1 px-2 text-[11px]"
             onClick={handleRetry}
           >
-            <RefreshCw className="h-3 w-3" />
+            <RefreshCw className="size-3" />
             Retry
           </Button>
         )}
-        {canMarkDone && (
+        {canClose && (
           <Button
             variant="outline"
             size="sm"
@@ -317,8 +323,8 @@ export function AutomationRunDetail() {
             onClick={handleMarkAsDone}
             disabled={isSubmitting}
           >
-            <CheckCircle2 className="h-3 w-3" />
-            {isSubmitting ? 'Marking…' : 'Done'}
+            <CheckCircle2 className="size-3" />
+            {isSubmitting ? 'Closing...' : 'Close'}
           </Button>
         )}
       </div>
@@ -359,7 +365,7 @@ export function AutomationRunDetail() {
                     Approved
                   </Badge>
                   <Badge variant="warning" className="text-[10px]">
-                    Waiting For Execution Slot
+                    Waiting
                   </Badge>
                 </div>
                 <p className="text-[12px] leading-relaxed text-secondary">
@@ -460,12 +466,7 @@ export function AutomationRunDetail() {
                         {describeAutomationRun(run)}
                       </span>
                       <span className="shrink-0 text-[11px] text-muted-foreground">
-                        {new Date(run.createdAt).toLocaleString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
+                        {formatTimestamp(run.createdAt, SHORT_TIMESTAMP_FORMAT)}
                       </span>
                       {run.failureCount > 0 && (
                         <span className="shrink-0 text-[10px] text-danger">
@@ -551,7 +552,7 @@ export function AutomationRunDetail() {
                     className="rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
                     title="Copy branch name"
                   >
-                    <Copy className="h-3 w-3" />
+                    <Copy className="size-3" />
                   </Button>
                   {thread.worktreePath && thread.projectId && (
                     <Button
@@ -600,7 +601,7 @@ export function AutomationRunDetail() {
                         disabled={createPr.isPending}
                         title="Create a draft pull request on GitHub"
                       >
-                        <GitPullRequest className="h-3 w-3" />
+                        <GitPullRequest className="size-3" />
                         {createPr.isPending ? 'Creating…' : 'Create PR'}
                       </Button>
                       {createPr.isError && (
@@ -645,15 +646,7 @@ export function AutomationRunDetail() {
             {/* Timestamps */}
             {thread && (
               <div className="space-y-0.5 text-[11px] text-muted-foreground">
-                <p>
-                  Created{' '}
-                  {new Date(thread.createdAt).toLocaleString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </p>
+                <p>Created {formatTimestamp(thread.createdAt, SHORT_TIMESTAMP_FORMAT)}</p>
                 {thread.failureCount > 0 && (
                   <p>
                     {thread.failureCount} {thread.failureCount === 1 ? 'failure' : 'failures'}
@@ -666,4 +659,8 @@ export function AutomationRunDetail() {
       </div>
     </div>
   );
+}
+
+export function AutomationRunDetail() {
+  return useAutomationRunDetailView();
 }

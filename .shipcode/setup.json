@@ -1,13 +1,12 @@
 {
   "version": 1,
   "setupCommands": [
-    "bun install"
+    "bun install --frozen-lockfile"
   ],
   "verifyCommands": [
-    "bun run typecheck",
-    "bun run test"
+    "bun run verify:affected"
   ],
   "envFiles": [],
   "setupBeforeVerify": false,
-  "testingContext": "This is a Turborepo + Bun monorepo. Use Vitest for package tests. Prefer targeted tests for touched packages when possible, but the repo-level verification contract is `bun run typecheck` followed by `bun run test`."
+  "testingContext": "This is a Turborepo + Bun monorepo. ShipCode verification runs `bun run verify:affected`, which maps changed files to workspace packages and runs only package-local typecheck/test scripts sequentially. Do not use full-root `bun run test` or installer builds in automated tasks."
 }

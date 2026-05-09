@@ -130,9 +130,9 @@ export function ConversationsTab({ threadId }: ConversationsTabProps) {
         <div className="ml-auto">
           <Button variant="ghost" size="sm" onClick={copyAll} className="h-7 text-xs gap-1">
             {copiedId === '__all__' ? (
-              <CheckIcon className="h-3 w-3" />
+              <CheckIcon className="size-3" />
             ) : (
-              <CopyIcon className="h-3 w-3" />
+              <CopyIcon className="size-3" />
             )}
             Copy all
           </Button>
@@ -213,7 +213,7 @@ function ConversationTurn({
             onClick={onCopy}
             className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
           >
-            {isCopied ? <CheckIcon className="h-3 w-3" /> : <CopyIcon className="h-3 w-3" />}
+            {isCopied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
           </Button>
         </div>
       </div>

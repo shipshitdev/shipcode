@@ -148,7 +148,7 @@ describe('SettingsQueries', () => {
 
   it('set() serializes objects as JSON', () => {
     const events = {
-      awaitingApproval: true,
+      approval: true,
       failed: true,
       completed: false,
       verificationExhausted: true,

@@ -38,7 +38,7 @@ export function isApprovedAwaitingExecutionIssue(
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>,
 ): boolean {
   return (
-    issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval &&
+    issue.pipelineStatus === ISSUE_PIPELINE_STATUS.approval &&
     approvedAwaitingExecutionIssueIds?.has(issue.id) === true
   );
 }
@@ -74,10 +74,8 @@ export function issueMatchesSection(
     approvedAwaitingExecutionIssueIds,
   );
   if (section.key === 'waiting_execution') return approvedAwaitingExecution;
-  if (section.key === 'awaiting') {
-    return (
-      issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval && !approvedAwaitingExecution
-    );
+  if (section.key === 'approval') {
+    return issue.pipelineStatus === ISSUE_PIPELINE_STATUS.approval && !approvedAwaitingExecution;
   }
   return section.statuses.includes(issue.pipelineStatus);
 }
@@ -89,7 +87,7 @@ export function dragOverlayBorderClass(
   if (approvedAwaitingExecution) return 'border-agent';
   if (status === ISSUE_PIPELINE_STATUS.failed) return 'border-danger';
   if (
-    status === ISSUE_PIPELINE_STATUS.awaitingApproval ||
+    status === ISSUE_PIPELINE_STATUS.approval ||
     status === ISSUE_PIPELINE_STATUS.clarifying ||
     status === ISSUE_PIPELINE_STATUS.paused
   ) {
@@ -192,14 +190,14 @@ export function resolveIssueRevisionBadge(
 function badgeVariantForIssueStatus(status: IssuePipelineStatus): IssueRevisionBadge['variant'] {
   if (status === ISSUE_PIPELINE_STATUS.failed) return 'danger';
   if (
-    status === ISSUE_PIPELINE_STATUS.awaitingApproval ||
+    status === ISSUE_PIPELINE_STATUS.approval ||
     status === ISSUE_PIPELINE_STATUS.clarifying ||
     status === ISSUE_PIPELINE_STATUS.paused
   ) {
     return 'warning';
   }
   if (status === ISSUE_PIPELINE_STATUS.completed) return 'success';
-  if (status === ISSUE_PIPELINE_STATUS.done) return 'done';
+  if (status === ISSUE_PIPELINE_STATUS.closed) return 'done';
   if (status === ISSUE_PIPELINE_STATUS.deferred) return 'default';
   if (ACTIVE_STATUSES.includes(status)) return 'info';
   return 'default';
@@ -264,7 +262,7 @@ export function resolveIssueApprovalBadge(
   if (!settings) return null;
   if (
     issue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
-    issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done
+    issue.pipelineStatus === ISSUE_PIPELINE_STATUS.closed
   ) {
     return null;
   }
@@ -390,14 +388,14 @@ export function rowToneFor(
   if (approvedAwaitingExecution) return 'agent';
   if (status === ISSUE_PIPELINE_STATUS.failed) return 'danger';
   if (
-    status === ISSUE_PIPELINE_STATUS.awaitingApproval ||
+    status === ISSUE_PIPELINE_STATUS.approval ||
     status === ISSUE_PIPELINE_STATUS.clarifying ||
     status === ISSUE_PIPELINE_STATUS.paused
   ) {
     return 'warning';
   }
   if (status === ISSUE_PIPELINE_STATUS.completed) return 'success';
-  if (status === ISSUE_PIPELINE_STATUS.done) return 'done';
+  if (status === ISSUE_PIPELINE_STATUS.closed) return 'done';
   if (ACTIVE_STATUSES.includes(status)) return 'agent';
   return 'default';
 }

@@ -306,7 +306,7 @@ export class GitHubIssueQueries {
     return Number(result.changes) > 0;
   }
 
-  resetStaleAwaitingApproval(projectId: string): number {
+  resetStaleApproval(projectId: string): number {
     const result = this.db
       .prepare(
         `UPDATE github_issue_cache
@@ -322,7 +322,7 @@ export class GitHubIssueQueries {
              )
            )`,
       )
-      .run(ISSUE_PIPELINE_STATUS.todo, projectId, ISSUE_PIPELINE_STATUS.awaitingApproval);
+      .run(ISSUE_PIPELINE_STATUS.todo, projectId, ISSUE_PIPELINE_STATUS.approval);
     return Number(result.changes);
   }
 
@@ -349,9 +349,9 @@ export class GitHubIssueQueries {
         id,
         ISSUE_PIPELINE_STATUS.todo,
         ISSUE_PIPELINE_STATUS.queued,
-        ISSUE_PIPELINE_STATUS.awaitingApproval,
+        ISSUE_PIPELINE_STATUS.approval,
         ISSUE_PIPELINE_STATUS.failed,
-        ISSUE_PIPELINE_STATUS.done,
+        ISSUE_PIPELINE_STATUS.closed,
         PIPELINE_PHASE.completed,
       );
     return Number(result.changes) > 0;
@@ -360,7 +360,7 @@ export class GitHubIssueQueries {
   /**
    * When a GH issue flips to `state = 'closed'` externally (via the web UI,
    * `gh issue close`, or a Projects v2 workflow), move the local
-   * `pipeline_status` to `'done'` — but only from terminal or
+   * `pipeline_status` to `'closed'` — but only from terminal or
    * not-yet-started source states. In-flight statuses
    * (planning/reviewing/revising/executing/verifying/shipping) are left alone
    * so the pipeline writer never races with this flip. The SQL guard makes
@@ -368,7 +368,7 @@ export class GitHubIssueQueries {
    *
    * Returns `true` iff a row was updated.
    */
-  markDoneOnClose(id: string): boolean {
+  markClosedOnClose(id: string): boolean {
     const result = this.db
       .prepare(
         `UPDATE github_issue_cache
@@ -377,11 +377,11 @@ export class GitHubIssueQueries {
            AND pipeline_status IN (?, ?, ?, ?, ?)`,
       )
       .run(
-        ISSUE_PIPELINE_STATUS.done,
+        ISSUE_PIPELINE_STATUS.closed,
         id,
         ISSUE_PIPELINE_STATUS.todo,
         ISSUE_PIPELINE_STATUS.queued,
-        ISSUE_PIPELINE_STATUS.awaitingApproval,
+        ISSUE_PIPELINE_STATUS.approval,
         ISSUE_PIPELINE_STATUS.failed,
         ISSUE_PIPELINE_STATUS.completed,
       );
@@ -431,7 +431,7 @@ export class GitHubIssueQueries {
         PIPELINE_PHASE.completed,
         id,
         ISSUE_PIPELINE_STATUS.completed,
-        ISSUE_PIPELINE_STATUS.done,
+        ISSUE_PIPELINE_STATUS.closed,
       );
     return Number(result.changes) > 0;
   }
@@ -724,10 +724,10 @@ export class GitHubIssueQueries {
     return asRows<GitHubIssueCacheRow>(rows).map((r) => this.toRecord(r));
   }
 
-  listCompleted(projectId: string): GitHubIssueCacheRecord[] {
+  listClosed(projectId: string): GitHubIssueCacheRecord[] {
     const rows = this.db
       .prepare(
-        "SELECT * FROM github_issue_cache WHERE project_id = ? AND pipeline_status IN ('completed','done') AND archived_at IS NULL ORDER BY fetched_at DESC",
+        "SELECT * FROM github_issue_cache WHERE project_id = ? AND pipeline_status = 'closed' AND archived_at IS NULL ORDER BY fetched_at DESC",
       )
       .all(projectId);
     return asRows<GitHubIssueCacheRow>(rows).map((r) => this.toRecord(r));

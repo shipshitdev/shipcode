@@ -1,6 +1,7 @@
 'use client';
 
 import { ShipCodeLogoMark } from '@shipcode/ui';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 export function Header() {
@@ -18,18 +19,18 @@ export function Header() {
         scrolled ? 'bg-primary/70 backdrop-blur-xl' : 'bg-transparent'
       }`}
     >
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
-        <a
+      <nav className="mx-auto flex max-w-6xl items-center justify-between p-6">
+        <Link
           href="/"
           className="flex items-center gap-3 text-sm font-medium tracking-[0.18em] text-primary uppercase"
         >
-          <ShipCodeLogoMark className="h-8 w-8 shrink-0" />
+          <ShipCodeLogoMark className="size-8 shrink-0" />
           ShipCode
-        </a>
+        </Link>
         <div className="flex items-center gap-6 text-sm">
-          <a href="/docs" className="text-secondary transition-colors hover:text-primary">
+          <Link href="/docs" className="text-secondary transition-colors hover:text-primary">
             Docs
-          </a>
+          </Link>
           <a
             href="https://github.com/shipshitdev/shipcode"
             target="_blank"

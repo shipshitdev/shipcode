@@ -30,7 +30,6 @@ import type {
   ProjectOpenTarget,
   ShipCodePlan,
   TerminalOpenTarget,
-  Thread,
 } from '@shipcode/shared';
 import {
   clampError,
@@ -124,14 +123,14 @@ async function buildGitVisualizerData(
   });
   const threads = queries.threads.list(project.id);
   const threadByWorktreePath = new Map(
-    threads
-      .filter((thread): thread is Thread & { worktreePath: string } => !!thread.worktreePath)
-      .map((thread) => [thread.worktreePath, thread]),
+    threads.flatMap((thread) =>
+      thread.worktreePath ? [[thread.worktreePath, thread] as const] : [],
+    ),
   );
   const threadByBranch = new Map(
-    threads
-      .filter((thread): thread is Thread & { worktreeBranch: string } => !!thread.worktreeBranch)
-      .map((thread) => [thread.worktreeBranch, thread]),
+    threads.flatMap((thread) =>
+      thread.worktreeBranch ? [[thread.worktreeBranch, thread] as const] : [],
+    ),
   );
 
   const shipcodeWorktrees = await manager.list();
@@ -243,52 +242,54 @@ async function repairProjectWorktreesAfterRelink(
     log.warn('[project:relink-path] worktree list failed during relink:', error);
   }
 
-  for (const entry of entries.values()) {
-    const currentPath = entry.path;
-    const relinkedPath = getRelinkedWorktreePath(currentPath, oldParent, nextParent);
-    const currentExists = fs.existsSync(currentPath);
-    const relinkedExists = relinkedPath ? fs.existsSync(relinkedPath) : false;
+  await Promise.all(
+    [...entries.values()].map(async (entry) => {
+      const currentPath = entry.path;
+      const relinkedPath = getRelinkedWorktreePath(currentPath, oldParent, nextParent);
+      const currentExists = fs.existsSync(currentPath);
+      const relinkedExists = relinkedPath ? fs.existsSync(relinkedPath) : false;
 
-    if (currentExists) {
-      try {
-        await manager.repair([currentPath]);
-      } catch (error) {
-        log.warn(`[project:relink-path] worktree repair failed for ${currentPath}:`, error);
-      }
-
-      if (relinkedPath && path.resolve(relinkedPath) !== path.resolve(currentPath)) {
+      if (currentExists) {
         try {
-          await fsp.mkdir(path.dirname(relinkedPath), { recursive: true });
-          await manager.move(currentPath, relinkedPath);
-          if (entry.threadId) {
-            queries.threads.setWorktree(entry.threadId, entry.branch, relinkedPath);
-          }
+          await manager.repair([currentPath]);
         } catch (error) {
-          log.warn(
-            `[project:relink-path] worktree move failed for ${currentPath} -> ${relinkedPath}:`,
-            error,
-          );
+          log.warn(`[project:relink-path] worktree repair failed for ${currentPath}:`, error);
         }
-      }
-      continue;
-    }
 
-    if (relinkedPath && relinkedExists) {
-      try {
-        await manager.repair([relinkedPath]);
-      } catch (error) {
-        log.warn(`[project:relink-path] worktree repair failed for ${relinkedPath}:`, error);
+        if (relinkedPath && path.resolve(relinkedPath) !== path.resolve(currentPath)) {
+          try {
+            await fsp.mkdir(path.dirname(relinkedPath), { recursive: true });
+            await manager.move(currentPath, relinkedPath);
+            if (entry.threadId) {
+              queries.threads.setWorktree(entry.threadId, entry.branch, relinkedPath);
+            }
+          } catch (error) {
+            log.warn(
+              `[project:relink-path] worktree move failed for ${currentPath} -> ${relinkedPath}:`,
+              error,
+            );
+          }
+        }
+        return;
       }
-      if (entry.threadId) {
-        queries.threads.setWorktree(entry.threadId, entry.branch, relinkedPath);
-      }
-      continue;
-    }
 
-    if (relinkedPath && entry.threadId) {
-      queries.threads.clearWorktree(entry.threadId);
-    }
-  }
+      if (relinkedPath && relinkedExists) {
+        try {
+          await manager.repair([relinkedPath]);
+        } catch (error) {
+          log.warn(`[project:relink-path] worktree repair failed for ${relinkedPath}:`, error);
+        }
+        if (entry.threadId) {
+          queries.threads.setWorktree(entry.threadId, entry.branch, relinkedPath);
+        }
+        return;
+      }
+
+      if (relinkedPath && entry.threadId) {
+        queries.threads.clearWorktree(entry.threadId);
+      }
+    }),
+  );
 }
 
 async function resolveGithubRepoIdentity(
@@ -573,15 +574,21 @@ export function registerProjectHandlers({
         worktreeRoot: appSettings.worktreeRoot,
       });
       const threads = queries.threads.list(projectId);
-      const failures: string[] = [];
-      for (const thread of threads) {
-        if (thread.worktreePath && thread.worktreeBranch) {
-          const result = await worktreeManager.remove(thread.worktreePath, thread.worktreeBranch);
-          if (result.error) {
-            failures.push(`${thread.worktreePath}: ${result.error}`);
-          }
-        }
-      }
+      const failures = (
+        await Promise.all(
+          threads.flatMap((thread) =>
+            thread.worktreePath && thread.worktreeBranch
+              ? [
+                  worktreeManager
+                    .remove(thread.worktreePath, thread.worktreeBranch)
+                    .then((result) =>
+                      result.error ? `${thread.worktreePath}: ${result.error}` : null,
+                    ),
+                ]
+              : [],
+          ),
+        )
+      ).flatMap((failure) => (failure ? [failure] : []));
       if (failures.length > 0) {
         throw new Error(
           `Failed to clean up ${failures.length} worktree(s). Project not removed:\n${failures.join('\n')}`,
@@ -689,7 +696,7 @@ export function registerProjectHandlers({
       PIPELINE_PHASE.idle,
     ]);
     if (!MARKABLE_STATUSES.has(thread.status)) {
-      throw new Error(`Cannot mark thread as done while in ${thread.status} phase`);
+      throw new Error(`Cannot close thread while in ${thread.status} phase`);
     }
 
     queries.threads.markDone(threadId);
@@ -1072,10 +1079,10 @@ export function registerProjectHandlers({
         try {
           const diff = await git.getDiffStat(worktreePath);
           modifiedSet = new Set(
-            diff
-              .split('\n')
-              .map((line) => line.split('|')[0]?.trim())
-              .filter((p): p is string => Boolean(p && !p.startsWith(' '))),
+            diff.split('\n').flatMap((line) => {
+              const candidate = line.split('|')[0]?.trim();
+              return candidate && !candidate.startsWith(' ') ? [candidate] : [];
+            }),
           );
         } catch {
           modifiedSet = new Set();
@@ -1083,30 +1090,35 @@ export function registerProjectHandlers({
       }
 
       const entries = await fsp.readdir(dirPath, { withFileTypes: true });
-      const result: CodeTreeEntry[] = [];
-      for (const entry of entries) {
-        if (CODE_TREE_IGNORE.has(entry.name)) continue;
-        const entryRelative = path.join(relativePath ?? '', entry.name).replace(/\\/g, '/');
-        const isFile = entry.isFile();
-        let sizeBytes: number | null = null;
-        if (isFile) {
-          try {
-            const stat = await fsp.stat(path.join(dirPath, entry.name));
-            sizeBytes = stat.size;
-          } catch {
-            sizeBytes = null;
-          }
-        }
-        result.push({
-          name: entry.name,
-          relativePath: entryRelative,
-          type: isFile ? 'file' : 'dir',
-          sizeBytes,
-          isModified: isFile
-            ? modifiedSet.has(entryRelative)
-            : isDirty && [...modifiedSet].some((p) => p.startsWith(`${entryRelative}/`)),
-        });
-      }
+      const result = await Promise.all(
+        entries.flatMap((entry) => {
+          if (CODE_TREE_IGNORE.has(entry.name)) return [];
+          const entryRelative = path.join(relativePath ?? '', entry.name).replace(/\\/g, '/');
+          const isFile = entry.isFile();
+          return [
+            (async (): Promise<CodeTreeEntry> => {
+              let sizeBytes: number | null = null;
+              if (isFile) {
+                try {
+                  const stat = await fsp.stat(path.join(dirPath, entry.name));
+                  sizeBytes = stat.size;
+                } catch {
+                  sizeBytes = null;
+                }
+              }
+              return {
+                name: entry.name,
+                relativePath: entryRelative,
+                type: isFile ? 'file' : 'dir',
+                sizeBytes,
+                isModified: isFile
+                  ? modifiedSet.has(entryRelative)
+                  : isDirty && [...modifiedSet].some((p) => p.startsWith(`${entryRelative}/`)),
+              };
+            })(),
+          ];
+        }),
+      );
 
       return result.sort((a, b) => {
         if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
@@ -1197,8 +1209,7 @@ export function registerProjectHandlers({
         activeSummaries: pipeline.listActive(),
         managedBranches: queries.threads
           .list(project.id)
-          .map((thread) => thread.worktreeBranch)
-          .filter((branch): branch is string => !!branch),
+          .flatMap((thread) => (thread.worktreeBranch ? [thread.worktreeBranch] : [])),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1220,8 +1231,7 @@ export function registerProjectHandlers({
           activeSummaries: pipeline.listActive(),
           managedBranches: queries.threads
             .list(project.id)
-            .map((thread) => thread.worktreeBranch)
-            .filter((branch): branch is string => !!branch),
+            .flatMap((thread) => (thread.worktreeBranch ? [thread.worktreeBranch] : [])),
         });
         return await runCleanupApply({
           project,

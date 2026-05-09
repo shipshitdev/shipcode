@@ -35,7 +35,7 @@ import { ChevronDown } from 'lucide-react';
 import { getModelOptions } from '../model-provider-options';
 import { PhaseModelRow } from './PhaseModelRow';
 
-export function PipelineSettingsSection({
+function pipelineSettingsSection({
   settings,
   integrationStatus,
   onUpdate,
@@ -583,7 +583,7 @@ export function PipelineSettingsSection({
 
           <SettingsSection
             title="Pipeline phases"
-            description="Workflow order here is Planner -> Reviewer -> Executor -> Verifier. Clarifying and Awaiting Approval are human checkpoints, so they do not have model rows."
+            description="Workflow order here is Planner -> Reviewer -> Executor -> Verifier. Clarifying and Approval are human checkpoints, so they do not have model rows."
           >
             <PhaseModelRow
               label="Planner model"
@@ -807,4 +807,8 @@ export function PipelineSettingsSection({
       </Tabs>
     </>
   );
+}
+
+export function PipelineSettingsSection(props: Parameters<typeof pipelineSettingsSection>[0]) {
+  return pipelineSettingsSection(props);
 }

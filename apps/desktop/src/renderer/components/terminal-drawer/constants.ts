@@ -15,7 +15,7 @@ export const FULL_HEIGHT = 9999;
 
 export const CONSOLE_VISIBLE_STATUSES = new Set<PipelinePhase>([
   PIPELINE_PHASE.clarifying,
-  PIPELINE_PHASE.awaitingApproval,
+  PIPELINE_PHASE.approval,
   PIPELINE_PHASE.planning,
   PIPELINE_PHASE.reviewing,
   PIPELINE_PHASE.revising,
@@ -31,7 +31,7 @@ export const PHASE_LABELS: Partial<Record<PipelinePhase, string>> = {
   [PIPELINE_PHASE.clarifying]: 'Waiting for clarification',
   [PIPELINE_PHASE.reviewing]: 'Reviewing',
   [PIPELINE_PHASE.revising]: 'Thinking',
-  [PIPELINE_PHASE.awaitingApproval]: 'Needs approval',
+  [PIPELINE_PHASE.approval]: 'Needs approval',
   [PIPELINE_PHASE.executing]: 'Working',
   [PIPELINE_PHASE.testing]: 'Running tests',
   [PIPELINE_PHASE.verifying]: 'Verifying',

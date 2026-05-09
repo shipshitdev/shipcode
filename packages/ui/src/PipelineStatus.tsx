@@ -8,12 +8,12 @@ const PHASES: { key: PipelinePhase; label: string }[] = [
   { key: 'clarifying', label: 'Clarify' },
   { key: 'reviewing', label: 'Review' },
   { key: 'revising', label: 'Revise' },
-  { key: 'awaiting_approval', label: 'Approval' },
+  { key: 'approval', label: 'Approval' },
   { key: 'executing', label: 'Execute' },
   { key: 'testing', label: 'Test' },
   { key: 'verifying', label: 'Verify' },
   { key: 'shipping', label: 'Ship' },
-  { key: 'completed', label: 'Done' },
+  { key: 'completed', label: 'Complete' },
 ];
 
 const PHASE_ORDER = PHASES.map((p) => p.key);
@@ -45,7 +45,7 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
             >
               <span
                 className={cn(
-                  'relative inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold border-2 border-text-muted-foreground text-muted-foreground',
+                  'relative inline-flex items-center justify-center size-5 rounded-full text-[10px] font-bold border-2 border-text-muted-foreground text-muted-foreground',
                   isActive && !isFailed && 'bg-accent border-accent text-bg-primary',
                   isCompleted && 'bg-success border-success text-bg-primary',
                   isFailed && isActive && 'bg-danger border-danger text-bg-primary',

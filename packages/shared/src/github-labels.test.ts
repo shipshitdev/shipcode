@@ -82,10 +82,10 @@ describe('SHIPCODE_PIPELINE_LABELS', () => {
 describe('pipelineLabelForStatus', () => {
   it('returns null for non-agent-loop statuses', () => {
     expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.todo)).toBeNull();
-    expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.done)).toBeNull();
+    expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.closed)).toBeNull();
     expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.deferred)).toBeNull();
     expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.completed)).toBeNull();
-    expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.awaitingApproval)).toBeNull();
+    expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.approval)).toBeNull();
   });
 
   it('returns correct label for agent-loop statuses', () => {
@@ -167,13 +167,13 @@ describe('macroColumnForStatus', () => {
 
   it('maps human-review statuses → human_review', () => {
     expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.clarifying)).toBe('human_review');
-    expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.awaitingApproval)).toBe('human_review');
+    expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.approval)).toBe('human_review');
     expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.failed)).toBe('human_review');
   });
 
-  it('maps done statuses → done', () => {
+  it('maps Done-column statuses to the GitHub Done macro column', () => {
     expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.completed)).toBe('done');
-    expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.done)).toBe('done');
+    expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.closed)).toBe('done');
   });
 
   it('maps deferred → deferred', () => {

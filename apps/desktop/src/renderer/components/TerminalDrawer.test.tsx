@@ -654,15 +654,15 @@ describe('TerminalDrawer', () => {
       activeProjectId: 'project-1',
       activeThreadId: 'thread-1',
       activeIssue: makeIssue({
-        pipelineStatus: 'awaiting_approval',
+        pipelineStatus: 'approval',
         title: 'Approved slot waiter',
         threadId: 'thread-1',
       }),
       terminalThreadId: 'thread-1',
-      pipelinePhase: 'awaiting_approval',
+      pipelinePhase: 'approval',
       githubIssues: [
         makeIssue({
-          pipelineStatus: 'awaiting_approval',
+          pipelineStatus: 'approval',
           title: 'Approved slot waiter',
           threadId: 'thread-1',
         }),

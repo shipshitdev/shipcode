@@ -149,7 +149,7 @@ describe('NotificationService', () => {
       notificationBadgeEnabled: true,
       notificationSoundEnabled: false,
       notificationEvents: {
-        awaitingApproval: true,
+        approval: true,
         failed: true,
         completed: true,
         verificationExhausted: true,
@@ -166,7 +166,7 @@ describe('NotificationService', () => {
     (notificationQueries.listActive as ReturnType<typeof vi.fn>).mockReturnValue([
       makeNotificationRecord({ id: 'completed-1', kind: 'completed' }),
       makeNotificationRecord({ id: 'failed-1', kind: 'failed' }),
-      makeNotificationRecord({ id: 'awaiting-1', kind: 'awaiting_approval' }),
+      makeNotificationRecord({ id: 'awaiting-1', kind: 'approval' }),
     ]);
 
     const service = new NotificationService(
@@ -214,10 +214,10 @@ describe('NotificationService', () => {
   });
 
   it('fires approval-needed notifications with direct copy', () => {
-    const thread = makeThread({ status: 'awaiting_approval', title: 'Review pricing page' });
+    const thread = makeThread({ status: 'approval', title: 'Review pricing page' });
     const record = makeNotificationRecord({
       id: 'approval-1',
-      kind: 'awaiting_approval',
+      kind: 'approval',
       title: 'Approval needed',
       body: 'Review pricing page is waiting for approval before execution',
     });
@@ -229,12 +229,12 @@ describe('NotificationService', () => {
       settingsQueries,
       activityQueries,
     );
-    service.fire('awaiting_approval', thread);
+    service.fire('approval', thread);
 
     expect(notificationQueries.create).toHaveBeenCalledWith({
       threadId: thread.id,
       projectId: thread.projectId,
-      kind: 'awaiting_approval',
+      kind: 'approval',
       title: 'Approval needed',
       body: 'Review pricing page is waiting for approval before execution',
     });
@@ -315,7 +315,7 @@ describe('NotificationService', () => {
     (settingsQueries.get as ReturnType<typeof vi.fn>).mockReturnValueOnce({
       notificationsEnabled: false,
       notificationEvents: {
-        awaitingApproval: true,
+        approval: true,
         failed: true,
         completed: true,
         verificationExhausted: true,
@@ -327,7 +327,7 @@ describe('NotificationService', () => {
     (settingsQueries.get as ReturnType<typeof vi.fn>).mockReturnValueOnce({
       notificationsEnabled: true,
       notificationEvents: {
-        awaitingApproval: true,
+        approval: true,
         failed: true,
         completed: false,
         verificationExhausted: true,

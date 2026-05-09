@@ -21,7 +21,7 @@ interface PipelinePhaseLogRow {
 }
 
 const UNTIMERED_PHASES = new Set<PipelinePhase>([
-  'awaiting_approval',
+  'approval',
   'clarifying',
   'completed',
   'failed',

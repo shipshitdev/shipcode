@@ -7,7 +7,7 @@ import { parseIssueNumber } from './issue-helpers';
 /**
  * `shipcode plan <issue-number>`
  *
- * Run plan generation + review + revision only. Stops at awaiting_approval.
+ * Run plan generation + review + revision only. Stops at approval.
  * Outputs final plan JSON to stdout. Pipeline writes to DB normally.
  */
 export async function planCommand(issueNumber: string) {

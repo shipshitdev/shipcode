@@ -74,7 +74,7 @@ function DraggableListRow({
   approvedAwaitingExecution = false,
 }: DraggableListRowProps) {
   const presentationStatus = issue.pipelineStatus;
-  const isDone = presentationStatus === ISSUE_PIPELINE_STATUS.done;
+  const isClosed = presentationStatus === ISSUE_PIPELINE_STATUS.closed;
   const isCreating = isIssueCreating(issue);
   const isAutomation = isAutomationIssue(issue);
   const referenceLabel = isCreating
@@ -148,27 +148,27 @@ function DraggableListRow({
       }}
     >
       {isActive ? (
-        <span className="relative flex h-2 w-2 shrink-0 items-center justify-center">
+        <span className="relative flex size-2 shrink-0 items-center justify-center">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-agent" />
+          <span className="relative inline-flex size-2 rounded-full bg-agent" />
         </span>
       ) : (
         <span
           className={cn(
-            'h-2 w-2 shrink-0 rounded-full',
+            'size-2 shrink-0 rounded-full',
             tone === 'success' && 'bg-success',
             tone === 'done' && 'bg-done',
             tone === 'danger' && 'bg-danger',
             tone === 'warning' && 'bg-warning',
             tone === 'agent' && 'bg-agent',
             tone === 'default' &&
-              (issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done
+              (issue.pipelineStatus === ISSUE_PIPELINE_STATUS.closed
                 ? 'bg-done'
                 : 'bg-text-muted-foreground'),
           )}
         />
       )}
-      <StalenessDot staleness={staleness} className="h-2 w-2" />
+      <StalenessDot staleness={staleness} className="size-2" />
       <div className="flex shrink-0 items-center gap-1.5">
         {repoUrl && issue.issueNumber > 0 && !isCreating && !isAutomation && onOpenPullRequest ? (
           <Button
@@ -276,7 +276,7 @@ function DraggableListRow({
             <Maximize2 size={12} />
           </Button>
         )}
-        {isDone && onArchiveIssue && !isAutomation && (
+        {isClosed && onArchiveIssue && !isAutomation && (
           <Button
             variant="ghost"
             size="icon-xs"
@@ -472,7 +472,7 @@ export function IssueListView({
                 {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                 <span
                   className={cn(
-                    'h-2 w-2 shrink-0 rounded-full',
+                    'size-2 shrink-0 rounded-full',
                     !columnDotColor && COLUMN_DOT_CLASS[column.key],
                   )}
                   style={columnDotColor ? { backgroundColor: columnDotColor } : undefined}

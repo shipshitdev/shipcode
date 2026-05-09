@@ -676,8 +676,8 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       .listActiveInPhases(EXECUTION_PHASES)
       .filter((summary) => summary.threadId !== threadId && isSameProject(summary, context)).length;
     if (executingCount >= maxConcurrentExecutions) {
-      // Project execution slots full — stay in awaiting_approval until a slot frees.
-      emitPhase(threadId, 'awaiting_approval');
+      // Project execution slots full — stay in approval until a slot frees.
+      emitPhase(threadId, 'approval');
       return;
     }
 

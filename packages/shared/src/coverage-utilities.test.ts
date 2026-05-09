@@ -84,7 +84,7 @@ describe('shared utility coverage', () => {
   it('maps pipeline phases and CLI model capability fallbacks', () => {
     expect(phaseToProgress('todo')).toBe(0);
     expect(phaseToProgress('executing')).toBe(72);
-    expect(phaseToProgress('done')).toBe(100);
+    expect(phaseToProgress('closed')).toBe(100);
     expect(phaseToProgress('something-else' as never)).toBe(0);
 
     const fallback = fallbackCliModelCapabilities('codex', '2026-05-08T00:00:00.000Z');

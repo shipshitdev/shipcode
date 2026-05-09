@@ -11,7 +11,15 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import { DroppableColumn, StackedColumn } from '@/kanban-board/BoardColumns';
 import { BoardToolbar } from '@/kanban-board/BoardToolbar';
 import { COLUMNS } from '@/kanban-board/constants';
@@ -44,9 +52,10 @@ type KeyboardFocusColumn = {
   issues: GitHubIssueCacheRecord[];
 };
 
-type PendingIssueAction = 'start' | 'retry' | 'pause' | 'resume' | 'cancel' | 'done' | 'reset';
+type PendingIssueAction = 'start' | 'retry' | 'pause' | 'resume' | 'cancel' | 'close' | 'reset';
 type IssueActionHandler = (issue: GitHubIssueCacheRecord) => void | Promise<void>;
 const MIN_ACTION_PENDING_MS = 650;
+const EMPTY_THREADS: NonNullable<KanbanBoardProps['threads']> = [];
 
 function isEditableKeyboardTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -71,8 +80,10 @@ function firstFocusableIssueId(columns: KeyboardFocusColumn[]): string | null {
 function findFocusedPosition(columns: KeyboardFocusColumn[], issueId: string | null) {
   if (!issueId) return null;
   for (let columnIndex = 0; columnIndex < columns.length; columnIndex += 1) {
-    const issueIndex = columns[columnIndex].issues.findIndex((issue) => issue.id === issueId);
-    if (issueIndex >= 0) return { columnIndex, issueIndex };
+    const issues = columns[columnIndex].issues;
+    for (let issueIndex = 0; issueIndex < issues.length; issueIndex += 1) {
+      if (issues[issueIndex].id === issueId) return { columnIndex, issueIndex };
+    }
   }
   return null;
 }
@@ -127,11 +138,11 @@ function moveFocusedIssueId(
   );
 }
 
-export function KanbanBoard({
+function useKanbanBoardView({
   issues,
   project,
   settings,
-  threads = [],
+  threads = EMPTY_THREADS,
   approvedAwaitingExecutionIssueIds,
   flashingIssueIds,
   readOnly = false,
@@ -204,8 +215,14 @@ export function KanbanBoard({
     branchName: string;
     status: 'copied' | 'error';
   } | null>(null);
-  const [keyboardActionToast, setKeyboardActionToast] = useState<string | null>(null);
-  const [focusedIssueId, setFocusedIssueId] = useState<string | null>(null);
+  const [keyboardActionToast, showKeyboardActionToast] = useReducer(
+    (_current: string | null, next: string | null) => next,
+    null,
+  );
+  const [focusedIssueId, focusIssue] = useReducer(
+    (_current: string | null, next: string | null) => next,
+    null,
+  );
   const [pendingIssueActions, setPendingIssueActions] = useState<
     Partial<Record<string, PendingIssueAction>>
   >({});
@@ -309,7 +326,7 @@ export function KanbanBoard({
     [boardIssues, settings?.worktreeBranchFormat],
   );
   const sortedIssues = useMemo(
-    () => [...boardIssues].sort((a, b) => compareIssues(a, b, sortOrder)),
+    () => boardIssues.toSorted((a, b) => compareIssues(a, b, sortOrder)),
     [boardIssues, sortOrder],
   );
   const visibleIssues = useMemo(
@@ -325,18 +342,19 @@ export function KanbanBoard({
       }),
     [approvalFilter, issueApprovalBadgeById, issueStalenessById, sortedIssues, stalenessFilter],
   );
-  const visibleIssuesByColumn = useMemo(
-    () =>
-      new Map(
-        COLUMNS.filter((column) => !column.sections).map((column) => [
-          column.key,
-          visibleIssues.filter((issue) =>
-            issueMatchesColumn(issue, column, approvedAwaitingExecutionIssueIds),
-          ),
-        ]),
-      ),
-    [approvedAwaitingExecutionIssueIds, visibleIssues],
-  );
+  const visibleIssuesByColumn = useMemo(() => {
+    const next = new Map<ColumnKey, GitHubIssueCacheRecord[]>();
+    for (const column of COLUMNS) {
+      if (column.sections) continue;
+      next.set(
+        column.key,
+        visibleIssues.filter((issue) =>
+          issueMatchesColumn(issue, column, approvedAwaitingExecutionIssueIds),
+        ),
+      );
+    }
+    return next;
+  }, [approvedAwaitingExecutionIssueIds, visibleIssues]);
   const keyboardFocusColumns = useMemo<KeyboardFocusColumn[]>(
     () =>
       COLUMNS.map((column) => {
@@ -360,8 +378,9 @@ export function KanbanBoard({
   const focusedIssue = useMemo(() => {
     if (!focusedIssueId) return null;
     for (const column of keyboardFocusColumns) {
-      const issue = column.issues.find((candidate) => candidate.id === focusedIssueId);
-      if (issue) return issue;
+      for (const issue of column.issues) {
+        if (issue.id === focusedIssueId) return issue;
+      }
     }
     return null;
   }, [focusedIssueId, keyboardFocusColumns]);
@@ -432,7 +451,7 @@ export function KanbanBoard({
   );
 
   const handleMarkDone = useCallback(
-    (issue: GitHubIssueCacheRecord) => runIssueAction('done', issue, onMarkDone),
+    (issue: GitHubIssueCacheRecord) => runIssueAction('close', issue, onMarkDone),
     [onMarkDone, runIssueAction],
   );
 
@@ -463,26 +482,29 @@ export function KanbanBoard({
 
   useEffect(() => {
     if (view !== 'kanban' || readOnly) {
-      setFocusedIssueId(null);
+      focusIssue(null);
       return;
     }
 
-    setFocusedIssueId((current) => {
-      if (!current) return null; // don't auto-focus on mount
-      if (findFocusedPosition(keyboardFocusColumns, current)) return current;
-      return firstFocusableIssueId(keyboardFocusColumns);
-    });
-  }, [keyboardFocusColumns, readOnly, view]);
+    focusIssue(
+      (() => {
+        const current = focusedIssueId;
+        if (!current) return null; // don't auto-focus on mount
+        if (findFocusedPosition(keyboardFocusColumns, current)) return current;
+        return firstFocusableIssueId(keyboardFocusColumns);
+      })(),
+    );
+  }, [focusedIssueId, keyboardFocusColumns, readOnly, view]);
 
-  useEffect(() => {
-    if (view !== 'kanban' || !focusedIssueId) return;
+  const scrollIssueIntoView = useCallback((issueId: string | null) => {
+    if (!issueId) return;
     const root = boardRootRef.current;
     if (!root) return;
     const focusedCard = Array.from(root.querySelectorAll<HTMLElement>('[data-issue-card-id]')).find(
-      (card) => card.dataset.issueCardId === focusedIssueId,
+      (card) => card.dataset.issueCardId === issueId,
     );
     focusedCard?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-  }, [focusedIssueId, view]);
+  }, []);
 
   useEffect(() => {
     if (!showRefreshToast) return;
@@ -498,7 +520,7 @@ export function KanbanBoard({
 
   useEffect(() => {
     if (!keyboardActionToast) return;
-    const id = setTimeout(() => setKeyboardActionToast(null), 2000);
+    const id = setTimeout(() => showKeyboardActionToast(null), 2000);
     return () => clearTimeout(id);
   }, [keyboardActionToast]);
 
@@ -511,6 +533,25 @@ export function KanbanBoard({
     },
     [],
   );
+
+  const openIssueFromKeyboard = useEffectEvent((issue: GitHubIssueCacheRecord) => {
+    onIssueClick(issue);
+  });
+  const commentIssueFromKeyboard = useEffectEvent((issue: GitHubIssueCacheRecord) => {
+    (onCommentIssue ?? onIssueClick)(issue);
+  });
+  const startPipelineFromKeyboard = useEffectEvent((issue: GitHubIssueCacheRecord) => {
+    handleStartPipeline(issue);
+  });
+  const rerunFromKeyboard = useEffectEvent((issue: GitHubIssueCacheRecord) => {
+    handleRerun(issue);
+  });
+  const resumeFromKeyboard = useEffectEvent((issue: GitHubIssueCacheRecord) => {
+    handleResume(issue);
+  });
+  const hasStartPipelineHandler = useEffectEvent(() => Boolean(onStartPipeline));
+  const hasRerunHandler = useEffectEvent(() => Boolean(onRerun));
+  const hasResumeHandler = useEffectEvent(() => Boolean(onResume));
 
   useEffect(() => {
     if (!shortcutsEnabled || view !== 'kanban') return;
@@ -536,7 +577,9 @@ export function KanbanBoard({
       const key = arrowMap[raw] ?? raw;
       if (key === 'j' || key === 'k' || key === 'h' || key === 'l') {
         event.preventDefault();
-        setFocusedIssueId((current) => moveFocusedIssueId(keyboardFocusColumns, current, key));
+        const nextIssueId = moveFocusedIssueId(keyboardFocusColumns, focusedIssueId, key);
+        focusIssue(nextIssueId);
+        scrollIssueIntoView(nextIssueId);
         return;
       }
 
@@ -544,18 +587,18 @@ export function KanbanBoard({
       if (isIssueCreating(focusedIssue)) {
         if (key === 'Enter' || key === 'c' || key === 'e') {
           event.preventDefault();
-          setKeyboardActionToast('Issue is still being created on GitHub.');
+          showKeyboardActionToast('Issue is still being created on GitHub.');
         }
         return;
       }
       if (key === 'Enter') {
         event.preventDefault();
-        onIssueClick(focusedIssue);
+        openIssueFromKeyboard(focusedIssue);
         return;
       }
       if (key === 'c') {
         event.preventDefault();
-        (onCommentIssue ?? onIssueClick)(focusedIssue);
+        commentIssueFromKeyboard(focusedIssue);
         return;
       }
       if (key !== 'e') return;
@@ -563,38 +606,40 @@ export function KanbanBoard({
       event.preventDefault();
       if (
         focusedIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.todo &&
-        onStartPipeline &&
+        hasStartPipelineHandler() &&
         !readOnly &&
         !isAutomationIssue(focusedIssue)
       ) {
-        handleStartPipeline(focusedIssue);
+        startPipelineFromKeyboard(focusedIssue);
         return;
       }
-      if (focusedIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed && onRerun && !readOnly) {
-        handleRerun(focusedIssue);
+      if (
+        focusedIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed &&
+        hasRerunHandler() &&
+        !readOnly
+      ) {
+        rerunFromKeyboard(focusedIssue);
         return;
       }
-      if (focusedIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.paused && onResume && !readOnly) {
-        handleResume(focusedIssue);
+      if (
+        focusedIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.paused &&
+        hasResumeHandler() &&
+        !readOnly
+      ) {
+        resumeFromKeyboard(focusedIssue);
         return;
       }
-      setKeyboardActionToast('Pipeline can only start from Todo cards.');
+      showKeyboardActionToast('Pipeline can only start from Todo cards.');
     };
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [
     focusedIssue,
-    handleRerun,
-    handleResume,
-    handleStartPipeline,
+    focusedIssueId,
     keyboardFocusColumns,
-    onCommentIssue,
-    onIssueClick,
-    onRerun,
-    onResume,
-    onStartPipeline,
     readOnly,
+    scrollIssueIntoView,
     shortcutsEnabled,
     view,
   ]);
@@ -633,14 +678,14 @@ export function KanbanBoard({
       runIssueAction('retry', issue, onRerun ?? onStartPipeline);
       return;
     }
-    // 3. human → todo (reset failed or awaiting_approval back to todo)
+    // 3. human → todo (reset failed or approval back to todo)
     if (
       sourceColumn === 'human' &&
       dropId === 'todo' &&
       (issue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed ||
         issue.pipelineStatus === ISSUE_PIPELINE_STATUS.clarifying ||
         issue.pipelineStatus === ISSUE_PIPELINE_STATUS.paused ||
-        issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval) &&
+        issue.pipelineStatus === ISSUE_PIPELINE_STATUS.approval) &&
       onRetry
     ) {
       handleResetIssue(issue);
@@ -651,14 +696,14 @@ export function KanbanBoard({
       sourceColumn === 'agent' &&
       dropId === 'todo' &&
       (issue.pipelineStatus === ISSUE_PIPELINE_STATUS.queued ||
-        issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval) &&
+        issue.pipelineStatus === ISSUE_PIPELINE_STATUS.approval) &&
       onRetry
     ) {
       handleResetIssue(issue);
       return;
     }
-    // 5. any manually draggable card → done (explicitly complete issue)
-    if ((dropId === 'done' || dropId === 'done:done') && onMarkDone) {
+    // 5. any manually draggable card -> closed
+    if ((dropId === 'done' || dropId === 'done:closed') && onMarkDone) {
       handleMarkDone(issue);
       return;
     }
@@ -758,7 +803,7 @@ export function KanbanBoard({
                       pausingId={pendingIssueIdByAction.pause ?? null}
                       resumingId={pendingIssueIdByAction.resume ?? null}
                       cancellingId={pendingIssueIdByAction.cancel ?? null}
-                      markingDoneId={pendingIssueIdByAction.done ?? null}
+                      markingDoneId={pendingIssueIdByAction.close ?? null}
                       selectedIssueNumber={selectedIssueNumber}
                       issueBranchNameById={issueBranchNameById}
                       branchCopyIssueId={branchCopyToast?.issueId ?? null}
@@ -864,4 +909,8 @@ export function KanbanBoard({
       )}
     </div>
   );
+}
+
+export function KanbanBoard(props: KanbanBoardProps) {
+  return useKanbanBoardView(props);
 }

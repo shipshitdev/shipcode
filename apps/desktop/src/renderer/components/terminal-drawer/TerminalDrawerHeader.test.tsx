@@ -199,7 +199,7 @@ describe('TerminalDrawerHeader', () => {
   });
 
   it('renders waiting-for-slot copy for approved execution waiters', () => {
-    const issue = makeIssue({ pipelineStatus: 'awaiting_approval' });
+    const issue = makeIssue({ pipelineStatus: 'approval' });
 
     renderHeader(
       <TerminalDrawerHeader
@@ -209,7 +209,7 @@ describe('TerminalDrawerHeader', () => {
         displayTarget={issueTarget(issue)}
         isMaximized={false}
         isMinimized={false}
-        pipelinePhase="awaiting_approval"
+        pipelinePhase="approval"
         runningTargets={[issueTarget(issue)]}
         startedAt={null}
         terminalThreadId={issue.threadId}

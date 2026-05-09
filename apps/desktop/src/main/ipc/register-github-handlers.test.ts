@@ -194,7 +194,7 @@ describe('registerGitHubHandlers', () => {
       linkThread: vi.fn(),
       list: vi.fn(() => listResult),
       reconcileCompletedFromEvidence: vi.fn(),
-      resetStaleAwaitingApproval: vi.fn(() => 0),
+      resetStaleApproval: vi.fn(() => 0),
       runInTransaction: vi.fn((fn: () => unknown) => fn()),
       ...overrides,
     };
@@ -363,17 +363,17 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
-  it('reopens a closed issue and restores awaiting approval from the linked thread state', async () => {
+  it('reopens a closed issue and restores approval from the linked thread state', async () => {
     const closedIssue = {
       ...baseIssue,
       state: 'closed',
-      pipelineStatus: 'done',
+      pipelineStatus: 'closed',
       threadId: reusableThread.id,
     };
     const restoredIssue = {
       ...closedIssue,
       state: 'open',
-      pipelineStatus: 'awaiting_approval',
+      pipelineStatus: 'approval',
     };
     const queries = {
       projects: {
@@ -388,10 +388,10 @@ describe('registerGitHubHandlers', () => {
         [restoredIssue],
       ),
       threads: {
-        getById: vi.fn(() => ({ ...reusableThread, status: 'awaiting_approval' })),
+        getById: vi.fn(() => ({ ...reusableThread, status: 'approval' })),
         getByProjectAndGithubIssue: vi.fn(() => ({
           ...reusableThread,
-          status: 'awaiting_approval',
+          status: 'approval',
         })),
       },
     };
@@ -416,7 +416,7 @@ describe('registerGitHubHandlers', () => {
     expect(queries.githubIssues.updateState).toHaveBeenCalledWith(closedIssue.id, 'open');
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
       closedIssue.id,
-      'awaiting_approval',
+      'approval',
     );
     expect(queries.githubIssues.clearArchivedAt).toHaveBeenCalledWith(closedIssue.id);
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
@@ -425,7 +425,7 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
-  it('marks a quick/local issue done without calling GitHub', async () => {
+  it('closes a quick/local issue without calling GitHub', async () => {
     const quickIssue = {
       ...baseIssue,
       id: 'quick-1',
@@ -474,7 +474,7 @@ describe('registerGitHubHandlers', () => {
 
     expect(closeIssueMock).not.toHaveBeenCalled();
     expect(queries.githubIssues.updateState).not.toHaveBeenCalled();
-    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(quickIssue.id, 'done');
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(quickIssue.id, 'closed');
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
       projectId: 'project-1',
       issues: [quickIssue],
@@ -541,7 +541,7 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
-  it('marks an automation issue done by updating the backing thread only', async () => {
+  it('closes an automation issue by updating the backing thread only', async () => {
     const markDoneThread = vi.fn();
     const queries = {
       projects: {
@@ -598,7 +598,7 @@ describe('registerGitHubHandlers', () => {
       ...baseIssue,
       id: 'issue-open',
       state: 'open',
-      pipelineStatus: 'done',
+      pipelineStatus: 'closed',
     };
     const refreshedIssues = [{ ...openIssue, archivedAt: new Date().toISOString() }];
     const archiveIssues = vi.fn();
@@ -649,7 +649,7 @@ describe('registerGitHubHandlers', () => {
     expect(closeIssueMock).toHaveBeenCalledWith(42);
     expect(archiveProjectItemsMock).toHaveBeenCalledWith(42);
     expect(queries.githubIssues.updateState).toHaveBeenCalledWith(openIssue.id, 'closed');
-    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(openIssue.id, 'done');
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(openIssue.id, 'closed');
     expect(archiveIssues).toHaveBeenCalledWith([openIssue.id]);
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
       projectId: 'project-1',
@@ -664,7 +664,7 @@ describe('registerGitHubHandlers', () => {
       issueNumber: -236024417,
       isQuickMode: true,
       state: 'open',
-      pipelineStatus: 'done',
+      pipelineStatus: 'closed',
     };
     const archiveIssues = vi.fn();
     const queries = {
@@ -709,7 +709,7 @@ describe('registerGitHubHandlers', () => {
     expect(closeIssueMock).not.toHaveBeenCalled();
     expect(archiveProjectItemsMock).not.toHaveBeenCalled();
     expect(queries.githubIssues.updateState).not.toHaveBeenCalled();
-    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(quickIssue.id, 'done');
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(quickIssue.id, 'closed');
     expect(archiveIssues).toHaveBeenCalledWith([quickIssue.id]);
   });
 
@@ -718,7 +718,7 @@ describe('registerGitHubHandlers', () => {
       ...baseIssue,
       id: 'issue-open',
       state: 'open',
-      pipelineStatus: 'done',
+      pipelineStatus: 'closed',
     };
     archiveProjectItemsMock.mockRejectedValue(new Error('project archive failed'));
     const queries = {
@@ -775,7 +775,7 @@ describe('registerGitHubHandlers', () => {
       ...baseIssue,
       id: 'issue-closed',
       state: 'closed',
-      pipelineStatus: 'done',
+      pipelineStatus: 'closed',
     };
     const queries = {
       projects: {
@@ -826,21 +826,21 @@ describe('registerGitHubHandlers', () => {
     expect(queries.githubIssues.archiveIssues).not.toHaveBeenCalled();
   });
 
-  it('archives done automation runs locally when archiving all done issues', async () => {
-    const archiveDoneAutomationRuns = vi.fn(() => 3);
+  it('archives closed automation runs locally when archiving all closed issues', async () => {
+    const archiveClosedAutomationRuns = vi.fn(() => 3);
     const queries = {
       projects: {
         getById: vi.fn(() => baseProject),
       },
       githubIssues: buildGithubIssuesQueries(
         {
-          listCompleted: vi.fn(() => []),
+          listClosed: vi.fn(() => []),
           archiveIssues: vi.fn(),
         },
         [],
       ),
       threads: {
-        archiveDoneAutomationRuns,
+        archiveClosedAutomationRuns,
         getById: vi.fn(() => null),
         getByProjectAndGithubIssue: vi.fn(() => null),
       },
@@ -862,7 +862,7 @@ describe('registerGitHubHandlers', () => {
 
     const result = await archiveAllDone(undefined, { projectId: 'project-1' });
 
-    expect(archiveDoneAutomationRuns).toHaveBeenCalledWith('project-1');
+    expect(archiveClosedAutomationRuns).toHaveBeenCalledWith('project-1');
     expect(closeIssueMock).not.toHaveBeenCalled();
     expect(archiveProjectItemsMock).not.toHaveBeenCalled();
     expect(queries.githubIssues.archiveIssues).not.toHaveBeenCalled();
@@ -873,14 +873,14 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
-  it('archives done quick tasks locally when archiving all done issues', async () => {
+  it('archives closed quick tasks locally when archiving all closed issues', async () => {
     const quickIssue = {
       ...baseIssue,
       id: 'quick-1',
       issueNumber: -236024417,
       isQuickMode: true,
       state: 'open',
-      pipelineStatus: 'done',
+      pipelineStatus: 'closed',
     };
     const archiveIssues = vi.fn();
     const queries = {
@@ -889,13 +889,13 @@ describe('registerGitHubHandlers', () => {
       },
       githubIssues: buildGithubIssuesQueries(
         {
-          listCompleted: vi.fn(() => [quickIssue]),
+          listClosed: vi.fn(() => [quickIssue]),
           archiveIssues,
         },
         [],
       ),
       threads: {
-        archiveDoneAutomationRuns: vi.fn(() => 0),
+        archiveClosedAutomationRuns: vi.fn(() => 0),
         getById: vi.fn(() => null),
         getByProjectAndGithubIssue: vi.fn(() => null),
       },
@@ -923,7 +923,7 @@ describe('registerGitHubHandlers', () => {
     expect(result).toEqual({ archivedCount: 1, failedCount: 0 });
   });
 
-  it('archives GitHub done issues and reports per-issue archive failures', async () => {
+  it('archives GitHub closed issues and reports per-issue archive failures', async () => {
     const openIssue = { ...baseIssue, id: 'issue-open', issueNumber: 42, state: 'open' };
     const closedIssue = { ...baseIssue, id: 'issue-closed', issueNumber: 43, state: 'closed' };
     const failedIssue = { ...baseIssue, id: 'issue-failed', issueNumber: 44, state: 'open' };
@@ -938,13 +938,13 @@ describe('registerGitHubHandlers', () => {
       },
       githubIssues: buildGithubIssuesQueries(
         {
-          listCompleted: vi.fn(() => [openIssue, closedIssue, failedIssue]),
+          listClosed: vi.fn(() => [openIssue, closedIssue, failedIssue]),
           archiveIssues,
         },
         [],
       ),
       threads: {
-        archiveDoneAutomationRuns: vi.fn(() => 1),
+        archiveClosedAutomationRuns: vi.fn(() => 1),
         getById: vi.fn(() => null),
         getByProjectAndGithubIssue: vi.fn(() => null),
       },
@@ -1358,7 +1358,7 @@ describe('registerGitHubHandlers', () => {
             // Subsequent calls: post-upsert + final list-for-broadcast.
             .mockReturnValue(cachedAfterUpsert),
           upsert: vi.fn(() => baseIssue),
-          markDoneOnClose: vi.fn(),
+          markClosedOnClose: vi.fn(),
           updateState: vi.fn(),
           clearArchivedAt: vi.fn(),
           setPriority: vi.fn(),

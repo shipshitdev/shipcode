@@ -30,7 +30,7 @@ function LabelCategory({ title, labels, existingNames }: LabelCategoryProps) {
           return (
             <div key={label.name} className="flex items-center gap-2 text-[12px]">
               <span
-                className="inline-block h-2.5 w-2.5 rounded-full"
+                className="inline-block size-2.5 rounded-full"
                 style={{ backgroundColor: `#${label.color}` }}
               />
               <span className={isPresent ? 'text-primary' : 'text-muted-foreground'}>
@@ -97,7 +97,7 @@ function StatusColumnMapping({
       <div className="space-y-1">
         {mapped.map((col) => (
           <div key={col.key} className="flex items-center gap-2 text-[12px]">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-success" />
+            <span className="inline-block size-2.5 rounded-full bg-success" />
             <span className="font-medium text-primary">{col.label}</span>
             <span className="text-muted-foreground">→</span>
             <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-primary">
@@ -107,7 +107,7 @@ function StatusColumnMapping({
         ))}
         {unmapped.map((col) => (
           <div key={col.key} className="flex items-center gap-2 text-[12px]">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-warning" />
+            <span className="inline-block size-2.5 rounded-full bg-warning" />
             <span className="font-medium text-muted-foreground">{col.label}</span>
             <span className="text-[10px] text-warning">not mapped</span>
           </div>
@@ -163,7 +163,7 @@ function ProjectReadinessSummary({
   onRefresh: () => void;
 }) {
   if (loading) {
-    return <div className="text-[12px] text-muted-foreground">Checking GitHub readiness...</div>;
+    return <div className="text-[12px] text-muted-foreground">Checking GitHub readiness…</div>;
   }
 
   if (error) {
@@ -260,7 +260,7 @@ export function ProjectSettingsGitHubTab({
       </div>
 
       {readinessQuery.isLoading ? (
-        <div className="text-[12px] text-muted-foreground">Checking GitHub readiness...</div>
+        <div className="text-[12px] text-muted-foreground">Checking GitHub readiness…</div>
       ) : (
         <>
           <ProjectReadinessSummary

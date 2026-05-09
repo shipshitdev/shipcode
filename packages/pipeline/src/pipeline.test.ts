@@ -212,7 +212,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     projectId: 'project-1',
     title: 'test',
     prompt: 'test',
-    status: 'awaiting_approval',
+    status: 'approval',
     kind: 'pipeline' as const,
     worktreeBranch: null,
     worktreePath: null,
@@ -824,11 +824,11 @@ describe('createPipeline', () => {
 
       expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
         'issue-1',
-        'awaiting_approval',
+        'approval',
       );
     });
 
-    it('passes awaiting_approval through to the linked GitHub issue status', async () => {
+    it('passes approval through to the linked GitHub issue status', async () => {
       vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue(makeIssue());
 
       const pipeline = createPipeline(mock.deps);
@@ -857,11 +857,11 @@ describe('createPipeline', () => {
         { speedProfile: 'smart_fast' },
       );
       expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approved');
-      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approval');
       expect(mock.emittedEvents).toContainEqual(
         expect.objectContaining({ type: 'plan:parsed', threadId: 't1' }),
       );
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
     });
 
     it('exit 0 + valid plan + autonomous → calls startExecution (spawns claude) when revisions are off', async () => {
@@ -1142,7 +1142,7 @@ Custom prompt`,
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
     });
 
-    it('approve + manual → emits awaiting_approval', async () => {
+    it('approve + manual → emits approval', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
 
@@ -1151,8 +1151,8 @@ Custom prompt`,
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
-      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approval');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
     });
 
     it('request_changes + autonomous + round < MAX_REVIEW_ROUNDS → emits revising', async () => {
@@ -1192,7 +1192,7 @@ Custom prompt`,
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
     });
 
-    it('request_changes + autonomous + round >= MAX_REVIEW_ROUNDS + has critical → awaiting_approval', async () => {
+    it('request_changes + autonomous + round >= MAX_REVIEW_ROUNDS + has critical → approval', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       const context = requireContext(pipeline);
@@ -1204,8 +1204,8 @@ Custom prompt`,
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
-      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approval');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
     });
 
     it('reject → emits failed', async () => {
@@ -1242,7 +1242,7 @@ Custom prompt`,
       );
     });
 
-    it('approve + non-autonomous + !requireApproval → awaiting_approval (no auto-execute)', async () => {
+    it('approve + non-autonomous + !requireApproval → approval (no auto-execute)', async () => {
       // context.autonomous defaults to false; requireApproval defaults to false
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
@@ -1252,10 +1252,10 @@ Custom prompt`,
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
     });
 
-    it('request_changes + requireApproval + rounds exhausted + has critical → awaiting_approval', async () => {
+    it('request_changes + requireApproval + rounds exhausted + has critical → approval', async () => {
       vi.mocked(mock.deps.settings.get).mockReturnValue({
         ...DEFAULT_SETTINGS,
         requireApproval: true,
@@ -1270,11 +1270,11 @@ Custom prompt`,
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
-      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approval');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
     });
 
-    it('approve + autonomous + project approval override → awaiting_approval', async () => {
+    it('approve + autonomous + project approval override → approval', async () => {
       vi.mocked(mock.deps.projects.getById).mockReturnValue(
         makeProject({ requireApprovalOverride: true }),
       );
@@ -1288,11 +1288,11 @@ Custom prompt`,
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
-      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approval');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
     });
 
-    it('request_changes + non-autonomous + rounds exhausted + has critical → awaiting_approval', async () => {
+    it('request_changes + non-autonomous + rounds exhausted + has critical → approval', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       // autonomous stays false (default)
@@ -1302,8 +1302,8 @@ Custom prompt`,
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
-      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approval');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
     });
   });
 
@@ -2988,12 +2988,12 @@ Custom prompt`,
       expect(active[0].phase).toBe('planning');
     });
 
-    it('reflects awaiting_approval phase from the thread for scheduler slot accounting', async () => {
+    it('reflects approval phase from the thread for scheduler slot accounting', async () => {
       mock.deps.threads.getById = vi.fn(() => ({
         id: 't1',
         projectId: 'project-1',
         githubIssueNumber: 42,
-        status: 'awaiting_approval',
+        status: 'approval',
       })) as never;
 
       const pipeline = createPipeline(mock.deps);
@@ -3001,7 +3001,7 @@ Custom prompt`,
 
       const active = pipeline.listActive();
       expect(active).toHaveLength(1);
-      expect(active[0].phase).toBe('awaiting_approval');
+      expect(active[0].phase).toBe('approval');
     });
 
     it('removes a pipeline from the active list after cancel', async () => {
@@ -3072,7 +3072,7 @@ Custom prompt`,
       mock.deps.threads.getById = vi.fn((id: string) => ({
         id,
         projectId: 'project-1',
-        status: id === 't-new' ? 'awaiting_approval' : 'executing',
+        status: id === 't-new' ? 'approval' : 'executing',
       })) as never;
 
       const pipeline = createPipeline(mock.deps);
@@ -3084,13 +3084,13 @@ Custom prompt`,
       const plan = { steps: [] } as never;
       await pipeline.startExecution('t-new', plan);
 
-      // Should have emitted awaiting_approval, not executing
+      // Should have emitted approval, not executing
       const phaseEvents = mock.emittedEvents.filter(
         (e: PipelineEvent) => e.type === 'pipeline:phase' && e.threadId === 't-new',
       );
       expect(phaseEvents[phaseEvents.length - 1]).toMatchObject({
         type: 'pipeline:phase',
-        phase: 'awaiting_approval',
+        phase: 'approval',
       });
     });
 
@@ -3098,7 +3098,7 @@ Custom prompt`,
       mock.deps.threads.getById = vi.fn((id: string) => ({
         id,
         projectId: 'project-1',
-        status: id === 't-existing' ? 'executing' : 'awaiting_approval',
+        status: id === 't-existing' ? 'executing' : 'approval',
       })) as never;
 
       const pipeline = createPipeline(mock.deps);
@@ -3108,7 +3108,7 @@ Custom prompt`,
       const plan = { steps: [] } as never;
       await pipeline.startExecution('t-new', plan);
 
-      // Should have emitted executing (gate passed), not awaiting_approval
+      // Should have emitted executing (gate passed), not approval
       const phaseEvents = mock.emittedEvents.filter(
         (e: PipelineEvent) => e.type === 'pipeline:phase' && e.threadId === 't-new',
       );
@@ -3122,7 +3122,7 @@ Custom prompt`,
       mock.deps.threads.getById = vi.fn((id: string) => ({
         id,
         projectId: id.startsWith('other-') ? 'project-2' : 'project-1',
-        status: id === 't-new' ? 'awaiting_approval' : 'executing',
+        status: id === 't-new' ? 'approval' : 'executing',
       })) as never;
 
       const pipeline = createPipeline(mock.deps);
@@ -3152,7 +3152,7 @@ Custom prompt`,
       mock.deps.threads.getById = vi.fn((id: string) => ({
         id,
         projectId: 'project-1',
-        status: id === 't3' ? 'awaiting_approval' : 'executing',
+        status: id === 't3' ? 'approval' : 'executing',
       })) as never;
 
       const pipeline = createPipeline(mock.deps);

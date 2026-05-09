@@ -18,6 +18,14 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 const PAGE_SIZE = 25;
+const ACTIVITY_LOADING_ROW_KEYS = [
+  'activity-loading-1',
+  'activity-loading-2',
+  'activity-loading-3',
+  'activity-loading-4',
+  'activity-loading-5',
+  'activity-loading-6',
+];
 
 function dayLabel(isoStr: string): string {
   const date = new Date(isoStr);
@@ -85,17 +93,16 @@ export function ActivityView() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <PageHeader title="Activity" subtitle="Timeline of all pipeline runs and agent actions." />
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-5xl">
           {isLoading && (
             <div className="space-y-5 py-4">
               <Skeleton className="h-3 w-16" />
               <Card>
                 <CardContent className="p-0">
-                  {Array.from({ length: 6 }, (_, i) => (
+                  {ACTIVITY_LOADING_ROW_KEYS.map((key) => (
                     <div
-                      // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
-                      key={i}
+                      key={key}
                       className="flex items-center gap-3 border-b border-border px-4 py-2.5 last:border-0"
                     >
                       <Skeleton className="h-3.5 w-10" />
@@ -119,7 +126,7 @@ export function ActivityView() {
 
           {!isLoading && !isError && activity.length === 0 && (
             <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-16 text-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/10">
+              <div className="flex size-10 items-center justify-center rounded-full bg-muted/10">
                 <Activity size={20} className="text-muted-foreground/50" />
               </div>
               <div className="space-y-1">

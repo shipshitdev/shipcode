@@ -24,7 +24,7 @@ import { FolderGit, Sparkles, Terminal } from 'lucide-react';
 import { useState } from 'react';
 import { StatusPill } from './StatusPill';
 
-export function IntegrationsSettingsSection({
+function useIntegrationsSettingsSectionView({
   integrationStatus,
   integrationsFetching,
   settings,
@@ -231,7 +231,7 @@ export function IntegrationsSettingsSection({
       </div>
 
       {!integrationStatus ? (
-        <div className="text-[13px] text-muted-foreground">Loading integration status...</div>
+        <div className="text-[13px] text-muted-foreground">Loading integration status…</div>
       ) : (
         <Tabs defaultValue="cli">
           <TabsList className="mb-5">
@@ -279,7 +279,7 @@ export function IntegrationsSettingsSection({
                 <div key={key} className="rounded-md border border-border bg-secondary/40 p-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="flex min-w-[110px] items-center gap-2 text-[13px] font-medium text-primary">
-                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-tertiary text-secondary">
+                      <span className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-tertiary text-secondary">
                         <Icon size={15} />
                       </span>
                       <span>{label}</span>
@@ -408,9 +408,13 @@ export function IntegrationsSettingsSection({
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="flex items-center justify-between gap-3">
+                    <label
+                      htmlFor="settings-discord-enabled"
+                      className="flex items-center justify-between gap-3"
+                    >
                       <span>Enable Discord chat alerts</span>
                       <Switch
+                        id="settings-discord-enabled"
                         checked={settings.discordEnabled}
                         onCheckedChange={(checked) => onUpdate({ discordEnabled: checked })}
                       />
@@ -465,9 +469,13 @@ export function IntegrationsSettingsSection({
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="flex items-center justify-between gap-3">
+                    <label
+                      htmlFor="settings-telegram-enabled"
+                      className="flex items-center justify-between gap-3"
+                    >
                       <span>Enable Telegram chat alerts</span>
                       <Switch
+                        id="settings-telegram-enabled"
                         checked={settings.telegramEnabled}
                         onCheckedChange={(checked) => onUpdate({ telegramEnabled: checked })}
                       />
@@ -552,4 +560,10 @@ export function IntegrationsSettingsSection({
       )}
     </>
   );
+}
+
+export function IntegrationsSettingsSection(
+  props: Parameters<typeof useIntegrationsSettingsSectionView>[0],
+) {
+  return useIntegrationsSettingsSectionView(props);
 }

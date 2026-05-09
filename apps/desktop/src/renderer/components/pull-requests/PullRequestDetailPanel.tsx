@@ -28,7 +28,7 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
   if (isLoading || !detail) {
     return (
       <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-        Loading...
+        Loading…
       </div>
     );
   }
@@ -105,7 +105,7 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
                 key={check.name}
                 className="flex items-center gap-2 rounded border border-border bg-secondary/30 px-2.5 py-1.5 text-[11px]"
               >
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+                <span className="size-1.5 shrink-0 rounded-full bg-red-500" />
                 <span className="flex-1 truncate text-primary">{check.name}</span>
                 {check.workflowName && (
                   <span className="text-muted-foreground">{check.workflowName}</span>
@@ -113,7 +113,7 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
                 {check.detailsUrl && (
                   <Button
                     variant="ghost"
-                    className="h-5 w-5 p-0 text-secondary"
+                    className="size-5 p-0 text-secondary"
                     onClick={() =>
                       check.detailsUrl
                         ? window.shipcode.invoke('shell:open-external', { url: check.detailsUrl })
@@ -151,7 +151,7 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
                   <div className="flex-1" />
                   <Button
                     variant="ghost"
-                    className="h-5 w-5 p-0 text-secondary"
+                    className="size-5 p-0 text-secondary"
                     onClick={() =>
                       window.shipcode.invoke('shell:open-external', { url: comment.url })
                     }

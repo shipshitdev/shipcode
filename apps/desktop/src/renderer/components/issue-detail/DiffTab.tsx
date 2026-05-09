@@ -8,10 +8,10 @@ export function DiffTab({ diffs, threadStatus }: { diffs: DiffRecord[]; threadSt
   const [isFullScreen, setIsFullScreen] = useState(false);
 
   if (diffs.length === 0) {
-    const isTerminal = threadStatus === 'completed' || threadStatus === 'done';
+    const isTerminal = threadStatus === 'completed' || threadStatus === 'closed';
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/10">
+        <div className="flex size-10 items-center justify-center rounded-full bg-muted/10">
           <FileCode2 size={20} className="text-muted-foreground/50" />
         </div>
         <div className="space-y-1">
@@ -66,7 +66,7 @@ export function DiffTab({ diffs, threadStatus }: { diffs: DiffRecord[]; threadSt
         className="max-w-[95vw] h-[90vh] flex flex-col overflow-hidden p-0"
         headerClassName="shrink-0 border-b border-border px-6 py-4"
         headerAction={
-          <Button variant="ghost" className="h-7 w-7 p-0" onClick={() => setIsFullScreen(false)}>
+          <Button variant="ghost" className="size-7 p-0" onClick={() => setIsFullScreen(false)}>
             <X size={15} strokeWidth={2.25} />
           </Button>
         }

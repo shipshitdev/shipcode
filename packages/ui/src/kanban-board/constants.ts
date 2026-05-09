@@ -10,7 +10,7 @@ export const COLUMNS: BoardColumn[] = [
   },
   {
     key: 'agent',
-    label: 'Agent Loop',
+    label: 'Agent',
     statuses: [
       ISSUE_PIPELINE_STATUS.queued,
       ISSUE_PIPELINE_STATUS.planning,
@@ -42,8 +42,8 @@ export const COLUMNS: BoardColumn[] = [
       },
       {
         key: 'waiting_execution',
-        label: 'Waiting For Execution',
-        statuses: [ISSUE_PIPELINE_STATUS.awaitingApproval],
+        label: 'Waiting',
+        statuses: [ISSUE_PIPELINE_STATUS.approval],
         droppable: false,
       },
       {
@@ -68,10 +68,10 @@ export const COLUMNS: BoardColumn[] = [
   },
   {
     key: 'human',
-    label: 'Human',
+    label: 'Attention',
     statuses: [
       ISSUE_PIPELINE_STATUS.clarifying,
-      ISSUE_PIPELINE_STATUS.awaitingApproval,
+      ISSUE_PIPELINE_STATUS.approval,
       ISSUE_PIPELINE_STATUS.paused,
       ISSUE_PIPELINE_STATUS.failed,
     ],
@@ -83,15 +83,9 @@ export const COLUMNS: BoardColumn[] = [
         droppable: false,
       },
       {
-        key: 'awaiting',
-        label: 'Needs Approval',
-        statuses: [ISSUE_PIPELINE_STATUS.awaitingApproval],
-        droppable: false,
-      },
-      {
-        key: 'failed',
-        label: 'Failed',
-        statuses: [ISSUE_PIPELINE_STATUS.failed],
+        key: 'approval',
+        label: 'Approval',
+        statuses: [ISSUE_PIPELINE_STATUS.approval],
         droppable: false,
       },
       {
@@ -100,13 +94,19 @@ export const COLUMNS: BoardColumn[] = [
         statuses: [ISSUE_PIPELINE_STATUS.paused],
         droppable: false,
       },
+      {
+        key: 'failed',
+        label: 'Failed',
+        statuses: [ISSUE_PIPELINE_STATUS.failed],
+        droppable: false,
+      },
     ],
   },
   {
     key: 'done',
     label: 'Done',
     droppable: false,
-    statuses: [ISSUE_PIPELINE_STATUS.completed, ISSUE_PIPELINE_STATUS.done],
+    statuses: [ISSUE_PIPELINE_STATUS.completed, ISSUE_PIPELINE_STATUS.closed],
     sections: [
       {
         key: 'completed',
@@ -115,9 +115,9 @@ export const COLUMNS: BoardColumn[] = [
         droppable: false,
       },
       {
-        key: 'done',
-        label: 'Done',
-        statuses: [ISSUE_PIPELINE_STATUS.done],
+        key: 'closed',
+        label: 'Closed',
+        statuses: [ISSUE_PIPELINE_STATUS.closed],
         droppable: true,
       },
     ],
@@ -155,7 +155,7 @@ export const DRAGGABLE_STATUSES: IssuePipelineStatus[] = [
   ISSUE_PIPELINE_STATUS.queued,
   ISSUE_PIPELINE_STATUS.completed,
   ISSUE_PIPELINE_STATUS.failed,
-  ISSUE_PIPELINE_STATUS.awaitingApproval,
+  ISSUE_PIPELINE_STATUS.approval,
   ISSUE_PIPELINE_STATUS.paused,
 ];
 
@@ -181,8 +181,8 @@ export const PHASE_ELAPSED_STATUSES: IssuePipelineStatus[] = [
 
 export const LIST_COLUMN_LABEL: Record<ColumnKey, string> = {
   todo: 'Todo',
-  agent: 'In Progress',
-  human: 'Needs Attention',
+  agent: 'Agent',
+  human: 'Attention',
   done: 'Done',
   deferred: 'Deferred',
 };
@@ -190,7 +190,7 @@ export const LIST_COLUMN_LABEL: Record<ColumnKey, string> = {
 export const LIST_COLUMN_DROP_ID: Partial<Record<ColumnKey, string>> = {
   todo: 'todo',
   agent: 'agent:planning',
-  done: 'done:done',
+  done: 'done:closed',
 };
 
 export const BOARD_SORT_LABELS: Record<BoardSortOrder, string> = {

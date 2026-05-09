@@ -141,7 +141,7 @@ describe('CLI entrypoint', () => {
       },
       {
         name: 'plan <issue>',
-        description: 'Generate and review a plan (stops at awaiting_approval)',
+        description: 'Generate and review a plan (stops at approval)',
         action: planCommandMock,
       },
       {

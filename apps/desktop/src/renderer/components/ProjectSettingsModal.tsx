@@ -17,7 +17,15 @@ import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { Bell, Code2, FolderGit, Settings, Terminal, Workflow } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+} from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ProjectSettingsContextTab } from './project-settings-modal/ProjectSettingsContextTab';
@@ -87,7 +95,200 @@ const PROJECT_SETTINGS_SECTIONS = [
 
 const SETUP_REDETECT_BUSY_MIN_MS = 400;
 
-export function ProjectSettingsModal() {
+type ProjectSyncResult = {
+  attached: number;
+  alreadyPresent: number;
+  failed: number;
+  errors: string[];
+};
+
+type ProjectSettingsUiState = {
+  activeTab: ProjectTab;
+  nameInput: string;
+  urlInput: string;
+  touched: boolean;
+  submitError: string | null;
+  overrides: ProjectOverrideState;
+  contextGenerating: boolean;
+  contextGeneratorCli: ContextGeneratorCli;
+  contextError: string | null;
+  syncResult: ProjectSyncResult | null;
+  syncError: string | null;
+  relinkError: string | null;
+  issueOverrideResetResult: string | null;
+  issueOverrideResetError: string | null;
+  modelValidation: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
+  notifyGithubUser: string;
+  setupSaveError: string | null;
+  manualSetupDetectPending: boolean;
+};
+
+type ProjectSettingsUiAction =
+  | { type: 'seed-open'; activeTab: ProjectTab | null; project: Project | null | undefined }
+  | { type: 'patch'; patch: Partial<ProjectSettingsUiState> }
+  | { type: 'overrides'; updater: SetStateAction<ProjectOverrideState> }
+  | {
+      type: 'model-validation';
+      updater: SetStateAction<Partial<Record<PhaseKey, OpenRouterModelValidation | null>>>;
+    };
+
+const INITIAL_PROJECT_SETTINGS_UI_STATE: ProjectSettingsUiState = {
+  activeTab: 'general',
+  nameInput: '',
+  urlInput: '',
+  touched: false,
+  submitError: null,
+  overrides: EMPTY_OVERRIDES,
+  contextGenerating: false,
+  contextGeneratorCli: 'claude',
+  contextError: null,
+  syncResult: null,
+  syncError: null,
+  relinkError: null,
+  issueOverrideResetResult: null,
+  issueOverrideResetError: null,
+  modelValidation: {},
+  notifyGithubUser: '',
+  setupSaveError: null,
+  manualSetupDetectPending: false,
+};
+
+function getProjectOverrides(project: Project | null | undefined): ProjectOverrideState {
+  return {
+    plannerModelOverride: project?.plannerModelOverride ?? null,
+    reviewerModelOverride: project?.reviewerModelOverride ?? null,
+    executorModelOverride: project?.executorModelOverride ?? null,
+    verifierModelOverride: project?.verifierModelOverride ?? null,
+    plannerModelIdOverride: project?.plannerModelIdOverride ?? null,
+    reviewerModelIdOverride: project?.reviewerModelIdOverride ?? null,
+    executorModelIdOverride: project?.executorModelIdOverride ?? null,
+    verifierModelIdOverride: project?.verifierModelIdOverride ?? null,
+    plannerReasoningEffortOverride: project?.plannerReasoningEffortOverride ?? null,
+    reviewerReasoningEffortOverride: project?.reviewerReasoningEffortOverride ?? null,
+    executorReasoningEffortOverride: project?.executorReasoningEffortOverride ?? null,
+    verifierReasoningEffortOverride: project?.verifierReasoningEffortOverride ?? null,
+    revisionCountOverride: project?.revisionCountOverride ?? null,
+    requireApprovalOverride: project?.requireApprovalOverride ?? null,
+    pipelineSpeedProfileOverride: project?.pipelineSpeedProfileOverride ?? null,
+    prdQualityGate: project?.prdQualityGate ?? null,
+    discordRouting: project?.discordRouting ?? 'inherit',
+    discordWebhookUrlOverride: project?.discordWebhookUrlOverride ?? null,
+    telegramRouting: project?.telegramRouting ?? 'inherit',
+    telegramChatIdOverride: project?.telegramChatIdOverride ?? null,
+  };
+}
+
+function projectSettingsUiReducer(
+  state: ProjectSettingsUiState,
+  action: ProjectSettingsUiAction,
+): ProjectSettingsUiState {
+  switch (action.type) {
+    case 'seed-open':
+      return {
+        ...state,
+        activeTab: action.activeTab ?? state.activeTab,
+        urlInput: action.project?.githubProjectUrl ?? '',
+        nameInput: action.project?.name ?? '',
+        overrides: getProjectOverrides(action.project),
+        notifyGithubUser: action.project?.notifyGithubUser ?? '',
+        touched: false,
+        submitError: null,
+        setupSaveError: null,
+        manualSetupDetectPending: false,
+        syncResult: null,
+        syncError: null,
+        contextGenerating: false,
+        contextGeneratorCli: 'claude',
+        contextError: null,
+        relinkError: null,
+        issueOverrideResetResult: null,
+        issueOverrideResetError: null,
+        modelValidation: {},
+      };
+    case 'patch':
+      return { ...state, ...action.patch };
+    case 'overrides': {
+      const overrides =
+        typeof action.updater === 'function' ? action.updater(state.overrides) : action.updater;
+      return { ...state, overrides };
+    }
+    case 'model-validation': {
+      const modelValidation =
+        typeof action.updater === 'function'
+          ? action.updater(state.modelValidation)
+          : action.updater;
+      return { ...state, modelValidation };
+    }
+  }
+}
+
+type ProjectSetupFormState = {
+  setupCommandsText: string;
+  verifyCommandsText: string;
+  testingContext: string;
+  runtimeQaServerCommand: string;
+  runtimeQaReadinessUrl: string;
+  runtimeQaStartupTimeoutMs: number;
+  runtimeQaPortEnvVar: string;
+  runtimeQaTestCommandsText: string;
+  runtimeQaDiscoverAgentTests: boolean;
+  setupBeforeVerify: boolean;
+  envFiles: LocalEnvFile[];
+};
+
+type ProjectSetupFormAction =
+  | { type: 'contract'; contract: RepoSetupContract }
+  | { type: 'patch'; patch: Partial<ProjectSetupFormState> }
+  | { type: 'env-files'; updater: SetStateAction<LocalEnvFile[]> };
+
+const INITIAL_PROJECT_SETUP_FORM_STATE: ProjectSetupFormState = {
+  setupCommandsText: '',
+  verifyCommandsText: '',
+  testingContext: '',
+  runtimeQaServerCommand: '',
+  runtimeQaReadinessUrl: '',
+  runtimeQaStartupTimeoutMs: 60_000,
+  runtimeQaPortEnvVar: 'PORT',
+  runtimeQaTestCommandsText: '',
+  runtimeQaDiscoverAgentTests: true,
+  setupBeforeVerify: false,
+  envFiles: [],
+};
+
+function contractToSetupFormState(contract: RepoSetupContract): ProjectSetupFormState {
+  return {
+    setupCommandsText: commandsToText(contract.setupCommands),
+    verifyCommandsText: commandsToText(contract.verifyCommands),
+    testingContext: contract.testingContext ?? '',
+    runtimeQaServerCommand: contract.runtimeQa?.server?.command ?? '',
+    runtimeQaReadinessUrl: contract.runtimeQa?.server?.readinessUrl ?? '',
+    runtimeQaStartupTimeoutMs: contract.runtimeQa?.server?.startupTimeoutMs ?? 60_000,
+    runtimeQaPortEnvVar: contract.runtimeQa?.server?.portEnvVar ?? 'PORT',
+    runtimeQaTestCommandsText: runtimeQaCommandsToText(contract.runtimeQa),
+    runtimeQaDiscoverAgentTests: contract.runtimeQa?.discoverAgentTests ?? true,
+    setupBeforeVerify: contract.setupBeforeVerify,
+    envFiles: normalizeEnvFiles(contract.envFiles),
+  };
+}
+
+function projectSetupFormReducer(
+  state: ProjectSetupFormState,
+  action: ProjectSetupFormAction,
+): ProjectSetupFormState {
+  switch (action.type) {
+    case 'contract':
+      return contractToSetupFormState(action.contract);
+    case 'patch':
+      return { ...state, ...action.patch };
+    case 'env-files': {
+      const envFiles =
+        typeof action.updater === 'function' ? action.updater(state.envFiles) : action.updater;
+      return { ...state, envFiles };
+    }
+  }
+}
+
+function useProjectSettingsModalView() {
   const queryClient = useQueryClient();
   const projectSettingsModalOpen = useAppStore((state) => state.projectSettingsModalOpen);
   const projectSettingsModalProjectId = useAppStore((state) => state.projectSettingsModalProjectId);
@@ -96,44 +297,93 @@ export function ProjectSettingsModal() {
   );
   const closeProjectSettingsModal = useAppStore((state) => state.closeProjectSettingsModal);
 
-  const [activeTab, setActiveTab] = useState<ProjectTab>('general');
-  const [nameInput, setNameInput] = useState('');
-  const [urlInput, setUrlInput] = useState('');
-  const [touched, setTouched] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [overrides, setOverrides] = useState<ProjectOverrideState>(EMPTY_OVERRIDES);
-  const [contextGenerating, setContextGenerating] = useState(false);
-  const [contextGeneratorCli, setContextGeneratorCli] = useState<ContextGeneratorCli>('claude');
-  const [contextError, setContextError] = useState<string | null>(null);
-  const [syncResult, setSyncResult] = useState<{
-    attached: number;
-    alreadyPresent: number;
-    failed: number;
-    errors: string[];
-  } | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const [relinkError, setRelinkError] = useState<string | null>(null);
-  const [issueOverrideResetResult, setIssueOverrideResetResult] = useState<string | null>(null);
-  const [issueOverrideResetError, setIssueOverrideResetError] = useState<string | null>(null);
-  const [modelValidation, setModelValidation] = useState<
-    Partial<Record<PhaseKey, OpenRouterModelValidation | null>>
-  >({});
-  const [notifyGithubUser, setNotifyGithubUser] = useState('');
-
-  // Setup tab state
-  const [setupCommandsText, setSetupCommandsText] = useState('');
-  const [verifyCommandsText, setVerifyCommandsText] = useState('');
-  const [testingContext, setTestingContext] = useState('');
-  const [runtimeQaServerCommand, setRuntimeQaServerCommand] = useState('');
-  const [runtimeQaReadinessUrl, setRuntimeQaReadinessUrl] = useState('');
-  const [runtimeQaStartupTimeoutMs, setRuntimeQaStartupTimeoutMs] = useState(60_000);
-  const [runtimeQaPortEnvVar, setRuntimeQaPortEnvVar] = useState('PORT');
-  const [runtimeQaTestCommandsText, setRuntimeQaTestCommandsText] = useState('');
-  const [runtimeQaDiscoverAgentTests, setRuntimeQaDiscoverAgentTests] = useState(true);
-  const [setupBeforeVerify, setSetupBeforeVerify] = useState(false);
-  const [envFiles, setEnvFiles] = useState<LocalEnvFile[]>([]);
-  const [setupSaveError, setSetupSaveError] = useState<string | null>(null);
-  const [manualSetupDetectPending, setManualSetupDetectPending] = useState(false);
+  const [settingsUi, dispatchSettingsUi] = useReducer(
+    projectSettingsUiReducer,
+    INITIAL_PROJECT_SETTINGS_UI_STATE,
+  );
+  const {
+    activeTab,
+    nameInput,
+    urlInput,
+    touched,
+    submitError,
+    overrides,
+    contextGenerating,
+    contextGeneratorCli,
+    contextError,
+    syncResult,
+    syncError,
+    relinkError,
+    issueOverrideResetResult,
+    issueOverrideResetError,
+    modelValidation,
+    notifyGithubUser,
+    setupSaveError,
+    manualSetupDetectPending,
+  } = settingsUi;
+  const [setupForm, dispatchSetupForm] = useReducer(
+    projectSetupFormReducer,
+    INITIAL_PROJECT_SETUP_FORM_STATE,
+  );
+  const {
+    setupCommandsText,
+    verifyCommandsText,
+    testingContext,
+    runtimeQaServerCommand,
+    runtimeQaReadinessUrl,
+    runtimeQaStartupTimeoutMs,
+    runtimeQaPortEnvVar,
+    runtimeQaTestCommandsText,
+    runtimeQaDiscoverAgentTests,
+    setupBeforeVerify,
+    envFiles,
+  } = setupForm;
+  const patchSettingsUi = (patch: Partial<ProjectSettingsUiState>) =>
+    dispatchSettingsUi({ type: 'patch', patch });
+  const setActiveTab = (activeTab: ProjectTab) => patchSettingsUi({ activeTab });
+  const setNameInput = (nameInput: string) => patchSettingsUi({ nameInput });
+  const setUrlInput = (urlInput: string) => patchSettingsUi({ urlInput });
+  const setTouched = (touched: boolean) => patchSettingsUi({ touched });
+  const setSubmitError = (submitError: string | null) => patchSettingsUi({ submitError });
+  const setSetupSaveError = (setupSaveError: string | null) => patchSettingsUi({ setupSaveError });
+  const setSyncResult = (syncResult: ProjectSyncResult | null) => patchSettingsUi({ syncResult });
+  const setSyncError = (syncError: string | null) => patchSettingsUi({ syncError });
+  const setRelinkError = (relinkError: string | null) => patchSettingsUi({ relinkError });
+  const setIssueOverrideResetResult = (issueOverrideResetResult: string | null) =>
+    patchSettingsUi({ issueOverrideResetResult });
+  const setIssueOverrideResetError = (issueOverrideResetError: string | null) =>
+    patchSettingsUi({ issueOverrideResetError });
+  const setContextGenerating = (contextGenerating: boolean) =>
+    patchSettingsUi({ contextGenerating });
+  const setContextGeneratorCli = (contextGeneratorCli: ContextGeneratorCli) =>
+    patchSettingsUi({ contextGeneratorCli });
+  const setContextError = (contextError: string | null) => patchSettingsUi({ contextError });
+  const setNotifyGithubUser = (notifyGithubUser: string) => patchSettingsUi({ notifyGithubUser });
+  const setOverrides: Dispatch<SetStateAction<ProjectOverrideState>> = (updater) =>
+    dispatchSettingsUi({ type: 'overrides', updater });
+  const setModelValidation: Dispatch<
+    SetStateAction<Partial<Record<PhaseKey, OpenRouterModelValidation | null>>>
+  > = (updater) => dispatchSettingsUi({ type: 'model-validation', updater });
+  const setSetupCommandsText = (setupCommandsText: string) =>
+    dispatchSetupForm({ type: 'patch', patch: { setupCommandsText } });
+  const setVerifyCommandsText = (verifyCommandsText: string) =>
+    dispatchSetupForm({ type: 'patch', patch: { verifyCommandsText } });
+  const setTestingContext = (testingContext: string) =>
+    dispatchSetupForm({ type: 'patch', patch: { testingContext } });
+  const setRuntimeQaServerCommand = (runtimeQaServerCommand: string) =>
+    dispatchSetupForm({ type: 'patch', patch: { runtimeQaServerCommand } });
+  const setRuntimeQaReadinessUrl = (runtimeQaReadinessUrl: string) =>
+    dispatchSetupForm({ type: 'patch', patch: { runtimeQaReadinessUrl } });
+  const setRuntimeQaStartupTimeoutMs = (runtimeQaStartupTimeoutMs: number) =>
+    dispatchSetupForm({ type: 'patch', patch: { runtimeQaStartupTimeoutMs } });
+  const setRuntimeQaPortEnvVar = (runtimeQaPortEnvVar: string) =>
+    dispatchSetupForm({ type: 'patch', patch: { runtimeQaPortEnvVar } });
+  const setRuntimeQaTestCommandsText = (runtimeQaTestCommandsText: string) =>
+    dispatchSetupForm({ type: 'patch', patch: { runtimeQaTestCommandsText } });
+  const setRuntimeQaDiscoverAgentTests = (runtimeQaDiscoverAgentTests: boolean) =>
+    dispatchSetupForm({ type: 'patch', patch: { runtimeQaDiscoverAgentTests } });
+  const setSetupBeforeVerify = (setupBeforeVerify: boolean) =>
+    dispatchSetupForm({ type: 'patch', patch: { setupBeforeVerify } });
 
   // Track open transition to apply initialTab only once
   const prevOpenRef = useRef(false);
@@ -201,94 +451,21 @@ export function ProjectSettingsModal() {
 
     if (!projectSettingsModalOpen) return;
 
-    if (isOpening) {
-      const tab = projectSettingsModalInitialTab;
-      const isValidTab = tab && (PROJECT_TABS as readonly string[]).includes(tab);
-      setActiveTab(isValidTab ? (tab as ProjectTab) : 'general');
-    }
-
-    setUrlInput(project?.githubProjectUrl ?? '');
-    setNameInput(project?.name ?? '');
-    setOverrides({
-      plannerModelOverride: project?.plannerModelOverride ?? null,
-      reviewerModelOverride: project?.reviewerModelOverride ?? null,
-      executorModelOverride: project?.executorModelOverride ?? null,
-      verifierModelOverride: project?.verifierModelOverride ?? null,
-      plannerModelIdOverride: project?.plannerModelIdOverride ?? null,
-      reviewerModelIdOverride: project?.reviewerModelIdOverride ?? null,
-      executorModelIdOverride: project?.executorModelIdOverride ?? null,
-      verifierModelIdOverride: project?.verifierModelIdOverride ?? null,
-      plannerReasoningEffortOverride: project?.plannerReasoningEffortOverride ?? null,
-      reviewerReasoningEffortOverride: project?.reviewerReasoningEffortOverride ?? null,
-      executorReasoningEffortOverride: project?.executorReasoningEffortOverride ?? null,
-      verifierReasoningEffortOverride: project?.verifierReasoningEffortOverride ?? null,
-      revisionCountOverride: project?.revisionCountOverride ?? null,
-      requireApprovalOverride: project?.requireApprovalOverride ?? null,
-      pipelineSpeedProfileOverride: project?.pipelineSpeedProfileOverride ?? null,
-      prdQualityGate: project?.prdQualityGate ?? null,
-      discordRouting: project?.discordRouting ?? 'inherit',
-      discordWebhookUrlOverride: project?.discordWebhookUrlOverride ?? null,
-      telegramRouting: project?.telegramRouting ?? 'inherit',
-      telegramChatIdOverride: project?.telegramChatIdOverride ?? null,
+    const tab = projectSettingsModalInitialTab;
+    const isValidTab = tab && (PROJECT_TABS as readonly string[]).includes(tab);
+    dispatchSettingsUi({
+      type: 'seed-open',
+      activeTab: isOpening ? (isValidTab ? (tab as ProjectTab) : 'general') : null,
+      project,
     });
-    setNotifyGithubUser(project?.notifyGithubUser ?? '');
-    setTouched(false);
-    setSubmitError(null);
-    setSetupSaveError(null);
-    setManualSetupDetectPending(false);
-    setSyncResult(null);
-    setSyncError(null);
-    setContextGenerating(false);
-    setContextGeneratorCli('claude');
-    setContextError(null);
-    setRelinkError(null);
-    setIssueOverrideResetResult(null);
-    setIssueOverrideResetError(null);
-    setModelValidation({});
-  }, [
-    projectSettingsModalOpen,
-    projectSettingsModalInitialTab,
-    project?.executorModelIdOverride,
-    project?.executorModelOverride,
-    project?.executorReasoningEffortOverride,
-    project?.discordRouting,
-    project?.discordWebhookUrlOverride,
-    project?.githubProjectUrl,
-    project?.name,
-    project?.notifyGithubUser,
-    project?.plannerModelIdOverride,
-    project?.plannerModelOverride,
-    project?.plannerReasoningEffortOverride,
-    project?.revisionCountOverride,
-    project?.requireApprovalOverride,
-    project?.pipelineSpeedProfileOverride,
-    project?.prdQualityGate,
-    project?.reviewerModelIdOverride,
-    project?.reviewerModelOverride,
-    project?.reviewerReasoningEffortOverride,
-    project?.verifierModelIdOverride,
-    project?.verifierModelOverride,
-    project?.verifierReasoningEffortOverride,
-    project?.telegramRouting,
-    project?.telegramChatIdOverride,
-  ]);
+  }, [projectSettingsModalOpen, projectSettingsModalInitialTab, project]);
 
   // Seed setup state from setup draft
   useEffect(() => {
     if (!projectSettingsModalOpen || !projectSetup) return;
     const contract = projectSetup.inspection.contract ?? projectSetup.suggestedContract;
-    setSetupCommandsText(commandsToText(contract.setupCommands));
-    setVerifyCommandsText(commandsToText(contract.verifyCommands));
-    setTestingContext(contract.testingContext ?? '');
-    setRuntimeQaServerCommand(contract.runtimeQa?.server?.command ?? '');
-    setRuntimeQaReadinessUrl(contract.runtimeQa?.server?.readinessUrl ?? '');
-    setRuntimeQaStartupTimeoutMs(contract.runtimeQa?.server?.startupTimeoutMs ?? 60_000);
-    setRuntimeQaPortEnvVar(contract.runtimeQa?.server?.portEnvVar ?? 'PORT');
-    setRuntimeQaTestCommandsText(runtimeQaCommandsToText(contract.runtimeQa));
-    setRuntimeQaDiscoverAgentTests(contract.runtimeQa?.discoverAgentTests ?? true);
-    setSetupBeforeVerify(contract.setupBeforeVerify);
-    setEnvFiles(normalizeEnvFiles(contract.envFiles));
-    setSetupSaveError(null);
+    dispatchSetupForm({ type: 'contract', contract });
+    dispatchSettingsUi({ type: 'patch', patch: { setupSaveError: null } });
   }, [projectSettingsModalOpen, projectSetup]);
 
   const validation = useMemo(() => validateGithubProjectUrl(urlInput), [urlInput]);
@@ -303,67 +480,77 @@ export function ProjectSettingsModal() {
   // Env file handlers
   const addEnvFile = useCallback(
     () =>
-      setEnvFiles((prev) => [
-        ...prev,
-        { id: makeEnvFileId(), source: '', target: undefined, required: true },
-      ]),
+      dispatchSetupForm({
+        type: 'env-files',
+        updater: (prev) => [
+          ...prev,
+          { id: makeEnvFileId(), source: '', target: undefined, required: true },
+        ],
+      }),
     [],
   );
 
   const updateEnvFile = useCallback(
     (id: string, patch: Partial<RepoSetupEnvFile>) =>
-      setEnvFiles((prev) => prev.map((file) => (file.id === id ? { ...file, ...patch } : file))),
+      dispatchSetupForm({
+        type: 'env-files',
+        updater: (prev) => prev.map((file) => (file.id === id ? { ...file, ...patch } : file)),
+      }),
     [],
   );
 
   const removeEnvFile = useCallback(
-    (id: string) => setEnvFiles((prev) => prev.filter((file) => file.id !== id)),
+    (id: string) =>
+      dispatchSetupForm({
+        type: 'env-files',
+        updater: (prev) => prev.filter((file) => file.id !== id),
+      }),
     [],
   );
 
   const applySetupContract = useCallback((contract: RepoSetupContract) => {
-    setSetupCommandsText(commandsToText(contract.setupCommands));
-    setVerifyCommandsText(commandsToText(contract.verifyCommands));
-    setTestingContext(contract.testingContext ?? '');
-    setRuntimeQaServerCommand(contract.runtimeQa?.server?.command ?? '');
-    setRuntimeQaReadinessUrl(contract.runtimeQa?.server?.readinessUrl ?? '');
-    setRuntimeQaStartupTimeoutMs(contract.runtimeQa?.server?.startupTimeoutMs ?? 60_000);
-    setRuntimeQaPortEnvVar(contract.runtimeQa?.server?.portEnvVar ?? 'PORT');
-    setRuntimeQaTestCommandsText(runtimeQaCommandsToText(contract.runtimeQa));
-    setRuntimeQaDiscoverAgentTests(contract.runtimeQa?.discoverAgentTests ?? true);
-    setSetupBeforeVerify(contract.setupBeforeVerify);
-    setEnvFiles(normalizeEnvFiles(contract.envFiles));
-    setSetupSaveError(null);
+    dispatchSetupForm({ type: 'contract', contract });
+    dispatchSettingsUi({ type: 'patch', patch: { setupSaveError: null } });
   }, []);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!projectSettingsModalProjectId) return null;
-      await window.shipcode.invoke<Project>('project:set-name', {
-        projectId: projectSettingsModalProjectId,
-        name: normalizedName,
-      });
-      await window.shipcode.invoke<Project>('project:set-github-project-url', {
-        projectId: projectSettingsModalProjectId,
-        url: validation.ok ? validation.value : null,
-      });
-      await window.shipcode.invoke<Project>('project:set-notification-routing', {
-        projectId: projectSettingsModalProjectId,
-        routing: {
-          discordRouting: overrides.discordRouting,
-          discordWebhookUrlOverride: overrides.discordWebhookUrlOverride,
-          telegramRouting: overrides.telegramRouting,
-          telegramChatIdOverride: overrides.telegramChatIdOverride,
-        },
-      });
-      await window.shipcode.invoke<Project>('project:set-notify-github-user', {
-        projectId: projectSettingsModalProjectId,
-        handle: notifyGithubUser.trim() || null,
-      });
-      return window.shipcode.invoke<Project>('project:set-model-overrides', {
-        projectId: projectSettingsModalProjectId,
-        overrides,
-      });
+      const [, , , , updatedProject] = await Promise.all([
+        window.shipcode.invoke<Project>('project:set-name', {
+          projectId: projectSettingsModalProjectId,
+          name: normalizedName,
+        }),
+        window.shipcode.invoke<Project>('project:set-github-project-url', {
+          projectId: projectSettingsModalProjectId,
+          url: validation.ok ? validation.value : null,
+        }),
+        window.shipcode.invoke<Project>('project:set-notification-routing', {
+          projectId: projectSettingsModalProjectId,
+          routing: {
+            discordRouting: overrides.discordRouting,
+            discordWebhookUrlOverride: overrides.discordWebhookUrlOverride,
+            telegramRouting: overrides.telegramRouting,
+            telegramChatIdOverride: overrides.telegramChatIdOverride,
+          },
+        }),
+        window.shipcode.invoke<Project>('project:set-notify-github-user', {
+          projectId: projectSettingsModalProjectId,
+          handle: notifyGithubUser.trim() || null,
+        }),
+        window.shipcode.invoke<Project>('project:set-model-overrides', {
+          projectId: projectSettingsModalProjectId,
+          overrides,
+        }),
+      ]);
+      return updatedProject;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
+      queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectSettingsModalProjectId] });
     },
     onError: (err: unknown) => {
       log.error('[ProjectSettingsModal] save failed', err);
@@ -378,13 +565,18 @@ export function ProjectSettingsModal() {
         version: 1,
         setupCommands: textToCommands(setupCommandsText),
         verifyCommands: textToCommands(verifyCommandsText),
-        envFiles: envFiles
-          .map((file) => ({
-            source: file.source.trim(),
-            target: file.target?.trim() || undefined,
-            required: file.required,
-          }))
-          .filter((file) => file.source.length > 0),
+        envFiles: envFiles.flatMap((file) => {
+          const source = file.source.trim();
+          return source
+            ? [
+                {
+                  source,
+                  target: file.target?.trim() || undefined,
+                  required: file.required,
+                },
+              ]
+            : [];
+        }),
         setupBeforeVerify,
         testingContext: testingContext.trim() || null,
         runtimeQa: buildRuntimeQaConfig({
@@ -400,6 +592,9 @@ export function ProjectSettingsModal() {
         projectId: projectSettingsModalProjectId,
         contract,
       });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-setup', projectSettingsModalProjectId] });
     },
     onError: (err: unknown) => {
       log.error('[ProjectSettingsModal] setup save failed', err);
@@ -422,6 +617,8 @@ export function ProjectSettingsModal() {
     onSuccess: (result) => {
       setSyncError(null);
       setSyncResult(result);
+      queryClient.invalidateQueries({ queryKey: ['github-issues', projectSettingsModalProjectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectSettingsModalProjectId] });
     },
     onError: (err: unknown) => {
       log.error('[ProjectSettingsModal] sync failed', err);
@@ -643,7 +840,7 @@ export function ProjectSettingsModal() {
 
   const handleSetupRedetect = useCallback(() => {
     if (manualSetupDetectPending) return;
-    setManualSetupDetectPending(true);
+    dispatchSettingsUi({ type: 'patch', patch: { manualSetupDetectPending: true } });
     const startedAt = Date.now();
 
     void refetchSetup().finally(() => {
@@ -653,7 +850,7 @@ export function ProjectSettingsModal() {
       }
       setupDetectTimeoutRef.current = window.setTimeout(() => {
         setupDetectTimeoutRef.current = null;
-        setManualSetupDetectPending(false);
+        dispatchSettingsUi({ type: 'patch', patch: { manualSetupDetectPending: false } });
       }, remainingMs);
     });
   }, [manualSetupDetectPending, refetchSetup]);
@@ -934,4 +1131,8 @@ export function ProjectSettingsModal() {
       </ModalFooter>
     </Modal>
   );
+}
+
+export function ProjectSettingsModal() {
+  return useProjectSettingsModalView();
 }

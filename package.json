@@ -36,7 +36,8 @@
     "postinstall": "sh scripts/fix-node-pty-permissions.sh && sh scripts/setup-git-hooks.sh",
     "sync:docs": "sh scripts/sync-docs-to-web.sh",
     "test": "turbo run test",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "verify:affected": "bun scripts/verify-affected-workspaces.ts"
   },
   "workspaces": [
     "apps/*",

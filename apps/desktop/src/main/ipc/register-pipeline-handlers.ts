@@ -145,8 +145,10 @@ async function buildExecutionResumeContext(
   ]);
   const terminalTail = queries.terminalEvents
     .listByThread(thread.id, EXECUTION_RESUME_TERMINAL_LIMIT)
-    .map(formatTerminalResumeLine)
-    .filter((line): line is string => Boolean(line?.trim()))
+    .flatMap((event) => {
+      const line = formatTerminalResumeLine(event);
+      return line?.trim() ? [line] : [];
+    })
     .join('\n');
 
   const sections = [
@@ -240,7 +242,7 @@ export function registerPipelineHandlers({
         threadTitle: thread?.title ?? summary.threadId,
         phase: summary.phase,
         approvedAwaitingExecution:
-          summary.phase === PIPELINE_PHASE.awaitingApproval && latestPlanStatus === 'approved',
+          summary.phase === PIPELINE_PHASE.approval && latestPlanStatus === 'approved',
         startedAt: summary.startedAt,
         activeProcessId: summary.activeProcessId,
         githubIssueNumber: thread?.githubIssueNumber ?? null,
@@ -370,15 +372,20 @@ export function registerPipelineHandlers({
       }
 
       const normalizedAnswers = answers.map((answer) => clarificationAnswerSchema.parse(answer));
+      const answersByQuestionId = new Map(
+        normalizedAnswers.map((answer) => [answer.questionId, answer]),
+      );
       for (const question of thread.clarificationRequest.questions) {
-        const answer = normalizedAnswers.find((entry) => entry.questionId === question.id);
+        const answer = answersByQuestionId.get(question.id);
         if (!answer) {
           throw new Error(`Missing answer for "${question.title}"`);
         }
 
         const selectedChoice =
           answer.selectedChoiceId != null
-            ? (question.choices.find((choice) => choice.id === answer.selectedChoiceId) ?? null)
+            ? (new Map(question.choices.map((choice) => [choice.id, choice])).get(
+                answer.selectedChoiceId,
+              ) ?? null)
             : null;
         const hasFreeform = Boolean(answer.freeformText?.trim());
 
@@ -445,17 +452,15 @@ export function registerPipelineHandlers({
 
     const latestPlan = queries.plans.getLatest(threadId);
     if (!latestPlan) throw new Error('No plan available to approve');
-    if (thread.status !== PIPELINE_PHASE.awaitingApproval) {
-      throw new Error(
-        `This task is no longer awaiting approval. Current status: ${thread.status}.`,
-      );
+    if (thread.status !== PIPELINE_PHASE.approval) {
+      throw new Error(`This task is no longer in approval. Current status: ${thread.status}.`);
     }
     if (latestPlan.status === 'approved') {
       throw new Error('Approval is already confirmed. Waiting for an execution slot.');
     }
-    if (latestPlan.status !== PIPELINE_PHASE.awaitingApproval) {
+    if (latestPlan.status !== PIPELINE_PHASE.approval) {
       throw new Error(
-        `This plan is no longer awaiting approval. Current plan status: ${latestPlan.status}.`,
+        `This plan is no longer in approval. Current plan status: ${latestPlan.status}.`,
       );
     }
 
@@ -744,7 +749,7 @@ export function registerPipelineHandlers({
     const thread = queries.threads.getById(threadId);
     if (!thread) throw new Error(`Thread ${threadId} not found`);
 
-    // Clear any previous "done" marker so a retried thread doesn't stay classified as done.
+    // Clear any previous closed marker so a retried thread doesn't stay classified as closed.
     if (thread.doneAt) {
       queries.threads.clearDoneAt(threadId);
     }
@@ -964,11 +969,11 @@ export function registerPipelineHandlers({
     const thread = queries.threads.getById(threadId);
     const latestPlan = queries.plans.getLatest(threadId);
     if (latestPlan) {
-      queries.plans.updateStatus(latestPlan.id, 'awaiting_approval');
+      queries.plans.updateStatus(latestPlan.id, 'approval');
     }
     logEvent('pipeline:approval-gate', {
       threadId,
-      outcome: 'awaiting_approval',
+      outcome: 'approval',
       reviewDecision: 'approve',
       planVersion: latestPlan?.version ?? null,
       requireApproval: resolveEffectiveRequireApproval(threadId),
@@ -990,7 +995,7 @@ export function registerPipelineHandlers({
     });
     transitionThreadPhase(mainWindow, queries, emitter, {
       threadId,
-      phase: PIPELINE_PHASE.awaitingApproval,
+      phase: PIPELINE_PHASE.approval,
     });
   });
 

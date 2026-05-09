@@ -167,7 +167,7 @@ describe('OverviewView', () => {
         return {
           stats: {
             agentsRunning: 1,
-            runningByPhase: { awaiting_approval: 1 },
+            runningByPhase: { approval: 1 },
             agentsRunningByProject: {},
             pendingApprovalsByProject: {},
             tasksInProgress: 1,
@@ -184,7 +184,7 @@ describe('OverviewView', () => {
               projectId: 'project-1',
               projectName: 'vitayai',
               threadTitle: 'Approved but waiting for an execution slot',
-              phase: 'awaiting_approval',
+              phase: 'approval',
               approvedAwaitingExecution: true,
               startedAt: Date.now() - 45_000,
               activeProcessId: null,

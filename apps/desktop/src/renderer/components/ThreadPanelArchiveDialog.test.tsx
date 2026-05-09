@@ -26,6 +26,6 @@ describe('ThreadPanelArchiveDialog', () => {
   it('renders the bulk archive title', () => {
     render(<ThreadPanelArchiveDialog open count={3} onClose={vi.fn()} onConfirm={vi.fn()} />);
 
-    expect(screen.getByText('Archive 3 done issues?')).toBeInTheDocument();
+    expect(screen.getByText('Archive 3 closed issues?')).toBeInTheDocument();
   });
 });

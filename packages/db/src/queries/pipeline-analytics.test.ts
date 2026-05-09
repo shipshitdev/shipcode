@@ -49,19 +49,19 @@ describe('pipeline analytics persistence', () => {
       phase: 'planning',
       startedAt: new Date(Date.now() - 60_000).toISOString(),
     });
-    phaseLogs.transition(threadId, 'awaiting_approval');
+    phaseLogs.transition(threadId, 'approval');
     phaseLogs.transition(threadId, 'executing');
 
     const rows = phaseLogs.listByThread(threadId);
     const planning = rows.find((row) => row.phase === 'planning');
-    const awaitingApproval = rows.find((row) => row.phase === 'awaiting_approval');
+    const approval = rows.find((row) => row.phase === 'approval');
     const executing = rows.find((row) => row.phase === 'executing');
 
     expect(planning?.durationMs ?? 0).toBeGreaterThan(0);
-    expect(awaitingApproval).toMatchObject({
-      completedAt: awaitingApproval?.startedAt,
+    expect(approval).toMatchObject({
+      completedAt: approval?.startedAt,
       durationMs: null,
-      terminalStatus: 'awaiting_approval',
+      terminalStatus: 'approval',
     });
     expect(executing?.completedAt).toBeNull();
     expect(rows.filter((row) => row.completedAt === null)).toHaveLength(1);

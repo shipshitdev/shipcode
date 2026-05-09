@@ -46,27 +46,27 @@ The **Setup** tab edits the repo setup contract at `.shipcode/setup.json`. ShipC
 ```json
 {
   "version": 1,
-  "setupCommands": ["bun install --frozen-lockfile"],
+  "setupCommands": ["<repo-specific install command>"],
   "verifyCommands": [
-    "TURBO_SCM_BASE=\"${TURBO_SCM_BASE:-HEAD}\" bunx turbo run typecheck test build --affected --concurrency=1"
+    "<repo-specific scoped verify command>"
   ],
   "runtimeQa": {
     "server": {
-      "command": "bun run dev --host 127.0.0.1 --port $PORT",
+      "command": "<repo-specific dev server command using $PORT>",
       "readinessUrl": "http://127.0.0.1:$PORT",
       "startupTimeoutMs": 60000,
       "portEnvVar": "PORT"
     },
-    "testCommands": ["bun run test:e2e"],
+    "testCommands": ["<repo-specific runtime test command>"],
     "discoverAgentTests": true
   },
   "envFiles": [{ "source": ".env.local", "required": true }],
   "setupBeforeVerify": false,
-  "testingContext": "Tests use Vitest and Playwright."
+  "testingContext": "Explain the repo's test runner, scope rules, and expensive commands to avoid."
 }
 ```
 
-Project detection can prefill setup and verify commands from common repo profiles. Runtime QA starts the configured dev server inside the feature worktree, runs browser/E2E commands, and also supports generated visual QA when a PRD includes a `## QA State` contract.
+Project detection can prefill setup and verify commands from common repo profiles, including Node package managers, Turborepo, Xcode, SwiftPM, Rust, Go, Python, Ruby, Java, .NET, and PHP. Runtime QA starts the configured dev server inside the feature worktree, runs browser/E2E commands, and also supports generated visual QA when a PRD includes a `## QA State` contract.
 
 ## GitHub readiness
 

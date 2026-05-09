@@ -7,7 +7,7 @@ import { getThreadForIssueOrExit, parseIssueNumber } from './issue-helpers';
 /**
  * `shipcode approve <issue-number>`
  *
- * Read thread from DB. Verify status is awaiting_approval.
+ * Read thread from DB. Verify status is approval.
  * Resume execution from the saved plan.
  */
 export async function approveCommand(issueNumber: string) {
@@ -17,10 +17,8 @@ export async function approveCommand(issueNumber: string) {
   const ctx = createCliContext(process.cwd());
   const thread = getThreadForIssueOrExit(ctx, num);
 
-  if (thread.status !== PIPELINE_PHASE.awaitingApproval) {
-    console.error(
-      `Thread is in "${thread.status}" state, not "awaiting_approval". Cannot approve.`,
-    );
+  if (thread.status !== PIPELINE_PHASE.approval) {
+    console.error(`Thread is in "${thread.status}" state, not "approval". Cannot approve.`);
     process.exit(1);
   }
 

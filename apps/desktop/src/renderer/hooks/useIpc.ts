@@ -17,15 +17,15 @@ const LAST_ACTIVITY_THROTTLE_MS = 500;
 
 export function useIpc() {
   const queryClient = useQueryClient();
-  const setPlan = useAppStore((state) => state.setPlan);
-  const setReview = useAppStore((state) => state.setReview);
-  const setPipelinePhase = useAppStore((state) => state.setPipelinePhase);
+  const applyPlan = useAppStore((state) => state.setPlan);
+  const applyReview = useAppStore((state) => state.setReview);
+  const applyPipelinePhase = useAppStore((state) => state.setPipelinePhase);
   const touchLastActivity = useAppStore((state) => state.touchLastActivity);
   const addNotification = useAppStore((state) => state.addNotification);
   const removeNotification = useAppStore((state) => state.removeNotification);
   const mapProcessToThread = useAppStore((state) => state.mapProcessToThread);
-  const setCurrentModel = useAppStore((state) => state.setCurrentModel);
-  const setTerminalPaneState = useAppStore((state) => state.setTerminalPaneState);
+  const applyCurrentModel = useAppStore((state) => state.setCurrentModel);
+  const applyTerminalPaneState = useAppStore((state) => state.setTerminalPaneState);
   const appendCanonicalEvents = useAppStore((state) => state.appendCanonicalEvents);
 
   useEffect(() => {
@@ -168,7 +168,7 @@ export function useIpc() {
         }
         queryClient.invalidateQueries({ queryKey: ['task-graph', data.threadId] });
         if (data.threadId === store.activeThreadId) {
-          setPipelinePhase(data.phase);
+          applyPipelinePhase(data.phase);
           invalidatePlanQueriesForThread(data.threadId);
           queryClient.invalidateQueries({ queryKey: ['checkpoints', data.threadId] });
           queryClient.invalidateQueries({ queryKey: ['diffs', data.threadId] });
@@ -206,7 +206,7 @@ export function useIpc() {
     unsubscribers.push(
       window.shipcode.on('plan:parsed', (data) => {
         if (data.threadId === useAppStore.getState().activeThreadId) {
-          setPlan(data.plan);
+          applyPlan(data.plan);
         }
         invalidatePlanQueriesForThread(data.threadId);
       }),
@@ -215,7 +215,7 @@ export function useIpc() {
     unsubscribers.push(
       window.shipcode.on('review:parsed', (data) => {
         if (data.threadId === useAppStore.getState().activeThreadId) {
-          setReview(data.review);
+          applyReview(data.review);
         }
       }),
     );
@@ -287,7 +287,7 @@ export function useIpc() {
           mapProcessToThread(data.processId, data.threadId);
         }
         if (data.threadId) {
-          setTerminalPaneState(data.threadId, data.state);
+          applyTerminalPaneState(data.threadId, data.state);
         }
       }),
     );
@@ -297,7 +297,7 @@ export function useIpc() {
         const store = useAppStore.getState();
         const displayName = formatResolvedModelDisplay(data.requestedModel, data.resolvedModel);
         const tid = data.threadId ?? store.terminalThreadId;
-        if (tid && displayName) setCurrentModel(tid, displayName);
+        if (tid && displayName) applyCurrentModel(tid, displayName);
         // Token usage recorded — push-invalidate cost queries so CostsView
         // updates without relying on heavy polling.
         queryClient.invalidateQueries({ queryKey: ['costs-summary'] });
@@ -346,15 +346,15 @@ export function useIpc() {
       for (const unsub of unsubscribers) unsub();
     };
   }, [
-    setPlan,
-    setReview,
-    setPipelinePhase,
+    applyPlan,
+    applyReview,
+    applyPipelinePhase,
     touchLastActivity,
     addNotification,
     removeNotification,
     mapProcessToThread,
-    setCurrentModel,
-    setTerminalPaneState,
+    applyCurrentModel,
+    applyTerminalPaneState,
     appendCanonicalEvents,
     queryClient,
   ]);

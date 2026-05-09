@@ -294,7 +294,7 @@ export function sendGithubIssuesUpdated(
 
 type AttentionPhase = Extract<
   PipelinePhase,
-  'clarifying' | 'awaiting_approval' | 'completed' | 'failed' | 'idle'
+  'clarifying' | 'approval' | 'completed' | 'failed' | 'idle'
 >;
 
 export function transitionThreadPhase(

@@ -7,6 +7,7 @@ import {
   type Thread,
   type ThreadPanelData,
 } from '@shipcode/shared';
+import { TooltipProvider } from '@shipcode/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -35,14 +36,18 @@ function renderWithProviders(onRender?: ProfilerOnRenderCallback) {
     <StrictMode>
       {onRender ? (
         <Profiler id="thread-panel" onRender={onRender}>
+          <TooltipProvider>
+            <QueryClientProvider client={queryClient}>
+              <IssuesPanel />
+            </QueryClientProvider>
+          </TooltipProvider>
+        </Profiler>
+      ) : (
+        <TooltipProvider>
           <QueryClientProvider client={queryClient}>
             <IssuesPanel />
           </QueryClientProvider>
-        </Profiler>
-      ) : (
-        <QueryClientProvider client={queryClient}>
-          <IssuesPanel />
-        </QueryClientProvider>
+        </TooltipProvider>
       )}
     </StrictMode>,
   );
@@ -104,7 +109,7 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     labels: [],
     assignee: null,
     state: 'open',
-    pipelineStatus: 'awaiting_approval',
+    pipelineStatus: 'approval',
     threadId: 'thread-1',
     claimedAt: null,
     claimedBy: null,
@@ -267,7 +272,7 @@ describe('IssuesPanel', () => {
 
     renderWithProviders();
 
-    expect(await screen.findByText('Waiting For Execution')).toBeInTheDocument();
+    expect(await screen.findByText('Waiting')).toBeInTheDocument();
     expect(await screen.findByText('Approved waiter')).toBeInTheDocument();
   });
 

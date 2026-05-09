@@ -34,7 +34,7 @@ vi.mock('@shipcode/pipeline', () => ({
 
 vi.mock('@shipcode/shared', () => ({
   PIPELINE_PHASE: {
-    awaitingApproval: 'awaiting_approval',
+    approval: 'approval',
   },
 }));
 
@@ -77,7 +77,7 @@ describe('approveCommand', () => {
     getThreadByIssueMock.mockReturnValue({
       id: 'thread-1',
       title: 'Ship coverage',
-      status: 'awaiting_approval',
+      status: 'approval',
     });
     getLatestPlanMock.mockReturnValue({
       id: 'plan-1',
@@ -101,7 +101,7 @@ describe('approveCommand', () => {
     expect(errorSpy).toHaveBeenCalledWith('No thread found for issue #42 in this project.');
   });
 
-  it('exits when the thread is not awaiting approval', async () => {
+  it('exits when the thread is not in approval', async () => {
     getThreadByIssueMock.mockReturnValueOnce({
       id: 'thread-1',
       title: 'Ship coverage',
@@ -111,7 +111,7 @@ describe('approveCommand', () => {
     await expect(approveCommand('42')).rejects.toThrow('process.exit:1');
 
     expect(errorSpy).toHaveBeenCalledWith(
-      'Thread is in "executing" state, not "awaiting_approval". Cannot approve.',
+      'Thread is in "executing" state, not "approval". Cannot approve.',
     );
   });
 

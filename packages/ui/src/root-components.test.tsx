@@ -277,7 +277,7 @@ describe('root UI components', () => {
   });
 
   it('uses noun labels for passive workflow stages', () => {
-    const view = renderIntoDom(<PipelineStatus currentPhase="awaiting_approval" />);
+    const view = renderIntoDom(<PipelineStatus currentPhase="approval" />);
 
     expect(view.container.textContent).toContain('Approval');
     expect(view.container.textContent).not.toContain('Approve');

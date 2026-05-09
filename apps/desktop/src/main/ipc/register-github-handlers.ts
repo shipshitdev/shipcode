@@ -226,7 +226,7 @@ export function registerGitHubHandlers({
               updatedAt: issue.updatedAt ?? null,
             });
             if (record.state === 'closed') {
-              queries.githubIssues.markDoneOnClose(record.id);
+              queries.githubIssues.markClosedOnClose(record.id);
             } else if (record.state === 'open') {
               syncOpenIssueState(queries, record);
             }
@@ -236,23 +236,23 @@ export function registerGitHubHandlers({
             }
           }
         });
-        for (const issue of newIssues) {
-          await attachIssueToConfiguredProjectBoard(
-            project,
-            ghCli,
-            issue.number,
-            issue.url,
-            'github:refresh-issues',
-          );
-        }
+        await Promise.all(
+          newIssues.map((issue) =>
+            attachIssueToConfiguredProjectBoard(
+              project,
+              ghCli,
+              issue.number,
+              issue.url,
+              'github:refresh-issues',
+            ),
+          ),
+        );
 
-        const staleAwaitingApprovalCount = force
-          ? queries.githubIssues.resetStaleAwaitingApproval(projectId)
-          : 0;
-        if (staleAwaitingApprovalCount > 0) {
+        const staleApprovalCount = force ? queries.githubIssues.resetStaleApproval(projectId) : 0;
+        if (staleApprovalCount > 0) {
           logEvent('github:refresh-issues:stale-awaiting-approval-reset', {
             projectId,
-            count: staleAwaitingApprovalCount,
+            count: staleApprovalCount,
           });
         }
 
@@ -307,7 +307,7 @@ export function registerGitHubHandlers({
                 ISSUE_PIPELINE_STATUS.queued,
                 ISSUE_PIPELINE_STATUS.planning,
                 ISSUE_PIPELINE_STATUS.clarifying,
-                ISSUE_PIPELINE_STATUS.awaitingApproval,
+                ISSUE_PIPELINE_STATUS.approval,
                 ISSUE_PIPELINE_STATUS.reviewing,
                 ISSUE_PIPELINE_STATUS.revising,
                 ISSUE_PIPELINE_STATUS.executing,
@@ -329,7 +329,7 @@ export function registerGitHubHandlers({
                 else if (macroColumn === 'in_progress') targetStatus = ISSUE_PIPELINE_STATUS.queued;
                 else if (macroColumn === 'human_review') targetStatus = null;
                 else if (macroColumn === 'deferred') targetStatus = ISSUE_PIPELINE_STATUS.deferred;
-                else if (macroColumn === 'done') targetStatus = ISSUE_PIPELINE_STATUS.done;
+                else if (macroColumn === 'done') targetStatus = ISSUE_PIPELINE_STATUS.closed;
 
                 if (targetStatus && targetStatus !== cachedIssue.pipelineStatus) {
                   queries.githubIssues.updatePipelineStatus(cachedIssue.id, targetStatus);
@@ -342,9 +342,9 @@ export function registerGitHubHandlers({
 
           // Sync archive state from GitHub Project board
           if (archivedIssueNumbers.size > 0) {
-            const idsToArchive = cachedAfterIssueSync
-              .filter((c) => archivedIssueNumbers.has(c.issueNumber))
-              .map((c) => c.id);
+            const idsToArchive = cachedAfterIssueSync.flatMap((candidate) =>
+              archivedIssueNumbers.has(candidate.issueNumber) ? [candidate.id] : [],
+            );
             if (idsToArchive.length > 0) {
               queries.githubIssues.archiveIssues(idsToArchive);
               log.info(
@@ -353,30 +353,32 @@ export function registerGitHubHandlers({
             }
           }
         }
-        for (const issue of cachedAfterIssueSync) {
-          if (!issue.threadId) continue;
-          if (
-            !force &&
-            issue.prLastSyncAt &&
-            Date.now() - new Date(issue.prLastSyncAt).getTime() < PR_FEEDBACK_SYNC_TTL_MS
-          ) {
-            continue;
-          }
-          try {
-            await syncLinkedPullRequestFeedback(
-              project,
-              issue,
-              queries,
-              notificationService,
-              chatNotificationService,
-            );
-          } catch (err) {
-            log.warn(
-              `[github:refresh-issues] PR feedback sync failed for #${issue.issueNumber}:`,
-              err,
-            );
-          }
-        }
+        await Promise.all(
+          cachedAfterIssueSync.flatMap((issue) => {
+            if (!issue.threadId) return [];
+            if (
+              !force &&
+              issue.prLastSyncAt &&
+              Date.now() - new Date(issue.prLastSyncAt).getTime() < PR_FEEDBACK_SYNC_TTL_MS
+            ) {
+              return [];
+            }
+            return [
+              syncLinkedPullRequestFeedback(
+                project,
+                issue,
+                queries,
+                notificationService,
+                chatNotificationService,
+              ).catch((err) => {
+                log.warn(
+                  `[github:refresh-issues] PR feedback sync failed for #${issue.issueNumber}:`,
+                  err,
+                );
+              }),
+            ];
+          }),
+        );
 
         const refreshed = queries.githubIssues.list(projectId);
         logEvent('github:refresh-issues:done', {
@@ -447,35 +449,41 @@ export function registerGitHubHandlers({
     let appliedCount = 0;
     const summaries = [];
 
-    for (const recommendation of result.recommendations) {
-      const issue = candidatesByNumber.get(recommendation.issueNumber);
-      if (!issue) continue;
-      const applied = recommendation.confidence >= threshold;
-      if (applied) {
-        const nextLabels = mergeTriageLabels(issue.labels, recommendation);
-        await ghCli.syncIssueLabels(issue.issueNumber, nextLabels, { removeAgentLabels: true });
-        const refreshedIssue = await ghCli.getIssue(issue.issueNumber);
-        queries.githubIssues.upsert({
-          projectId,
-          issueNumber: refreshedIssue.number,
-          title: refreshedIssue.title,
-          body: refreshedIssue.body,
-          labels: refreshedIssue.labels,
-          assignee: refreshedIssue.assignee,
-          state: refreshedIssue.state,
-        });
-        appliedCount += 1;
-      }
-      summaries.push({
-        issueNumber: recommendation.issueNumber,
-        confidence: recommendation.confidence,
-        applied,
-        suggestedLabels: recommendation.suggestedLabels,
-        suggestedAgent: recommendation.suggestedAgent,
-        shouldStart: recommendation.shouldStart,
-        needsHuman: recommendation.needsHuman,
-        rationale: recommendation.rationale,
-      });
+    const triageResults = await Promise.all(
+      result.recommendations.map(async (recommendation) => {
+        const issue = candidatesByNumber.get(recommendation.issueNumber);
+        if (!issue) return null;
+        const applied = recommendation.confidence >= threshold;
+        if (applied) {
+          const nextLabels = mergeTriageLabels(issue.labels, recommendation);
+          await ghCli.syncIssueLabels(issue.issueNumber, nextLabels, { removeAgentLabels: true });
+          const refreshedIssue = await ghCli.getIssue(issue.issueNumber);
+          queries.githubIssues.upsert({
+            projectId,
+            issueNumber: refreshedIssue.number,
+            title: refreshedIssue.title,
+            body: refreshedIssue.body,
+            labels: refreshedIssue.labels,
+            assignee: refreshedIssue.assignee,
+            state: refreshedIssue.state,
+          });
+        }
+        return {
+          issueNumber: recommendation.issueNumber,
+          confidence: recommendation.confidence,
+          applied,
+          suggestedLabels: recommendation.suggestedLabels,
+          suggestedAgent: recommendation.suggestedAgent,
+          shouldStart: recommendation.shouldStart,
+          needsHuman: recommendation.needsHuman,
+          rationale: recommendation.rationale,
+        };
+      }),
+    );
+    for (const summary of triageResults) {
+      if (!summary) continue;
+      if (summary.applied) appliedCount += 1;
+      summaries.push(summary);
     }
 
     sendGithubIssuesUpdated(mainWindow, queries, projectId);
@@ -525,7 +533,7 @@ export function registerGitHubHandlers({
       }
 
       try {
-        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.done);
+        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.closed);
         queries.githubIssues.archiveIssues([issue.id]);
       } catch (err) {
         log.error('[github:archive-issue] DB archive failed:', err);
@@ -573,7 +581,7 @@ export function registerGitHubHandlers({
         queries.githubIssues.updateState(issue.id, 'closed');
       }
 
-      queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.done);
+      queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.closed);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );
@@ -585,7 +593,7 @@ export function registerGitHubHandlers({
       if (!project) throw new Error(`Project ${projectId} not found`);
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
-      assertRealGithubIssue(issue, 'mark done on GitHub');
+      assertRealGithubIssue(issue, 'close on GitHub');
 
       const thread = issue.threadId ? queries.threads.getById(issue.threadId) : null;
       const hasCompletionEvidence =
@@ -593,7 +601,7 @@ export function registerGitHubHandlers({
 
       if (issue.state === 'closed') {
         queries.githubIssues.updateState(issue.id, 'closed');
-        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.done);
+        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.closed);
       } else if (hasCompletionEvidence) {
         queries.githubIssues.updateState(issue.id, 'open');
         queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.completed);
@@ -601,7 +609,7 @@ export function registerGitHubHandlers({
         const ghCli = new GhCli(project.path);
         await ghCli.closeIssue(issueNumber);
         queries.githubIssues.updateState(issue.id, 'closed');
-        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.done);
+        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.closed);
       }
 
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
@@ -624,7 +632,7 @@ export function registerGitHubHandlers({
       }
 
       queries.githubIssues.updateState(issue.id, 'closed');
-      queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.done);
+      queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.closed);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );
@@ -655,32 +663,38 @@ export function registerGitHubHandlers({
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
 
-      const doneIssues = queries.githubIssues.listCompleted(projectId);
-      const githubDoneIssues = doneIssues.filter(
+      const closedIssues = queries.githubIssues.listClosed(projectId);
+      const githubClosedIssues = closedIssues.filter(
         (i) => !i.isQuickMode && isRealGithubIssueNumber(i.issueNumber),
       );
-      const localDoneIssueIds = doneIssues
-        .filter((i) => i.isQuickMode || !isRealGithubIssueNumber(i.issueNumber))
-        .map((i) => i.id);
+      const localClosedIssueIds = closedIssues.flatMap((issue) =>
+        issue.isQuickMode || !isRealGithubIssueNumber(issue.issueNumber) ? [issue.id] : [],
+      );
       const ghCli = new GhCli(project.path);
       const succeededIds: string[] = [];
       let failedCount = 0;
-      const localAutomationArchivedCount = queries.threads.archiveDoneAutomationRuns(projectId);
+      const localAutomationArchivedCount = queries.threads.archiveClosedAutomationRuns(projectId);
 
-      for (const issue of githubDoneIssues) {
-        try {
-          if (issue.state !== 'closed') {
-            await ghCli.closeIssue(issue.issueNumber);
+      const archiveResults = await Promise.all(
+        githubClosedIssues.map(async (issue) => {
+          try {
+            if (issue.state !== 'closed') {
+              await ghCli.closeIssue(issue.issueNumber);
+            }
+            await ghCli.archiveProjectItems(issue.issueNumber);
+            return { issueId: issue.id, ok: true };
+          } catch (err) {
+            log.warn(`[github:archive-all-done] archive #${issue.issueNumber} failed:`, err);
+            return { issueId: issue.id, ok: false };
           }
-          await ghCli.archiveProjectItems(issue.issueNumber);
-          succeededIds.push(issue.id);
-        } catch (err) {
-          log.warn(`[github:archive-all-done] archive #${issue.issueNumber} failed:`, err);
-          failedCount++;
-        }
+        }),
+      );
+      for (const result of archiveResults) {
+        if (result.ok) succeededIds.push(result.issueId);
+        else failedCount++;
       }
 
-      const archivedIssueIds = [...localDoneIssueIds, ...succeededIds];
+      const archivedIssueIds = [...localClosedIssueIds, ...succeededIds];
       if (archivedIssueIds.length > 0) {
         queries.githubIssues.archiveIssues(archivedIssueIds);
       }
@@ -893,25 +907,39 @@ export function registerGitHubHandlers({
       let failed = 0;
       const errors: string[] = [];
 
-      for (const issue of issues) {
-        const issueUrl = deriveGithubIssueUrl(project.gitRemote, issue.issueNumber);
-        if (!issueUrl) {
+      const attachResults = await Promise.all(
+        issues.map(async (issue) => {
+          const issueUrl = deriveGithubIssueUrl(project.gitRemote, issue.issueNumber);
+          if (!issueUrl) {
+            return {
+              status: 'failed' as const,
+              error: `#${issue.issueNumber}: could not derive issue URL from git remote`,
+            };
+          }
+          try {
+            const result = await ghCli.addIssueToProject({
+              projectNumber: parsed.number,
+              owner: parsed.owner,
+              issueUrl,
+            });
+            return {
+              status: result.alreadyPresent ? ('already-present' as const) : ('attached' as const),
+            };
+          } catch (err) {
+            log.warn(`[github:sync-to-project-board] #${issue.issueNumber} failed:`, err);
+            return {
+              status: 'failed' as const,
+              error: `#${issue.issueNumber}: ${clampError(err)}`,
+            };
+          }
+        }),
+      );
+      for (const result of attachResults) {
+        if (result.status === 'attached') attached += 1;
+        else if (result.status === 'already-present') alreadyPresent += 1;
+        else if (result.status === 'failed') {
           failed += 1;
-          errors.push(`#${issue.issueNumber}: could not derive issue URL from git remote`);
-          continue;
-        }
-        try {
-          const result = await ghCli.addIssueToProject({
-            projectNumber: parsed.number,
-            owner: parsed.owner,
-            issueUrl,
-          });
-          if (result.alreadyPresent) alreadyPresent += 1;
-          else attached += 1;
-        } catch (err) {
-          failed += 1;
-          errors.push(`#${issue.issueNumber}: ${clampError(err)}`);
-          log.warn(`[github:sync-to-project-board] #${issue.issueNumber} failed:`, err);
+          errors.push(result.error);
         }
       }
 
@@ -1072,24 +1100,28 @@ export function registerGitHubHandlers({
       let started = 0;
       let queued = 0;
 
-      for (const issue of eligible) {
-        try {
-          const issueUrl = deriveGithubIssueUrl(project.gitRemote, issue.issueNumber);
-          const ghCliForAttach = new GhCli(project.path);
-          await attachIssueToConfiguredProjectBoard(
-            project,
-            ghCliForAttach,
-            issue.issueNumber,
-            issueUrl,
-            'github:auto-run',
-          );
-          const result = await scheduler.startOrQueue(projectId, issue.issueNumber);
-          if (result.queued) queued++;
-          else started++;
-        } catch (err) {
-          log.error(`[auto-run] failed to enqueue issue #${issue.issueNumber}:`, err);
-        }
-      }
+      const runResults = await Promise.all(
+        eligible.map(async (issue) => {
+          try {
+            const issueUrl = deriveGithubIssueUrl(project.gitRemote, issue.issueNumber);
+            const ghCliForAttach = new GhCli(project.path);
+            await attachIssueToConfiguredProjectBoard(
+              project,
+              ghCliForAttach,
+              issue.issueNumber,
+              issueUrl,
+              'github:auto-run',
+            );
+            const result = await scheduler.startOrQueue(projectId, issue.issueNumber);
+            return result.queued ? 'queued' : 'started';
+          } catch (err) {
+            log.error(`[auto-run] failed to enqueue issue #${issue.issueNumber}:`, err);
+            return 'failed';
+          }
+        }),
+      );
+      started = runResults.filter((result) => result === 'started').length;
+      queued = runResults.filter((result) => result === 'queued').length;
 
       log.info(
         `[auto-run] batch complete: ${started} started, ${queued} queued out of ${eligible.length} eligible`,

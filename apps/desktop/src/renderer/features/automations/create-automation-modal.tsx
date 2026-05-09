@@ -27,7 +27,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Cron } from 'croner';
 import log from 'electron-log/renderer';
 import { Wand2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { useAppStore } from '../../stores/app-store';
 
 const PRESETS: Array<{ id: string; label: string; cron: string | null }> = [
@@ -65,6 +65,55 @@ interface FormatAutomationVariables {
   reasoning: 'inherit' | ReasoningEffort;
 }
 
+interface AutomationFormState {
+  projectId: string;
+  name: string;
+  prompt: string;
+  presetId: string;
+  customCron: string;
+  enabled: boolean;
+  provider: 'inherit' | AgentType;
+  executorModelId: string;
+  reasoning: 'inherit' | ReasoningEffort;
+  error: string | null;
+}
+
+type AutomationFormAction =
+  | { type: 'load'; form: AutomationFormState }
+  | { type: 'ensure-project'; projectId: string }
+  | {
+      type: 'field';
+      field: keyof AutomationFormState;
+      value: AutomationFormState[keyof AutomationFormState];
+    };
+
+const INITIAL_AUTOMATION_FORM_STATE: AutomationFormState = {
+  projectId: '',
+  name: '',
+  prompt: '',
+  presetId: 'hourly',
+  customCron: '',
+  enabled: true,
+  provider: 'inherit',
+  executorModelId: '',
+  reasoning: 'inherit',
+  error: null,
+};
+
+function automationFormReducer(
+  state: AutomationFormState,
+  action: AutomationFormAction,
+): AutomationFormState {
+  switch (action.type) {
+    case 'load':
+      return action.form;
+    case 'ensure-project':
+      return state.projectId ? state : { ...state, projectId: action.projectId };
+    case 'field':
+      return { ...state, [action.field]: action.value };
+  }
+}
+
 function presetForCron(cron: string): string {
   const found = PRESETS.find((p) => p.cron === cron);
   return found ? found.id : 'custom';
@@ -80,7 +129,7 @@ function validateCron(expr: string): string | null {
   }
 }
 
-export function CreateAutomationModal() {
+function useCreateAutomationModalView() {
   const queryClient = useQueryClient();
   const open = useAppStore((s) => s.createAutomationModalOpen);
   const editingId = useAppStore((s) => s.editingAutomationId);
@@ -108,16 +157,19 @@ export function CreateAutomationModal() {
     enabled: open && isEdit,
   });
 
-  const [projectId, setProjectId] = useState<string>('');
-  const [name, setName] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [presetId, setPresetId] = useState<string>('hourly');
-  const [customCron, setCustomCron] = useState('');
-  const [enabled, setEnabled] = useState(true);
-  const [provider, setProvider] = useState<'inherit' | AgentType>('inherit');
-  const [executorModelId, setExecutorModelId] = useState('');
-  const [reasoning, setReasoning] = useState<'inherit' | ReasoningEffort>('inherit');
-  const [error, setError] = useState<string | null>(null);
+  const [form, dispatchForm] = useReducer(automationFormReducer, INITIAL_AUTOMATION_FORM_STATE);
+  const {
+    projectId,
+    name,
+    prompt,
+    presetId,
+    customCron,
+    enabled,
+    provider,
+    executorModelId,
+    reasoning,
+    error,
+  } = form;
 
   useEffect(() => {
     if (!open) {
@@ -130,36 +182,36 @@ export function CreateAutomationModal() {
 
     if (initializedFormKeyRef.current === currentFormKey) {
       if (!isEdit && fallbackProjectId) {
-        setProjectId((current) => current || fallbackProjectId);
+        dispatchForm({ type: 'ensure-project', projectId: fallbackProjectId });
       }
       return;
     }
 
     if (isEdit && existing) {
-      setProjectId(existing.projectId);
-      setName(existing.name);
-      setPrompt(existing.prompt);
       const pid = presetForCron(existing.cronExpr);
-      setPresetId(pid);
-      setCustomCron(pid === 'custom' ? existing.cronExpr : '');
-      setEnabled(existing.enabled);
-      setProvider(existing.executorProvider ?? 'inherit');
-      setExecutorModelId(existing.executorModelId ?? '');
-      setReasoning(existing.executorReasoningEffort ?? 'inherit');
+      dispatchForm({
+        type: 'load',
+        form: {
+          projectId: existing.projectId,
+          name: existing.name,
+          prompt: existing.prompt,
+          presetId: pid,
+          customCron: pid === 'custom' ? existing.cronExpr : '',
+          enabled: existing.enabled,
+          provider: existing.executorProvider ?? 'inherit',
+          executorModelId: existing.executorModelId ?? '',
+          reasoning: existing.executorReasoningEffort ?? 'inherit',
+          error: null,
+        },
+      });
       initializedFormKeyRef.current = currentFormKey;
     } else if (!isEdit) {
-      setProjectId(fallbackProjectId);
-      setName('');
-      setPrompt('');
-      setPresetId('hourly');
-      setCustomCron('');
-      setEnabled(true);
-      setProvider('inherit');
-      setExecutorModelId('');
-      setReasoning('inherit');
+      dispatchForm({
+        type: 'load',
+        form: { ...INITIAL_AUTOMATION_FORM_STATE, projectId: fallbackProjectId },
+      });
       initializedFormKeyRef.current = currentFormKey;
     }
-    setError(null);
   }, [open, isEdit, currentFormKey, existing, activeProjectId, projects]);
 
   const cronExpr = useMemo(() => {
@@ -206,7 +258,7 @@ export function CreateAutomationModal() {
     },
     onError: (err) => {
       log.error('[CreateAutomationModal] submit failed', err);
-      setError(clampError(err));
+      dispatchForm({ type: 'field', field: 'error', value: clampError(err) });
     },
   });
 
@@ -228,7 +280,8 @@ export function CreateAutomationModal() {
       ) {
         return;
       }
-      setPrompt(result.prompt);
+      dispatchForm({ type: 'field', field: 'prompt', value: result.prompt });
+      queryClient.invalidateQueries({ queryKey: ['automations'] });
     },
     onError: (err, variables) => {
       if (
@@ -238,7 +291,7 @@ export function CreateAutomationModal() {
         return;
       }
       log.error('[CreateAutomationModal] format failed', err);
-      setError(clampError(err));
+      dispatchForm({ type: 'field', field: 'error', value: clampError(err) });
     },
     onSettled: (_result, _error, variables) => {
       if (
@@ -264,13 +317,13 @@ export function CreateAutomationModal() {
     formatPendingForCurrentForm || createOrUpdate.isPending || !projectId || !prompt.trim();
 
   const handleSubmit = () => {
-    setError(null);
+    dispatchForm({ type: 'field', field: 'error', value: null });
     if (submitDisabled) return;
     createOrUpdate.mutate();
   };
 
   const handleFormat = () => {
-    setError(null);
+    dispatchForm({ type: 'field', field: 'error', value: null });
     if (formatDisabled) return;
     nextFormatRequestIdRef.current += 1;
     const requestId = nextFormatRequestIdRef.current;
@@ -320,9 +373,8 @@ export function CreateAutomationModal() {
           <Input
             id="auto-name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => dispatchForm({ type: 'field', field: 'name', value: e.target.value })}
             placeholder="Daily smoke test"
-            autoFocus
           />
         </div>
 
@@ -331,7 +383,10 @@ export function CreateAutomationModal() {
             <Label htmlFor="auto-project" className="text-xs text-secondary">
               Project
             </Label>
-            <Select value={projectId} onValueChange={setProjectId}>
+            <Select
+              value={projectId}
+              onValueChange={(value) => dispatchForm({ type: 'field', field: 'projectId', value })}
+            >
               <SelectTrigger id="auto-project" className="bg-transparent">
                 <SelectValue placeholder="Select a project…" />
               </SelectTrigger>
@@ -372,7 +427,9 @@ export function CreateAutomationModal() {
           <Textarea
             id="auto-prompt"
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(e) =>
+              dispatchForm({ type: 'field', field: 'prompt', value: e.target.value })
+            }
             placeholder="What should this run do?"
             rows={6}
             className="text-[13px]"
@@ -384,7 +441,10 @@ export function CreateAutomationModal() {
           <Label htmlFor="auto-preset" className="text-xs text-secondary">
             Schedule
           </Label>
-          <Select value={presetId} onValueChange={setPresetId}>
+          <Select
+            value={presetId}
+            onValueChange={(value) => dispatchForm({ type: 'field', field: 'presetId', value })}
+          >
             <SelectTrigger id="auto-preset" className="bg-transparent">
               <SelectValue />
             </SelectTrigger>
@@ -399,7 +459,9 @@ export function CreateAutomationModal() {
           {presetId === 'custom' && (
             <Input
               value={customCron}
-              onChange={(e) => setCustomCron(e.target.value)}
+              onChange={(e) =>
+                dispatchForm({ type: 'field', field: 'customCron', value: e.target.value })
+              }
               placeholder="*/15 * * * *"
               className="font-mono text-xs"
             />
@@ -422,7 +484,13 @@ export function CreateAutomationModal() {
               </Label>
               <Select
                 value={provider}
-                onValueChange={(v) => setProvider(v as 'inherit' | AgentType)}
+                onValueChange={(value) =>
+                  dispatchForm({
+                    type: 'field',
+                    field: 'provider',
+                    value: value as 'inherit' | AgentType,
+                  })
+                }
               >
                 <SelectTrigger id="auto-provider" className="bg-transparent">
                   <SelectValue />
@@ -443,7 +511,13 @@ export function CreateAutomationModal() {
               <Input
                 id="auto-model"
                 value={executorModelId}
-                onChange={(e) => setExecutorModelId(e.target.value)}
+                onChange={(e) =>
+                  dispatchForm({
+                    type: 'field',
+                    field: 'executorModelId',
+                    value: e.target.value,
+                  })
+                }
                 placeholder="e.g. anthropic/claude-opus-4-7"
                 className="font-mono text-xs"
               />
@@ -454,7 +528,13 @@ export function CreateAutomationModal() {
               </Label>
               <Select
                 value={reasoning}
-                onValueChange={(v) => setReasoning(v as 'inherit' | ReasoningEffort)}
+                onValueChange={(value) =>
+                  dispatchForm({
+                    type: 'field',
+                    field: 'reasoning',
+                    value: value as 'inherit' | ReasoningEffort,
+                  })
+                }
               >
                 <SelectTrigger id="auto-reasoning" className="bg-transparent">
                   <SelectValue />
@@ -476,7 +556,11 @@ export function CreateAutomationModal() {
           className="flex cursor-pointer items-center justify-between rounded-md border border-border bg-tertiary/30 px-3 py-2.5 text-[13px] text-secondary"
         >
           <span>Enabled</span>
-          <Switch id="auto-enabled" checked={enabled} onCheckedChange={setEnabled} />
+          <Switch
+            id="auto-enabled"
+            checked={enabled}
+            onCheckedChange={(value) => dispatchForm({ type: 'field', field: 'enabled', value })}
+          />
         </Label>
       </div>
 
@@ -493,4 +577,8 @@ export function CreateAutomationModal() {
       </ModalFooter>
     </Modal>
   );
+}
+
+export function CreateAutomationModal() {
+  return useCreateAutomationModalView();
 }

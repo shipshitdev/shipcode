@@ -2,7 +2,7 @@ const features = [
   {
     title: 'Multi-model routing',
     description:
-      'Claude, Codex, or OpenRouter — pick the best model for each pipeline phase. Swap providers without rewriting prompts.',
+      'Claude, Codex, or OpenRouter: pick the best model for each pipeline phase. Swap providers without rewriting prompts.',
   },
   {
     title: 'Automations and scheduling',
@@ -39,7 +39,7 @@ export function Features() {
           What you get out of the box
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-center text-sm leading-6 text-secondary">
-          A full-stack pipeline engine — not another chat wrapper.
+          A full-stack pipeline engine, not another chat wrapper.
         </p>
 
         <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">

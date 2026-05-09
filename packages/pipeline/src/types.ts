@@ -130,7 +130,7 @@ export type PipelineEvent =
   | {
       type: 'pipeline:approval-gate';
       threadId: string;
-      outcome: 'awaiting_approval' | 'auto_execute';
+      outcome: 'approval' | 'auto_execute';
       reviewDecision: 'approve' | 'request_changes' | 'parse_failure';
       planVersion: number | null;
       requireApproval: boolean;

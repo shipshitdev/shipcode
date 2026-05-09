@@ -255,7 +255,7 @@ export function createPlanningPhaseHandlers({
       deps.emitter.emit({
         type: 'pipeline:approval-gate',
         threadId,
-        outcome: 'awaiting_approval',
+        outcome: 'approval',
         reviewDecision: 'approve',
         planVersion: plan.version,
         requireApproval,
@@ -265,9 +265,9 @@ export function createPlanningPhaseHandlers({
         hasCriticalOrMajor: false,
         reasons,
       });
-      deps.plans.updateStatus(plan.id, 'awaiting_approval');
+      deps.plans.updateStatus(plan.id, 'approval');
       void postPlanComment(context, structuredPlan);
-      emitPhase(threadId, 'awaiting_approval');
+      emitPhase(threadId, 'approval');
       return;
     }
 
@@ -612,7 +612,7 @@ export function createPlanningPhaseHandlers({
               deps.emitter.emit({
                 type: 'pipeline:approval-gate',
                 threadId,
-                outcome: 'awaiting_approval',
+                outcome: 'approval',
                 reviewDecision: 'approve',
                 planVersion: latestPlan.version,
                 requireApproval,
@@ -622,9 +622,9 @@ export function createPlanningPhaseHandlers({
                 hasCriticalOrMajor: false,
                 reasons,
               });
-              deps.plans.updateStatus(latestPlan.id, 'awaiting_approval');
+              deps.plans.updateStatus(latestPlan.id, 'approval');
               void postPlanComment(context, latestStructuredPlan);
-              emitPhase(threadId, 'awaiting_approval');
+              emitPhase(threadId, 'approval');
             } else {
               deps.emitter.emit({
                 type: 'pipeline:approval-gate',
@@ -675,7 +675,7 @@ export function createPlanningPhaseHandlers({
                 deps.emitter.emit({
                   type: 'pipeline:approval-gate',
                   threadId,
-                  outcome: 'awaiting_approval',
+                  outcome: 'approval',
                   reviewDecision: 'request_changes',
                   planVersion: latestPlan.version,
                   requireApproval,
@@ -685,9 +685,9 @@ export function createPlanningPhaseHandlers({
                   hasCriticalOrMajor,
                   reasons,
                 });
-                deps.plans.updateStatus(latestPlan.id, 'awaiting_approval');
+                deps.plans.updateStatus(latestPlan.id, 'approval');
                 void postPlanComment(context, latestStructuredPlan);
-                emitPhase(threadId, 'awaiting_approval');
+                emitPhase(threadId, 'approval');
               } else {
                 deps.emitter.emit({
                   type: 'pipeline:approval-gate',

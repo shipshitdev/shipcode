@@ -3,7 +3,7 @@ import { ERROR_PATTERNS, formatClockTime, stripAnsi } from '@shipcode/shared';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@shipcode/ui';
 import { Badge, Button, cn } from '@shipshitdev/ui';
 import { ArrowDownToLine, Check, Copy, Loader2, Terminal, Wand2 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export interface TerminalFailureActionRequest {
   record: TerminalEventRecord;
@@ -97,7 +97,7 @@ function FailureActions({
   const copied = copiedEventId === record.id;
   const buttonClass = cn(
     'border-border/70 bg-primary/30 text-secondary hover:text-primary',
-    compact && 'h-5 w-5',
+    compact && 'size-5',
   );
 
   return (
@@ -129,7 +129,7 @@ function FailureActions({
               aria-label="Send failure to terminal"
               className={cn(
                 'border-agent/35 bg-agent/10 text-agent hover:bg-agent/15 hover:text-agent',
-                compact && 'h-5 w-5',
+                compact && 'size-5',
               )}
               disabled={sending}
               onClick={() => onSendToTerminal({ record, output })}
@@ -150,7 +150,7 @@ function FailureActions({
               aria-label="Auto fix failure"
               className={cn(
                 'border-danger/35 bg-danger/10 text-danger hover:bg-danger/15 hover:text-danger',
-                compact && 'h-5 w-5',
+                compact && 'size-5',
               )}
               disabled={autoFixing}
               onClick={() => onAutoFix({ record, output })}
@@ -165,7 +165,7 @@ function FailureActions({
   );
 }
 
-function TranscriptRow({
+function transcriptRow({
   record,
   compact = false,
   onAction,
@@ -525,9 +525,6 @@ function TranscriptRow({
   }
 }
 
-const MemoTranscriptRow = memo(TranscriptRow);
-MemoTranscriptRow.displayName = 'MemoTranscriptRow';
-
 function dedupeTranscriptEvents(events: TerminalEventRecord[]): TerminalEventRecord[] {
   const seen = new Set<string>();
   let hasDuplicate = false;
@@ -594,22 +591,21 @@ export function TerminalTranscript({
 
   const plainRows = useMemo(
     () =>
-      visibleEvents
-        .map((record) => (
-          <MemoTranscriptRow
-            key={record.id}
-            record={record}
-            compact={compact}
-            onAction={onAction}
-            onAutoFix={onAutoFix}
-            onSendToTerminal={onSendToTerminal}
-            onCopyFailure={handleCopyFailure}
-            autoFixingEventId={autoFixingEventId}
-            sendingToTerminalEventId={sendingToTerminalEventId}
-            copiedEventId={copiedEventId}
-          />
-        ))
-        .filter(Boolean),
+      visibleEvents.map((record) => (
+        <Fragment key={record.id}>
+          {transcriptRow({
+            record,
+            compact,
+            onAction,
+            onAutoFix,
+            onSendToTerminal,
+            onCopyFailure: handleCopyFailure,
+            autoFixingEventId,
+            sendingToTerminalEventId,
+            copiedEventId,
+          })}
+        </Fragment>
+      )),
     [
       autoFixingEventId,
       compact,
@@ -691,7 +687,7 @@ export function TerminalTranscript({
       {!hasEvents && pendingLabel ? (
         <div className="flex min-h-full items-center justify-center">
           <div className="inline-flex items-center gap-3 rounded-xl border border-border/70 bg-elevated px-4 py-3">
-            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-agent" />
+            <span className="size-2.5 animate-pulse rounded-full bg-agent" />
             <span className={cn('text-secondary', compact ? 'text-[12px]' : 'text-[13px]')}>
               {pendingLabel}…
             </span>
@@ -731,9 +727,7 @@ export function TerminalTranscript({
         className="h-full overflow-y-auto overscroll-contain"
         onScroll={handleScroll}
       >
-        <div
-          className={cn('flex min-h-full w-full flex-col gap-1.5', compact ? 'p-3' : 'px-4 py-4')}
-        >
+        <div className={cn('flex min-h-full w-full flex-col gap-1.5', compact ? 'p-3' : 'p-4')}>
           {headerContent}
           {hasEvents ? plainRows : null}
           {footerContent}

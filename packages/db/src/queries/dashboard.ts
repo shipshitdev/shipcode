@@ -15,7 +15,7 @@ const ACTIVE_PHASES: PipelinePhase[] = [
   PIPELINE_PHASE.clarifying,
   PIPELINE_PHASE.reviewing,
   PIPELINE_PHASE.revising,
-  PIPELINE_PHASE.awaitingApproval,
+  PIPELINE_PHASE.approval,
   PIPELINE_PHASE.executing,
   PIPELINE_PHASE.testing,
   PIPELINE_PHASE.verifying,
@@ -25,7 +25,7 @@ const ACTIVE_PHASES: PipelinePhase[] = [
 // Phases where the user is blocked waiting for input / failure recovery.
 const BLOCKED_PHASES: PipelinePhase[] = [
   PIPELINE_PHASE.clarifying,
-  PIPELINE_PHASE.awaitingApproval,
+  PIPELINE_PHASE.approval,
   PIPELINE_PHASE.paused,
 ];
 
@@ -52,7 +52,7 @@ interface RecentTaskRow {
 
 function awaitingHumanApprovalWhere(alias: string): string {
   return `${alias}.kind = 'pipeline'
-    AND ${alias}.status = '${PIPELINE_PHASE.awaitingApproval}'
+    AND ${alias}.status = '${PIPELINE_PHASE.approval}'
     AND COALESCE(
       (
         SELECT p.status

@@ -182,7 +182,7 @@ export function ProjectSettingsGeneralTab({
           description="If you moved this repo on disk, relink the existing project instead of creating a duplicate."
         >
           <Button variant="secondary" size="sm" onClick={onRelink} disabled={relinkPending}>
-            <LoadingButtonContent loading={relinkPending}>Change folder...</LoadingButtonContent>
+            <LoadingButtonContent loading={relinkPending}>Change folder…</LoadingButtonContent>
           </Button>
         </SettingsRow>
         <div className="font-mono text-xs text-secondary break-all">{project.path}</div>

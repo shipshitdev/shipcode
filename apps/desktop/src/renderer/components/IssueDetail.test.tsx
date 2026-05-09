@@ -65,7 +65,7 @@ const makeThread = (overrides: Partial<Thread> = {}): Thread => {
     projectId: 'project-1',
     title: 'Thread title',
     prompt: 'Do the thing',
-    status: 'awaiting_approval',
+    status: 'approval',
     kind: 'pipeline' as const,
     worktreeBranch: null,
     worktreePath: null,
@@ -660,7 +660,7 @@ describe('IssueDetail', () => {
     useAppStore.setState({
       activeThreadId: thread.id,
       activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'reviewing' }),
-      pipelinePhase: 'awaiting_approval',
+      pipelinePhase: 'approval',
     });
 
     invokeMock.mockImplementation(async (channel, args) => {
@@ -721,7 +721,7 @@ describe('IssueDetail', () => {
           notificationBadgeEnabled: true,
           notificationSoundEnabled: false,
           notificationEvents: {
-            awaitingApproval: true,
+            approval: true,
             failed: true,
             completed: true,
             verificationExhausted: true,
@@ -768,7 +768,7 @@ describe('IssueDetail', () => {
     useAppStore.setState({
       activeThreadId: thread.id,
       activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'reviewing' }),
-      pipelinePhase: 'awaiting_approval',
+      pipelinePhase: 'approval',
     });
 
     invokeMock.mockImplementation(async (channel, args) => {
@@ -787,14 +787,14 @@ describe('IssueDetail', () => {
     expect(confirmButton).toBeEnabled();
   });
 
-  it('renders the approval dropdown when awaiting approval', async () => {
+  it('renders the approval dropdown during approval', async () => {
     const thread = makeThread();
     const plan = makePlan();
 
     useAppStore.setState({
       activeThreadId: thread.id,
       activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'reviewing' }),
-      pipelinePhase: 'awaiting_approval',
+      pipelinePhase: 'approval',
     });
 
     invokeMock.mockImplementation(async (channel, args) => {
@@ -821,8 +821,8 @@ describe('IssueDetail', () => {
 
     useAppStore.setState({
       activeThreadId: thread.id,
-      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'awaiting_approval' }),
-      pipelinePhase: 'awaiting_approval',
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'approval' }),
+      pipelinePhase: 'approval',
     });
 
     invokeMock.mockImplementation(async (channel, args) => {
@@ -844,13 +844,13 @@ describe('IssueDetail', () => {
   });
 
   it('shows waiting-for-execution messaging after a plan is already approved', async () => {
-    const thread = makeThread({ status: 'awaiting_approval' });
+    const thread = makeThread({ status: 'approval' });
     const plan = makePlan({ status: 'approved' });
 
     useAppStore.setState({
       activeThreadId: thread.id,
-      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'awaiting_approval' }),
-      pipelinePhase: 'awaiting_approval',
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'approval' }),
+      pipelinePhase: 'approval',
     });
 
     invokeMock.mockImplementation(async (channel, args) => {
@@ -863,7 +863,7 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    expect(await screen.findByText('Waiting For Execution Slot')).toBeInTheDocument();
+    expect(await screen.findByText('Waiting')).toBeInTheDocument();
     expect(screen.getByText(/Approval is already confirmed\./)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
   });
@@ -960,14 +960,14 @@ describe('IssueDetail', () => {
   });
 
   it('renders reviewer feedback labels without leaking raw decision enums', async () => {
-    const thread = makeThread({ status: 'awaiting_approval' });
-    const plan = makePlan({ status: 'awaiting_approval' });
+    const thread = makeThread({ status: 'approval' });
+    const plan = makePlan({ status: 'approval' });
     const review = makeReview({ planId: plan.id, decision: 'request_changes' });
 
     useAppStore.setState({
       activeThreadId: thread.id,
       activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'reviewing' }),
-      pipelinePhase: 'awaiting_approval',
+      pipelinePhase: 'approval',
     });
 
     invokeMock.mockImplementation(async (channel, args) => {
@@ -1149,7 +1149,7 @@ describe('IssueDetail', () => {
           notificationBadgeEnabled: true,
           notificationSoundEnabled: false,
           notificationEvents: {
-            awaitingApproval: true,
+            approval: true,
             failed: true,
             completed: true,
             verificationExhausted: true,

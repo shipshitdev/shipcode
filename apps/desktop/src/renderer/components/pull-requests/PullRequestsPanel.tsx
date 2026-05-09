@@ -68,7 +68,7 @@ export function PullRequestsPanel() {
           <Button
             variant="ghost"
             className={cn(
-              'h-6 w-6 p-0 text-muted-foreground hover:text-primary',
+              'size-6 p-0 text-muted-foreground hover:text-primary',
               isFetching && '[&_svg]:animate-spin',
             )}
             onClick={() =>
@@ -84,7 +84,7 @@ export function PullRequestsPanel() {
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="flex items-center justify-center p-8 text-xs text-muted-foreground">
-              Loading...
+              Loading…
             </div>
           ) : pullRequests.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">

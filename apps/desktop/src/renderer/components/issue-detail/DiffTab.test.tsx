@@ -54,8 +54,8 @@ describe('DiffTab', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows completed empty state when thread is done with no diffs', () => {
-    render(<DiffTab diffs={[]} threadStatus="done" />);
+  it('shows completed empty state when thread is closed with no diffs', () => {
+    render(<DiffTab diffs={[]} threadStatus="closed" />);
 
     expect(screen.getByText('No code changes')).toBeInTheDocument();
     expect(

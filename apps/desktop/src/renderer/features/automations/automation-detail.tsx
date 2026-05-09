@@ -88,10 +88,10 @@ export function AutomationDetail() {
           aria-label="Back to automations"
           className="rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="size-4" />
         </Button>
         {isAutomationLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          <Loader2 className="size-4 animate-spin text-muted-foreground" />
         ) : (
           <>
             <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-primary">
@@ -135,7 +135,7 @@ export function AutomationDetail() {
           <div className="flex-1 overflow-y-auto">
             {isHistoryLoading ? (
               <div className="flex justify-center py-12">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
               </div>
             ) : runHistory.length === 0 ? (
               <p className="px-6 py-8 text-center text-[12px] text-muted-foreground">

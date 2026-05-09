@@ -3,7 +3,7 @@ import { Button, Checkbox, Input, Label, SettingsRow, Textarea } from '@shipshit
 import { RefreshCw } from 'lucide-react';
 import type { LocalEnvFile } from './setup-utils';
 
-export function ProjectSettingsSetupTab({
+function projectSettingsSetupTab({
   setupCommandsText,
   setSetupCommandsText,
   verifyCommandsText,
@@ -243,8 +243,12 @@ export function ProjectSettingsSetupTab({
                 placeholder="PORT"
               />
             </div>
-            <label className="flex items-center gap-2 text-[11px] text-secondary">
+            <label
+              htmlFor="project-runtime-qa-discover-agent-tests"
+              className="flex items-center gap-2 text-[11px] text-secondary"
+            >
               <Checkbox
+                id="project-runtime-qa-discover-agent-tests"
                 checked={runtimeQaDiscoverAgentTests}
                 onCheckedChange={(checked) => setRuntimeQaDiscoverAgentTests(checked === true)}
               />
@@ -278,23 +282,39 @@ export function ProjectSettingsSetupTab({
               className="grid gap-2 rounded-md border border-border p-3 md:grid-cols-[1fr_1fr_auto_auto]"
             >
               <div className="flex flex-col gap-1">
-                <Label className="text-[11px] text-secondary">Source</Label>
+                <Label
+                  htmlFor={`env-file-source-${file.id}`}
+                  className="text-[11px] text-secondary"
+                >
+                  Source
+                </Label>
                 <Input
+                  id={`env-file-source-${file.id}`}
                   value={file.source}
                   onChange={(e) => updateEnvFile(file.id, { source: e.target.value })}
                   placeholder=".env.local"
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <Label className="text-[11px] text-secondary">Target</Label>
+                <Label
+                  htmlFor={`env-file-target-${file.id}`}
+                  className="text-[11px] text-secondary"
+                >
+                  Target
+                </Label>
                 <Input
+                  id={`env-file-target-${file.id}`}
                   value={file.target ?? ''}
                   onChange={(e) => updateEnvFile(file.id, { target: e.target.value || undefined })}
                   placeholder="Optional alternate target path"
                 />
               </div>
-              <label className="flex items-center gap-2 self-end pb-2 text-[11px] text-secondary">
+              <label
+                htmlFor={`env-file-required-${file.id}`}
+                className="flex items-center gap-2 self-end pb-2 text-[11px] text-secondary"
+              >
                 <Checkbox
+                  id={`env-file-required-${file.id}`}
                   checked={file.required}
                   onCheckedChange={(checked) =>
                     updateEnvFile(file.id, { required: checked === true })
@@ -343,4 +363,8 @@ export function ProjectSettingsSetupTab({
       ) : null}
     </div>
   );
+}
+
+export function ProjectSettingsSetupTab(props: Parameters<typeof projectSettingsSetupTab>[0]) {
+  return projectSettingsSetupTab(props);
 }

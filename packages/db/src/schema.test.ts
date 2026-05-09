@@ -51,6 +51,7 @@ import {
   migrateV49,
   migrateV50,
   migrateV52,
+  migrateV53,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -311,10 +312,10 @@ describe('migrateV18', () => {
     db.close();
   });
 
-  it('rewrites rejected plans to awaiting_approval when the owning thread is awaiting approval', () => {
+  it('rewrites rejected plans to approval when the owning thread is in approval', () => {
     db.prepare("INSERT INTO projects (id, name, path) VALUES ('p1', 'test', '/tmp/test')").run();
     db.prepare(
-      "INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t1', 'p1', 'title', 'prompt', 'awaiting_approval')",
+      "INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t1', 'p1', 'title', 'prompt', 'approval')",
     ).run();
     db.prepare(
       "INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t2', 'p1', 'title 2', 'prompt', 'failed')",
@@ -335,7 +336,7 @@ describe('migrateV18', () => {
       status: string;
     };
 
-    expect(rewritten.status).toBe('awaiting_approval');
+    expect(rewritten.status).toBe('approval');
     expect(untouched.status).toBe('rejected');
   });
 });
@@ -388,7 +389,7 @@ describe('migrateV21', () => {
     db.close();
   });
 
-  it('reclassifies open completed issues with linked PR evidence back to completed and closed ones to done', () => {
+  it('reclassifies open completed issues with linked PR evidence back to completed and closed ones to closed', () => {
     db.prepare("INSERT INTO projects (id, name, path) VALUES ('p1', 'test', '/tmp/test')").run();
     db.prepare(
       "INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t1', 'p1', 'title', 'prompt', 'completed')",
@@ -410,7 +411,7 @@ describe('migrateV21', () => {
       .get('closed-issue') as { pipeline_status: string };
 
     expect(openRow.pipeline_status).toBe('completed');
-    expect(closedRow.pipeline_status).toBe('done');
+    expect(closedRow.pipeline_status).toBe('closed');
   });
 });
 
@@ -1298,5 +1299,110 @@ describe('migrateV52', () => {
 
   it('is idempotent', () => {
     expect(() => migrateV52(db)).not.toThrow();
+  });
+});
+
+describe('migrateV53', () => {
+  let db: ReturnType<typeof createTestDb>;
+
+  beforeEach(() => {
+    db = createTestDb();
+    db.exec(`
+      INSERT INTO projects (id, name, path) VALUES ('p53', 'Project 53', '/tmp/project-53');
+      INSERT INTO threads (id, project_id, title, prompt, status, paused_phase)
+        VALUES ('t53', 'p53', 'Thread 53', 'prompt', 'awaiting_approval', 'awaiting_approval');
+      INSERT INTO plans (id, thread_id, raw_output, status)
+        VALUES ('plan53', 't53', '{}', 'awaiting_approval');
+      INSERT INTO github_issue_cache (id, project_id, issue_number, title, labels, state, pipeline_status)
+        VALUES
+          ('issue-approval', 'p53', 5301, 'Approval issue', '[]', 'open', 'awaiting_approval'),
+          ('issue-closed', 'p53', 5302, 'Closed issue', '[]', 'closed', 'done');
+      INSERT INTO pipeline_phase_log (id, thread_id, phase, started_at, terminal_status)
+        VALUES ('phase53', 't53', 'awaiting_approval', '2026-01-01T00:00:00.000Z', 'awaiting_approval');
+      INSERT INTO notifications (id, thread_id, project_id, kind, title, body)
+        VALUES ('notification53', 't53', 'p53', 'awaiting_approval', 'Approval', 'Body');
+      INSERT OR REPLACE INTO settings (key, value)
+        VALUES
+          ('notificationEvents', '{"awaitingApproval":true,"failed":true}'),
+          ('chatNotificationEvents', '{"awaitingApproval":false,"failed":true}');
+      DELETE FROM schema_version;
+      INSERT INTO schema_version (version) VALUES (52);
+    `);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('renames approval and closed status values', () => {
+    migrateV53(db);
+
+    expect(
+      db.prepare("SELECT status, paused_phase FROM threads WHERE id = 't53'").get() as {
+        status: string;
+        paused_phase: string;
+      },
+    ).toEqual({ status: 'approval', paused_phase: 'approval' });
+    expect(
+      (db.prepare("SELECT status FROM plans WHERE id = 'plan53'").get() as { status: string })
+        .status,
+    ).toBe('approval');
+    expect(
+      (
+        db
+          .prepare("SELECT pipeline_status FROM github_issue_cache WHERE id = 'issue-approval'")
+          .get() as { pipeline_status: string }
+      ).pipeline_status,
+    ).toBe('approval');
+    expect(
+      (
+        db
+          .prepare("SELECT pipeline_status FROM github_issue_cache WHERE id = 'issue-closed'")
+          .get() as {
+          pipeline_status: string;
+        }
+      ).pipeline_status,
+    ).toBe('closed');
+    expect(
+      db
+        .prepare("SELECT phase, terminal_status FROM pipeline_phase_log WHERE id = 'phase53'")
+        .get() as {
+        phase: string;
+        terminal_status: string;
+      },
+    ).toEqual({ phase: 'approval', terminal_status: 'approval' });
+    expect(
+      (
+        db.prepare("SELECT kind FROM notifications WHERE id = 'notification53'").get() as {
+          kind: string;
+        }
+      ).kind,
+    ).toBe('approval');
+    expect(
+      (
+        db.prepare("SELECT value FROM settings WHERE key = 'notificationEvents'").get() as {
+          value: string;
+        }
+      ).value,
+    ).toBe('{"approval":true,"failed":true}');
+    expect(
+      (
+        db.prepare("SELECT value FROM settings WHERE key = 'chatNotificationEvents'").get() as {
+          value: string;
+        }
+      ).value,
+    ).toBe('{"approval":false,"failed":true}');
+    expect(
+      (
+        db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as {
+          version: number;
+        }
+      ).version,
+    ).toBe(53);
+  });
+
+  it('is idempotent', () => {
+    migrateV53(db);
+    expect(() => migrateV53(db)).not.toThrow();
   });
 });

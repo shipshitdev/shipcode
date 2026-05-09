@@ -70,6 +70,12 @@ const PROJECT_TAB_ITEMS: Array<{
 const SIDEBAR_MIN = 220;
 const SIDEBAR_MAX = 256;
 const SIDEBAR_DEFAULT = SIDEBAR_MAX;
+const PROJECT_LOADING_ROW_KEYS = [
+  'project-loading-1',
+  'project-loading-2',
+  'project-loading-3',
+  'project-loading-4',
+];
 
 type SortOrder = AppSettings['projectSortOrder'];
 type ProjectWithPathState = Project & { pathExists?: boolean };
@@ -91,7 +97,7 @@ const PROJECT_OPEN_TARGET_ICONS: Record<AppSettings['projectOpenTarget'], AppIco
   t3code: Braces,
 };
 
-export function ProjectSidebar() {
+function useProjectSidebarView() {
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const viewMode = useAppStore((state) => state.viewMode);
   const settingsVisible = useAppStore((state) => state.settingsVisible);
@@ -169,7 +175,11 @@ export function ProjectSidebar() {
   const pinProject = useMutation({
     mutationFn: ({ projectId, pinned }: { projectId: string; pinned: boolean }) =>
       window.shipcode.invoke('project:pin', { projectId, pinned }),
-    onSuccess: invalidateProjects,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
+      queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
+    },
   });
 
   const archiveProject = useMutation({
@@ -179,7 +189,9 @@ export function ProjectSidebar() {
         selectProject(null);
         openOverview();
       }
-      invalidateProjects();
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
+      queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
     },
     onError: (error: Error) => {
       toast.error('Failed to archive project', error.message);
@@ -193,7 +205,9 @@ export function ProjectSidebar() {
         selectProject(null);
         openOverview();
       }
-      invalidateProjects();
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
+      queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
     },
     onError: (error: Error) => {
       toast.error('Failed to remove project', error.message);
@@ -231,6 +245,11 @@ export function ProjectSidebar() {
       projectId: string;
       target: 'default' | AppSettings['projectOpenTarget'];
     }) => window.shipcode.invoke('project:open-path', { projectId, target }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
+      queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
+    },
     onError: (error: Error) => {
       toast.error('Failed to open project folder', error.message);
     },
@@ -266,13 +285,11 @@ export function ProjectSidebar() {
         dragRef.current = null;
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
+        document.body.classList.remove('cursor-col-resize', 'select-none');
       };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
+      document.body.classList.add('cursor-col-resize', 'select-none');
     },
     [sidebarWidth],
   );
@@ -280,7 +297,7 @@ export function ProjectSidebar() {
   // Pinned projects always float to top; within each group, apply the selected sort order.
   const sortedProjects = useMemo(
     () =>
-      [...projects].sort((a, b) => {
+      projects.toSorted((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
         if (sortOrder === 'alpha') return a.name.localeCompare(b.name);
         if (sortOrder === 'added') return (a.createdAt || '').localeCompare(b.createdAt || '');
@@ -297,7 +314,7 @@ export function ProjectSidebar() {
   const inboxCount = inboxItems.length;
   const hasFailure = inboxItems.some((n) => n.kind === 'failed' || n.kind === 'ci_blocked');
   const hasWarning = inboxItems.some(
-    (n) => n.kind === 'awaiting_approval' || n.kind === 'verification_exhausted',
+    (n) => n.kind === 'approval' || n.kind === 'verification_exhausted',
   );
   const inboxBadgeClass = hasFailure
     ? 'bg-danger/15 text-danger'
@@ -363,9 +380,9 @@ export function ProjectSidebar() {
             <span className="flex-1 truncate">Overview</span>
             {liveCount > 0 && (
               <span className="inline-flex items-center gap-1 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
-                <span className="relative flex h-1.5 w-1.5 items-center justify-center">
+                <span className="relative flex size-1.5 items-center justify-center">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-agent" />
+                  <span className="relative inline-flex size-1.5 rounded-full bg-agent" />
                 </span>
                 {liveCount} live
               </span>
@@ -465,7 +482,7 @@ export function ProjectSidebar() {
               <DropdownMenuContent align="end">
                 {(Object.keys(SORT_LABELS) as SortOrder[]).map((key) => (
                   <DropdownMenuItem key={key} onSelect={() => setSortOrder.mutate(key)}>
-                    <span className="flex h-3.5 w-3.5 items-center justify-center">
+                    <span className="flex size-3.5 items-center justify-center">
                       {sortOrder === key ? <Check size={12} /> : null}
                     </span>
                     {SORT_LABELS[key]}
@@ -488,10 +505,9 @@ export function ProjectSidebar() {
 
         <div className="flex-1 overflow-y-auto px-2 py-1" data-project-list>
           {projectsLoading && projects.length === 0
-            ? Array.from({ length: 4 }, (_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
-                <div key={i} className="flex items-center gap-2 px-3 py-2">
-                  <Skeleton className="h-3.5 w-3.5 shrink-0 rounded" />
+            ? PROJECT_LOADING_ROW_KEYS.map((key) => (
+                <div key={key} className="flex items-center gap-2 px-3 py-2">
+                  <Skeleton className="size-3.5 shrink-0 rounded" />
                   <Skeleton className="h-3.5 flex-1 rounded" />
                 </div>
               ))
@@ -575,9 +591,9 @@ export function ProjectSidebar() {
                         )}
                         {(stats?.agentsRunningByProject?.[project.id] ?? 0) > 0 && (
                           <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
-                            <span className="relative flex h-1.5 w-1.5 items-center justify-center">
+                            <span className="relative flex size-1.5 items-center justify-center">
                               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
-                              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-agent" />
+                              <span className="relative inline-flex size-1.5 rounded-full bg-agent" />
                             </span>
                             {stats?.agentsRunningByProject[project.id]} live
                           </span>
@@ -738,4 +754,8 @@ export function ProjectSidebar() {
       </aside>
     </div>
   );
+}
+
+export function ProjectSidebar() {
+  return useProjectSidebarView();
 }

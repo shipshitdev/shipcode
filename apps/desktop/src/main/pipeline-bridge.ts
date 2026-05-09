@@ -58,9 +58,9 @@ const PHASE_ACTIVITY: Partial<
     title: (t) => `${t.title} — revising`,
     subtitle: 'Claude is revising the plan',
   },
-  [PIPELINE_PHASE.awaitingApproval]: {
+  [PIPELINE_PHASE.approval]: {
     kind: 'phase_change',
-    title: (t) => `${t.title} — awaiting approval`,
+    title: (t) => `${t.title} — approval`,
     subtitle: 'Needs your approval',
   },
   [PIPELINE_PHASE.executing]: {
@@ -98,7 +98,7 @@ const PHASE_ACTIVITY: Partial<
 
 const SLOT_FREEING_PHASES = new Set<PipelinePhase>([
   PIPELINE_PHASE.clarifying,
-  PIPELINE_PHASE.awaitingApproval,
+  PIPELINE_PHASE.approval,
   PIPELINE_PHASE.paused,
   PIPELINE_PHASE.completed,
   PIPELINE_PHASE.failed,
@@ -460,9 +460,9 @@ export function createElectronEmitter(
             deps.notifications.dismissByThread(thread.id);
           }
 
-          if (event.phase === PIPELINE_PHASE.awaitingApproval) {
-            deps.notifications.fire('awaiting_approval', thread);
-            deps.chatNotifications.fire('awaiting_approval', thread);
+          if (event.phase === PIPELINE_PHASE.approval) {
+            deps.notifications.fire('approval', thread);
+            deps.chatNotifications.fire('approval', thread);
           } else if (event.phase === PIPELINE_PHASE.failed) {
             deps.notifications.fire('failed', thread);
             deps.chatNotifications.fire('failed', thread);
@@ -476,7 +476,7 @@ export function createElectronEmitter(
       }
 
       // 5. Promote next queued issue if a pipeline slot opened up.
-      // clarifying/awaiting_approval are included: the slot becomes available
+      // clarifying/approval are included: the slot becomes available
       // while the human responds, so the next queued issue can start in parallel.
       if (event.type === 'pipeline:phase' && SLOT_FREEING_PHASES.has(event.phase)) {
         try {
@@ -487,7 +487,7 @@ export function createElectronEmitter(
       }
 
       // 5b. Promote next execution-queued pipeline if a project execution slot opened.
-      // Only terminal phases free an execution slot — awaiting_approval frees a
+      // Only terminal phases free an execution slot — approval frees a
       // planning slot, not an execution slot.
       if (event.type === 'pipeline:phase' && TERMINAL_PHASES.has(event.phase)) {
         try {

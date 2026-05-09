@@ -85,7 +85,7 @@ describe('InboxView', () => {
       id: 'notification-1',
       projectId: 'project-1',
       threadId: 'thread-1',
-      kind: 'awaiting_approval',
+      kind: 'approval',
       title: 'Approval needed for demo task',
       body: 'Pipeline paused before execution.',
       createdAt: '2026-04-21T10:00:00.000Z',
@@ -159,7 +159,7 @@ describe('InboxView', () => {
     expect(cells).toHaveLength(3);
     expect(cells[1]).toHaveTextContent('Execution failed for demo task');
     expect(cells[2]).toHaveTextContent(formatRelativeTime(notifications[1].createdAt));
-    expect(within(cells[2]).getByRole('button', { name: /Open issue/i })).toBeInTheDocument();
+    expect(within(cells[2]).getByRole('button', { name: /Quick view/i })).toBeInTheDocument();
     expect(within(cells[2]).getByRole('button', { name: /Retry pipeline/i })).toBeInTheDocument();
     expect(
       within(cells[2]).getByRole('button', { name: /Dismiss notification/i }),
@@ -225,7 +225,9 @@ describe('InboxView', () => {
 
     renderWithProviders();
 
-    fireEvent.click(await screen.findByRole('button', { name: /Open issue: Approval needed/i }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Open issue detail: Approval needed/i }),
+    );
 
     await waitFor(() => {
       expect(useAppStore.getState().activeProjectId).toBe('project-1');
@@ -250,7 +252,9 @@ describe('InboxView', () => {
 
     renderWithProviders();
 
-    fireEvent.click(await screen.findByRole('button', { name: /Open issue: Execution failed/i }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Open issue detail: Execution failed/i }),
+    );
 
     await waitFor(() => {
       expect(useAppStore.getState().activeAutomationThreadId).toBe('thread-2');
@@ -268,7 +272,9 @@ describe('InboxView', () => {
 
     renderWithProviders();
 
-    fireEvent.click(await screen.findByRole('button', { name: /Open issue: Approval needed/i }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Open issue detail: Approval needed/i }),
+    );
 
     await waitFor(() => {
       expect(useAppStore.getState().activeProjectId).toBe('existing-project');

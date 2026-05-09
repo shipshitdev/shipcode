@@ -137,7 +137,7 @@ export function DroppableColumn({
         <span className="flex items-center gap-1.5">
           <span
             className={cn(
-              'h-2 w-2 shrink-0 rounded-full',
+              'size-2 shrink-0 rounded-full',
               !columnDotColor && COLUMN_DOT_CLASS[columnKey],
             )}
             style={columnDotColor ? { backgroundColor: columnDotColor } : undefined}
@@ -316,12 +316,12 @@ function SectionBlock({
           </span>
         </Button>
         <div className="flex items-center gap-1">
-          {onArchiveAllDone && section.key === 'done' && !empty && (
+          {onArchiveAllDone && section.key === 'closed' && !empty && (
             <Button
               variant="ghost"
               size="icon-xs"
               className="text-muted-foreground/60 hover:bg-muted/10 hover:text-muted-foreground"
-              title="Archive all done issues"
+              title="Archive closed issues"
               onClick={onArchiveAllDone}
             >
               <Archive size={12} />
@@ -518,7 +518,7 @@ export function StackedColumn({
         <span className="flex items-center gap-1.5">
           <span
             className={cn(
-              'h-2 w-2 shrink-0 rounded-full',
+              'size-2 shrink-0 rounded-full',
               !columnDotColor && COLUMN_DOT_CLASS[column.key],
             )}
             style={columnDotColor ? { backgroundColor: columnDotColor } : undefined}
@@ -557,7 +557,7 @@ export function StackedColumn({
             onMarkDone={onMarkDone}
             onArchiveIssue={onArchiveIssue}
             onCreatePr={onCreatePr}
-            onArchiveAllDone={section.key === 'done' ? onArchiveAllDone : undefined}
+            onArchiveAllDone={section.key === 'closed' ? onArchiveAllDone : undefined}
             selectedIssueNumber={selectedIssueNumber}
             rerunningId={rerunningId}
             pausingId={pausingId}

@@ -16,7 +16,7 @@ When multiple pipelines are running concurrently, the drawer title shows a dropd
 
 Before the dropdown (Session 25), the drawer used `#N` pill tabs that overflowed once you had more than 3–4 concurrent runs. The dropdown scales to as many runs as you have.
 
-If a run has already been approved but the project's execution capacity is full, the drawer shows **Waiting for execution slot** instead of pretending it still needs approval. The internal thread phase is still `awaiting_approval`, but the drawer translates that into the real user-facing state.
+If a run has already been approved but the project's execution capacity is full, the drawer shows **Waiting for execution slot** instead of pretending it still needs approval. The internal thread phase is still `approval`, but the drawer translates that into the real user-facing state.
 
 ## Stream coloring
 
@@ -48,7 +48,7 @@ Use `events.log` when you need to reconstruct pipeline behavior after the fact. 
 - Pipeline start source (`github:start-issue`, `pipeline:start`, retry, approve)
 - Phase transitions
 - Parsed review / verification summaries
-- Approval-gate decisions, including why the runtime chose `awaiting_approval` or auto-execution
+- Approval-gate decisions, including why the runtime chose `approval` or auto-execution
 
 For user-reported pipeline bugs, ask for `events.log` plus the thread ID or GitHub issue number.
 

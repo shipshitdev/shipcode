@@ -47,7 +47,7 @@ describe('ThreadQueries', () => {
     expect(list.length).toBe(2);
   });
 
-  it('archiveDoneAutomationRuns() hides completed automation threads from list()', () => {
+  it('archiveClosedAutomationRuns() hides closed automation threads from list()', () => {
     const done = threads.create(projectId, 'done prompt', 'Done automation');
     const completed = threads.create(projectId, 'completed prompt', 'Completed automation');
     const active = threads.create(projectId, 'active prompt', 'Active automation');
@@ -67,16 +67,16 @@ describe('ThreadQueries', () => {
     threads.updateStatus(active.id, 'executing');
     threads.updateStatus(manual.id, 'completed');
 
-    expect(threads.archiveDoneAutomationRuns(projectId)).toBe(2);
+    expect(threads.archiveClosedAutomationRuns(projectId)).toBe(1);
 
     expect(threads.list(projectId).map((thread) => thread.id)).toEqual(
-      expect.arrayContaining([active.id, manual.id]),
+      expect.arrayContaining([completed.id, active.id, manual.id]),
     );
     expect(threads.list(projectId).map((thread) => thread.id)).not.toEqual(
-      expect.arrayContaining([done.id, completed.id]),
+      expect.arrayContaining([done.id]),
     );
     expect(threads.getById(done.id)?.archivedAt).toBeTruthy();
-    expect(threads.getById(completed.id)?.archivedAt).toBeTruthy();
+    expect(threads.getById(completed.id)?.archivedAt).toBeNull();
     expect(threads.getById(active.id)?.archivedAt).toBeNull();
     expect(threads.getById(manual.id)?.archivedAt).toBeNull();
   });
@@ -195,7 +195,7 @@ describe('ThreadQueries', () => {
     const executing = threads.create(projectId, 'executing', 'Executing');
 
     for (const thread of [older, newer, rejected]) {
-      threads.updateStatus(thread.id, 'awaiting_approval');
+      threads.updateStatus(thread.id, 'approval');
     }
     threads.updateStatus(executing.id, 'executing');
 
@@ -260,7 +260,7 @@ describe('ThreadQueries', () => {
     expect(threads.hasActivePipeline(projectId)).toBe(true);
   });
 
-  it('hasActivePipeline() returns false for idle/done statuses', () => {
+  it('hasActivePipeline() returns false for idle/closed statuses', () => {
     const t = threads.create(projectId, 'a', 'A');
     threads.updateStatus(t.id, 'idle');
     expect(threads.hasActivePipeline(projectId)).toBe(false);

@@ -77,13 +77,36 @@ describe('project setup detection', () => {
     );
 
     const draft = detectProjectSetup(projectDir);
+    const expectedTurboCommand =
+      'TURBO_SCM_BASE="$' +
+      '{TURBO_SCM_BASE:-HEAD}" bunx turbo run typecheck test build --affected --concurrency=1';
 
     expect(draft.suggestedContract.setupCommands).toEqual(['bun install --frozen-lockfile']);
-    expect(draft.suggestedContract.verifyCommands).toEqual([
-      'TURBO_SCM_BASE="${TURBO_SCM_BASE:-HEAD}" bunx turbo run typecheck test build --affected --concurrency=1',
-    ]);
+    expect(draft.suggestedContract.verifyCommands).toEqual([expectedTurboCommand]);
     expect(draft.suggestedContract.testingContext).toMatch(/Turborepo workspace/i);
     expect(draft.suggestedContract.testingContext).toMatch(/--concurrency=1/);
+  });
+
+  it('prefers repo-owned affected verification scripts for bun workspaces', () => {
+    const projectDir = makeProject();
+    writeFileSync(path.join(projectDir, 'bun.lock'), '');
+    writeFileSync(path.join(projectDir, 'turbo.json'), JSON.stringify({ tasks: {} }));
+    writeFileSync(
+      path.join(projectDir, 'package.json'),
+      JSON.stringify({
+        name: 'demo',
+        workspaces: ['apps/*', 'packages/*'],
+        scripts: {
+          'verify:affected': 'bun scripts/verify-affected-workspaces.ts',
+          test: 'turbo run test',
+        },
+      }),
+    );
+
+    const draft = detectProjectSetup(projectDir);
+
+    expect(draft.suggestedContract.verifyCommands).toEqual(['bun run verify:affected']);
+    expect(draft.suggestedContract.testingContext).toMatch(/repo-owned verify:affected/i);
   });
 
   it('does not suggest full root verification scripts for unscoped workspaces', () => {
@@ -124,6 +147,84 @@ describe('project setup detection', () => {
       draft.profiles.find((profile: { kind: string }) => profile.kind === 'swiftpm')
         ?.suggestedContract.verifyCommands,
     ).toEqual(['swift test']);
+  });
+
+  it('recommends xcode over incidental package.json markers', () => {
+    const projectDir = makeProject();
+    mkdirSync(path.join(projectDir, 'Demo.xcodeproj'));
+    writeFileSync(path.join(projectDir, 'bun.lock'), '');
+    writeFileSync(
+      path.join(projectDir, 'package.json'),
+      JSON.stringify({
+        scripts: {
+          test: 'vitest run',
+        },
+      }),
+    );
+
+    const draft = detectProjectSetup(projectDir);
+
+    expect(
+      draft.profiles.find((profile: { recommended: boolean }) => profile.recommended)?.kind,
+    ).toBe('xcode');
+    expect(draft.suggestedContract.verifyCommands).toEqual([]);
+    expect(
+      draft.profiles.find((profile: { kind: string }) => profile.kind === 'bun')?.suggestedContract
+        .verifyCommands,
+    ).toEqual(['bun run test']);
+  });
+
+  it('detects non-javascript single-project test commands', () => {
+    const rustDir = makeProject();
+    writeFileSync(path.join(rustDir, 'Cargo.toml'), '[package]\nname = "demo"\n');
+    expect(detectProjectSetup(rustDir).suggestedContract.verifyCommands).toEqual(['cargo test']);
+
+    const goDir = makeProject();
+    writeFileSync(path.join(goDir, 'go.mod'), 'module example.com/demo\n');
+    expect(detectProjectSetup(goDir).suggestedContract.verifyCommands).toEqual(['go test ./...']);
+
+    const dotnetDir = makeProject();
+    writeFileSync(path.join(dotnetDir, 'Demo.csproj'), '<Project />');
+    expect(detectProjectSetup(dotnetDir).suggestedContract.verifyCommands).toEqual([
+      'dotnet test Demo.csproj',
+    ]);
+  });
+
+  it('avoids full-root test suggestions for non-javascript workspaces', () => {
+    const rustDir = makeProject();
+    writeFileSync(path.join(rustDir, 'Cargo.toml'), '[workspace]\nmembers = ["crates/*"]\n');
+    expect(detectProjectSetup(rustDir).suggestedContract.verifyCommands).toEqual([]);
+    expect(detectProjectSetup(rustDir).suggestedContract.testingContext).toMatch(/workspace/i);
+
+    const mavenDir = makeProject();
+    writeFileSync(
+      path.join(mavenDir, 'pom.xml'),
+      '<project><modules><module>core</module></modules></project>',
+    );
+    expect(detectProjectSetup(mavenDir).suggestedContract.verifyCommands).toEqual([]);
+    expect(detectProjectSetup(mavenDir).suggestedContract.testingContext).toMatch(/multi-module/i);
+  });
+
+  it('detects explicit framework test markers for script-light stacks', () => {
+    const pythonDir = makeProject();
+    writeFileSync(path.join(pythonDir, 'pyproject.toml'), '[tool.pytest.ini_options]\n');
+    expect(detectProjectSetup(pythonDir).suggestedContract.verifyCommands).toEqual([
+      'python -m pytest',
+    ]);
+
+    const rubyDir = makeProject();
+    writeFileSync(path.join(rubyDir, 'Gemfile'), 'gem "rspec"\n');
+    mkdirSync(path.join(rubyDir, 'spec'));
+    expect(detectProjectSetup(rubyDir).suggestedContract.verifyCommands).toEqual([
+      'bundle exec rspec',
+    ]);
+
+    const phpDir = makeProject();
+    writeFileSync(path.join(phpDir, 'composer.json'), JSON.stringify({}));
+    writeFileSync(path.join(phpDir, 'phpunit.xml'), '<phpunit />');
+    expect(detectProjectSetup(phpDir).suggestedContract.verifyCommands).toEqual([
+      'vendor/bin/phpunit',
+    ]);
   });
 
   it('prefers an existing valid setup contract over heuristics', () => {

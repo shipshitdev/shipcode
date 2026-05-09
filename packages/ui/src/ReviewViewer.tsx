@@ -49,7 +49,7 @@ export function ReviewViewer({ review }: ReviewViewerProps) {
   if (!review) {
     return (
       <div className="flex items-center justify-center h-full p-4 text-muted-foreground">
-        <p>Waiting for review...</p>
+        <p>Waiting for review…</p>
       </div>
     );
   }

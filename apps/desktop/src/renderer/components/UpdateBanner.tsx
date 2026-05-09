@@ -1,6 +1,6 @@
 import type { UpdateStatus } from '@shipcode/shared';
 import { Alert, AlertDescription, Button } from '@shipshitdev/ui';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -8,7 +8,6 @@ const BREW_UPGRADE_COMMAND = 'brew upgrade --cask shipcode';
 
 export function UpdateBanner() {
   const queryClient = useQueryClient();
-  const [dismissedTag, setDismissedTag] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const { data: status } = useQuery<UpdateStatus>({
@@ -25,18 +24,19 @@ export function UpdateBanner() {
     return unsub;
   }, [queryClient]);
 
-  const openReleases = useMutation({
-    mutationFn: (url: string) => window.shipcode.invoke('shell:open-external', { url }),
-  });
-
   const handleCopy = async () => {
     await navigator.clipboard.writeText(BREW_UPGRADE_COMMAND);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const dismissUpdate = (releaseTag: string) => {
+    queryClient.setQueryData<UpdateStatus | undefined>(['update-status'], (current) =>
+      current?.releaseTag === releaseTag ? { ...current, hasUpdate: false } : current,
+    );
+  };
+
   if (!status?.hasUpdate || !status.latest) return null;
-  if (dismissedTag && status.releaseTag === dismissedTag) return null;
 
   return (
     <Alert
@@ -45,7 +45,7 @@ export function UpdateBanner() {
     >
       <span className="text-base font-bold leading-none text-accent">↑</span>
       <AlertDescription className="text-xs text-accent">
-        ShipCode v{status.latest} is available — you're on v{status.current}. Upgrade with{' '}
+        ShipCode v{status.latest} is available. You're on v{status.current}. Upgrade with{' '}
         <code className="rounded bg-accent/15 px-1 py-0.5 font-mono text-[11px]">
           {BREW_UPGRADE_COMMAND}
         </code>
@@ -65,7 +65,11 @@ export function UpdateBanner() {
             variant="ghost"
             size="sm"
             className="h-7 gap-1 px-2 text-[11px] text-accent hover:bg-accent/15"
-            onClick={() => (status.releaseUrl ? openReleases.mutate(status.releaseUrl) : undefined)}
+            onClick={() =>
+              status.releaseUrl
+                ? void window.shipcode.invoke('shell:open-external', { url: status.releaseUrl })
+                : undefined
+            }
           >
             <ExternalLink size={12} />
             Release notes
@@ -75,7 +79,9 @@ export function UpdateBanner() {
           variant="ghost"
           size="sm"
           className="h-7 px-2 text-[11px] text-muted-foreground hover:bg-accent/10 hover:text-accent"
-          onClick={() => setDismissedTag(status.releaseTag)}
+          onClick={() => {
+            if (status.releaseTag) dismissUpdate(status.releaseTag);
+          }}
         >
           Dismiss
         </Button>

@@ -96,7 +96,7 @@ export function TaskGraphViewer({
 }: TaskGraphViewerProps) {
   if (!graph) return null;
 
-  const orderedNodes = [...graph.nodes].sort((a, b) => a.order - b.order);
+  const orderedNodes = graph.nodes.toSorted((a, b) => a.order - b.order);
   const completedCount = orderedNodes.filter((node) => node.status === 'completed').length;
   const activeNode = orderedNodes.find((node) => node.status === 'running');
   const readyCount = orderedNodes.filter((node) => node.status === 'ready').length;

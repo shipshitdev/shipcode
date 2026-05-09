@@ -174,7 +174,7 @@ function ClarificationSection({
           return (
             <section
               key={question.id}
-              className={cn('px-4 py-4', index > 0 && 'border-t border-warning/10')}
+              className={cn('p-4', index > 0 && 'border-t border-warning/10')}
             >
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-warning/80">
@@ -208,7 +208,7 @@ function ClarificationSection({
                       <div className="flex items-center gap-2">
                         <span
                           className={cn(
-                            'h-2.5 w-2.5 rounded-full border',
+                            'size-2.5 rounded-full border',
                             selected ? 'border-warning bg-warning' : 'border-border bg-transparent',
                           )}
                         />
@@ -256,7 +256,7 @@ function ClarificationSection({
   );
 }
 
-export function IssueDetailActions({
+export function buildIssueDetailActions({
   approveError,
   approvedAwaitingExecution,
   canApprove,
@@ -322,7 +322,7 @@ export function IssueDetailActions({
             key={phase.id}
             className="inline-flex shrink-0 items-center gap-2 text-muted-foreground"
           >
-            <span className="flex h-4 w-4 items-center justify-center rounded-full border border-border bg-tertiary font-mono text-[8px] font-medium">
+            <span className="flex size-4 items-center justify-center rounded-full border border-border bg-tertiary font-mono text-[8px] font-medium">
               {index + 1}
             </span>
             <span className="text-[9px] font-semibold uppercase tracking-[0.08em]">
@@ -506,7 +506,7 @@ export function IssueDetailActions({
           disabled={isSubmitting}
           className="flex-1 border-purple-500/40 text-purple-400 hover:border-purple-500 hover:bg-purple-500/10"
         >
-          Mark As Done
+          Close Issue
         </Button>
       </div>
     </div>
@@ -520,11 +520,11 @@ export function IssueDetailActions({
         </p>
         {verificationSummary ? (
           <span className="text-[11px] text-muted-foreground" title={verificationSummary}>
-            — {verificationSummary.slice(0, 80)}
+            {verificationSummary.slice(0, 80)}
             {verificationSummary.length > 80 ? '…' : ''}
           </span>
         ) : !hasDiffs ? (
-          <span className="text-[11px] text-muted-foreground">— no code changes</span>
+          <span className="text-[11px] text-muted-foreground">no code changes</span>
         ) : null}
         {thread?.totalCostUsd ? (
           <span className="text-[11px] text-muted-foreground">
@@ -543,7 +543,7 @@ export function IssueDetailActions({
             disabled={isSubmitting || !!isCreatingPr}
             className="gap-1"
           >
-            <GitPullRequest className="h-3 w-3" />
+            <GitPullRequest className="size-3" />
             <LoadingButtonContent loading={!!isCreatingPr}>Create PR</LoadingButtonContent>
           </Button>
         )}
@@ -556,7 +556,7 @@ export function IssueDetailActions({
           disabled={isSubmitting}
           className="bg-purple-600 text-white hover:bg-purple-500"
         >
-          Mark As Done
+          Close Issue
         </Button>
       </div>
     </div>
@@ -581,7 +581,7 @@ export function IssueDetailActions({
               Approved
             </Badge>
             <Badge variant="warning" className="text-[10px]">
-              Waiting For Execution Slot
+              Waiting
             </Badge>
           </div>
           <p className="text-[12px] leading-relaxed text-secondary">

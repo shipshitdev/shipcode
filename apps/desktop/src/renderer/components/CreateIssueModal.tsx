@@ -31,7 +31,7 @@ import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { ImageIcon, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { toast } from '../stores/toast-store';
@@ -42,10 +42,10 @@ import { toast } from '../stores/toast-store';
  * ship a runaway title to the API.
  */
 function deriveTitleFromBody(body: string): string {
-  const lines = body
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
+  const lines = body.split('\n').flatMap((line) => {
+    const trimmed = line.trim();
+    return trimmed ? [trimmed] : [];
+  });
   const heading = lines.find((l) => l.startsWith('# '));
   const raw = heading ? heading.replace(/^#\s+/, '').replace(/^PRD:\s*/i, '') : (lines[0] ?? '');
   return raw.slice(0, 80).trim();
@@ -121,7 +121,106 @@ function createPendingIssueRecord({
   };
 }
 
-export function CreateIssueModal() {
+type CreateIssueDraftState = {
+  body: string;
+  estimatedComplexity: PrdEstimatedComplexity;
+  blastRadius: PrdBlastRadius;
+  error: string | null;
+  isQuickMode: boolean;
+  quickText: string;
+  selectedProjectId: string | null;
+};
+
+type EditingPrdDraft = {
+  issueNumber: number;
+  body: string;
+  labels: string[];
+};
+
+type CreateIssueDraftAction =
+  | { type: 'replace'; state: CreateIssueDraftState }
+  | { type: 'body'; body: string }
+  | {
+      type: 'metadata';
+      body: string;
+      estimatedComplexity: PrdEstimatedComplexity;
+      blastRadius: PrdBlastRadius;
+    }
+  | { type: 'error'; error: string | null }
+  | { type: 'quick-mode'; enabled: boolean }
+  | { type: 'quick-text'; text: string }
+  | { type: 'project'; projectId: string | null }
+  | { type: 'reset-submit-another' };
+
+const EMPTY_CREATE_ISSUE_DRAFT: CreateIssueDraftState = {
+  body: '',
+  estimatedComplexity: 'medium',
+  blastRadius: 'contained',
+  error: null,
+  isQuickMode: false,
+  quickText: '',
+  selectedProjectId: null,
+};
+
+function createIssueDraftReducer(
+  state: CreateIssueDraftState,
+  action: CreateIssueDraftAction,
+): CreateIssueDraftState {
+  switch (action.type) {
+    case 'replace':
+      return action.state;
+    case 'body':
+      return { ...state, body: action.body };
+    case 'metadata':
+      return {
+        ...state,
+        body: action.body,
+        estimatedComplexity: action.estimatedComplexity,
+        blastRadius: action.blastRadius,
+      };
+    case 'error':
+      return { ...state, error: action.error };
+    case 'quick-mode':
+      return { ...state, isQuickMode: action.enabled };
+    case 'quick-text':
+      return { ...state, quickText: action.text };
+    case 'project':
+      return { ...state, selectedProjectId: action.projectId };
+    case 'reset-submit-another':
+      return {
+        ...state,
+        body: '',
+        estimatedComplexity: 'medium',
+        blastRadius: 'contained',
+        error: null,
+        quickText: '',
+      };
+  }
+}
+
+function buildCreateIssueDraftState({
+  activeProjectId,
+  editingPrd,
+  mode,
+}: {
+  activeProjectId: string | null;
+  editingPrd: EditingPrdDraft | null;
+  mode: 'create' | 'edit';
+}): CreateIssueDraftState {
+  if (mode === 'edit' && editingPrd) {
+    const metadata = readPrdIssueMetadata(editingPrd.body ?? '', editingPrd.labels);
+    return {
+      ...EMPTY_CREATE_ISSUE_DRAFT,
+      selectedProjectId: activeProjectId,
+      body: metadata.cleanBody,
+      estimatedComplexity: metadata.estimatedComplexity,
+      blastRadius: metadata.blastRadius,
+    };
+  }
+  return { ...EMPTY_CREATE_ISSUE_DRAFT, selectedProjectId: activeProjectId };
+}
+
+function useCreateIssueModalView() {
   const queryClient = useQueryClient();
   const createIssueModalOpen = useAppStore((state) => state.createIssueModalOpen);
   const closeCreateIssueModal = useAppStore((state) => state.closeCreateIssueModal);
@@ -131,20 +230,21 @@ export function CreateIssueModal() {
   const selectProject = useAppStore((state) => state.selectProject);
   const addPendingCreatedIssue = useAppStore((state) => state.addPendingCreatedIssue);
   const removePendingCreatedIssue = useAppStore((state) => state.removePendingCreatedIssue);
-  const [body, setBody] = useState('');
-  const [estimatedComplexity, setEstimatedComplexity] = useState<PrdEstimatedComplexity>('medium');
-  const [blastRadius, setBlastRadius] = useState<PrdBlastRadius>('contained');
+  const [draft, dispatchDraft] = useReducer(createIssueDraftReducer, EMPTY_CREATE_ISSUE_DRAFT);
+  const {
+    body,
+    estimatedComplexity,
+    blastRadius,
+    error,
+    isQuickMode,
+    quickText,
+    selectedProjectId,
+  } = draft;
   const [enhancing, setEnhancing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [submitAnother, setSubmitAnother] = useState(false);
-  const [isQuickMode, setIsQuickMode] = useState(false);
-  const [quickText, setQuickText] = useState('');
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const quickInputRef = useRef<HTMLInputElement>(null);
-
-  // Local project selection — defaults to activeProjectId when modal opens
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ['projects-visible'],
@@ -277,27 +377,18 @@ export function CreateIssueModal() {
 
   useEffect(() => {
     if (!createIssueModalOpen) return;
-    setSelectedProjectId(activeProjectId);
-    setIsQuickMode(false);
-    setQuickText('');
-    if (mode === 'edit' && editingPrd) {
-      const metadata = readPrdIssueMetadata(editingPrd.body ?? '', editingPrd.labels);
-      setBody(metadata.cleanBody);
-      setEstimatedComplexity(metadata.estimatedComplexity);
-      setBlastRadius(metadata.blastRadius);
-      setError(null);
-    } else {
-      setBody('');
-      setEstimatedComplexity('medium');
-      setBlastRadius('contained');
-      setError(null);
-    }
-    setTimeout(() => bodyRef.current?.focus(), 50);
+    dispatchDraft({
+      type: 'replace',
+      state: buildCreateIssueDraftState({ activeProjectId, editingPrd, mode }),
+    });
+    const focusTimeout = setTimeout(() => bodyRef.current?.focus(), 50);
+    return () => clearTimeout(focusTimeout);
   }, [createIssueModalOpen, mode, editingPrd, activeProjectId]);
 
   useEffect(() => {
     if (createIssueModalOpen && isQuickMode) {
-      setTimeout(() => quickInputRef.current?.focus(), 50);
+      const focusTimeout = setTimeout(() => quickInputRef.current?.focus(), 50);
+      return () => clearTimeout(focusTimeout);
     }
   }, [createIssueModalOpen, isQuickMode]);
 
@@ -307,12 +398,8 @@ export function CreateIssueModal() {
   }, [clearAttachmentSession, closeCreateIssueModal]);
 
   const resetDraftForSubmitAnother = useCallback(() => {
-    setBody('');
-    setEstimatedComplexity('medium');
-    setBlastRadius('contained');
-    setError(null);
+    dispatchDraft({ type: 'reset-submit-another' });
     setEnhancing(false);
-    setQuickText('');
     setTimeout(() => bodyRef.current?.focus(), 50);
   }, []);
 
@@ -337,7 +424,7 @@ export function CreateIssueModal() {
   const handleEnhance = async () => {
     if (!effectiveProjectId) return;
     setEnhancing(true);
-    setError(null);
+    dispatchDraft({ type: 'error', error: null });
     try {
       const result = await window.shipcode.invoke<{ body: string }>('ai:enhance-prd', {
         projectId: effectiveProjectId,
@@ -345,12 +432,15 @@ export function CreateIssueModal() {
         attachmentSessionId: sessionIdRef.current,
       });
       const metadata = readPrdIssueMetadata(result.body);
-      setBody(metadata.cleanBody);
-      setEstimatedComplexity(metadata.estimatedComplexity);
-      setBlastRadius(metadata.blastRadius);
+      dispatchDraft({
+        type: 'metadata',
+        body: metadata.cleanBody,
+        estimatedComplexity: metadata.estimatedComplexity,
+        blastRadius: metadata.blastRadius,
+      });
     } catch (err) {
       log.error('[CreateIssueModal] enhance failed', err);
-      setError(clampError(err));
+      dispatchDraft({ type: 'error', error: clampError(err) });
     } finally {
       setEnhancing(false);
     }
@@ -435,7 +525,7 @@ export function CreateIssueModal() {
           void queryClient.invalidateQueries({ queryKey: ['github-issues', projectId] });
           const message = clampError(err);
           if (showInlineErrors) {
-            setError(`Failed to create "${title}": ${message}`);
+            dispatchDraft({ type: 'error', error: `Failed to create "${title}": ${message}` });
           } else {
             toast.error(`Failed to create issue "${title}"`, message);
           }
@@ -449,7 +539,7 @@ export function CreateIssueModal() {
       const trimmed = quickText.trim();
       if (!trimmed || !effectiveProjectId) return;
       setSubmitting(true);
-      setError(null);
+      dispatchDraft({ type: 'error', error: null });
       try {
         const { issue } = await window.shipcode.invoke<{ issue: GitHubIssueCacheRecord }>(
           'pipeline:create-quick-task',
@@ -463,7 +553,7 @@ export function CreateIssueModal() {
         closeCreateIssueModal();
       } catch (err) {
         log.error('[CreateIssueModal] quick-task submit failed', err);
-        setError(clampError(err));
+        dispatchDraft({ type: 'error', error: clampError(err) });
       } finally {
         setSubmitting(false);
       }
@@ -477,7 +567,7 @@ export function CreateIssueModal() {
     if (mode === 'create' && !derivedTitle) return;
     if (!effectiveProjectId) return;
     setSubmitting(true);
-    setError(null);
+    dispatchDraft({ type: 'error', error: null });
     try {
       if (mode === 'edit' && editingPrd) {
         await window.shipcode.invoke('github:edit-issue-body', {
@@ -529,7 +619,7 @@ export function CreateIssueModal() {
       closeCreateIssueModal();
     } catch (err) {
       log.error('[CreateIssueModal] submit failed', err);
-      setError(clampError(err));
+      dispatchDraft({ type: 'error', error: clampError(err) });
     } finally {
       setSubmitting(false);
     }
@@ -633,7 +723,7 @@ export function CreateIssueModal() {
               <Input
                 ref={quickInputRef}
                 value={quickText}
-                onChange={(e) => setQuickText(e.target.value)}
+                onChange={(e) => dispatchDraft({ type: 'quick-text', text: e.target.value })}
                 placeholder="Describe the fix in one line…"
                 disabled={submitting}
                 onKeyDown={(e) => {
@@ -650,7 +740,7 @@ export function CreateIssueModal() {
                   </Label>
                   <Select
                     value={effectiveProjectId ?? ''}
-                    onValueChange={(value) => setSelectedProjectId(value)}
+                    onValueChange={(value) => dispatchDraft({ type: 'project', projectId: value })}
                   >
                     <SelectTrigger id="quick-project" className="bg-transparent">
                       <SelectValue placeholder="Select a project..." />
@@ -681,7 +771,7 @@ export function CreateIssueModal() {
               ref={bodyRef}
               id="issue-body"
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={(e) => dispatchDraft({ type: 'body', body: e.target.value })}
               placeholder={
                 mode === 'create' ? 'Describe what you want to build…' : 'PRD markdown...'
               }
@@ -706,7 +796,7 @@ export function CreateIssueModal() {
                 </Label>
                 <Select
                   value={effectiveProjectId ?? ''}
-                  onValueChange={(value) => setSelectedProjectId(value)}
+                  onValueChange={(value) => dispatchDraft({ type: 'project', projectId: value })}
                 >
                   <SelectTrigger id="issue-project" className="bg-transparent">
                     <SelectValue placeholder="Select a project..." />
@@ -760,7 +850,7 @@ export function CreateIssueModal() {
                   key={a.originalPath}
                   className="flex items-center gap-2 rounded-md border border-border bg-tertiary/30 px-2.5 py-1.5 text-xs"
                 >
-                  <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate text-secondary" title={a.fileName}>
                     {a.fileName}
                   </span>
@@ -776,7 +866,7 @@ export function CreateIssueModal() {
                       void handleRemoveAttachment(a);
                     }}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="size-3.5" />
                   </Button>
                 </div>
               ))}
@@ -795,7 +885,9 @@ export function CreateIssueModal() {
               <Checkbox
                 id="quick-mode-toggle"
                 checked={isQuickMode}
-                onCheckedChange={(checked) => setIsQuickMode(checked === true)}
+                onCheckedChange={(checked) =>
+                  dispatchDraft({ type: 'quick-mode', enabled: checked === true })
+                }
                 disabled={submitting || enhancing}
                 aria-label="Quick mode (skip PRD, no GitHub issue)"
               />
@@ -833,4 +925,8 @@ export function CreateIssueModal() {
       </ModalFooter>
     </Modal>
   );
+}
+
+export function CreateIssueModal() {
+  return useCreateIssueModalView();
 }

@@ -18,13 +18,13 @@ All four phase defaults can be changed after onboarding from the desktop **Setti
 ## State Machine
 
 ```
-Todo → Planning → Reviewing ⇄ Revising → (Awaiting Approval) → Executing → Testing → Verifying → Shipping → Completed
+Todo → Planning → Reviewing ⇄ Revising → (Approval) → Executing → Testing → Verifying → Shipping → Completed
                                                                                                  ↘ Failed
 ```
 
-- **Awaiting Approval** is skipped unless the effective approval setting for that run requires it. Approval inherits app defaults first, then project overrides, then issue overrides.
+- **Approval** is skipped unless the effective approval setting for that run requires it. Approval inherits app defaults first, then project overrides, then issue overrides.
 - Kanban/list cards surface that effective gate with an `Approval` badge, and Inbox can filter directly to approval-gated work with `Needs approval`.
-- After a run is approved, it can still wait for an execution slot if that project's runtime capacity is full. The board shows that as **Waiting For Execution** even though the internal pipeline phase remains `awaiting_approval`.
+- After a run is approved, it can still wait for an execution slot if that project's runtime capacity is full. The board shows that as **Waiting** even though the internal pipeline phase remains `approval`.
 - **Revising** loops back to **Reviewing** up to the configured revision count. New installs default to `0`, which skips plan review for the fastest first run.
 - **Testing** runs configured verification commands, runtime QA server checks, browser/E2E commands, and generated visual QA when available.
 - **Shipping** runs after **Verifying** and uses `gh` CLI to push the branch, open the PR, and link it back to the issue.

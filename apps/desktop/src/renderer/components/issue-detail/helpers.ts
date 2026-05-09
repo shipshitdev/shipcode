@@ -70,7 +70,7 @@ export function getPlanStatusPresentation(
         phaseStatus: PIPELINE_PHASE.completed,
         style: 'phase-chip',
       };
-    case 'awaiting_approval':
+    case 'approval':
       return {
         label: 'Needs approval',
         phaseStatus: PIPELINE_PHASE.reviewing,
@@ -141,8 +141,9 @@ function resolveRawPlanText(raw: string): string {
         if (typeof parsed.result === 'string') return parsed.result;
         if (Array.isArray(parsed.result)) {
           const text = parsed.result
-            .filter((block: { type: string }) => block.type === 'text')
-            .map((block: { text: string }) => block.text)
+            .flatMap((block: { type: string; text?: string }) =>
+              block.type === 'text' && typeof block.text === 'string' ? [block.text] : [],
+            )
             .join('\n');
           if (text) return text;
         }

@@ -4,7 +4,37 @@ import type { PlanRecord } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { IssueDetailDialogs } from './IssueDetailDialogs';
+import { buildIssueDetailDialogs } from './IssueDetailDialogs';
+
+type IssueDetailDialogsTestProps = Omit<Parameters<typeof buildIssueDetailDialogs>[0], 'state'> & {
+  canApprove: boolean;
+  isFullScreenPlanLoading: boolean;
+  isSubmitting: boolean;
+  showArchiveConfirm: boolean;
+  showMarkAsDoneConfirm: boolean;
+};
+
+function renderIssueDetailDialogs({
+  canApprove,
+  isFullScreenPlanLoading,
+  isSubmitting,
+  showArchiveConfirm,
+  showMarkAsDoneConfirm,
+  ...props
+}: IssueDetailDialogsTestProps) {
+  return render(
+    buildIssueDetailDialogs({
+      ...props,
+      state: {
+        canApprove,
+        isFullScreenPlanLoading,
+        isSubmitting,
+        showArchiveConfirm,
+        showMarkAsDoneConfirm,
+      },
+    }),
+  );
+}
 
 const planRecord: PlanRecord = {
   id: 'plan-1',
@@ -12,7 +42,7 @@ const planRecord: PlanRecord = {
   version: 1,
   rawOutput: 'raw plan output',
   structured: null,
-  status: 'awaiting_approval',
+  status: 'approval',
   createdAt: '2026-04-20T00:00:00.000Z',
 };
 
@@ -25,26 +55,24 @@ describe('IssueDetailDialogs', () => {
     const onApprove = vi.fn();
     const onCloseFullScreenPlan = vi.fn();
 
-    render(
-      <IssueDetailDialogs
-        activeIssueNumber={42}
-        canApprove
-        fullScreenPlan={planRecord}
-        fullScreenPlanId="plan-1"
-        fullScreenReview={undefined}
-        isFullScreenPlanLoading={false}
-        isSubmitting={false}
-        latestPlanId="plan-1"
-        onApprove={onApprove}
-        onArchiveConfirmed={vi.fn()}
-        onCloseArchiveConfirm={vi.fn()}
-        onCloseFullScreenPlan={onCloseFullScreenPlan}
-        onMarkAsDoneConfirmed={vi.fn()}
-        onCloseMarkAsDoneConfirm={vi.fn()}
-        showArchiveConfirm={false}
-        showMarkAsDoneConfirm={false}
-      />,
-    );
+    renderIssueDetailDialogs({
+      activeIssueNumber: 42,
+      canApprove: true,
+      fullScreenPlan: planRecord,
+      fullScreenPlanId: 'plan-1',
+      fullScreenReview: undefined,
+      isFullScreenPlanLoading: false,
+      isSubmitting: false,
+      latestPlanId: 'plan-1',
+      onApprove,
+      onArchiveConfirmed: vi.fn(),
+      onCloseArchiveConfirm: vi.fn(),
+      onCloseFullScreenPlan,
+      onMarkAsDoneConfirmed: vi.fn(),
+      onCloseMarkAsDoneConfirm: vi.fn(),
+      showArchiveConfirm: false,
+      showMarkAsDoneConfirm: false,
+    });
 
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Enter', metaKey: true });
 
@@ -55,55 +83,51 @@ describe('IssueDetailDialogs', () => {
   it('archives on cmd-enter in the archive confirmation modal', () => {
     const onArchiveConfirmed = vi.fn();
 
-    render(
-      <IssueDetailDialogs
-        activeIssueNumber={42}
-        canApprove={false}
-        fullScreenPlan={null}
-        fullScreenPlanId={null}
-        fullScreenReview={undefined}
-        isFullScreenPlanLoading={false}
-        isSubmitting={false}
-        latestPlanId={null}
-        onApprove={vi.fn()}
-        onArchiveConfirmed={onArchiveConfirmed}
-        onCloseArchiveConfirm={vi.fn()}
-        onCloseFullScreenPlan={vi.fn()}
-        onMarkAsDoneConfirmed={vi.fn()}
-        onCloseMarkAsDoneConfirm={vi.fn()}
-        showArchiveConfirm
-        showMarkAsDoneConfirm={false}
-      />,
-    );
+    renderIssueDetailDialogs({
+      activeIssueNumber: 42,
+      canApprove: false,
+      fullScreenPlan: null,
+      fullScreenPlanId: null,
+      fullScreenReview: undefined,
+      isFullScreenPlanLoading: false,
+      isSubmitting: false,
+      latestPlanId: null,
+      onApprove: vi.fn(),
+      onArchiveConfirmed,
+      onCloseArchiveConfirm: vi.fn(),
+      onCloseFullScreenPlan: vi.fn(),
+      onMarkAsDoneConfirmed: vi.fn(),
+      onCloseMarkAsDoneConfirm: vi.fn(),
+      showArchiveConfirm: true,
+      showMarkAsDoneConfirm: false,
+    });
 
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Enter', metaKey: true });
 
     expect(onArchiveConfirmed).toHaveBeenCalledTimes(1);
   });
 
-  it('marks as done on cmd-enter in the done confirmation modal', () => {
+  it('closes on cmd-enter in the close confirmation modal', () => {
     const onMarkAsDoneConfirmed = vi.fn();
 
-    render(
-      <IssueDetailDialogs
-        activeIssueNumber={42}
-        canApprove={false}
-        fullScreenPlan={null}
-        fullScreenPlanId={null}
-        fullScreenReview={undefined}
-        isFullScreenPlanLoading={false}
-        isSubmitting={false}
-        latestPlanId={null}
-        onApprove={vi.fn()}
-        onArchiveConfirmed={vi.fn()}
-        onCloseArchiveConfirm={vi.fn()}
-        onCloseFullScreenPlan={vi.fn()}
-        onMarkAsDoneConfirmed={onMarkAsDoneConfirmed}
-        onCloseMarkAsDoneConfirm={vi.fn()}
-        showArchiveConfirm={false}
-        showMarkAsDoneConfirm
-      />,
-    );
+    renderIssueDetailDialogs({
+      activeIssueNumber: 42,
+      canApprove: false,
+      fullScreenPlan: null,
+      fullScreenPlanId: null,
+      fullScreenReview: undefined,
+      isFullScreenPlanLoading: false,
+      isSubmitting: false,
+      latestPlanId: null,
+      onApprove: vi.fn(),
+      onArchiveConfirmed: vi.fn(),
+      onCloseArchiveConfirm: vi.fn(),
+      onCloseFullScreenPlan: vi.fn(),
+      onMarkAsDoneConfirmed,
+      onCloseMarkAsDoneConfirm: vi.fn(),
+      showArchiveConfirm: false,
+      showMarkAsDoneConfirm: true,
+    });
 
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Enter', metaKey: true });
 

@@ -54,7 +54,7 @@ describe('CommandPalette', () => {
       commandPaletteOpen: true,
       activeProjectId: 'project-1',
       activeThreadId: 'thread-1',
-      pipelinePhase: 'awaiting_approval',
+      pipelinePhase: 'approval',
       activeIssue: null,
       githubIssues: [],
     } as never);
@@ -119,7 +119,7 @@ describe('CommandPalette', () => {
             version: 1,
             rawOutput: '',
             structured: null,
-            status: 'awaiting_approval',
+            status: 'approval',
             createdAt: new Date().toISOString(),
           },
         ] satisfies PlanRecord[];

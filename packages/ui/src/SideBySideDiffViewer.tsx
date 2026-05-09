@@ -18,6 +18,7 @@ interface SideBySideDiffViewerProps {
 }
 
 type SideBySideLine = {
+  key: string;
   type: 'context' | 'added' | 'removed' | 'hunk';
   leftNum: number | null;
   rightNum: number | null;
@@ -30,6 +31,9 @@ function parseSideBySideLines(diffContent: string): SideBySideLine[] {
   const result: SideBySideLine[] = [];
   let leftNum = 0;
   let rightNum = 0;
+  let sequence = 0;
+
+  const nextKey = (text: string) => `${sequence++}:${text}`;
 
   // Buffer removed/added lines for paired rendering
   let removedBuffer: { num: number; text: string }[] = [];
@@ -41,6 +45,7 @@ function parseSideBySideLines(diffContent: string): SideBySideLine[] {
       const removed = removedBuffer[i];
       const added = addedBuffer[i];
       result.push({
+        key: nextKey(`${removed?.text ?? ''}:${added?.text ?? ''}`),
         type: removed && added ? 'removed' : removed ? 'removed' : 'added',
         leftNum: removed?.num ?? null,
         rightNum: added?.num ?? null,
@@ -61,6 +66,7 @@ function parseSideBySideLines(diffContent: string): SideBySideLine[] {
         rightNum = Number.parseInt(match[2], 10) - 1;
       }
       result.push({
+        key: nextKey(line),
         type: 'hunk',
         leftNum: null,
         rightNum: null,
@@ -91,6 +97,7 @@ function parseSideBySideLines(diffContent: string): SideBySideLine[] {
       leftNum++;
       rightNum++;
       result.push({
+        key: nextKey(line),
         type: 'context',
         leftNum,
         rightNum,
@@ -182,11 +189,7 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
                   {parsedLines.map((line, i) => {
                     if (line.type === 'hunk') {
                       return (
-                        <tr
-                          // biome-ignore lint/suspicious/noArrayIndexKey: diff lines have stable order
-                          key={i}
-                          className="bg-accent/5"
-                        >
+                        <tr key={line.key} className="bg-accent/5">
                           <td
                             colSpan={4}
                             className="px-3 py-1 text-accent text-[11px] font-semibold"
@@ -200,10 +203,7 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
                     const isRemoved = line.type === 'removed' || line.type === 'added';
 
                     return (
-                      <tr
-                        // biome-ignore lint/suspicious/noArrayIndexKey: diff lines have stable order
-                        key={i}
-                      >
+                      <tr key={line.key}>
                         {/* Left side (old) */}
                         <td
                           className={cn(

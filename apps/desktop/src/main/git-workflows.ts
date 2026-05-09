@@ -18,8 +18,10 @@ interface ActiveWorktreeOwner {
 function summarizeCommitFailure(value: string): string {
   const lines = stripAnsi(value)
     .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .flatMap((line) => {
+      const trimmed = line.trim();
+      return trimmed ? [trimmed] : [];
+    });
   const summary = lines.slice(0, 8).join('\n');
   return summary.length > 800 ? `${summary.slice(0, 797)}...` : summary;
 }
@@ -43,8 +45,10 @@ export async function runAutoCommitWorkflow(args: {
   signal: AbortSignal;
 }): Promise<AutoCommitResult> {
   const git = new GitService(args.project.path);
-  const status = await git.getRawStatus(args.worktreePath);
-  const preCommitHookPath = await git.getPreCommitHookPath(args.worktreePath);
+  const [status, preCommitHookPath] = await Promise.all([
+    git.getRawStatus(args.worktreePath),
+    git.getPreCommitHookPath(args.worktreePath),
+  ]);
 
   // Aggregate every changed/untracked path into a single dirty set.
   const dirtySet = new Set<string>();
@@ -80,12 +84,14 @@ export async function runAutoCommitWorkflow(args: {
   }
 
   const commits: Array<{ sha: string; message: string }> = [];
-  for (let i = 0; i < result.groups.length; i++) {
+  const commitNextGroup = async (i: number): Promise<AutoCommitResult | null> => {
+    if (i >= result.groups.length) return null;
     const group = result.groups[i];
     try {
-      await git.resetIndex(args.worktreePath);
-      await git.addPaths(group.files, args.worktreePath);
-      const staged = await git.getStagedFiles(args.worktreePath);
+      const staged = await git
+        .resetIndex(args.worktreePath)
+        .then(() => git.addPaths(group.files, args.worktreePath))
+        .then(() => git.getStagedFiles(args.worktreePath));
       const stagedSet = new Set(staged);
       const expectedSet = new Set(group.files);
       // Verify the index matches what the group asked for. simple-git can
@@ -97,6 +103,7 @@ export async function runAutoCommitWorkflow(args: {
       }
       const sha = await git.commitStaged(group.message, args.worktreePath);
       commits.push({ sha, message: group.message });
+      return commitNextGroup(i + 1);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       log.warn(`[auto-commit] group ${i} failed: ${message}`);
@@ -113,9 +120,11 @@ export async function runAutoCommitWorkflow(args: {
         },
       };
     }
-  }
+  };
 
-  return { commits, fallbackUsed: result.fallbackUsed, preCommitHookPath };
+  return (
+    (await commitNextGroup(0)) ?? { commits, fallbackUsed: result.fallbackUsed, preCommitHookPath }
+  );
 }
 
 /**
@@ -137,14 +146,16 @@ export async function runCleanupAnalyze(args: {
     log.warn(`[cleanup] git fetch failed: ${(err as Error).message}`);
   }
 
-  const defaultBranch = args.project.defaultBranch || (await git.getDefaultBranch());
-  const baseRef = await git.resolveFirstExistingRef([`origin/${defaultBranch}`, defaultBranch]);
-
-  const [worktreeList, branchList, remoteBranchList] = await Promise.all([
+  const defaultBranchPromise = Promise.resolve(
+    args.project.defaultBranch || git.getDefaultBranch(),
+  );
+  const [defaultBranch, worktreeList, branchList, remoteBranchList] = await Promise.all([
+    defaultBranchPromise,
     wt.list(),
     git.listLocalBranchesWithMeta(),
     git.listRemoteBranchesWithMeta('origin'),
   ]);
+  const baseRef = await git.resolveFirstExistingRef([`origin/${defaultBranch}`, defaultBranch]);
 
   const protectedBranches = Array.from(new Set([defaultBranch, 'main', 'master']));
 
@@ -157,9 +168,9 @@ export async function runCleanupAnalyze(args: {
     log.warn(`[cleanup] gh listPullRequests failed: ${(err as Error).message}`);
   }
 
-  const dirtyMap = await git.getDirtyWorktrees(worktreeList.map((w) => w.path));
-  const statusMap = new Map(
-    await Promise.all(
+  const [dirtyMap, statusEntries, branches, remoteBranches] = await Promise.all([
+    git.getDirtyWorktrees(worktreeList.map((w) => w.path)),
+    Promise.all(
       worktreeList.map(async (w) => {
         try {
           return [w.path, await git.getStatus(w.path, baseRef ?? defaultBranch)] as const;
@@ -168,36 +179,35 @@ export async function runCleanupAnalyze(args: {
         }
       }),
     ),
-  );
-
-  const branches = await Promise.all(
-    branchList.map(async (branch) => {
-      const divergence = baseRef
-        ? await git.getBranchDivergence(branch.name, baseRef)
-        : { aheadCount: 0, behindCount: 0, compareRef: null };
-      return {
-        ...branch,
-        aheadCount: divergence.aheadCount,
-        behindCount: divergence.behindCount,
-        compareRef: divergence.compareRef,
-      };
-    }),
-  );
-
-  const remoteBranches = await Promise.all(
-    remoteBranchList.map(async (branch) => {
-      const fullRef = `${branch.remote}/${branch.name}`;
-      const divergence = baseRef
-        ? await git.getBranchDivergence(fullRef, baseRef)
-        : { aheadCount: 0, behindCount: 0, compareRef: null };
-      return {
-        ...branch,
-        aheadCount: divergence.aheadCount,
-        behindCount: divergence.behindCount,
-        compareRef: divergence.compareRef,
-      };
-    }),
-  );
+    Promise.all(
+      branchList.map(async (branch) => {
+        const divergence = baseRef
+          ? await git.getBranchDivergence(branch.name, baseRef)
+          : { aheadCount: 0, behindCount: 0, compareRef: null };
+        return {
+          ...branch,
+          aheadCount: divergence.aheadCount,
+          behindCount: divergence.behindCount,
+          compareRef: divergence.compareRef,
+        };
+      }),
+    ),
+    Promise.all(
+      remoteBranchList.map(async (branch) => {
+        const fullRef = `${branch.remote}/${branch.name}`;
+        const divergence = baseRef
+          ? await git.getBranchDivergence(fullRef, baseRef)
+          : { aheadCount: 0, behindCount: 0, compareRef: null };
+        return {
+          ...branch,
+          aheadCount: divergence.aheadCount,
+          behindCount: divergence.behindCount,
+          compareRef: divergence.compareRef,
+        };
+      }),
+    ),
+  ]);
+  const statusMap = new Map(statusEntries);
 
   const items = analyzeCleanup({
     worktrees: worktreeList.map((w) => {
@@ -227,7 +237,7 @@ export async function runCleanupAnalyze(args: {
 
   // Refuse to surface a worktree that has an active pipeline operating on it.
   const activeWorktreePaths = new Set(
-    args.activeSummaries.map((s) => s.worktreePath).filter((p): p is string => !!p),
+    args.activeSummaries.flatMap((s) => (s.worktreePath ? [s.worktreePath] : [])),
   );
   const filtered = items.filter((it) => {
     if (
@@ -256,8 +266,6 @@ export async function runCleanupApply(args: {
   const git = new GitService(args.project.path);
   const wt = new WorktreeManager(args.project.path);
 
-  const succeeded: string[] = [];
-  const failed: Array<{ itemId: string; error: string }> = [];
   const selectedIds = new Set(args.itemIds);
   const processedIds = new Set<string>();
 
@@ -267,49 +275,68 @@ export async function runCleanupApply(args: {
     }
   };
 
-  for (const item of args.items) {
-    if (!selectedIds.has(item.id)) continue;
-    processedIds.add(item.id);
-    try {
-      if (
-        item.kind === 'worktree-merged-pr' ||
-        item.kind === 'worktree-closed-pr' ||
-        item.kind === 'worktree-no-pr-clean'
-      ) {
-        const status = await git.getStatus(item.worktreePath, item.compareRef ?? undefined);
-        if (status.isDirty) {
-          throw new Error(`worktree dirty — refusing to remove: ${item.worktreePath}`);
-        }
-        if (status.aheadCount > 0) {
-          throw new Error(
-            `worktree has ${status.aheadCount} local commit${status.aheadCount === 1 ? '' : 's'} ahead of ${status.compareRef ?? 'the compare ref'} — refusing to remove: ${item.worktreePath}`,
-          );
-        }
-        await assertMerged(item.branch, item.compareRef, `branch ${item.branch}`);
-        const result = await args.lockFor(item.worktreePath, async () => {
-          return wt.remove(item.worktreePath, item.branch);
-        });
-        if (result.error) throw new Error(result.error);
-      } else if (item.kind === 'local-branch-no-remote' || item.kind === 'local-branch-merged') {
-        if ((item.aheadCount ?? 0) > 0) {
-          throw new Error(
-            `branch has ${item.aheadCount} local commit${item.aheadCount === 1 ? '' : 's'} ahead of ${item.compareRef ?? 'the compare ref'} — refusing to delete: ${item.branch}`,
-          );
-        }
-        await assertMerged(item.branch, item.compareRef ?? null, `branch ${item.branch}`);
-        await git.deleteLocalBranch(item.branch);
-      } else if (item.kind === 'remote-branch-merged') {
-        await assertMerged(
-          `${item.remote}/${item.branch}`,
-          item.compareRef,
-          `remote branch ${item.remote}/${item.branch}`,
-        );
-        await git.deleteRemoteBranch(item.branch, item.remote);
-      }
-      succeeded.push(item.id);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      failed.push({ itemId: item.id, error: message });
+  const settled = await Promise.all(
+    args.items.flatMap((item) => {
+      if (!selectedIds.has(item.id)) return [];
+      processedIds.add(item.id);
+      return [
+        (async (): Promise<{ itemId: string; ok: true } | { itemId: string; error: string }> => {
+          try {
+            if (
+              item.kind === 'worktree-merged-pr' ||
+              item.kind === 'worktree-closed-pr' ||
+              item.kind === 'worktree-no-pr-clean'
+            ) {
+              const status = await git.getStatus(item.worktreePath, item.compareRef ?? undefined);
+              if (status.isDirty) {
+                throw new Error(`worktree dirty — refusing to remove: ${item.worktreePath}`);
+              }
+              if (status.aheadCount > 0) {
+                throw new Error(
+                  `worktree has ${status.aheadCount} local commit${status.aheadCount === 1 ? '' : 's'} ahead of ${status.compareRef ?? 'the compare ref'} — refusing to remove: ${item.worktreePath}`,
+                );
+              }
+              await assertMerged(item.branch, item.compareRef, `branch ${item.branch}`);
+              const result = await args.lockFor(item.worktreePath, async () => {
+                return wt.remove(item.worktreePath, item.branch);
+              });
+              if (result.error) throw new Error(result.error);
+            } else if (
+              item.kind === 'local-branch-no-remote' ||
+              item.kind === 'local-branch-merged'
+            ) {
+              if ((item.aheadCount ?? 0) > 0) {
+                throw new Error(
+                  `branch has ${item.aheadCount} local commit${item.aheadCount === 1 ? '' : 's'} ahead of ${item.compareRef ?? 'the compare ref'} — refusing to delete: ${item.branch}`,
+                );
+              }
+              await assertMerged(item.branch, item.compareRef ?? null, `branch ${item.branch}`);
+              await git.deleteLocalBranch(item.branch);
+            } else if (item.kind === 'remote-branch-merged') {
+              await assertMerged(
+                `${item.remote}/${item.branch}`,
+                item.compareRef,
+                `remote branch ${item.remote}/${item.branch}`,
+              );
+              await git.deleteRemoteBranch(item.branch, item.remote);
+            }
+            return { itemId: item.id, ok: true };
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            return { itemId: item.id, error: message };
+          }
+        })(),
+      ];
+    }),
+  );
+
+  const succeeded: string[] = [];
+  const failed: Array<{ itemId: string; error: string }> = [];
+  for (const item of settled) {
+    if ('ok' in item) {
+      succeeded.push(item.itemId);
+    } else {
+      failed.push(item);
     }
   }
 

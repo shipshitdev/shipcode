@@ -196,7 +196,7 @@ export class ThreadQueries {
       .run(id);
   }
 
-  archiveDoneAutomationRuns(projectId: string): number {
+  archiveClosedAutomationRuns(projectId: string): number {
     const result = this.db
       .prepare(
         `UPDATE threads
@@ -205,9 +205,9 @@ export class ThreadQueries {
             AND kind = ?
             AND automation_id IS NOT NULL
             AND archived_at IS NULL
-            AND (done_at IS NOT NULL OR status = ?)`,
+            AND done_at IS NOT NULL`,
       )
-      .run(projectId, THREAD_KIND.pipeline, PIPELINE_PHASE.completed);
+      .run(projectId, THREAD_KIND.pipeline);
     return Number(result.changes ?? 0);
   }
 
@@ -483,7 +483,7 @@ export class ThreadQueries {
     ).map(mapThread);
   }
 
-  /** Find awaiting_approval threads whose latest plan is approved (execution-queued), oldest first. */
+  /** Find approval threads whose latest plan is approved (execution-queued), oldest first. */
   listAwaitingWithApprovedPlans(): Thread[] {
     const rows = this.db
       .prepare(
@@ -495,11 +495,11 @@ export class ThreadQueries {
          ORDER BY t.updated_at ASC
         `,
       )
-      .all(PIPELINE_PHASE.awaitingApproval);
+      .all(PIPELINE_PHASE.approval);
     return asRows<ThreadRow>(rows).map(mapThread);
   }
 
-  /** Find the oldest thread in awaiting_approval whose latest plan is approved (execution-queued). */
+  /** Find the oldest thread in approval whose latest plan is approved (execution-queued). */
   getAwaitingWithApprovedPlan(): Thread | null {
     return this.listAwaitingWithApprovedPlans()[0] ?? null;
   }

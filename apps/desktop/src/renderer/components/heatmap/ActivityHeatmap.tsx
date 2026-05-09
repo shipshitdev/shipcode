@@ -130,9 +130,9 @@ const BUCKET_CLASS: Record<0 | 1 | 2 | 3 | 4, string> = {
 };
 
 const CELL_SIZE_CLASS: Record<HeatmapRange, string> = {
-  30: 'h-3.5 w-3.5',
-  90: 'h-3 w-3',
-  365: 'h-2.5 w-2.5',
+  30: 'size-3.5',
+  90: 'size-3',
+  365: 'size-2.5',
 };
 
 interface WeekCell {
@@ -374,7 +374,7 @@ export function ActivityHeatmap({
         {([0, 1, 2, 3, 4] as const).map((b) => (
           <span
             key={b}
-            className={cn('h-2.5 w-2.5 rounded-[2px]', BUCKET_CLASS[b])}
+            className={cn('size-2.5 rounded-[2px]', BUCKET_CLASS[b])}
             aria-hidden="true"
           />
         ))}

@@ -2,6 +2,7 @@ import type {
   CostSummary,
   CostTaskSummary,
   GitHubIssueCacheRecord,
+  PipelineAnalyticsOverview,
   PipelinePhase,
 } from '@shipcode/shared';
 import {
@@ -27,9 +28,15 @@ import {
 } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Coins } from 'lucide-react';
-import { useState } from 'react';
+import { useReducer } from 'react';
 import { useAppStore } from '../stores/app-store';
+import { CostByProjectChart } from './costs/CostByProjectChart';
+import { PhaseDurationsChart } from './costs/PhaseDurationsChart';
+import { TokensByPhaseChart } from './costs/TokensByPhaseChart';
 import { ActivityHeatmap } from './heatmap/ActivityHeatmap';
+
+const COST_STAT_LOADING_KEYS = ['cost-stat-1', 'cost-stat-2', 'cost-stat-3'];
+const COST_PROJECT_LOADING_KEYS = ['cost-project-1', 'cost-project-2', 'cost-project-3'];
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -56,13 +63,55 @@ const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
   executing: AGENT_PHASE_CLASSES,
   verifying: AGENT_PHASE_CLASSES,
   shipping: AGENT_PHASE_CLASSES,
-  awaiting_approval: 'bg-warning/15 text-warning border-warning/30',
+  approval: 'bg-warning/15 text-warning border-warning/30',
   completed: 'bg-success/15 text-success border-success/30',
   failed: 'bg-danger/15 text-danger border-danger/30',
   idle: 'bg-secondary text-muted-foreground border-border',
 };
 
 type DisplayMode = '$' | 'tokens';
+
+interface CostsViewState {
+  displayMode: DisplayMode;
+  navigatingThreadId: string | null;
+  tasksPage: number;
+  selectedProjectId: string | null;
+  projectPage: number;
+}
+
+type CostsViewAction =
+  | { type: 'display-mode'; value: DisplayMode }
+  | { type: 'navigating-thread'; threadId: string | null }
+  | { type: 'tasks-page'; page: number }
+  | { type: 'project-page'; page: number }
+  | { type: 'toggle-project'; projectId: string };
+
+const INITIAL_COSTS_VIEW_STATE: CostsViewState = {
+  displayMode: 'tokens',
+  navigatingThreadId: null,
+  tasksPage: 1,
+  selectedProjectId: null,
+  projectPage: 1,
+};
+
+function costsViewReducer(state: CostsViewState, action: CostsViewAction): CostsViewState {
+  switch (action.type) {
+    case 'display-mode':
+      return { ...state, displayMode: action.value };
+    case 'navigating-thread':
+      return { ...state, navigatingThreadId: action.threadId };
+    case 'tasks-page':
+      return { ...state, tasksPage: action.page };
+    case 'project-page':
+      return { ...state, projectPage: action.page };
+    case 'toggle-project':
+      return {
+        ...state,
+        selectedProjectId: state.selectedProjectId === action.projectId ? null : action.projectId,
+        projectPage: 1,
+      };
+  }
+}
 
 export function CostsView() {
   const selectProject = useAppStore((state) => state.selectProject);
@@ -72,11 +121,8 @@ export function CostsView() {
   // Default to tokens because token counts are exact for every provider,
   // whereas USD amounts are only real for OpenRouter (billed) and are
   // best-effort estimates for Claude/Codex CLI runs priced from published rates.
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('tokens');
-  const [navigatingThreadId, setNavigatingThreadId] = useState<string | null>(null);
-  const [tasksPage, setTasksPage] = useState(1);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [projectPage, setProjectPage] = useState(1);
+  const [{ displayMode, navigatingThreadId, tasksPage, selectedProjectId, projectPage }, dispatch] =
+    useReducer(costsViewReducer, INITIAL_COSTS_VIEW_STATE);
   const PAGE_SIZE = 8;
 
   // Click-through from the Top Tasks table: switch project, fetch its issues,
@@ -84,7 +130,7 @@ export function CostsView() {
   // implementation called selectIssue(null) which closed the panel instead of
   // opening it.
   const goToTask = async (projectId: string, threadId: string) => {
-    setNavigatingThreadId(threadId);
+    dispatch({ type: 'navigating-thread', threadId });
     try {
       selectProject(projectId);
       selectThread(threadId);
@@ -95,7 +141,7 @@ export function CostsView() {
       const match = issues.find((i) => i.threadId === threadId) ?? null;
       if (match) selectIssue(match);
     } finally {
-      setNavigatingThreadId(null);
+      dispatch({ type: 'navigating-thread', threadId: null });
     }
   };
 
@@ -141,6 +187,12 @@ export function CostsView() {
     enabled: !!selectedProjectId,
   });
 
+  const { data: analytics } = useQuery<PipelineAnalyticsOverview>({
+    queryKey: ['pipeline-analytics', 'overview'],
+    queryFn: () =>
+      window.shipcode.invoke<PipelineAnalyticsOverview>('pipeline-analytics:get-overview'),
+  });
+
   const tasksTotalPages = Math.max(1, Math.ceil(tasksTotal / PAGE_SIZE));
   const projectTasksTotalPages = Math.max(1, Math.ceil(projectTasksTotal / PAGE_SIZE));
 
@@ -159,7 +211,7 @@ export function CostsView() {
             <Button
               variant="ghost"
               size="xs"
-              onClick={() => setDisplayMode('$')}
+              onClick={() => dispatch({ type: 'display-mode', value: '$' })}
               className={cn(
                 displayMode === '$'
                   ? 'bg-tertiary text-primary font-medium'
@@ -172,7 +224,7 @@ export function CostsView() {
             <Button
               variant="ghost"
               size="xs"
-              onClick={() => setDisplayMode('tokens')}
+              onClick={() => dispatch({ type: 'display-mode', value: 'tokens' })}
               className={cn(
                 displayMode === 'tokens'
                   ? 'bg-tertiary text-primary font-medium'
@@ -185,7 +237,7 @@ export function CostsView() {
           </div>
         }
       />
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-5xl space-y-6">
           {isError && (
             <div className="flex flex-col items-center gap-3 py-16 text-center">
@@ -199,9 +251,8 @@ export function CostsView() {
           {/* Stat cards — skeleton while loading, real values when data arrives */}
           {isLoading && !data ? (
             <div className="grid grid-cols-3 gap-4">
-              {Array.from({ length: 3 }, (_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
-                <Skeleton key={i} className="h-[76px] rounded-lg" />
+              {COST_STAT_LOADING_KEYS.map((key) => (
+                <Skeleton key={key} className="h-[76px] rounded-lg" />
               ))}
             </div>
           ) : data ? (
@@ -235,81 +286,64 @@ export function CostsView() {
             <ActivityHeatmap scope="global" surface="global" />
           </section>
 
-          {/* By project — skeleton while loading */}
-          {isLoading && !data ? (
-            <div className="space-y-3">
-              <Skeleton className="h-3 w-20" />
-              {Array.from({ length: 3 }, (_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
-                <Skeleton key={i} className="h-10 w-full rounded-md" />
-              ))}
-            </div>
-          ) : data ? (
-            <section>
-              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                By Project
-              </h2>
-              {data.byProject.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-12 text-center">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/10">
-                    <Coins size={20} className="text-muted-foreground/50" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-muted-foreground">No cost data yet</p>
-                    <p className="text-xs text-muted-foreground/50">
-                      Run a pipeline to see cost breakdowns here.
-                    </p>
-                  </div>
+          {/* Usage analytics charts */}
+          <section>
+            <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+              Usage Analytics
+            </h2>
+            {!analytics ? (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <Skeleton className="h-64 rounded-lg" />
+                <Skeleton className="h-64 rounded-lg" />
+              </div>
+            ) : (
+              <>
+                <div
+                  className={cn(
+                    'grid gap-4',
+                    data && data.byProject.length > 1
+                      ? 'grid-cols-1 lg:grid-cols-2'
+                      : 'grid-cols-1',
+                  )}
+                >
+                  <TokensByPhaseChart
+                    tokensByPhase={analytics.tokensByPhase}
+                    displayMode={displayMode}
+                  />
+                  {data && data.byProject.length > 1 && (
+                    <CostByProjectChart byProject={data.byProject} displayMode={displayMode} />
+                  )}
                 </div>
-              ) : (
-                <Card>
-                  <CardContent className="p-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Project</TableHead>
-                          <TableHead className="text-right">Tasks</TableHead>
-                          <TableHead className="text-right">
-                            {displayMode === '$' ? 'Cost' : 'Tokens'}
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data.byProject.map((p) => (
-                          <TableRow
-                            key={p.projectId}
-                            className={cn(
-                              'cursor-pointer hover:bg-hover',
-                              selectedProjectId === p.projectId && 'bg-hover',
-                            )}
-                            onClick={() => {
-                              setSelectedProjectId((current) =>
-                                current === p.projectId ? null : p.projectId,
-                              );
-                              setProjectPage(1);
-                            }}
-                          >
-                            <TableCell className="font-medium text-primary">
-                              {p.projectName}
-                            </TableCell>
-                            <TableCell className="text-right text-secondary">
-                              {p.taskCount}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-xs text-primary">
-                              {displayValue(
-                                p.totalCostUsd,
-                                p.totalTokensPrompt + p.totalTokensCompletion,
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              )}
-            </section>
-          ) : null}
+                {analytics.averagePhaseDurations.length > 0 && (
+                  <PhaseDurationsChart
+                    phaseDurations={analytics.averagePhaseDurations}
+                    className="mt-4"
+                  />
+                )}
+                {analytics.timeToPr.sampleSize > 0 && (
+                  <div className="mt-4 grid grid-cols-3 gap-4">
+                    <TimeToPrCard
+                      label="Median Time to PR"
+                      ms={analytics.timeToPr.medianMs}
+                      samples={analytics.timeToPr.sampleSize}
+                    />
+                    <TimeToPrCard label="P75" ms={analytics.timeToPr.p75Ms} />
+                    <TimeToPrCard label="P95" ms={analytics.timeToPr.p95Ms} />
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+
+          {/* By project — skeleton while loading */}
+          <ProjectCostsSection
+            data={data}
+            displayMode={displayMode}
+            isLoading={isLoading}
+            selectedProjectId={selectedProjectId}
+            displayValue={displayValue}
+            onToggleProject={(projectId) => dispatch({ type: 'toggle-project', projectId })}
+          />
 
           {selectedProjectId && data && (
             <section>
@@ -322,7 +356,7 @@ export function CostsView() {
                 tasks={projectTasks}
                 page={projectPage}
                 totalPages={projectTasksTotalPages}
-                onPageChange={setProjectPage}
+                onPageChange={(page) => dispatch({ type: 'project-page', page })}
                 onTaskClick={goToTask}
                 navigatingThreadId={navigatingThreadId}
                 keyPrefix={`${selectedProjectId}-`}
@@ -338,7 +372,7 @@ export function CostsView() {
               tasks={tasks}
               page={tasksPage}
               totalPages={tasksTotalPages}
-              onPageChange={setTasksPage}
+              onPageChange={(page) => dispatch({ type: 'tasks-page', page })}
               onTaskClick={goToTask}
               navigatingThreadId={navigatingThreadId}
               showProjectName
@@ -348,6 +382,94 @@ export function CostsView() {
         </div>
       </div>
     </div>
+  );
+}
+
+function ProjectCostsSection({
+  data,
+  displayMode,
+  isLoading,
+  selectedProjectId,
+  displayValue,
+  onToggleProject,
+}: {
+  data?: CostSummary;
+  displayMode: DisplayMode;
+  isLoading: boolean;
+  selectedProjectId: string | null;
+  displayValue: (costUsd: number, tokens: number) => string;
+  onToggleProject: (projectId: string) => void;
+}) {
+  if (isLoading && !data) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-20" />
+        {COST_PROJECT_LOADING_KEYS.map((key) => (
+          <Skeleton key={key} className="h-10 w-full rounded-md" />
+        ))}
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  return (
+    <section>
+      <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        By Project
+      </h2>
+      {data.byProject.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-12 text-center">
+          <div className="flex size-10 items-center justify-center rounded-full bg-muted/10">
+            <Coins size={20} className="text-muted-foreground/50" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-muted-foreground">No cost data yet</p>
+            <p className="text-xs text-muted-foreground/50">
+              Run a pipeline to see cost breakdowns here.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Project</TableHead>
+                  <TableHead className="text-right">Tasks</TableHead>
+                  <TableHead className="text-right">
+                    {displayMode === '$' ? 'Cost' : 'Tokens'}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.byProject.map((project) => (
+                  <TableRow
+                    key={project.projectId}
+                    className={cn(
+                      'cursor-pointer hover:bg-hover',
+                      selectedProjectId === project.projectId && 'bg-hover',
+                    )}
+                    onClick={() => onToggleProject(project.projectId)}
+                  >
+                    <TableCell className="font-medium text-primary">
+                      {project.projectName}
+                    </TableCell>
+                    <TableCell className="text-right text-secondary">{project.taskCount}</TableCell>
+                    <TableCell className="text-right font-mono text-xs text-primary">
+                      {displayValue(
+                        project.totalCostUsd,
+                        project.totalTokensPrompt + project.totalTokensCompletion,
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </section>
   );
 }
 
@@ -375,7 +497,7 @@ function CostTaskTable({
   if (tasks.length === 0 && emptyMessage) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-12 text-center">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/10">
+        <div className="flex size-10 items-center justify-center rounded-full bg-muted/10">
           <Coins size={20} className="text-muted-foreground/50" />
         </div>
         <p className="text-sm font-medium text-muted-foreground">{emptyMessage}</p>
@@ -467,6 +589,41 @@ function StatCard({ label, value, subtitle }: { label: string; value: string; su
       </div>
       <div className="mt-1 text-2xl font-bold text-primary">{value}</div>
       {subtitle && <div className="mt-0.5 text-[11px] text-muted-foreground">{subtitle}</div>}
+    </div>
+  );
+}
+
+function formatDurationCompact(ms: number | null | undefined): string {
+  if (ms == null) return '—';
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1000);
+  if (minutes < 60) return `${minutes}m ${seconds}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
+
+function TimeToPrCard({
+  label,
+  ms,
+  samples,
+}: {
+  label: string;
+  ms: number | null;
+  samples?: number;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-secondary p-4">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</div>
+      <div className="mt-1 text-2xl font-bold tabular-nums text-primary">
+        {formatDurationCompact(ms)}
+      </div>
+      {samples != null && (
+        <div className="mt-0.5 text-[11px] text-muted">
+          {samples} shipped sample{samples === 1 ? '' : 's'}
+        </div>
+      )}
     </div>
   );
 }

@@ -100,7 +100,7 @@ describe('linked PR affordances', () => {
     view.cleanup();
   });
 
-  it('opens the linked PR from a done card without triggering card selection', () => {
+  it('opens the linked PR from a closed card without triggering card selection', () => {
     const onClick = vi.fn();
     const onOpenPullRequest = vi.fn();
 
@@ -320,13 +320,13 @@ describe('linked PR affordances', () => {
       </DndContext>,
     );
 
-    const doneButton = doneView.container.querySelector('button[title="Marking as done"]');
-    if (!(doneButton instanceof HTMLButtonElement)) {
-      throw new Error('Expected marking done action button');
+    const closeButton = doneView.container.querySelector('button[title="Closing issue"]');
+    if (!(closeButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected closing issue action button');
     }
-    expect(doneButton.disabled).toBe(true);
-    expect(doneButton.textContent).toContain('DONE');
-    expect(doneButton.querySelector('.animate-spin')).not.toBeNull();
+    expect(closeButton.disabled).toBe(true);
+    expect(closeButton.textContent).toContain('CLOSE');
+    expect(closeButton.querySelector('.animate-spin')).not.toBeNull();
     doneView.cleanup();
   });
 
@@ -388,7 +388,7 @@ describe('linked PR affordances', () => {
       id: 'issue-slot-waiter',
       issueNumber: 95,
       title: 'Approved and waiting for execution',
-      pipelineStatus: 'awaiting_approval',
+      pipelineStatus: 'approval',
       linkedPrNumber: null,
       linkedPrUrl: null,
       requireApprovalOverride: true,
@@ -405,14 +405,14 @@ describe('linked PR affordances', () => {
       />,
     );
 
-    expect(view.container.textContent).toContain('Waiting For Execution');
+    expect(view.container.textContent).toContain('Waiting');
     expect(view.container.textContent).toContain('Approved');
     expect(view.container.textContent).toContain('Waiting for slot');
     view.cleanup();
   });
 
   it('renders an approval badge in list rows with a source tooltip', () => {
-    const issue = makeIssue({ pipelineStatus: 'awaiting_approval' });
+    const issue = makeIssue({ pipelineStatus: 'approval' });
 
     const view = renderIntoDom(
       <DndContext>
@@ -512,7 +512,7 @@ describe('linked PR affordances', () => {
       id: 'issue-approval',
       issueNumber: 111,
       title: 'Still waiting on me',
-      pipelineStatus: 'awaiting_approval',
+      pipelineStatus: 'approval',
       linkedPrNumber: null,
       linkedPrUrl: null,
       requireApprovalOverride: true,
@@ -521,7 +521,7 @@ describe('linked PR affordances', () => {
       id: 'issue-slot-waiter',
       issueNumber: 112,
       title: 'Approved and waiting for slot',
-      pipelineStatus: 'awaiting_approval',
+      pipelineStatus: 'approval',
       linkedPrNumber: null,
       linkedPrUrl: null,
       requireApprovalOverride: true,
@@ -685,7 +685,8 @@ describe('linked PR affordances', () => {
   it('shares one second ticker across multiple elapsed cards', () => {
     const setIntervalSpy = vi.spyOn(window, 'setInterval');
     const clearIntervalSpy = vi.spyOn(window, 'clearInterval');
-    const startedAt = Date.now() - 5_000;
+    const startedAt = 1_700_000_000_000;
+    const lastPhaseUpdate = new Date(startedAt).toISOString();
 
     const view = renderIntoDom(
       <>
@@ -705,7 +706,7 @@ describe('linked PR affordances', () => {
               pipelineStatus: 'executing',
               linkedPrNumber: null,
               linkedPrUrl: null,
-              lastPhaseUpdate: new Date(startedAt).toISOString(),
+              lastPhaseUpdate,
             })}
             onClick={vi.fn()}
             readOnly
@@ -723,7 +724,8 @@ describe('linked PR affordances', () => {
 
   it('does not run elapsed timers for approval waits', () => {
     const setIntervalSpy = vi.spyOn(window, 'setInterval');
-    const startedAt = Date.now() - 5_000;
+    const startedAt = 1_700_000_000_000;
+    const lastPhaseUpdate = new Date(startedAt).toISOString();
 
     const view = renderIntoDom(
       <DndContext>
@@ -732,10 +734,10 @@ describe('linked PR affordances', () => {
             id: 'issue-awaiting-approval',
             issueNumber: 207,
             title: 'Needs approval',
-            pipelineStatus: 'awaiting_approval',
+            pipelineStatus: 'approval',
             linkedPrNumber: null,
             linkedPrUrl: null,
-            lastPhaseUpdate: new Date(startedAt).toISOString(),
+            lastPhaseUpdate,
           })}
           onClick={vi.fn()}
           readOnly
@@ -764,7 +766,7 @@ describe('linked PR affordances', () => {
                 id: 'issue-awaiting',
                 issueNumber: 205,
                 title: 'Awaiting approval issue',
-                pipelineStatus: 'awaiting_approval',
+                pipelineStatus: 'approval',
                 linkedPrNumber: null,
                 linkedPrUrl: null,
               }),
@@ -776,10 +778,10 @@ describe('linked PR affordances', () => {
     );
 
     const awaitingHeader = Array.from(view.container.querySelectorAll('button')).find((element) =>
-      element.textContent?.includes('Needs Approval'),
+      element.textContent?.includes('Approval'),
     );
     if (!(awaitingHeader instanceof HTMLButtonElement)) {
-      throw new Error('Expected Needs Approval section header');
+      throw new Error('Expected Approval section header');
     }
 
     expect(awaitingHeader.className).toContain('text-left');
@@ -822,6 +824,7 @@ describe('linked PR affordances', () => {
   });
 
   it('reserves enough card header space when branch copy adds a third action icon', () => {
+    const lastPhaseUpdate = new Date(1_700_000_000_000).toISOString();
     const view = renderIntoDom(
       <DndContext>
         <DraggableCard
@@ -829,10 +832,10 @@ describe('linked PR affordances', () => {
             id: 'issue-with-branch',
             issueNumber: 207,
             title: 'Issue with branch actions',
-            pipelineStatus: 'awaiting_approval',
+            pipelineStatus: 'approval',
             linkedPrNumber: null,
             linkedPrUrl: null,
-            lastPhaseUpdate: new Date(Date.now() - 90_000).toISOString(),
+            lastPhaseUpdate,
           })}
           branchName="shipcode/issue-207"
           onClick={vi.fn()}
@@ -848,7 +851,7 @@ describe('linked PR affordances', () => {
     view.cleanup();
   });
 
-  it('keeps todo cards tall enough for two-line titles and the phase action row', () => {
+  it('keeps todo cards compact while preserving two-line titles and the phase action row', () => {
     const view = renderIntoDom(
       <DndContext>
         <DraggableCard
@@ -867,7 +870,7 @@ describe('linked PR affordances', () => {
     );
 
     const card = view.container.querySelector('[data-issue-card-id="issue-todo"]');
-    expect(card?.className).toContain('min-h-[124px]');
+    expect(card?.className).toContain('min-h-[104px]');
     expect(view.container.textContent).toContain('todo');
     view.cleanup();
   });

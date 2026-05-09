@@ -4,16 +4,13 @@ The Kanban board lives under the project **Issues** tab. Each column corresponds
 
 ## Columns
 
-| Column | Pipeline phase | Contents |
+| Column | Pipeline state | Contents |
 |--------|----------------|----------|
-| Todo | — | Unclaimed issues with a `shipcode:agent:*` label but no active pipeline |
-| Planning | `planning` | Planner is rewriting the issue into a structured plan |
-| Reviewing | `reviewing` / `revising` | Reviewer is critiquing the plan for the configured revision count |
-| Executing | `executing` | Executor is implementing the plan in an isolated git worktree |
-| Testing | `testing` | Setup, test, runtime QA, or generated visual QA commands are running |
-| Verifying | `verifying` | Verifier is checking the diff against acceptance criteria |
-| Done | `completed` / `done` | `completed`: ShipCode finished and a PR exists. `done`: the issue is explicitly closed/finalized. |
-| Failed | `failed` | Pipeline errored out — check the terminal drawer or Inbox |
+| Todo | `todo` | Unclaimed issues with a `shipcode:agent:*` label but no active pipeline |
+| Agent | `queued`, `planning`, `reviewing`, `revising`, `approval`, `executing`, `testing`, `verifying`, `shipping` | Work the runtime can continue without a new human decision. Approved-but-capacity-limited runs appear in the `Waiting` section. |
+| Attention | `clarifying`, `approval`, `paused`, `failed` | Work that needs a human decision, answer, resume, or retry. |
+| Done | `completed`, `closed` | `completed`: ShipCode finished and the PR path is ready. `closed`: the issue is explicitly closed/finalized and ready to archive. |
+| Deferred | `deferred` | Parked for later |
 
 The board still groups work by phase, but the model choice is now shown on each card instead of in the column header. That matters because model selection is hierarchical:
 
@@ -27,7 +24,7 @@ Cards also show the effective revision count for that issue. If a run is already
 
 If the effective workflow for an issue requires a human approval gate before execution, the card also shows an `Approval` badge. Hover it to see whether that requirement comes from the app default, project override, or issue override.
 
-After you approve a run, it no longer stays under the human approval section. If that project's execution slots are full, the board moves it into **Agent Loop → Waiting For Execution** so it is clear that approval is done and the runtime is only waiting for capacity.
+After you approve a run, it no longer stays under the human approval section. If that project's execution slots are full, the board moves it into **Agent → Waiting** so it is clear that approval is resolved and the runtime is only waiting for capacity.
 
 ## Drag to launch
 
@@ -37,7 +34,7 @@ The Kanban component lives in [`packages/ui/src/KanbanBoard.tsx`](https://github
 
 ## List view
 
-Click the toggle in the Kanban header to switch to a flat list view. The list mirrors the same column structure as Planning / Reviewing / Executing / Verifying, plus the Done column's `Completed` and `Done` sub-sections. Use list view when you have more than a handful of concurrent runs and want a denser layout.
+Click the toggle in the Kanban header to switch to a flat list view. The list mirrors the same column structure as Todo / Agent / Attention / Done / Deferred, including the Done column's `Completed` and `Closed` sub-sections. Use list view when you have more than a handful of concurrent runs and want a denser layout.
 
 The header also has a `Needs approval` filter. Enable it to show only issues whose effective workflow will pause for human approval before execution. Approved runs that are only waiting for execution capacity are excluded from this filter.
 

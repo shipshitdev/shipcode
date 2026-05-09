@@ -57,12 +57,12 @@ export function NotificationsSettingsSection({
         <SettingsRow label="Needs approval" htmlFor="notify-awaiting-approval">
           <Switch
             id="notify-awaiting-approval"
-            checked={settings.notificationEvents.awaitingApproval}
+            checked={settings.notificationEvents.approval}
             onCheckedChange={(checked: boolean) =>
               onUpdate({
                 notificationEvents: {
                   ...settings.notificationEvents,
-                  awaitingApproval: !!checked,
+                  approval: !!checked,
                 },
               })
             }
@@ -127,12 +127,12 @@ export function NotificationsSettingsSection({
           <Switch
             id="chat-awaiting-approval"
             aria-label="Chat alert: Needs approval"
-            checked={settings.chatNotificationEvents.awaitingApproval}
+            checked={settings.chatNotificationEvents.approval}
             onCheckedChange={(checked: boolean) =>
               onUpdate({
                 chatNotificationEvents: {
                   ...settings.chatNotificationEvents,
-                  awaitingApproval: !!checked,
+                  approval: !!checked,
                 },
               })
             }

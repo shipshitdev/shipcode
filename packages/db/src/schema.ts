@@ -648,12 +648,12 @@ export function migrateV18(db: DatabaseSync): void {
   transaction(db, () => {
     db.exec(`
       UPDATE plans
-         SET status = 'awaiting_approval'
+         SET status = 'approval'
        WHERE status = 'rejected'
          AND thread_id IN (
            SELECT id
              FROM threads
-            WHERE status = 'awaiting_approval'
+            WHERE status IN ('approval', 'awaiting_approval')
          )
     `);
 
@@ -714,7 +714,7 @@ export function migrateV21(db: DatabaseSync): void {
   transaction(db, () => {
     db.exec(`
       UPDATE github_issue_cache
-         SET pipeline_status = 'done',
+         SET pipeline_status = 'closed',
              last_phase_update = COALESCE(last_phase_update, ${ISO_NOW_SQL})
        WHERE state = 'closed'
          AND pipeline_status = 'completed'
@@ -725,7 +725,7 @@ export function migrateV21(db: DatabaseSync): void {
          SET pipeline_status = 'completed',
              last_phase_update = COALESCE(last_phase_update, ${ISO_NOW_SQL})
        WHERE state = 'open'
-         AND pipeline_status IN ('todo', 'queued', 'awaiting_approval', 'failed')
+         AND pipeline_status IN ('todo', 'queued', 'approval', 'awaiting_approval', 'failed')
          AND (
            linked_pr_number IS NOT NULL
            OR EXISTS (
@@ -1425,9 +1425,9 @@ export function migrateV48(db: DatabaseSync): void {
   if (row && row.version >= 48) return;
 
   transaction(db, () => {
-    // Automation threads have no github_issue_cache row, so "mark done" has
+    // Automation threads have no github_issue_cache row, so closing has
     // nowhere to persist. Adding done_at to threads lets the renderer map
-    // completed automation threads → ISSUE_PIPELINE_STATUS.done when the
+    // completed automation threads → ISSUE_PIPELINE_STATUS.closed when the
     // column is set.
     execAlterTableIfMissing(db, 'ALTER TABLE threads ADD COLUMN done_at TEXT');
 
@@ -1557,5 +1557,54 @@ export function migrateV52(db: DatabaseSync): void {
     execAlterTableIfMissing(db, 'ALTER TABLE threads ADD COLUMN paused_at TEXT');
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (52)`);
+  });
+}
+
+export function migrateV53(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 53) return;
+
+  transaction(db, () => {
+    db.exec(`
+      UPDATE threads
+         SET status = 'approval'
+       WHERE status = 'awaiting_approval';
+
+      UPDATE threads
+         SET paused_phase = 'approval'
+       WHERE paused_phase = 'awaiting_approval';
+
+      UPDATE plans
+         SET status = 'approval'
+       WHERE status = 'awaiting_approval';
+
+      UPDATE github_issue_cache
+         SET pipeline_status = 'approval'
+       WHERE pipeline_status = 'awaiting_approval';
+
+      UPDATE github_issue_cache
+         SET pipeline_status = 'closed'
+       WHERE pipeline_status = 'done';
+
+      UPDATE pipeline_phase_log
+         SET phase = 'approval'
+       WHERE phase = 'awaiting_approval';
+
+      UPDATE pipeline_phase_log
+         SET terminal_status = 'approval'
+       WHERE terminal_status = 'awaiting_approval';
+
+      UPDATE notifications
+         SET kind = 'approval'
+       WHERE kind = 'awaiting_approval';
+
+      UPDATE settings
+         SET value = replace(value, '"awaitingApproval"', '"approval"')
+       WHERE key IN ('notificationEvents', 'chatNotificationEvents');
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (53)`);
   });
 }

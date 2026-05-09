@@ -211,7 +211,7 @@ export function GitVisualizer({
         <div className="min-h-0 flex-1">
           {diffLoading ? (
             <div className="flex h-full items-center justify-center text-sm text-secondary">
-              Loading diff...
+              Loading diff…
             </div>
           ) : (
             <SideBySideDiffViewer diffs={diffs} className="h-full" />

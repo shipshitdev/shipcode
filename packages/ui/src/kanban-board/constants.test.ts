@@ -24,7 +24,7 @@ describe('kanban board phase constants', () => {
 
   it('only shows elapsed timers for agent-loop phases', () => {
     expect(PHASE_ELAPSED_STATUSES).toEqual(ACTIVE_STATUSES);
-    expect(PHASE_ELAPSED_STATUSES).not.toContain('awaiting_approval');
+    expect(PHASE_ELAPSED_STATUSES).not.toContain('approval');
     expect(PHASE_ELAPSED_STATUSES).not.toContain('clarifying');
   });
 });

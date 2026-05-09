@@ -123,7 +123,7 @@ describe('pipeline CLI commands', () => {
     getThreadForIssueOrExitMock.mockReturnValue({
       id: 'thread-1',
       title: 'Ship coverage',
-      status: 'awaiting_approval',
+      status: 'approval',
       prompt: 'Fix tests',
       worktreePath: '/tmp/worktree',
     });
@@ -135,7 +135,7 @@ describe('pipeline CLI commands', () => {
     });
     getThreadByIssueMock.mockReturnValue({
       id: 'thread-1',
-      status: 'awaiting_approval',
+      status: 'approval',
     });
     getLatestPlanMock.mockReturnValue({
       id: 'plan-1',
@@ -171,7 +171,7 @@ describe('pipeline CLI commands', () => {
     expect(logSpy).toHaveBeenCalledWith('\nExecution started.');
   });
 
-  it('rejects approve when the thread is not awaiting approval or has no plan', async () => {
+  it('rejects approve when the thread is not in approval or has no plan', async () => {
     getThreadForIssueOrExitMock.mockReturnValueOnce({
       id: 'thread-1',
       title: 'Ship coverage',
@@ -180,13 +180,13 @@ describe('pipeline CLI commands', () => {
 
     await expect(approveCommand('42')).rejects.toThrow('process.exit:1');
     expect(errorSpy).toHaveBeenCalledWith(
-      'Thread is in "executing" state, not "awaiting_approval". Cannot approve.',
+      'Thread is in "executing" state, not "approval". Cannot approve.',
     );
 
     getThreadForIssueOrExitMock.mockReturnValueOnce({
       id: 'thread-1',
       title: 'Ship coverage',
-      status: 'awaiting_approval',
+      status: 'approval',
     });
     getLatestPlanMock.mockReturnValueOnce(null);
 
@@ -211,7 +211,7 @@ describe('pipeline CLI commands', () => {
     );
     expect(logSpy).toHaveBeenCalledWith('\n--- Plan Output ---');
     expect(logSpy).toHaveBeenCalledWith(JSON.stringify(structuredPlan, null, 2));
-    expect(logSpy).toHaveBeenCalledWith('\nThread status: awaiting_approval');
+    expect(logSpy).toHaveBeenCalledWith('\nThread status: approval');
   });
 
   it('falls back to claude routing and exits if plan command cannot find the thread', async () => {

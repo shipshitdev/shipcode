@@ -53,7 +53,7 @@ export function ActivePipelineCard({
 }: ActivePipelineCardProps) {
   const isHumanBlocked =
     phase === PIPELINE_PHASE.clarifying ||
-    (phase === PIPELINE_PHASE.awaitingApproval && !approvedAwaitingExecution);
+    (phase === PIPELINE_PHASE.approval && !approvedAwaitingExecution);
   const isAgentActive = AGENT_RUNNING_PHASES.includes(phase);
   const progress = phaseToProgress(phase);
 

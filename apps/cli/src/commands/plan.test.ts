@@ -93,7 +93,7 @@ describe('planCommand', () => {
     });
     getThreadByIssueMock.mockReturnValue({
       id: 'thread-1',
-      status: 'awaiting_approval',
+      status: 'approval',
     });
     getLatestPlanMock.mockReturnValue({
       id: 'plan-1',
@@ -120,7 +120,7 @@ describe('planCommand', () => {
     );
     expect(logSpy).toHaveBeenCalledWith('\n--- Plan Output ---');
     expect(logSpy).toHaveBeenCalledWith(JSON.stringify(structuredPlan, null, 2));
-    expect(logSpy).toHaveBeenCalledWith('\nThread status: awaiting_approval');
+    expect(logSpy).toHaveBeenCalledWith('\nThread status: approval');
   });
 
   it('falls back to Claude routing when label routing returns an error', async () => {

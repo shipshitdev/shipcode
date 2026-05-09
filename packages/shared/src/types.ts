@@ -175,7 +175,7 @@ export const PIPELINE_PHASE = {
   clarifying: 'clarifying',
   reviewing: 'reviewing',
   revising: 'revising',
-  awaitingApproval: 'awaiting_approval',
+  approval: 'approval',
   executing: 'executing',
   testing: 'testing',
   verifying: 'verifying',
@@ -609,7 +609,7 @@ export interface AgentProcess {
 export type PlanStatus =
   | 'draft'
   | 'pending_review'
-  | 'awaiting_approval'
+  | 'approval'
   | 'approved'
   | 'rejected'
   | 'superseded';
@@ -778,13 +778,13 @@ export interface AppSettings {
   // Branch naming format for issue worktrees. Tokens: {id} = issue number, {slug} = slugified title.
   // Default: 'ship/{id}-{slug}'. Non-issue threads use 'shipcode/{slug}'.
   worktreeBranchFormat: string;
-  // Default review→revise cycles before falling through to execute/awaiting_approval.
+  // Default review→revise cycles before falling through to execute/approval.
   // 0 = skip review/revise entirely for the fastest path.
   revisionCount: RevisionCount;
   // Controls task-graph decomposition. smart_fast preserves final tests/verifier
   // while skipping redundant per-node gates for contained low-risk work.
   pipelineSpeedProfile: PipelineSpeedProfile;
-  // When true, pipeline pauses at awaiting_approval after review loop for human sign-off.
+  // When true, pipeline pauses at approval after review loop for human sign-off.
   // When false (default), it proceeds directly to execution.
   requireApproval: boolean;
   // Per-phase reasoning effort. Applied as:
@@ -824,7 +824,7 @@ export interface AppSettings {
   /** Max concurrent pipeline runs. New starts queue when limit is reached. */
   maxConcurrentPipelines: number;
   /** Max concurrent pipelines per project in execution phases (executing/testing/verifying/shipping).
-   *  Approved pipelines wait in awaiting_approval until a project execution slot opens. */
+   *  Approved pipelines wait in approval until a project execution slot opens. */
   maxConcurrentExecutions: number;
   /** Max concurrent CPU-heavy local command phases across all projects. */
   maxConcurrentCpuTasks: number;
@@ -1051,7 +1051,21 @@ export interface RepoSetupContract {
 
 export type ProjectSetupStatus = 'configured' | 'missing' | 'invalid';
 
-export type DetectedProjectKind = 'bun' | 'npm' | 'pnpm' | 'yarn' | 'xcode' | 'swiftpm' | 'unknown';
+export type DetectedProjectKind =
+  | 'bun'
+  | 'npm'
+  | 'pnpm'
+  | 'yarn'
+  | 'xcode'
+  | 'swiftpm'
+  | 'rust'
+  | 'go'
+  | 'python'
+  | 'ruby'
+  | 'java'
+  | 'dotnet'
+  | 'php'
+  | 'unknown';
 
 export interface DetectedProjectProfile {
   kind: DetectedProjectKind;
@@ -1081,7 +1095,7 @@ export interface OnboardingRepo {
 }
 
 export interface NotificationEventToggles {
-  awaitingApproval: boolean;
+  approval: boolean;
   failed: boolean;
   completed: boolean;
   verificationExhausted: boolean;
@@ -1431,14 +1445,14 @@ export const ISSUE_PIPELINE_STATUS = {
   clarifying: PIPELINE_PHASE.clarifying,
   reviewing: PIPELINE_PHASE.reviewing,
   revising: PIPELINE_PHASE.revising,
-  awaitingApproval: PIPELINE_PHASE.awaitingApproval,
+  approval: PIPELINE_PHASE.approval,
   executing: PIPELINE_PHASE.executing,
   testing: PIPELINE_PHASE.testing,
   verifying: PIPELINE_PHASE.verifying,
   shipping: PIPELINE_PHASE.shipping,
   paused: PIPELINE_PHASE.paused,
   completed: PIPELINE_PHASE.completed,
-  done: 'done',
+  closed: 'closed',
   deferred: 'deferred',
   failed: PIPELINE_PHASE.failed,
 } as const;
@@ -1846,7 +1860,7 @@ export interface ActivePipelineSummary {
 // === Notifications ===
 
 export type NotificationKind =
-  | 'awaiting_approval'
+  | 'approval'
   | 'failed'
   | 'completed'
   | 'verification_exhausted'

@@ -21,7 +21,6 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
-import { PolarAngleAxis, RadialBar, RadialBarChart } from 'recharts';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
@@ -53,7 +52,7 @@ function ProviderStatusDot({
   return (
     <span
       title={title}
-      className={cn('inline-block h-2 w-2 shrink-0 rounded-full', dotClass(tone, state))}
+      className={cn('inline-block size-2 shrink-0 rounded-full', dotClass(tone, state))}
     />
   );
 }
@@ -245,7 +244,7 @@ function ProviderStatusBadge({
           <Button
             variant="ghost"
             size="icon-xs"
-            className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground hover:text-primary"
+            className="mt-0.5 size-5 shrink-0 text-muted-foreground hover:text-primary"
             onClick={onRefresh}
             disabled={isRefreshing}
             title="Refresh CLI status"
@@ -275,7 +274,7 @@ function cpuColorClass(percent: number | null): {
   border: string;
   bg: string;
   hover: string;
-  stroke: string;
+  fill: string;
 } {
   if (percent == null || percent <= 50) {
     return {
@@ -283,7 +282,7 @@ function cpuColorClass(percent: number | null): {
       border: 'border-border/80',
       bg: 'bg-secondary/40',
       hover: 'hover:bg-secondary/60',
-      stroke: 'stroke-success',
+      fill: 'bg-success',
     };
   }
   if (percent <= 70) {
@@ -292,7 +291,7 @@ function cpuColorClass(percent: number | null): {
       border: 'border-warning/25',
       bg: 'bg-warning/5',
       hover: 'hover:bg-warning/10',
-      stroke: 'stroke-warning',
+      fill: 'bg-warning',
     };
   }
   return {
@@ -300,45 +299,23 @@ function cpuColorClass(percent: number | null): {
     border: 'border-danger/25',
     bg: 'bg-danger/5',
     hover: 'hover:bg-danger/10',
-    stroke: 'stroke-danger',
+    fill: 'bg-danger',
   };
-}
-
-function cpuGaugeColor(percent: number | null): string {
-  if (percent == null || percent <= 50) return 'var(--color-success)';
-  if (percent <= 70) return 'var(--color-warning)';
-  return 'var(--color-danger)';
 }
 
 function CpuGauge({ percent }: { percent: number | null }) {
   const colors = cpuColorClass(percent);
   const clamped = percent == null ? 0 : Math.max(0, Math.min(100, percent));
-  const data = [{ value: clamped, fill: cpuGaugeColor(percent) }];
 
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <div className="h-[56px] w-[88px]">
-        <RadialBarChart
-          width={88}
-          height={88}
-          cx={44}
-          cy={48}
-          innerRadius={30}
-          outerRadius={42}
-          barSize={6}
-          data={data}
-          startAngle={180}
-          endAngle={0}
-        >
-          <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-          <RadialBar
-            dataKey="value"
-            cornerRadius={4}
-            background={{ fill: 'var(--color-tertiary)' }}
-            animationDuration={600}
-            animationEasing="ease-out"
+      <div className="flex h-[56px] w-[88px] items-end justify-center">
+        <div className="h-2 w-20 overflow-hidden rounded-full bg-tertiary">
+          <div
+            className={cn('h-full rounded-full transition-[width]', colors.fill)}
+            style={{ width: `${clamped}%` }}
           />
-        </RadialBarChart>
+        </div>
       </div>
       <span className={cn('text-lg font-semibold tabular-nums', colors.text)}>
         {percent == null ? '—' : `${Math.round(percent)}%`}
@@ -450,7 +427,7 @@ function ResourceUsageBadge() {
                     <Button
                       variant="ghost"
                       size="icon-xs"
-                      className="h-6 w-6 shrink-0 text-muted-foreground hover:text-danger"
+                      className="size-6 shrink-0 text-muted-foreground hover:text-danger"
                       title="Kill process"
                       aria-label={`Kill ${title}`}
                       disabled={killProcess.isPending}
@@ -548,7 +525,7 @@ export function Titlebar() {
       <div className="flex min-w-0 items-center gap-2 text-xs">
         <button
           type="button"
-          className="group relative flex h-6 w-6 shrink-0 items-center justify-center rounded-md app-region-no-drag hover:bg-elevated disabled:pointer-events-none disabled:opacity-50"
+          className="group relative flex size-6 shrink-0 items-center justify-center rounded-md app-region-no-drag hover:bg-elevated disabled:pointer-events-none disabled:opacity-50"
           onClick={toggleSidebar}
           title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
           disabled={hasDetailView}

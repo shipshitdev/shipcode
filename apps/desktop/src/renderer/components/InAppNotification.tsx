@@ -53,7 +53,7 @@ export function InAppNotification({
         <Button
           variant="ghost"
           onClick={onClick}
-          className="h-auto min-w-0 flex-1 justify-start whitespace-normal bg-transparent px-0 py-0 text-left font-normal hover:bg-transparent focus-visible:ring-0"
+          className="h-auto min-w-0 flex-1 justify-start whitespace-normal bg-transparent p-0 text-left font-normal hover:bg-transparent focus-visible:ring-0"
         >
           {content}
         </Button>

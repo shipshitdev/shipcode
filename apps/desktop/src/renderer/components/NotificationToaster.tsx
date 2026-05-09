@@ -6,11 +6,7 @@ import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { InAppNotification } from './InAppNotification';
 
-const STICKY_KINDS: NotificationKind[] = [
-  'awaiting_approval',
-  'verification_exhausted',
-  'ci_blocked',
-];
+const STICKY_KINDS: NotificationKind[] = ['approval', 'verification_exhausted', 'ci_blocked'];
 
 const AUTO_DISMISS_MS: Partial<Record<NotificationKind, number>> = {
   failed: 4_000,
@@ -18,7 +14,7 @@ const AUTO_DISMISS_MS: Partial<Record<NotificationKind, number>> = {
 };
 
 const KIND_TONE: Record<NotificationKind, 'warning' | 'danger' | 'success'> = {
-  awaiting_approval: 'warning',
+  approval: 'warning',
   failed: 'danger',
   verification_exhausted: 'danger',
   ci_blocked: 'danger',

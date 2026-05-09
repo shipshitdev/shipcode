@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { diffActionVariant, fileActionColor, fileActionIcon } from '@/lib/file-action';
 import type { DiffRecord } from '@/lib/shipcode';
 import { cn } from '@/lib/utils';
@@ -11,9 +12,19 @@ interface DiffViewerProps {
   onFileSelect?: (filePath: string) => void;
 }
 
+function keyedDiffLines(lines: string[]) {
+  const seen = new Map<string, number>();
+  return lines.map((line) => {
+    const occurrence = seen.get(line) ?? 0;
+    seen.set(line, occurrence + 1);
+    return { key: `${occurrence}:${line}`, line };
+  });
+}
+
 export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps) {
   const activeDiff = diffs.find((d) => d.filePath === activeFile) ?? diffs[0];
   const diffLines = activeDiff?.diffContent?.split('\n') ?? [];
+  const stableDiffLines = useMemo(() => keyedDiffLines(diffLines), [diffLines]);
   const codeLines = diffLines.map((line) => {
     if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')) return line;
     if (line.startsWith('+') || line.startsWith('-') || line.startsWith(' ')) return line.slice(1);
@@ -57,7 +68,7 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
           </div>
           <pre className="font-mono text-xs leading-relaxed overflow-x-auto py-2 bg-secondary rounded-b-md">
             {activeDiff.diffContent
-              ? diffLines.map((line, i) => {
+              ? stableDiffLines.map(({ key, line }, i) => {
                   const isAdded = line.startsWith('+') && !line.startsWith('+++');
                   const isRemoved = line.startsWith('-') && !line.startsWith('---');
                   const isHunk = line.startsWith('@@');
@@ -65,8 +76,7 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
 
                   return (
                     <div
-                      // biome-ignore lint/suspicious/noArrayIndexKey: diff lines have stable order; blank lines repeat so index is the only unique key
-                      key={i}
+                      key={key}
                       className={cn(
                         'px-3',
                         isAdded && 'bg-success/15 text-success',

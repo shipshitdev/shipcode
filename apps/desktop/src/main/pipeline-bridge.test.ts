@@ -138,8 +138,8 @@ describe('createElectronEmitter onPipelineTerminal (slot-freed) callback', () =>
     expect(deps.onPipelineTerminal).toHaveBeenCalledTimes(1);
   });
 
-  it('fires onPipelineTerminal on awaiting_approval', () => {
-    emitPhase('awaiting_approval');
+  it('fires onPipelineTerminal on approval', () => {
+    emitPhase('approval');
     expect(deps.onPipelineTerminal).toHaveBeenCalledTimes(1);
   });
 
@@ -250,7 +250,7 @@ describe('createElectronEmitter event forwarding and terminal bookkeeping', () =
     emitter.emit({
       type: 'pipeline:phase',
       threadId: 'thread-1',
-      phase: 'awaiting_approval',
+      phase: 'approval',
     } as PipelineEvent);
 
     expect(deps.onPipelineTerminal).toHaveBeenCalledTimes(1);

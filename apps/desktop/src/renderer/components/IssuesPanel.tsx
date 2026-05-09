@@ -18,7 +18,16 @@ import { Button } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { RefreshCw, X } from 'lucide-react';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import { toast } from '../stores/toast-store';
 
 // ReactFlow + CSS is heavy — lazy-load since graph tab is rarely the default view.
@@ -27,15 +36,28 @@ const ProjectGraphTab = lazy(() =>
 );
 
 import { useAppStore } from '../stores/app-store';
+import { currentIsoTimestamp } from './format-timestamp';
 import { ThreadPanelArchiveDialog } from './ThreadPanelArchiveDialog';
 import { ThreadPanelBoardReviewDialog } from './ThreadPanelBoardReviewDialog';
 
 const EMPTY_ISSUES: GitHubIssueCacheRecord[] = [];
-const DONE_PIPELINE_STATUSES: IssuePipelineStatus[] = [
-  ISSUE_PIPELINE_STATUS.completed,
-  ISSUE_PIPELINE_STATUS.done,
-];
+const ARCHIVABLE_PIPELINE_STATUSES: IssuePipelineStatus[] = [ISSUE_PIPELINE_STATUS.closed];
 const KANBAN_FLASH_MS = 1600;
+
+type FlashingIssueIdsAction = { type: 'add'; ids: string[] } | { type: 'remove'; id: string };
+
+function flashingIssueIdsReducer(
+  current: ReadonlySet<string>,
+  action: FlashingIssueIdsAction,
+): ReadonlySet<string> {
+  if (action.type === 'add') {
+    return new Set([...current, ...action.ids]);
+  }
+  if (!current.has(action.id)) return current;
+  const next = new Set(current);
+  next.delete(action.id);
+  return next;
+}
 
 function automationIssueNumber(threadId: string): number {
   let hash = 0;
@@ -46,7 +68,7 @@ function automationIssueNumber(threadId: string): number {
 }
 
 function pipelineStatusFromThread(thread: Thread): IssuePipelineStatus {
-  if (thread.doneAt) return ISSUE_PIPELINE_STATUS.done;
+  if (thread.doneAt) return ISSUE_PIPELINE_STATUS.closed;
   return thread.status === PIPELINE_PHASE.idle ? ISSUE_PIPELINE_STATUS.todo : thread.status;
 }
 
@@ -98,7 +120,7 @@ function automationThreadToIssue(thread: Thread, projectId: string): GitHubIssue
   };
 }
 
-export function IssuesPanel() {
+function useIssuesPanelView() {
   const queryClient = useQueryClient();
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const selectedIssueNumber = useAppStore((state) => state.activeIssue?.issueNumber);
@@ -116,7 +138,10 @@ export function IssuesPanel() {
   const pendingCreatedIssues = useAppStore((state) => state.pendingCreatedIssues);
   const previousTaskStatusById = useRef(new Map<string, IssuePipelineStatus>());
   const flashTimeoutsByIssueId = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  const [flashingIssueIds, setFlashingIssueIds] = useState<ReadonlySet<string>>(new Set());
+  const [flashingIssueIds, dispatchFlashingIssueIds] = useReducer(
+    flashingIssueIdsReducer,
+    new Set<string>(),
+  );
   const [isRefreshingBranches, setIsRefreshingBranches] = useState(false);
   const [archiveFeedback, setArchiveFeedback] = useState<{
     tone: 'pending' | 'success' | 'error';
@@ -263,15 +288,14 @@ export function IssuesPanel() {
     const issueThreadIds = new Set(
       issues.flatMap((issue) => (issue.threadId ? [issue.threadId] : [])),
     );
-    const automationIssues = threads
-      .filter(
-        (thread) =>
-          thread.kind === THREAD_KIND.pipeline &&
-          thread.automationId !== null &&
-          !thread.archivedAt &&
-          !issueThreadIds.has(thread.id),
-      )
-      .map((thread) => automationThreadToIssue(thread, activeProjectId));
+    const automationIssues = threads.flatMap((thread) =>
+      thread.kind === THREAD_KIND.pipeline &&
+      thread.automationId !== null &&
+      !thread.archivedAt &&
+      !issueThreadIds.has(thread.id)
+        ? [automationThreadToIssue(thread, activeProjectId)]
+        : [],
+    );
 
     return automationIssues.length > 0 ? [...automationIssues, ...issues] : issues;
   }, [activeProjectId, issues, threads]);
@@ -282,7 +306,7 @@ export function IssuesPanel() {
     const issueIds = new Set<string>();
     for (const issue of issues) {
       if (
-        issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval &&
+        issue.pipelineStatus === ISSUE_PIPELINE_STATUS.approval &&
         issue.threadId &&
         latestPlanStatusByThreadId[issue.threadId] === 'approved'
       ) {
@@ -309,7 +333,7 @@ export function IssuesPanel() {
     previousTaskStatusById.current = tracked;
     if (changedIds.length === 0) return;
 
-    setFlashingIssueIds((current) => new Set([...current, ...changedIds]));
+    dispatchFlashingIssueIds({ type: 'add', ids: changedIds });
 
     for (const issueId of changedIds) {
       const existing = flashTimeoutsByIssueId.current.get(issueId);
@@ -317,15 +341,19 @@ export function IssuesPanel() {
 
       const timeout = setTimeout(() => {
         flashTimeoutsByIssueId.current.delete(issueId);
-        setFlashingIssueIds((current) => {
-          if (!current.has(issueId)) return current;
-          const next = new Set(current);
-          next.delete(issueId);
-          return next;
-        });
+        dispatchFlashingIssueIds({ type: 'remove', id: issueId });
       }, KANBAN_FLASH_MS);
       flashTimeoutsByIssueId.current.set(issueId, timeout);
     }
+
+    return () => {
+      for (const issueId of changedIds) {
+        const timeout = flashTimeoutsByIssueId.current.get(issueId);
+        if (!timeout) continue;
+        clearTimeout(timeout);
+        flashTimeoutsByIssueId.current.delete(issueId);
+      }
+    };
   }, [boardIssues]);
 
   useEffect(() => {
@@ -400,21 +428,21 @@ export function IssuesPanel() {
           toast.error('Failed to archive issue', err?.message ?? String(err));
         });
     } else {
-      const doneIssues = boardIssues.filter((issue) =>
-        DONE_PIPELINE_STATUSES.includes(issue.pipelineStatus),
+      const closedIssues = boardIssues.filter((issue) =>
+        ARCHIVABLE_PIPELINE_STATUSES.includes(issue.pipelineStatus),
       );
       archiveIssuesOptimistic(
-        doneIssues.filter((issue) => !isAutomationIssue(issue)).map((issue) => issue.id),
+        closedIssues.flatMap((issue) => (!isAutomationIssue(issue) ? [issue.id] : [])),
       );
-      const archivedAt = new Date().toISOString();
-      for (const issue of doneIssues) {
+      const archivedAt = currentIsoTimestamp();
+      for (const issue of closedIssues) {
         if (isAutomationIssue(issue) && issue.threadId) {
           patchThreadOptimistic(issue.threadId, { archivedAt, updatedAt: archivedAt });
         }
       }
       setArchiveFeedback({
         tone: 'pending',
-        message: `Archiving ${doneIssues.length} done issue${doneIssues.length === 1 ? '' : 's'}…`,
+        message: `Archiving ${closedIssues.length} closed issue${closedIssues.length === 1 ? '' : 's'}...`,
       });
       window.shipcode
         .invoke('github:archive-all-done', { projectId: activeProjectId })
@@ -441,11 +469,11 @@ export function IssuesPanel() {
         .catch((err) => {
           setArchiveFeedback({
             tone: 'error',
-            message: 'Failed to archive done issues.',
+            message: 'Failed to archive closed issues.',
           });
           refreshIssues.mutate(activeProjectId);
           log.error('[threadpanel] archive-all-done failed', { err });
-          toast.error('Failed to archive done issues', err?.message ?? String(err));
+          toast.error('Failed to archive closed issues', err?.message ?? String(err));
         });
     }
   };
@@ -664,10 +692,10 @@ export function IssuesPanel() {
         }}
         onArchiveIssue={(issue) => setArchiveConfirm({ type: 'one', issue })}
         onArchiveAllDone={() => {
-          const doneCount = boardIssues.filter((i) =>
-            DONE_PIPELINE_STATUSES.includes(i.pipelineStatus),
+          const closedCount = boardIssues.filter((i) =>
+            ARCHIVABLE_PIPELINE_STATUSES.includes(i.pipelineStatus),
           ).length;
-          setArchiveConfirm({ type: 'all', count: doneCount });
+          setArchiveConfirm({ type: 'all', count: closedCount });
         }}
         graphContent={
           <Suspense fallback={null}>
@@ -677,8 +705,8 @@ export function IssuesPanel() {
         onMarkDone={(issue) => {
           if (!activeProjectId) return;
           const isAutomation = isAutomationIssue(issue);
-          const markedDoneAt = new Date().toISOString();
-          const nextStatus: IssuePipelineStatus = ISSUE_PIPELINE_STATUS.done;
+          const markedDoneAt = currentIsoTimestamp();
+          const nextStatus: IssuePipelineStatus = ISSUE_PIPELINE_STATUS.closed;
           const nextState: GitHubIssueCacheRecord['state'] = 'closed';
           if (isAutomation && issue.threadId) {
             patchThreadOptimistic(issue.threadId, {
@@ -722,7 +750,7 @@ export function IssuesPanel() {
               if (isAutomation && issue.threadId) {
                 patchThreadOptimistic(issue.threadId, {
                   doneAt: null,
-                  updatedAt: new Date().toISOString(),
+                  updatedAt: currentIsoTimestamp(),
                 });
               }
               if (activeProjectId) {
@@ -738,7 +766,7 @@ export function IssuesPanel() {
                 err,
               });
               toast.error(
-                `Failed to mark issue #${issue.issueNumber} as done`,
+                `Failed to close issue #${issue.issueNumber}`,
                 err?.message ?? String(err),
               );
             });
@@ -750,7 +778,7 @@ export function IssuesPanel() {
               doneAt: null,
               pausedPhase: null,
               pausedAt: null,
-              updatedAt: new Date().toISOString(),
+              updatedAt: currentIsoTimestamp(),
             });
             return window.shipcode
               .invoke('pipeline:retry', { threadId: issue.threadId })
@@ -789,7 +817,7 @@ export function IssuesPanel() {
         }}
         onPause={(issue) => {
           if (!issue.threadId) return;
-          const pausedAt = new Date().toISOString();
+          const pausedAt = currentIsoTimestamp();
           patchIssueOptimistic(issue.id, { pipelineStatus: ISSUE_PIPELINE_STATUS.paused });
           patchThreadOptimistic(issue.threadId, {
             status: PIPELINE_PHASE.paused,
@@ -820,7 +848,7 @@ export function IssuesPanel() {
         }}
         onResume={(issue) => {
           if (!issue.threadId) return;
-          const resumedAt = new Date().toISOString();
+          const resumedAt = currentIsoTimestamp();
           const thread = threadById.get(issue.threadId);
           const nextStatus = (thread?.pausedPhase ??
             PIPELINE_PHASE.executing) as IssuePipelineStatus;
@@ -953,7 +981,7 @@ export function IssuesPanel() {
         {doneUndo && (
           <div className="pointer-events-auto flex items-center gap-3 rounded-lg border border-warning/30 bg-elevated px-3 py-2 shadow-lg">
             <div className="min-w-0 text-xs text-secondary">
-              <div className="font-medium text-primary">Moved #{doneUndo.issueNumber} to Done</div>
+              <div className="font-medium text-primary">Closed #{doneUndo.issueNumber}</div>
               <div className="truncate">
                 Reopen the issue and restore it to {doneUndo.previousStatus.replaceAll('_', ' ')}.
               </div>
@@ -1035,4 +1063,8 @@ export function IssuesPanel() {
       </div>
     </div>
   );
+}
+
+export function IssuesPanel() {
+  return useIssuesPanelView();
 }

@@ -71,14 +71,7 @@ function upsertTerminalEvents(
   return merged;
 }
 
-export type ViewMode =
-  | 'overview'
-  | 'project'
-  | 'activity'
-  | 'inbox'
-  | 'costs'
-  | 'skills'
-  | 'automations';
+type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills' | 'automations';
 
 export type ProjectTab = 'issues' | 'git' | 'code' | 'pull-requests' | 'terminal' | 'insights';
 export type TerminalPaneMode = 'replay' | 'live';

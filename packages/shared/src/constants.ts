@@ -2,7 +2,7 @@ import { PINNED_MODEL_DEFAULTS } from './model-catalog';
 import { type AppSettings, type ExecutorModel, PIPELINE_PHASE, type PipelinePhase } from './types';
 
 export const DEFAULT_NOTIFICATION_EVENTS = {
-  awaitingApproval: true,
+  approval: true,
   failed: true,
   completed: true,
   verificationExhausted: true,
@@ -10,7 +10,7 @@ export const DEFAULT_NOTIFICATION_EVENTS = {
 } as const;
 
 export const DEFAULT_CHAT_NOTIFICATION_EVENTS = {
-  awaitingApproval: true,
+  approval: true,
   failed: true,
   completed: false,
   verificationExhausted: true,

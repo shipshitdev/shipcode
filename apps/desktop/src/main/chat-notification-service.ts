@@ -15,7 +15,7 @@ const TELEGRAM_TOKEN_RE = /^\d+:[A-Za-z0-9_-]{20,}$/;
 
 function kindLabel(kind: NotificationKind): string {
   switch (kind) {
-    case 'awaiting_approval':
+    case 'approval':
       return 'Needs approval';
     case 'failed':
       return 'Target project failed';
@@ -229,11 +229,13 @@ export class ChatNotificationService {
       lastError: null,
     };
 
-    for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt += 1) {
-      if (RETRY_DELAYS_MS[attempt] > 0) {
-        await delay(RETRY_DELAYS_MS[attempt]);
+    const attemptDelivery = async (attempt: number): Promise<IntegrationDeliveryStatus> => {
+      const retryDelay = RETRY_DELAYS_MS[attempt];
+      if (retryDelay == null) {
+        log.warn(`[chat-notifications] ${provider} delivery failed`, status);
+        return status;
       }
-
+      if (retryDelay > 0) await delay(retryDelay);
       try {
         const response = await fetch(url, { ...init, signal: AbortSignal.timeout(10_000) });
         if (response.ok) {
@@ -247,9 +249,9 @@ export class ChatNotificationService {
       } catch (error) {
         status.lastError = clampError(error);
       }
-    }
+      return attemptDelivery(attempt + 1);
+    };
 
-    log.warn(`[chat-notifications] ${provider} delivery failed`, status);
-    return status;
+    return attemptDelivery(0);
   }
 }

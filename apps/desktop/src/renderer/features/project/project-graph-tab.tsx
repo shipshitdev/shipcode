@@ -65,13 +65,6 @@ export function ProjectGraphTab({ embedded = false }: { embedded?: boolean }) {
     });
   }, [activeProjectId, queryClient]);
 
-  const refreshGraph = useCallback(
-    (nextGraph: ProjectIssueGraph) => {
-      queryClient.setQueryData(['issue-graph', activeProjectId], nextGraph);
-    },
-    [activeProjectId, queryClient],
-  );
-
   const createEdge = useMutation({
     mutationFn: (input: { sourceIssueId: string; targetIssueId: string }) =>
       window.shipcode.invoke<ProjectIssueGraph>('issue-graph:create-edge', {
@@ -80,7 +73,10 @@ export function ProjectGraphTab({ embedded = false }: { embedded?: boolean }) {
         targetIssueId: input.targetIssueId,
         edgeType: 'blocks',
       }),
-    onSuccess: refreshGraph,
+    onSuccess: (nextGraph) => {
+      queryClient.setQueryData(['issue-graph', activeProjectId], nextGraph);
+      queryClient.invalidateQueries({ queryKey: ['issue-graph', activeProjectId] });
+    },
   });
 
   const deleteEdge = useMutation({
@@ -89,7 +85,10 @@ export function ProjectGraphTab({ embedded = false }: { embedded?: boolean }) {
         projectId: activeProjectId,
         edgeId,
       }),
-    onSuccess: refreshGraph,
+    onSuccess: (nextGraph) => {
+      queryClient.setQueryData(['issue-graph', activeProjectId], nextGraph);
+      queryClient.invalidateQueries({ queryKey: ['issue-graph', activeProjectId] });
+    },
   });
 
   const previewRun = useMutation({
@@ -104,6 +103,7 @@ export function ProjectGraphTab({ embedded = false }: { embedded?: boolean }) {
     onSuccess: (preview) => {
       setPreviewGroups(preview.groups);
       setPreviewError(null);
+      queryClient.invalidateQueries({ queryKey: ['issue-graph', activeProjectId] });
     },
     onError: (error) => {
       setPreviewGroups([]);
@@ -189,12 +189,7 @@ export function ProjectGraphTab({ embedded = false }: { embedded?: boolean }) {
   }
 
   return (
-    <div
-      className={cn(
-        'flex flex-1 min-h-0 min-w-0 bg-primary',
-        embedded ? 'h-full p-3' : 'px-4 py-4',
-      )}
-    >
+    <div className={cn('flex flex-1 min-h-0 min-w-0 bg-primary', embedded ? 'h-full p-3' : 'p-4')}>
       <Card className="min-h-[520px] min-w-0 flex-1 overflow-hidden bg-primary">
         <CardContent className="relative h-full min-h-[520px] p-0">
           {selectedIssueIds.length > 0 || previewGroups.length > 0 || previewError ? (

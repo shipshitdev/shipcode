@@ -196,14 +196,14 @@ const AGENT_LOOP_STATUSES = new Set<IssuePipelineStatus>([
 
 const HUMAN_STATUSES = new Set<IssuePipelineStatus>([
   ISSUE_PIPELINE_STATUS.clarifying,
-  ISSUE_PIPELINE_STATUS.awaitingApproval,
+  ISSUE_PIPELINE_STATUS.approval,
   ISSUE_PIPELINE_STATUS.paused,
   ISSUE_PIPELINE_STATUS.failed,
 ]);
 
 const DONE_STATUSES = new Set<IssuePipelineStatus>([
   ISSUE_PIPELINE_STATUS.completed,
-  ISSUE_PIPELINE_STATUS.done,
+  ISSUE_PIPELINE_STATUS.closed,
 ]);
 
 /**
@@ -222,8 +222,8 @@ export function macroColumnForStatus(status: IssuePipelineStatus): GhMacroColumn
 
 /**
  * Maps an IssuePipelineStatus to the `shipcode:pipeline:<state>` label that should be
- * set on the GitHub issue, or null if no pipeline label applies (todo, done,
- * deferred, awaiting_approval, completed).
+ * set on the GitHub issue, or null if no pipeline label applies (todo, closed,
+ * deferred, approval, completed).
  */
 export function pipelineLabelForStatus(
   status: IssuePipelineStatus,

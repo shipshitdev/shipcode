@@ -59,7 +59,7 @@ import {
   Play,
   Square,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { toast } from '../stores/toast-store';
@@ -70,8 +70,8 @@ import {
   encodePhaseOption,
   resolveFailingPhaseOutput,
 } from './issue-detail/helpers';
-import { IssueDetailActions } from './issue-detail/IssueDetailActions';
-import { IssueDetailDialogs } from './issue-detail/IssueDetailDialogs';
+import { buildIssueDetailActions } from './issue-detail/IssueDetailActions';
+import { buildIssueDetailDialogs } from './issue-detail/IssueDetailDialogs';
 import { IssueDetailTabs } from './issue-detail/IssueDetailTabs';
 import { PipelineTab } from './issue-detail/PipelineTab';
 import type { IssueDetailTab } from './issue-detail/tab-types';
@@ -91,10 +91,43 @@ const EXECUTOR_EDITABLE_STATUSES = new Set<IssuePipelineStatus>([
   ISSUE_PIPELINE_STATUS.queued,
   ISSUE_PIPELINE_STATUS.failed,
   ISSUE_PIPELINE_STATUS.completed,
-  ISSUE_PIPELINE_STATUS.done,
+  ISSUE_PIPELINE_STATUS.closed,
 ]);
+const ISSUE_META_DOT = <span className="mx-1.5 text-border">·</span>;
 
-export function IssueDetail() {
+type IssueDetailUiState = {
+  activeTab: IssueDetailTab;
+  expandedPlanId: string | null;
+  showAllPlanRuns: boolean;
+};
+
+type IssueDetailUiAction =
+  | { type: 'issue-changed' }
+  | { type: 'active-tab'; tab: IssueDetailTab }
+  | { type: 'expanded-plan'; planId: string | null }
+  | { type: 'show-all-plan-runs'; show: boolean };
+
+function issueDetailUiReducer(
+  state: IssueDetailUiState,
+  action: IssueDetailUiAction,
+): IssueDetailUiState {
+  switch (action.type) {
+    case 'issue-changed':
+      return { activeTab: 'prd', expandedPlanId: null, showAllPlanRuns: false };
+    case 'active-tab':
+      return { ...state, activeTab: action.tab };
+    case 'expanded-plan':
+      return { ...state, expandedPlanId: action.planId };
+    case 'show-all-plan-runs':
+      return {
+        ...state,
+        showAllPlanRuns: action.show,
+        expandedPlanId: action.show ? state.expandedPlanId : null,
+      };
+  }
+}
+
+function useIssueDetailView() {
   const queryClient = useQueryClient();
   const activeIssue = useAppStore((state) => state.activeIssue);
   const activeThreadId = useAppStore((state) => state.activeThreadId);
@@ -103,14 +136,18 @@ export function IssueDetail() {
   const pipelinePhase = useAppStore((state) => state.pipelinePhase);
   const commentComposerRequest = useAppStore((state) => state.commentComposerRequest);
   const openEditPrdModal = useAppStore((state) => state.openEditPrdModal);
-  const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
+  const [issueDetailUi, dispatchIssueDetailUi] = useReducer(issueDetailUiReducer, {
+    activeTab: 'prd',
+    expandedPlanId: null,
+    showAllPlanRuns: false,
+  });
+  const { activeTab, expandedPlanId, showAllPlanRuns } = issueDetailUi;
   const prevIssueSelectionKeyRef = useRef<string | null>(null);
   const [fullScreenPlanId, setFullScreenPlanId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false);
   const [isTogglingState, setIsTogglingState] = useState(false);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
-  const [showAllPlanRuns, setShowAllPlanRuns] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showMarkAsDoneConfirm, setShowMarkAsDoneConfirm] = useState(false);
@@ -143,18 +180,15 @@ export function IssueDetail() {
         detailDragRef.current = null;
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
+        document.body.classList.remove('cursor-col-resize', 'select-none');
       };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
+      document.body.classList.add('cursor-col-resize', 'select-none');
     },
     [detailSidebarWidth],
   );
 
-  const [activeTab, setActiveTab] = useState<IssueDetailTab>('prd');
   const [phaseModelValidation, setPhaseModelValidation] = useState<
     Partial<
       Record<'planner' | 'reviewer' | 'executor' | 'verifier', OpenRouterModelValidation | null>
@@ -185,7 +219,7 @@ export function IssueDetail() {
   const shouldPollLiveThread =
     !!activeThreadId &&
     (ACTIVE_PHASES.includes(currentPipelinePhase as PipelinePhase) ||
-      currentPipelinePhase === PIPELINE_PHASE.awaitingApproval);
+      currentPipelinePhase === PIPELINE_PHASE.approval);
   const shouldPollPlanData =
     !!activeThreadId && PLAN_MUTATING_PHASES.includes(currentPipelinePhase as PipelinePhase);
   const shouldLoadHistoryTab = activeTab === 'history';
@@ -246,21 +280,26 @@ export function IssueDetail() {
   });
   const normalizedIssueActivity = Array.isArray(issueActivity) ? issueActivity : [];
   const planRunGroups = useMemo(() => {
-    const groupedRuns: Array<{ threadId: string; plans: PlanRecord[] }> = [];
+    const groupedRunsByThread = new Map<string, Array<{ order: number; plan: PlanRecord }>>();
+    let order = 0;
     for (const plan of normalizedPlanHistory) {
-      const existingGroup = groupedRuns.find((group) => group.threadId === plan.threadId);
-      if (existingGroup) {
-        existingGroup.plans.push(plan);
-        continue;
-      }
-      groupedRuns.push({ threadId: plan.threadId, plans: [plan] });
+      const existingGroup = groupedRunsByThread.get(plan.threadId) ?? [];
+      existingGroup.push({ order: order++, plan });
+      groupedRunsByThread.set(plan.threadId, existingGroup);
     }
-    const totalRuns = groupedRuns.length;
-    return groupedRuns.map((group, index) => ({
-      ...group,
-      runNumber: totalRuns - index,
-      isCurrentRun: group.threadId === activeThreadId,
+    const groupedRuns = [...groupedRunsByThread.entries()].map(([threadId, entries]) => ({
+      threadId,
+      order: entries[0]?.order ?? 0,
+      plans: entries.map((entry) => entry.plan),
     }));
+    const totalRuns = groupedRuns.length;
+    return groupedRuns
+      .toSorted((a, b) => a.order - b.order)
+      .map((group, index) => ({
+        ...group,
+        runNumber: totalRuns - index,
+        isCurrentRun: group.threadId === activeThreadId,
+      }));
   }, [activeThreadId, normalizedPlanHistory]);
 
   const latestThreadPlanId = normalizedThreadPlanHistory[0]?.id ?? null;
@@ -454,14 +493,12 @@ export function IssueDetail() {
   useEffect(() => {
     if (prevIssueSelectionKeyRef.current === issueSelectionKey) return;
     prevIssueSelectionKeyRef.current = issueSelectionKey;
-    setActiveTab('prd');
-    setExpandedPlanId(null);
-    setShowAllPlanRuns(false);
+    dispatchIssueDetailUi({ type: 'issue-changed' });
   }, [issueSelectionKey]);
 
   useEffect(() => {
     if (!activeIssue || commentComposerRequest?.issueId !== activeIssue.id) return;
-    setActiveTab('comments');
+    dispatchIssueDetailUi({ type: 'active-tab', tab: 'comments' });
   }, [activeIssue, commentComposerRequest]);
 
   useEffect(() => {
@@ -525,18 +562,18 @@ export function IssueDetail() {
     !activeThreadId &&
     !!activeProjectId &&
     activeIssue?.pipelineStatus !== ISSUE_PIPELINE_STATUS.completed &&
-    activeIssue?.pipelineStatus !== ISSUE_PIPELINE_STATUS.done;
+    activeIssue?.pipelineStatus !== ISSUE_PIPELINE_STATUS.closed;
   const canRerun =
     !!activeIssue &&
     activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed &&
     !!activeProjectId;
   const approvedAwaitingExecution =
     !!activeThreadId &&
-    threadPhase === PIPELINE_PHASE.awaitingApproval &&
+    threadPhase === PIPELINE_PHASE.approval &&
     latestPlan?.status === 'approved';
   const hasApprovalDecision =
     !!activeThreadId &&
-    threadPhase === PIPELINE_PHASE.awaitingApproval &&
+    threadPhase === PIPELINE_PHASE.approval &&
     !!latestPlan &&
     latestPlan.status !== 'approved';
   const canApprove = hasApprovalDecision && !!(latestPlan?.structured || latestPlan?.rawOutput);
@@ -627,10 +664,7 @@ export function IssueDetail() {
   };
 
   const handleShowAllPlanRunsChange = (show: boolean) => {
-    setShowAllPlanRuns(show);
-    if (!show) {
-      setExpandedPlanId(null);
-    }
+    dispatchIssueDetailUi({ type: 'show-all-plan-runs', show });
   };
 
   const handleApprove = async () => {
@@ -718,16 +752,18 @@ export function IssueDetail() {
   ) => {
     if (!activeProjectId || !activeIssue) return;
     if (value === INHERIT_EXECUTOR_VALUE) {
-      await window.shipcode.invoke('github:clear-phase-model-override', {
-        projectId: activeProjectId,
-        issueNumber: activeIssue.issueNumber,
-        phase,
-      });
-      await window.shipcode.invoke('github:clear-phase-model-id-override', {
-        projectId: activeProjectId,
-        issueNumber: activeIssue.issueNumber,
-        phase,
-      });
+      await Promise.all([
+        window.shipcode.invoke('github:clear-phase-model-override', {
+          projectId: activeProjectId,
+          issueNumber: activeIssue.issueNumber,
+          phase,
+        }),
+        window.shipcode.invoke('github:clear-phase-model-id-override', {
+          projectId: activeProjectId,
+          issueNumber: activeIssue.issueNumber,
+          phase,
+        }),
+      ]);
       await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
       return;
     }
@@ -1135,7 +1171,7 @@ export function IssueDetail() {
       </div>
       {/* Archive button — top right */}
       {(activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
-        activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.done) && (
+        activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.closed) && (
         <div className="absolute right-3 top-3">
           <Button
             variant="ghost"
@@ -1156,8 +1192,7 @@ export function IssueDetail() {
       ? threadPhase
       : activeIssue.pipelineStatus;
   const headerStatusAnimated =
-    ACTIVE_PHASES.includes(threadPhase as PipelinePhase) ||
-    threadPhase === PIPELINE_PHASE.awaitingApproval;
+    ACTIVE_PHASES.includes(threadPhase as PipelinePhase) || threadPhase === PIPELINE_PHASE.approval;
 
   const issueStatusChip = (
     <PhaseChip
@@ -1253,7 +1288,6 @@ export function IssueDetail() {
     (thread?.githubPrNumber && thread.githubRepo
       ? `https://github.com/${thread.githubRepo}/pull/${thread.githubPrNumber}`
       : null);
-  const dot = <span className="mx-1.5 text-border">·</span>;
   const issueIdentityLinks = (
     <div className="mt-1 flex flex-wrap items-center pl-10 text-[11px]">
       {/* Issue number */}
@@ -1277,7 +1311,7 @@ export function IssueDetail() {
       {/* State — open/closed dropdown */}
       {!isAutomationIssue(activeIssue) && (
         <>
-          {dot}
+          {ISSUE_META_DOT}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -1291,9 +1325,9 @@ export function IssueDetail() {
                 disabled={isTogglingState}
               >
                 {activeIssue.state === 'open' ? (
-                  <CircleDot className="h-3 w-3" />
+                  <CircleDot className="size-3" />
                 ) : (
-                  <CircleCheck className="h-3 w-3" />
+                  <CircleCheck className="size-3" />
                 )}
                 <LoadingButtonContent
                   loading={isTogglingState}
@@ -1310,14 +1344,14 @@ export function IssueDetail() {
                 disabled={activeIssue.state === 'open'}
                 onClick={() => void handleToggleIssueState('open')}
               >
-                <CircleDot className="mr-2 h-3.5 w-3.5 text-success" />
+                <CircleDot className="mr-2 size-3.5 text-success" />
                 Reopen issue
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={activeIssue.state === 'closed'}
                 onClick={() => void handleToggleIssueState('closed')}
               >
-                <CircleCheck className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                <CircleCheck className="mr-2 size-3.5 text-muted-foreground" />
                 Close issue
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -1328,7 +1362,7 @@ export function IssueDetail() {
       {/* Branch name — copy on click */}
       {issueBranchName && (
         <>
-          {dot}
+          {ISSUE_META_DOT}
           <button
             type="button"
             onClick={() => void handleCopyBranchName()}
@@ -1351,9 +1385,9 @@ export function IssueDetail() {
             data-testid="copy-branch-name"
           >
             {branchCopyState === 'copied' ? (
-              <Check className="h-3 w-3" />
+              <Check className="size-3" />
             ) : (
-              <Copy className="h-3 w-3" />
+              <Copy className="size-3" />
             )}
             <span className="max-w-[20ch] truncate">{issueBranchName}</span>
           </button>
@@ -1363,7 +1397,7 @@ export function IssueDetail() {
       {/* PR link */}
       {activeIssue.linkedPrNumber && (
         <>
-          {dot}
+          {ISSUE_META_DOT}
           {linkedPrUrl ? (
             <button
               type="button"
@@ -1404,11 +1438,15 @@ export function IssueDetail() {
           {activeIssue.linkedPrIsDraft ? 'Draft PR' : 'Ready PR'}
         </Badge>
       )}
-      {activeIssue.labels.filter(isAgentRoutingLabel).map((l) => (
-        <Badge key={l} className="text-[10px] bg-accent/15 text-accent" title={l}>
-          {displayAgentLabel(l)}
-        </Badge>
-      ))}
+      {activeIssue.labels.flatMap((label) =>
+        isAgentRoutingLabel(label)
+          ? [
+              <Badge key={label} className="text-[10px] bg-accent/15 text-accent" title={label}>
+                {displayAgentLabel(label)}
+              </Badge>,
+            ]
+          : [],
+      )}
       {activeIssue.ciBlocked && (
         <Badge variant="danger" className="text-[10px] uppercase">
           CI blocked
@@ -1435,7 +1473,7 @@ export function IssueDetail() {
     completionSection,
     pipelineStartCard,
     rerunSection,
-  } = IssueDetailActions({
+  } = buildIssueDetailActions({
     approveError,
     approvedAwaitingExecution,
     canApprove,
@@ -1515,7 +1553,7 @@ export function IssueDetail() {
       threadPhase={threadPhase}
       githubIssueUrl={githubIssueUrl}
       onEditPrd={handleEditPrd}
-      onActiveTabChange={setActiveTab}
+      onActiveTabChange={(tab) => dispatchIssueDetailUi({ type: 'active-tab', tab })}
       onFullScreenPlan={setFullScreenPlanId}
       currentPhaseReasoningEfforts={currentPhaseReasoningEfforts}
       inheritedPhaseReasoningEfforts={inheritedPhaseReasoningEfforts}
@@ -1535,7 +1573,9 @@ export function IssueDetail() {
       onPhaseOpenRouterSlugBlur={(phase, value) => {
         void handlePhaseOpenRouterSlugBlur(phase, value);
       }}
-      onPlanExpandedChange={(planId) => setExpandedPlanId(planId ?? null)}
+      onPlanExpandedChange={(planId) =>
+        dispatchIssueDetailUi({ type: 'expanded-plan', planId: planId ?? null })
+      }
       onPlanHistoryCollapsedChange={setPlanHistoryCollapsed}
       onShowAllPlanRunsChange={handleShowAllPlanRunsChange}
       onRefreshFromGithub={() => {
@@ -1554,33 +1594,32 @@ export function IssueDetail() {
     />
   );
 
-  const detailDialogs = (
-    <IssueDetailDialogs
-      activeIssueNumber={activeIssue.issueNumber}
-      canApprove={canApprove}
-      fullScreenPlan={fullScreenPlan}
-      fullScreenPlanId={fullScreenPlanId}
-      fullScreenReview={fullScreenReview}
-      isFullScreenPlanLoading={
-        shouldFetchFullScreenPlanDetail && isFullScreenPlanDetailLoading && !!fullScreenPlanId
-      }
-      isSubmitting={isSubmitting}
-      latestPlanId={latestPlan?.id ?? null}
-      onApprove={() => {
-        void handleApprove();
-      }}
-      onArchiveConfirmed={handleArchiveConfirmed}
-      onCloseArchiveConfirm={() => setShowArchiveConfirm(false)}
-      onCloseFullScreenPlan={() => setFullScreenPlanId(null)}
-      onMarkAsDoneConfirmed={() => {
-        setShowMarkAsDoneConfirm(false);
-        void handleMarkAsDone();
-      }}
-      onCloseMarkAsDoneConfirm={() => setShowMarkAsDoneConfirm(false)}
-      showArchiveConfirm={showArchiveConfirm}
-      showMarkAsDoneConfirm={showMarkAsDoneConfirm}
-    />
-  );
+  const detailDialogs = buildIssueDetailDialogs({
+    activeIssueNumber: activeIssue.issueNumber,
+    fullScreenPlan,
+    fullScreenPlanId,
+    fullScreenReview,
+    latestPlanId: latestPlan?.id ?? null,
+    state: {
+      canApprove,
+      isFullScreenPlanLoading:
+        shouldFetchFullScreenPlanDetail && isFullScreenPlanDetailLoading && !!fullScreenPlanId,
+      isSubmitting,
+      showArchiveConfirm,
+      showMarkAsDoneConfirm,
+    },
+    onApprove: () => {
+      void handleApprove();
+    },
+    onArchiveConfirmed: handleArchiveConfirmed,
+    onCloseArchiveConfirm: () => setShowArchiveConfirm(false),
+    onCloseFullScreenPlan: () => setFullScreenPlanId(null),
+    onMarkAsDoneConfirmed: () => {
+      setShowMarkAsDoneConfirm(false);
+      void handleMarkAsDone();
+    },
+    onCloseMarkAsDoneConfirm: () => setShowMarkAsDoneConfirm(false),
+  });
 
   const detailActionStack =
     pipelineStartCard ||
@@ -1703,4 +1742,8 @@ export function IssueDetail() {
       {detailDialogs}
     </div>
   );
+}
+
+export function IssueDetail() {
+  return useIssueDetailView();
 }

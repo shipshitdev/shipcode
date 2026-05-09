@@ -3,6 +3,7 @@ import { PIPELINE_PHASE } from '@shipcode/shared';
 import { PhaseChip, PlanViewer, ReviewViewer } from '@shipcode/ui';
 import { Badge, Button, cn, Skeleton } from '@shipshitdev/ui';
 import { ChevronDown, ChevronRight, ChevronUp, Maximize2 } from 'lucide-react';
+import { formatTimestamp } from '../format-timestamp';
 import {
   diagnosePlanParseFailure,
   getPlanStatusPresentation,
@@ -118,7 +119,7 @@ export function PlanHistoryTab({
                       </span>
                     </div>
                     <span className="text-[11px] text-muted-foreground">
-                      {new Date(runGroup.plans[0].createdAt).toLocaleString()}
+                      {formatTimestamp(runGroup.plans[0].createdAt)}
                     </span>
                   </div>
 
@@ -151,7 +152,7 @@ export function PlanHistoryTab({
                             <Button
                               variant="ghost"
                               className={cn(
-                                'h-auto min-w-0 flex-1 justify-start rounded-md px-2 py-2 text-left text-[13px] font-normal',
+                                'h-auto min-w-0 flex-1 justify-start rounded-md p-2 text-left text-[13px] font-normal',
                                 isSuperseded ? 'text-secondary' : 'text-primary',
                               )}
                               onClick={() => onPlanExpandedChange(isExpanded ? null : plan.id)}
@@ -175,7 +176,7 @@ export function PlanHistoryTab({
                                   </Badge>
                                 )}
                                 <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
-                                  {new Date(plan.createdAt).toLocaleString()}
+                                  {formatTimestamp(plan.createdAt)}
                                 </span>
                                 {isExpanded ? (
                                   <ChevronDown

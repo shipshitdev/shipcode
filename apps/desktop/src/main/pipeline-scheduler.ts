@@ -48,7 +48,7 @@ const REUSABLE_THREAD_STATUSES = new Set<PipelinePhase>([
  *
  * When `maxConcurrentPipelines` slots are all occupied, new issues are queued
  * (status = 'queued') in the DB.  Whenever a slot opens up — because a
- * pipeline reaches clarifying, awaiting_approval, completed, failed, or idle — the
+ * pipeline reaches clarifying, approval, completed, failed, or idle — the
  * scheduler drains the next queued issue.
  *
  * This class is intentionally a thin wrapper around the existing pipeline +
@@ -181,7 +181,7 @@ export class PipelineScheduler {
   }
 
   /**
-   * Called when a pipeline slot frees up (clarifying, awaiting_approval, completed, failed, idle).
+   * Called when a pipeline slot frees up (clarifying, approval, completed, failed, idle).
    * Drains one queued issue if capacity allows.
    */
   onSlotFreed(): void {

@@ -78,11 +78,11 @@ function CommandPaletteContent() {
     queryKey: ['command-palette-plan-history', activeThreadId],
     queryFn: () => window.shipcode.invoke('plan:list', { threadId: activeThreadId }),
     staleTime: STABLE_APP_STATE_STALE_TIME,
-    enabled: !!activeThreadId && pipelinePhase === PIPELINE_PHASE.awaitingApproval,
+    enabled: !!activeThreadId && pipelinePhase === PIPELINE_PHASE.approval,
   });
   const latestPlanStatus = activeThreadPlans[0]?.status ?? null;
   const approvedAwaitingExecution =
-    pipelinePhase === PIPELINE_PHASE.awaitingApproval && latestPlanStatus === 'approved';
+    pipelinePhase === PIPELINE_PHASE.approval && latestPlanStatus === 'approved';
 
   const allIssues = useMemo(() => {
     const result: Array<{ issue: GitHubIssueCacheRecord; project: Project }> = [];
@@ -141,7 +141,7 @@ function CommandPaletteContent() {
           {activeProjectId && (
             <>
               <CommandItem onSelect={() => runAction(() => openCreateIssueModal())}>
-                <span className="flex-1">New Issue...</span>
+                <span className="flex-1">New Issue…</span>
                 <CommandShortcut>{getShortcut('new-issue').glyph}</CommandShortcut>
               </CommandItem>
               <CommandItem
@@ -174,7 +174,7 @@ function CommandPaletteContent() {
                 <span className="flex-1">Start Pipeline</span>
               </CommandItem>
             )}
-            {pipelinePhase === PIPELINE_PHASE.awaitingApproval && !approvedAwaitingExecution && (
+            {pipelinePhase === PIPELINE_PHASE.approval && !approvedAwaitingExecution && (
               <>
                 <CommandItem
                   onSelect={() =>

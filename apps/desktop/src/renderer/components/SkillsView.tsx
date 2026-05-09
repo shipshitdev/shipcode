@@ -87,10 +87,19 @@ const PHASE_LABELS: Record<PhaseSkillKey, { label: string; description: string }
     description: 'Generates the pull request body content',
   },
 };
+const SKILLS_LOADING_ROW_KEYS = [
+  'skills-loading-1',
+  'skills-loading-2',
+  'skills-loading-3',
+  'skills-loading-4',
+  'skills-loading-5',
+  'skills-loading-6',
+  'skills-loading-7',
+];
 
 const SCOPE_GLOBAL = '__GLOBAL__' as const;
 
-export function SkillsView() {
+function useSkillsView() {
   const queryClient = useQueryClient();
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const [scope, setScope] = useState<string>(SCOPE_GLOBAL);
@@ -141,15 +150,23 @@ export function SkillsView() {
     return activeEntry.globalRow;
   }, [activeEntry, projectId]);
 
-  // Reset draft whenever the editing row changes (different phase or scope).
-  useEffect(() => {
-    setDraft(editingRow?.content ?? '');
+  const editorContent = draftDirty ? draft : (editingRow?.content ?? '');
+  const resetEditorChrome = () => {
+    setDraft('');
     setDraftDirty(false);
     setValidationError(null);
     setRewriteInstruction('');
     setRewriteError(null);
     setRewriteNotice(null);
-  }, [editingRow]);
+  };
+  const handleScopeChange = (value: string) => {
+    setScope(value);
+    resetEditorChrome();
+  };
+  const handlePhaseChange = (phase: PhaseSkillKey) => {
+    setActivePhase(phase);
+    resetEditorChrome();
+  };
 
   const writeMutation = useMutation({
     mutationFn: ({
@@ -165,12 +182,13 @@ export function SkillsView() {
           content,
         },
       ),
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       if (!result.ok && result.error) {
         setValidationError(result.error.message);
         return;
       }
       setValidationError(null);
+      setDraft(result.row?.content ?? variables.content);
       setDraftDirty(false);
       queryClient.invalidateQueries({ queryKey: ['skills:list'] });
     },
@@ -206,6 +224,7 @@ export function SkillsView() {
       setValidationError(null);
       setRewriteError(null);
       setRewriteNotice('Draft rewritten. Review and save when ready.');
+      queryClient.invalidateQueries({ queryKey: ['skills:list'] });
     },
     onError: (err: unknown) => {
       setRewriteError(clampError(err));
@@ -231,6 +250,9 @@ export function SkillsView() {
       window.shipcode.invoke<void>('skills:open-writing-prds', {
         projectId: activeProjectId as string,
       }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['skills:list'] });
+    },
   });
 
   // Pre-validate before save so the renderer gives early feedback. The same
@@ -249,12 +271,12 @@ export function SkillsView() {
   }
 
   const handleSave = () => {
-    const err = clientValidate(draft);
+    const err = clientValidate(editorContent);
     if (err) {
       setValidationError(err);
       return;
     }
-    writeMutation.mutate({ content: draft });
+    writeMutation.mutate({ content: editorContent });
   };
 
   const handleRewrite = () => {
@@ -265,7 +287,7 @@ export function SkillsView() {
     }
     setRewriteError(null);
     setRewriteNotice(null);
-    rewriteMutation.mutate({ instruction, content: draft });
+    rewriteMutation.mutate({ instruction, content: editorContent });
   };
 
   const quarantinedRows = useMemo(
@@ -284,9 +306,8 @@ export function SkillsView() {
           <aside className="w-[260px] shrink-0 border-r border-border bg-primary p-4">
             <Skeleton className="mb-4 h-3 w-24" />
             <div className="space-y-2">
-              {Array.from({ length: 7 }, (_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
-                <Skeleton key={i} className="h-8 w-full rounded-md" />
+              {SKILLS_LOADING_ROW_KEYS.map((key) => (
+                <Skeleton key={key} className="h-8 w-full rounded-md" />
               ))}
             </div>
           </aside>
@@ -315,11 +336,14 @@ export function SkillsView() {
 
             {/* Scope picker */}
             <div className="mb-4">
-              <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              <label
+                htmlFor="skills-scope-select"
+                className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1"
+              >
                 Scope
               </label>
-              <Select value={scope} onValueChange={setScope}>
-                <SelectTrigger className="w-full text-[12px]">
+              <Select value={scope} onValueChange={handleScopeChange}>
+                <SelectTrigger id="skills-scope-select" className="w-full text-[12px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -342,7 +366,7 @@ export function SkillsView() {
                   <li key={entry.phase}>
                     <Button
                       variant="ghost"
-                      onClick={() => setActivePhase(entry.phase)}
+                      onClick={() => handlePhaseChange(entry.phase)}
                       className={cn(
                         'w-full h-auto justify-start text-left rounded px-3 py-2 text-[13px] border border-transparent whitespace-normal',
                         isActive
@@ -511,7 +535,7 @@ export function SkillsView() {
 
                 <Textarea
                   aria-label="Skill content"
-                  value={draft}
+                  value={editorContent}
                   onChange={(e) => {
                     setDraft(e.target.value);
                     setDraftDirty(true);
@@ -596,6 +620,10 @@ export function SkillsView() {
       </div>
     </div>
   );
+}
+
+export function SkillsView() {
+  return useSkillsView();
 }
 
 function SourceBadge({

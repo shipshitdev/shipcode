@@ -41,7 +41,7 @@ function resolveProviderAndModel(row: TaskCostRow): {
       return { provider: row.reviewer_model as ExecutorModel, model: row.reviewer_resolved_model };
     case PIPELINE_PHASE.revising:
       return { provider: row.planner_model as ExecutorModel, model: row.revisor_resolved_model };
-    case PIPELINE_PHASE.awaitingApproval:
+    case PIPELINE_PHASE.approval:
     case PIPELINE_PHASE.executing:
     case PIPELINE_PHASE.testing:
     case PIPELINE_PHASE.paused:

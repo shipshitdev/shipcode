@@ -142,15 +142,17 @@ function extractAliasCustomResolverCompat(config: UserConfig): Plugin | null {
     name: 'shipcode-alias-custom-resolver-compat',
     enforce: 'pre',
     async resolveId(source, importer, options) {
-      for (const entry of resolverEntries) {
-        const { matched, nextSource } = resolveAliasTarget(source, entry);
-        if (!matched || typeof entry.customResolver !== 'function') continue;
+      const resolvedEntries = await Promise.all(
+        resolverEntries.map(async (entry) => {
+          const { matched, nextSource } = resolveAliasTarget(source, entry);
+          if (!matched || typeof entry.customResolver !== 'function') return null;
 
-        const resolved = await entry.customResolver(nextSource, importer, options);
-        if (resolved) return resolved;
-      }
+          const resolved = await entry.customResolver(nextSource, importer, options);
+          return resolved ?? null;
+        }),
+      );
 
-      return null;
+      return resolvedEntries.find((resolved) => resolved !== null) ?? null;
     },
   };
 }

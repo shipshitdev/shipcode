@@ -68,14 +68,11 @@ describe('transitionThreadPhase', () => {
 
     transitionThreadPhase(mainWindow as never, queries, emitter, {
       threadId: 'thread-1',
-      phase: 'awaiting_approval',
+      phase: 'approval',
     });
 
-    expect(threadQueries.updateStatus).toHaveBeenCalledWith('thread-1', 'awaiting_approval');
-    expect(githubIssueQueries.updatePipelineStatus).toHaveBeenCalledWith(
-      'issue-1',
-      'awaiting_approval',
-    );
+    expect(threadQueries.updateStatus).toHaveBeenCalledWith('thread-1', 'approval');
+    expect(githubIssueQueries.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'approval');
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
       projectId: 'project-1',
       issues: [{ id: 'issue-1' }],
@@ -83,7 +80,7 @@ describe('transitionThreadPhase', () => {
     expect(emitter.emit).toHaveBeenCalledWith({
       type: 'pipeline:phase',
       threadId: 'thread-1',
-      phase: 'awaiting_approval',
+      phase: 'approval',
     });
   });
 

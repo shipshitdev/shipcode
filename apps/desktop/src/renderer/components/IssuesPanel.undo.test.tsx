@@ -42,7 +42,7 @@ vi.mock('@shipcode/ui', () => ({
       {issues[0] ? (
         <>
           <button type="button" onClick={() => onMarkDone?.(issues[0])}>
-            Trigger mark done
+            Trigger close issue
           </button>
           <button type="button" onClick={() => onRerun?.(issues[0])}>
             Trigger rerun
@@ -93,12 +93,12 @@ const project: Project = {
   updatedAt: '2026-04-14T00:00:00.000Z',
 };
 
-const awaitingApprovalThread: Thread = {
+const approvalThread: Thread = {
   id: 'thread-1',
   projectId: project.id,
   title: 'Ship your first change with ShipCode',
   prompt: 'Fix it',
-  status: 'awaiting_approval',
+  status: 'approval',
   kind: 'pipeline',
   worktreeBranch: null,
   worktreePath: null,
@@ -141,7 +141,7 @@ const awaitingApprovalThread: Thread = {
 const panelData: ThreadPanelData = {
   project,
   settings: DEFAULT_SETTINGS,
-  threads: [awaitingApprovalThread],
+  threads: [approvalThread],
   latestPlanStatusByThreadId: {},
   branches: [],
 };
@@ -156,8 +156,8 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     labels: [],
     assignee: null,
     state: 'open',
-    pipelineStatus: 'awaiting_approval',
-    threadId: awaitingApprovalThread.id,
+    pipelineStatus: 'approval',
+    threadId: approvalThread.id,
     claimedAt: null,
     claimedBy: null,
     lastPhaseUpdate: '2026-04-22T10:00:00.000Z',
@@ -210,7 +210,7 @@ function renderWithProviders() {
   );
 }
 
-describe('IssuesPanel undo done move', () => {
+describe('IssuesPanel undo close move', () => {
   const invokeMock = vi.fn<(channel: string, args?: unknown) => Promise<unknown>>();
 
   beforeEach(() => {
@@ -235,9 +235,9 @@ describe('IssuesPanel undo done move', () => {
     cleanup();
   });
 
-  it('shows an undo toast for accidental done moves and reopens on undo', async () => {
+  it('shows an undo toast for accidental close moves and reopens on undo', async () => {
     const originalIssue = makeIssue();
-    const doneIssue = makeIssue({ state: 'closed', pipelineStatus: 'done' });
+    const doneIssue = makeIssue({ state: 'closed', pipelineStatus: 'closed' });
     let refreshCount = 0;
 
     invokeMock.mockImplementation(async (channel) => {
@@ -255,10 +255,10 @@ describe('IssuesPanel undo done move', () => {
     renderWithProviders();
 
     await screen.findByText(originalIssue.title);
-    fireEvent.click(await screen.findByRole('button', { name: 'Trigger mark done' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Trigger close issue' }));
 
-    expect(await screen.findByText('Moved #18 to Done')).toBeInTheDocument();
-    expect(screen.getByText(/restore it to awaiting approval/i)).toBeInTheDocument();
+    expect(await screen.findByText('Closed #18')).toBeInTheDocument();
+    expect(screen.getByText(/restore it to approval/i)).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith('issue:mark-done', {
       projectId: project.id,
       issueId: originalIssue.id,
@@ -275,14 +275,14 @@ describe('IssuesPanel undo done move', () => {
     });
   });
 
-  it('optimistically moves completed linked-PR issues into done when the badge is clicked', async () => {
+  it('optimistically moves completed linked-PR issues into closed when the badge is clicked', async () => {
     const completedIssue = makeIssue({
       pipelineStatus: 'completed',
       linkedPrNumber: 91,
       linkedPrUrl: 'https://github.com/shipshitdev/shipcode/pull/91',
     });
     const doneIssue = makeIssue({
-      pipelineStatus: 'done',
+      pipelineStatus: 'closed',
       state: 'closed',
       linkedPrNumber: 91,
       linkedPrUrl: 'https://github.com/shipshitdev/shipcode/pull/91',
@@ -301,10 +301,10 @@ describe('IssuesPanel undo done move', () => {
     await screen.findByText(completedIssue.title);
     expect(screen.getByTestId('board-status')).toHaveTextContent('completed');
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Trigger mark done' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Trigger close issue' }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('board-status')).toHaveTextContent('done');
+      expect(screen.getByTestId('board-status')).toHaveTextContent('closed');
     });
     expect(invokeMock).toHaveBeenCalledWith('issue:mark-done', {
       projectId: project.id,
@@ -313,7 +313,7 @@ describe('IssuesPanel undo done move', () => {
     });
   });
 
-  it('does not offer GitHub reopen undo for quick/local done moves', async () => {
+  it('does not offer GitHub reopen undo for quick/local close moves', async () => {
     const quickIssue = makeIssue({
       id: 'quick-1',
       issueNumber: -236024417,
@@ -325,14 +325,14 @@ describe('IssuesPanel undo done move', () => {
       if (channel === 'thread-panel:get-data') return panelData;
       if (channel === 'github:list-issues') return [quickIssue];
       if (channel === 'issue:mark-done') return undefined;
-      if (channel === 'github:refresh-issues') return [{ ...quickIssue, pipelineStatus: 'done' }];
+      if (channel === 'github:refresh-issues') return [{ ...quickIssue, pipelineStatus: 'closed' }];
       return null;
     });
 
     renderWithProviders();
 
     await screen.findByText(quickIssue.title);
-    fireEvent.click(await screen.findByRole('button', { name: 'Trigger mark done' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Trigger close issue' }));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('issue:mark-done', {
@@ -344,9 +344,9 @@ describe('IssuesPanel undo done move', () => {
     expect(screen.queryByText(/Moved #/)).not.toBeInTheDocument();
   });
 
-  it('marks automation cards done through their thread without showing GitHub undo', async () => {
+  it('closes automation cards through their thread without showing GitHub undo', async () => {
     const automationThread: Thread = {
-      ...awaitingApprovalThread,
+      ...approvalThread,
       id: 'automation-thread-1',
       githubIssueNumber: null,
       automationId: 'automation-1',
@@ -371,10 +371,10 @@ describe('IssuesPanel undo done move', () => {
     renderWithProviders();
 
     await screen.findByText('[Auto] clean');
-    fireEvent.click(await screen.findByRole('button', { name: 'Trigger mark done' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Trigger close issue' }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('board-status')).toHaveTextContent('done');
+      expect(screen.getByTestId('board-status')).toHaveTextContent('closed');
     });
     expect(invokeMock).toHaveBeenCalledWith('issue:mark-done', {
       projectId: project.id,
@@ -386,7 +386,7 @@ describe('IssuesPanel undo done move', () => {
 
   it('retries failed automation cards through pipeline retry and moves them to planning', async () => {
     const automationThread: Thread = {
-      ...awaitingApprovalThread,
+      ...approvalThread,
       id: 'automation-thread-1',
       githubIssueNumber: null,
       automationId: 'automation-1',

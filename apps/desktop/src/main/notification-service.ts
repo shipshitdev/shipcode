@@ -16,7 +16,7 @@ function buildCopy(
 ): { title: string; body: string } {
   const label = thread.title || `Thread ${thread.id.slice(0, 6)}`;
   switch (kind) {
-    case 'awaiting_approval':
+    case 'approval':
       return {
         title: 'Approval needed',
         body: `${label} is waiting for approval before execution`,

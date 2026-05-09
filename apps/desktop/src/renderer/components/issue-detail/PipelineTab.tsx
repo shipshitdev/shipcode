@@ -34,7 +34,8 @@ import {
 } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { ExternalLink } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer } from 'react';
+import { formatTimestamp } from '../format-timestamp';
 import {
   formatProviderSelectionLabel,
   getModelOptions,
@@ -44,7 +45,35 @@ import {
 import { encodePhaseOption, PHASE_PROVIDER_OPTIONS } from './helpers';
 import type { PhaseKey, PhaseSelection } from './tab-types';
 
-export function PipelineTab({
+type ManualQaServer = { baseUrl: string; port: number };
+
+type ManualQaState = {
+  server: ManualQaServer | null;
+  pending: boolean;
+  error: string | null;
+  evidenceError: string | null;
+};
+
+type ManualQaAction =
+  | { type: 'server-loaded'; server: ManualQaServer | null }
+  | { type: 'pending'; pending: boolean }
+  | { type: 'error'; error: string | null }
+  | { type: 'evidence-error'; error: string | null };
+
+function manualQaReducer(state: ManualQaState, action: ManualQaAction): ManualQaState {
+  switch (action.type) {
+    case 'server-loaded':
+      return { ...state, server: action.server };
+    case 'pending':
+      return { ...state, pending: action.pending };
+    case 'error':
+      return { ...state, error: action.error };
+    case 'evidence-error':
+      return { ...state, evidenceError: action.error };
+  }
+}
+
+function usePipelineTabView({
   activeIssue,
   activeThreadId,
   checkpoints,
@@ -119,16 +148,16 @@ export function PipelineTab({
     : undefined;
   const qaExtraction = activeIssue.body ? extractFeatureQaState(activeIssue.body) : null;
   const featureQaState = qaExtraction?.status === 'present' ? qaExtraction.qaState : null;
-  const [manualQaServer, setManualQaServer] = useState<{ baseUrl: string; port: number } | null>(
-    null,
-  );
-  const [manualQaPending, setManualQaPending] = useState(false);
-  const [manualQaError, setManualQaError] = useState<string | null>(null);
-  const [qaEvidenceError, setQaEvidenceError] = useState<string | null>(null);
+  const [manualQa, dispatchManualQa] = useReducer(manualQaReducer, {
+    server: null,
+    pending: false,
+    error: null,
+    evidenceError: null,
+  });
 
   useEffect(() => {
     if (!activeThreadId) {
-      setManualQaServer(null);
+      dispatchManualQa({ type: 'server-loaded', server: null });
       return;
     }
 
@@ -138,10 +167,10 @@ export function PipelineTab({
         threadId: activeThreadId,
       })
       .then((server) => {
-        if (!cancelled) setManualQaServer(server);
+        if (!cancelled) dispatchManualQa({ type: 'server-loaded', server });
       })
       .catch(() => {
-        if (!cancelled) setManualQaServer(null);
+        if (!cancelled) dispatchManualQa({ type: 'server-loaded', server: null });
       });
 
     return () => {
@@ -151,8 +180,8 @@ export function PipelineTab({
 
   const startManualQa = async () => {
     if (!activeThreadId) return;
-    setManualQaPending(true);
-    setManualQaError(null);
+    dispatchManualQa({ type: 'pending', pending: true });
+    dispatchManualQa({ type: 'error', error: null });
     try {
       const server = await window.shipcode.invoke<{ baseUrl: string; port: number }>(
         'feature-qa:start-server',
@@ -161,37 +190,41 @@ export function PipelineTab({
           threadId: activeThreadId,
         },
       );
-      setManualQaServer(server);
+      dispatchManualQa({ type: 'server-loaded', server });
     } catch (error) {
-      setManualQaError(clampError(error));
+      dispatchManualQa({ type: 'error', error: clampError(error) });
     } finally {
-      setManualQaPending(false);
+      dispatchManualQa({ type: 'pending', pending: false });
     }
   };
 
   const stopManualQa = async () => {
     if (!activeThreadId) return;
-    setManualQaPending(true);
-    setManualQaError(null);
+    dispatchManualQa({ type: 'pending', pending: true });
+    dispatchManualQa({ type: 'error', error: null });
     try {
       await window.shipcode.invoke('feature-qa:stop-server', { threadId: activeThreadId });
-      setManualQaServer(null);
+      dispatchManualQa({ type: 'server-loaded', server: null });
     } catch (error) {
-      setManualQaError(clampError(error));
+      dispatchManualQa({ type: 'error', error: clampError(error) });
     } finally {
-      setManualQaPending(false);
+      dispatchManualQa({ type: 'pending', pending: false });
     }
   };
 
   const openEvidence = async (path: string) => {
     if (!activeThreadId) return;
-    setQaEvidenceError(null);
+    dispatchManualQa({ type: 'evidence-error', error: null });
     try {
       await window.shipcode.invoke('feature-qa:open-evidence', { threadId: activeThreadId, path });
     } catch (error) {
-      setQaEvidenceError(clampError(error));
+      dispatchManualQa({ type: 'evidence-error', error: clampError(error) });
     }
   };
+  const manualQaServer = manualQa.server;
+  const manualQaPending = manualQa.pending;
+  const manualQaError = manualQa.error;
+  const qaEvidenceError = manualQa.evidenceError;
 
   return (
     <>
@@ -533,7 +566,7 @@ export function PipelineTab({
             </h4>
             {activeIssue.prLastSyncAt ? (
               <span className="text-[10px] text-muted-foreground">
-                {new Date(activeIssue.prLastSyncAt).toLocaleString()}
+                {formatTimestamp(activeIssue.prLastSyncAt)}
               </span>
             ) : null}
           </div>
@@ -651,8 +684,7 @@ export function PipelineTab({
                   <div className="text-[12px] font-medium text-primary">{checkpoint.label}</div>
                   <div className="truncate text-[11px] text-muted-foreground">
                     {checkpoint.branch ? `${checkpoint.branch} · ` : ''}
-                    {checkpoint.commitSha.slice(0, 12)} ·{' '}
-                    {new Date(checkpoint.createdAt).toLocaleString()}
+                    {checkpoint.commitSha.slice(0, 12)} · {formatTimestamp(checkpoint.createdAt)}
                   </div>
                 </div>
                 <Button
@@ -829,7 +861,7 @@ export function PipelineTab({
                     <span className="text-[12px] font-medium text-primary">{result.featureId}</span>
                   </div>
                   <span className="text-[11px] text-muted-foreground">
-                    {new Date(result.runAt).toLocaleString()}
+                    {formatTimestamp(result.runAt)}
                   </span>
                 </div>
                 {result.summary ? (
@@ -845,7 +877,7 @@ export function PipelineTab({
                           </span>
                           <span className="font-medium text-primary">{flow.flowName}</span>
                           {flow.failureReason ? (
-                            <span className="text-muted-foreground">— {flow.failureReason}</span>
+                            <span className="text-muted-foreground">{flow.failureReason}</span>
                           ) : null}
                         </div>
                         {flow.assertions?.length ? (
@@ -949,4 +981,8 @@ export function PipelineTab({
       ) : null}
     </>
   );
+}
+
+export function PipelineTab(props: Parameters<typeof usePipelineTabView>[0]) {
+  return usePipelineTabView(props);
 }

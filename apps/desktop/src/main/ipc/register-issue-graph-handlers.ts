@@ -31,7 +31,7 @@ const activeGroupedRuns = new Map<string, ActiveIssueGroupRun>();
 
 const ISSUE_GROUP_TERMINAL_STATUSES = new Set<IssuePipelineStatus>([
   ISSUE_PIPELINE_STATUS.completed,
-  ISSUE_PIPELINE_STATUS.done,
+  ISSUE_PIPELINE_STATUS.closed,
   ISSUE_PIPELINE_STATUS.failed,
 ]);
 
@@ -136,12 +136,14 @@ export function registerIssueGraphHandlers({
         startedIssueIds,
       });
 
-      for (const issueId of runState.getReadyIssueIds()) {
-        const issue = issuesById.get(issueId);
-        if (!issue) continue;
-        startedIssueIds.add(issueId);
-        await scheduler.startOrQueue(projectId, issue.issueNumber);
-      }
+      await Promise.all(
+        runState.getReadyIssueIds().flatMap((issueId) => {
+          const issue = issuesById.get(issueId);
+          if (!issue) return [];
+          startedIssueIds.add(issueId);
+          return [scheduler.startOrQueue(projectId, issue.issueNumber)];
+        }),
+      );
 
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
       return { runId, preview };
@@ -165,10 +167,8 @@ export function notifyIssueGraphPipelinePhaseChange(input: {
   if (!completedIssue) return;
 
   for (const [runId, run] of activeGroupedRuns) {
-    if (
-      run.projectId !== completedIssue.projectId ||
-      !run.selectedIssueIds.includes(completedIssue.id)
-    ) {
+    const selectedIssueIds = new Set(run.selectedIssueIds);
+    if (run.projectId !== completedIssue.projectId || !selectedIssueIds.has(completedIssue.id)) {
       continue;
     }
 
@@ -177,11 +177,13 @@ export function notifyIssueGraphPipelinePhaseChange(input: {
       input.phase === PIPELINE_PHASE.completed,
     );
 
+    const issuesById = new Map(
+      deps.queries.githubIssues.list(run.projectId).map((issue) => [issue.id, issue]),
+    );
+
     for (const issueId of newlyReadyIssueIds) {
       if (run.startedIssueIds.has(issueId)) continue;
-      const issue = deps.queries.githubIssues
-        .list(run.projectId)
-        .find((entry) => entry.id === issueId);
+      const issue = issuesById.get(issueId);
       if (!issue) continue;
       run.startedIssueIds.add(issueId);
       deps.scheduler.startOrQueue(run.projectId, issue.issueNumber).catch(() => {});
@@ -189,9 +191,7 @@ export function notifyIssueGraphPipelinePhaseChange(input: {
 
     if (
       run.selectedIssueIds.every((issueId) => {
-        const issue = deps.queries.githubIssues
-          .list(run.projectId)
-          .find((entry) => entry.id === issueId);
+        const issue = issuesById.get(issueId);
         return issue ? ISSUE_GROUP_TERMINAL_STATUSES.has(issue.pipelineStatus) : true;
       })
     ) {

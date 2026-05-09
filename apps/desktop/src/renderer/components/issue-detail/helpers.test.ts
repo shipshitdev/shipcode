@@ -103,7 +103,7 @@ describe('getPlanStatusPresentation', () => {
   });
 
   it('uses needs-approval copy for approval-gated plans', () => {
-    expect(getPlanStatusPresentation(makePlan({ status: 'awaiting_approval' }))).toEqual({
+    expect(getPlanStatusPresentation(makePlan({ status: 'approval' }))).toEqual({
       label: 'Needs approval',
       phaseStatus: 'reviewing',
       style: 'phase-chip',

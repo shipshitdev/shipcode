@@ -1235,7 +1235,7 @@ describe('registerProjectHandlers', () => {
     existsSpy.mockRestore();
   });
 
-  it('marks only idle, failed, and completed threads as done', async () => {
+  it('closes only idle, failed, and completed threads', async () => {
     const queries = {
       projects: {
         getById: vi.fn(() => baseProject),
@@ -1271,7 +1271,7 @@ describe('registerProjectHandlers', () => {
       'Thread thread-1 not found',
     );
     expect(() => markDone(undefined, { threadId: 'thread-1' })).toThrow(
-      'Cannot mark thread as done while in executing phase',
+      'Cannot close thread while in executing phase',
     );
     markDone(undefined, { threadId: 'thread-1' });
 

@@ -75,7 +75,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-primary p-8">
         <div className="flex w-full max-w-2xl flex-col items-center gap-5 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10">
+          <div className="flex size-14 items-center justify-center rounded-full bg-red-500/10">
             <svg
               aria-hidden="true"
               width="28"

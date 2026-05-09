@@ -29,7 +29,7 @@ export function ThreadPanelArchiveDialog({
       title={
         issueNumber != null
           ? `Archive issue #${issueNumber}?`
-          : `Archive ${count ?? 0} done issue${(count ?? 0) !== 1 ? 's' : ''}?`
+          : `Archive ${count ?? 0} closed issue${(count ?? 0) !== 1 ? 's' : ''}?`
       }
       className="max-w-sm"
       onKeyDown={handleKeyDown}

@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest';
-import type { CostSummary, CostTaskSummary, GitHubIssueCacheRecord } from '@shipcode/shared';
+import type {
+  CostSummary,
+  CostTaskSummary,
+  GitHubIssueCacheRecord,
+  PipelineAnalyticsOverview,
+} from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,6 +15,25 @@ import { CostsView } from './CostsView';
 
 vi.mock('./heatmap/ActivityHeatmap', () => ({
   ActivityHeatmap: () => <div data-testid="activity-heatmap" />,
+}));
+
+vi.mock('./costs/TokensByPhaseChart', () => ({
+  TokensByPhaseChart: ({ tokensByPhase }: { tokensByPhase: unknown[] }) => (
+    <div data-testid="tokens-by-phase-chart">{tokensByPhase.length} phases</div>
+  ),
+}));
+
+vi.mock('./costs/CostByProjectChart', () => ({
+  CostByProjectChart: ({ byProject }: { byProject: unknown[] }) =>
+    byProject.length > 1 ? (
+      <div data-testid="cost-by-project-chart">{byProject.length} projects</div>
+    ) : null,
+}));
+
+vi.mock('./costs/PhaseDurationsChart', () => ({
+  PhaseDurationsChart: ({ phaseDurations }: { phaseDurations: unknown[] }) => (
+    <div data-testid="phase-durations-chart">{phaseDurations.length} phases</div>
+  ),
 }));
 
 function renderWithClient() {
@@ -64,6 +88,60 @@ function makeTask(overrides: Partial<CostTaskSummary> = {}): CostTaskSummary {
     tokensPrompt: 1000,
     tokensCompletion: 250,
     updatedAt: '2026-05-08T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeAnalytics(
+  overrides: Partial<PipelineAnalyticsOverview> = {},
+): PipelineAnalyticsOverview {
+  return {
+    timeToPr: { sampleSize: 3, medianMs: 120_000, p75Ms: 240_000, p95Ms: 600_000 },
+    averagePhaseDurations: [
+      {
+        phase: 'executing',
+        runCount: 5,
+        averageMs: 90_000,
+        medianMs: 80_000,
+        p75Ms: 120_000,
+        p95Ms: 200_000,
+      },
+      {
+        phase: 'planning',
+        runCount: 5,
+        averageMs: 30_000,
+        medianMs: 25_000,
+        p75Ms: 40_000,
+        p95Ms: 60_000,
+      },
+    ],
+    slowestRecentRuns: [],
+    tokensByPhase: [
+      {
+        phase: 'execute',
+        promptTokens: 50_000,
+        completionTokens: 10_000,
+        costUsd: 2.5,
+        attemptCount: 5,
+      },
+      {
+        phase: 'plan',
+        promptTokens: 20_000,
+        completionTokens: 5_000,
+        costUsd: 1.0,
+        attemptCount: 5,
+      },
+    ],
+    promptByPhase: [],
+    skillFallback: {
+      totalResolutions: 0,
+      fallbackCount: 0,
+      fallbackRate: 0,
+      parseFailureRate: 0,
+      retryRate: 0,
+      downstreamSuccessRate: 0,
+      score: 0,
+    },
     ...overrides,
   };
 }
@@ -159,6 +237,7 @@ describe('CostsView', () => {
       if (channel === 'costs:get-summary') return makeSummary({ byProject: [] });
       if (channel === 'costs:list-tasks') return [];
       if (channel === 'costs:count-tasks') return 0;
+      if (channel === 'pipeline-analytics:get-overview') return makeAnalytics();
       return null;
     });
 
@@ -179,7 +258,7 @@ describe('CostsView', () => {
     const projectTask = makeTask({
       threadId: 'thread-2',
       title: 'Project detail task',
-      phase: 'awaiting_approval',
+      phase: 'approval',
       model: null,
       updatedAt: '',
     });
@@ -189,6 +268,7 @@ describe('CostsView', () => {
       if (channel === 'costs:list-tasks') return args?.projectId ? [projectTask] : [topTask];
       if (channel === 'costs:count-tasks') return 1;
       if (channel === 'github:list-issues') return [makeIssue()];
+      if (channel === 'pipeline-analytics:get-overview') return makeAnalytics();
       return null;
     });
 
@@ -203,7 +283,7 @@ describe('CostsView', () => {
 
     expect(await screen.findByText('ShipCode Cost Details')).toBeInTheDocument();
     expect(await screen.findByText('Project detail task')).toBeInTheDocument();
-    expect(screen.getByText('awaiting approval')).toBeInTheDocument();
+    expect(screen.getByText('approval')).toBeInTheDocument();
     expect(screen.getAllByText('codex').length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByText('Add cost coverage').closest('tr') as HTMLTableRowElement);
@@ -229,6 +309,7 @@ describe('CostsView', () => {
         ];
       }
       if (channel === 'costs:count-tasks') return 9;
+      if (channel === 'pipeline-analytics:get-overview') return makeAnalytics();
       return null;
     });
 
@@ -246,6 +327,7 @@ describe('CostsView', () => {
       if (channel === 'costs:get-summary') throw new Error('db unavailable');
       if (channel === 'costs:list-tasks') return [];
       if (channel === 'costs:count-tasks') return 0;
+      if (channel === 'pipeline-analytics:get-overview') return makeAnalytics();
       return null;
     });
 
@@ -256,10 +338,65 @@ describe('CostsView', () => {
       if (channel === 'costs:get-summary') return makeSummary({ byProject: [] });
       if (channel === 'costs:list-tasks') return [];
       if (channel === 'costs:count-tasks') return 0;
+      if (channel === 'pipeline-analytics:get-overview') return makeAnalytics();
       return null;
     });
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(await screen.findByText('No cost data yet')).toBeInTheDocument();
+  });
+
+  it('renders usage analytics section with charts and time-to-pr cards', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'costs:get-summary') return makeSummary();
+      if (channel === 'costs:list-tasks') return [makeTask()];
+      if (channel === 'costs:count-tasks') return 1;
+      if (channel === 'pipeline-analytics:get-overview') return makeAnalytics();
+      return null;
+    });
+
+    renderWithClient();
+
+    expect(await screen.findByText('Usage Analytics')).toBeInTheDocument();
+    expect(await screen.findByTestId('tokens-by-phase-chart')).toHaveTextContent('2 phases');
+    expect(screen.getByTestId('phase-durations-chart')).toHaveTextContent('2 phases');
+    expect(screen.getByText('Median Time to PR')).toBeInTheDocument();
+    expect(screen.getByText('P75')).toBeInTheDocument();
+    expect(screen.getByText('P95')).toBeInTheDocument();
+  });
+
+  it('shows project donut chart when multiple projects exist', async () => {
+    const multiProjectSummary = makeSummary({
+      byProject: [
+        {
+          projectId: 'p1',
+          projectName: 'Alpha',
+          totalCostUsd: 5,
+          totalTokensPrompt: 10_000,
+          totalTokensCompletion: 2_000,
+          taskCount: 1,
+        },
+        {
+          projectId: 'p2',
+          projectName: 'Beta',
+          totalCostUsd: 7,
+          totalTokensPrompt: 15_000,
+          totalTokensCompletion: 3_000,
+          taskCount: 2,
+        },
+      ],
+    });
+
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'costs:get-summary') return multiProjectSummary;
+      if (channel === 'costs:list-tasks') return [makeTask()];
+      if (channel === 'costs:count-tasks') return 1;
+      if (channel === 'pipeline-analytics:get-overview') return makeAnalytics();
+      return null;
+    });
+
+    renderWithClient();
+
+    expect(await screen.findByTestId('cost-by-project-chart')).toHaveTextContent('2 projects');
   });
 });

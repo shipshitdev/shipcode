@@ -7,7 +7,7 @@ import type {
 } from '@shipcode/shared';
 import { formatClockTime, PIPELINE_PHASE, THREAD_KIND } from '@shipcode/shared';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';
 import { useAppStore } from '../../stores/app-store';
 import {
@@ -68,7 +68,6 @@ export function useTerminalDrawer() {
   const setTerminalMaximized = useAppStore((s) => s.setTerminalMaximized);
   const activeProjectId = useAppStore((s) => s.activeProjectId);
   const terminalThreadId = useAppStore((s) => s.terminalThreadId);
-  const legacyMaximized = useAppStore((s) => s.terminalMaximized);
   const githubIssues = useAppStore((s) => s.githubIssues);
   const activeIssue = useAppStore((s) => s.activeIssue);
   const scopedIssues = useMemo(
@@ -85,22 +84,30 @@ export function useTerminalDrawer() {
   });
   const issueTargets = useMemo(
     () =>
-      scopedIssues
-        .map(issueTarget)
-        .filter((target): target is TerminalDrawerTarget => target !== null),
+      scopedIssues.flatMap((issue) => {
+        const target = issueTarget(issue);
+        return target ? [target] : [];
+      }),
     [scopedIssues],
   );
   const { runningIssueTargets, issueThreadIds } = useMemo(() => {
-    const running = issueTargets.filter((target) => CONSOLE_VISIBLE_STATUSES.has(target.phase));
-    const threadIds = new Set(issueTargets.map((target) => target.threadId));
+    const running: TerminalDrawerTarget[] = [];
+    const threadIds = new Set<string>();
+    for (const target of issueTargets) {
+      if (CONSOLE_VISIBLE_STATUSES.has(target.phase)) {
+        running.push(target);
+      }
+      threadIds.add(target.threadId);
+    }
     return { runningIssueTargets: running, issueThreadIds: threadIds };
   }, [issueTargets]);
   const syntheticActiveTargets = useMemo(
     () =>
-      activePipelines
-        .filter((summary) => summary.projectId === activeProjectId)
-        .filter((summary) => !issueThreadIds.has(summary.threadId))
-        .map(activeSummaryTarget),
+      activePipelines.flatMap((summary) =>
+        summary.projectId === activeProjectId && !issueThreadIds.has(summary.threadId)
+          ? [activeSummaryTarget(summary)]
+          : [],
+      ),
     [activePipelines, activeProjectId, issueThreadIds],
   );
   const runningTargets = useMemo(
@@ -154,12 +161,12 @@ export function useTerminalDrawer() {
   const { data: displayThreadPlans = [] } = useQuery<PlanRecord[]>({
     queryKey: ['terminal-drawer-plan-history', visibleTerminalThreadId],
     queryFn: () => window.shipcode.invoke('plan:list', { threadId: visibleTerminalThreadId }),
-    enabled: !!visibleTerminalThreadId && displayTarget?.phase === PIPELINE_PHASE.awaitingApproval,
+    enabled: !!visibleTerminalThreadId && displayTarget?.phase === PIPELINE_PHASE.approval,
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
   const latestPlanStatus = displayThreadPlans[0]?.status ?? null;
   const approvedAwaitingExecution =
-    displayTarget?.phase === PIPELINE_PHASE.awaitingApproval && latestPlanStatus === 'approved';
+    displayTarget?.phase === PIPELINE_PHASE.approval && latestPlanStatus === 'approved';
   const currentModel = useAppStore(
     (s) => (visibleTerminalThreadId ? s.currentModels[visibleTerminalThreadId] : null) ?? null,
   );
@@ -170,10 +177,6 @@ export function useTerminalDrawer() {
   const dragStartRef = useRef<{ y: number; h: number } | null>(null);
   const isMaximized = height >= FULL_HEIGHT;
   const isMinimized = height <= MINIMIZED_HEIGHT;
-
-  useEffect(() => {
-    if (legacyMaximized) setTerminalMaximized(false);
-  }, [legacyMaximized, setTerminalMaximized]);
 
   const handleResizeMouseDown = useCallback(
     (event: React.MouseEvent) => {

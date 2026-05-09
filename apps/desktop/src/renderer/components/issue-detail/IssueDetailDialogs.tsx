@@ -7,41 +7,46 @@ import { diagnosePlanParseFailure, resolveClientSidePlan } from './helpers';
 
 interface IssueDetailDialogsProps {
   activeIssueNumber: number;
-  canApprove: boolean;
   fullScreenPlan: PlanRecord | null;
   fullScreenPlanId: string | null;
   fullScreenReview?: ReviewRecord;
-  isFullScreenPlanLoading: boolean;
-  isSubmitting: boolean;
   latestPlanId: string | null;
+  state: {
+    canApprove: boolean;
+    isFullScreenPlanLoading: boolean;
+    isSubmitting: boolean;
+    showArchiveConfirm: boolean;
+    showMarkAsDoneConfirm: boolean;
+  };
   onApprove: () => void;
   onArchiveConfirmed: () => void;
   onCloseArchiveConfirm: () => void;
   onCloseFullScreenPlan: () => void;
   onMarkAsDoneConfirmed: () => void;
   onCloseMarkAsDoneConfirm: () => void;
-  showArchiveConfirm: boolean;
-  showMarkAsDoneConfirm: boolean;
 }
 
-export function IssueDetailDialogs({
+export function buildIssueDetailDialogs({
   activeIssueNumber,
-  canApprove,
   fullScreenPlan,
   fullScreenPlanId,
   fullScreenReview,
-  isFullScreenPlanLoading,
-  isSubmitting,
   latestPlanId,
+  state,
   onApprove,
   onArchiveConfirmed,
   onCloseArchiveConfirm,
   onCloseFullScreenPlan,
   onMarkAsDoneConfirmed,
   onCloseMarkAsDoneConfirm,
-  showArchiveConfirm,
-  showMarkAsDoneConfirm,
 }: IssueDetailDialogsProps) {
+  const {
+    canApprove,
+    isFullScreenPlanLoading,
+    isSubmitting,
+    showArchiveConfirm,
+    showMarkAsDoneConfirm,
+  } = state;
   const fullScreenClientPlan =
     fullScreenPlan && !fullScreenPlan.structured
       ? resolveClientSidePlan(fullScreenPlan.rawOutput ?? '')
@@ -84,7 +89,7 @@ export function IssueDetailDialogs({
         headerClassName="shrink-0 border-b border-border px-6 py-4"
         onKeyDown={handleFullScreenKeyDown}
         headerAction={
-          <Button variant="ghost" className="h-7 w-7 p-0" onClick={onCloseFullScreenPlan}>
+          <Button variant="ghost" className="size-7 p-0" onClick={onCloseFullScreenPlan}>
             <X size={15} strokeWidth={2.25} />
           </Button>
         }
@@ -141,12 +146,13 @@ export function IssueDetailDialogs({
       <Modal
         open={showMarkAsDoneConfirm}
         onClose={onCloseMarkAsDoneConfirm}
-        title={`Mark issue #${activeIssueNumber} as done?`}
+        title={`Close issue #${activeIssueNumber}?`}
         className="max-w-sm"
         onKeyDown={handleMarkAsDoneKeyDown}
       >
         <p className="text-sm text-secondary">
-          This will move the issue to the Done column. You can still reopen it later from GitHub.
+          This will move the issue to Closed in the Done column. You can still reopen it later from
+          GitHub.
         </p>
         <ModalFooter>
           <Button variant="ghost" size="sm" onClick={onCloseMarkAsDoneConfirm}>
@@ -158,7 +164,7 @@ export function IssueDetailDialogs({
             disabled={isSubmitting}
             className="bg-purple-600 text-white hover:bg-purple-700"
           >
-            <LoadingButtonContent loading={isSubmitting}>Mark As Done</LoadingButtonContent>
+            <LoadingButtonContent loading={isSubmitting}>Close Issue</LoadingButtonContent>
           </Button>
         </ModalFooter>
       </Modal>

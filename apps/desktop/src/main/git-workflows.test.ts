@@ -133,8 +133,10 @@ afterEach(() => {
 
 describe('cleanup git workflows', () => {
   it('removes only clean branches and worktrees verified as merged into the default branch', async () => {
-    const { runCleanupAnalyze, runCleanupApply } = await import('./git-workflows');
-    const { repoPath, worktreePath } = await createFixtureRepo();
+    const [{ runCleanupAnalyze, runCleanupApply }, { repoPath, worktreePath }] = await Promise.all([
+      import('./git-workflows'),
+      createFixtureRepo(),
+    ]);
     const project = makeProject(repoPath);
     const criteria = { ...DEFAULT_SETTINGS.cleanupCriteria, worktreeNoPrCleanTree: true };
 

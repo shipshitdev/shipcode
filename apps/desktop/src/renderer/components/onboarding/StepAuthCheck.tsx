@@ -2,7 +2,7 @@ import type { CliHealth, GhAuthStatus, SystemHealth } from '@shipcode/shared';
 import { StartupProgress, type StartupProgressStep } from '@shipcode/ui';
 import { Badge, Button } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface AuthResult extends SystemHealth {
   ghAuth: GhAuthStatus;
@@ -143,7 +143,12 @@ function AuthCheckProgress() {
 }
 
 export function useAuthCheck() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => window.shipcode.invoke<AuthResult>('onboarding:check-auth'),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['onboarding-auth'], result);
+      queryClient.invalidateQueries({ queryKey: ['system-health'] });
+    },
   });
 }

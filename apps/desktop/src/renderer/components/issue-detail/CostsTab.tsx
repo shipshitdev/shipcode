@@ -30,6 +30,11 @@ const STEP_PHASE_LABEL: Record<PipelineStepPhase, string> = {
   execute: 'Execute',
   verify: 'Verify',
 };
+const PIPELINE_STEPS_LOADING_KEYS = [
+  'pipeline-step-loading-1',
+  'pipeline-step-loading-2',
+  'pipeline-step-loading-3',
+];
 
 function formatDuration(ms: number | null): string {
   if (ms == null) return '—';
@@ -50,9 +55,8 @@ function StepAttempts({ threadId }: { threadId: string }) {
   if (isLoading) {
     return (
       <div className="space-y-2 px-3 py-2">
-        {Array.from({ length: 3 }, (_, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
-          <Skeleton key={i} className="h-8 w-full rounded-md" />
+        {PIPELINE_STEPS_LOADING_KEYS.map((key) => (
+          <Skeleton key={key} className="h-8 w-full rounded-md" />
         ))}
       </div>
     );
@@ -264,7 +268,7 @@ function ThreadAnalyticsPanel({
           Timeline
         </h4>
         {phaseTimeline.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border px-3 py-3 text-[11px] text-muted-foreground">
+          <p className="rounded-md border border-dashed border-border p-3 text-[11px] text-muted-foreground">
             No phase timing data yet.
           </p>
         ) : (
@@ -302,7 +306,7 @@ function ThreadAnalyticsPanel({
             ))}
           </div>
         ) : (
-          <p className="rounded-md border border-dashed border-border px-3 py-3 text-[11px] text-muted-foreground">
+          <p className="rounded-md border border-dashed border-border p-3 text-[11px] text-muted-foreground">
             No prompt telemetry yet.
           </p>
         )}
@@ -399,9 +403,8 @@ export function CostsTab({
             <Skeleton className="h-14 rounded-md" />
             <Skeleton className="h-14 rounded-md" />
           </div>
-          {Array.from({ length: 3 }, (_, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
-            <Skeleton key={i} className="h-10 w-full rounded-md" />
+          {PIPELINE_STEPS_LOADING_KEYS.map((key) => (
+            <Skeleton key={key} className="h-10 w-full rounded-md" />
           ))}
         </div>
       ) : tasks.length === 0 ? (
@@ -470,7 +473,7 @@ export function CostsTab({
                       aria-expanded={isExpanded}
                       className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-secondary/40"
                     >
-                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border bg-tertiary text-[10px] font-medium text-muted-foreground">
+                      <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-border bg-tertiary text-[10px] font-medium text-muted-foreground">
                         {tasks.length - index}
                       </span>
                       <span
@@ -532,7 +535,10 @@ export function CostsTab({
                     { label: 'Verifier', model: thread.verifierResolvedModel },
                   ] as const
                 )
-                  .filter((entry) => entry.model)
+                  .reduce<Array<{ label: string; model: string }>>((entries, entry) => {
+                    if (entry.model) entries.push({ label: entry.label, model: entry.model });
+                    return entries;
+                  }, [])
                   .map((entry) => (
                     <div key={entry.label} className="flex flex-col gap-0.5">
                       <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">

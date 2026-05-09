@@ -11,7 +11,7 @@ export function PlanViewer({ plan }: PlanViewerProps) {
   if (!plan) {
     return (
       <div className="flex items-center justify-center h-full p-4 text-muted-foreground">
-        <p>Waiting for plan generation...</p>
+        <p>Waiting for plan generation…</p>
       </div>
     );
   }

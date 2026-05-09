@@ -71,7 +71,7 @@ export function ProjectInsights() {
         title="Insights"
         subtitle={`${RANGE_SUBTITLE[range]} · activity and spend across this project.`}
       />
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-5xl space-y-6">
           {/* KPI strip */}
           <div className="flex gap-3">

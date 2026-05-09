@@ -173,7 +173,7 @@ describe('AutomationRunDetail', () => {
     const expectedError = `${rawError.split('\n')[0].slice(0, 279)}…`;
 
     invokeMock.mockImplementation(async (channel: string) => {
-      if (channel === 'thread:get') return makeThread({ status: 'awaiting_approval' });
+      if (channel === 'thread:get') return makeThread({ status: 'approval' });
       if (channel === 'plan:list') return [makePlan()];
       if (channel === 'diff:list') return [];
       if (channel === 'automations:run-history') return [];
@@ -251,7 +251,7 @@ describe('AutomationRunDetail', () => {
     );
   });
 
-  it('renders failed run errors and retries or marks the run done', async () => {
+  it('renders failed run errors and retries or closes the run', async () => {
     invokeMock.mockImplementation(async (channel: string) => {
       if (channel === 'thread:get') {
         return makeThread({
@@ -275,7 +275,7 @@ describe('AutomationRunDetail', () => {
     expect(screen.getByText('Verifier found missing coverage')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith('pipeline:retry', { threadId: 'thread-1' }),

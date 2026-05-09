@@ -44,7 +44,7 @@ export function StartupProgress({ title, subtitle, steps, className }: StartupPr
       <div className="w-full max-w-md">
         <div className="mb-6">
           <div className="mb-3 flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md border border-agent/30 bg-agent/10 text-[13px] font-semibold text-agent">
+            <div className="flex size-9 items-center justify-center rounded-md border border-agent/30 bg-agent/10 text-[13px] font-semibold text-agent">
               SC
             </div>
             <div className="min-w-0">

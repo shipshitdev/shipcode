@@ -39,7 +39,7 @@ const STEP_STATUS_ICON: Record<PlanStepSummary['status'], { char: string; classN
 };
 
 function PlanStepsSection({ steps }: { steps: PlanStepSummary[] }) {
-  const sorted = [...steps].sort((a, b) => a.order - b.order);
+  const sorted = steps.toSorted((a, b) => a.order - b.order);
   const visible = sorted.slice(0, MAX_VISIBLE_STEPS);
   const overflow = sorted.length - visible.length;
 

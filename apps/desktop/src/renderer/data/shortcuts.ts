@@ -25,7 +25,7 @@ export type ShortcutId =
   | 'board-comment-focused';
 
 export type ShortcutCategory = 'Navigation' | 'Workspace' | 'Board';
-export type ShortcutScope = 'global' | 'board';
+type ShortcutScope = 'global' | 'board';
 
 export interface KeyCombo {
   meta?: boolean;

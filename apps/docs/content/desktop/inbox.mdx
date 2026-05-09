@@ -8,7 +8,7 @@ The component is [`apps/desktop/src/renderer/components/InboxView.tsx`](https://
 
 By default, the Inbox surfaces threads in these states:
 
-- `awaiting_approval` / **Needs approval** — pipeline paused after review because the effective approval setting for that run requires a human sign-off before execution
+- `approval` / **Needs approval** — pipeline paused after review because the effective approval setting for that run requires a human sign-off before execution
 - `failed` — any phase errored out
 - `completed` — PR opened and ready for you to review/read
 - Verification-exhausted — verifier ran out of retries without passing

@@ -172,7 +172,7 @@ export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
       ISSUE_PIPELINE_STATUS.planning,
       ISSUE_PIPELINE_STATUS.clarifying,
       ISSUE_PIPELINE_STATUS.revising,
-      ISSUE_PIPELINE_STATUS.awaitingApproval,
+      ISSUE_PIPELINE_STATUS.approval,
       ISSUE_PIPELINE_STATUS.paused,
     ],
   },
@@ -443,7 +443,7 @@ export function getPipelineCardPhase(status: PipelinePhase): ResolvedPhaseModel 
     status === PIPELINE_PHASE.planning ||
     status === PIPELINE_PHASE.clarifying ||
     status === PIPELINE_PHASE.revising ||
-    status === PIPELINE_PHASE.awaitingApproval
+    status === PIPELINE_PHASE.approval
   ) {
     return 'planner';
   }

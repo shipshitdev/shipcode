@@ -124,7 +124,7 @@ describe('NotificationToaster', () => {
 
     const sticky = makeNotification({
       id: 'sticky-1',
-      kind: 'awaiting_approval',
+      kind: 'approval',
       title: 'Approval needed',
       body: 'Review required before execution.',
     });

@@ -1,8 +1,8 @@
 import { BrowserWindow, nativeTheme } from 'electron';
 
-export type SplashStepStatus = 'pending' | 'active' | 'complete' | 'error';
+type SplashStepStatus = 'pending' | 'active' | 'complete' | 'error';
 
-export interface SplashStep {
+interface SplashStep {
   id: string;
   label: string;
   detail?: string;

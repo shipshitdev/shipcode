@@ -27,25 +27,25 @@ Repos can declare fresh-worktree setup in `.shipcode/setup.json`. This file is r
     { "source": ".env.local", "required": true }
   ],
   "setupCommands": [
-    "bun install --frozen-lockfile"
+    "<repo-specific install command>"
   ],
   "verifyCommands": [
-    "TURBO_SCM_BASE=\"${TURBO_SCM_BASE:-HEAD}\" bunx turbo run typecheck test build --affected --concurrency=1"
+    "<repo-specific scoped verify command>"
   ],
   "runtimeQa": {
     "server": {
-      "command": "bun run dev --host 127.0.0.1 --port $PORT",
+      "command": "<repo-specific dev server command using $PORT>",
       "readinessUrl": "http://127.0.0.1:$PORT",
       "startupTimeoutMs": 60000,
       "portEnvVar": "PORT"
     },
     "testCommands": [
-      "bun run test:e2e"
+      "<repo-specific runtime test command>"
     ],
     "discoverAgentTests": true
   },
   "setupBeforeVerify": false,
-  "testingContext": "Tests use Vitest and live next to source files as *.test.ts."
+  "testingContext": "Explain the repo's test runner, scope rules, and expensive commands to avoid."
 }
 ```
 

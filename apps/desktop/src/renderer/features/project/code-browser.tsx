@@ -302,13 +302,13 @@ function FileViewer({
             <div className="p-4 text-xs text-muted-foreground">No file selected</div>
           ) : file.isBinary ? (
             <div className="p-4 text-xs text-muted-foreground">
-              Binary file ({formatBytes(file.sizeBytes)}) — preview unavailable.
+              Binary file ({formatBytes(file.sizeBytes)}), preview unavailable.
             </div>
           ) : (
             <>
               {file.truncated && (
                 <div className="border-b border-border bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-500">
-                  File truncated — showing first {formatBytes(file.content.length)} of{' '}
+                  File truncated, showing first {formatBytes(file.content.length)} of{' '}
                   {formatBytes(file.sizeBytes)}.
                 </div>
               )}
@@ -357,10 +357,6 @@ export function CodeBrowser() {
         : (worktrees.find((w) => w.kind === 'main')?.path ?? worktrees[0]?.path ?? null),
     );
   }, [worktrees]);
-
-  useEffect(() => {
-    setSelectedPath(null);
-  }, []);
 
   const activeWorktree = useMemo(
     () => worktrees.find((w) => w.path === selectedWorktreePath) ?? null,

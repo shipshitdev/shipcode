@@ -1,6 +1,6 @@
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { type ComponentProps, forwardRef } from 'react';
+import type { ComponentProps, Ref } from 'react';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
@@ -28,10 +28,10 @@ const buttonVariants = cva(
         md: 'h-8 px-3.5 py-1.5',
         lg: 'h-9 px-4 text-[13px]',
         xl: 'h-10 px-5 text-[14px]',
-        'icon-xs': 'h-6 w-6 justify-center',
-        'icon-sm': 'h-7 w-7 justify-center',
-        icon: 'h-8 w-8 justify-center',
-        'icon-lg': 'h-9 w-9 justify-center',
+        'icon-xs': 'size-6 justify-center',
+        'icon-sm': 'size-7 justify-center',
+        icon: 'size-8 justify-center',
+        'icon-lg': 'size-9 justify-center',
       },
     },
     defaultVariants: {
@@ -41,31 +41,33 @@ const buttonVariants = cva(
   },
 );
 
-const Button = forwardRef<
-  HTMLButtonElement,
-  ComponentProps<'button'> &
-    VariantProps<typeof buttonVariants> & {
-      asChild?: boolean;
-    }
->(
-  (
-    { className, variant, size, asChild = false, title, 'aria-label': ariaLabel, ...props },
-    ref,
-  ) => {
-    const Comp = asChild ? Slot : 'button';
+type ButtonProps = ComponentProps<'button'> &
+  VariantProps<typeof buttonVariants> & {
+    asChild?: boolean;
+    ref?: Ref<HTMLButtonElement>;
+  };
 
-    return (
-      <Comp
-        ref={ref}
-        title={title}
-        aria-label={ariaLabel}
-        className={cn(buttonVariants({ variant, size }), className)}
-        {...props}
-      />
-    );
-  },
-);
+function Button({
+  className,
+  variant,
+  size,
+  asChild = false,
+  title,
+  'aria-label': ariaLabel,
+  ref,
+  ...props
+}: ButtonProps) {
+  const Comp = asChild ? Slot : 'button';
 
-Button.displayName = 'Button';
+  return (
+    <Comp
+      ref={ref}
+      title={title}
+      aria-label={ariaLabel}
+      className={cn(buttonVariants({ variant, size }), className)}
+      {...props}
+    />
+  );
+}
 
 export { Button };

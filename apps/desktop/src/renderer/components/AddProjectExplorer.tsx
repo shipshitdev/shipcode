@@ -2,7 +2,7 @@ import type { Project } from '@shipcode/shared';
 import { Button, cn, Input, Modal } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, ChevronLeft, ChevronRight, Folder, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 interface DirEntry {
@@ -15,6 +15,56 @@ interface ListResult {
   error: 'permission-denied' | 'not-found' | null;
 }
 
+interface ExplorerState {
+  cwd: string;
+  selectedIndex: number;
+  pathInputValue: string;
+  isEditingPath: boolean;
+  addError: string | null;
+}
+
+type ExplorerAction =
+  | { type: 'navigate'; path: string }
+  | { type: 'select'; index: number }
+  | { type: 'edit-path'; value: string }
+  | { type: 'focus-path'; value: string }
+  | { type: 'blur-path'; value: string }
+  | { type: 'add-error'; message: string | null }
+  | { type: 'reset' };
+
+const INITIAL_EXPLORER_STATE: ExplorerState = {
+  cwd: '',
+  selectedIndex: -1,
+  pathInputValue: '',
+  isEditingPath: false,
+  addError: null,
+};
+
+function explorerReducer(state: ExplorerState, action: ExplorerAction): ExplorerState {
+  switch (action.type) {
+    case 'navigate':
+      return {
+        ...state,
+        cwd: action.path,
+        pathInputValue: action.path,
+        selectedIndex: -1,
+        addError: null,
+      };
+    case 'select':
+      return { ...state, selectedIndex: action.index };
+    case 'edit-path':
+      return { ...state, pathInputValue: action.value };
+    case 'focus-path':
+      return { ...state, isEditingPath: true, pathInputValue: action.value };
+    case 'blur-path':
+      return { ...state, isEditingPath: false, pathInputValue: action.value };
+    case 'add-error':
+      return { ...state, addError: action.message };
+    case 'reset':
+      return INITIAL_EXPLORER_STATE;
+  }
+}
+
 export function AddProjectExplorer() {
   const open = useAppStore((s) => s.addProjectExplorerOpen);
   const close = useAppStore((s) => s.closeAddProjectExplorer);
@@ -25,15 +75,10 @@ export function AddProjectExplorer() {
 
   // ── Local state ──────────────────────────────────────────────────────
 
-  const [cwd, setCwd] = useState<string>('');
-  const [cwdInitialized, setCwdInitialized] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [pathInputValue, setPathInputValue] = useState('');
-  const [isEditingPath, setIsEditingPath] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(explorerReducer, INITIAL_EXPLORER_STATE);
+  const { selectedIndex, pathInputValue, isEditingPath, addError } = state;
 
   const pathInputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
 
   // ── Resolve start directory ──────────────────────────────────────────
 
@@ -44,13 +89,7 @@ export function AddProjectExplorer() {
     staleTime: Infinity,
   });
 
-  useEffect(() => {
-    if (startDir && !cwdInitialized) {
-      setCwd(startDir.resolvedPath);
-      setPathInputValue(startDir.resolvedPath);
-      setCwdInitialized(true);
-    }
-  }, [startDir, cwdInitialized]);
+  const cwd = state.cwd || startDir?.resolvedPath || '';
 
   // ── List directories ─────────────────────────────────────────────────
 
@@ -71,10 +110,7 @@ export function AddProjectExplorer() {
   // ── Navigation helpers ───────────────────────────────────────────────
 
   const navigateTo = useCallback((dirPath: string) => {
-    setCwd(dirPath);
-    setPathInputValue(dirPath);
-    setSelectedIndex(-1);
-    setAddError(null);
+    dispatch({ type: 'navigate', path: dirPath });
   }, []);
 
   const goUp = useCallback(() => {
@@ -99,13 +135,13 @@ export function AddProjectExplorer() {
         .catch(() => {});
     },
     onError: (err: Error) => {
-      setAddError(err.message);
+      dispatch({ type: 'add-error', message: err.message });
     },
   });
 
   const handleAdd = useCallback(() => {
     if (!cwd || addProject.isPending) return;
-    setAddError(null);
+    dispatch({ type: 'add-error', message: null });
     addProject.mutate();
   }, [cwd, addProject]);
 
@@ -116,7 +152,7 @@ export function AddProjectExplorer() {
     if (trimmed && trimmed !== cwd) {
       navigateTo(trimmed);
     }
-    setIsEditingPath(false);
+    dispatch({ type: 'blur-path', value: trimmed || cwd });
   }, [pathInputValue, cwd, navigateTo]);
 
   // ── Keyboard navigation ──────────────────────────────────────────────
@@ -127,10 +163,10 @@ export function AddProjectExplorer() {
 
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedIndex((prev) => Math.min(prev + 1, entries.length - 1));
+        dispatch({ type: 'select', index: Math.min(selectedIndex + 1, entries.length - 1) });
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedIndex((prev) => Math.max(prev - 1, -1));
+        dispatch({ type: 'select', index: Math.max(selectedIndex - 1, -1) });
       } else if (e.key === 'Enter') {
         if (isPathInputFocused) {
           handlePathSubmit();
@@ -147,24 +183,11 @@ export function AddProjectExplorer() {
     [entries, selectedIndex, goUp, handleAdd, handlePathSubmit, navigateTo],
   );
 
-  // ── Auto-scroll selected item into view ──────────────────────────────
-
-  useEffect(() => {
-    if (selectedIndex < 0 || !listRef.current) return;
-    const row = listRef.current.querySelector(`[data-index="${selectedIndex}"]`);
-    row?.scrollIntoView({ block: 'nearest' });
-  }, [selectedIndex]);
-
   // ── Reset state on close ─────────────────────────────────────────────
 
   useEffect(() => {
     if (!open) {
-      setCwd('');
-      setCwdInitialized(false);
-      setSelectedIndex(-1);
-      setPathInputValue('');
-      setIsEditingPath(false);
-      setAddError(null);
+      dispatch({ type: 'reset' });
     }
   }, [open]);
 
@@ -205,14 +228,12 @@ export function AddProjectExplorer() {
           className="flex-1 h-8 text-sm font-mono"
           value={isEditingPath ? pathInputValue : cwd}
           onFocus={() => {
-            setIsEditingPath(true);
-            setPathInputValue(cwd);
+            dispatch({ type: 'focus-path', value: cwd });
           }}
           onBlur={() => {
-            setIsEditingPath(false);
-            setPathInputValue(cwd);
+            dispatch({ type: 'blur-path', value: cwd });
           }}
-          onChange={(e) => setPathInputValue(e.target.value)}
+          onChange={(e) => dispatch({ type: 'edit-path', value: e.target.value })}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
@@ -231,11 +252,11 @@ export function AddProjectExplorer() {
       </div>
 
       {/* ── Directory listing ─────────────────────────────────────── */}
-      <div ref={listRef} className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0">
         {isLoading && !listing && (
           <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
             <Loader2 size={16} className="animate-spin" />
-            Loading...
+            Loading…
           </div>
         )}
 
@@ -263,6 +284,11 @@ export function AddProjectExplorer() {
             type="button"
             variant="ghost"
             data-index={i}
+            ref={(node) => {
+              if (node && i === selectedIndex) {
+                node.scrollIntoView({ block: 'nearest' });
+              }
+            }}
             className={cn(
               'flex w-full items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors hover:bg-hover',
               i === selectedIndex && 'bg-hover text-primary',
@@ -291,7 +317,7 @@ export function AddProjectExplorer() {
               {addProject.isPending ? (
                 <span className="flex items-center gap-1.5">
                   <Loader2 size={14} className="animate-spin" />
-                  Adding...
+                  Adding…
                 </span>
               ) : (
                 'Add Repository'

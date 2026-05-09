@@ -51,14 +51,14 @@ describe('DashboardQueries', () => {
     expect(stats.runningByPhase.executing).toBe(1);
   });
 
-  it('getStats().tasksBlocked and pendingApprovals count awaiting_approval threads', () => {
+  it('getStats().tasksBlocked and pendingApprovals count approval threads', () => {
     const t = threads.create(projectId, 'needs approval', 'Approval');
-    db.prepare(`UPDATE threads SET status = 'awaiting_approval' WHERE id = ?`).run(t.id);
+    db.prepare(`UPDATE threads SET status = 'approval' WHERE id = ?`).run(t.id);
 
     const stats = dashboard.getStats();
     expect(stats.tasksBlocked).toBe(1);
     expect(stats.pendingApprovals).toBe(1);
-    expect(stats.tasksInProgress).toBe(1); // awaiting_approval is still "in progress"
+    expect(stats.tasksInProgress).toBe(1); // approval is still "in progress"
   });
 
   it('getStats().shippedLast7d counts completed threads updated recently', () => {
@@ -118,23 +118,23 @@ describe('DashboardQueries', () => {
     expect(stats.agentsRunningByProject[project2Id]).toBe(1);
   });
 
-  it('getStats().agentsRunningByProject excludes awaiting_approval from count', () => {
+  it('getStats().agentsRunningByProject excludes approval from count', () => {
     const t = threads.create(projectId, 'blocked', 'Blocked');
-    db.prepare(`UPDATE threads SET status = 'awaiting_approval' WHERE id = ?`).run(t.id);
+    db.prepare(`UPDATE threads SET status = 'approval' WHERE id = ?`).run(t.id);
 
     const stats = dashboard.getStats();
     expect(stats.agentsRunningByProject[projectId]).toBeUndefined();
   });
 
-  it('getStats().pendingApprovalsByProject counts awaiting_approval threads per project', () => {
+  it('getStats().pendingApprovalsByProject counts approval threads per project', () => {
     const project2Id = projects.add('/tmp/test-project-2').id;
     const t1 = threads.create(projectId, 'needs approval a', 'Approval A');
     const t2 = threads.create(projectId, 'needs approval b', 'Approval B');
     const t3 = threads.create(project2Id, 'needs approval c', 'Approval C');
     const t4 = threads.create(project2Id, 'executing', 'Executing');
-    db.prepare(`UPDATE threads SET status = 'awaiting_approval' WHERE id = ?`).run(t1.id);
-    db.prepare(`UPDATE threads SET status = 'awaiting_approval' WHERE id = ?`).run(t2.id);
-    db.prepare(`UPDATE threads SET status = 'awaiting_approval' WHERE id = ?`).run(t3.id);
+    db.prepare(`UPDATE threads SET status = 'approval' WHERE id = ?`).run(t1.id);
+    db.prepare(`UPDATE threads SET status = 'approval' WHERE id = ?`).run(t2.id);
+    db.prepare(`UPDATE threads SET status = 'approval' WHERE id = ?`).run(t3.id);
     db.prepare(`UPDATE threads SET status = 'executing' WHERE id = ?`).run(t4.id);
 
     const stats = dashboard.getStats();
@@ -154,7 +154,7 @@ describe('DashboardQueries', () => {
 
   it('excludes approved execution-slot waiters from approval counts', () => {
     const t = threads.create(projectId, 'slot wait', 'Slot Wait');
-    db.prepare(`UPDATE threads SET status = 'awaiting_approval' WHERE id = ?`).run(t.id);
+    db.prepare(`UPDATE threads SET status = 'approval' WHERE id = ?`).run(t.id);
     const plan = plans.create(t.id, 'raw plan', null, 1);
     plans.updateStatus(plan.id, 'approved');
 

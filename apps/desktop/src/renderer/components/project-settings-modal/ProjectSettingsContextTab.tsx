@@ -49,7 +49,7 @@ export function ProjectSettingsContextTab({
               return (
                 <div key={name} className="flex items-center gap-2 text-xs">
                   {file?.exists ? (
-                    <span className="h-2 w-2 shrink-0 rounded-full bg-green-500" />
+                    <span className="size-2 shrink-0 rounded-full bg-green-500" />
                   ) : (
                     <span className="w-2 shrink-0 text-center text-muted-foreground">-</span>
                   )}

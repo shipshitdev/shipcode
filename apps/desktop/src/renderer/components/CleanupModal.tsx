@@ -7,7 +7,7 @@ import type {
 import { Alert, AlertDescription, Button, Checkbox, Modal, ModalFooter } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useReducer } from 'react';
 
 interface CleanupModalProps {
   open: boolean;
@@ -40,9 +40,10 @@ function formatCleanupDivergence(item: CleanupItem): string | null {
   if (!('aheadCount' in item)) return null;
   const ahead = item.aheadCount ?? 0;
   const behind = item.behindCount ?? 0;
-  const parts = [ahead > 0 ? `+${ahead} ahead` : null, behind > 0 ? `-${behind} behind` : null]
-    .filter(Boolean)
-    .join(' / ');
+  const parts = [
+    ...(ahead > 0 ? [`+${ahead} ahead`] : []),
+    ...(behind > 0 ? [`-${behind} behind`] : []),
+  ].join(' / ');
   if (!parts) return null;
   return `${parts}${item.compareRef ? ` vs ${item.compareRef}` : ''}`;
 }
@@ -107,11 +108,73 @@ function isSelectableCleanupItem(item: CleanupItem): boolean {
   return !itemHasLocalWork(item) && itemHasMergeProof(item);
 }
 
-export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModalProps) {
+type CleanupModalState = {
+  selected: Set<string>;
+  acknowledgedCleanup: boolean;
+  applyResult: CleanupApplyResult | null;
+};
+
+type CleanupModalAction =
+  | { type: 'reset' }
+  | { type: 'analysis-loaded'; items: CleanupItem[] }
+  | { type: 'toggle'; id: string }
+  | { type: 'toggle-all'; items: CleanupItem[] }
+  | { type: 'acknowledge'; checked: boolean }
+  | { type: 'apply-result'; result: CleanupApplyResult };
+
+const INITIAL_CLEANUP_STATE: CleanupModalState = {
+  selected: new Set(),
+  acknowledgedCleanup: false,
+  applyResult: null,
+};
+
+function cleanupModalReducer(
+  state: CleanupModalState,
+  action: CleanupModalAction,
+): CleanupModalState {
+  switch (action.type) {
+    case 'reset':
+      return INITIAL_CLEANUP_STATE;
+    case 'analysis-loaded':
+      return {
+        ...state,
+        selected: new Set(
+          action.items.flatMap((item) => (isSelectableCleanupItem(item) ? [item.id] : [])),
+        ),
+        acknowledgedCleanup: false,
+      };
+    case 'toggle': {
+      const selected = new Set(state.selected);
+      if (selected.has(action.id)) selected.delete(action.id);
+      else selected.add(action.id);
+      return { ...state, selected };
+    }
+    case 'toggle-all': {
+      const selected = new Set(state.selected);
+      const allSelected = action.items.every((item) => selected.has(item.id));
+      for (const item of action.items) {
+        if (allSelected) selected.delete(item.id);
+        else if (isSelectableCleanupItem(item)) selected.add(item.id);
+      }
+      return { ...state, selected };
+    }
+    case 'acknowledge':
+      return { ...state, acknowledgedCleanup: action.checked };
+    case 'apply-result':
+      return {
+        selected: new Set(),
+        acknowledgedCleanup: false,
+        applyResult: action.result,
+      };
+  }
+}
+
+function useCleanupModalView({ open, onClose, projectId, criteria }: CleanupModalProps) {
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [acknowledgedCleanup, setAcknowledgedCleanup] = useState(false);
-  const [applyResult, setApplyResult] = useState<CleanupApplyResult | null>(null);
+  const [{ selected, acknowledgedCleanup, applyResult }, dispatch] = useReducer(
+    cleanupModalReducer,
+    INITIAL_CLEANUP_STATE,
+  );
 
   const {
     data: analysis,
@@ -129,16 +192,13 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
 
   useEffect(() => {
     if (!open) {
-      setSelected(new Set());
-      setAcknowledgedCleanup(false);
-      setApplyResult(null);
+      dispatch({ type: 'reset' });
     }
   }, [open]);
 
   useEffect(() => {
     if (!open || !analysis) return;
-    setSelected(new Set(analysis.items.filter(isSelectableCleanupItem).map((item) => item.id)));
-    setAcknowledgedCleanup(false);
+    dispatch({ type: 'analysis-loaded', items: analysis.items });
   }, [analysis, open]);
 
   const grouped = useMemo(() => {
@@ -188,37 +248,19 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
         itemIds: Array.from(selected),
       }),
     onSuccess: (result) => {
-      setApplyResult(result);
+      dispatch({ type: 'apply-result', result });
       queryClient.invalidateQueries({ queryKey: ['git-visualizer-data', projectId] });
       queryClient.invalidateQueries({ queryKey: ['cleanup-analyze', projectId] });
       void refetchAnalyze();
-      setSelected(new Set());
-      setAcknowledgedCleanup(false);
     },
   });
 
   const toggle = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    dispatch({ type: 'toggle', id });
   };
 
   const toggleAll = (_kind: CleanupItem['kind'], items: CleanupItem[]) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      const allSelected = items.every((it) => next.has(it.id));
-      for (const it of items) {
-        if (allSelected) {
-          next.delete(it.id);
-          continue;
-        }
-        if (isSelectableCleanupItem(it)) next.add(it.id);
-      }
-      return next;
-    });
+    dispatch({ type: 'toggle-all', items });
   };
 
   const applyDisabled = apply.isPending || selected.size === 0 || !acknowledgedCleanup;
@@ -388,10 +430,16 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
                 </div>
               ) : null}
             </div>
-            <label className="mt-2 flex items-center gap-2 text-xs text-primary">
+            <label
+              htmlFor="cleanup-acknowledge"
+              className="mt-2 flex items-center gap-2 text-xs text-primary"
+            >
               <Checkbox
+                id="cleanup-acknowledge"
                 checked={acknowledgedCleanup}
-                onCheckedChange={(checked: boolean) => setAcknowledgedCleanup(!!checked)}
+                onCheckedChange={(checked: boolean) =>
+                  dispatch({ type: 'acknowledge', checked: !!checked })
+                }
               />
               I reviewed this exact list and want to delete only these selected cleanup items.
             </label>
@@ -448,4 +496,8 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
       </ModalFooter>
     </Modal>
   );
+}
+
+export function CleanupModal(props: CleanupModalProps) {
+  return useCleanupModalView(props);
 }

@@ -92,7 +92,7 @@ export function CommentsTab({
         <p className="py-4 text-center text-[13px] text-muted-foreground">Loading comments…</p>
       ) : comments.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-border bg-secondary/10 px-4 py-10 text-center">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted/10">
+          <div className="flex size-9 items-center justify-center rounded-full bg-muted/10">
             <MessageSquare size={18} className="text-muted-foreground/50" />
           </div>
           <p className="text-[12px] text-muted-foreground">No comments yet.</p>

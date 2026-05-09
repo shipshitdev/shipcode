@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { generateStaticParamsFor, importPage } from 'nextra/pages';
 import type { ComponentType, ReactNode } from 'react';
 
-import { useMDXComponents } from '../../mdx-components';
+import { getMDXComponents } from '../../mdx-components';
 
 type PageProps = {
   params: Promise<{ mdxPath?: string[] }>;
@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function CatchAllDocsPage({ params }: PageProps) {
   const resolvedParams = await params;
   const { default: MDXContent, metadata, toc } = await importPage(resolvedParams.mdxPath ?? []);
-  const Wrapper = useMDXComponents().wrapper as ComponentType<{
+  const Wrapper = getMDXComponents().wrapper as ComponentType<{
     children: ReactNode;
     metadata: typeof metadata;
     toc: typeof toc;

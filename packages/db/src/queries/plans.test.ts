@@ -112,8 +112,8 @@ describe('PlanQueries', () => {
 
   it('updateStatus() changes plan status', () => {
     const p = plans.create(threadId, 'raw', null, 1);
-    plans.updateStatus(p.id, 'awaiting_approval');
-    expect(plans.getById(p.id)?.status).toBe('awaiting_approval');
+    plans.updateStatus(p.id, 'approval');
+    expect(plans.getById(p.id)?.status).toBe('approval');
   });
 
   it('updateStructured() stores JSON', () => {

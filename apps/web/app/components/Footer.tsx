@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 const discordUrl = process.env.NEXT_PUBLIC_DISCORD_URL ?? 'https://discord.com/invite/AXvM4TBAEB';
 
 export function Footer() {
@@ -13,9 +15,9 @@ export function Footer() {
           &copy; 2026 shipshit.dev
         </a>
         <div className="flex items-center gap-6">
-          <a href="/docs" className="transition-colors hover:text-secondary">
+          <Link href="/docs" className="transition-colors hover:text-secondary">
             Docs
-          </a>
+          </Link>
           <a
             href="https://github.com/shipshitdev/shipcode"
             target="_blank"

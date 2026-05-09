@@ -40,17 +40,24 @@ function renderIntoDom(element: ReactElement) {
 }
 
 async function waitForHighlightedSpans(container: HTMLElement) {
-  const started = Date.now();
+  await act(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`Expected syntax-highlighted token spans: ${container.innerHTML}`));
+      }, 2_000);
 
-  while (Date.now() - started < 2_000) {
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      const check = () => {
+        if (container.querySelector('span[style*="color"]')) {
+          clearTimeout(timeout);
+          resolve();
+          return;
+        }
+        setTimeout(check, 10);
+      };
+
+      check();
     });
-
-    if (container.querySelector('span[style*="color"]')) return;
-  }
-
-  throw new Error(`Expected syntax-highlighted token spans: ${container.innerHTML}`);
+  });
 }
 
 const diffRecords: DiffRecord[] = [
@@ -305,12 +312,13 @@ describe('UI component regression coverage', () => {
   });
 
   it('renders active pipeline model chips without provider prefixes', () => {
+    const startedAt = 1_700_000_000_000;
     const view = renderIntoDom(
       <ActivePipelineCard
         projectName="shipcode"
         title="Candidate-to-role matching"
         phase="planning"
-        startedAt={Date.now() - 5_000}
+        startedAt={startedAt}
         modelProvider="codex"
         model="gpt-5.4"
         reasoningEffort="high"
@@ -325,13 +333,14 @@ describe('UI component regression coverage', () => {
   });
 
   it('renders approved execution waiters with waiting-for-slot copy', () => {
+    const startedAt = 1_700_000_000_000;
     const view = renderIntoDom(
       <ActivePipelineCard
         projectName="shipcode"
         title="Hold for execution capacity"
-        phase="awaiting_approval"
+        phase="approval"
         approvedAwaitingExecution
-        startedAt={Date.now() - 5_000}
+        startedAt={startedAt}
         onClick={vi.fn()}
       />,
     );
@@ -344,12 +353,13 @@ describe('UI component regression coverage', () => {
 
   it('does not run the elapsed timer for human approval waits', () => {
     const setIntervalSpy = vi.spyOn(window, 'setInterval');
+    const startedAt = 1_700_000_000_000;
     const view = renderIntoDom(
       <ActivePipelineCard
         projectName="shipcode"
         title="Needs approval"
-        phase="awaiting_approval"
-        startedAt={Date.now() - 5_000}
+        phase="approval"
+        startedAt={startedAt}
         onClick={vi.fn()}
       />,
     );

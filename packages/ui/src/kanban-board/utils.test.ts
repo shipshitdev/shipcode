@@ -171,7 +171,7 @@ describe('compareIssues', () => {
       makeIssue(20, 'P2', ['priority:low']),
     ];
 
-    const sorted = [...issues].sort((a, b) => compareIssues(a, b, 'priority'));
+    const sorted = issues.toSorted((a, b) => compareIssues(a, b, 'priority'));
 
     expect(sorted.map((issue) => issue.issueNumber)).toEqual([3, 8, 20, 12]);
   });
@@ -200,7 +200,7 @@ describe('compareIssues', () => {
   it('sorts title mode alphabetically and breaks ties by newest issue number', () => {
     const issues = [makeIssue(9, 'Beta'), makeIssue(4, 'Alpha'), makeIssue(11, 'Alpha')];
 
-    const sorted = [...issues].sort((a, b) => compareIssues(a, b, 'title'));
+    const sorted = issues.toSorted((a, b) => compareIssues(a, b, 'title'));
 
     expect(sorted.map((issue) => issue.issueNumber)).toEqual([11, 4, 9]);
   });
@@ -209,10 +209,10 @@ describe('compareIssues', () => {
     const issues = [makeIssue(30, 'Third'), makeIssue(10, 'First'), makeIssue(20, 'Second')];
 
     expect(
-      [...issues].sort((a, b) => compareIssues(a, b, 'id-asc')).map((issue) => issue.issueNumber),
+      issues.toSorted((a, b) => compareIssues(a, b, 'id-asc')).map((issue) => issue.issueNumber),
     ).toEqual([10, 20, 30]);
     expect(
-      [...issues].sort((a, b) => compareIssues(a, b, 'id-desc')).map((issue) => issue.issueNumber),
+      issues.toSorted((a, b) => compareIssues(a, b, 'id-desc')).map((issue) => issue.issueNumber),
     ).toEqual([30, 20, 10]);
   });
 });
@@ -331,7 +331,7 @@ describe('resolveIssueApprovalBadge', () => {
     });
   });
 
-  it('hides approval badges for done states', () => {
+  it('hides approval badges for closed states', () => {
     const issue = makeIssue(49, 'Completed issue');
     issue.pipelineStatus = 'completed';
 
@@ -404,7 +404,7 @@ describe('resolveIssueRevisionBadge', () => {
 describe('approved-awaiting-execution helpers', () => {
   it('flags approved awaiting-approval issues as execution-slot waiters', () => {
     const issue = makeIssue(52, 'Waiting for execution');
-    issue.pipelineStatus = 'awaiting_approval';
+    issue.pipelineStatus = 'approval';
     issue.threadId = 'thread-52';
 
     expect(isApprovedAwaitingExecutionIssue(issue, new Set([issue.id]))).toBe(true);
@@ -413,25 +413,21 @@ describe('approved-awaiting-execution helpers', () => {
 
   it('routes approved waiters to the agent column and waiting-execution section', () => {
     const issue = makeIssue(53, 'Approved waiter');
-    issue.pipelineStatus = 'awaiting_approval';
+    issue.pipelineStatus = 'approval';
     issue.threadId = 'thread-53';
     const approvedIds = new Set([issue.id]);
 
     expect(issueMatchesColumn(issue, { key: 'agent', statuses: ['queued'] }, approvedIds)).toBe(
       true,
     );
+    expect(issueMatchesColumn(issue, { key: 'human', statuses: ['approval'] }, approvedIds)).toBe(
+      false,
+    );
     expect(
-      issueMatchesColumn(issue, { key: 'human', statuses: ['awaiting_approval'] }, approvedIds),
-    ).toBe(false);
-    expect(
-      issueMatchesSection(
-        issue,
-        { key: 'waiting_execution', statuses: ['awaiting_approval'] },
-        approvedIds,
-      ),
+      issueMatchesSection(issue, { key: 'waiting_execution', statuses: ['approval'] }, approvedIds),
     ).toBe(true);
     expect(
-      issueMatchesSection(issue, { key: 'awaiting', statuses: ['awaiting_approval'] }, approvedIds),
+      issueMatchesSection(issue, { key: 'approval', statuses: ['approval'] }, approvedIds),
     ).toBe(false);
   });
 });

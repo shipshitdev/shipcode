@@ -62,7 +62,7 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     labels: [],
     assignee: null,
     state: 'closed',
-    pipelineStatus: 'done',
+    pipelineStatus: 'closed',
     threadId: null,
     claimedAt: null,
     claimedBy: null,

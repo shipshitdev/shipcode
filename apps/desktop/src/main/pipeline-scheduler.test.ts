@@ -358,7 +358,7 @@ describe('PipelineScheduler', () => {
     it('promotes the next queued issue when a slot is free', async () => {
       pipeline.listActiveInPhases.mockReturnValue([
         { threadId: 'a', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
-        { threadId: 'b', phase: 'awaiting_approval', startedAt: Date.now(), activeProcessId: null },
+        { threadId: 'b', phase: 'approval', startedAt: Date.now(), activeProcessId: null },
       ]);
       queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 3 }));
       queries.githubIssues.getNextQueued.mockReturnValue(
@@ -401,7 +401,7 @@ describe('PipelineScheduler', () => {
       projectId: 'project-1',
       title: 'Approved waiter',
       prompt: 'prompt',
-      status: 'awaiting_approval',
+      status: 'approval',
       worktreePath: null,
       worktreeBranch: null,
       githubIssueNumber: 42,
@@ -692,8 +692,10 @@ describe('PipelineScheduler', () => {
       queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 3 }));
       queries.automations.getById.mockReturnValue(automation);
 
-      const r1 = await scheduler.startOrQueueAutomation('auto-1');
-      const r2 = await scheduler.startOrQueueAutomation('auto-1');
+      const [r1, r2] = await Promise.all([
+        scheduler.startOrQueueAutomation('auto-1'),
+        scheduler.startOrQueueAutomation('auto-1'),
+      ]);
 
       expect(r1.queued).toBe(true);
       expect(r2.queued).toBe(true);

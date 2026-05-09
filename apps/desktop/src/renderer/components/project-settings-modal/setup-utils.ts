@@ -11,10 +11,10 @@ export function commandsToText(commands: string[]): string {
 }
 
 export function textToCommands(value: string): string[] {
-  return value
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+  return value.split('\n').flatMap((line) => {
+    const trimmed = line.trim();
+    return trimmed ? [trimmed] : [];
+  });
 }
 
 export function runtimeQaCommandsToText(runtimeQa?: RuntimeQaConfig): string {

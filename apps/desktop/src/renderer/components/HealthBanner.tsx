@@ -1,16 +1,17 @@
 import type { AppSettings, GhAuthStatus, SystemHealth } from '@shipcode/shared';
 import { Alert, AlertDescription, Button } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { useAppStore } from '../stores/app-store';
+
+const AUTH_CHECK_DELAY_MS = 2_000;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 export function HealthBanner() {
   const queryClient = useQueryClient();
-  const systemHealth = useAppStore((state) => state.systemHealth);
-  const setSystemHealth = useAppStore((state) => state.setSystemHealth);
-  const [canRunAuthCheck, setCanRunAuthCheck] = useState(false);
 
-  const { data } = useQuery<SystemHealth>({
+  const { data: systemHealth } = useQuery<SystemHealth>({
     queryKey: ['health'],
     queryFn: () => window.shipcode.invoke('health:check'),
     staleTime: 30_000,
@@ -23,8 +24,11 @@ export function HealthBanner() {
   // info, so we hit onboarding:check-auth which does (via checkGhAuth).
   const { data: authData } = useQuery<SystemHealth & { ghAuth: GhAuthStatus }>({
     queryKey: ['onboarding-auth'],
-    queryFn: () => window.shipcode.invoke('onboarding:check-auth'),
-    enabled: canRunAuthCheck && !!data?.gh.available,
+    queryFn: async () => {
+      await delay(AUTH_CHECK_DELAY_MS);
+      return window.shipcode.invoke('onboarding:check-auth');
+    },
+    enabled: !!systemHealth?.gh.available,
     staleTime: 5 * 60_000,
     refetchInterval: 5 * 60_000,
     refetchIntervalInBackground: false,
@@ -37,15 +41,6 @@ export function HealthBanner() {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
   });
-
-  useEffect(() => {
-    if (data) setSystemHealth(data);
-  }, [data, setSystemHealth]);
-
-  useEffect(() => {
-    const id = window.setTimeout(() => setCanRunAuthCheck(true), 2_000);
-    return () => window.clearTimeout(id);
-  }, []);
 
   if (!systemHealth) return null;
 

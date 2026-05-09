@@ -48,7 +48,7 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     projectId: 'project-1',
     title: 'Fix bug',
     prompt: 'Fix it',
-    status: 'awaiting_approval',
+    status: 'approval',
     kind: 'pipeline' as const,
     worktreeBranch: null,
     worktreePath: '/tmp/worktree',
@@ -240,7 +240,7 @@ describe('registerPipelineHandlers', () => {
           version: 1,
           rawOutput: `\`\`\`shipcode-plan\n${PLAN_JSON}\n\`\`\``,
           structured: JSON.parse(PLAN_JSON),
-          status: 'awaiting_approval',
+          status: 'approval',
           createdAt: new Date().toISOString(),
         })),
         getLatestStructured: vi.fn(() => null),
@@ -390,7 +390,7 @@ describe('registerPipelineHandlers', () => {
         version: 1,
         rawOutput: 'plan output',
         structured: JSON.parse(PLAN_JSON),
-        status: 'awaiting_approval',
+        status: 'approval',
         createdAt: '2026-01-01T00:00:00.000Z',
       });
       queries.reviews.getByPlanId.mockReturnValue({
@@ -462,14 +462,14 @@ describe('registerPipelineHandlers', () => {
       expect(notificationService.dismissByThread).toHaveBeenCalledWith('thread-1');
     });
 
-    it('throws for a thread not in awaiting_approval', async () => {
+    it('throws for a thread not in approval', async () => {
       queries.threads.getById.mockReturnValue(makeThread({ status: 'executing' }));
 
       const handler = handlers.get('pipeline:approve');
       if (!handler) throw new Error('pipeline:approve handler not registered');
 
       await expect(handler(undefined, { threadId: 'thread-1' })).rejects.toThrow(
-        'This task is no longer awaiting approval. Current status: executing.',
+        'This task is no longer in approval. Current status: executing.',
       );
       expect(pipeline.startExecution).not.toHaveBeenCalled();
     });
@@ -927,7 +927,7 @@ describe('registerPipelineHandlers', () => {
   });
 
   describe('pipeline:skip-review', () => {
-    it('moves the latest plan to awaiting approval and emits the phase transition', async () => {
+    it('moves the latest plan to approval and emits the phase transition', async () => {
       queries.threads.getById.mockReturnValue(
         makeThread({
           githubIssueNumber: null,
@@ -941,12 +941,12 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(queries.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
-      expect(queries.threads.updateStatus).toHaveBeenCalledWith('thread-1', 'awaiting_approval');
+      expect(queries.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approval');
+      expect(queries.threads.updateStatus).toHaveBeenCalledWith('thread-1', 'approval');
       expect(emitter.emit).toHaveBeenCalledWith({
         type: 'pipeline:phase',
         threadId: 'thread-1',
-        phase: 'awaiting_approval',
+        phase: 'approval',
       });
     });
   });
@@ -1029,12 +1029,12 @@ describe('registerPipelineHandlers', () => {
       });
     });
 
-    it('includes awaiting_approval threads in the active list', () => {
+    it('includes approval threads in the active list', () => {
       pipeline.listActive.mockReturnValue([
         {
           threadId: 'thread-1',
           projectPath: '/tmp/project',
-          phase: 'awaiting_approval',
+          phase: 'approval',
           startedAt: Date.now(),
           activeProcessId: null,
         },
@@ -1044,10 +1044,10 @@ describe('registerPipelineHandlers', () => {
       if (!handler) throw new Error('pipeline:list-active handler not registered');
 
       const result = handler(undefined, undefined) as Array<{ phase: string }>;
-      expect(result[0].phase).toBe('awaiting_approval');
+      expect(result[0].phase).toBe('approval');
     });
 
-    it('marks approved awaiting_approval threads as waiting for execution', () => {
+    it('marks approved approval threads as waiting for execution', () => {
       queries.plans.getLatest.mockReturnValue({
         id: 'plan-1',
         threadId: 'thread-1',
@@ -1061,7 +1061,7 @@ describe('registerPipelineHandlers', () => {
         {
           threadId: 'thread-1',
           projectPath: '/tmp/project',
-          phase: 'awaiting_approval',
+          phase: 'approval',
           startedAt: Date.now(),
           activeProcessId: null,
         },

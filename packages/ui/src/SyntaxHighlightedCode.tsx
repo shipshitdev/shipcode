@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useReducer } from 'react';
 import {
   type BundledLanguage,
   createHighlighter,
@@ -54,6 +54,25 @@ const HIGHLIGHT_THEME = 'dark-plus';
 let highlighterPromise: Promise<Highlighter> | null = null;
 const loadedLanguagePromises = new Map<BundledLanguage, Promise<void>>();
 
+type HighlightState = {
+  tokens: HighlightToken[][] | null;
+};
+
+type HighlightAction =
+  | { type: 'loading' }
+  | { type: 'loaded'; tokens: HighlightToken[][] }
+  | { type: 'failed' };
+
+function highlightReducer(_state: HighlightState, action: HighlightAction): HighlightState {
+  switch (action.type) {
+    case 'loaded':
+      return { tokens: action.tokens };
+    case 'loading':
+    case 'failed':
+      return { tokens: null };
+  }
+}
+
 function getSyntaxHighlighter(): Promise<Highlighter> {
   highlighterPromise ??= createHighlighter({
     engine: createJavaScriptRegexEngine({ forgiving: true }),
@@ -99,11 +118,11 @@ function useHighlightedTokens(
   code: string,
   language: BundledLanguage | 'text',
 ): HighlightToken[][] | null {
-  const [tokens, setTokens] = useState<HighlightToken[][] | null>(null);
+  const [state, dispatch] = useReducer(highlightReducer, { tokens: null });
 
   useEffect(() => {
     let cancelled = false;
-    setTokens(null);
+    dispatch({ type: 'loading' });
 
     if (!code || language === 'text') {
       return () => {
@@ -120,7 +139,7 @@ function useHighlightedTokens(
       )
       .then((result) => {
         if (!cancelled) {
-          setTokens(result.tokens);
+          dispatch({ type: 'loaded', tokens: result.tokens });
         }
       })
       .catch((error) => {
@@ -128,7 +147,7 @@ function useHighlightedTokens(
           console.warn('Syntax highlighting failed', error);
         }
         if (!cancelled) {
-          setTokens(null);
+          dispatch({ type: 'failed' });
         }
       });
 
@@ -137,7 +156,7 @@ function useHighlightedTokens(
     };
   }, [code, language]);
 
-  return tokens;
+  return state.tokens;
 }
 
 function tokenStyle(token: HighlightToken): CSSProperties {
@@ -149,15 +168,35 @@ function tokenStyle(token: HighlightToken): CSSProperties {
   };
 }
 
-function renderLineTokens(tokens: HighlightToken[] | undefined, fallback: string) {
+function keyedTokens(tokens: HighlightToken[]) {
+  let offset = 0;
+  return tokens.map((token) => {
+    const key = `${offset}:${token.content}`;
+    offset += token.content.length;
+    return { key, token };
+  });
+}
+
+function keyedLines(lines: string[]) {
+  const seen = new Map<string, number>();
+  return lines.map((line) => {
+    const occurrence = seen.get(line) ?? 0;
+    seen.set(line, occurrence + 1);
+    return { key: `${occurrence}:${line}`, line };
+  });
+}
+
+function TokenSpans({
+  tokens,
+  fallback,
+}: {
+  tokens: HighlightToken[] | undefined;
+  fallback: string;
+}) {
   if (!tokens) return fallback || '\u00A0';
   if (tokens.length === 0) return '\u00A0';
-  return tokens.map((token, index) => (
-    <span
-      // biome-ignore lint/suspicious/noArrayIndexKey: token order is stable for a rendered line
-      key={index}
-      style={tokenStyle(token)}
-    >
+  return keyedTokens(tokens).map(({ key, token }) => (
+    <span key={key} style={tokenStyle(token)}>
       {token.content}
     </span>
   ));
@@ -175,17 +214,15 @@ export function SyntaxHighlightedCode({
   );
   const tokens = useHighlightedTokens(code, resolvedLanguage);
   const lines = useMemo(() => code.split('\n'), [code]);
+  const stableLines = useMemo(() => keyedLines(lines), [lines]);
 
   return (
     <pre
       className={cn('whitespace-pre font-mono text-[11px] leading-[1.45] text-primary', className)}
     >
-      {lines.map((line, index) => (
-        <div
-          // biome-ignore lint/suspicious/noArrayIndexKey: code lines have stable order while content is static
-          key={index}
-        >
-          {renderLineTokens(tokens?.[index], line)}
+      {stableLines.map(({ key, line }, index) => (
+        <div key={key}>
+          <TokenSpans tokens={tokens?.[index]} fallback={line} />
         </div>
       ))}
     </pre>
@@ -204,7 +241,11 @@ export function SyntaxHighlightedLine({
   );
   const tokens = useHighlightedTokens(code, resolvedLanguage);
 
-  return <span className={className}>{renderLineTokens(tokens?.[0], code)}</span>;
+  return (
+    <span className={className}>
+      <TokenSpans tokens={tokens?.[0]} fallback={code} />
+    </span>
+  );
 }
 
 export function useSyntaxHighlightedLines(lines: string[], filePath?: string): ReactNode[] {
@@ -213,7 +254,10 @@ export function useSyntaxHighlightedLines(lines: string[], filePath?: string): R
   const tokens = useHighlightedTokens(code, language);
 
   return useMemo(
-    () => lines.map((line, index) => renderLineTokens(tokens?.[index], line)),
+    () =>
+      keyedLines(lines).map(({ key, line }, index) => (
+        <TokenSpans key={key} tokens={tokens?.[index]} fallback={line} />
+      )),
     [lines, tokens],
   );
 }

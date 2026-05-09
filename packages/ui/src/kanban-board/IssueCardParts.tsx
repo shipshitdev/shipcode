@@ -56,7 +56,7 @@ import {
 } from './utils';
 
 const ISSUE_CARD_BASE_CLASS =
-  'group relative flex min-h-[124px] flex-col overflow-hidden rounded-md border bg-elevated p-3 text-left transition-colors outline-none';
+  'group relative flex min-h-[104px] flex-col overflow-hidden rounded-md border bg-elevated p-2.5 text-left transition-colors outline-none';
 
 function issueReferenceLabel(issue: GitHubIssueCacheRecord, isCreating: boolean): string {
   if (isCreating) return 'Creating';
@@ -98,7 +98,7 @@ function issueCardToneClass({
   isCreating,
   isSelected,
   isCompleted,
-  isDone,
+  isClosed,
   isFailed,
   isPaused,
   isAwaiting,
@@ -108,7 +108,7 @@ function issueCardToneClass({
   isCreating: boolean;
   isSelected?: boolean;
   isCompleted: boolean;
-  isDone: boolean;
+  isClosed: boolean;
   isFailed: boolean;
   isPaused: boolean;
   isAwaiting: boolean;
@@ -121,7 +121,7 @@ function issueCardToneClass({
       ? 'border-success/65 bg-success/[0.08] opacity-90'
       : 'border-success/35 bg-success/[0.04] opacity-80 hover:border-success/55 hover:bg-success/[0.055] hover:opacity-90';
   }
-  if (isDone) {
+  if (isClosed) {
     return isSelected
       ? 'border-done/65 bg-done/[0.09] opacity-85'
       : 'border-done/35 bg-done/[0.045] opacity-70 hover:border-done/55 hover:bg-done/[0.06] hover:opacity-80';
@@ -160,13 +160,13 @@ function IssueProgressBar({
   status,
   isActive,
   isCompleted,
-  isDone,
+  isClosed,
   approvedAwaitingExecution,
 }: {
   status: IssuePipelineStatus;
   isActive: boolean;
   isCompleted: boolean;
-  isDone: boolean;
+  isClosed: boolean;
   approvedAwaitingExecution: boolean;
 }) {
   if (
@@ -179,18 +179,18 @@ function IssueProgressBar({
 
   const trackClass = isCompleted
     ? 'bg-success/15'
-    : isDone
+    : isClosed
       ? 'bg-done/15'
       : approvedAwaitingExecution
         ? 'bg-agent/15'
         : 'bg-agent/15';
   const fillClass = isCompleted
     ? 'bg-success'
-    : isDone
+    : isClosed
       ? 'bg-done'
       : approvedAwaitingExecution
         ? 'bg-agent'
-        : status === ISSUE_PIPELINE_STATUS.awaitingApproval ||
+        : status === ISSUE_PIPELINE_STATUS.approval ||
             status === ISSUE_PIPELINE_STATUS.clarifying ||
             status === ISSUE_PIPELINE_STATUS.paused
           ? 'bg-warning'
@@ -214,7 +214,7 @@ function IssueProgressBar({
   );
 }
 
-function PhaseAction({
+function phaseAction({
   issue,
   status,
   readOnly,
@@ -484,7 +484,7 @@ function PhaseAction({
             DONE_ACTION_BADGE_CLASS,
             isMarkingDone && 'opacity-100',
           )}
-          title={isMarkingDone ? 'Marking as done' : 'Mark as done'}
+          title={isMarkingDone ? 'Closing issue' : 'Close issue'}
           disabled={isMarkingDone}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
@@ -496,10 +496,10 @@ function PhaseAction({
           {isMarkingDone ? (
             <>
               <Loader2 size={10} className="animate-spin" />
-              DONE
+              CLOSE
             </>
           ) : (
-            'DONE'
+            'CLOSE'
           )}
         </Button>
       </span>
@@ -536,7 +536,7 @@ export function StalenessDot({
           role="img"
           aria-label={`Stale: ${staleness.title}`}
           className={cn(
-            'inline-flex h-4 w-4 shrink-0 items-center justify-center text-danger',
+            'inline-flex size-4 shrink-0 items-center justify-center text-danger',
             className,
           )}
         >
@@ -586,7 +586,7 @@ interface DraggableCardProps {
   onFetchPlanSteps?: (threadId: string) => Promise<import('./types').PlanStepSummary[] | null>;
 }
 
-function DraggableCardComponent({
+function useDraggableCardView({
   issue,
   phaseChip,
   revisionBadge,
@@ -639,13 +639,13 @@ function DraggableCardComponent({
   const isFailed = presentationStatus === ISSUE_PIPELINE_STATUS.failed;
   const isClarifying = presentationStatus === ISSUE_PIPELINE_STATUS.clarifying;
   const isPaused = presentationStatus === ISSUE_PIPELINE_STATUS.paused;
-  const isAwaitingApproval =
-    presentationStatus === ISSUE_PIPELINE_STATUS.awaitingApproval && !approvedAwaitingExecution;
-  const isAwaiting = isAwaitingApproval || isClarifying;
+  const isApproval =
+    presentationStatus === ISSUE_PIPELINE_STATUS.approval && !approvedAwaitingExecution;
+  const isAwaiting = isApproval || isClarifying;
   const isActive = ACTIVE_STATUSES.includes(presentationStatus);
   const isTodo = presentationStatus === ISSUE_PIPELINE_STATUS.todo;
   const isCompleted = presentationStatus === ISSUE_PIPELINE_STATUS.completed;
-  const isDone = presentationStatus === ISSUE_PIPELINE_STATUS.done;
+  const isClosed = presentationStatus === ISSUE_PIPELINE_STATUS.closed;
   const showBranchCopyAction = !!branchName && !!onCopyBranchName && !isAutomation && !readOnly;
   const linkedPrLabel = issue.linkedPrNumber ? `PR #${issue.linkedPrNumber}` : null;
 
@@ -666,7 +666,7 @@ function DraggableCardComponent({
             isCreating,
             isSelected,
             isCompleted,
-            isDone,
+            isClosed,
             isFailed,
             isPaused,
             isAwaiting,
@@ -716,7 +716,7 @@ function DraggableCardComponent({
           status={presentationStatus}
           isActive={isActive}
           isCompleted={isCompleted}
-          isDone={isDone}
+          isClosed={isClosed}
           approvedAwaitingExecution={approvedAwaitingExecution}
         />
         <StalenessDot staleness={staleness} className="absolute right-2 bottom-2 z-10" />
@@ -821,10 +821,10 @@ function DraggableCardComponent({
                 {(isCompleted || isFailed) && onMarkDone && (
                   <DropdownMenuItem onClick={() => onMarkDone(issue)}>
                     <Check size={14} />
-                    Mark as Done
+                    Close Issue
                   </DropdownMenuItem>
                 )}
-                {isDone && onArchiveIssue && !isAutomation && (
+                {isClosed && onArchiveIssue && !isAutomation && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -897,7 +897,7 @@ function DraggableCardComponent({
             {issue.title}
           </span>
         </div>
-        <div className="relative z-10 mt-auto flex flex-wrap items-center gap-1.5 pt-2">
+        <div className="relative z-10 mt-1.5 flex flex-wrap items-center gap-1.5">
           {priorityBadge ? (
             <Badge
               variant={priorityBadge.variant}
@@ -930,48 +930,54 @@ function DraggableCardComponent({
               {approvalBadge.label}
             </Badge>
           ) : null}
-          {issue.labels
-            .filter((label) => !readOnly && isAgentRoutingLabel(label))
-            .map((label) => (
-              <Badge
-                key={label}
-                variant="accent"
-                className="px-1.5 py-px text-[10px] font-medium"
-                title={label}
-              >
-                {displayAgentLabel(label)}
-              </Badge>
-            ))}
+          {issue.labels.flatMap((label) =>
+            !readOnly && isAgentRoutingLabel(label)
+              ? [
+                  <Badge
+                    key={label}
+                    variant="accent"
+                    className="px-1.5 py-px text-[10px] font-medium"
+                    title={label}
+                  >
+                    {displayAgentLabel(label)}
+                  </Badge>,
+                ]
+              : [],
+          )}
           <IssueExternalBlockers issue={issue} />
-          <PhaseAction
-            issue={issue}
-            status={presentationStatus}
-            readOnly={readOnly}
-            isCreating={isCreating}
-            isAutomation={isAutomation}
-            isTodo={isTodo}
-            isActive={isActive}
-            isPaused={isPaused}
-            isFailed={isFailed}
-            isCompleted={isCompleted}
-            approvedAwaitingExecution={approvedAwaitingExecution}
-            isStartingPipeline={isStartingPipeline}
-            isPausing={isPausing}
-            isResuming={isResuming}
-            isCancelling={isCancelling}
-            isRerunning={isRerunning}
-            isMarkingDone={isMarkingDone}
-            onStartPipeline={onStartPipeline}
-            onPause={onPause}
-            onResume={onResume}
-            onCancel={onCancel}
-            onRerun={onRerun}
-            onMarkDone={onMarkDone}
-          />
+          {phaseAction({
+            issue,
+            status: presentationStatus,
+            readOnly,
+            isCreating,
+            isAutomation,
+            isTodo,
+            isActive,
+            isPaused,
+            isFailed,
+            isCompleted,
+            approvedAwaitingExecution,
+            isStartingPipeline,
+            isPausing,
+            isResuming,
+            isCancelling,
+            isRerunning,
+            isMarkingDone,
+            onStartPipeline,
+            onPause,
+            onResume,
+            onCancel,
+            onRerun,
+            onMarkDone,
+          })}
         </div>
       </div>
     </IssueHoverCard>
   );
+}
+
+function DraggableCardComponent(props: DraggableCardProps) {
+  return useDraggableCardView(props);
 }
 
 export const DraggableCard = memo(DraggableCardComponent);
@@ -1001,7 +1007,7 @@ export function DragOverlayCard({
           {issue.title}
         </span>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         {priorityBadge ? (
           <Badge
             variant={priorityBadge.variant}

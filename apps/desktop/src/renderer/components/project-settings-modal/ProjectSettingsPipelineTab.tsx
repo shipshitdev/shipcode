@@ -58,8 +58,8 @@ export function ProjectSettingsPipelineTab({
           </div>
         </SettingsRow>
         <div className="mt-2 text-xs text-muted-foreground">
-          Approved issues move to <span className="text-primary">Waiting For Execution</span> until
-          one of this project's execution slots opens.
+          Approved issues move to <span className="text-primary">Waiting</span> until one of this
+          project's execution slots opens.
         </div>
       </section>
 

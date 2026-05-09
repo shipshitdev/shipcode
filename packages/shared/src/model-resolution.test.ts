@@ -332,20 +332,20 @@ describe('model-resolution', () => {
     expect(getIssueCardPhase('planning')).toBe('planner');
     expect(getIssueCardPhase('clarifying')).toBe('planner');
     expect(getIssueCardPhase('reviewing')).toBe('reviewer');
-    expect(getIssueCardPhase('awaiting_approval')).toBe('planner');
+    expect(getIssueCardPhase('approval')).toBe('planner');
     expect(getIssueCardPhase('executing')).toBe('executor');
     expect(getIssueCardPhase('testing')).toBe('executor');
     expect(getIssueCardPhase('verifying')).toBe('verifier');
     expect(getIssueCardPhase('failed')).toBeNull();
     expect(getIssueCardPhase('completed')).toBeNull();
-    expect(getIssueCardPhase('done')).toBeNull();
+    expect(getIssueCardPhase('closed')).toBeNull();
   });
 
   it('maps pipeline phases to the current card phase', () => {
     expect(getPipelineCardPhase('planning')).toBe('planner');
     expect(getPipelineCardPhase('clarifying')).toBe('planner');
     expect(getPipelineCardPhase('revising')).toBe('planner');
-    expect(getPipelineCardPhase('awaiting_approval')).toBe('planner');
+    expect(getPipelineCardPhase('approval')).toBe('planner');
     expect(getPipelineCardPhase('reviewing')).toBe('reviewer');
     expect(getPipelineCardPhase('executing')).toBe('executor');
     expect(getPipelineCardPhase('testing')).toBe('executor');

@@ -171,13 +171,13 @@ function loadLocalEnvFiles() {
       if (!trimmed || trimmed.startsWith('#')) continue;
 
       const normalized = trimmed.startsWith('export ') ? trimmed.slice(7).trim() : trimmed;
-      const eqIndex = normalized.indexOf('=');
-      if (eqIndex <= 0) continue;
+      const envMatch = /^([^=]+)=(.*)$/.exec(normalized);
+      if (!envMatch) continue;
 
-      const key = normalized.slice(0, eqIndex).trim();
+      const key = envMatch[1].trim();
       if (!key || process.env[key] !== undefined) continue;
 
-      let value = normalized.slice(eqIndex + 1).trim();
+      let value = envMatch[2].trim();
       if (
         (value.startsWith('"') && value.endsWith('"')) ||
         (value.startsWith("'") && value.endsWith("'"))

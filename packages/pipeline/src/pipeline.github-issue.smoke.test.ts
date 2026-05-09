@@ -3,7 +3,7 @@
  *
  * Drives the default plan flow via the mock process manager,
  * using the same helpers and mock patterns as pipeline.test.ts.
- * Asserts the thread lands on awaiting_approval with the current
+ * Asserts the thread lands on approval with the current
  * default workflow (0 revisions + approval required).
  */
 
@@ -284,7 +284,7 @@ describe('startFromGitHubIssue — smoke', () => {
     vi.restoreAllMocks();
   });
 
-  it('plan → awaiting_approval with the default workflow', async () => {
+  it('plan → approval with the default workflow', async () => {
     const pipeline = createPipeline(smoke.deps);
     const issue = { number: 42, title: 'Fix the bug', body: 'It crashes on startup', labels: [] };
 
@@ -303,11 +303,11 @@ describe('startFromGitHubIssue — smoke', () => {
     // Plan was created and, with the default 0 revisions, approval is requested immediately
     expect(smoke.deps.plans.create).toHaveBeenCalled();
     expect(smoke.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approved');
-    expect(smoke.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
-    expect(smoke.deps.threads.updateStatus).toHaveBeenCalledWith('t-smoke', 'awaiting_approval');
+    expect(smoke.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approval');
+    expect(smoke.deps.threads.updateStatus).toHaveBeenCalledWith('t-smoke', 'approval');
   });
 
-  it('syncs GitHub issue pipeline status through planning → awaiting_approval', async () => {
+  it('syncs GitHub issue pipeline status through planning → approval', async () => {
     const pipeline = createPipeline(smoke.deps);
     const issue = { number: 42, title: 'Fix the bug', body: 'It crashes', labels: [] };
 
@@ -323,7 +323,7 @@ describe('startFromGitHubIssue — smoke', () => {
 
     expect(smoke.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
       'issue-42',
-      'awaiting_approval',
+      'approval',
     );
   });
 

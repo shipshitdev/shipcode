@@ -21,12 +21,13 @@ import { TelemetryConsentDialog } from './components/TelemetryConsentDialog';
 import { TerminalDrawer } from './components/TerminalDrawer';
 import { Titlebar } from './components/Titlebar';
 import { UpdateBanner } from './components/UpdateBanner';
-import { useDelayedUnmount } from './hooks/useDelayedUnmount';
 import { useGlobalKeyboard } from './hooks/useGlobalKeyboard';
 import { useIpc } from './hooks/useIpc';
 import { STABLE_APP_STATE_STALE_TIME } from './query-stale-times';
 import { useAppStore } from './stores/app-store';
 import { syncRendererTelemetry } from './telemetry';
+
+const VIEW_LOADING_CARD_KEYS = ['view-card-1', 'view-card-2', 'view-card-3'];
 
 /** Skeleton shown while lazy view chunks load — matches PageHeader + content layout. */
 function ViewLoadingFallback() {
@@ -38,11 +39,10 @@ function ViewLoadingFallback() {
           <Skeleton className="h-3 w-56" />
         </div>
       </div>
-      <div className="flex-1 space-y-4 px-6 py-6">
+      <div className="flex-1 space-y-4 p-6">
         <div className="grid grid-cols-3 gap-4">
-          {Array.from({ length: 3 }, (_, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
-            <Skeleton key={i} className="h-20 rounded-lg" />
+          {VIEW_LOADING_CARD_KEYS.map((key) => (
+            <Skeleton key={key} className="h-20 rounded-lg" />
           ))}
         </div>
         <Skeleton className="h-48 rounded-xl" />
@@ -154,10 +154,6 @@ export function App() {
   const hasActiveIssue = useAppStore((state) => state.activeIssue !== null);
   const hasActiveAutomationThread = useAppStore((state) => state.activeAutomationThreadId !== null);
   const hasActiveAutomationDetail = useAppStore((state) => state.activeAutomationDetailId !== null);
-  const { shouldRender: shouldRenderTerminal, isExiting: isTerminalExiting } = useDelayedUnmount(
-    terminalVisible,
-    200,
-  );
 
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
@@ -262,7 +258,7 @@ export function App() {
         <div className="flex flex-col items-center gap-6">
           {isBridgeMissing ? (
             <>
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10">
+              <div className="flex size-14 items-center justify-center rounded-full bg-red-500/10">
                 <svg
                   aria-hidden="true"
                   width="28"
@@ -297,7 +293,7 @@ export function App() {
           ) : (
             <>
               <div
-                className="h-10 w-10 rounded-full"
+                className="size-10 rounded-full"
                 style={{
                   border: '1.5px solid rgba(244,244,245,0.08)',
                   borderTopColor: 'rgba(244,244,245,0.6)',
@@ -383,7 +379,7 @@ export function App() {
                 </div>
               </Suspense>
             )}
-            {shouldRenderTerminal && <TerminalDrawer isExiting={isTerminalExiting} />}
+            {terminalVisible && <TerminalDrawer />}
           </div>
         </div>
         <CommandPalette />

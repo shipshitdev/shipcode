@@ -470,13 +470,15 @@ describe('prd-attachments IPC handlers', () => {
 
   afterEach(async () => {
     const clearHandler = getHandler('prd-attachments:clear');
-    for (const id of sessionIds) {
-      try {
-        await clearHandler(undefined, { sessionId: id });
-      } catch {
-        /* already cleared */
-      }
-    }
+    await Promise.all(
+      sessionIds.map(async (id) => {
+        try {
+          await clearHandler(undefined, { sessionId: id });
+        } catch {
+          /* already cleared */
+        }
+      }),
+    );
     sessionIds.length = 0;
   });
 

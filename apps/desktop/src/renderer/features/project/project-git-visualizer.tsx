@@ -18,7 +18,7 @@ export function ProjectGitVisualizer() {
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const pendingGitWorktreePath = useAppStore((state) => state.pendingGitWorktreePath);
   const clearPendingGitWorktreePath = useAppStore((state) => state.clearPendingGitWorktreePath);
-  const [selectedWorktreePath, setSelectedWorktreePath] = useState<string | null>(null);
+  const [userSelectedWorktreePath, setUserSelectedWorktreePath] = useState<string | null>(null);
   const [autoCommitMessage, setAutoCommitMessage] = useState<{
     tone: 'success' | 'error';
     text: string;
@@ -43,31 +43,28 @@ export function ProjectGitVisualizer() {
     staleTime: 5_000,
   });
 
-  useEffect(() => {
-    if (!data?.worktrees.length) {
-      setSelectedWorktreePath(null);
-      return;
+  const selectedWorktreePath = useMemo(() => {
+    const worktrees = data?.worktrees ?? [];
+    if (worktrees.length === 0) return null;
+    if (pendingGitWorktreePath && worktrees.some((w) => w.path === pendingGitWorktreePath)) {
+      return pendingGitWorktreePath;
     }
+    if (userSelectedWorktreePath && worktrees.some((w) => w.path === userSelectedWorktreePath)) {
+      return userSelectedWorktreePath;
+    }
+    return worktrees[0].path;
+  }, [data?.worktrees, pendingGitWorktreePath, userSelectedWorktreePath]);
 
-    // If a pending worktree path was requested (e.g. from detail panel "View in Git"),
-    // prefer it over the default first-worktree selection.
-    if (pendingGitWorktreePath) {
-      const match = data.worktrees.find((w) => w.path === pendingGitWorktreePath);
-      if (match) {
-        setSelectedWorktreePath(match.path);
-        clearPendingGitWorktreePath();
-        return;
-      }
-      // No match — clear pending and fall through to default behavior.
+  useEffect(() => {
+    if (
+      pendingGitWorktreePath &&
+      data?.worktrees &&
+      (selectedWorktreePath === pendingGitWorktreePath ||
+        !data.worktrees.some((w) => w.path === pendingGitWorktreePath))
+    ) {
       clearPendingGitWorktreePath();
     }
-
-    setSelectedWorktreePath((current) =>
-      current && data.worktrees.some((worktree) => worktree.path === current)
-        ? current
-        : data.worktrees[0].path,
-    );
-  }, [data?.worktrees, pendingGitWorktreePath, clearPendingGitWorktreePath]);
+  }, [data?.worktrees, pendingGitWorktreePath, selectedWorktreePath, clearPendingGitWorktreePath]);
 
   const {
     data: diffs = [],
@@ -134,7 +131,7 @@ export function ProjectGitVisualizer() {
     return (
       <div className="flex flex-1 items-center justify-center gap-2 text-sm text-secondary">
         <Loader2 className="animate-spin" size={14} />
-        Loading git state...
+        Loading git state…
       </div>
     );
   }
@@ -220,7 +217,7 @@ export function ProjectGitVisualizer() {
         diffs={diffs}
         loading={isFetching}
         diffLoading={isDiffFetching}
-        onSelectWorktree={setSelectedWorktreePath}
+        onSelectWorktree={setUserSelectedWorktreePath}
         onRefresh={() => {
           queryClient.invalidateQueries({ queryKey: ['git-visualizer-data', activeProjectId] });
           queryClient.invalidateQueries({ queryKey: ['git-worktree-diff', activeProjectId] });

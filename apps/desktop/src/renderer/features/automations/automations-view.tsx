@@ -66,7 +66,7 @@ export function AutomationsView() {
       <div className="flex-1 overflow-auto p-6">
         {isLoading ? (
           <div className="flex justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-secondary" />
+            <Loader2 className="size-6 animate-spin text-secondary" />
           </div>
         ) : automations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center text-secondary">
@@ -116,6 +116,7 @@ function AutomationCard({
   onToggleEnabled,
   onDelete,
 }: AutomationCardProps) {
+  const queryClient = useQueryClient();
   const [historyOpen, setHistoryOpen] = useState(false);
   const selectAutomationThread = useAppStore((s) => s.selectAutomationThread);
   const openAutomationDetail = useAppStore((s) => s.openAutomationDetail);
@@ -124,6 +125,10 @@ function AutomationCard({
     mutationKey: ['run-now', automation.id],
     mutationFn: () =>
       window.shipcode.invoke<{ queued: boolean }>('automations:run-now', { id: automation.id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['automations'] });
+      queryClient.invalidateQueries({ queryKey: ['automation-run-history', automation.id] });
+    },
   });
 
   const { data: runHistory = [], isLoading: isHistoryLoading } = useQuery<Thread[]>({
@@ -234,7 +239,7 @@ function AutomationCard({
             </h4>
             {isHistoryLoading ? (
               <div className="flex justify-center py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
               </div>
             ) : runHistory.length === 0 ? (
               <p className="py-2 text-[12px] text-muted-foreground">No runs yet.</p>

@@ -2,7 +2,7 @@ import type { AgentType, GhAuthStatus, SystemHealth } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
 import { Button, Card } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer } from 'react';
 import { StepAuthCheck, useAuthCheck } from './StepAuthCheck';
 import { StepModelPrefs } from './StepModelPrefs';
 
@@ -52,20 +52,61 @@ interface Props {
   onComplete: () => void | Promise<void>;
 }
 
+interface OnboardingState {
+  step: Step;
+  authResult: AuthResult | null;
+  plannerModel: AgentType;
+  reviewerModel: AgentType;
+  saving: boolean;
+}
+
+type OnboardingAction =
+  | { type: 'auth-result'; result: AuthResult }
+  | { type: 'next' }
+  | { type: 'back' }
+  | { type: 'models'; plannerModel: AgentType; reviewerModel: AgentType }
+  | { type: 'saving'; saving: boolean };
+
+const INITIAL_ONBOARDING_STATE: OnboardingState = {
+  step: 0,
+  authResult: null,
+  plannerModel: 'claude',
+  reviewerModel: 'codex',
+  saving: false,
+};
+
+function onboardingReducer(state: OnboardingState, action: OnboardingAction): OnboardingState {
+  switch (action.type) {
+    case 'auth-result':
+      return { ...state, authResult: action.result };
+    case 'next':
+      return { ...state, step: Math.min(2, state.step + 1) as Step };
+    case 'back':
+      return { ...state, step: Math.max(0, state.step - 1) as Step };
+    case 'models':
+      return {
+        ...state,
+        plannerModel: action.plannerModel,
+        reviewerModel: action.reviewerModel,
+      };
+    case 'saving':
+      return { ...state, saving: action.saving };
+  }
+}
+
 export function OnboardingWizard({ onComplete }: Props) {
-  const [step, setStep] = useState<Step>(0);
-  const [authResult, setAuthResult] = useState<AuthResult | null>(null);
-  const [plannerModel, setPlannerModel] = useState<AgentType>('claude');
-  const [reviewerModel, setReviewerModel] = useState<AgentType>('codex');
+  const [{ step, authResult, plannerModel, reviewerModel, saving }, dispatch] = useReducer(
+    onboardingReducer,
+    INITIAL_ONBOARDING_STATE,
+  );
 
   const authCheck = useAuthCheck();
-  const [saving, setSaving] = useState(false);
   const { mutate: runAuthCheck } = authCheck;
 
   // Run auth check once on mount
   useEffect(() => {
     runAuthCheck(undefined, {
-      onSuccess: (data) => setAuthResult(data),
+      onSuccess: (data) => dispatch({ type: 'auth-result', result: data }),
     });
   }, [runAuthCheck]);
 
@@ -77,24 +118,20 @@ export function OnboardingWizard({ onComplete }: Props) {
 
   function handleRecheck() {
     runAuthCheck(undefined, {
-      onSuccess: (data) => setAuthResult(data),
+      onSuccess: (data) => dispatch({ type: 'auth-result', result: data }),
     });
   }
 
   function handleNext() {
-    if (step < 2) {
-      setStep((step + 1) as Step);
-    }
+    dispatch({ type: 'next' });
   }
 
   function handleBack() {
-    if (step > 0) {
-      setStep((step - 1) as Step);
-    }
+    dispatch({ type: 'back' });
   }
 
   async function handleFinish() {
-    setSaving(true);
+    dispatch({ type: 'saving', saving: true });
     try {
       await window.shipcode.invoke('settings:set', {
         plannerModel,
@@ -103,7 +140,7 @@ export function OnboardingWizard({ onComplete }: Props) {
       });
       await onComplete();
     } finally {
-      setSaving(false);
+      dispatch({ type: 'saving', saving: false });
     }
   }
 
@@ -114,7 +151,7 @@ export function OnboardingWizard({ onComplete }: Props) {
     <div className="flex items-center justify-center h-screen bg-primary [app-region:drag]">
       <Card className="w-[520px] max-h-[80vh] flex flex-col overflow-hidden [app-region:no-drag]">
         <div className="px-6 pt-6 pb-4 border-b border-border">
-          <h2 className="text-lg font-bold mb-4">Welcome to ShipCode</h2>
+          <h2 className="mb-4 text-lg font-semibold">Welcome to ShipCode</h2>
           <div className="flex gap-6">
             {STEP_LABELS.map((label, i) => (
               <div
@@ -124,7 +161,7 @@ export function OnboardingWizard({ onComplete }: Props) {
                 }`}
               >
                 <span
-                  className={`w-2 h-2 rounded-full ${
+                  className={`size-2 rounded-full ${
                     i === step ? 'bg-accent' : i < step ? 'bg-success' : 'bg-text-muted-foreground'
                   }`}
                 />
@@ -147,8 +184,7 @@ export function OnboardingWizard({ onComplete }: Props) {
               plannerModel={plannerModel}
               reviewerModel={reviewerModel}
               onChange={(p, r) => {
-                setPlannerModel(p);
-                setReviewerModel(r);
+                dispatch({ type: 'models', plannerModel: p, reviewerModel: r });
               }}
               singleAgentMode={singleAgentMode}
             />
