@@ -15,7 +15,6 @@ import {
   formatReasoningEffortLabel,
   getCapabilitySupportedReasoningEfforts,
   getSupportedReasoningEfforts,
-  MODEL_DISPLAY,
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
 import { TaskGraphViewer } from '@shipcode/ui';
@@ -79,7 +78,6 @@ function usePipelineTabView({
   checkpoints,
   currentPhaseReasoningEfforts,
   currentPhaseSelections,
-  effectivePhaseResolvedModels,
   effectiveRequireApproval,
   effectiveRevisionCount,
   executorEditable,
@@ -238,25 +236,21 @@ function usePipelineTabView({
               {
                 role: 'Planner',
                 phase: 'planner' as const,
-                displayModel: effectivePhaseResolvedModels.planner,
               },
               {
                 role: 'Reviewer',
                 phase: 'reviewer' as const,
-                displayModel: effectivePhaseResolvedModels.reviewer,
               },
               {
                 role: 'Executor',
                 phase: 'executor' as const,
-                displayModel: effectivePhaseResolvedModels.executor,
               },
               {
                 role: 'Verifier',
                 phase: 'verifier' as const,
-                displayModel: effectivePhaseResolvedModels.verifier,
               },
             ] as const
-          ).map(({ role, phase, displayModel }) => {
+          ).map(({ role, phase }) => {
             const provider = currentPhaseSelections[phase].provider;
             const modelId = currentPhaseSelections[phase].modelId;
             const supportedEfforts =
@@ -286,125 +280,111 @@ function usePipelineTabView({
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                   {role}
                 </span>
-                {executorEditable ? (
-                  <div className="flex min-w-0 gap-2">
-                    <Select
-                      value={phaseSelectValues[phase]}
-                      onValueChange={(value: string) => onPhaseAgentChange(phase, value)}
+                <div className="flex min-w-0 gap-2">
+                  <Select
+                    value={phaseSelectValues[phase]}
+                    onValueChange={(value: string) => onPhaseAgentChange(phase, value)}
+                    disabled={!executorEditable}
+                  >
+                    <SelectTrigger
+                      className="h-6 min-w-0 flex-1 text-[11px]"
+                      data-testid={`phase-provider-select-${phase}`}
                     >
-                      <SelectTrigger
-                        className="h-6 min-w-0 flex-1 text-[11px]"
-                        data-testid={`phase-provider-select-${phase}`}
-                      >
-                        <SelectValue>
-                          {phaseSelectValues[phase] === '__inherit__' ? (
-                            <InheritValueDisplay
-                              detail={`project default (${formatProviderSelectionLabel(
-                                projectDefaultPhaseSelections[phase].provider,
-                                projectDefaultPhaseSelections[phase].modelId,
-                                integrationStatus,
-                              )})`}
-                            />
-                          ) : undefined}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__inherit__">
-                          {`Inherit project default (${formatProviderSelectionLabel(
-                            projectDefaultPhaseSelections[phase].provider,
-                            projectDefaultPhaseSelections[phase].modelId,
-                            integrationStatus,
-                          )})`}
-                        </SelectItem>
-                        <SelectSeparator />
-                        {PHASE_PROVIDER_OPTIONS[phase].map((providerOption) => {
-                          const selectedSelection = currentPhaseSelections[phase];
-                          const selectedModelId =
-                            selectedSelection.provider === providerOption
-                              ? selectedSelection.modelId
-                              : null;
-                          const modelOptions = getModelOptions(providerOption, integrationStatus);
-                          const selectedModelAvailability = assessCliModelAvailability(
-                            integrationStatus,
-                            providerOption,
-                            selectedModelId,
-                          );
-                          return (
-                            <SelectGroup key={providerOption}>
-                              <SelectLabel>{PROVIDER_DISPLAY[providerOption]}</SelectLabel>
-                              <SelectItem value={encodePhaseOption(providerOption, null)}>
-                                {PROVIDER_DISPLAY[providerOption]} default
+                      <SelectValue>
+                        {phaseSelectValues[phase] === '__inherit__' ? (
+                          <InheritValueDisplay
+                            detail={`project default (${formatProviderSelectionLabel(
+                              projectDefaultPhaseSelections[phase].provider,
+                              projectDefaultPhaseSelections[phase].modelId,
+                              integrationStatus,
+                            )})`}
+                          />
+                        ) : undefined}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__inherit__">
+                        {`Inherit project default (${formatProviderSelectionLabel(
+                          projectDefaultPhaseSelections[phase].provider,
+                          projectDefaultPhaseSelections[phase].modelId,
+                          integrationStatus,
+                        )})`}
+                      </SelectItem>
+                      <SelectSeparator />
+                      {PHASE_PROVIDER_OPTIONS[phase].map((providerOption) => {
+                        const selectedSelection = currentPhaseSelections[phase];
+                        const selectedModelId =
+                          selectedSelection.provider === providerOption
+                            ? selectedSelection.modelId
+                            : null;
+                        const modelOptions = getModelOptions(providerOption, integrationStatus);
+                        const selectedModelAvailability = assessCliModelAvailability(
+                          integrationStatus,
+                          providerOption,
+                          selectedModelId,
+                        );
+                        return (
+                          <SelectGroup key={providerOption}>
+                            <SelectLabel>{PROVIDER_DISPLAY[providerOption]}</SelectLabel>
+                            <SelectItem value={encodePhaseOption(providerOption, null)}>
+                              {PROVIDER_DISPLAY[providerOption]} default
+                            </SelectItem>
+                            {selectedModelId &&
+                            !modelOptions.some((option) => option.value === selectedModelId) ? (
+                              <SelectItem
+                                value={encodePhaseOption(providerOption, selectedModelId)}
+                                disabled={!selectedModelAvailability.available}
+                              >
+                                {selectedModelId}
+                                {!selectedModelAvailability.available ? ' (Unavailable)' : ''}
                               </SelectItem>
-                              {selectedModelId &&
-                              !modelOptions.some((option) => option.value === selectedModelId) ? (
-                                <SelectItem
-                                  value={encodePhaseOption(providerOption, selectedModelId)}
-                                  disabled={!selectedModelAvailability.available}
-                                >
-                                  {selectedModelId}
-                                  {!selectedModelAvailability.available ? ' (Unavailable)' : ''}
-                                </SelectItem>
-                              ) : null}
-                              {modelOptions.map((option) => (
-                                <SelectItem
-                                  key={option.value}
-                                  value={encodePhaseOption(providerOption, option.value)}
-                                >
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                              {providerOption !==
-                              PHASE_PROVIDER_OPTIONS[phase][
-                                PHASE_PROVIDER_OPTIONS[phase].length - 1
-                              ] ? (
-                                <SelectSeparator />
-                              ) : null}
-                            </SelectGroup>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={displayedEffortValue}
-                      onValueChange={(next) => onPhaseEffortChange(phase, next)}
-                    >
-                      <SelectTrigger className="h-6 min-w-0 flex-1 text-[11px]">
-                        <SelectValue>
-                          {isEffortInherited ? (
-                            <InheritValueDisplay
-                              detail={`inherit (${formatReasoningEffortLabel(inheritedPhaseReasoningEfforts[phase])})`}
-                            />
-                          ) : undefined}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__inherit__">
-                          {`Inherit (${formatReasoningEffortLabel(inheritedPhaseReasoningEfforts[phase])})`}
+                            ) : null}
+                            {modelOptions.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={encodePhaseOption(providerOption, option.value)}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                            {providerOption !==
+                            PHASE_PROVIDER_OPTIONS[phase][
+                              PHASE_PROVIDER_OPTIONS[phase].length - 1
+                            ] ? (
+                              <SelectSeparator />
+                            ) : null}
+                          </SelectGroup>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={displayedEffortValue}
+                    onValueChange={(next) => onPhaseEffortChange(phase, next)}
+                    disabled={!executorEditable}
+                  >
+                    <SelectTrigger className="h-6 min-w-0 flex-1 text-[11px]">
+                      <SelectValue>
+                        {isEffortInherited ? (
+                          <InheritValueDisplay
+                            detail={`inherit (${formatReasoningEffortLabel(inheritedPhaseReasoningEfforts[phase])})`}
+                          />
+                        ) : undefined}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__inherit__">
+                        {`Inherit (${formatReasoningEffortLabel(inheritedPhaseReasoningEfforts[phase])})`}
+                      </SelectItem>
+                      <SelectSeparator />
+                      {supportedEfforts.map((effort) => (
+                        <SelectItem key={effort} value={effort}>
+                          {formatReasoningEffortLabel(effort)}
                         </SelectItem>
-                        <SelectSeparator />
-                        {supportedEfforts.map((effort) => (
-                          <SelectItem key={effort} value={effort}>
-                            {formatReasoningEffortLabel(effort)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant="default"
-                      className="min-w-0 truncate font-mono normal-case tracking-normal"
-                    >
-                      {MODEL_DISPLAY[displayModel] ?? displayModel}
-                    </Badge>
-                    {phaseEffortSelectValues[phase] !== '__inherit__' ? (
-                      <span className="shrink-0 text-[10px] text-muted-foreground">
-                        {formatReasoningEffortLabel(effortResolution.effective)}
-                      </span>
-                    ) : null}
-                  </div>
-                )}
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 {/* Below-row extras (openrouter slug, validation messages) */}
                 {executorEditable && provider === 'openrouter' && phase !== 'executor' ? (
                   <div>

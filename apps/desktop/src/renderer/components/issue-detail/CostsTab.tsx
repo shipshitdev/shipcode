@@ -137,8 +137,14 @@ function formatPromptMaterialKind(kind: string): string {
     .replace(/\bQa\b/g, 'QA');
 }
 
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
 function PromptTelemetryCard({ record }: { record: PromptTelemetryRecord }) {
   const selectedMaterials = record.selectedMaterials;
+  const materialKinds = selectedMaterials ? uniqueStrings(selectedMaterials.kinds) : [];
+  const materialLabels = selectedMaterials ? uniqueStrings(selectedMaterials.labels) : [];
   const modelLabel = record.model
     ? (MODEL_DISPLAY[record.model as keyof typeof MODEL_DISPLAY] ?? record.model)
     : null;
@@ -197,18 +203,18 @@ function PromptTelemetryCard({ record }: { record: PromptTelemetryRecord }) {
             <span>Context Materials</span>
             <span>{selectedMaterials.count}</span>
           </div>
-          {selectedMaterials.kinds.length > 0 ? (
+          {materialKinds.length > 0 ? (
             <div className="mb-1 flex flex-wrap gap-1">
-              {selectedMaterials.kinds.map((kind) => (
+              {materialKinds.map((kind) => (
                 <Badge key={kind} variant="default" className="text-[9px] font-normal">
                   {formatPromptMaterialKind(kind)}
                 </Badge>
               ))}
             </div>
           ) : null}
-          {selectedMaterials.labels.length > 0 ? (
+          {materialLabels.length > 0 ? (
             <div className="max-h-24 space-y-1 overflow-y-auto pr-1">
-              {selectedMaterials.labels.map((label) => (
+              {materialLabels.map((label) => (
                 <div
                   key={label}
                   className="truncate font-mono text-[10px] text-muted-foreground"

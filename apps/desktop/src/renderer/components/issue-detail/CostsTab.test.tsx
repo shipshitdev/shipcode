@@ -175,6 +175,7 @@ describe('CostsTab', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.shipcode ??= {} as typeof window.shipcode;
     window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke;
   });
 
@@ -269,5 +270,43 @@ describe('CostsTab', () => {
       within(screen.getByText('Skill Resolution').parentElement as HTMLElement).getByText('88'),
     ).toBeInTheDocument();
     expect(screen.getByText('explicit · fallback')).toBeInTheDocument();
+  });
+
+  it('renders duplicate prompt material kinds once', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'costs:list-for-issue') return [makeTask()];
+      if (channel === 'pipeline-steps:list-by-thread') return [];
+      if (channel === 'pipeline-analytics:get-thread') {
+        return makeAnalytics({
+          promptTelemetry: [
+            {
+              ...makeAnalytics().promptTelemetry[0],
+              selectedMaterials: {
+                count: 5,
+                labels: ['repo context', 'repo context', 'testing context', 'testing context'],
+                kinds: [
+                  'repo_file_context',
+                  'repo_file_context',
+                  'testing_context',
+                  'testing_context',
+                ],
+              },
+            },
+          ],
+        });
+      }
+      return null;
+    });
+
+    renderWithClient();
+
+    const firstRun = await screen.findByRole('button', { expanded: false });
+    fireEvent.click(firstRun);
+
+    expect(await screen.findByText('Context Materials')).toBeInTheDocument();
+    expect(screen.getAllByText('Repo File Context')).toHaveLength(1);
+    expect(screen.getAllByText('Testing Context')).toHaveLength(1);
+    expect(screen.getAllByText('repo context')).toHaveLength(1);
+    expect(screen.getAllByText('testing context')).toHaveLength(1);
   });
 });

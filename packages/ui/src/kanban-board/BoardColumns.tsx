@@ -7,7 +7,7 @@ import { DraggableCard } from '@/kanban-board/IssueCardParts';
 import type { GitHubIssueCacheRecord, IssueStalenessResult } from '@/lib/shipcode';
 import { cn } from '@/lib/utils';
 import { Button } from '@/primitives/button';
-import { COLUMN_DOT_CLASS } from './constants';
+import { COLUMN_DOT_CLASS, COLUMN_SCROLLBAR_COLOR, COLUMN_TEXT_CLASS } from './constants';
 import type {
   BoardColumn,
   ColumnKey,
@@ -122,7 +122,6 @@ export function DroppableColumn({
   onFetchPlanSteps,
 }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable || readOnly });
-  const hasIssues = issues.length > 0;
 
   return (
     <div
@@ -133,7 +132,12 @@ export function DroppableColumn({
         isOver && droppable && 'bg-tertiary ring-2 ring-accent',
       )}
     >
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary">
+      <div
+        className={cn(
+          'flex shrink-0 items-center justify-between border-b border-border px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide',
+          COLUMN_TEXT_CLASS[columnKey],
+        )}
+      >
         <span className="flex items-center gap-1.5">
           <span
             className={cn(
@@ -148,15 +152,17 @@ export function DroppableColumn({
           <span
             className={cn(
               'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
-              !hasIssues && 'text-muted-foreground/70',
-              hasIssues && 'text-muted-foreground',
+              COLUMN_TEXT_CLASS[columnKey],
             )}
           >
             {issues.length}
           </span>
         </div>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-1.5 supports-[scrollbar-gutter:stable]:[scrollbar-gutter:stable]">
+      <div
+        className="kanban-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-1.5 supports-[scrollbar-gutter:stable]:[scrollbar-gutter:stable]"
+        style={{ '--column-scrollbar': COLUMN_SCROLLBAR_COLOR[columnKey] } as React.CSSProperties}
+      >
         {issues.map((issue) => (
           <DraggableCard
             key={issue.id}
@@ -294,7 +300,7 @@ function SectionBlock({
     >
       <div
         className={cn(
-          'sticky top-0 z-10 flex w-full items-center justify-between gap-2 border-b border-transparent px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide',
+          'sticky top-0 z-10 flex w-full items-center justify-between gap-2 border-b border-transparent px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide backdrop-blur-sm',
           'transition-colors',
           compact ? 'bg-secondary text-secondary' : SECTION_HEADER_CLASS[tone],
           section.droppable && isOver && 'border-accent/50 bg-tertiary text-primary',
@@ -500,7 +506,6 @@ export function StackedColumn({
       ),
     [approvedAwaitingExecutionIssueIds, column.sections, columnIssues],
   );
-  const hasIssues = columnIssues.length > 0;
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   const toggleSection = useCallback((key: string) => {
@@ -514,7 +519,12 @@ export function StackedColumn({
         compact ? 'min-w-0 max-w-none flex-1 basis-0' : 'min-w-[280px] max-w-[360px] flex-[1.3]',
       )}
     >
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary">
+      <div
+        className={cn(
+          'flex shrink-0 items-center justify-between border-b border-border px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide',
+          COLUMN_TEXT_CLASS[column.key],
+        )}
+      >
         <span className="flex items-center gap-1.5">
           <span
             className={cn(
@@ -529,15 +539,17 @@ export function StackedColumn({
           <span
             className={cn(
               'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
-              !hasIssues && 'text-muted-foreground/70',
-              hasIssues && 'text-muted-foreground',
+              COLUMN_TEXT_CLASS[column.key],
             )}
           >
             {columnIssues.length}
           </span>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto supports-[scrollbar-gutter:stable]:[scrollbar-gutter:stable]">
+      <div
+        className="kanban-scroll min-h-0 flex-1 overflow-y-auto supports-[scrollbar-gutter:stable]:[scrollbar-gutter:stable]"
+        style={{ '--column-scrollbar': COLUMN_SCROLLBAR_COLOR[column.key] } as React.CSSProperties}
+      >
         {(column.sections ?? []).map((section) => (
           <SectionBlock
             key={section.key}

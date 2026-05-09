@@ -171,6 +171,36 @@ branch refs/heads/feature/not-ours
     ]);
   });
 
+  it('does not treat an explicit non-issue title as a base ref when baseBranch is undefined', async () => {
+    gitMock.raw
+      .mockResolvedValueOnce('origin/main\n')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('');
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/tmp/shipcode-worktrees',
+    });
+
+    await expect(
+      manager.create('XqHCBbk29QnO6wzPlg9_Z', '[Auto] clean', undefined),
+    ).resolves.toEqual({
+      worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/auto-clean',
+      branch: 'shipcode/auto-clean',
+    });
+
+    expect(gitMock.raw).toHaveBeenLastCalledWith([
+      '-c',
+      'branch.autoSetupMerge=false',
+      '-c',
+      'push.autoSetupRemote=false',
+      'worktree',
+      'add',
+      '-b',
+      'shipcode/auto-clean',
+      '/tmp/shipcode-worktrees/project-9a1fd1/auto-clean',
+      'main',
+    ]);
+  });
+
   it('suffixes issue branch and directory names when an existing branch collides', async () => {
     gitMock.raw
       .mockResolvedValueOnce('')

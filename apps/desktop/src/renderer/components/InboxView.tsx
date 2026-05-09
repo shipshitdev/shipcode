@@ -23,7 +23,7 @@ import {
   TableRow,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUpDown, Loader2, Maximize2, X } from 'lucide-react';
+import { ArrowUpDown, Ban, Eye, Loader2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
@@ -262,7 +262,7 @@ function useInboxView() {
           <span className="pt-0.5 text-[11px] text-muted-foreground transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
             {formatRelativeTime(n.createdAt)}
           </span>
-          <div className="absolute right-0 top-0 flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          <div className="absolute right-0 top-0 flex items-center justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
             {n.projectId !== null && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -272,7 +272,7 @@ function useInboxView() {
                     onClick={() => setQuickViewNotification(n)}
                     aria-label={`Quick view: ${n.title}`}
                   >
-                    <Maximize2 size={13} />
+                    <Eye size={13} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Quick view</TooltipContent>
@@ -309,7 +309,7 @@ function useInboxView() {
                   disabled={dismiss.isPending && dismiss.variables === n.id}
                   aria-label={`Dismiss notification: ${n.title}`}
                 >
-                  <X size={13} />
+                  <Ban size={13} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Dismiss</TooltipContent>

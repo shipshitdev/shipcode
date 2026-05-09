@@ -308,16 +308,14 @@ function CpuGauge({ percent }: { percent: number | null }) {
   const clamped = percent == null ? 0 : Math.max(0, Math.min(100, percent));
 
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      <div className="flex h-[56px] w-[88px] items-end justify-center">
-        <div className="h-2 w-20 overflow-hidden rounded-full bg-tertiary">
-          <div
-            className={cn('h-full rounded-full transition-[width]', colors.fill)}
-            style={{ width: `${clamped}%` }}
-          />
-        </div>
+    <div className="flex items-center gap-2.5">
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-tertiary">
+        <div
+          className={cn('h-full rounded-full transition-[width]', colors.fill)}
+          style={{ width: `${clamped}%` }}
+        />
       </div>
-      <span className={cn('text-lg font-semibold tabular-nums', colors.text)}>
+      <span className={cn('text-sm font-semibold tabular-nums', colors.text)}>
         {percent == null ? '—' : `${Math.round(percent)}%`}
       </span>
     </div>
@@ -335,8 +333,9 @@ function ResourceUsageBadge() {
         return null;
       }
     },
-    refetchInterval: 2_000,
-    staleTime: 1_000,
+    refetchInterval: 10_000,
+    staleTime: 8_000,
+    placeholderData: (prev) => prev,
   });
 
   const killProcess = useMutation({
@@ -370,7 +369,9 @@ function ResourceUsageBadge() {
           <Cpu size={12} className={colors.text} />
           <span className="text-[10px] font-medium tracking-[0.08em] uppercase tabular-nums">
             <span className="text-secondary">CPU </span>
-            <span className={cn('inline-block w-[3ch] text-right', colors.text)}>{cpuValue}</span>
+            <span className={cn('inline-block min-w-[4ch] text-right', colors.text)}>
+              {cpuValue}
+            </span>
           </span>
           {isFetching ? <Loader2 size={10} className="animate-spin text-muted-foreground" /> : null}
         </Button>
@@ -380,18 +381,16 @@ function ResourceUsageBadge() {
         sideOffset={6}
         className="w-[calc(100vw-24px)] max-w-[560px] rounded-xl bg-primary p-4 shadow-2xl shadow-black/40"
       >
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div className="flex items-center gap-4">
-            <CpuGauge percent={snapshot.cpuPercent} />
-            <div>
-              <div className="text-[11px] font-medium text-primary">CPU usage</div>
-              <div className="text-[10px] text-muted-foreground">
-                {snapshot.cpuPercent == null
-                  ? `${snapshot.cpuCoreCount} cores · warming up`
-                  : `${snapshot.cpuCoreCount} cores · ${snapshot.cpuPercent}% host CPU`}
-              </div>
+        <div className="mb-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] font-medium text-primary">CPU usage</div>
+            <div className="text-[10px] text-muted-foreground">
+              {snapshot.cpuPercent == null
+                ? `${snapshot.cpuCoreCount} cores · warming up`
+                : `${snapshot.cpuCoreCount} cores · ${snapshot.cpuPercent}% host CPU`}
             </div>
           </div>
+          <CpuGauge percent={snapshot.cpuPercent} />
         </div>
 
         {topTasks.length > 0 ? (

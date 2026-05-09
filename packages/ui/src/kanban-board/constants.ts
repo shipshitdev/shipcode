@@ -138,6 +138,22 @@ export const COLUMN_DOT_CLASS: Record<ColumnKey, string> = {
   deferred: 'bg-text-muted-foreground',
 };
 
+export const COLUMN_TEXT_CLASS: Record<ColumnKey, string> = {
+  todo: 'text-success',
+  agent: 'text-agent',
+  human: 'text-warning',
+  done: 'text-done',
+  deferred: 'text-muted-foreground',
+};
+
+export const COLUMN_SCROLLBAR_COLOR: Record<ColumnKey, string> = {
+  todo: 'var(--success)',
+  agent: 'var(--agent)',
+  human: 'var(--warning)',
+  done: 'var(--done)',
+  deferred: 'var(--text-muted)',
+};
+
 /** Maps GitHub ProjectV2SingleSelectFieldOption color enum → CSS hex. */
 export const GH_OPTION_COLOR_HEX: Record<string, string> = {
   GRAY: '#6e7681',
