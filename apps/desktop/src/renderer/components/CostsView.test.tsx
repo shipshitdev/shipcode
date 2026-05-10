@@ -96,7 +96,7 @@ function makeAnalytics(
   overrides: Partial<PipelineAnalyticsOverview> = {},
 ): PipelineAnalyticsOverview {
   return {
-    timeToPr: { sampleSize: 3, medianMs: 120_000, p75Ms: 240_000, p95Ms: 600_000 },
+    timeToPr: { sampleSize: 3, medianMs: 120_000, p75Ms: 240_000, p95Ms: 3_900_000 },
     averagePhaseDurations: [
       {
         phase: 'executing',
@@ -322,6 +322,47 @@ describe('CostsView', () => {
     expect(await screen.findByText('Task offset 8')).toBeInTheDocument();
   });
 
+  it('paginates and collapses selected project cost details', async () => {
+    invokeMock.mockImplementation(async (channel: string, rawArgs?: unknown) => {
+      const args = rawArgs as { projectId?: string; offset?: number } | undefined;
+      if (channel === 'costs:get-summary') return makeSummary();
+      if (channel === 'costs:list-tasks') {
+        if (args?.projectId) {
+          return [
+            makeTask({
+              threadId: `project-thread-${args.offset ?? 0}`,
+              title: `Project task offset ${args.offset ?? 0}`,
+            }),
+          ];
+        }
+        return [makeTask({ title: 'Top cost task' })];
+      }
+      if (channel === 'costs:count-tasks') return args?.projectId ? 9 : 1;
+      if (channel === 'pipeline-analytics:get-overview') return makeAnalytics();
+      return null;
+    });
+
+    renderWithClient();
+
+    const byProject = (await screen.findByText('By Project')).closest('section') as HTMLElement;
+    fireEvent.click(within(byProject).getByText('ShipCode').closest('tr') as HTMLTableRowElement);
+
+    const details = (await screen.findByText('ShipCode Cost Details')).closest(
+      'section',
+    ) as HTMLElement;
+    expect(await within(details).findByText('Project task offset 0')).toBeInTheDocument();
+
+    fireEvent.click(within(details).getByRole('button', { name: /next/i }));
+
+    expect(await within(details).findByText('Project task offset 8')).toBeInTheDocument();
+
+    fireEvent.click(within(byProject).getByText('ShipCode').closest('tr') as HTMLTableRowElement);
+
+    await waitFor(() => {
+      expect(screen.queryByText('ShipCode Cost Details')).not.toBeInTheDocument();
+    });
+  });
+
   it('renders error state and retries summary loading', async () => {
     invokeMock.mockImplementation(async (channel: string) => {
       if (channel === 'costs:get-summary') throw new Error('db unavailable');
@@ -398,5 +439,47 @@ describe('CostsView', () => {
     renderWithClient();
 
     expect(await screen.findByTestId('cost-by-project-chart')).toHaveTextContent('2 projects');
+  });
+
+  it('covers token toggle, unmatched task navigation, fallback phase, and compact durations', async () => {
+    const unmatchedTask = makeTask({
+      phase: 'custom_phase' as CostTaskSummary['phase'],
+      model: null,
+      updatedAt: '2026-05-08T10:00:00.000Z',
+    });
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'costs:get-summary') return makeSummary();
+      if (channel === 'costs:list-tasks') return [unmatchedTask];
+      if (channel === 'costs:count-tasks') return 1;
+      if (channel === 'github:list-issues') return [];
+      if (channel === 'pipeline-analytics:get-overview') {
+        return makeAnalytics({
+          timeToPr: { sampleSize: 1, medianMs: null, p75Ms: 999, p95Ms: 1_500 },
+          averagePhaseDurations: [],
+        } as Partial<PipelineAnalyticsOverview>);
+      }
+      return null;
+    });
+
+    renderWithClient();
+
+    expect(await screen.findByText('custom phase')).toBeInTheDocument();
+    expect(screen.getByText('codex')).toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.getByText('999ms')).toBeInTheDocument();
+    expect(screen.getByText('1.5s')).toBeInTheDocument();
+    expect(screen.getByText('1 shipped sample')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show costs in US dollars' }));
+    expect(await screen.findByText('$12.34')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show costs in tokens' }));
+    expect(await screen.findByText('123k')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Add cost coverage').closest('tr') as HTMLTableRowElement);
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('github:list-issues', { projectId: 'project-1' });
+    });
+    expect(useAppStore.getState().activeIssue).toBeNull();
   });
 });

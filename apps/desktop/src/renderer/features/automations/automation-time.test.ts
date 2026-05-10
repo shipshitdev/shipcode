@@ -16,4 +16,19 @@ describe('formatAutomationRelativeTime', () => {
       vi.useRealTimers();
     }
   });
+
+  it('formats empty, invalid, Date, and future minute/hour values', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-05-08T12:00:00.000Z'));
+
+      expect(formatAutomationRelativeTime(null)).toBe('-');
+      expect(formatAutomationRelativeTime('not-a-date')).toBe('-');
+      expect(formatAutomationRelativeTime(new Date('2026-05-08T12:00:30.000Z'))).toBe('in <1m');
+      expect(formatAutomationRelativeTime('2026-05-08T12:15:00.000Z')).toBe('in 15m');
+      expect(formatAutomationRelativeTime('2026-05-08T14:00:00.000Z')).toBe('in 2h');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

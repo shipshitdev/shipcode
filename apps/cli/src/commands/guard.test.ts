@@ -38,6 +38,15 @@ describe('requireOnboarding', () => {
     expect(logSpy).toHaveBeenCalledWith('ShipCode is not set up yet. Run: shipcode onboard');
   });
 
+  it('checks the relative data dir when HOME is unavailable', () => {
+    delete process.env.HOME;
+    existsSyncMock.mockReturnValueOnce(false);
+
+    expect(requireOnboarding()).toBe(false);
+
+    expect(existsSyncMock).toHaveBeenCalledWith('.shipcode/data/shipcode.db');
+  });
+
   it('returns false when onboarding is behind the current version', () => {
     existsSyncMock.mockReturnValueOnce(true);
     getDatabaseMock.mockReturnValueOnce({});

@@ -161,10 +161,7 @@ function DraggableListRow({
             tone === 'danger' && 'bg-danger',
             tone === 'warning' && 'bg-warning',
             tone === 'agent' && 'bg-agent',
-            tone === 'default' &&
-              (issue.pipelineStatus === ISSUE_PIPELINE_STATUS.closed
-                ? 'bg-done'
-                : 'bg-text-muted-foreground'),
+            tone === 'default' && 'bg-text-muted-foreground',
           )}
         />
       )}
@@ -338,8 +335,6 @@ function ListSectionBlock({
       <div
         className={cn(
           'flex items-center gap-1.5 rounded-md border px-3 py-1 text-[10px] font-semibold uppercase tracking-wide',
-          tone === 'default' && 'border-border/60 bg-secondary/60 text-secondary',
-          tone === 'success' && 'border-success/20 bg-success/[0.08] text-success',
           tone === 'done' && 'border-done/20 bg-done/[0.08] text-done',
           tone === 'agent' && 'border-agent/20 bg-agent/[0.08] text-agent',
           tone === 'danger' && 'border-danger/20 bg-danger/[0.08] text-danger',
@@ -351,8 +346,6 @@ function ListSectionBlock({
         <span
           className={cn(
             'ml-1 min-w-[18px] rounded-full border px-1.5 py-px text-center text-[10px] font-medium',
-            tone === 'default' && 'border-border/60 bg-tertiary text-muted-foreground',
-            tone === 'success' && 'border-success/20 bg-success/15 text-success',
             tone === 'done' && 'border-done/20 bg-done/15 text-done',
             tone === 'agent' && 'border-agent/20 bg-agent/15 text-agent',
             tone === 'danger' && 'border-danger/20 bg-danger/15 text-danger',
@@ -528,7 +521,6 @@ export function IssueListView({
                         activeId={activeId}
                         onIssueClick={onIssueClick}
                         onOpenPullRequest={onOpenPullRequest}
-                        onArchiveIssue={column.key === 'done' ? onArchiveIssue : undefined}
                       />
                     ))}
                     {columnIssues.length === 0 && (

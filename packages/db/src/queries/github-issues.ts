@@ -14,7 +14,7 @@ import {
 import { nanoid } from 'nanoid';
 import { asRow, asRows, transaction } from '../utils';
 
-function isUniqueViolation(err: unknown): boolean {
+function isUniqueViolation(err: unknown): err is Error {
   return err instanceof Error && /UNIQUE constraint failed/i.test(err.message);
 }
 
@@ -211,7 +211,7 @@ export class GitHubIssueQueries {
     body: string;
     threadId: string;
   }): GitHubIssueCacheRecord {
-    let lastErr: unknown = null;
+    let lastErr = new Error('unknown');
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         this.db.exec('BEGIN IMMEDIATE');
@@ -244,14 +244,12 @@ export class GitHubIssueQueries {
         } catch {
           // already rolled back
         }
-        lastErr = err;
         if (!isUniqueViolation(err)) throw err;
+        lastErr = err;
       }
     }
     throw new Error(
-      `insertQuickTask: failed to allocate sentinel after 5 attempts (last: ${
-        lastErr instanceof Error ? lastErr.message : String(lastErr)
-      })`,
+      `insertQuickTask: failed to allocate sentinel after 5 attempts (last: ${lastErr.message})`,
     );
   }
 
@@ -531,8 +529,8 @@ export class GitHubIssueQueries {
         ${priorityClause}`;
     const params: string[] = [projectId, ISSUE_PIPELINE_STATUS.todo];
     if (hasPriorityFilter) params.push(...priorities);
-    const row = this.db.prepare(sql).get(...params) as { cnt: number } | undefined;
-    return row?.cnt ?? 0;
+    const row = this.db.prepare(sql).get(...params) as { cnt: number };
+    return row.cnt;
   }
 
   getOrphanedClaims(): GitHubIssueCacheRecord[] {
@@ -647,7 +645,7 @@ export class GitHubIssueQueries {
            )`,
       )
       .run(projectId);
-    return Number(result.changes ?? 0);
+    return Number(result.changes);
   }
 
   updatePullRequestFeedback(
@@ -692,7 +690,7 @@ export class GitHubIssueQueries {
       | undefined;
     if (!row) return;
 
-    const current = new Set<string>(JSON.parse(row.labels || '[]'));
+    const current = new Set<string>(JSON.parse(row.labels));
     if (present) current.add(label);
     else current.delete(label);
 
@@ -740,7 +738,7 @@ export class GitHubIssueQueries {
       issueNumber: row.issue_number,
       title: row.title,
       body: row.body,
-      labels: JSON.parse(row.labels || '[]'),
+      labels: JSON.parse(row.labels),
       assignee: row.assignee,
       state: row.state,
       pipelineStatus: row.pipeline_status,
@@ -796,12 +794,12 @@ export class GitHubIssueQueries {
       linkedPrUrl: row.linked_pr_url ?? null,
       linkedPrIsDraft: !!row.linked_pr_is_draft,
       ciBlocked: !!row.ci_blocked,
-      failingChecks: JSON.parse(row.failing_checks || '[]'),
-      unresolvedReviewComments: JSON.parse(row.unresolved_review_comments || '[]'),
-      unresolvedReviewCommentCount: row.unresolved_review_comment_count ?? 0,
+      failingChecks: JSON.parse(row.failing_checks as string),
+      unresolvedReviewComments: JSON.parse(row.unresolved_review_comments as string),
+      unresolvedReviewCommentCount: row.unresolved_review_comment_count as number,
       prLastSyncAt: toIsoUtc(row.pr_last_sync_at),
       updatedAt: toIsoUtc(row.github_updated_at) ?? row.github_updated_at ?? null,
-      fetchedAt: toIsoUtc(row.fetched_at) ?? row.fetched_at,
+      fetchedAt: toIsoUtc(row.fetched_at) as string,
       priorityRank:
         row.priority_rank === 'p0' ||
         row.priority_rank === 'p1' ||

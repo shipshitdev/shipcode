@@ -41,6 +41,22 @@ function supportHandlerError(err: unknown, fallback: string): string {
   return fallback;
 }
 
+export function parseOnboardingRepoList(
+  stdout: string,
+): { id: string; name: string; private: boolean }[] {
+  const seen = new Set<string>();
+  const repos: { id: string; name: string; private: boolean }[] = [];
+  for (const line of stdout.trim().split('\n').filter(Boolean)) {
+    const parsed = JSON.parse(line) as { id?: string; name?: string; private?: boolean };
+    const name = parsed.name?.trim();
+    const id = parsed.id?.trim();
+    if (!id || !name || seen.has(name)) continue;
+    seen.add(name);
+    repos.push({ id, name, private: !!parsed.private });
+  }
+  return repos.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function registerSupportHandlers({
   ipcMain,
   mainWindow,
@@ -72,17 +88,7 @@ export function registerSupportHandlers({
         { timeout: 20_000, env: shellExecEnv() },
       );
 
-      const seen = new Set<string>();
-      const repos: { id: string; name: string; private: boolean }[] = [];
-      for (const line of stdout.trim().split('\n').filter(Boolean)) {
-        const parsed = JSON.parse(line) as { id?: string; name?: string; private?: boolean };
-        const name = parsed.name?.trim();
-        const id = parsed.id?.trim();
-        if (!id || !name || seen.has(name)) continue;
-        seen.add(name);
-        repos.push({ id, name, private: !!parsed.private });
-      }
-      return repos.sort((a, b) => a.name.localeCompare(b.name));
+      return parseOnboardingRepoList(stdout);
     } catch (err) {
       throw new Error(supportHandlerError(err, 'Repository lookup failed'));
     }

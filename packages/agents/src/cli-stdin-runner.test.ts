@@ -48,6 +48,7 @@ function createFakeProc() {
 
 describe('runCliWithStdin', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
   });
 
@@ -79,5 +80,58 @@ describe('runCliWithStdin', () => {
     });
 
     await expect(promise).rejects.toThrow('Claude CLI exited 1: You’ve hit your limit');
+  });
+
+  it('resolves stdout on successful exits', async () => {
+    const fake = createFakeProc();
+    mockSpawn.mockReturnValueOnce(fake.proc);
+
+    const promise = runCliWithStdin({
+      cli: 'codex',
+      args: ['exec', '--json'],
+      input: 'PROMPT',
+      cwd: '/repo',
+      timeoutMs: 5_000,
+    });
+
+    fake.close(0, { stdout: 'done' });
+
+    await expect(promise).resolves.toBe('done');
+  });
+
+  it('wraps spawn errors with a clamped first-line message', async () => {
+    const fake = createFakeProc();
+    mockSpawn.mockReturnValueOnce(fake.proc);
+
+    const promise = runCliWithStdin({
+      cli: 'codex',
+      args: ['exec'],
+      input: 'PROMPT',
+      cwd: '/repo',
+      timeoutMs: 5_000,
+    });
+
+    fake.proc.emit('error', new Error('spawn failed\nprompt should not leak'));
+
+    await expect(promise).rejects.toThrow('Codex CLI spawn failed: spawn failed');
+  });
+
+  it('terminates timed-out CLI processes', async () => {
+    vi.useFakeTimers();
+    const fake = createFakeProc();
+    mockSpawn.mockReturnValueOnce(fake.proc);
+
+    const promise = runCliWithStdin({
+      cli: 'claude',
+      args: ['-p'],
+      input: 'PROMPT',
+      cwd: '/repo',
+      timeoutMs: 250,
+    });
+
+    vi.advanceTimersByTime(250);
+
+    await expect(promise).rejects.toThrow('Claude CLI timed out after 250ms');
+    expect(fake.proc.kill).toHaveBeenCalledWith('SIGTERM');
   });
 });

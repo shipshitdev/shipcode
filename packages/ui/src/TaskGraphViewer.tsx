@@ -158,6 +158,7 @@ export function TaskGraphViewer({
             node.githubIssueNumber !== null
               ? (getIssueUrl?.(node.githubIssueNumber) ?? null)
               : null;
+          const openIssue = issueUrl && onOpenIssue ? () => onOpenIssue(issueUrl) : undefined;
           const files = visibleFiles(node);
 
           return (
@@ -206,10 +207,8 @@ export function TaskGraphViewer({
                     variant="ghost"
                     size="xs"
                     className="h-6 shrink-0 px-1.5 text-[11px] text-muted-foreground"
-                    onClick={() => {
-                      if (issueUrl) onOpenIssue?.(issueUrl);
-                    }}
-                    disabled={!issueUrl || !onOpenIssue}
+                    onClick={openIssue}
+                    disabled={!openIssue}
                     title={`Open task issue #${node.githubIssueNumber}`}
                   >
                     #{node.githubIssueNumber}

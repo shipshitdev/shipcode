@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import { toast } from '../stores/toast-store';
 import { getShortcut, matchesShortcut, SHORTCUTS, type ShortcutId } from '../data/shortcuts';
 import { useAppStore } from '../stores/app-store';
+import { toast } from '../stores/toast-store';
 import { useOpenProjectTerminal } from './useOpenProjectTerminal';
 
 export function useGlobalKeyboard() {

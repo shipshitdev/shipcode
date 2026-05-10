@@ -287,6 +287,62 @@ describe('fetchProjectStatuses', () => {
     expect(onWarn).toHaveBeenCalled();
   });
 
+  it('handles non-Error and undefined-stderr exec failures without throwing', async () => {
+    mockExecFileAsync.mockRejectedValueOnce('gh unavailable');
+    const firstWarn = vi.fn();
+
+    await expect(
+      fetchProjectStatuses({ cwd: '/repo', projectUrl: ORG_URL, onWarn: firstWarn }),
+    ).resolves.toEqual(new Map());
+    expect(firstWarn).toHaveBeenCalledWith(
+      '[project-status] gh api graphql failed',
+      'gh unavailable',
+    );
+
+    mockExecFileAsync.mockRejectedValueOnce({ message: 'gh failed', stderr: undefined });
+    const secondWarn = vi.fn();
+
+    await expect(
+      fetchProjectStatuses({ cwd: '/repo', projectUrl: ORG_URL, onWarn: secondWarn }),
+    ).resolves.toEqual(new Map());
+    expect(secondWarn).toHaveBeenCalledWith('[project-status] gh api graphql failed', {
+      message: 'gh failed',
+      stderr: undefined,
+    });
+  });
+
+  it('warns specifically when GitHub reports missing project scope', async () => {
+    const err = new Error('GraphQL failed') as Error & { stderr?: string };
+    err.stderr = 'insufficient_scopes: requires read:project';
+    mockExecFileAsync.mockRejectedValueOnce(err);
+    const onWarn = vi.fn();
+
+    const out = await fetchProjectStatuses({ cwd: '/repo', projectUrl: ORG_URL, onWarn });
+
+    expect(out.size).toBe(0);
+    expect(onWarn.mock.calls[0]?.[0]).toContain('missing read:project scope');
+  });
+
+  it('returns empty map on invalid JSON and inaccessible projects', async () => {
+    const onWarn = vi.fn();
+    mockExecFileAsync.mockResolvedValueOnce({ stdout: 'not-json', stderr: '' });
+    await expect(
+      fetchProjectStatuses({ cwd: '/repo', projectUrl: ORG_URL, onWarn }),
+    ).resolves.toEqual(new Map());
+    expect(onWarn).toHaveBeenCalledWith(
+      '[project-status] failed to parse GraphQL response',
+      expect.any(SyntaxError),
+    );
+
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({ data: { organization: { projectV2: null } } }),
+      stderr: '',
+    });
+    await expect(fetchProjectStatuses({ cwd: '/repo', projectUrl: ORG_URL })).resolves.toEqual(
+      new Map(),
+    );
+  });
+
   it('returns empty map for unparseable project URL', async () => {
     const onWarn = vi.fn();
     const out = await fetchProjectStatuses({
@@ -309,6 +365,180 @@ describe('fetchProjectStatuses', () => {
 
     const out = await fetchProjectStatuses({ cwd: '/repo', projectUrl: ORG_URL });
     expect(out.has(99)).toBe(false);
+  });
+
+  it('skips archived, non-issue, missing-number, and non-status field values', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: {
+          organization: {
+            projectV2: {
+              items: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  { isArchived: true, content: { __typename: 'Issue', number: 1 } },
+                  { content: { __typename: 'PullRequest', number: 2 } },
+                  { content: { __typename: 'Issue' } },
+                  {
+                    content: { __typename: 'Issue', number: 4 },
+                    fieldValues: {
+                      nodes: [
+                        {
+                          __typename: 'ProjectV2ItemFieldSingleSelectValue',
+                          name: 'P1',
+                          field: { name: 'Priority' },
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    content: { __typename: 'Issue', number: 5 },
+                    fieldValues: {
+                      nodes: [
+                        { __typename: 'OtherValue', name: 'Todo', field: { name: 'Status' } },
+                        {
+                          __typename: 'ProjectV2ItemFieldSingleSelectValue',
+                          name: 'Todo',
+                          field: { name: 'Status' },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      }),
+      stderr: '',
+    });
+
+    const out = await fetchProjectStatuses({ cwd: '/repo', projectUrl: ORG_URL });
+
+    expect([...out.entries()]).toEqual([[5, { raw: 'Todo' }]]);
+  });
+
+  it('handles sparse Project item fields and nameless GraphQL errors', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({ data: null, errors: [{}] }),
+      stderr: '',
+    });
+    const onWarn = vi.fn();
+
+    const errors = await fetchProjectStatuses({ cwd: '/repo', projectUrl: ORG_URL, onWarn });
+
+    expect(errors.size).toBe(0);
+    expect(onWarn).toHaveBeenCalledWith('[project-status] GraphQL errors: <unknown>');
+
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: {
+          organization: {
+            projectV2: {
+              items: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  {
+                    content: { __typename: 'Issue', number: 6 },
+                    fieldValues: {
+                      nodes: [
+                        {
+                          __typename: 'ProjectV2ItemFieldSingleSelectValue',
+                          name: 'Todo',
+                          field: {},
+                        },
+                        {
+                          __typename: 'ProjectV2ItemFieldSingleSelectValue',
+                          field: { name: 'Status' },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      }),
+      stderr: '',
+    });
+
+    const sparse = await fetchProjectStatuses({ cwd: '/repo', projectUrl: ORG_URL });
+
+    expect(sparse.has(6)).toBe(false);
+  });
+
+  it('handles missing item and field-value connection payloads', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: { organization: { projectV2: {} } },
+      }),
+      stderr: '',
+    });
+
+    await expect(fetchProjectStatuses({ cwd: '/repo', projectUrl: ORG_URL })).resolves.toEqual(
+      new Map(),
+    );
+
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: {
+          organization: {
+            projectV2: {
+              items: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [{ content: { __typename: 'Issue', number: 9 } }],
+              },
+            },
+          },
+        },
+      }),
+      stderr: '',
+    });
+
+    await expect(fetchProjectStatuses({ cwd: '/repo', projectUrl: ORG_URL })).resolves.toEqual(
+      new Map(),
+    );
+  });
+
+  it('stops pagination when GitHub reports another page without a cursor', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: buildItemPage({
+        hasNextPage: true,
+        endCursor: null,
+        nodes: [{ issueNumber: 1, statusName: 'Todo' }],
+      }),
+      stderr: '',
+    });
+
+    const out = await fetchProjectStatuses({ cwd: '/repo', projectUrl: ORG_URL });
+
+    expect(out.get(1)).toEqual({ raw: 'Todo' });
+    expect(mockExecFileAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns when the page cap truncates status sync', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: buildItemPage({
+        hasNextPage: true,
+        endCursor: 'NEXT',
+        nodes: [{ issueNumber: 1, statusName: 'Todo' }],
+      }),
+      stderr: '',
+    });
+    const onWarn = vi.fn();
+
+    const out = await fetchProjectStatuses({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+      maxPages: 1,
+      onWarn,
+    });
+
+    expect(out.get(1)).toEqual({ raw: 'Todo' });
+    expect(onWarn).toHaveBeenCalledWith(
+      '[project-status] hit page cap of 1; truncating status sync',
+    );
   });
 
   it('filters issues by repoFullName when provided', async () => {
@@ -486,6 +716,28 @@ describe('validateProjectStatusField', () => {
     expect(result.reason).toContain('inProgress');
   });
 
+  it('reports missing todo when all other status columns are detected', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: buildFieldsPage({
+        statusOptions: ['Active', 'Review', 'Done', 'Later'],
+      }),
+      stderr: '',
+    });
+
+    const result = await validateProjectStatusField({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.mapping?.todo).toBeNull();
+    expect(result.mapping?.inProgress?.name).toBe('Active');
+    expect(result.mapping?.humanReview?.name).toBe('Review');
+    expect(result.mapping?.done?.name).toBe('Done');
+    expect(result.mapping?.deferred?.name).toBe('Later');
+    expect(result.reason).toContain('todo');
+  });
+
   it('returns ok=false on exec failure', async () => {
     mockExecFileAsync.mockRejectedValueOnce(new Error('network error'));
 
@@ -495,6 +747,84 @@ describe('validateProjectStatusField', () => {
     });
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('GraphQL query failed');
+  });
+
+  it('returns ok=false on invalid JSON and inaccessible project responses', async () => {
+    const onWarn = vi.fn();
+    mockExecFileAsync.mockResolvedValueOnce({ stdout: 'not-json', stderr: '' });
+    const invalid = await validateProjectStatusField({ cwd: '/repo', projectUrl: ORG_URL, onWarn });
+    expect(invalid).toMatchObject({ ok: false, reason: 'invalid JSON response' });
+    expect(onWarn).toHaveBeenCalledWith(
+      '[project-status] validate: failed to parse GraphQL response',
+      expect.any(SyntaxError),
+    );
+
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({ data: { organization: { projectV2: null } } }),
+      stderr: '',
+    });
+    const missing = await validateProjectStatusField({ cwd: '/repo', projectUrl: ORG_URL });
+    expect(missing).toMatchObject({ ok: false, reason: 'project not found or inaccessible' });
+  });
+
+  it('handles sparse field payloads during validation', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({ data: { organization: { projectV2: {} } } }),
+      stderr: '',
+    });
+
+    const missingFields = await validateProjectStatusField({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+    });
+    expect(missingFields).toMatchObject({
+      ok: false,
+      reason: 'no "Status" single-select field found on the project board',
+    });
+
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: {
+          organization: {
+            projectV2: {
+              fields: {
+                nodes: [
+                  { __typename: 'ProjectV2SingleSelectField' },
+                  { __typename: 'ProjectV2SingleSelectField', name: 'Status' },
+                ],
+              },
+            },
+          },
+        },
+      }),
+      stderr: '',
+    });
+
+    const missingOptions = await validateProjectStatusField({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+    });
+    expect(missingOptions).toMatchObject({
+      ok: false,
+      reason: 'no "Status" single-select field found on the project board',
+    });
+  });
+
+  it('uses user project field queries for user-owned project URLs', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: buildFieldsPage({
+        ownerType: 'user',
+        statusOptions: ['Todo', 'In Progress', 'Human Review', 'Done', 'Deferred'],
+      }),
+      stderr: '',
+    });
+
+    const result = await validateProjectStatusField({ cwd: '/repo', projectUrl: USER_URL });
+
+    expect(result.ok).toBe(true);
+    const args = mockExecFileAsync.mock.calls[0]?.[1] as string[];
+    const queryArg = args.find((a: string) => a.startsWith('query=')) ?? '';
+    expect(queryArg).toContain('user(login:');
   });
 
   it('returns ok=false for unparseable project URL', async () => {
@@ -543,5 +873,40 @@ describe('validateProjectStatusField', () => {
       done: { name: 'Done', color: 'PURPLE' },
       deferred: { name: 'Deferred', color: 'GRAY' },
     });
+  });
+
+  it('reports missing done and deferred mappings', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: buildFieldsPage({
+        statusOptions: ['Todo', 'In Progress', 'Human Review'],
+      }),
+      stderr: '',
+    });
+
+    const result = await validateProjectStatusField({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain('done');
+    expect(result.reason).toContain('deferred');
+  });
+
+  it('keeps the first detected done mapping when later done-like options are present', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: buildFieldsPage({
+        statusOptions: ['Todo', 'In Progress', 'Human Review', 'Done', 'Closed', 'Deferred'],
+      }),
+      stderr: '',
+    });
+
+    const result = await validateProjectStatusField({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.mapping?.done).toEqual({ name: 'Done', color: null });
   });
 });

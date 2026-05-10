@@ -276,9 +276,9 @@ function useProjectSidebarView() {
       e.preventDefault();
       dragRef.current = { startX: e.clientX, startW: sidebarWidth };
       const onMove = (ev: MouseEvent) => {
-        if (!dragRef.current) return;
-        const delta = ev.clientX - dragRef.current.startX;
-        const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, dragRef.current.startW + delta));
+        const drag = dragRef.current!;
+        const delta = ev.clientX - drag.startX;
+        const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, drag.startW + delta));
         setSidebarWidth(next);
       };
       const onUp = () => {
@@ -300,9 +300,9 @@ function useProjectSidebarView() {
       projects.toSorted((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
         if (sortOrder === 'alpha') return a.name.localeCompare(b.name);
-        if (sortOrder === 'added') return (a.createdAt || '').localeCompare(b.createdAt || '');
+        if (sortOrder === 'added') return a.createdAt.localeCompare(b.createdAt);
         // 'recent'
-        return (b.updatedAt || '').localeCompare(a.updatedAt || '');
+        return b.updatedAt.localeCompare(a.updatedAt);
       }),
     [projects, sortOrder],
   );

@@ -101,6 +101,10 @@ describe('logsCommand', () => {
         event: { kind: 'tool_end', name: 'bun test', exitCode: 1 },
       },
       {
+        createdAt: '2026-05-08T12:00:04.500Z',
+        event: { kind: 'tool_end', name: 'bun lint', exitCode: 0 },
+      },
+      {
         createdAt: '2026-05-08T12:00:05.000Z',
         event: { kind: 'lifecycle', message: 'started\n' },
       },

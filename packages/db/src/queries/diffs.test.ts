@@ -42,6 +42,13 @@ describe('DiffQueries', () => {
     expect(d.createdAt).toBeTruthy();
   });
 
+  it('falls back to the raw timestamp when created_at is not ISO parseable', () => {
+    const d = diffs.create(threadId, 'src/raw.ts', 'modify', 'diff');
+    db.prepare(`UPDATE diffs SET created_at = '' WHERE id = ?`).run(d.id);
+
+    expect(diffs.list(threadId)[0].createdAt).toBe('');
+  });
+
   it('create() accepts null diffContent for deleted files', () => {
     const d = diffs.create(threadId, 'src/gone.ts', 'delete', null);
     expect(d.diffContent).toBeNull();

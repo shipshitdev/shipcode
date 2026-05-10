@@ -43,6 +43,19 @@ describe('NotificationsQueries', () => {
     expect(n.dismissedAt).toBeNull();
   });
 
+  it('falls back to the raw timestamp when created_at is not ISO parseable', () => {
+    const n = notifications.create({
+      threadId,
+      projectId,
+      kind: 'completed',
+      title: 'Raw timestamp',
+      body: '',
+    });
+    db.prepare(`UPDATE notifications SET created_at = '' WHERE id = ?`).run(n.id);
+
+    expect(notifications.listActive()[0].createdAt).toBe('');
+  });
+
   it('listActive() returns only undismissed notifications', () => {
     const n1 = notifications.create({
       threadId,
@@ -92,6 +105,24 @@ describe('NotificationsQueries', () => {
     notifications.create({ threadId, projectId, kind: 'failed', title: 'B', body: '' });
     notifications.dismissAll();
     expect(notifications.listActive()).toHaveLength(0);
+  });
+
+  it('dismissByThread() clears active notifications for one thread only', () => {
+    const otherThread = threads.create(projectId, 'other', 'Other').id;
+    notifications.create({ threadId, projectId, kind: 'completed', title: 'Mine', body: '' });
+    notifications.create({
+      threadId: otherThread,
+      projectId,
+      kind: 'failed',
+      title: 'Theirs',
+      body: '',
+    });
+
+    notifications.dismissByThread(threadId);
+
+    const active = notifications.listActive();
+    expect(active).toHaveLength(1);
+    expect(active[0].threadId).toBe(otherThread);
   });
 
   it('activeCount() returns count of undismissed notifications', () => {

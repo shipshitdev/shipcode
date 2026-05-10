@@ -73,6 +73,7 @@ describe('ConversationsTab', () => {
   });
 
   it('filters phases, expands long turns, and copies one turn or all visible turns', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     const longContent = Array.from({ length: 35 }, (_, index) => `line ${index + 1}`).join('\n');
     invokeMock.mockResolvedValueOnce([
       makeConversation({
@@ -94,16 +95,33 @@ describe('ConversationsTab', () => {
         costUsd: 0,
         content: 'Execution response',
       }),
+      makeConversation({
+        id: 'execute-2',
+        phase: 'execute',
+        speaker: 'unknown-agent',
+        provider: null,
+        role: 'response',
+        model: null,
+        tokensIn: 10,
+        tokensOut: null,
+        costUsd: null,
+        content: 'Second execution response',
+      }),
     ]);
 
     renderWithClient();
 
     expect(await screen.findByText('plan (1)')).toBeInTheDocument();
-    expect(screen.getByText('execute (1)')).toBeInTheDocument();
+    expect(screen.getByText('execute (2)')).toBeInTheDocument();
     expect(screen.getByText('Show full (35 lines)')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'execute' }));
-    expect(screen.queryByText('execute (1)')).not.toBeInTheDocument();
+    expect(screen.queryByText('execute (2)')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'execute' }));
+    expect(screen.getByText('execute (2)')).toBeInTheDocument();
+    expect(screen.getByText('10→0 tok')).toBeInTheDocument();
+    expect(screen.getByText('unknown-agent')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Copy all/i }));
     await waitFor(() => {
@@ -112,18 +130,24 @@ describe('ConversationsTab', () => {
       );
     });
     expect(screen.getByRole('button', { name: /Copy all/i })).toBeInTheDocument();
+    vi.advanceTimersByTime(1500);
+    expect(screen.getByRole('button', { name: /Copy all/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show full (35 lines)' }));
     expect(screen.getByText('Show less')).toBeInTheDocument();
     expect(screen.getByText((content) => content.includes('line 35'))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+    expect(screen.getByText('Show full (35 lines)')).toBeInTheDocument();
 
     const copyButtons = screen.getAllByRole('button').filter((button) => button.textContent === '');
     fireEvent.click(copyButtons.at(-1) as HTMLButtonElement);
 
     await waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-        expect.stringContaining('**claude** (plan, prompt)'),
+        expect.stringContaining('**unknown-agent** (execute, response)'),
       );
     });
+    vi.advanceTimersByTime(1500);
+    vi.useRealTimers();
   });
 });

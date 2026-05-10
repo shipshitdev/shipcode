@@ -12,8 +12,10 @@ import {
   type GitHubIssueCacheRecord,
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
+  MAX_CLARIFICATION_ROUNDS,
   MAX_NODE_VERIFICATION_RETRIES,
   MAX_REVIEW_ROUNDS,
+  MAX_TEST_RETRIES,
   MAX_VERIFICATION_RETRIES,
   PIPELINE_MAX_RETRIES,
   type PlanRecord,
@@ -26,9 +28,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPipeline } from './pipeline';
 import type { PipelineContext, PipelineDeps, PipelineEvent } from './types';
 
+const { mockWorktreeCreate } = vi.hoisted(() => ({
+  mockWorktreeCreate: vi.fn(),
+}));
+
 vi.mock('@shipcode/git', () => {
   class WorktreeManager {
-    create = vi.fn().mockResolvedValue({ worktreePath: '/fake/worktree', branch: 'feat/42-bug' });
+    create = mockWorktreeCreate;
     remove = vi.fn().mockResolvedValue({ success: true });
   }
   class GitService {
@@ -593,6 +599,9 @@ function createMockDeps() {
     removeListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       listeners[event] = (listeners[event] ?? []).filter((h) => h !== handler);
     }),
+    off: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      listeners[event] = (listeners[event] ?? []).filter((h) => h !== handler);
+    }),
   } as unknown as ProcessManager;
 
   /**
@@ -657,6 +666,7 @@ function createMockDeps() {
         })),
         incrementReviewRound: vi.fn(),
         clearClarification: vi.fn(),
+        setClarificationRequest: vi.fn(),
         setGithubPr: vi.fn(),
         updateAutonomousFields: vi.fn(),
         setResolvedModel: vi.fn(),
@@ -723,6 +733,10 @@ function createMockDeps() {
         })),
         resolveOwnedByThread: vi.fn(() => 0),
       },
+      featureQaResults: {
+        insert: vi.fn(),
+        listByThread: vi.fn(() => []),
+      },
       settings,
       providers,
       skills: {
@@ -759,6 +773,11 @@ describe('createPipeline', () => {
 
   beforeEach(() => {
     mock = createMockDeps();
+    mockWorktreeCreate.mockReset();
+    mockWorktreeCreate.mockResolvedValue({
+      worktreePath: '/fake/worktree',
+      branch: 'feat/42-bug',
+    });
     mockExecSync.mockReset();
     mockExecSync.mockImplementation((cmd: string) => {
       if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'feat/test-branch';
@@ -770,6 +789,7 @@ describe('createPipeline', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true });
@@ -789,6 +809,36 @@ describe('createPipeline', () => {
         threadId: 't1',
         phase: 'planning',
       });
+    });
+
+    it('fails fast when the project PRD quality gate is enabled', async () => {
+      vi.mocked(mock.deps.projects.getById).mockReturnValue(
+        makeProject({ prdQualityGate: true } as Partial<Project>),
+      );
+      const pipeline = createPipeline(mock.deps);
+
+      await pipeline.startPlanGeneration('t1', '## Executive Summary\nToo thin', '/proj', null);
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('PRD quality gate:'),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('reports a missing planner provider when generation exits 127', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      await mock.trigger('exit', 'proc-1', 127);
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('claude CLI not found (exit 127)'),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
     it('initializeContext seeds state before pipeline start', async () => {
@@ -864,6 +914,22 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
     });
 
+    it('exit non-zero + valid plan still accepts the structured plan', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      await mock.trigger('output', 'proc-1', planBlock());
+      await mock.trigger('exit', 'proc-1', 1);
+
+      expect(mock.deps.plans.create).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.any(Object),
+        1,
+      );
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
+    });
+
     it('exit 0 + valid plan + autonomous → calls startExecution (spawns claude) when revisions are off', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
@@ -877,6 +943,59 @@ describe('createPipeline', () => {
       expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2);
       const secondCall = vi.mocked(mock.deps.processManager.spawn).mock.calls[1];
       expect(secondCall[1]).toBe('claude');
+    });
+
+    it('persists and comments task graphs when a structured plan is accepted', async () => {
+      const graph = makeTaskGraph();
+      vi.mocked(mock.deps.taskGraphs?.replaceForPlan).mockReturnValue(graph);
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      await mock.trigger('output', 'proc-1', planBlock());
+      await mock.trigger('exit', 'proc-1', 0);
+
+      expect(mock.deps.taskGraphs?.replaceForPlan).toHaveBeenCalledWith(
+        't1',
+        'plan-1',
+        expect.any(Object),
+        expect.any(Object),
+      );
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
+    });
+
+    it('continues when task graph persistence fails for an accepted plan', async () => {
+      vi.mocked(mock.deps.taskGraphs?.replaceForPlan).mockImplementation(() => {
+        throw new Error('task graph db offline');
+      });
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      await mock.trigger('output', 'proc-1', planBlock());
+      await mock.trigger('exit', 'proc-1', 0);
+
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approval');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
+    });
+
+    it('replaces an existing planning retry timer and skips retry when cancelled', async () => {
+      useRetryFakeTimers();
+      const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.retryTimer = setTimeout(() => {}, 10_000);
+
+      await mock.trigger('output', 'proc-1', 'transient failure without plan');
+      await mock.trigger('exit', 'proc-1', 1);
+
+      expect(clearSpy).toHaveBeenCalled();
+      expect(context.retryTimer).not.toBeNull();
+      context.cancelled = true;
+      await vi.runOnlyPendingTimersAsync();
+
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
+      expect(context.retryTimer).toBeNull();
     });
 
     it('exit 0 + no valid plan → creates plan with null, emits failed', async () => {
@@ -967,6 +1086,115 @@ describe('createPipeline', () => {
       expect(prompt).toContain('Produce a concrete plan now');
     });
 
+    it('enters clarifying when the planner emits a clarification request', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const request = clarificationRequest('clarify-1', 'scope', 'Scope');
+
+      await mock.trigger(
+        'output',
+        'proc-1',
+        `\`\`\`shipcode-clarification\n${JSON.stringify(request)}\n\`\`\``,
+      );
+      await mock.trigger('exit', 'proc-1', 0);
+      await flush();
+
+      expect(mock.deps.threads.setClarificationRequest).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({
+          id: 'clarify-1',
+          threadId: 't1',
+          phase: 'plan',
+        }),
+        1,
+      );
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'clarifying');
+      expect(mock.emittedEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'terminal:event',
+          threadId: 't1',
+          event: expect.objectContaining({
+            kind: 'clarification_requested',
+            questionCount: 1,
+          }),
+        }),
+      );
+    });
+
+    it('exit non-zero + clarification request still enters clarifying', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const request = clarificationRequest('clarify-1', 'scope', 'Scope');
+
+      await mock.trigger(
+        'output',
+        'proc-1',
+        `\`\`\`shipcode-clarification\n${JSON.stringify(request)}\n\`\`\``,
+      );
+      await mock.trigger('exit', 'proc-1', 1);
+
+      expect(mock.deps.threads.setClarificationRequest).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({ id: 'clarify-1' }),
+        1,
+      );
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'clarifying');
+    });
+
+    it('fails when planner clarification exceeds the round limit', async () => {
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        clarificationRound: MAX_CLARIFICATION_ROUNDS,
+      });
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const request = clarificationRequest('clarify-1', 'scope', 'Scope');
+
+      await mock.trigger(
+        'output',
+        'proc-1',
+        `\`\`\`shipcode-clarification\n${JSON.stringify(request)}\n\`\`\``,
+      );
+      await mock.trigger('exit', 'proc-1', 0);
+      await flush();
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        'planning',
+        expect.stringContaining('Planning clarification limit reached'),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('fails planning when the repo setup contract is invalid', async () => {
+      const projectDir = makeTempProject();
+      writeFileSync(path.join(projectDir, '.shipcode', 'setup.json'), '{');
+      const pipeline = createPipeline(mock.deps);
+
+      await pipeline.startPlanGeneration('t1', 'do stuff', projectDir, null);
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('Invalid repo setup contract'),
+      );
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('ignores planner completion after the context is cancelled', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      requireContext(pipeline).cancelled = true;
+
+      await mock.trigger('output', 'proc-1', planBlock());
+      await mock.trigger('exit', 'proc-1', 0);
+
+      expect(mock.deps.plans.create).not.toHaveBeenCalled();
+      expect(mock.deps.threads.recordFailure).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeDefined();
+    });
+
     it('uses repo WORKFLOW.md body as the planner prompt template when present', async () => {
       const projectDir = makeTempProject();
       writeFileSync(
@@ -1005,6 +1233,22 @@ Custom prompt`,
       expect(args[1]).toContain('Produce a detailed, step-by-step implementation plan');
     });
 
+    it('fails when the repo WORKFLOW.md template cannot render', async () => {
+      const projectDir = makeTempProject();
+      writeFileSync(path.join(projectDir, '.shipcode', 'WORKFLOW.md'), '{{ issue.titel }}');
+
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', projectDir, null);
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        'planning',
+        expect.stringContaining('WORKFLOW.md template render error:'),
+      );
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
     it('exit non-zero → schedules failure retry with exponential backoff', async () => {
       useRetryFakeTimers();
       const pipeline = createPipeline(mock.deps);
@@ -1041,6 +1285,80 @@ Custom prompt`,
         't1',
         expect.any(String),
         expect.any(String),
+      );
+    });
+
+    it('uses a final CLI result line as the exhausted planning failure reason', async () => {
+      useRetryFakeTimers();
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      for (let i = 1; i <= PIPELINE_MAX_RETRIES + 1; i++) {
+        await mock.trigger(
+          'output',
+          `proc-${i}`,
+          JSON.stringify({ type: 'result', result: `Planner failed attempt ${i}` }),
+        );
+        const exit = mock.trigger('exit', `proc-${i}`, 1);
+        await vi.advanceTimersByTimeAsync(0);
+        await exit;
+        if (i <= PIPELINE_MAX_RETRIES) {
+          await vi.advanceTimersByTimeAsync(10_000 * 2 ** (i - 1));
+        }
+      }
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        'planning',
+        'Planner failed attempt 4',
+      );
+    });
+
+    it('uses a final CLI errors line as the exhausted planning failure reason', async () => {
+      useRetryFakeTimers();
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      for (let i = 1; i <= PIPELINE_MAX_RETRIES + 1; i++) {
+        await mock.trigger(
+          'output',
+          `proc-${i}`,
+          JSON.stringify({ type: 'result', errors: [`Planner error attempt ${i}`] }),
+        );
+        const exit = mock.trigger('exit', `proc-${i}`, 1);
+        await vi.advanceTimersByTimeAsync(0);
+        await exit;
+        if (i <= PIPELINE_MAX_RETRIES) {
+          await vi.advanceTimersByTimeAsync(10_000 * 2 ** (i - 1));
+        }
+      }
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        'planning',
+        'Planner error attempt 4',
+      );
+    });
+
+    it('uses the generic exhausted planning failure when the final snippet is raw JSON', async () => {
+      useRetryFakeTimers();
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      for (let i = 1; i <= PIPELINE_MAX_RETRIES + 1; i++) {
+        await mock.trigger('output', `proc-${i}`, '{"unexpected":"shape"}');
+        const exit = mock.trigger('exit', `proc-${i}`, 1);
+        await vi.advanceTimersByTimeAsync(0);
+        await exit;
+        if (i <= PIPELINE_MAX_RETRIES) {
+          await vi.advanceTimersByTimeAsync(10_000 * 2 ** (i - 1));
+        }
+      }
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        'planning',
+        'Plan generation failed — no structured plan was produced.',
       );
     });
 
@@ -1127,6 +1445,21 @@ Custom prompt`,
       );
     });
 
+    it('loads repo prompt materials when review starts from a rehydrated context', async () => {
+      const projectDir = makeTempProject();
+      mkdirSync(path.join(projectDir, '.agents', 'memory'), { recursive: true });
+      writeFileSync(path.join(projectDir, '.agents', 'memory', 'MEMORY.md'), 'Repo memory.');
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', { projectPath: projectDir, worktreePath: projectDir });
+
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+
+      const context = requireContext(pipeline);
+      expect(context.repoPromptMaterials).not.toBeNull();
+      expect(context.repoContext).toContain('Repo memory.');
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
+    });
+
     it('approve + autonomous → calls startExecution (emits executing)', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
@@ -1153,6 +1486,41 @@ Custom prompt`,
 
       expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approval');
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
+    });
+
+    it('reports a missing reviewer provider when review exits 127', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('exit', 'proc-2', 127);
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('codex CLI not found (exit 127)'),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('fails review when WORKFLOW.md template cannot render', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.workflowPolicy = {
+        ...context.workflowPolicy,
+        promptTemplate: '{{ issue.titel }}',
+      };
+
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('WORKFLOW.md template render error:'),
+      );
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
+      expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
     it('request_changes + autonomous + round < MAX_REVIEW_ROUNDS → emits revising', async () => {
@@ -1239,6 +1607,70 @@ Custom prompt`,
         't1',
         expect.any(String),
         expect.any(String),
+      );
+    });
+
+    it('parse failure without a latest plan still emits failed', async () => {
+      vi.mocked(mock.deps.plans.getLatest).mockReturnValue(null);
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-2', 'garbage output');
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.reviews.create).not.toHaveBeenCalled();
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Review output could not be parsed — reviewer did not emit a shipcode-review block.',
+      );
+    });
+
+    it('ignores review completion after the context is cancelled', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+      requireContext(pipeline).cancelled = true;
+
+      await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.reviews.create).not.toHaveBeenCalled();
+      expect(mock.deps.plans.updateStatus).not.toHaveBeenCalledWith('plan-1', 'approved');
+    });
+
+    it('fails review when the latest plan record has no structured plan', async () => {
+      mock.latestPlan.structured = null;
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Review aborted: latest plan record has no structured plan.',
+      );
+    });
+
+    it('reports review persistence errors', async () => {
+      vi.mocked(mock.deps.reviews.create).mockImplementation(() => {
+        throw new Error('review db offline');
+      });
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Review error: review db offline',
       );
     });
 
@@ -1354,6 +1786,63 @@ Custom prompt`,
       );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
+
+    it('fails revision when WORKFLOW.md template cannot render', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.workflowPolicy = {
+        ...context.workflowPolicy,
+        promptTemplate: '{{ issue.titel }}',
+      };
+
+      await pipeline.startRevision('t1', JSON.parse(PLAN_JSON), 'feedback');
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('WORKFLOW.md template render error:'),
+      );
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('reports revision persistence errors', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      vi.mocked(mock.deps.plans.create).mockImplementation(() => {
+        throw new Error('plan db offline');
+      });
+
+      await pipeline.startRevision('t1', JSON.parse(PLAN_JSON), 'feedback');
+      await mock.trigger('output', 'proc-2', planBlock());
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.plans.supersedeAll).toHaveBeenCalledWith('t1');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Revision error: plan db offline',
+      );
+    });
+
+    it('ignores revision completion after the context is cancelled', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      await pipeline.startRevision('t1', JSON.parse(PLAN_JSON), 'feedback');
+      requireContext(pipeline).cancelled = true;
+
+      await mock.trigger('output', 'proc-2', planBlock());
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.plans.supersedeAll).not.toHaveBeenCalled();
+      expect(mock.deps.plans.create).not.toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.any(Object),
+        2,
+      );
+    });
   });
 
   // ─── startExecution ────────────────────────────────────────────────
@@ -1364,6 +1853,199 @@ Custom prompt`,
       await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
 
       expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+    });
+
+    it('refuses execution when no latest plan record exists', async () => {
+      vi.mocked(mock.deps.plans.getLatest).mockReturnValue(null);
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', { projectPath: '/proj', worktreePath: '/worktree' });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Refusing to execute: no plan record found for this thread.',
+      );
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('refuses execution when latest plan is rejected', async () => {
+      vi.mocked(mock.deps.plans.getLatest).mockReturnValue(makePlanRecord({ status: 'rejected' }));
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', { projectPath: '/proj', worktreePath: '/worktree' });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Refusing to execute: latest plan is rejected.',
+      );
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('refuses execution when latest plan has no structured output', async () => {
+      vi.mocked(mock.deps.plans.getLatest).mockReturnValue(makePlanRecord({ structured: null }));
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', { projectPath: '/proj', worktreePath: '/worktree' });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Refusing to execute: latest plan has no parsed structured output.',
+      );
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('refuses execution when latest plan is superseded', async () => {
+      vi.mocked(mock.deps.plans.getLatest).mockReturnValue(
+        makePlanRecord({ status: 'superseded' }),
+      );
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', { projectPath: '/proj', worktreePath: '/worktree' });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Refusing to execute: latest plan is superseded.',
+      );
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('fails execution when worktree creation fails', async () => {
+      mockWorktreeCreate.mockRejectedValueOnce(new Error('worktree failed'));
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', { projectPath: '/proj', worktreePath: null });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Worktree creation failed: Error: worktree failed',
+      );
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('fails execution when checkpoint creation throws', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === 'git rev-parse --abbrev-ref HEAD') {
+          throw new Error('rev-parse offline');
+        }
+        return '';
+      });
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', { projectPath: '/proj', worktreePath: '/worktree' });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Checkpoint creation failed: rev-parse offline',
+      );
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('skips duplicate checkpoint creation for the same execute attempt', async () => {
+      vi.mocked(mock.deps.checkpoints.getLatest).mockReturnValue({
+        id: 'checkpoint-1',
+        threadId: 't1',
+        projectId: 'project-1',
+        phase: 'executing',
+        reason: 'before_execute',
+        label: 'Before execute attempt 1',
+        branch: 'feat/test-branch',
+        commitSha: 'abc123',
+        createdAt: '',
+      });
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', { projectPath: '/proj', worktreePath: '/worktree' });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(mock.deps.checkpoints.create).not.toHaveBeenCalled();
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps execution in approval when project execution slots are full', async () => {
+      vi.mocked(mock.deps.settings.get).mockReturnValue({
+        ...DEFAULT_SETTINGS,
+        maxConcurrentExecutions: 1,
+      });
+      vi.mocked(mock.deps.threads.getById).mockImplementation((id: string) =>
+        id === 'other-thread'
+          ? ({ id, projectId: null, githubIssueNumber: null, status: 'executing' } as never)
+          : ({ id, projectId: null, githubIssueNumber: null, status: 'approval' } as never),
+      );
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('other-thread', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        projectId: null,
+      });
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        projectId: null,
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+    });
+
+    it('fails execution when WORKFLOW.md execute template cannot render', async () => {
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', { projectPath: '/proj', worktreePath: '/worktree' });
+      const context = requireContext(pipeline);
+      context.workflowPolicy = {
+        ...context.workflowPolicy,
+        promptTemplate: '{{ issue.titel }}',
+      };
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('WORKFLOW.md template render error:'),
+      );
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('fails execution when repo setup contract loading throws', async () => {
+      const projectDir = makeTempProject();
+      writeFileSync(path.join(projectDir, '.shipcode', 'setup.json'), '{');
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: projectDir,
+        worktreePath: projectDir,
+        baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('Invalid repo setup contract'),
+      );
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
     it('appends interrupted execution resume context once', async () => {
@@ -1471,6 +2153,169 @@ Custom prompt`,
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'verifying');
     });
 
+    it('continues autonomous direct execution when graph completion status update fails', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff output';
+        if (cmd.startsWith('git status')) return '';
+        return '';
+      });
+      const graph = {
+        ...makeTaskGraph(),
+        mode: 'direct',
+        assessment: {
+          mode: 'direct',
+          shouldDecompose: false,
+          riskScore: 0.1,
+          reasons: ['Contained plan with one low-risk execution surface'],
+          suggestedNodeCount: 1,
+          surfaces: ['frontend'],
+        } satisfies TaskGraphAssessment,
+        nodes: [makeTaskGraph().nodes[0]],
+        edges: [],
+      } satisfies TaskGraphWithNodes;
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      const statusError = new Error('status offline');
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(taskGraphs.getByPlanId).mockImplementation(() => graph);
+      vi.mocked(taskGraphs.updateGraphStatus).mockImplementation(() => {
+        throw statusError;
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+        autonomous: true,
+        forkPointSha: 'abc123',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('exit', 'proc-1', 0);
+      await flush();
+
+      expect(taskGraphs.updateGraphStatus).toHaveBeenCalledWith('graph-1', 'completed');
+      expect(consoleError).toHaveBeenCalledWith(
+        '[pipeline] direct task graph completion failed for t1:',
+        statusError,
+      );
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'verifying');
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2);
+    });
+
+    it('fails a completed manual task graph when no code changes were produced', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === 'git status --porcelain') return '';
+        if (cmd.startsWith('git diff')) return '';
+        if (cmd.startsWith('git rev-parse')) return 'abc123';
+        return '';
+      });
+      const graph = {
+        ...makeTaskGraph(),
+        status: 'active',
+        nodes: makeTaskGraph().nodes.map((node) => ({ ...node, status: 'completed' as const })),
+      };
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockReturnValue(graph);
+      vi.mocked(taskGraphs.getNextReadyNode).mockReturnValue(null);
+      vi.mocked(taskGraphs.updateGraphStatus).mockReturnValue({ ...graph, status: 'completed' });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+        autonomous: false,
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(taskGraphs.updateGraphStatus).toHaveBeenCalledWith('graph-1', 'completed');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'All task graph nodes completed but no code changes were produced',
+      );
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('fails a task graph with incomplete nodes but no ready node', async () => {
+      const graph = {
+        ...makeTaskGraph(),
+        nodes: makeTaskGraph().nodes.map((node, index) => ({
+          ...node,
+          status: index === 0 ? ('blocked' as const) : ('pending' as const),
+        })),
+      };
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockReturnValue(graph);
+      vi.mocked(taskGraphs.getNextReadyNode).mockReturnValue(null);
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Task graph has no ready node (step-1:blocked, step-2:pending).',
+      );
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('resets terminal task graph nodes before retry execution', async () => {
+      const terminalGraph = {
+        ...makeTaskGraph(),
+        status: 'failed',
+        nodes: makeTaskGraph().nodes.map((node) => ({
+          ...node,
+          status: 'failed' as const,
+        })),
+      };
+      const resetGraph = {
+        ...makeTaskGraph(),
+        nodes: makeTaskGraph().nodes.map((node, index) => ({
+          ...node,
+          status: index === 0 ? ('ready' as const) : ('pending' as const),
+        })),
+      };
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockReturnValue(resetGraph);
+      vi.mocked(taskGraphs.resetForRetry).mockReturnValue(resetGraph);
+      vi.mocked(taskGraphs.getNextReadyNode).mockReturnValue(resetGraph.nodes[0]);
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+        testRetries: 1,
+        nodeVerificationRetries: 2,
+        nodeAnchorSha: 'old-anchor',
+      });
+      vi.mocked(taskGraphs.getByPlanId)
+        .mockReturnValueOnce(terminalGraph)
+        .mockReturnValue(resetGraph);
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(taskGraphs.resetForRetry).toHaveBeenCalledWith('graph-1');
+      expect(requireContext(pipeline).nodeVerificationRetries).toBe(0);
+      expect(requireContext(pipeline).nodeAnchorSha).toBe('abc123');
+      expect(taskGraphs.updateNodeStatus).toHaveBeenCalledWith('node-1', 'running');
+    });
+
     it('executes task graph nodes one by one with specialist node prompts', async () => {
       // Mock git commands for per-node verification (captureNodeAnchorSha, computeNodeDiff)
       mockExecSync.mockImplementation((cmd: string) => {
@@ -1572,6 +2417,258 @@ Custom prompt`,
       expect(firstPrompt).toContain('Hard rule: execute ONLY the active node');
       expect(secondPrompt).toContain('Wire task graph pipeline');
       expect(secondPrompt).toContain('You are running as the backend specialist executor');
+    });
+
+    it('marks an active task graph node failed when execution exits non-zero', async () => {
+      const graph = makeTaskGraph();
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockReturnValue(graph);
+      vi.mocked(taskGraphs.getNextReadyNode).mockReturnValue(graph.nodes[0]);
+      vi.mocked(taskGraphs.updateNodeStatus).mockImplementation((nodeId: string, status) => {
+        const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+        if (!node) throw new Error(`missing node ${nodeId}`);
+        node.status = status;
+        return node;
+      });
+      vi.mocked(taskGraphs.markNodeFailed).mockReturnValue({
+        ...graph,
+        nodes: [{ ...graph.nodes[0], status: 'failed' }, graph.nodes[1]],
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-1', 'executor failed');
+      await mock.trigger('exit', 'proc-1', 1);
+
+      expect(taskGraphs.markNodeFailed).toHaveBeenCalledWith('node-1');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Execution failed (exit 1): executor failed',
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('schedules a node retry when node verification fails with retry budget left', async () => {
+      useRetryFakeTimers();
+      const graph = makeTaskGraph();
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockReturnValue(graph);
+      vi.mocked(taskGraphs.getNextReadyNode).mockReturnValue(graph.nodes[0]);
+      vi.mocked(taskGraphs.updateNodeStatus).mockImplementation((nodeId: string, status) => {
+        const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+        if (!node) throw new Error(`missing node ${nodeId}`);
+        node.status = status;
+        return node;
+      });
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === 'git rev-parse HEAD') return 'anchor-sha-123';
+        if (cmd === 'git status --porcelain') return ' M a.ts';
+        if (cmd === 'git add -A') return '';
+        if (cmd.startsWith('git commit --no-verify')) return '';
+        if (cmd.startsWith('git diff anchor-sha-123..HEAD')) return 'diff --git a/file.ts\n+code';
+        return '';
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('exit', 'proc-1', 0);
+      await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
+      const verifyExit = mock.trigger('exit', 'proc-2', 0);
+      await vi.advanceTimersByTimeAsync(0);
+      await verifyExit;
+
+      const context = requireContext(pipeline);
+      expect(context.nodeVerificationRetries).toBe(1);
+      expect(context.retryTimer).not.toBeNull();
+      expect(context.stabilizationFeedback).toContain('<node_verification_failure>');
+      expect(taskGraphs.updateNodeStatus).toHaveBeenLastCalledWith('node-1', 'ready');
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
+    });
+
+    it('does not verify a completed node when execution is cancelled before provider exit settles', async () => {
+      const graph = makeTaskGraph();
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockReturnValue(graph);
+      vi.mocked(taskGraphs.getNextReadyNode).mockReturnValue(graph.nodes[0]);
+      vi.mocked(taskGraphs.updateNodeStatus).mockImplementation((nodeId: string, status) => {
+        const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+        if (!node) throw new Error(`missing node ${nodeId}`);
+        node.status = status;
+        return node;
+      });
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === 'git rev-parse HEAD') return 'anchor-sha-123';
+        return '';
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      requireContext(pipeline).cancelled = true;
+      await mock.trigger('exit', 'proc-1', 0);
+      await flush();
+
+      expect(taskGraphs.markNodeCompletedAndPromote).not.toHaveBeenCalled();
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
+    });
+
+    it('replaces an existing node retry timer and skips retry execution after cancellation', async () => {
+      useRetryFakeTimers();
+      const graph = makeTaskGraph();
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockReturnValue(graph);
+      vi.mocked(taskGraphs.getNextReadyNode).mockReturnValue(graph.nodes[0]);
+      vi.mocked(taskGraphs.updateNodeStatus).mockImplementation((nodeId: string, status) => {
+        const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+        if (!node) throw new Error(`missing node ${nodeId}`);
+        node.status = status;
+        return node;
+      });
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === 'git rev-parse HEAD') return 'anchor-sha-123';
+        if (cmd === 'git status --porcelain') return ' M a.ts';
+        if (cmd === 'git add -A') return '';
+        if (cmd.startsWith('git commit --no-verify')) return '';
+        if (cmd.startsWith('git diff anchor-sha-123..HEAD')) return 'diff --git a/file.ts\n+code';
+        return '';
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+      });
+      const context = requireContext(pipeline);
+      context.retryTimer = setTimeout(() => {
+        throw new Error('stale retry timer fired');
+      }, 1_000);
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('exit', 'proc-1', 0);
+      await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
+      const verifyExit = mock.trigger('exit', 'proc-2', 0);
+      await vi.advanceTimersByTimeAsync(0);
+      await verifyExit;
+
+      context.cancelled = true;
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(context.nodeVerificationRetries).toBe(1);
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2);
+    });
+
+    it('continues when direct task graph completion status persistence fails', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff output';
+        if (cmd.startsWith('git status')) return '';
+        return '';
+      });
+      const graph = {
+        ...makeTaskGraph(),
+        mode: 'direct',
+        status: 'active',
+        assessment: {
+          mode: 'direct',
+          shouldDecompose: false,
+          riskScore: 0.1,
+          reasons: ['direct'],
+          suggestedNodeCount: 1,
+          surfaces: ['frontend'],
+        } satisfies TaskGraphAssessment,
+        nodes: [makeTaskGraph().nodes[0]],
+        edges: [],
+      } satisfies TaskGraphWithNodes;
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockReturnValue(graph);
+      vi.mocked(taskGraphs.updateGraphStatus).mockImplementation(() => {
+        throw new Error('graph db offline');
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+        autonomous: true,
+        forkPointSha: 'abc123',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('exit', 'proc-1', 0);
+      await flush();
+
+      expect(taskGraphs.updateGraphStatus).toHaveBeenCalledWith('graph-1', 'completed');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'verifying');
+    });
+
+    it('continues failure handling when direct task graph failure status persistence fails', async () => {
+      const graph = {
+        ...makeTaskGraph(),
+        mode: 'direct',
+        status: 'active',
+        assessment: {
+          mode: 'direct',
+          shouldDecompose: false,
+          riskScore: 0.1,
+          reasons: ['direct'],
+          suggestedNodeCount: 1,
+          surfaces: ['frontend'],
+        } satisfies TaskGraphAssessment,
+        nodes: [makeTaskGraph().nodes[0]],
+        edges: [],
+      } satisfies TaskGraphWithNodes;
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockReturnValue(graph);
+      vi.mocked(taskGraphs.updateGraphStatus).mockImplementation(() => {
+        throw new Error('graph db offline');
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-1', 'executor failed');
+      await mock.trigger('exit', 'proc-1', 1);
+
+      expect(taskGraphs.updateGraphStatus).toHaveBeenCalledWith('graph-1', 'failed');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Execution failed (exit 1): executor failed',
+      );
     });
 
     it('empty node diff exhausts retry budget and marks node failed (no infinite loop)', async () => {
@@ -1678,6 +2775,56 @@ Custom prompt`,
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
+    it('marks a task graph node completed when node verification passes', async () => {
+      const graph = makeTaskGraph();
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockImplementation(() => graph);
+      vi.mocked(taskGraphs.getNextReadyNode).mockImplementation(
+        () => graph.nodes.find((n) => n.status === 'ready') ?? null,
+      );
+      vi.mocked(taskGraphs.updateNodeStatus).mockImplementation((nodeId: string, status) => {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        if (!node) throw new Error(`missing node ${nodeId}`);
+        node.status = status;
+        return node;
+      });
+      vi.mocked(taskGraphs.markNodeCompletedAndPromote).mockImplementation((nodeId: string) => {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        if (!node) throw new Error(`missing node ${nodeId}`);
+        node.status = 'completed';
+        graph.nodes[1].status = 'ready';
+        return graph;
+      });
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === 'git rev-parse HEAD') return 'anchor-sha-123';
+        if (cmd === 'git status --porcelain') return ' M a.ts';
+        if (cmd === 'git add -A') return '';
+        if (cmd.startsWith('git commit --no-verify')) return '';
+        if (cmd.startsWith('git diff anchor-sha-123..HEAD')) return 'diff --git a/file.ts\n+code';
+        return '';
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('exit', 'proc-1', 0);
+      await flush();
+      await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_PASSED_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+      await flush();
+
+      expect(taskGraphs.markNodeCompletedAndPromote).toHaveBeenCalledWith('node-1');
+      expect(taskGraphs.updateNodeStatus).toHaveBeenCalledWith('node-1', 'running');
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(3);
+    });
+
     it('exit non-zero → emits failed', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
@@ -1690,6 +2837,70 @@ Custom prompt`,
         't1',
         expect.any(String),
         expect.any(String),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('manual execution fails when the executor exits successfully without changes', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === 'git status --porcelain') return '';
+        if (cmd.startsWith('git diff')) return '';
+        if (cmd.startsWith('git rev-parse')) return 'abc123';
+        return '';
+      });
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        autonomous: false,
+        baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger(
+        'output',
+        'proc-1',
+        '{"type":"result","is_error":true,"result":"No edits needed"}',
+      );
+      await mock.trigger('exit', 'proc-1', 0);
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Executor exited successfully but produced no code changes: No edits needed',
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('reports execution provider errors from the async execution body', async () => {
+      const provider: AgentProvider = {
+        id: 'claude',
+        supports: new Set(['execute']),
+        generate: vi.fn(async () => {
+          throw new Error('provider failed');
+        }),
+        healthCheck: vi.fn(async () => ({ ok: true })),
+      };
+      const deps = {
+        ...mock.deps,
+        providers: {
+          for: vi.fn(() => provider),
+        },
+      } as unknown as PipelineDeps;
+      const pipeline = createPipeline(deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await flush();
+
+      expect(deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Execution error: Error: provider failed',
       );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
@@ -1984,6 +3195,55 @@ Custom prompt`,
       expect(mock.deps.diffs.replaceForThread).toHaveBeenCalledWith('t1', []);
     });
 
+    it('fails when the pre-verification commit step throws', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      requireContext(pipeline).forkPointSha = 'abc123';
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git status')) return 'M dirty.ts';
+        if (cmd.startsWith('git add')) throw new Error('git add failed');
+        return '';
+      });
+
+      await pipeline.startVerification('t1');
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Pre-verification commit failed: git add failed',
+      );
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('treats diff command failures as an empty diff', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      requireContext(pipeline).forkPointSha = 'abc123';
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git status')) return '';
+        if (cmd.startsWith('git rev-parse')) return 'headsha123';
+        if (cmd.startsWith('git diff')) throw new Error('diff failed');
+        return '';
+      });
+
+      await pipeline.startVerification('t1');
+
+      expect(mock.deps.verifications.create).toHaveBeenCalledWith(
+        't1',
+        'plan-1',
+        'No changes detected',
+        null,
+      );
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('Verification skipped'),
+      );
+    });
+
     it('persists parsed per-file diffs before running verification', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
@@ -2071,6 +3331,180 @@ Custom prompt`,
       await vi.advanceTimersByTimeAsync(1000);
 
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
+    });
+
+    it('replaces an existing verification retry timer before scheduling execution retry', async () => {
+      useRetryFakeTimers();
+      const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.forkPointSha = 'abc123';
+      context.verificationRetries = 0;
+      context.retryTimer = setTimeout(() => {}, 10_000);
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff';
+        if (cmd.startsWith('git status')) return '';
+        if (cmd.startsWith('git rev-parse')) return 'headsha123';
+        return '';
+      });
+
+      await pipeline.startVerification('t1');
+      await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
+      const exitP = mock.trigger('exit', 'proc-2', 0);
+      await vi.advanceTimersByTimeAsync(0);
+      await exitP;
+
+      expect(clearSpy).toHaveBeenCalled();
+      expect(context.retryTimer).not.toBeNull();
+    });
+
+    it('persists feature QA flow results emitted by the verifier', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.forkPointSha = 'abc123';
+      context.featureQaState = {
+        featureId: 'issue-42',
+        routes: [],
+        criticalFlows: [],
+        expectedStates: [],
+        testDataAssumptions: [],
+        selectorReadiness: 'ready',
+      };
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff';
+        if (cmd.startsWith('git status')) return '';
+        if (cmd.startsWith('git rev-parse')) return 'headsha123';
+        if (cmd.startsWith('git log')) return 'commit ahead';
+        return '';
+      });
+
+      await pipeline.startVerification('t1');
+      await mock.trigger(
+        'output',
+        'proc-2',
+        `${verificationBlock(VERIFICATION_PASSED_JSON)}\n<qa_results>${JSON.stringify([
+          { flowName: 'checkout-flow', passed: true, evidencePaths: ['qa/pass.png'] },
+        ])}</qa_results>`,
+      );
+      await mock.trigger('exit', 'proc-2', 0);
+      await flush();
+
+      expect(mock.deps.featureQaResults?.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: 't1',
+          featureId: 'issue-42',
+          status: 'passed',
+          summary: 'OK',
+          evidencePaths: ['qa/pass.png'],
+        }),
+      );
+    });
+
+    it('continues when verifier feature QA persistence fails', async () => {
+      vi.mocked(mock.deps.featureQaResults?.insert).mockImplementation(() => {
+        throw new Error('qa db offline');
+      });
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.forkPointSha = 'abc123';
+      context.featureQaState = {
+        featureId: 'issue-42',
+        routes: [],
+        criticalFlows: [],
+        expectedStates: [],
+        testDataAssumptions: [],
+        selectorReadiness: 'ready',
+      };
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff';
+        if (cmd.startsWith('git status')) return '';
+        if (cmd.startsWith('git rev-parse')) return 'headsha123';
+        if (cmd.startsWith('git log')) return 'commit ahead';
+        return '';
+      });
+
+      await pipeline.startVerification('t1');
+      await mock.trigger(
+        'output',
+        'proc-2',
+        `${verificationBlock(VERIFICATION_PASSED_JSON)}\n<qa_results>${JSON.stringify([
+          { flowName: 'checkout-flow', passed: true },
+        ])}</qa_results>`,
+      );
+      await mock.trigger('exit', 'proc-2', 0);
+      await flush();
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'shipping');
+    });
+
+    it('reports verifier provider errors', async () => {
+      const provider: AgentProvider = {
+        id: 'claude',
+        supports: new Set(['verify']),
+        generate: vi.fn(async () => {
+          throw new Error('verifier failed');
+        }),
+        healthCheck: vi.fn(async () => ({ ok: true })),
+      };
+      const deps = {
+        ...mock.deps,
+        providers: {
+          for: vi.fn(() => provider),
+        },
+      } as unknown as PipelineDeps;
+      const pipeline = createPipeline(deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        forkPointSha: 'abc123',
+      });
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff';
+        if (cmd.startsWith('git status')) return '';
+        return '';
+      });
+
+      await pipeline.startVerification('t1');
+      await flush();
+
+      expect(deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Verification error: verifier failed',
+      );
+    });
+
+    it('fails verification when WORKFLOW.md verify template cannot render', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.forkPointSha = 'abc123';
+      context.workflowPolicy = {
+        ...context.workflowPolicy,
+        promptTemplate: '{{ issue.titel }}',
+      };
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff';
+        if (cmd.startsWith('git status')) return '';
+        return '';
+      });
+
+      await pipeline.startVerification('t1');
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('WORKFLOW.md template render error:'),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
     it('dirty worktree is auto-committed before verification, then fails when retries are exhausted', async () => {
@@ -2173,6 +3607,27 @@ Custom prompt`,
       await vi.advanceTimersByTimeAsync(1000);
 
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
+    });
+
+    it('does not persist verifier output after a run is marked cancelled', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.forkPointSha = 'abc123';
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff';
+        if (cmd.startsWith('git status')) return '';
+        return '';
+      });
+
+      await pipeline.startVerification('t1');
+      context.cancelled = true;
+      await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_PASSED_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.verifications.create).not.toHaveBeenCalled();
+      expect(mock.deps.threads.updateStatus).not.toHaveBeenCalledWith('t1', 'shipping');
     });
 
     it('verification failed + no retries → emits failed', async () => {
@@ -2318,6 +3773,46 @@ Custom prompt`,
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
+    it('blocks when the same shared test failure was already resolved elsewhere', async () => {
+      const projectFailures = mock.deps.projectFailures;
+      if (!projectFailures) throw new Error('Expected project failure deps');
+      vi.mocked(projectFailures.claimOrCreate).mockReturnValueOnce({
+        id: 'failure-1',
+        projectId: 'project-1',
+        baseBranch: 'main',
+        fingerprint: 'fp-1',
+        status: 'resolved',
+        ownerThreadId: 'owner-thread',
+        firstSeenThreadId: 'owner-thread',
+        seenThreadIds: ['owner-thread', 't1'],
+        command: failingCommand,
+        summary: 'FAIL packages/foo.test.ts',
+        outputExcerpt: '',
+        implicatedFiles: ['packages/foo.test.ts'],
+        resolvedByThreadId: 'owner-thread',
+        resolvedCommitSha: 'resolvedsha1234567890',
+        resolvedAt: '',
+        createdAt: '',
+        updatedAt: '',
+      });
+      const pipeline = createPipeline(mock.deps);
+      seedVerifyCommandContext(pipeline, failingCommand);
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-1', 'execution done');
+      await mock.trigger('exit', 'proc-1', 0);
+      await mock.trigger('output', 'proc-2', 'FAIL packages/foo.test.ts\n');
+      await mock.trigger('exit', 'proc-2', 1);
+      await flush();
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('already resolved by owner-thread at resolvedsha1'),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
     it('marks owned shared failures resolved after tests pass and verification commits', async () => {
       const passingCommand = 'node -e "process.exit(0)"';
       const pipeline = createPipeline(mock.deps);
@@ -2341,6 +3836,854 @@ Custom prompt`,
         't1',
         'resolvedsha123',
       );
+    });
+
+    it('parse failure creates an unstructured verification and fails', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      requireContext(pipeline).forkPointSha = 'abc123';
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff';
+        if (cmd.startsWith('git status')) return '';
+        if (cmd.startsWith('git rev-parse')) return 'headsha123';
+        return '';
+      });
+
+      await pipeline.startVerification('t1');
+      await mock.trigger('output', 'proc-2', 'verifier did not emit a block');
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.verifications.create).toHaveBeenCalledWith(
+        't1',
+        'plan-1',
+        'verifier did not emit a block',
+        null,
+      );
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Verification output could not be parsed — verifier did not emit a shipcode-verify block.',
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+  });
+
+  describe('runtime QA', () => {
+    it('startTesting no-ops without active context', async () => {
+      const pipeline = createPipeline(mock.deps);
+
+      await pipeline.startTesting('t1');
+
+      expect(mock.deps.processManager.spawnWithStdin).not.toHaveBeenCalled();
+      expect(mock.deps.threads.updateStatus).not.toHaveBeenCalledWith('t1', 'testing');
+    });
+
+    it('defers local verification while CPU task slots are busy', async () => {
+      useRetryFakeTimers();
+      vi.mocked(mock.deps.settings.get).mockReturnValue({
+        ...DEFAULT_SETTINGS,
+        maxConcurrentCpuTasks: 1,
+      });
+      let cpuReady = false;
+      mock.deps.cpuTaskGate = {
+        canStartCpuTask: vi.fn(() =>
+          cpuReady ? { allowed: true } : { allowed: false, reason: 'CPU load high' },
+        ),
+        retryDelayMs: 5000,
+      } as never;
+      const pipeline = createPipeline(mock.deps);
+      seedVerifyCommandContext(pipeline, 'node -e "process.exit(0)"');
+
+      await pipeline.startTesting('t1');
+
+      const context = requireContext(pipeline);
+      expect(context.cpuQueueStartedAt).not.toBeNull();
+      expect(context.cpuQueueLastNotifiedAt).not.toBeNull();
+      expect(context.retryTimer).not.toBeNull();
+      expect(mock.deps.processManager.spawnWithStdin).not.toHaveBeenCalledWith(
+        'shell',
+        expect.any(String),
+        expect.arrayContaining(['node -e "process.exit(0)"']),
+        expect.any(String),
+        '',
+        't1',
+        expect.any(Object),
+      );
+
+      cpuReady = true;
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'testing');
+    });
+
+    it('defers local verification when another thread occupies the only CPU slot', async () => {
+      useRetryFakeTimers();
+      vi.mocked(mock.deps.settings.get).mockReturnValue({
+        ...DEFAULT_SETTINGS,
+        maxConcurrentCpuTasks: 1,
+      });
+      let otherThreadStatus = 'testing';
+      vi.mocked(mock.deps.threads.getById).mockImplementation((id: string) =>
+        id === 'other-thread'
+          ? ({ id, projectId: 'project-1', status: otherThreadStatus } as never)
+          : ({ id, projectId: 'project-1', status: 'approval' } as never),
+      );
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('other-thread', {
+        projectPath: '/proj',
+        worktreePath: '/other-worktree',
+        projectId: 'project-1',
+      });
+      const context = seedVerifyCommandContext(pipeline, 'node -e "process.exit(0)"');
+      context.retryTimer = setTimeout(() => undefined, 1);
+
+      await pipeline.startTesting('t1');
+
+      expect(context.retryTimer).not.toBeNull();
+      expect(mock.deps.threads.updateStatus).not.toHaveBeenCalledWith('t1', 'testing');
+
+      otherThreadStatus = 'completed';
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'testing');
+    });
+
+    it('fails verification preflight when setup-before-verify commands fail', async () => {
+      const pipeline = createPipeline(mock.deps);
+      const context = seedVerifyCommandContext(pipeline, 'node -e "process.exit(0)"');
+      context.repoSetupContract = {
+        ...context.repoSetupContract,
+        contract: {
+          ...context.repoSetupContract.contract,
+          setupCommands: ['setup-fails'],
+          setupBeforeVerify: true,
+        },
+      };
+
+      const testing = pipeline.startTesting('t1');
+      await flush();
+      await mock.trigger('output', 'proc-1', 'setup failed\n');
+      await mock.trigger('exit', 'proc-1', 1);
+      await testing;
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Verification preflight failed: command failed (1): setup-fails — setup failed',
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('fails testing when repo setup contract loading throws', async () => {
+      const projectDir = makeTempProject();
+      writeFileSync(path.join(projectDir, '.shipcode', 'setup.json'), '{');
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: projectDir,
+        worktreePath: projectDir,
+        autonomous: true,
+      });
+
+      await pipeline.startTesting('t1');
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('Invalid repo setup contract'),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('routes a scheduled test fix failure when the structured plan is missing', async () => {
+      useRetryFakeTimers();
+      vi.mocked(mock.deps.plans.getLatest).mockReturnValue(makePlanRecord({ structured: null }));
+      const pipeline = createPipeline(mock.deps);
+      seedVerifyCommandContext(pipeline, 'FAIL packages/foo.test.ts');
+
+      await pipeline.startTesting('t1');
+      await mock.trigger('output', 'proc-1', 'FAIL packages/foo.test.ts\n');
+      const exitP = mock.trigger('exit', 'proc-1', 1);
+      await vi.advanceTimersByTimeAsync(0);
+      await exitP;
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Test fix cannot start: structured plan missing for this thread.',
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('schedules a local test-fix retry without the shared failure ledger and cancels before retry', async () => {
+      useRetryFakeTimers();
+      const pipeline = createPipeline(mock.deps);
+      const context = seedVerifyCommandContext(pipeline, 'FAIL packages/foo.test.ts');
+      delete (context as unknown as { projectId?: string }).projectId;
+      context.retryTimer = setTimeout(() => undefined, 1);
+
+      await pipeline.startTesting('t1');
+      await mock.trigger('output', 'proc-1', 'FAIL packages/foo.test.ts\n');
+      const exitP = mock.trigger('exit', 'proc-1', 1);
+      await vi.advanceTimersByTimeAsync(0);
+      await exitP;
+
+      expect(mock.deps.projectFailures?.claimOrCreate).not.toHaveBeenCalled();
+      expect(context.retryTimer).not.toBeNull();
+
+      context.cancelled = true;
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(mock.deps.threads.updateStatus).not.toHaveBeenCalledWith('t1', 'executing');
+    });
+
+    it('blocks a duplicate test fix when the shared failure is already resolved', async () => {
+      vi.mocked(mock.deps.projectFailures?.claimOrCreate).mockReturnValueOnce({
+        id: 'failure-1',
+        projectId: 'project-1',
+        baseBranch: 'main',
+        fingerprint: 'fingerprint-1',
+        status: 'resolved',
+        ownerThreadId: 'owner-thread',
+        firstSeenThreadId: 'owner-thread',
+        seenThreadIds: ['owner-thread', 't1'],
+        command: 'bun test',
+        summary: 'Tests failed',
+        outputExcerpt: '',
+        implicatedFiles: [],
+        resolvedByThreadId: 'owner-thread',
+        resolvedCommitSha: 'abcdef1234567890',
+        resolvedAt: '',
+        createdAt: '',
+        updatedAt: '',
+      });
+      const pipeline = createPipeline(mock.deps);
+      seedVerifyCommandContext(pipeline, 'FAIL packages/foo.test.ts');
+
+      await pipeline.startTesting('t1');
+      await mock.trigger('output', 'proc-1', 'FAIL packages/foo.test.ts\n');
+      await mock.trigger('exit', 'proc-1', 1);
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Shared test failure already resolved by owner-thread at abcdef123456. Rebase or cherry-pick that fix before retrying this worktree.',
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('blocks a duplicate test fix when another thread owns the shared failure', async () => {
+      vi.mocked(mock.deps.projectFailures?.claimOrCreate).mockReturnValueOnce({
+        id: 'failure-1',
+        projectId: 'project-1',
+        baseBranch: 'main',
+        fingerprint: 'fingerprint-1',
+        status: 'in_progress',
+        ownerThreadId: 'owner-thread',
+        firstSeenThreadId: 'owner-thread',
+        seenThreadIds: ['owner-thread', 't1'],
+        command: 'bun test',
+        summary: 'Tests failed',
+        outputExcerpt: '',
+        implicatedFiles: [],
+        resolvedByThreadId: null,
+        resolvedCommitSha: null,
+        resolvedAt: null,
+        createdAt: '',
+        updatedAt: '',
+      });
+      const pipeline = createPipeline(mock.deps);
+      seedVerifyCommandContext(pipeline, 'FAIL packages/foo.test.ts');
+
+      await pipeline.startTesting('t1');
+      await mock.trigger('output', 'proc-1', 'FAIL packages/foo.test.ts\n');
+      await mock.trigger('exit', 'proc-1', 1);
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Shared test failure is already being fixed by owner-thread. This worktree is blocked to avoid a duplicate fix and merge conflict.',
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('emits an exhausted static verification failure at the test retry ceiling', async () => {
+      const pipeline = createPipeline(mock.deps);
+      const context = seedVerifyCommandContext(pipeline, 'FAIL packages/foo.test.ts');
+      context.testRetries = MAX_TEST_RETRIES;
+
+      await pipeline.startTesting('t1');
+      await mock.trigger('output', 'proc-1', 'FAIL packages/foo.test.ts\n');
+      await mock.trigger('exit', 'proc-1', 1);
+
+      expect(mock.emittedEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'pipeline:verification-exhausted',
+          threadId: 't1',
+          retries: MAX_TEST_RETRIES,
+          testSummary: 'FAIL packages/foo.test.ts',
+        }),
+      );
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        `Test fix exhausted after ${MAX_TEST_RETRIES + 1} attempt(s): FAIL packages/foo.test.ts`,
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('fails static verification command spawn errors', async () => {
+      const pipeline = createPipeline(mock.deps);
+      seedVerifyCommandContext(pipeline, 'node -e "throw new Error()"');
+      vi.mocked(mock.deps.processManager.spawnWithStdin).mockImplementationOnce(() => {
+        throw new Error('shell spawn failed');
+      });
+
+      await pipeline.startTesting('t1');
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Verification command error: shell spawn failed',
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('runs runtime QA commands and continues to verification on success', async () => {
+      const pipeline = createPipeline(mock.deps);
+      const context = pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        autonomous: true,
+      });
+      context.repoSetupLoaded = true;
+      context.repoSetupContract = {
+        path: '/proj/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: {
+            testCommands: ['node -e "process.exit(0)"'],
+            discoverAgentTests: false,
+          },
+        },
+      };
+
+      await pipeline.startTesting('t1');
+      await mock.trigger('exit', 'proc-1', 0);
+      await flush();
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'testing');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'verifying');
+      expect(context.runtimeQaCleanup).toBeNull();
+    });
+
+    it('fails runtime QA command errors as fatal verification failures', async () => {
+      const pipeline = createPipeline(mock.deps);
+      const context = pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        autonomous: true,
+      });
+      context.repoSetupLoaded = true;
+      context.repoSetupContract = {
+        path: '/proj/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: {
+            testCommands: ['node -e "throw new Error()"'],
+            discoverAgentTests: false,
+          },
+        },
+      };
+      vi.mocked(mock.deps.processManager.spawnWithStdin).mockImplementationOnce(() => {
+        throw new Error('spawn failed');
+      });
+
+      await pipeline.startTesting('t1');
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('Runtime QA command error: spawn failed'),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('fails visual QA when selector readiness is not ready and retry budget is exhausted', async () => {
+      const pipeline = createPipeline(mock.deps);
+      const context = pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        autonomous: true,
+        projectId: null,
+      });
+      context.testRetries = MAX_TEST_RETRIES;
+      context.repoSetupLoaded = true;
+      context.repoSetupContract = {
+        path: '/proj/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+        },
+      };
+      context.featureQaState = {
+        featureId: 'issue-42',
+        routes: ['/dashboard'],
+        criticalFlows: [],
+        expectedStates: [],
+        testDataAssumptions: [],
+        selectorReadiness: 'missing',
+        visualAssertions: [
+          {
+            name: 'button visible',
+            route: '/dashboard',
+            targetSelector: '[data-testid="create-button"]',
+            assertion: 'visible',
+          },
+        ],
+      };
+
+      await pipeline.startTesting('t1');
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('Visual QA requires stable selectors'),
+      );
+      expect(mock.deps.processManager.spawnWithStdin).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('schedules a test-fix retry when visual QA selectors are not ready and retry budget remains', async () => {
+      useRetryFakeTimers();
+      const pipeline = createPipeline(mock.deps);
+      const context = pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        autonomous: true,
+      });
+      context.repoSetupLoaded = true;
+      context.repoSetupContract = {
+        path: '/proj/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+        },
+      };
+      context.featureQaState = {
+        featureId: 'issue-42',
+        routes: ['/dashboard'],
+        criticalFlows: [],
+        expectedStates: [],
+        testDataAssumptions: [],
+        selectorReadiness: 'missing',
+        visualAssertions: [
+          {
+            name: 'button visible',
+            route: '/dashboard',
+            targetSelector: '[data-testid="create-button"]',
+            assertion: 'visible',
+          },
+        ],
+      };
+
+      await pipeline.startTesting('t1');
+
+      expect(context.retryTimer).not.toBeNull();
+      expect(mock.deps.threads.recordFailure).not.toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('Visual QA requires stable selectors'),
+      );
+      expect(pipeline.getContext('t1')).toBe(context);
+    });
+
+    it('fails visual QA when relative routes have no runtime server', async () => {
+      const pipeline = createPipeline(mock.deps);
+      const context = pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        autonomous: true,
+      });
+      context.repoSetupLoaded = true;
+      context.repoSetupContract = {
+        path: '/proj/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: { testCommands: [], discoverAgentTests: false },
+        },
+      };
+      context.featureQaState = {
+        featureId: 'issue-42',
+        routes: ['/dashboard'],
+        criticalFlows: [],
+        expectedStates: [],
+        testDataAssumptions: [],
+        selectorReadiness: 'ready',
+        visualAssertions: [
+          {
+            name: 'button visible',
+            route: '/dashboard',
+            targetSelector: '[data-testid="create-button"]',
+            assertion: 'visible',
+          },
+        ],
+      };
+
+      await pipeline.startTesting('t1');
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('Visual QA uses relative routes'),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('generates visual QA runtime tests and runs the discovered runner', async () => {
+      const projectDir = makeTempProject();
+      const localPlaywright = path.join(projectDir, 'node_modules', '.bin', 'playwright');
+      mkdirSync(path.dirname(localPlaywright), { recursive: true });
+      writeFileSync(localPlaywright, '#!/usr/bin/env bash\nexit 0\n');
+      chmodSync(localPlaywright, 0o755);
+
+      const pipeline = createPipeline(mock.deps);
+      const context = pipeline.initializeContext('t1', {
+        projectPath: projectDir,
+        worktreePath: projectDir,
+        autonomous: true,
+      });
+      context.repoSetupLoaded = true;
+      context.repoSetupContract = {
+        path: path.join(projectDir, '.shipcode', 'setup.json'),
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: { testCommands: [], discoverAgentTests: true },
+        },
+      };
+      context.featureQaState = {
+        featureId: 'issue-42',
+        routes: ['http://localhost:3000/dashboard'],
+        criticalFlows: [],
+        expectedStates: [],
+        testDataAssumptions: [],
+        selectorReadiness: 'ready',
+        visualAssertions: [
+          {
+            name: 'button visible',
+            route: 'http://localhost:3000/dashboard',
+            targetSelector: 'data-testid=create-button',
+            assertion: 'visible',
+          },
+        ],
+      };
+
+      const testing = pipeline.startTesting('t1');
+      await flush();
+      const runnerPath = path.join(
+        projectDir,
+        '.shipcode',
+        'runtime-tests',
+        'visual-qa.generated.test.sh',
+      );
+      expect(readFileSync(runnerPath, 'utf-8')).toContain('playwright test');
+      await mock.trigger('exit', 'proc-1', 0);
+      await testing;
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'verifying');
+      expect(mock.deps.processManager.spawnWithStdin).toHaveBeenCalledWith(
+        'shell',
+        expect.any(String),
+        expect.arrayContaining([expect.stringContaining('visual-qa.generated.test.sh')]),
+        projectDir,
+        '',
+        't1',
+        expect.any(Object),
+      );
+    });
+
+    it('fails runtime QA server startup when readiness never succeeds', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({ ok: false })),
+      );
+      const pipeline = createPipeline(mock.deps);
+      const context = pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        projectId: null,
+        worktreePath: '/worktree',
+        autonomous: true,
+      });
+      context.testRetries = MAX_TEST_RETRIES;
+      context.repoSetupLoaded = true;
+      context.repoSetupContract = {
+        path: '/proj/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: {
+            server: {
+              command: 'npm run dev',
+              readinessUrl: 'http://localhost:3000/health',
+              portEnvVar: 'PORT',
+              startupTimeoutMs: 1,
+            },
+            testCommands: ['runtime-qa-pass'],
+            discoverAgentTests: false,
+          },
+        },
+      };
+
+      await pipeline.startTesting('t1');
+
+      expect(mock.deps.processManager.kill).toHaveBeenCalledWith('proc-1');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('Runtime QA server startup failed'),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('fails runtime QA when the managed server crashes before tests run', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => {
+          await mock.trigger('exit', 'proc-1', 1);
+          return { ok: true };
+        }),
+      );
+      const pipeline = createPipeline(mock.deps);
+      const context = pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        projectId: null,
+        worktreePath: '/worktree',
+        autonomous: true,
+      });
+      context.testRetries = MAX_TEST_RETRIES;
+      context.repoSetupLoaded = true;
+      context.repoSetupContract = {
+        path: '/proj/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: {
+            server: {
+              command: 'npm run dev',
+              readinessUrl: 'http://localhost:3000/health',
+              portEnvVar: 'PORT',
+              startupTimeoutMs: 100,
+            },
+            testCommands: ['runtime-qa-pass'],
+            discoverAgentTests: false,
+          },
+        },
+      };
+
+      await pipeline.startTesting('t1');
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        '[runtime-qa] Server crashed during testing',
+      );
+      expect(mock.deps.processManager.kill).toHaveBeenCalledWith('proc-1');
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('persists passing runtime QA flow results before verification', async () => {
+      const pipeline = createPipeline(mock.deps);
+      const context = pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        projectId: null,
+        worktreePath: '/worktree',
+        autonomous: true,
+      });
+      context.repoSetupLoaded = true;
+      context.repoSetupContract = {
+        path: '/proj/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: {
+            testCommands: ['runtime-qa-pass'],
+            discoverAgentTests: false,
+          },
+        },
+      };
+      context.featureQaState = {
+        featureId: 'issue-42',
+        routes: [],
+        criticalFlows: [],
+        expectedStates: [],
+        testDataAssumptions: [],
+        selectorReadiness: 'ready',
+      };
+
+      const testing = pipeline.startTesting('t1');
+      await flush();
+      await mock.trigger(
+        'output',
+        'proc-1',
+        `<qa_results>${JSON.stringify([
+          { flowName: 'checkout-flow', passed: true, evidencePaths: ['qa/pass.png'] },
+        ])}</qa_results>`,
+      );
+      await mock.trigger('exit', 'proc-1', 0);
+      await testing;
+
+      expect(mock.deps.featureQaResults?.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: 't1',
+          featureId: 'issue-42',
+          status: 'passed',
+          evidencePaths: ['qa/pass.png'],
+        }),
+      );
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'verifying');
+    });
+
+    it('persists failed runtime QA flow results and emits exhausted failure at retry ceiling', async () => {
+      const pipeline = createPipeline(mock.deps);
+      const context = pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        projectId: null,
+        worktreePath: '/worktree',
+        autonomous: true,
+      });
+      context.testRetries = MAX_TEST_RETRIES;
+      context.repoSetupLoaded = true;
+      context.repoSetupContract = {
+        path: '/proj/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: {
+            testCommands: ['runtime-qa-fail'],
+            discoverAgentTests: false,
+          },
+        },
+      };
+      context.featureQaState = {
+        featureId: 'issue-42',
+        routes: [],
+        criticalFlows: [],
+        expectedStates: [],
+        testDataAssumptions: [],
+        selectorReadiness: 'ready',
+      };
+
+      const testing = pipeline.startTesting('t1');
+      await flush();
+      await mock.trigger(
+        'output',
+        'proc-1',
+        `<qa_results>${JSON.stringify([
+          { flowName: 'checkout-flow', passed: false, failureReason: 'Missing total' },
+        ])}</qa_results>`,
+      );
+      await mock.trigger('exit', 'proc-1', 1);
+      await testing;
+
+      expect(mock.deps.featureQaResults?.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: 't1',
+          featureId: 'issue-42',
+          status: 'failed',
+          summary: expect.stringContaining('Missing total'),
+        }),
+      );
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Runtime QA exhausted retries on: runtime-qa-fail',
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('schedules a test-fix retry when runtime QA fails and retry budget remains', async () => {
+      useRetryFakeTimers();
+      const pipeline = createPipeline(mock.deps);
+      const context = pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        autonomous: true,
+      });
+      context.repoSetupLoaded = true;
+      context.repoSetupContract = {
+        path: '/proj/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: {
+            testCommands: ['runtime-qa-fail'],
+            discoverAgentTests: false,
+          },
+        },
+      };
+
+      const testing = pipeline.startTesting('t1');
+      await Promise.resolve();
+      await mock.trigger('output', 'proc-1', 'runtime failure\n');
+      await mock.trigger('exit', 'proc-1', 1);
+      await testing;
+
+      expect(context.retryTimer).not.toBeNull();
+      expect(mock.deps.threads.recordFailure).not.toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('Runtime QA exhausted retries'),
+      );
+      expect(pipeline.getContext('t1')).toBe(context);
     });
   });
 
@@ -2523,6 +4866,52 @@ Custom prompt`,
       );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
+
+    it('aborts commit when HEAD moved after verification', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.forkPointSha = 'abc123';
+      context.verifiedSha = 'verified-sha';
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse HEAD')) return 'different-sha';
+        return '';
+      });
+
+      await pipeline.startCommitAndPush('t1');
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Commit aborted: HEAD moved after verification (verifiedSha mismatch).',
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('retries commit push once after an initial failure', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      requireContext(pipeline).forkPointSha = 'abc123';
+      let pushAttempts = 0;
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse HEAD')) return 'headsha';
+        if (cmd.startsWith('git log')) return 'abc123 some commit';
+        if (cmd.startsWith('git rev-parse --abbrev-ref')) return 'feat/branch';
+        if (cmd.startsWith('git push')) {
+          pushAttempts++;
+          if (pushAttempts === 1) throw new Error('transient push failed');
+          return '';
+        }
+        return '';
+      });
+
+      await pipeline.startCommitAndPush('t1');
+
+      expect(pushAttempts).toBe(2);
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'shipping');
+    });
   });
 
   // ─── startShipping ─────────────────────────────────────────────────
@@ -2579,6 +4968,56 @@ Custom prompt`,
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'completed');
     });
 
+    it('fails shipping when baseBranch is missing for a GitHub issue', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.githubIssueNumber = 42;
+      context.projectId = 'project-1';
+      context.baseBranch = null;
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse')) return 'feat/branch';
+        return '';
+      });
+
+      await pipeline.startShipping('t1');
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Shipping failed: Thread t1: missing baseBranch at PR creation',
+      );
+      expect(mock.deps.threads.setGithubPr).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('fails shipping when gh pr create output has no pull request number', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.githubIssueNumber = 42;
+      context.projectId = 'project-1';
+      context.baseBranch = 'main';
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse')) return 'feat/branch';
+        if (cmd.startsWith('gh pr list')) return '[]';
+        if (cmd.startsWith('gh pr create')) return 'created but no url';
+        return '';
+      });
+
+      await pipeline.startShipping('t1');
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        'Shipping failed: Failed to parse pull request number from: created but no url',
+      );
+      expect(mock.deps.threads.setGithubPr).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
     it('updates an existing PR instead of creating a duplicate', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
@@ -2615,6 +5054,35 @@ Custom prompt`,
         failingChecks: [makeCheck()],
         unresolvedReviewComments: [makeReviewComment()],
       });
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'completed');
+    });
+
+    it('creates a PR with fallback body when the latest plan is missing', async () => {
+      vi.mocked(mock.deps.plans.getLatest).mockReturnValue(null);
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        githubIssueNumber: 42,
+        projectId: null,
+        baseBranch: 'main',
+      });
+      let createArgs: string[] = [];
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse')) return 'feat/branch';
+        if (cmd.startsWith('gh pr list')) return '[]';
+        if (cmd.startsWith('gh pr create')) {
+          createArgs = cmd.split(' ');
+          return 'https://github.com/org/repo/pull/99\n';
+        }
+        return '';
+      });
+
+      await pipeline.startShipping('t1');
+
+      expect(mock.deps.threads.setGithubPr).toHaveBeenCalledWith('t1', 99);
+      expect(createArgs.join(' ')).toContain('ShipCode: Issue #42');
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'completed');
     });
 
@@ -2780,6 +5248,66 @@ Custom prompt`,
       });
     });
 
+    it('uses the project approval setting when no cached issue override exists', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.includes('symbolic-ref')) return 'origin/main';
+        if (cmd.includes('rev-parse')) return 'sha789';
+        return '';
+      });
+      vi.mocked(mock.deps.projects.getById).mockReturnValue(
+        makeProject({ requireApprovalOverride: false }),
+      );
+      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue(null);
+
+      const pipeline = createPipeline(mock.deps);
+
+      await pipeline.startFromGitHubIssue(
+        't1',
+        '/proj',
+        { number: 12, title: 'Project setting', body: null, labels: [] },
+        'claude',
+      );
+
+      expect(mock.emittedEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'pipeline:start-context',
+          threadId: 't1',
+          requireApproval: false,
+        }),
+      );
+    });
+
+    it('falls back to global approval when no thread/project can be resolved', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.includes('symbolic-ref')) return 'origin/main';
+        if (cmd.includes('rev-parse')) return 'sha789';
+        return '';
+      });
+      vi.mocked(mock.deps.settings.get).mockReturnValue({
+        ...DEFAULT_SETTINGS,
+        requireApproval: false,
+      });
+      vi.mocked(mock.deps.threads.getById).mockReturnValue(null);
+
+      const pipeline = createPipeline(mock.deps);
+
+      await pipeline.startFromGitHubIssue(
+        'missing-thread',
+        '/proj',
+        { number: 13, title: 'Global setting', body: null, labels: [] },
+        'claude',
+      );
+
+      expect(mock.emittedEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'pipeline:start-context',
+          threadId: 'missing-thread',
+          requireApproval: false,
+        }),
+      );
+      expect(mock.deps.githubIssues.getByNumber).not.toHaveBeenCalled();
+    });
+
     it('uses the reused worktree as planner cwd when restarting the same issue', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('symbolic-ref')) return 'origin/main';
@@ -2875,6 +5403,83 @@ Custom prompt`,
       );
       expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approved');
     });
+
+    it('falls back to main with no fork point, global approval, and short acceptance criteria', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.includes('symbolic-ref')) throw new Error('no remote HEAD');
+        if (cmd.includes('rev-parse')) throw new Error('no ref');
+        return '';
+      });
+      vi.mocked(mock.deps.settings.get).mockReturnValue({
+        ...DEFAULT_SETTINGS,
+        requireApproval: false,
+      });
+      vi.mocked(mock.deps.threads.getById).mockReturnValue(null);
+      const pipeline = createPipeline(mock.deps);
+
+      await pipeline.startFromQuickTask(
+        'missing-thread',
+        '/proj',
+        {
+          issueNumber: -1,
+          title: 'Tiny',
+          text: 'Ship',
+        },
+        'claude',
+      );
+
+      expect(mock.deps.threads.updateAutonomousFields).toHaveBeenCalledWith(
+        'missing-thread',
+        expect.objectContaining({
+          baseBranch: 'main',
+          forkPointSha: '',
+        }),
+      );
+      expect(mock.deps.emitter.emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'pipeline:start-context',
+          threadId: 'missing-thread',
+          requireApproval: false,
+        }),
+      );
+      expect(mock.deps.plans.create).toHaveBeenCalledWith(
+        'missing-thread',
+        '<quick-task-synthesized>',
+        expect.objectContaining({
+          acceptanceCriteria: ['Implements: Tiny'],
+        }),
+        1,
+      );
+    });
+
+    it('uses an explicit quick-task base branch without probing origin HEAD', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.includes('symbolic-ref')) throw new Error('should not probe remote HEAD');
+        if (cmd.includes('rev-parse develop')) return 'develop-sha';
+        return '';
+      });
+      const pipeline = createPipeline(mock.deps);
+
+      await pipeline.startFromQuickTask(
+        't1',
+        '/proj',
+        {
+          issueNumber: -1,
+          title: 'Explicit base',
+          text: 'Use the supplied base branch.',
+        },
+        'claude',
+        { baseBranch: 'develop' },
+      );
+
+      expect(mock.deps.threads.updateAutonomousFields).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({
+          baseBranch: 'develop',
+          forkPointSha: 'develop-sha',
+        }),
+      );
+    });
   });
 
   describe('startFromAutomation', () => {
@@ -2925,6 +5530,81 @@ Custom prompt`,
       };
       expect(planArg.objective).toBe('Automation: Daily');
     });
+
+    it('uses project speed settings and includes long prompt acceptance criteria', async () => {
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        projectId: 'project-1',
+      });
+      const prompt = 'Run the full smoke automation and collect detailed evidence.';
+
+      await pipeline.startFromAutomation('t1', prompt, '/proj', 'Nightly');
+
+      expect(mock.deps.projects.getById).toHaveBeenCalledWith('project-1');
+      expect(mock.deps.plans.create).toHaveBeenCalledWith(
+        't1',
+        '<automation-synthesized>',
+        expect.objectContaining({
+          acceptanceCriteria: ['Implements automation: Nightly', `Satisfies prompt: ${prompt}`],
+        }),
+        1,
+      );
+    });
+  });
+
+  describe('startStabilization', () => {
+    it('startStabilization no-ops without active context', async () => {
+      const pipeline = createPipeline(mock.deps);
+
+      await pipeline.startStabilization('missing-thread', {
+        prNumber: 7,
+        prUrl: null,
+        failingChecks: [],
+        unresolvedReviewComments: [],
+      });
+
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+    });
+
+    it('resets cancellation state, injects stabilization feedback, and resumes execution', async () => {
+      const pipeline = createPipeline(mock.deps);
+      const context = pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        cancelled: true,
+        verifiedSha: 'old-sha',
+        stabilizationFeedback: 'old feedback',
+        autonomous: true,
+      });
+
+      await pipeline.startStabilization('t1', {
+        prNumber: 7,
+        prUrl: 'https://github.com/acme/repo/pull/7',
+        failingChecks: [makeCheck({ workflowName: 'CI', name: 'test' })],
+        unresolvedReviewComments: [makeReviewComment({ path: 'src/a.ts', line: 12 })],
+      });
+
+      expect(context.cancelled).toBe(false);
+      expect(context.verifiedSha).toBeNull();
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
+      expect(mock.deps.processManager.spawn).toHaveBeenCalled();
+    });
+
+    it('throws when stabilization has no structured plan to resume', async () => {
+      vi.mocked(mock.deps.plans.getLatest).mockReturnValue(makePlanRecord({ structured: null }));
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', { projectPath: '/proj', worktreePath: '/worktree' });
+
+      await expect(
+        pipeline.startStabilization('t1', {
+          prNumber: 7,
+          prUrl: null,
+          failingChecks: [],
+          unresolvedReviewComments: [],
+        }),
+      ).rejects.toThrow('missing approved plan');
+    });
   });
 
   // ─── cancel ────────────────────────────────────────────────────────
@@ -2939,6 +5619,89 @@ Custom prompt`,
       pipeline.cancel('t1');
 
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'idle');
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('clears retry state, aborts, kills active process, and runs cleanup', () => {
+      vi.useFakeTimers();
+      const pipeline = createPipeline(mock.deps);
+      const cleanup = vi.fn(async () => {});
+      const abort = new AbortController();
+      const abortSpy = vi.spyOn(abort, 'abort');
+      const retryTimer = setTimeout(() => {}, 1000);
+
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        activeProcessId: 'proc-1',
+        retryTimer,
+        abort,
+      });
+      const context = pipeline.getContext('t1');
+      if (!context) throw new Error('Expected context');
+      context.runtimeQaCleanup = cleanup;
+
+      pipeline.cancel('t1');
+
+      expect(abortSpy).toHaveBeenCalled();
+      expect(mock.deps.processManager.kill).toHaveBeenCalledWith('proc-1');
+      expect(cleanup).toHaveBeenCalled();
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'idle');
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('still emits idle when no active context exists', () => {
+      const pipeline = createPipeline(mock.deps);
+
+      pipeline.cancel('missing');
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('missing', 'idle');
+    });
+  });
+
+  describe('pause', () => {
+    it('clears timers, aborts, kills active process, runs cleanup, and emits paused', () => {
+      vi.useFakeTimers();
+      const pipeline = createPipeline(mock.deps);
+      const cleanup = vi.fn(async () => {});
+      const abort = new AbortController();
+      const abortSpy = vi.spyOn(abort, 'abort');
+      const retryTimer = setTimeout(() => {}, 1000);
+
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        activeProcessId: 'proc-1',
+        retryTimer,
+        abort,
+      });
+      const context = pipeline.getContext('t1');
+      if (!context) throw new Error('Expected context');
+      context.runtimeQaCleanup = cleanup;
+
+      pipeline.pause('t1');
+
+      expect(abortSpy).toHaveBeenCalled();
+      expect(mock.deps.processManager.kill).toHaveBeenCalledWith('proc-1');
+      expect(cleanup).toHaveBeenCalled();
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'paused');
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('still emits paused when no active context exists', () => {
+      const pipeline = createPipeline(mock.deps);
+
+      pipeline.pause('missing');
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('missing', 'paused');
+    });
+
+    it('pauses a context without optional timer, process, or cleanup state', () => {
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', { projectPath: '/proj' });
+
+      pipeline.pause('t1');
+
+      expect(mock.deps.processManager.kill).not.toHaveBeenCalled();
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'paused');
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
   });

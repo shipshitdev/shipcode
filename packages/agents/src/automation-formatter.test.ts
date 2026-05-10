@@ -17,6 +17,7 @@ import {
   extractFormattedAutomation,
   formatAutomationPrompt,
 } from './automation-formatter';
+import { OpenRouterClient } from './providers/openrouter-http';
 
 function sseResponse(chunks: string[]): Response {
   const encoder = new TextEncoder();
@@ -143,6 +144,74 @@ describe('formatAutomationPrompt', () => {
     });
   });
 
+  it('omits optional Claude and Codex model flags when no model is selected', async () => {
+    const claude = createFakeProc();
+    mockSpawn.mockReturnValueOnce(claude.proc);
+
+    const claudePromise = formatAutomationPrompt({
+      rawPrompt: 'summarize release notes',
+      cwd: '/repo',
+      provider: 'claude',
+      reasoningEffort: 'none',
+    });
+
+    await Promise.resolve();
+    expect(mockSpawn).toHaveBeenLastCalledWith(
+      'claude',
+      expect.not.arrayContaining(['--model', '--max-thinking-tokens']),
+      expect.any(Object),
+    );
+    claude.close(0, {
+      stdout: '```shipcode-automation\n{"prompt":"# Automation: release notes"}\n```',
+    });
+    await expect(claudePromise).resolves.toEqual({ prompt: '# Automation: release notes' });
+
+    const codex = createFakeProc();
+    mockSpawn.mockReturnValueOnce(codex.proc);
+
+    const codexPromise = formatAutomationPrompt({
+      rawPrompt: 'summarize release notes',
+      cwd: '/repo',
+      provider: 'codex',
+      reasoningEffort: null,
+    });
+
+    await Promise.resolve();
+    expect(mockSpawn).toHaveBeenLastCalledWith(
+      'codex',
+      expect.not.arrayContaining(['-m']),
+      expect.any(Object),
+    );
+    codex.close(0, {
+      stdout: '```shipcode-automation\n{"prompt":"# Automation: release notes"}\n```',
+    });
+    await expect(codexPromise).resolves.toEqual({ prompt: '# Automation: release notes' });
+  });
+
+  it('uses default Claude reasoning when reasoning effort is null', async () => {
+    const fake = createFakeProc();
+    mockSpawn.mockReturnValueOnce(fake.proc);
+
+    const promise = formatAutomationPrompt({
+      rawPrompt: 'summarize flaky specs',
+      cwd: '/repo',
+      provider: 'claude',
+      reasoningEffort: null,
+    });
+
+    await Promise.resolve();
+    expect(mockSpawn).toHaveBeenLastCalledWith(
+      'claude',
+      expect.arrayContaining(['--max-thinking-tokens', '32000']),
+      expect.any(Object),
+    );
+
+    fake.close(0, {
+      stdout: '```shipcode-automation\n{"prompt":"# Automation: flaky specs"}\n```',
+    });
+    await expect(promise).resolves.toEqual({ prompt: '# Automation: flaky specs' });
+  });
+
   it('uses OpenRouter chat when selected', async () => {
     const fetchMock = vi
       .fn()
@@ -199,6 +268,64 @@ describe('formatAutomationPrompt', () => {
     expect(mockSpawn).not.toHaveBeenCalled();
   });
 
+  it('uses OpenRouter defaults and aborts the request on timeout', async () => {
+    vi.useFakeTimers();
+    const chatSpy = vi
+      .spyOn(OpenRouterClient.prototype, 'chat')
+      .mockImplementation((_request, signal) => {
+        expect(_request.model).toBe('openrouter/auto');
+        expect(_request.include_reasoning).toBe(false);
+        return new Promise((_, reject) => {
+          signal.addEventListener('abort', () => reject(new Error('aborted by timeout')), {
+            once: true,
+          });
+        });
+      });
+
+    try {
+      const promise = formatAutomationPrompt({
+        rawPrompt: 'check stale branches',
+        cwd: '/repo',
+        provider: 'openrouter',
+        modelId: '   ',
+        reasoningEffort: 'none',
+        timeoutMs: 10,
+        openRouterApiKey: 'test-key',
+      });
+      const expected = expect(promise).rejects.toThrow('aborted by timeout');
+
+      await vi.advanceTimersByTimeAsync(10);
+      await expected;
+    } finally {
+      chatSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('normalizes null OpenRouter reasoning to provider defaults', async () => {
+    const chatSpy = vi.spyOn(OpenRouterClient.prototype, 'chat').mockResolvedValueOnce({
+      content: '```shipcode-automation\n{"prompt":"# Automation: stale PRs"}\n```',
+      toolCalls: [],
+      finishReason: 'stop',
+      model: 'openrouter/auto',
+      usage: null,
+    });
+
+    await expect(
+      formatAutomationPrompt({
+        rawPrompt: 'check stale PRs',
+        cwd: '/repo',
+        provider: 'openrouter',
+        modelId: 'openrouter/auto',
+        reasoningEffort: null,
+        openRouterApiKey: 'test-key',
+      }),
+    ).resolves.toEqual({ prompt: '# Automation: stale PRs' });
+
+    expect(chatSpy.mock.calls[0][0].reasoning).toEqual({ effort: 'high' });
+    chatSpy.mockRestore();
+  });
+
   it('rejects empty raw prompts before spawning a formatter', async () => {
     await expect(
       formatAutomationPrompt({
@@ -246,6 +373,18 @@ describe('extractFormattedAutomation', () => {
     );
   });
 
+  it('formats non-Error automation JSON parse failures', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse').mockImplementationOnce(() => {
+      throw 'plain parse failure';
+    });
+
+    expect(() => extractFormattedAutomation('```shipcode-automation\n{"prompt":"x"}\n```')).toThrow(
+      /plain parse failure/,
+    );
+
+    parseSpy.mockRestore();
+  });
+
   it('rejects envelopes without a non-empty prompt string', () => {
     expect(() => extractFormattedAutomation('```shipcode-automation\n{"prompt":""}\n```')).toThrow(
       /Formatted automation prompt is empty/,
@@ -253,5 +392,13 @@ describe('extractFormattedAutomation', () => {
     expect(() => extractFormattedAutomation('```shipcode-automation\n{"body":"x"}\n```')).toThrow(
       /missing required `prompt`/,
     );
+  });
+
+  it('accepts opening fences with trailing metadata and trims the formatted prompt', () => {
+    expect(
+      extractFormattedAutomation(
+        '```shipcode-automation json\n{"prompt":"  # Automation: trim me  "}\n```',
+      ),
+    ).toEqual({ prompt: '# Automation: trim me' });
   });
 });

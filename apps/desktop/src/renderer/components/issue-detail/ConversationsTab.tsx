@@ -121,7 +121,7 @@ export function ConversationsTab({ threadId }: ConversationsTabProps) {
             variant="ghost"
             onClick={() => togglePhase(phase)}
             className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-opacity ${
-              PHASE_COLORS[phase] ?? 'bg-zinc-500/15 text-zinc-400'
+              PHASE_COLORS[phase]
             } ${selectedPhases.has(phase) ? 'opacity-100' : 'opacity-30'}`}
           >
             {phase}
@@ -185,7 +185,7 @@ function ConversationTurn({
     SPEAKER_COLORS[conv.speaker] ??
     SPEAKER_COLORS[conv.provider ?? ''] ??
     'bg-zinc-500/15 text-zinc-400';
-  const phaseColor = PHASE_COLORS[conv.phase] ?? 'bg-zinc-500/15 text-zinc-400';
+  const phaseColor = PHASE_COLORS[conv.phase];
 
   return (
     <div className="border-border/50 rounded-lg border p-3 space-y-2">

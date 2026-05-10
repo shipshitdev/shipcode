@@ -13,6 +13,18 @@ describe('getAutomationRunTotalTokens', () => {
       }),
     ).toBe(1200);
   });
+
+  it('treats missing token fields as zero', () => {
+    expect(
+      getAutomationRunTotalTokens({
+        totalTokensPrompt: null,
+        totalTokensCompletion: null,
+        lastError: null,
+        totalCostUsd: 0,
+        executorResolvedModel: null,
+      }),
+    ).toBe(0);
+  });
 });
 
 describe('describeAutomationRun', () => {
@@ -41,5 +53,17 @@ describe('describeAutomationRun', () => {
         { errorMaxLength: 120 },
       ),
     ).toBe('x'.repeat(120));
+  });
+
+  it('falls back when there are no summary details', () => {
+    expect(
+      describeAutomationRun({
+        totalCostUsd: 0,
+        totalTokensPrompt: 0,
+        totalTokensCompletion: 0,
+        executorResolvedModel: null,
+        lastError: null,
+      }),
+    ).toBe('No details');
   });
 });

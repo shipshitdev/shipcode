@@ -77,6 +77,29 @@ describe('DashboardQueries', () => {
     expect(stats.failedLast7d).toBe(1);
   });
 
+  it('ignores closed threads outside the recent window and counts stale approvals', () => {
+    const oldCompleted = threads.create(projectId, 'old done', 'Old Done');
+    const oldFailed = threads.create(projectId, 'old failed', 'Old Failed');
+    const staleApproval = threads.create(projectId, 'stale approval', 'Stale Approval');
+    db.prepare(`UPDATE threads SET status = 'completed', updated_at = ? WHERE id = ?`).run(
+      '2000-01-01T00:00:00.000Z',
+      oldCompleted.id,
+    );
+    db.prepare(`UPDATE threads SET status = 'failed', updated_at = ? WHERE id = ?`).run(
+      '2000-01-01T00:00:00.000Z',
+      oldFailed.id,
+    );
+    db.prepare(`UPDATE threads SET status = 'approval', updated_at = ? WHERE id = ?`).run(
+      '2000-01-01T00:00:00.000Z',
+      staleApproval.id,
+    );
+
+    const stats = dashboard.getStats();
+    expect(stats.shippedLast7d).toBe(0);
+    expect(stats.failedLast7d).toBe(0);
+    expect(stats.staleApprovals).toBe(1);
+  });
+
   it('getRecentTasks() returns non-idle threads with project name, paginated', () => {
     const t1 = threads.create(projectId, 'task a', 'Task A');
     const t2 = threads.create(projectId, 'task b', 'Task B');
@@ -89,6 +112,16 @@ describe('DashboardQueries', () => {
 
     const all = dashboard.getRecentTasks(10, 0);
     expect(all).toHaveLength(2);
+  });
+
+  it('falls back to raw recent-task timestamps when they cannot be normalized', () => {
+    const t = threads.create(projectId, 'task raw date', 'Task Raw Date');
+    db.prepare(`UPDATE threads SET status = 'completed', updated_at = ? WHERE id = ?`).run(
+      '',
+      t.id,
+    );
+
+    expect(dashboard.getRecentTasks(1, 0)[0].updatedAt).toBe('');
   });
 
   it('getRecentTasks() excludes idle threads', () => {

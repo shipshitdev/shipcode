@@ -9,18 +9,7 @@ import type {
 } from '@shipcode/shared';
 import { formatBytes, getProjectProviderWarnings } from '@shipcode/shared';
 import { ShipCodeLogoMark } from '@shipcode/ui';
-import {
-  Button,
-  cn,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@shipshitdev/ui';
+import { Button, cn, Popover, PopoverContent, PopoverTrigger } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Cpu,
@@ -29,14 +18,12 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
-  Send,
   Settings,
   Terminal,
   X,
 } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
-import { type AssistantCli, useAppStore } from '../stores/app-store';
+import { useAppStore } from '../stores/app-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
 
 type ProviderTone = 'claude' | 'codex';
@@ -463,63 +450,6 @@ function ResourceUsageBadge() {
   );
 }
 
-function AssistantTopbarInput() {
-  const queueAssistantPrompt = useAppStore((state) => state.queueAssistantPrompt);
-  const openAssistant = useAppStore((state) => state.openAssistant);
-  const assistantCli = useAppStore((state) => state.assistantCli);
-  const setAssistantCli = useAppStore((state) => state.setAssistantCli);
-  const [value, setValue] = useState('');
-
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const prompt = value.trim();
-    if (!prompt) {
-      openAssistant();
-      return;
-    }
-    queueAssistantPrompt(prompt);
-    setValue('');
-  };
-
-  return (
-    <form
-      onSubmit={submit}
-      className="absolute left-1/2 z-10 flex h-7 w-[min(420px,34vw)] -translate-x-1/2 items-center gap-1.5 rounded-md border border-border bg-secondary/80 px-2 app-region-no-drag focus-within:border-border-strong focus-within:bg-primary"
-    >
-      <MessageSquare size={13} className="shrink-0 text-muted-foreground" />
-      <Select value={assistantCli} onValueChange={(next) => setAssistantCli(next as AssistantCli)}>
-        <SelectTrigger
-          aria-label="Assistant CLI"
-          className="h-5 w-[74px] shrink-0 rounded border-0 bg-transparent px-1.5 py-0 text-[10px] text-secondary hover:text-primary"
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="claude" className="text-xs">
-            Claude
-          </SelectItem>
-          <SelectItem value="codex" className="text-xs">
-            Codex
-          </SelectItem>
-        </SelectContent>
-      </Select>
-      <input
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder="Ask ShipCode..."
-        className="min-w-0 flex-1 bg-transparent text-xs text-primary outline-none placeholder:text-muted-foreground"
-      />
-      <button
-        type="submit"
-        aria-label={value.trim() ? 'Ask ShipCode' : 'Open ShipCode Assistant'}
-        className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-elevated hover:text-primary"
-      >
-        <Send size={11} />
-      </button>
-    </form>
-  );
-}
-
 export function Titlebar() {
   const queryClient = useQueryClient();
   const settingsVisible = useAppStore((state) => state.settingsVisible);
@@ -527,6 +457,9 @@ export function Titlebar() {
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
+  const assistantVisible = useAppStore((state) => state.assistantVisible);
+  const openAssistant = useAppStore((state) => state.openAssistant);
+  const closeAssistant = useAppStore((state) => state.closeAssistant);
   const terminalVisible = useAppStore((state) => state.terminalVisible);
   const toggleTerminal = useAppStore((state) => state.toggleTerminal);
   const hasDetailView = useAppStore(
@@ -589,7 +522,6 @@ export function Titlebar() {
 
   return (
     <div className="relative flex h-[var(--spacing-titlebar)] shrink-0 items-center justify-between border-b border-border bg-primary pl-[84px] pr-2 app-region-drag">
-      <AssistantTopbarInput />
       <div className="flex min-w-0 items-center gap-2 text-xs">
         <button
           type="button"
@@ -631,18 +563,35 @@ export function Titlebar() {
           />
         ) : null}
         {!settingsVisible && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'h-7 w-7 app-region-no-drag hover:bg-elevated',
-              terminalVisible && 'bg-elevated text-primary',
-            )}
-            onClick={toggleTerminal}
-            title={terminalVisible ? 'Hide terminal' : 'Show terminal'}
-          >
-            <Terminal size={14} className={terminalVisible ? 'text-primary' : 'text-secondary'} />
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                'h-7 w-7 app-region-no-drag hover:bg-elevated',
+                assistantVisible && 'bg-elevated text-primary',
+              )}
+              onClick={assistantVisible ? closeAssistant : openAssistant}
+              title={assistantVisible ? 'Hide agent' : 'Open agent'}
+            >
+              <MessageSquare
+                size={14}
+                className={assistantVisible ? 'text-primary' : 'text-secondary'}
+              />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                'h-7 w-7 app-region-no-drag hover:bg-elevated',
+                terminalVisible && 'bg-elevated text-primary',
+              )}
+              onClick={toggleTerminal}
+              title={terminalVisible ? 'Hide terminal' : 'Show terminal'}
+            >
+              <Terminal size={14} className={terminalVisible ? 'text-primary' : 'text-secondary'} />
+            </Button>
+          </>
         )}
         <Button
           variant="ghost"

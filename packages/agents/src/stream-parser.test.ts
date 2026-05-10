@@ -413,6 +413,112 @@ describe('StreamParser', () => {
     });
   });
 
+  describe('extractUsage', () => {
+    it('extracts Claude usage and strips ANSI-wrapped NDJSON', () => {
+      parser.feed(
+        [
+          '\x1b[32mnot json\x1b[0m',
+          `\x1b[32m${JSON.stringify({
+            type: 'result',
+            usage: { input_tokens: 12, output_tokens: 5 },
+            total_cost_usd: 0.123,
+          })}\x1b[0m`,
+          '',
+        ].join('\n'),
+      );
+
+      expect(parser.extractUsage()).toEqual({
+        inputTokens: 12,
+        outputTokens: 5,
+        costUsd: 0.123,
+      });
+    });
+
+    it('extracts Codex usage from prompt/completion token aliases and defaults missing completion tokens', () => {
+      parser.feed(
+        [
+          JSON.stringify({
+            type: 'response.completed',
+            response: { usage: { prompt_tokens: 10 } },
+          }),
+          '',
+        ].join('\n'),
+      );
+
+      expect(parser.extractUsage()).toEqual({
+        inputTokens: 10,
+        outputTokens: 0,
+        costUsd: 0,
+      });
+    });
+
+    it('extracts Codex usage from top-level usage events', () => {
+      parser.feed(
+        [
+          JSON.stringify({
+            type: 'response.output_item.done',
+            usage: { input_tokens: 7, completion_tokens: 3 },
+          }),
+          '',
+        ].join('\n'),
+      );
+
+      expect(parser.extractUsage()).toEqual({
+        inputTokens: 7,
+        outputTokens: 3,
+        costUsd: 0,
+      });
+    });
+  });
+
+  describe('NDJSON text extraction', () => {
+    it('extracts fenced plans from Claude string result lines', () => {
+      parser.feed(
+        `${JSON.stringify({ type: 'result', result: fenced('shipcode-plan', VALID_PLAN) })}\n`,
+      );
+
+      const result = parser.extractPlan();
+
+      expect(result.success).toBe(true);
+      expect(result.data?.objective).toBe('Test objective');
+    });
+
+    it('extracts fenced plans from Claude array result text blocks', () => {
+      parser.feed(
+        `${JSON.stringify({
+          type: 'result',
+          result: [
+            { type: 'thinking', text: 'hidden' },
+            { type: 'text', text: fenced('shipcode-plan', VALID_PLAN) },
+          ],
+        })}\n`,
+      );
+
+      const result = parser.extractPlan();
+
+      expect(result.success).toBe(true);
+      expect(result.data?.objective).toBe('Test objective');
+    });
+
+    it('extracts fenced reviews from Codex agent message items', () => {
+      parser.feed(
+        [
+          JSON.stringify({ type: 'item.completed', item: { type: 'reasoning', text: 'skip' } }),
+          JSON.stringify({
+            type: 'item.completed',
+            item: { type: 'agent_message', text: fenced('shipcode-review', VALID_REVIEW) },
+          }),
+          '',
+        ].join('\n'),
+      );
+
+      const result = parser.extractReview();
+
+      expect(result.success).toBe(true);
+      expect(result.data?.summary).toBe('Looks good');
+    });
+  });
+
   describe('extractCodexModel', () => {
     it('extracts the model from response.completed', () => {
       parser.feed(
@@ -460,6 +566,24 @@ describe('StreamParser', () => {
       );
 
       expect(parser.extractCodexModel()).toBe('gpt-5.4-high');
+    });
+  });
+
+  describe('stripSystemEvents', () => {
+    it('removes Claude system and rate-limit events but preserves user-visible lines', () => {
+      expect(
+        StreamParser.stripSystemEvents(
+          [
+            JSON.stringify({ type: 'system', message: 'hook' }),
+            JSON.stringify({ type: 'rate_limit_event', message: 'wait' }),
+            JSON.stringify({ type: 'assistant', message: { content: 'visible' } }),
+            'not-json',
+            '',
+          ].join('\n'),
+        ),
+      ).toBe(
+        `${JSON.stringify({ type: 'assistant', message: { content: 'visible' } })}\nnot-json\n`,
+      );
     });
   });
 });

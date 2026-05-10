@@ -55,6 +55,21 @@ export class TemplateRenderError extends Error {
   }
 }
 
+/**
+ * Exported for branch-focused renderer error tests.
+ *
+ * @knipignore
+ */
+export function toTemplateRenderError(err: unknown): TemplateRenderError {
+  const liquidErr = err as LiquidError & { line?: number; token?: { line?: number } };
+  const line = liquidErr.line ?? liquidErr.token?.line;
+  const msg = err instanceof Error ? err.message : String(err);
+  return new TemplateRenderError(msg, {
+    cause: err,
+    ...(typeof line === 'number' ? { templateLine: line } : {}),
+  });
+}
+
 let cachedEngine: Liquid | null = null;
 
 function getEngine(): Liquid {
@@ -81,12 +96,6 @@ export function renderTemplate(source: string, ctx: TemplateContext): string {
   try {
     return engine.parseAndRenderSync(source, ctx as unknown as Record<string, unknown>);
   } catch (err) {
-    const liquidErr = err as LiquidError & { line?: number; token?: { line?: number } };
-    const line = liquidErr.line ?? liquidErr.token?.line;
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new TemplateRenderError(msg, {
-      cause: err,
-      ...(typeof line === 'number' ? { templateLine: line } : {}),
-    });
+    throw toTemplateRenderError(err);
   }
 }

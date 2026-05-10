@@ -76,6 +76,57 @@ describe('buildIssueFlowGraph', () => {
       }),
     );
   });
+
+  it('keeps dependency edges static when neither endpoint has an active pipeline', () => {
+    const flowGraph = buildIssueFlowGraph({
+      ...graph,
+      nodes: graph.nodes.map((node) => ({ ...node, pipelineStatus: 'todo' })),
+      edges: [
+        {
+          ...graph.edges[0],
+          id: 'edge-depends',
+          sourceIssueId: 'issue-1',
+          targetIssueId: 'missing-issue',
+          edgeType: 'depends_on',
+        },
+      ],
+    });
+
+    expect(flowGraph.edges[0]).toEqual(
+      expect.objectContaining({
+        animated: false,
+        label: 'depends on',
+        style: expect.objectContaining({ stroke: 'rgba(217, 119, 6, 0.85)' }),
+      }),
+    );
+  });
+
+  it('animates edges when the source issue has an active pipeline', () => {
+    const flowGraph = buildIssueFlowGraph({
+      ...graph,
+      nodes: [
+        { ...graph.nodes[0], pipelineStatus: 'planning' },
+        { ...graph.nodes[1], pipelineStatus: 'todo' },
+      ],
+    });
+
+    expect(flowGraph.edges[0]).toEqual(expect.objectContaining({ animated: true }));
+  });
+
+  it('falls back cleanly when the source issue is missing from an edge', () => {
+    const flowGraph = buildIssueFlowGraph({
+      ...graph,
+      edges: [
+        {
+          ...graph.edges[0],
+          sourceIssueId: 'missing-issue',
+          targetIssueId: 'issue-2',
+        },
+      ],
+    });
+
+    expect(flowGraph.edges[0]).toEqual(expect.objectContaining({ animated: true }));
+  });
 });
 
 describe('formatPreviewGroups', () => {
@@ -83,6 +134,12 @@ describe('formatPreviewGroups', () => {
     expect(formatPreviewGroups(graph, [['issue-1'], ['issue-2']])).toEqual([
       'Wave 1: #1 First',
       'Wave 2: #2 Second',
+    ]);
+  });
+
+  it('falls back to the issue id when a preview group references a missing issue', () => {
+    expect(formatPreviewGroups(graph, [['issue-1', 'missing-issue']])).toEqual([
+      'Wave 1: #1 First, missing-issue',
     ]);
   });
 });

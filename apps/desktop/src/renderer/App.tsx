@@ -345,7 +345,7 @@ export function App() {
             !hasActiveAutomationThread &&
             !hasActiveAutomationDetail && <ProjectSidebar />
           )}
-          {/* Center column — main view above, terminal below. */}
+          {/* Center column — main view above, terminal dock below. */}
           <div className="flex flex-col flex-1 overflow-hidden min-h-0">
             {!hideMainContentForTerminal && (
               <Suspense fallback={<ViewLoadingFallback />}>

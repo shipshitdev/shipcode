@@ -416,7 +416,7 @@ export function buildIssueDetailActions({
                   <p
                     className={cn(
                       'text-[11px] leading-relaxed whitespace-pre-wrap text-secondary',
-                      selectedChoice && 'mt-1.5',
+                      selectedChoice ? 'mt-1.5' : undefined,
                     )}
                   >
                     {freeformText}
@@ -468,9 +468,9 @@ export function buildIssueDetailActions({
             )}
           </div>
         </div>
-        {failurePresentation.detail && (
+        {failurePresentation.detail ? (
           <p className="mb-2 text-[11px] text-danger/70">{failurePresentation.detail}</p>
-        )}
+        ) : null}
         {thread?.lastError ? (
           <p className="text-[12px] text-danger/80 break-words">
             {stripAnsi(safeErrorMessage(thread.lastError))}

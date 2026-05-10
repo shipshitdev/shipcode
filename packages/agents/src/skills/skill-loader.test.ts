@@ -85,6 +85,15 @@ describe('validateSkill', () => {
       expect(err, `bundled default for ${phase} should validate`).toBeNull();
     }
   });
+
+  it('reports schema drift for unknown validation phases', () => {
+    const err = validateSkill('unknown-phase' as never, VALID_SKILL);
+
+    expect(err).toEqual({
+      code: 'schema_drift',
+      message: 'Unknown phase "unknown-phase"',
+    });
+  });
 });
 
 describe('interpolateSkill', () => {
@@ -96,7 +105,10 @@ describe('interpolateSkill', () => {
   it('throws on unknown slot in dev mode', () => {
     const orig = process.env.NODE_ENV;
     process.env.NODE_ENV = 'development';
-    expect(() => interpolateSkill('see {{MISSING}}', [])).toThrow(/MISSING/);
+    expect(() => interpolateSkill('see {{MISSING}}', [{ key: 'KNOWN', value: 'value' }])).toThrow(
+      /provided slots: KNOWN/,
+    );
+    expect(() => interpolateSkill('see {{MISSING}}', [])).toThrow(/provided slots: none/);
     process.env.NODE_ENV = orig;
   });
 
@@ -123,6 +135,14 @@ describe('resolveSkill', () => {
     expect(result.skill.source).toBe('default');
     expect(result.fallbackUsed).toBe(false);
     expect(result.skill.content.startsWith('---')).toBe(false);
+  });
+
+  it('throws for unknown phases during resolution', () => {
+    const source = makeSource(new Map());
+
+    expect(() => resolveSkill('unknown-phase' as never, null, { skills: source })).toThrow(
+      'resolveSkill: unknown phase "unknown-phase"',
+    );
   });
 
   it('prefers global override over default', () => {
@@ -192,6 +212,28 @@ describe('resolveSkill', () => {
     expect(result.skill.source).toBe('default');
     expect(result.fallbackUsed).toBe(true);
     expect(source.quarantined).toEqual([]);
+  });
+
+  it('preserves the first fallback error when a later row is quarantined', () => {
+    const rows = new Map();
+    rows.set('proj-A::adversarial-review', {
+      content: VALID_SKILL.replace('{{PLAN_JSON}}', 'broken'),
+      baseVersion: 'p',
+      schemaVersion: 1,
+      status: 'ok',
+    });
+    rows.set('GLOBAL::adversarial-review', {
+      content: VALID_SKILL,
+      baseVersion: 'g',
+      schemaVersion: 1,
+      status: 'quarantined',
+    });
+    const source = makeSource(rows);
+
+    const result = resolveSkill('adversarial-review', 'proj-A', { skills: source });
+
+    expect(result.skill.source).toBe('default');
+    expect(result.error?.code).toBe('missing_slot');
   });
 
   it('falls back from project to global when project row is invalid', () => {

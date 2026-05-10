@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { ShipCodePlan } from '@shipcode/shared';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { PlanQueries } from './plans';
 import { ProjectQueries } from './projects';
@@ -82,6 +82,16 @@ describe('TaskGraphQueries', () => {
     expect(taskGraphs.getByPlanId(firstPlan.id)?.id).toBe(graph.id);
   });
 
+  it('fails loudly when a replaced graph cannot be reloaded', () => {
+    const firstPlan = plans.create(threadId, 'raw', plan(), 1);
+    const getById = vi.spyOn(taskGraphs, 'getById').mockReturnValueOnce(null);
+
+    expect(() => taskGraphs.replaceForPlan(threadId, firstPlan.id, plan())).toThrow(
+      'Failed to load task graph row',
+    );
+    getById.mockRestore();
+  });
+
   it('supersedes prior active graphs when a new plan graph is created', () => {
     const firstPlan = plans.create(threadId, 'raw', plan(), 1);
     const firstGraph = taskGraphs.replaceForPlan(threadId, firstPlan.id, plan());
@@ -105,6 +115,88 @@ describe('TaskGraphQueries', () => {
     expect(running.startedAt).toBeTruthy();
     expect(completed.status).toBe('completed');
     expect(completed.completedAt).toBeTruthy();
+  });
+
+  it('handles node status variants and missing graph/node lookups', () => {
+    const planRecord = plans.create(threadId, 'raw', plan(), 1);
+    const graph = taskGraphs.replaceForPlan(threadId, planRecord.id, plan());
+    const node = graph.nodes[0];
+
+    const pending = taskGraphs.updateNodeStatus(node.id, 'pending');
+    expect(pending.status).toBe('pending');
+    expect(pending.startedAt).toBeNull();
+    expect(pending.completedAt).toBeNull();
+
+    const blocked = taskGraphs.updateNodeStatus(node.id, 'blocked');
+    expect(blocked.status).toBe('blocked');
+    expect(blocked.completedAt).toBeTruthy();
+
+    expect(taskGraphs.getById('missing-graph')).toBeNull();
+    expect(taskGraphs.getByPlanId('missing-plan')).toBeNull();
+    expect(taskGraphs.getLatestByThread('missing-thread')).toBeNull();
+    expect(taskGraphs.getNextReadyNode('missing-graph')).toBeNull();
+    expect(taskGraphs.getNodeById('missing-node')).toBeNull();
+    expect(() => taskGraphs.updateNodeStatus('missing-node', 'running')).toThrow(
+      'Failed to load task node row: missing-node',
+    );
+    expect(() => taskGraphs.markNodeFailed('missing-node')).toThrow(
+      'Failed to load task node row: missing-node',
+    );
+    expect(() => taskGraphs.markNodeCompletedAndPromote('missing-node')).toThrow(
+      'Failed to load task node row: missing-node',
+    );
+    expect(() => taskGraphs.updateNodeGithubIssueNumber('missing-node', 7)).toThrow(
+      'Failed to load task node row: missing-node',
+    );
+  });
+
+  it('fails loudly when graph reloads disappear after updates', () => {
+    const planRecord = plans.create(threadId, 'raw', plan(), 1);
+    const graph = taskGraphs.replaceForPlan(threadId, planRecord.id, plan());
+    const getById = vi.spyOn(taskGraphs, 'getById').mockReturnValue(null);
+
+    expect(() => taskGraphs.updateGraphStatus(graph.id, 'failed')).toThrow(
+      'Failed to load task graph row',
+    );
+    expect(() => taskGraphs.resetForRetry(graph.id)).toThrow('Failed to load task graph row');
+    expect(() => taskGraphs.updateNodeGithubIssueNumber(graph.nodes[0].id, 7)).toThrow(
+      'Failed to load task graph row',
+    );
+    getById.mockRestore();
+  });
+
+  it('fails loudly when final graph reloads disappear after node operations', () => {
+    const planRecord = plans.create(threadId, 'raw', plan(), 1);
+    const graph = taskGraphs.replaceForPlan(threadId, planRecord.id, plan());
+
+    let getById = vi.spyOn(taskGraphs, 'getById').mockReturnValueOnce(null);
+    expect(() => taskGraphs.markNodeCompletedAndPromote(graph.nodes[0].id)).toThrow(
+      'Failed to load task graph row',
+    );
+    getById.mockRestore();
+
+    getById = vi.spyOn(taskGraphs, 'getById').mockReturnValueOnce(graph).mockReturnValueOnce(null);
+    expect(() => taskGraphs.markNodeFailed(graph.nodes[1].id)).toThrow(
+      'Failed to load task graph row',
+    );
+    getById.mockRestore();
+
+    getById = vi.spyOn(taskGraphs, 'getById').mockReturnValueOnce(graph).mockReturnValueOnce(null);
+    expect(() => taskGraphs.resetForRetry(graph.id)).toThrow('Failed to load task graph row');
+    getById.mockRestore();
+  });
+
+  it('lists graphs by thread newest first', () => {
+    const firstPlan = plans.create(threadId, 'raw', plan(), 1);
+    const firstGraph = taskGraphs.replaceForPlan(threadId, firstPlan.id, plan());
+    const secondPlan = plans.create(threadId, 'raw 2', plan({ version: 2 }), 2);
+    const secondGraph = taskGraphs.replaceForPlan(threadId, secondPlan.id, plan({ version: 2 }));
+
+    expect(taskGraphs.listByThread(threadId).map((graph) => graph.id)).toEqual([
+      secondGraph.id,
+      firstGraph.id,
+    ]);
+    expect(taskGraphs.listByThread('missing-thread')).toEqual([]);
   });
 
   it('stores the GitHub issue number created for a task node', () => {
@@ -138,6 +230,19 @@ describe('TaskGraphQueries', () => {
     ]);
   });
 
+  it('leaves dependents pending while another prerequisite is incomplete', () => {
+    const planRecord = plans.create(threadId, 'raw', plan(), 1);
+    const graph = taskGraphs.replaceForPlan(threadId, planRecord.id, plan());
+    db.prepare(
+      `INSERT INTO task_edges (id, graph_id, source_node_id, target_node_id, edge_type)
+       VALUES ('extra-blocker', ?, ?, ?, 'depends_on')`,
+    ).run(graph.id, graph.nodes[2].id, graph.nodes[1].id);
+
+    const afterFirst = taskGraphs.markNodeCompletedAndPromote(graph.nodes[0].id);
+
+    expect(afterFirst.nodes[1].status).toBe('pending');
+  });
+
   it('marks the graph completed after the final node completes', () => {
     const planRecord = plans.create(threadId, 'raw', plan(), 1);
     let graph = taskGraphs.replaceForPlan(threadId, planRecord.id, plan());
@@ -165,5 +270,20 @@ describe('TaskGraphQueries', () => {
       ['step-2', 'pending', null, null],
       ['step-3', 'pending', null, null],
     ]);
+  });
+
+  it('maps malformed node array payloads to empty arrays when hydrating legacy rows', () => {
+    const planRecord = plans.create(threadId, 'raw', plan(), 1);
+    const graph = taskGraphs.replaceForPlan(threadId, planRecord.id, plan());
+    db.prepare(
+      'UPDATE task_nodes SET files = ?, acceptance_criteria = ?, surfaces = ? WHERE id = ?',
+    ).run('"not-array"', '{"not":"array"}', 'null', graph.nodes[0].id);
+
+    const node = taskGraphs.getNodeById(graph.nodes[0].id);
+    expect(node).toMatchObject({
+      files: [],
+      acceptanceCriteria: [],
+      surfaces: [],
+    });
   });
 });

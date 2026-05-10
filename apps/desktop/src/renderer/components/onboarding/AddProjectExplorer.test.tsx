@@ -163,6 +163,29 @@ describe('AddProjectExplorer', () => {
     });
   });
 
+  it('still closes after adding when the issue refresh fails', async () => {
+    invoke.mockImplementation(async (channel, args) => {
+      if (channel === 'fs:resolve-start-dir') return { resolvedPath: '/Users/vincent' };
+      if (channel === 'fs:list-directories') return { entries: [], error: null };
+      if (channel === 'project:add') return project;
+      if (channel === 'github:refresh-issues') throw new Error(`Refresh failed ${args?.projectId}`);
+      return null;
+    });
+
+    renderExplorer();
+
+    expect(await screen.findByDisplayValue('/Users/vincent')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add Repository' }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('github:refresh-issues', {
+        projectId: 'project-1',
+        force: true,
+      });
+    });
+    expect(useAppStore.getState().addProjectExplorerOpen).toBe(false);
+  });
+
   it('keeps the explorer open and shows add errors when project creation fails', async () => {
     invoke.mockImplementation(async (channel, args) => {
       if (channel === 'fs:resolve-start-dir') return { resolvedPath: '/Users/vincent' };
@@ -182,5 +205,206 @@ describe('AddProjectExplorer', () => {
     });
     expect(await screen.findByText('Cannot add /Users/vincent')).toBeInTheDocument();
     expect(useAppStore.getState().addProjectExplorerOpen).toBe(true);
+  });
+
+  it('disables parent navigation at the filesystem root', async () => {
+    invoke.mockImplementation(async (channel) => {
+      if (channel === 'fs:resolve-start-dir') return { resolvedPath: '/' };
+      if (channel === 'fs:list-directories') return { entries: [], error: null };
+      return null;
+    });
+
+    renderExplorer();
+
+    expect(await screen.findByDisplayValue('/')).toBeInTheDocument();
+    expect(screen.getByTitle('Go up (Backspace)')).toBeDisabled();
+  });
+
+  it('navigates single-segment paths up to the filesystem root', async () => {
+    invoke.mockImplementation(async (channel, args) => {
+      if (channel === 'fs:resolve-start-dir') return { resolvedPath: '/Users' };
+      if (channel === 'fs:list-directories') {
+        if (args?.dirPath === '/Users') return { entries: [], error: null };
+        if (args?.dirPath === '/') return { entries: [], error: null };
+      }
+      return null;
+    });
+
+    renderExplorer();
+
+    expect(await screen.findByDisplayValue('/Users')).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('Go up (Backspace)'));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('fs:list-directories', { dirPath: '/' });
+    });
+    expect(screen.getByDisplayValue('/')).toBeInTheDocument();
+  });
+
+  it('submits edited paths and keeps Backspace scoped to the path input', async () => {
+    renderExplorer();
+
+    const pathInput = await screen.findByDisplayValue('/Users/vincent');
+    fireEvent.focus(pathInput);
+    fireEvent.change(pathInput, { target: { value: '/private' } });
+    fireEvent.keyDown(pathInput, { key: 'Backspace' });
+    expect(invoke).not.toHaveBeenCalledWith('fs:list-directories', { dirPath: '/Users' });
+
+    fireEvent.keyDown(pathInput, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('fs:list-directories', { dirPath: '/private' });
+    });
+    expect(await screen.findByText('Permission denied')).toBeInTheDocument();
+    fireEvent.blur(pathInput);
+  });
+
+  it('blurs edited paths back to cwd and ignores empty or same-path submissions', async () => {
+    renderExplorer();
+
+    const pathInput = await screen.findByDisplayValue('/Users/vincent');
+    fireEvent.focus(pathInput);
+    fireEvent.change(pathInput, { target: { value: '   ' } });
+    fireEvent.keyDown(pathInput, { key: 'Enter' });
+    expect(screen.getByDisplayValue('/Users/vincent')).toBeInTheDocument();
+
+    fireEvent.focus(pathInput);
+    fireEvent.change(pathInput, { target: { value: '/Users/vincent' } });
+    fireEvent.keyDown(pathInput, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('fs:list-directories', { dirPath: '/Users/vincent' });
+    });
+    expect(
+      invoke.mock.calls.filter(
+        ([channel, args]) =>
+          channel === 'fs:list-directories' && args?.dirPath === '/Users/vincent',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('supports keyboard directory selection and Backspace parent navigation', async () => {
+    invoke.mockImplementation(async (channel, args) => {
+      if (channel === 'fs:resolve-start-dir') return { resolvedPath: '/Users/vincent' };
+      if (channel === 'fs:list-directories') {
+        if (args?.dirPath === '/Users/vincent') {
+          return {
+            entries: [
+              { name: 'repo-one', absolutePath: '/Users/vincent/repo-one' },
+              { name: 'repo-two', absolutePath: '/Users/vincent/repo-two' },
+            ],
+            error: null,
+          };
+        }
+        return { entries: [], error: null };
+      }
+      return null;
+    });
+
+    renderExplorer();
+
+    const dialog = screen.getByRole('dialog', { name: 'Add Repository' });
+    expect(await screen.findByText('repo-one')).toBeInTheDocument();
+    fireEvent.keyDown(dialog, { key: 'ArrowDown' });
+    fireEvent.keyDown(dialog, { key: 'ArrowDown' });
+    fireEvent.keyDown(dialog, { key: 'ArrowUp' });
+    fireEvent.keyDown(dialog, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('fs:list-directories', {
+        dirPath: '/Users/vincent/repo-one',
+      });
+    });
+
+    fireEvent.keyDown(dialog, { key: 'Backspace' });
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('fs:list-directories', { dirPath: '/Users/vincent' });
+    });
+  });
+
+  it('keeps keyboard selection bounded and adds when no directory is selected', async () => {
+    renderExplorer();
+
+    const dialog = screen.getByRole('dialog', { name: 'Add Repository' });
+    expect(await screen.findByText('repo-one')).toBeInTheDocument();
+
+    fireEvent.keyDown(dialog, { key: 'z' });
+    fireEvent.keyDown(dialog, { key: 'ArrowUp' });
+    fireEvent.keyDown(dialog, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('project:add', { path: '/Users/vincent' });
+    });
+  });
+
+  it('ignores modal navigation and add shortcuts before the start directory resolves', async () => {
+    let resolveStartDir: (value: { resolvedPath: string }) => void = () => {};
+    invoke.mockImplementation((channel, args) => {
+      if (channel === 'fs:resolve-start-dir') {
+        return new Promise((resolve) => {
+          resolveStartDir = resolve as (value: { resolvedPath: string }) => void;
+        });
+      }
+      if (channel === 'fs:list-directories' && args?.dirPath === '/Users/vincent') {
+        return Promise.resolve({
+          entries: [{ name: 'repo-one', absolutePath: '/Users/vincent/repo-one' }],
+          error: null,
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    renderExplorer();
+
+    const dialog = screen.getByRole('dialog', { name: 'Add Repository' });
+    fireEvent.keyDown(dialog, { key: 'Backspace' });
+    fireEvent.keyDown(dialog, { key: 'Enter' });
+
+    expect(invoke).not.toHaveBeenCalledWith('project:add', expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith('fs:list-directories', expect.anything());
+
+    resolveStartDir({ resolvedPath: '/Users/vincent' });
+    expect(await screen.findByText('repo-one')).toBeInTheDocument();
+  });
+
+  it('submits the focused path input from the modal keyboard handler', async () => {
+    renderExplorer();
+
+    const pathInput = await screen.findByDisplayValue('/Users/vincent');
+    fireEvent.focus(pathInput);
+    fireEvent.change(pathInput, { target: { value: '/private' } });
+    const activeElementSpy = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(pathInput);
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Add Repository' }), { key: 'Enter' });
+    activeElementSpy.mockRestore();
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('fs:list-directories', { dirPath: '/private' });
+    });
+    expect(await screen.findByText('Permission denied')).toBeInTheDocument();
+  });
+
+  it('does not navigate above empty cwd and resets state when cancelled', async () => {
+    useAppStore.setState({ addProjectExplorerOpen: false } as never);
+    const { rerender } = renderExplorer();
+
+    expect(screen.queryByRole('dialog', { name: 'Add Repository' })).not.toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'Backspace' });
+
+    useAppStore.setState({ addProjectExplorerOpen: true } as never);
+    rerender(
+      <QueryClientProvider
+        client={
+          new QueryClient({
+            defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+          })
+        }
+      >
+        <AddProjectExplorer />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByDisplayValue('/Users/vincent')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(useAppStore.getState().addProjectExplorerOpen).toBe(false);
   });
 });

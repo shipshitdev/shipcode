@@ -211,6 +211,37 @@ describe('registerSkillsHandlers', () => {
     ]);
   });
 
+  it('falls back to the global skill row when the project row is inactive', () => {
+    mockBuildSkillRow.mockImplementation(
+      (_queries: unknown, phase: string, projectId: string | null) => ({
+        id: `${projectId ?? 'global'}:${phase}`,
+        projectId,
+        phase,
+        source: projectId ? 'default' : 'global',
+        status: projectId ? 'missing' : 'ok',
+        content: 'skill content',
+      }),
+    );
+    const listForView = getHandler('skills:list-for-view');
+
+    expect(listForView(null, { projectId: 'project-1' })).toEqual([
+      expect.objectContaining({
+        active: expect.objectContaining({ id: 'global:plan-generation' }),
+      }),
+    ]);
+  });
+
+  it('lists global-only skills when no project is selected', () => {
+    const listForView = getHandler('skills:list-for-view');
+
+    expect(listForView(null, { projectId: null })).toEqual([
+      expect.objectContaining({
+        projectRow: null,
+        active: expect.objectContaining({ id: 'global:plan-generation' }),
+      }),
+    ]);
+  });
+
   it('returns validation errors without persisting invalid skills', () => {
     mockValidateSkill.mockReturnValueOnce('Missing required slot USER_PROMPT');
     const write = getHandler('skills:write');
@@ -257,6 +288,117 @@ describe('registerSkillsHandlers', () => {
     );
     expect(mockRewriteSkillDraft.mock.calls[0][0].projectContext).toContain('bun test');
     expect(mockRewriteSkillDraft.mock.calls[0][0].projectContext).toContain('Repo memory');
+  });
+
+  it('builds rewrite context for partially configured projects and unavailable repo metadata', async () => {
+    const handler = getHandler('skills:rewrite');
+    queries.projects.getById.mockReturnValueOnce(
+      makeProject({
+        gitRemote: null,
+        githubRepoFullName: null,
+        githubProjectUrl: null,
+        githubStatusMapping: null,
+      }),
+    );
+    mockInspectProjectSetup.mockReturnValueOnce({
+      status: 'invalid',
+      error: 'missing setup command',
+      contract: {
+        setupCommands: [],
+        verifyCommands: [],
+        testingContext: null,
+      },
+    });
+    mockLoadRepoContext.mockImplementationOnce(() => {
+      throw new Error('memory missing');
+    });
+    queries.settings.get.mockReturnValueOnce({
+      prdRewriteCli: 'codex',
+      prdRewriteClaudeModel: 'claude-sonnet-4-6',
+      prdRewriteCodexModel: 'gpt-5.4',
+      prdRewriteReasoningEffort: 'medium',
+    });
+
+    await handler(null, {
+      projectId: 'project-1',
+      phase: 'plan-generation',
+      content: 'draft',
+      instruction: 'use codex',
+    });
+
+    const rewriteInput = mockRewriteSkillDraft.mock.calls[0][0];
+    expect(mockAssertPrdRewriteModelSupported).toHaveBeenCalledWith('codex', 'gpt-5.4', 'medium');
+    expect(rewriteInput.modelId).toBe('gpt-5.4');
+    expect(rewriteInput.projectContext).toContain('Git remote: not configured');
+    expect(rewriteInput.projectContext).toContain('GitHub Projects status mapping: not configured');
+    expect(rewriteInput.projectContext).toContain('Setup error: missing setup command');
+    expect(rewriteInput.projectContext).toContain('Setup commands: none');
+    expect(rewriteInput.projectContext).toContain('Verification commands: none');
+    expect(rewriteInput.projectContext).toContain('Repo memory unavailable: memory missing');
+  });
+
+  it('includes setup inspection failures in rewrite context', async () => {
+    const handler = getHandler('skills:rewrite');
+    mockInspectProjectSetup.mockImplementationOnce(() => {
+      throw new Error('setup exploded');
+    });
+
+    await handler(null, {
+      projectId: 'project-1',
+      phase: 'plan-generation',
+      content: 'draft',
+      instruction: 'include setup failure',
+    });
+
+    expect(mockRewriteSkillDraft.mock.calls[0][0].projectContext).toContain(
+      'Setup inspection failed: setup exploded',
+    );
+  });
+
+  it('formats unmapped status options and setup without a contract', async () => {
+    const handler = getHandler('skills:rewrite');
+    queries.projects.getById.mockReturnValueOnce(
+      makeProject({
+        githubStatusMapping: {
+          todo: null,
+          inProgress: { name: 'Doing', color: 'BLUE' },
+          humanReview: null,
+          done: { name: 'Done', color: 'GREEN' },
+        },
+      } as never),
+    );
+    mockInspectProjectSetup.mockReturnValueOnce({
+      status: 'missing',
+      error: null,
+      contract: null,
+    });
+
+    await handler(null, {
+      projectId: 'project-1',
+      phase: 'plan-generation',
+      content: 'draft',
+      instruction: 'format unmapped statuses',
+    });
+
+    const projectContext = mockRewriteSkillDraft.mock.calls[0][0].projectContext;
+    expect(projectContext).toContain('todo=unmapped');
+    expect(projectContext).toContain('human_review=unmapped');
+    expect(projectContext).toContain('Setup status: missing');
+    expect(projectContext).not.toContain('Setup commands:');
+  });
+
+  it('rejects unknown rewrite phases', async () => {
+    const handler = getHandler('skills:rewrite');
+
+    await expect(
+      handler(null, {
+        projectId: null,
+        contextProjectId: null,
+        phase: 'unknown-phase',
+        content: 'draft',
+        instruction: 'adapt',
+      }),
+    ).rejects.toThrow('Unknown skill phase: unknown-phase');
   });
 
   it('rewrites with no project context and clamps model rewrite failures', async () => {
@@ -335,6 +477,32 @@ describe('registerSkillsHandlers', () => {
 
     mockOpenPath.mockResolvedValueOnce('cannot open');
     await expect(openWritingPrds(null, { projectId: 'project-1' })).rejects.toThrow('cannot open');
+    existsSpy.mockRestore();
+  });
+
+  it('reports writing PRD fallback to the project path and rejects missing projects', async () => {
+    const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    const getInfo = getHandler('skills:get-writing-prds-info');
+    const openWritingPrds = getHandler('skills:open-writing-prds');
+
+    expect(getInfo(null, { projectId: 'project-1' })).toEqual({
+      projectId: 'project-1',
+      projectPath: '/repo',
+      absolutePath: path.join('/repo', 'skills', 'writing-prds', 'SKILL.md'),
+      exists: false,
+      usingFallback: true,
+      openTargetPath: '/repo',
+    });
+
+    queries.projects.getById.mockReturnValueOnce(null);
+    expect(() => getInfo(null, { projectId: 'missing-project' })).toThrow(
+      'Project missing-project not found',
+    );
+
+    queries.projects.getById.mockReturnValueOnce(null);
+    await expect(openWritingPrds(null, { projectId: 'missing-project' })).rejects.toThrow(
+      'Project missing-project not found',
+    );
     existsSpy.mockRestore();
   });
 });

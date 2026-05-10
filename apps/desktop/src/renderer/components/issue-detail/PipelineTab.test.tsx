@@ -5,12 +5,16 @@ import type {
   FeatureQaResult,
   GitHubIssueCacheRecord,
   IntegrationStatus,
+  OpenRouterModelValidation,
   PipelineCheckpoint,
+  ReasoningEffort,
+  TaskGraphWithNodes,
   Thread,
 } from '@shipcode/shared';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PipelineTab } from './PipelineTab';
+import type { PhaseKey, PhaseSelection } from './tab-types';
 
 function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord {
   return {
@@ -116,10 +120,20 @@ function renderPipelineTab({
   integrationStatus,
   isSubmitting = false,
   linkedPrUrl = null,
+  currentPhaseReasoningEfforts,
+  currentPhaseSelections,
+  phaseEffortSelectValues,
+  phaseModelValidation = {},
+  phaseSelectValues,
   onRestoreCheckpoint = vi.fn(),
+  onPhaseAgentChange = vi.fn(),
+  onPhaseEffortChange = vi.fn(),
+  onPhaseOpenRouterSlugBlur = vi.fn(),
   onStabilizePr = vi.fn(),
   qaResults = [],
+  taskGraph = null,
   thread = makeThread(),
+  githubIssueUrl = 'https://github.com/acme/repo/issues/42',
 }: {
   issueOverrides?: Partial<GitHubIssueCacheRecord>;
   activeThreadId?: string | null;
@@ -129,37 +143,45 @@ function renderPipelineTab({
   integrationStatus?: IntegrationStatus;
   isSubmitting?: boolean;
   linkedPrUrl?: string | null;
+  currentPhaseReasoningEfforts?: Record<PhaseKey, ReasoningEffort>;
+  currentPhaseSelections?: Record<PhaseKey, PhaseSelection>;
+  phaseEffortSelectValues?: Record<PhaseKey, string>;
+  phaseModelValidation?: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
+  phaseSelectValues?: Record<PhaseKey, string>;
   onRestoreCheckpoint?: (checkpoint: PipelineCheckpoint) => void;
+  onPhaseAgentChange?: (phase: PhaseKey, value: string) => void;
+  onPhaseEffortChange?: (phase: PhaseKey, effort: string) => void;
+  onPhaseOpenRouterSlugBlur?: (phase: PhaseKey, rawValue: string) => void;
   onStabilizePr?: () => void;
   qaResults?: FeatureQaResult[];
+  taskGraph?: TaskGraphWithNodes | null;
   thread?: Thread | null;
+  githubIssueUrl?: string | null;
 } = {}) {
+  const resolvedCurrentPhaseSelections = currentPhaseSelections ?? {
+    planner: {
+      provider: executorEditable ? 'gemini' : 'claude',
+      modelId: executorEditable ? 'missing-gemini-model' : null,
+    },
+    reviewer: { provider: 'codex', modelId: null },
+    executor: { provider: 'claude', modelId: null },
+    verifier: { provider: 'claude', modelId: null },
+  };
+
   render(
     <PipelineTab
       activeIssue={makeIssue(issueOverrides)}
       activeThreadId={activeThreadId}
       checkpoints={checkpoints}
-      currentPhaseReasoningEfforts={{
-        planner: 'high',
-        reviewer: 'high',
-        executor: 'high',
-        verifier: 'high',
-      }}
-      currentPhaseSelections={{
-        planner: {
-          provider: executorEditable ? 'gemini' : 'claude',
-          modelId: executorEditable ? 'missing-gemini-model' : null,
-        },
-        reviewer: { provider: 'codex', modelId: null },
-        executor: { provider: 'claude', modelId: null },
-        verifier: { provider: 'claude', modelId: null },
-      }}
-      effectivePhaseResolvedModels={{
-        planner: 'claude',
-        reviewer: 'codex',
-        executor: 'claude',
-        verifier: 'claude',
-      }}
+      currentPhaseReasoningEfforts={
+        currentPhaseReasoningEfforts ?? {
+          planner: 'high',
+          reviewer: 'high',
+          executor: 'high',
+          verifier: 'high',
+        }
+      }
+      currentPhaseSelections={resolvedCurrentPhaseSelections}
       effectiveRequireApproval={false}
       effectiveRevisionCount={1}
       executorEditable={executorEditable}
@@ -175,20 +197,24 @@ function renderPipelineTab({
       integrationStatus={integrationStatus}
       isSubmitting={isSubmitting}
       linkedPrUrl={linkedPrUrl}
-      phaseEffortSelectValues={{
-        planner: '__inherit__',
-        reviewer: '__inherit__',
-        executor: '__inherit__',
-        verifier: '__inherit__',
-      }}
-      phaseModelValidation={{}}
+      phaseEffortSelectValues={
+        phaseEffortSelectValues ?? {
+          planner: '__inherit__',
+          reviewer: '__inherit__',
+          executor: '__inherit__',
+          verifier: '__inherit__',
+        }
+      }
+      phaseModelValidation={phaseModelValidation}
       qaResults={qaResults}
-      phaseSelectValues={{
-        planner: executorEditable ? 'gemini::missing-gemini-model' : '__inherit__',
-        reviewer: '__inherit__',
-        executor: '__inherit__',
-        verifier: '__inherit__',
-      }}
+      phaseSelectValues={
+        phaseSelectValues ?? {
+          planner: executorEditable ? 'gemini::missing-gemini-model' : '__inherit__',
+          reviewer: '__inherit__',
+          executor: '__inherit__',
+          verifier: '__inherit__',
+        }
+      }
       projectDefaultPhaseSelections={{
         planner: { provider: 'claude', modelId: null },
         reviewer: { provider: 'codex', modelId: null },
@@ -197,14 +223,14 @@ function renderPipelineTab({
       }}
       requireApprovalSelectValue="__inherit__"
       revisionCountSelectValue="__inherit__"
-      taskGraph={null}
+      taskGraph={taskGraph}
       thread={thread}
-      githubIssueUrl="https://github.com/acme/repo/issues/42"
-      onPhaseAgentChange={vi.fn()}
-      onPhaseEffortChange={vi.fn()}
+      githubIssueUrl={githubIssueUrl}
+      onPhaseAgentChange={onPhaseAgentChange}
+      onPhaseEffortChange={onPhaseEffortChange}
       onRequireApprovalChange={vi.fn()}
       onRevisionCountChange={vi.fn()}
-      onPhaseOpenRouterSlugBlur={vi.fn()}
+      onPhaseOpenRouterSlugBlur={onPhaseOpenRouterSlugBlur}
       onRestoreCheckpoint={onRestoreCheckpoint}
       onStabilizePr={onStabilizePr}
     />,
@@ -325,6 +351,100 @@ describe('PipelineTab', () => {
     });
   });
 
+  it('opens nested QA assertion and flow evidence through IPC', () => {
+    const invoke = vi.fn(async () => null);
+    window.shipcode.invoke = invoke as unknown as typeof window.shipcode.invoke;
+
+    renderPipelineTab({
+      qaResults: [
+        {
+          featureId: 'issue-42',
+          status: 'partial',
+          summary: 'Visual QA partially passed.',
+          runAt: new Date().toISOString(),
+          evidencePaths: [],
+          flowResults: [
+            {
+              flowName: 'Review evidence links',
+              passed: false,
+              evidencePaths: ['/tmp/qa/flow.png'],
+              assertions: [
+                {
+                  name: 'Primary button position',
+                  passed: false,
+                  expected: 'Button is visible',
+                  actual: 'Button is hidden',
+                  evidencePath: '/tmp/qa/assertion.png',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const openButtons = screen.getAllByRole('button', { name: /open/i });
+    fireEvent.click(openButtons[0]);
+    fireEvent.click(openButtons[1]);
+
+    expect(invoke).toHaveBeenCalledWith('feature-qa:open-evidence', {
+      threadId: 'thread-1',
+      path: '/tmp/qa/assertion.png',
+    });
+    expect(invoke).toHaveBeenCalledWith('feature-qa:open-evidence', {
+      threadId: 'thread-1',
+      path: '/tmp/qa/flow.png',
+    });
+  });
+
+  it('does not open QA evidence when the active thread is missing', () => {
+    const invoke = vi.fn(async () => null);
+    window.shipcode.invoke = invoke as unknown as typeof window.shipcode.invoke;
+
+    renderPipelineTab({
+      activeThreadId: null,
+      qaResults: [
+        {
+          featureId: 'issue-42',
+          status: 'failed',
+          summary: 'Visual QA failed.',
+          runAt: new Date().toISOString(),
+          evidencePaths: ['/tmp/qa/create-button.png'],
+          flowResults: [],
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /open/i }));
+
+    expect(invoke).not.toHaveBeenCalledWith('feature-qa:open-evidence', expect.anything());
+  });
+
+  it('renders evidence open errors from QA result links', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'feature-qa:open-evidence') throw new Error('evidence missing');
+      return null;
+    });
+    window.shipcode.invoke = invoke as unknown as typeof window.shipcode.invoke;
+
+    renderPipelineTab({
+      qaResults: [
+        {
+          featureId: 'issue-42',
+          status: 'failed',
+          summary: 'Visual QA failed.',
+          runAt: new Date().toISOString(),
+          evidencePaths: ['/tmp/qa/missing.png'],
+          flowResults: [],
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /open/i }));
+
+    expect(await screen.findByText('evidence missing')).toBeInTheDocument();
+  });
+
   it('renders human QA scenarios from the issue QA state', () => {
     renderPipelineTab({
       issueOverrides: {
@@ -393,6 +513,74 @@ describe('PipelineTab', () => {
 
     expect(await screen.findByText('http://localhost:4321')).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith('feature-qa:get-server', { threadId: 'thread-1' });
+
+    fireEvent.click(screen.getByRole('button', { name: /http:\/\/localhost:4321/i }));
+    expect(invoke).toHaveBeenCalledWith('shell:open-external', {
+      url: 'http://localhost:4321',
+    });
+  });
+
+  it('keeps manual QA disabled when there is no active thread', () => {
+    renderPipelineTab({
+      activeThreadId: null,
+      issueOverrides: {
+        body: `## QA State
+
+\`\`\`json
+{
+  "featureId": "issue-42",
+  "routes": [],
+  "criticalFlows": [
+    {
+      "name": "Open settings",
+      "steps": ["Open settings"],
+      "successCriteria": "Settings loads."
+    }
+  ],
+  "expectedStates": [],
+  "testDataAssumptions": [],
+  "selectorReadiness": "ready"
+}
+\`\`\``,
+      },
+    });
+
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
+  });
+
+  it('falls back to no manual QA server when lookup fails', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'feature-qa:get-server') throw new Error('lookup failed');
+      return null;
+    });
+    window.shipcode.invoke = invoke as unknown as typeof window.shipcode.invoke;
+
+    renderPipelineTab({
+      issueOverrides: {
+        body: `## QA State
+
+\`\`\`json
+{
+  "featureId": "issue-42",
+  "routes": [],
+  "criticalFlows": [
+    {
+      "name": "Open settings",
+      "steps": ["Open settings"],
+      "successCriteria": "Settings loads."
+    }
+  ],
+  "expectedStates": [],
+  "testDataAssumptions": [],
+  "selectorReadiness": "ready"
+}
+\`\`\``,
+      },
+    });
+
+    expect(
+      await screen.findByText(/starts the configured runtime qa command/i),
+    ).toBeInTheDocument();
   });
 
   it('opens and stops the manual QA server through IPC', async () => {
@@ -446,6 +634,47 @@ describe('PipelineTab', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders a clamped error when stopping manual QA fails', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'feature-qa:get-server') {
+        return { baseUrl: 'http://localhost:5174', port: 5174 };
+      }
+      if (channel === 'feature-qa:stop-server') {
+        throw new Error('stop failed');
+      }
+      return null;
+    });
+    window.shipcode.invoke = invoke as unknown as typeof window.shipcode.invoke;
+
+    renderPipelineTab({
+      issueOverrides: {
+        body: `## QA State
+
+\`\`\`json
+{
+  "featureId": "issue-42",
+  "routes": [],
+  "criticalFlows": [
+    {
+      "name": "Open settings",
+      "steps": ["Open settings"],
+      "successCriteria": "Settings loads."
+    }
+  ],
+  "expectedStates": [],
+  "testDataAssumptions": [],
+  "selectorReadiness": "ready"
+}
+\`\`\``,
+      },
+    });
+
+    expect(await screen.findByText('http://localhost:5174')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+
+    expect(await screen.findByText('stop failed')).toBeInTheDocument();
+  });
+
   it('clamps and renders manual QA startup errors', async () => {
     const invoke = vi.fn(async (channel: string) => {
       if (channel === 'feature-qa:get-server') return null;
@@ -483,6 +712,108 @@ describe('PipelineTab', () => {
 
     const error = await screen.findByText(/^dev server failed/);
     expect(error.textContent?.length).toBeLessThanOrEqual(320);
+  });
+
+  it('opens task graph issue links from the active issue URL', () => {
+    const invoke = vi.fn(async () => null);
+    window.shipcode.invoke = invoke as unknown as typeof window.shipcode.invoke;
+
+    renderPipelineTab({
+      taskGraph: {
+        id: 'graph-1',
+        threadId: 'thread-1',
+        planId: 'plan-1',
+        mode: 'github-subissues',
+        status: 'active',
+        riskScore: 0.7,
+        assessment: {
+          mode: 'github-subissues',
+          shouldDecompose: true,
+          riskScore: 0.7,
+          reasons: ['multi-surface'],
+          suggestedNodeCount: 1,
+          surfaces: ['frontend'],
+        },
+        nodes: [
+          {
+            id: 'node-1',
+            graphId: 'graph-1',
+            stableKey: 'step-1',
+            order: 1,
+            title: 'Update settings form',
+            description: 'Wire the settings form.',
+            status: 'ready',
+            files: ['apps/desktop/src/renderer/settings.tsx'],
+            acceptanceCriteria: ['Settings save'],
+            surfaces: ['frontend'],
+            agentRole: 'frontend',
+            suggestedExecutorModel: 'claude',
+            suggestedReasoningEffort: 'high',
+            githubIssueNumber: 99,
+            startedAt: null,
+            completedAt: null,
+            createdAt: '2026-05-01T10:00:00.000Z',
+            updatedAt: '2026-05-01T10:00:00.000Z',
+          },
+        ],
+        edges: [],
+        createdAt: '2026-05-01T10:00:00.000Z',
+        updatedAt: '2026-05-01T10:00:00.000Z',
+      },
+      githubIssueUrl: 'https://github.com/acme/repo/issues/42?focused=1',
+    });
+
+    fireEvent.click(screen.getByTitle('Open task issue #99'));
+
+    expect(invoke).toHaveBeenCalledWith('shell:open-external', {
+      url: 'https://github.com/acme/repo/issues/99',
+    });
+  });
+
+  it('renders editable OpenRouter slug controls and reports blur changes', () => {
+    const onPhaseOpenRouterSlugBlur = vi.fn();
+
+    renderPipelineTab({
+      executorEditable: true,
+      currentPhaseSelections: {
+        planner: { provider: 'openrouter', modelId: 'custom/current-model' },
+        reviewer: { provider: 'codex', modelId: null },
+        executor: { provider: 'claude', modelId: null },
+        verifier: { provider: 'claude', modelId: null },
+      },
+      phaseSelectValues: {
+        planner: 'openrouter::custom/current-model',
+        reviewer: '__inherit__',
+        executor: '__inherit__',
+        verifier: '__inherit__',
+      },
+      phaseModelValidation: {
+        planner: {
+          modelId: 'custom/current-model',
+          status: 'invalid',
+          message: 'Model slug could not be validated.',
+        },
+      },
+      integrationStatus: {
+        openrouter: {
+          authStatus: 'missing',
+          message: 'OpenRouter key is missing.',
+        },
+      } as unknown as IntegrationStatus,
+      onPhaseOpenRouterSlugBlur,
+    });
+
+    expect(screen.getByText('OpenRouter key is missing.')).toBeInTheDocument();
+    expect(screen.getByText('Model slug could not be validated.')).toBeInTheDocument();
+
+    fireEvent.blur(screen.getByPlaceholderText('e.g. anthropic/claude-sonnet-4.6'), {
+      target: { value: 'anthropic/claude-sonnet-4.6' },
+    });
+
+    expect(onPhaseOpenRouterSlugBlur).toHaveBeenCalledWith(
+      'planner',
+      'anthropic/claude-sonnet-4.6',
+    );
   });
 
   it('renders PR feedback blockers and runs the stabilization action', () => {

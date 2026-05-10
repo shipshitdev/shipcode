@@ -101,7 +101,7 @@ function adjacentColumnIssueId(
   ) {
     const issues = columns[nextColumnIndex].issues;
     if (issues.length === 0) continue;
-    return issues[Math.min(issueIndex, issues.length - 1)]?.id ?? null;
+    return issues[Math.min(issueIndex, issues.length - 1)]!.id;
   }
   return null;
 }
@@ -119,13 +119,11 @@ function moveFocusedIssueId(
 
   const currentColumn = columns[position.columnIndex];
   if (key === 'j') {
-    return (
-      currentColumn.issues[Math.min(position.issueIndex + 1, currentColumn.issues.length - 1)]
-        ?.id ?? currentIssueId
-    );
+    return currentColumn.issues[Math.min(position.issueIndex + 1, currentColumn.issues.length - 1)]!
+      .id;
   }
   if (key === 'k') {
-    return currentColumn.issues[Math.max(position.issueIndex - 1, 0)]?.id ?? currentIssueId;
+    return currentColumn.issues[Math.max(position.issueIndex - 1, 0)]!.id;
   }
 
   return (
@@ -318,7 +316,7 @@ function useKanbanBoardView({
             ? ''
             : formatIssueBranch(
                 issue.issueNumber,
-                issue.title ?? '',
+                issue.title,
                 settings?.worktreeBranchFormat ?? null,
               ),
         ]),
@@ -359,7 +357,7 @@ function useKanbanBoardView({
     () =>
       COLUMNS.map((column) => {
         if (!column.sections) {
-          return { key: column.key, issues: visibleIssuesByColumn.get(column.key) ?? [] };
+          return { key: column.key, issues: visibleIssuesByColumn.get(column.key)! };
         }
 
         return {
@@ -498,8 +496,7 @@ function useKanbanBoardView({
 
   const scrollIssueIntoView = useCallback((issueId: string | null) => {
     if (!issueId) return;
-    const root = boardRootRef.current;
-    if (!root) return;
+    const root = boardRootRef.current!;
     const focusedCard = Array.from(root.querySelectorAll<HTMLElement>('[data-issue-card-id]')).find(
       (card) => card.dataset.issueCardId === issueId,
     );
@@ -646,7 +643,7 @@ function useKanbanBoardView({
 
   function getColumnForIssue(issue: GitHubIssueCacheRecord): ColumnKey {
     if (approvedAwaitingExecutionIssueIds?.has(issue.id)) return 'agent';
-    return COLUMNS.find((c) => c.statuses.includes(issue.pipelineStatus))?.key ?? 'todo';
+    return COLUMNS.find((c) => c.statuses.includes(issue.pipelineStatus))!.key;
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -823,7 +820,7 @@ function useKanbanBoardView({
                     />
                   );
                 }
-                const columnIssues = visibleIssuesByColumn.get(col.key) ?? [];
+                const columnIssues = visibleIssuesByColumn.get(col.key)!;
                 return (
                   <DroppableColumn
                     key={col.key}
@@ -839,8 +836,6 @@ function useKanbanBoardView({
                     onOpenPullRequest={onOpenPullRequest}
                     onCopyBranchName={handleCopyBranchName}
                     repoUrl={repoUrl}
-                    onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
-                    onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                     onCreatePr={onCreatePr}
                     issueBranchNameById={issueBranchNameById}
                     branchCopyIssueId={branchCopyToast?.issueId ?? null}
@@ -868,7 +863,9 @@ function useKanbanBoardView({
               {activeIssue ? (
                 <DragOverlayCard
                   issue={activeIssue}
-                  approvedAwaitingExecution={approvedAwaitingExecutionIssueIds?.has(activeIssue.id)}
+                  approvedAwaitingExecution={Boolean(
+                    approvedAwaitingExecutionIssueIds?.has(activeIssue.id),
+                  )}
                 />
               ) : null}
             </DragOverlay>

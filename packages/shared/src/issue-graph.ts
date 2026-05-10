@@ -44,8 +44,6 @@ export interface ProjectIssueGraph {
   edges: IssueGraphEdgeRecord[];
 }
 
-const DEPENDS_ON_PATTERN = /\bdepends\s+on\b[\s:]*#(\d+)\b/gi;
-const BLOCKS_PATTERN = /\bblocks\b[\s:]*#(\d+)\b/gi;
 const ISSUE_REFERENCE_PATTERN = /(^|[^\w])#(\d+)\b/g;
 const DEPENDS_ON_CLAUSE_PATTERN =
   /\bdepends\s+on\b[\s:]*([^.\n\r]*?)(?=\b(?:depends\s+on|blocks)\b|[.\n\r]|$)/gi;
@@ -92,31 +90,20 @@ export function parseIssueBodyDependencyEdges(
     edges.set(`${edge.edgeType}:${edge.sourceIssueNumber}:${edge.targetIssueNumber}`, edge);
   };
 
-  const pushHardEdgesFromClause = (
-    pattern: RegExp,
-    fallbackPattern: RegExp,
-    edgeType: 'blocks' | 'depends_on',
-  ) => {
-    let matchedClause = false;
+  const pushHardEdgesFromClause = (pattern: RegExp, edgeType: 'blocks' | 'depends_on') => {
     for (const match of body.matchAll(pattern)) {
-      matchedClause = true;
-      for (const referenceMatch of (match[1] ?? '').matchAll(CLAUSE_REFERENCE_PATTERN)) {
-        pushHardEdge(Number.parseInt(referenceMatch[1] ?? '', 10), edgeType);
-      }
-    }
-
-    if (!matchedClause) {
-      for (const match of body.matchAll(fallbackPattern)) {
-        pushHardEdge(Number.parseInt(match[1] ?? '', 10), edgeType);
+      const clause = match[1] as string;
+      for (const referenceMatch of clause.matchAll(CLAUSE_REFERENCE_PATTERN)) {
+        pushHardEdge(Number.parseInt(referenceMatch[1] as string, 10), edgeType);
       }
     }
   };
 
-  pushHardEdgesFromClause(DEPENDS_ON_CLAUSE_PATTERN, DEPENDS_ON_PATTERN, 'depends_on');
-  pushHardEdgesFromClause(BLOCKS_CLAUSE_PATTERN, BLOCKS_PATTERN, 'blocks');
+  pushHardEdgesFromClause(DEPENDS_ON_CLAUSE_PATTERN, 'depends_on');
+  pushHardEdgesFromClause(BLOCKS_CLAUSE_PATTERN, 'blocks');
 
   for (const match of body.matchAll(ISSUE_REFERENCE_PATTERN)) {
-    const referencedIssueNumber = Number.parseInt(match[2] ?? '', 10);
+    const referencedIssueNumber = Number.parseInt(match[2] as string, 10);
     if (!Number.isFinite(referencedIssueNumber) || referencedIssueNumber === issueNumber) {
       continue;
     }
@@ -130,13 +117,8 @@ export function parseIssueBodyDependencyEdges(
     edges.set(`${edge.edgeType}:${edge.sourceIssueNumber}:${edge.targetIssueNumber}`, edge);
   }
 
-  return [...edges.values()].sort((a, b) => {
-    if (a.sourceIssueNumber !== b.sourceIssueNumber) {
-      return a.sourceIssueNumber - b.sourceIssueNumber;
-    }
-    if (a.targetIssueNumber !== b.targetIssueNumber) {
-      return a.targetIssueNumber - b.targetIssueNumber;
-    }
-    return a.edgeType.localeCompare(b.edgeType);
-  });
+  return [...edges.values()].sort(
+    (a, b) =>
+      a.sourceIssueNumber - b.sourceIssueNumber || a.targetIssueNumber - b.targetIssueNumber,
+  );
 }

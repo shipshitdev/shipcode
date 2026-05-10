@@ -12,6 +12,21 @@ describe('shortcuts', () => {
     expect(matchesShortcut(event, { meta: true, key: 'j' })).toBe(false);
   });
 
+  it('rejects mismatched modifier keys before matching the shortcut key', () => {
+    expect(
+      matchesShortcut(new KeyboardEvent('keydown', { key: 'k' }), { meta: true, key: 'k' }),
+    ).toBe(false);
+    expect(
+      matchesShortcut(new KeyboardEvent('keydown', { key: 'k', altKey: true }), { key: 'k' }),
+    ).toBe(false);
+    expect(
+      matchesShortcut(new KeyboardEvent('keydown', { key: 'k', shiftKey: true }), { key: 'k' }),
+    ).toBe(false);
+    expect(
+      matchesShortcut(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }), { key: 'k' }),
+    ).toBe(false);
+  });
+
   it('matches option-composed alt glyphs for issue detail toggle', () => {
     const event = new KeyboardEvent('keydown', {
       key: '∫',

@@ -90,6 +90,7 @@ export function formatPlanComment(plan: ShipCodePlan): string {
       .filter((index) => index !== -1)
       .sort((a, b) => a - b)[0];
     const stepsEnd = fallbackSectionStart ?? body.length;
+    /* v8 ignore next -- formatted plan comments always contain a Steps section before truncation */
     if (stepsStart !== -1 && stepsEnd > stepsStart) {
       const beforeSteps = body.substring(0, stepsStart);
       const afterSteps = body.substring(stepsEnd);

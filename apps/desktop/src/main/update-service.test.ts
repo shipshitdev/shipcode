@@ -26,6 +26,24 @@ function makeWindow() {
   } as unknown as BrowserWindow;
 }
 
+function makeWindowWithState({
+  destroyed = false,
+  webContentsDestroyed = false,
+  send = vi.fn(),
+}: {
+  destroyed?: boolean;
+  webContentsDestroyed?: boolean;
+  send?: ReturnType<typeof vi.fn>;
+}) {
+  return {
+    isDestroyed: () => destroyed,
+    webContents: {
+      isDestroyed: () => webContentsDestroyed,
+      send,
+    },
+  } as unknown as BrowserWindow;
+}
+
 describe('UpdateService.checkNow', () => {
   const originalFetch = global.fetch;
 
@@ -36,6 +54,35 @@ describe('UpdateService.checkNow', () => {
   afterEach(() => {
     global.fetch = originalFetch;
     vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('starts and stops periodic update checks and exposes current status', async () => {
+    vi.useFakeTimers();
+    global.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ tag_name: 'v0.2.0', draft: false, prerelease: false }), {
+          status: 200,
+        }),
+    ) as typeof fetch;
+
+    const svc = new UpdateService(makeWindow());
+    expect(svc.getStatus()).toMatchObject({
+      current: '0.1.0',
+      state: 'idle',
+    });
+
+    svc.start();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
+    expect(fetch).toHaveBeenCalledTimes(2);
+
+    svc.stop();
+    svc.stop();
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('treats GitHub 404 (no published releases) as up-to-date, not error', async () => {
@@ -156,6 +203,178 @@ describe('UpdateService.checkNow', () => {
     expect(status.state).toBe('available');
     expect(status.latest).toBe('0.3.0');
     expect(status.releaseTag).toBe('v0.3.0');
+  });
+
+  it('reports malformed release metadata as a clamped update error', async () => {
+    global.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            tag_name: null,
+            name: null,
+            draft: false,
+            prerelease: false,
+          }),
+          { status: 200 },
+        ),
+    ) as typeof fetch;
+
+    const svc = new UpdateService(makeWindow());
+    const status = await svc.checkNow();
+
+    expect(status.state).toBe('error');
+    expect(status.error).toBe('Release response missing tag_name');
+  });
+
+  it('handles invalid and prerelease semver comparisons conservatively', async () => {
+    appGetVersionMock.mockReturnValue('1.0.0-rc.2');
+    global.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            tag_name: 'v1.0.0',
+            html_url: 42,
+            published_at: 42,
+            draft: false,
+            prerelease: false,
+          }),
+          { status: 200 },
+        ),
+    ) as typeof fetch;
+
+    const stableVsRc = new UpdateService(makeWindow());
+    await expect(stableVsRc.checkNow()).resolves.toMatchObject({
+      state: 'available',
+      latest: '1.0.0',
+      releaseUrl: null,
+      publishedAt: null,
+    });
+
+    appGetVersionMock.mockReturnValue('not-semver');
+    global.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            tag_name: 'also-not-semver',
+            draft: false,
+            prerelease: false,
+          }),
+          { status: 200 },
+        ),
+    ) as typeof fetch;
+
+    const invalid = new UpdateService(makeWindow());
+    await expect(invalid.checkNow()).resolves.toMatchObject({
+      state: 'up-to-date',
+      latest: 'also-not-semver',
+      hasUpdate: false,
+    });
+  });
+
+  it('handles prerelease ordering when current stable is newer', async () => {
+    appGetVersionMock.mockReturnValue('1.0.0');
+    global.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            tag_name: 'v1.0.0-rc.2',
+            draft: false,
+            prerelease: false,
+          }),
+          { status: 200 },
+        ),
+    ) as typeof fetch;
+
+    const stableVsRc = new UpdateService(makeWindow());
+    await expect(stableVsRc.checkNow()).resolves.toMatchObject({
+      state: 'up-to-date',
+      latest: '1.0.0-rc.2',
+      hasUpdate: false,
+    });
+
+    appGetVersionMock.mockReturnValue('1.0.0-rc.2');
+    global.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            tag_name: 'v1.0.0-rc.10',
+            draft: false,
+            prerelease: false,
+          }),
+          { status: 200 },
+        ),
+    ) as typeof fetch;
+
+    const lexicalNewer = new UpdateService(makeWindow());
+    await expect(lexicalNewer.checkNow()).resolves.toMatchObject({
+      state: 'up-to-date',
+      latest: '1.0.0-rc.10',
+      hasUpdate: false,
+    });
+  });
+
+  it('aborts slow update checks after the timeout', async () => {
+    vi.useFakeTimers();
+    global.fetch = vi.fn(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal;
+          if (signal instanceof AbortSignal) {
+            signal.addEventListener('abort', () => reject(new Error('aborted by timeout')));
+          }
+        }),
+    ) as typeof fetch;
+
+    const svc = new UpdateService(makeWindow());
+    const pending = svc.checkNow();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await expect(pending).resolves.toMatchObject({
+      state: 'error',
+      error: 'aborted by timeout',
+    });
+  });
+
+  it('skips renderer sends when the window or webContents is destroyed', async () => {
+    global.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ tag_name: 'v0.2.0', draft: false, prerelease: false }), {
+          status: 200,
+        }),
+    ) as typeof fetch;
+    const destroyedSend = vi.fn();
+    const destroyed = new UpdateService(
+      makeWindowWithState({ destroyed: true, send: destroyedSend }),
+    );
+
+    await destroyed.checkNow();
+
+    expect(destroyedSend).not.toHaveBeenCalled();
+
+    const webContentsDestroyedSend = vi.fn();
+    const webContentsDestroyed = new UpdateService(
+      makeWindowWithState({ webContentsDestroyed: true, send: webContentsDestroyedSend }),
+    );
+
+    await webContentsDestroyed.checkNow();
+
+    expect(webContentsDestroyedSend).not.toHaveBeenCalled();
+  });
+
+  it('ignores renderer send failures during status updates', async () => {
+    global.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ tag_name: 'v0.2.0', draft: false, prerelease: false }), {
+          status: 200,
+        }),
+    ) as typeof fetch;
+    const send = vi.fn(() => {
+      throw new Error('window closed during send');
+    });
+    const svc = new UpdateService(makeWindowWithState({ send }));
+
+    await expect(svc.checkNow()).resolves.toMatchObject({ state: 'available' });
+    expect(send).toHaveBeenCalled();
   });
 
   it('coalesces concurrent update checks into one fetch', async () => {

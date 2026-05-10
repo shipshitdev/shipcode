@@ -106,6 +106,13 @@ describe('ChatNotificationService', () => {
   const setSettingsMock = vi.fn();
   const getProjectMock = vi.fn();
 
+  function makeService() {
+    return new ChatNotificationService(
+      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
+      { getById: getProjectMock } as unknown as ProjectQueries,
+    );
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('ok', { status: 200 })));
@@ -125,10 +132,7 @@ describe('ChatNotificationService', () => {
   });
 
   it('sends actionable events to both configured providers', async () => {
-    const service = new ChatNotificationService(
-      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
-      { getById: getProjectMock } as unknown as ProjectQueries,
-    );
+    const service = makeService();
 
     service.fire('approval', makeThread());
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -154,10 +158,7 @@ describe('ChatNotificationService', () => {
         approval: false,
       },
     });
-    const service = new ChatNotificationService(
-      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
-      { getById: getProjectMock } as unknown as ProjectQueries,
-    );
+    const service = makeService();
 
     service.fire('approval', makeThread());
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -174,10 +175,7 @@ describe('ChatNotificationService', () => {
         telegramChatIdOverride: '-100555',
       }),
     );
-    const service = new ChatNotificationService(
-      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
-      { getById: getProjectMock } as unknown as ProjectQueries,
-    );
+    const service = makeService();
 
     await service.sendTest('discord', 'project-1');
     await service.sendTest('telegram', 'project-1');
@@ -188,10 +186,7 @@ describe('ChatNotificationService', () => {
   });
 
   it('dedupes identical notifications within the dedupe window', async () => {
-    const service = new ChatNotificationService(
-      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
-      { getById: getProjectMock } as unknown as ProjectQueries,
-    );
+    const service = makeService();
 
     service.fire('failed', makeThread({ status: 'failed' }));
     service.fire('failed', makeThread({ status: 'failed' }));
@@ -202,12 +197,9 @@ describe('ChatNotificationService', () => {
 
   it('skips delivery when the project no longer exists', async () => {
     getProjectMock.mockReturnValue(null);
-    const service = new ChatNotificationService(
-      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
-      { getById: getProjectMock } as unknown as ProjectQueries,
-    );
+    const service = makeService();
 
-    service.fire('completed', makeThread({ status: 'completed' }));
+    service.fire('approval', makeThread());
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetch).not.toHaveBeenCalled();
@@ -221,10 +213,7 @@ describe('ChatNotificationService', () => {
         telegramRouting: 'disabled',
       }),
     );
-    const service = new ChatNotificationService(
-      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
-      { getById: getProjectMock } as unknown as ProjectQueries,
-    );
+    const service = makeService();
 
     await expect(service.sendTest('discord', 'project-1')).resolves.toEqual({
       ok: false,
@@ -243,10 +232,7 @@ describe('ChatNotificationService', () => {
       'fetch',
       vi.fn(async () => new Response('rate limited by provider', { status: 429 })),
     );
-    const service = new ChatNotificationService(
-      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
-      { getById: getProjectMock } as unknown as ProjectQueries,
-    );
+    const service = makeService();
 
     const resultPromise = service.sendTest('discord');
     await vi.advanceTimersByTimeAsync(2_000);
@@ -263,6 +249,223 @@ describe('ChatNotificationService', () => {
         destination: 'discord-webhook',
         lastSuccessAt: null,
         lastError: expect.stringContaining('HTTP 429'),
+      }),
+    });
+  });
+
+  it('formats all terminal notification kinds with fallback task text and failure summary', async () => {
+    getSettingsMock.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      discordEnabled: true,
+      discordWebhookUrl: 'https://discord.com/api/webhooks/123/abc',
+      telegramEnabled: true,
+      telegramBotToken: '123456:abcdefghijklmnopqrstuvwx',
+      telegramDefaultChatId: '-1001234567890',
+      chatNotificationEvents: {
+        ...DEFAULT_SETTINGS.chatNotificationEvents,
+        completed: true,
+      },
+    });
+    const service = makeService();
+
+    service.fire(
+      'completed',
+      makeThread({
+        id: 'thread-completed',
+        title: '',
+        status: 'completed',
+        githubRepo: null,
+        githubIssueNumber: null,
+        githubPrNumber: null,
+      }),
+    );
+    service.fire(
+      'verification_exhausted',
+      makeThread({
+        id: 'thread-verify',
+        status: 'failed',
+      }),
+      'x'.repeat(250),
+    );
+    service.fire(
+      'ci_blocked',
+      makeThread({
+        id: 'thread-ci',
+        status: 'blocked',
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const bodies = (fetch as ReturnType<typeof vi.fn>).mock.calls.map(
+      ([, init]) => JSON.parse((init as RequestInit).body as string) as { content?: string },
+    );
+    expect(bodies.some((body) => body.content?.includes('ShipCode: Ready to ship'))).toBe(true);
+    expect(bodies.some((body) => body.content?.includes('Task: Thread thread'))).toBe(true);
+    expect(
+      bodies.some((body) => body.content?.includes('ShipCode: Target verification failed')),
+    ).toBe(true);
+    expect(bodies.some((body) => body.content?.includes(`Failure: ${'x'.repeat(200)}`))).toBe(true);
+    expect(bodies.some((body) => body.content?.includes('ShipCode: CI blocked'))).toBe(true);
+  });
+
+  it('rejects globally disabled and invalid provider configuration for test sends', async () => {
+    getSettingsMock.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      discordEnabled: false,
+      discordWebhookUrl: 'https://discord.com/api/webhooks/123/abc',
+      telegramEnabled: false,
+      telegramBotToken: '123456:abcdefghijklmnopqrstuvwx',
+      telegramDefaultChatId: '-1001234567890',
+    });
+    const service = makeService();
+
+    await expect(service.sendTest('discord')).resolves.toEqual({
+      ok: false,
+      message: 'Discord is not configured for this scope',
+    });
+    await expect(service.sendTest('telegram')).resolves.toEqual({
+      ok: false,
+      message: 'Telegram is not configured for this scope',
+    });
+
+    getSettingsMock.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      discordEnabled: true,
+      discordWebhookUrl: 'https://example.com/not-discord',
+      telegramEnabled: true,
+      telegramBotToken: 'bad-token',
+      telegramDefaultChatId: '',
+    });
+
+    await expect(service.sendTest('discord')).resolves.toEqual({
+      ok: false,
+      message: 'Discord is not configured for this scope',
+    });
+    await expect(service.sendTest('telegram')).resolves.toEqual({
+      ok: false,
+      message: 'Telegram is not configured for this scope',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects blank custom project routes instead of falling back to global destinations', async () => {
+    getProjectMock.mockReturnValue(
+      makeProject({
+        discordRouting: 'custom',
+        discordWebhookUrlOverride: '   ',
+        telegramRouting: 'custom',
+        telegramChatIdOverride: '   ',
+      }),
+    );
+    const service = makeService();
+
+    await expect(service.sendTest('discord', 'project-1')).resolves.toEqual({
+      ok: false,
+      message: 'Discord is not configured for this scope',
+    });
+    await expect(service.sendTest('telegram', 'project-1')).resolves.toEqual({
+      ok: false,
+      message: 'Telegram is not configured for this scope',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('uses global routes for missing project scopes and rejects null custom destinations', async () => {
+    getProjectMock.mockReturnValueOnce(null);
+    const service = makeService();
+
+    await expect(service.sendTest('discord', 'missing-project')).resolves.toEqual({
+      ok: true,
+      message: 'Discord test sent',
+    });
+
+    getProjectMock.mockReturnValue(
+      makeProject({
+        discordRouting: 'custom',
+        discordWebhookUrlOverride: null,
+        telegramRouting: 'custom',
+        telegramChatIdOverride: null,
+      }),
+    );
+    await expect(service.sendTest('discord', 'project-1')).resolves.toEqual({
+      ok: false,
+      message: 'Discord is not configured for this scope',
+    });
+    await expect(service.sendTest('telegram', 'project-1')).resolves.toEqual({
+      ok: false,
+      message: 'Telegram is not configured for this scope',
+    });
+
+    getSettingsMock.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      discordEnabled: true,
+      discordWebhookUrl: null,
+      telegramEnabled: true,
+      telegramBotToken: null,
+      telegramDefaultChatId: null,
+    });
+    getProjectMock.mockReturnValue(null);
+    await expect(service.sendTest('discord')).resolves.toEqual({
+      ok: false,
+      message: 'Discord is not configured for this scope',
+    });
+    await expect(service.sendTest('telegram')).resolves.toEqual({
+      ok: false,
+      message: 'Telegram is not configured for this scope',
+    });
+
+    getSettingsMock.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      discordEnabled: false,
+      telegramEnabled: true,
+      telegramBotToken: '123456:abcdefghijklmnopqrstuvwx',
+      telegramDefaultChatId: null,
+    });
+    await expect(service.sendTest('telegram')).resolves.toEqual({
+      ok: false,
+      message: 'Telegram is not configured for this scope',
+    });
+  });
+
+  it('reports Telegram delivery failures and fetch exceptions after retries', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 500 })),
+    );
+    const service = makeService();
+
+    const telegramResultPromise = service.sendTest('telegram');
+    await vi.advanceTimersByTimeAsync(2_000);
+    const telegramResult = await telegramResultPromise;
+
+    expect(telegramResult).toMatchObject({
+      ok: false,
+      message: 'Telegram test failed: HTTP 500',
+    });
+    expect(setSettingsMock).toHaveBeenCalledWith({
+      telegramLastDeliveryStatus: expect.objectContaining({
+        provider: 'telegram',
+        destination: '-1001234567890',
+        lastError: 'HTTP 500',
+      }),
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Promise.reject(new Error('network is down'))),
+    );
+    const discordResultPromise = service.sendTest('discord');
+    await vi.advanceTimersByTimeAsync(2_000);
+    const discordResult = await discordResultPromise;
+
+    expect(discordResult).toMatchObject({
+      ok: false,
+      message: 'Discord test failed: network is down',
+    });
+    expect(setSettingsMock).toHaveBeenCalledWith({
+      discordLastDeliveryStatus: expect.objectContaining({
+        lastError: 'network is down',
       }),
     });
   });

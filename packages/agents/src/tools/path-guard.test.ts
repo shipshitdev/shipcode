@@ -52,6 +52,17 @@ describe('assertPathInWorktree', () => {
       const resolved = await assertPathInWorktree('new-dir/new-file.txt', wt);
       expect(resolved).toContain(path.join('new-dir', 'new-file.txt'));
     });
+
+    it('accepts the worktree root itself for create-capable operations', async () => {
+      const resolved = await assertPathInWorktree('.', wt);
+      expect(resolved).toBe(await fs.realpath(wt));
+    });
+
+    it('handles trailing separators on worktree and candidate directories', async () => {
+      const resolved = await assertPathInWorktree('sub', `${wt}${path.sep}`, { mustExist: true });
+
+      expect(resolved).toBe(await fs.realpath(path.join(wt, 'sub')));
+    });
   });
 
   describe('path escapes', () => {

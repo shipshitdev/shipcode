@@ -56,4 +56,11 @@ describe('model-catalog', () => {
     expect(getKnownModelLabel(OPENROUTER_MODEL_IDS.autoPaid)).toBe('Auto (paid)');
     expect(getKnownModelLabel('anthropic/claude-opus-4-6')).toBe('Claude Opus 4.6');
   });
+
+  it('returns null for missing or unknown model ids', () => {
+    expect(getKnownModelLabel(null)).toBeNull();
+    expect(getKnownModelLabel(undefined)).toBeNull();
+    expect(getKnownModelLabel('')).toBeNull();
+    expect(getKnownModelLabel('provider/not-curated')).toBeNull();
+  });
 });

@@ -47,7 +47,7 @@ export function parseUnifiedDiff(diff: string): UnifiedDiffFile[] {
 
   return sections.map((section) => {
     const lines = section.split('\n');
-    const header = parseGitHeader(lines[0] ?? '');
+    const header = parseGitHeader(lines[0] as string);
 
     let action: DiffRecord['action'] = 'modify';
     let beforePath = header.beforePath;

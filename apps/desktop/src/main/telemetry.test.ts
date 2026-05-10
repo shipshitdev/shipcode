@@ -1,11 +1,28 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  captureIpcFailure,
+  captureMainException,
+  capturePipelineFailure,
+  configureMainTelemetry,
   getTelemetryDsn,
+  getTelemetryStatus,
   isTelemetryDisabledByEnv,
   MainTelemetryController,
   resolveTelemetryStatus,
   type SentryMainAdapter,
 } from './telemetry';
+
+const { sentryMainAdapter } = vi.hoisted(() => ({
+  sentryMainAdapter: {
+    init: vi.fn(),
+    close: vi.fn(async () => true),
+    captureException: vi.fn(),
+    captureMessage: vi.fn(),
+    addBreadcrumb: vi.fn(),
+  },
+}));
+
+vi.mock('@sentry/electron/main', () => sentryMainAdapter);
 
 function makeAdapter(): SentryMainAdapter {
   return {
@@ -60,6 +77,24 @@ describe('telemetry', () => {
     expect(adapter.init).toHaveBeenCalledWith(
       expect.objectContaining({ dsn: 'dsn', environment: 'test' }),
     );
+    const beforeSend = (adapter.init as ReturnType<typeof vi.fn>).mock.calls[0][0].beforeSend as (
+      event: Record<string, unknown> | null,
+    ) => Record<string, unknown> | null;
+    expect(beforeSend(null)).toBeNull();
+    expect(
+      beforeSend({
+        request: { headers: { authorization: 'secret' } },
+        extra: {
+          tokenValue: 'abc123',
+          nested: { rawPayload: 'raw', safe: 'value' },
+        },
+      }),
+    ).toEqual({
+      extra: {
+        tokenValue: '[redacted]',
+        nested: { rawPayload: '[redacted]', safe: 'value' },
+      },
+    });
     expect(controller.status({ telemetryEnabled: true })).toMatchObject({
       enabled: true,
       initialized: true,
@@ -69,6 +104,7 @@ describe('telemetry', () => {
       tags: { surface: 'ipc' },
       extra: { rawOutput: 'secret', safe: 'value' },
     });
+    controller.captureException(new Error('no context'));
     expect(adapter.captureException).toHaveBeenCalledWith(
       expect.any(Error),
       expect.objectContaining({
@@ -76,6 +112,10 @@ describe('telemetry', () => {
         extra: { rawOutput: '[redacted]', safe: 'value' },
       }),
     );
+    expect(adapter.captureException).toHaveBeenCalledWith(expect.any(Error), undefined);
+
+    await controller.configure({ telemetryEnabled: true });
+    expect(adapter.init).toHaveBeenCalledTimes(1);
 
     await controller.configure({ telemetryEnabled: false });
     expect(adapter.close).toHaveBeenCalledWith(2000);
@@ -97,6 +137,21 @@ describe('telemetry', () => {
       enabled: false,
       dsnConfigured: false,
       disabledReason: 'missing-dsn',
+    });
+  });
+
+  it('disables initialized telemetry even when the adapter has no close method', async () => {
+    const adapter = makeAdapter();
+    delete adapter.close;
+    const controller = new MainTelemetryController(async () => adapter, {
+      SHIPCODE_SENTRY_DSN: 'dsn',
+    });
+
+    await controller.configure({ telemetryEnabled: true });
+    await expect(controller.configure({ telemetryEnabled: false })).resolves.toMatchObject({
+      enabled: false,
+      initialized: false,
+      disabledReason: 'disabled-by-user',
     });
   });
 
@@ -159,5 +214,77 @@ describe('telemetry', () => {
     expect(adapter.captureException).not.toHaveBeenCalled();
     expect(adapter.captureMessage).not.toHaveBeenCalled();
     expect(adapter.addBreadcrumb).not.toHaveBeenCalled();
+  });
+
+  it('uses the singleton main telemetry wrapper functions', async () => {
+    vi.clearAllMocks();
+    delete process.env.SHIPCODE_SENTRY_DSN;
+
+    expect(getTelemetryStatus({ telemetryEnabled: true })).toMatchObject({
+      enabled: false,
+      dsnConfigured: false,
+    });
+
+    await configureMainTelemetry({ telemetryEnabled: true });
+    expect(sentryMainAdapter.init).not.toHaveBeenCalled();
+
+    captureMainException(new Error('main boom'), { tags: { surface: 'main' } });
+    captureIpcFailure(new Error('ipc boom'), { channel: 'settings:get', elapsedMs: 12 });
+    capturePipelineFailure({
+      threadId: 'thread-1',
+      projectId: 'project-1',
+      githubIssueNumber: 42,
+      source: 'pipeline:phase',
+      phase: 'failed',
+      autonomous: true,
+      requireApproval: false,
+      failurePhase: 'executing',
+      failureCount: 2,
+      verificationRetries: 1,
+      message: 'failed',
+    });
+
+    expect(sentryMainAdapter.captureException).not.toHaveBeenCalled();
+    expect(sentryMainAdapter.captureMessage).not.toHaveBeenCalled();
+  });
+
+  it('initializes and uses the singleton telemetry adapter when configured', async () => {
+    vi.clearAllMocks();
+    process.env.SHIPCODE_SENTRY_DSN = 'singleton-dsn';
+    process.env.SHIPCODE_ENVIRONMENT = 'test-singleton';
+
+    await expect(configureMainTelemetry({ telemetryEnabled: true })).resolves.toMatchObject({
+      enabled: true,
+      initialized: true,
+    });
+    expect(sentryMainAdapter.init).toHaveBeenCalledWith(
+      expect.objectContaining({ dsn: 'singleton-dsn', environment: 'test-singleton' }),
+    );
+
+    captureMainException(new Error('main boom'));
+    captureIpcFailure(new Error('ipc boom'), { channel: 'settings:get', elapsedMs: 12 });
+    capturePipelineFailure({
+      threadId: 'thread-1',
+      projectId: 'project-1',
+      githubIssueNumber: 42,
+      source: 'pipeline:phase',
+      phase: 'failed',
+      autonomous: true,
+      requireApproval: false,
+      failurePhase: 'executing',
+      failureCount: 2,
+      verificationRetries: 1,
+      message: 'failed',
+    });
+
+    expect(sentryMainAdapter.captureException).toHaveBeenCalledTimes(2);
+    expect(sentryMainAdapter.captureMessage).toHaveBeenCalledWith(
+      'Pipeline failed in failed',
+      expect.objectContaining({ tags: expect.objectContaining({ surface: 'pipeline' }) }),
+    );
+
+    delete process.env.SHIPCODE_SENTRY_DSN;
+    delete process.env.SHIPCODE_ENVIRONMENT;
+    await configureMainTelemetry({ telemetryEnabled: false });
   });
 });

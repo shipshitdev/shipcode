@@ -73,6 +73,7 @@ describe('ActivityView', () => {
   it('groups activity by day and opens linked project/thread rows', async () => {
     const today = new Date();
     const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const older = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     invokeMock.mockResolvedValueOnce([
       makeActivity({
@@ -89,12 +90,25 @@ describe('ActivityView', () => {
         subtitle: null,
         createdAt: yesterday.toISOString(),
       }),
+      makeActivity({
+        id: 'older-entry',
+        title: 'Older entry',
+        createdAt: older.toISOString(),
+      }),
+      makeActivity({
+        id: 'project-only',
+        threadId: null,
+        title: 'Project only entry',
+        createdAt: older.toISOString(),
+      }),
     ]);
 
     renderWithClient();
 
     expect(await screen.findByText('Today linked')).toBeInTheDocument();
     expect(screen.getByText('Yesterday detached')).toBeInTheDocument();
+    expect(screen.getByText('Older entry')).toBeInTheDocument();
+    expect(screen.getByText('Project only entry')).toBeInTheDocument();
     expect(screen.getByText('Today')).toBeInTheDocument();
     expect(screen.getByText('Yesterday')).toBeInTheDocument();
 
@@ -109,6 +123,11 @@ describe('ActivityView', () => {
 
     expect(useAppStore.getState().activeProjectId).toBe('project-1');
     expect(useAppStore.getState().activeThreadId).toBe('thread-1');
+
+    fireEvent.click(screen.getByText('Project only entry').closest('tr') as HTMLTableRowElement);
+
+    expect(useAppStore.getState().activeProjectId).toBe('project-1');
+    expect(useAppStore.getState().activeThreadId).toBeNull();
   });
 
   it('shows pagination for more than one activity page', async () => {
@@ -140,6 +159,28 @@ describe('ActivityView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(await screen.findByText('No activity yet')).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('refreshes activity when the dashboard invalidates activity data', async () => {
+    invokeMock
+      .mockResolvedValueOnce([makeActivity({ title: 'Before invalidate' })])
+      .mockResolvedValueOnce([makeActivity({ id: 'activity-2', title: 'After invalidate' })]);
+
+    renderWithClient();
+
+    expect(await screen.findByText('Before invalidate')).toBeInTheDocument();
+
+    const invalidateHandler = vi.mocked(window.shipcode.on).mock.calls[0][1] as (
+      data: unknown,
+    ) => void;
+    invalidateHandler(null);
+    invalidateHandler({ kinds: ['projects'] });
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+
+    invalidateHandler({ kinds: ['activity'] });
+
+    expect(await screen.findByText('After invalidate')).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledTimes(2);
   });
 });

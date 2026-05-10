@@ -57,6 +57,9 @@ vi.mock('@xyflow/react', () => ({
       <button type="button" onClick={() => onNodeClick({}, { id: 'issue-1' })}>
         Open node
       </button>
+      <button type="button" onClick={() => onNodeClick({}, { id: 'missing-issue' })}>
+        Open missing node
+      </button>
       {children}
     </div>
   ),
@@ -120,12 +123,16 @@ function makeGraph(): ProjectIssueGraph {
 
 describe('ProjectGraphTab', () => {
   const invokeMock = vi.fn<(channel: string, args?: unknown) => Promise<unknown>>();
+  const onMock = vi.fn(
+    (_channel: string, _handler: (payload: { projectId: string }) => void) => {},
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
     document.documentElement.dataset.theme = 'dark';
     window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke;
-    window.shipcode.on = vi.fn(() => () => {}) as unknown as typeof window.shipcode.on;
+    onMock.mockReturnValue(() => {});
+    window.shipcode.on = onMock as unknown as typeof window.shipcode.on;
     useAppStore.setState({
       activeIssue: null,
       activeProjectId: null,
@@ -138,6 +145,7 @@ describe('ProjectGraphTab', () => {
   });
 
   it('renders the no-project and missing-graph states', async () => {
+    delete document.documentElement.dataset.theme;
     renderWithClient();
     expect(screen.getByText('Select a project to view its issue graph.')).toBeInTheDocument();
 
@@ -173,7 +181,7 @@ describe('ProjectGraphTab', () => {
       ],
     } as never);
 
-    renderWithClient();
+    renderWithClient(<ProjectGraphTab embedded />);
 
     expect(await screen.findByTestId('react-flow')).toBeInTheDocument();
     expect(screen.getByTestId('node-count')).toHaveTextContent('2');
@@ -221,6 +229,15 @@ describe('ProjectGraphTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open node' }));
     expect(useAppStore.getState().activeIssue?.id).toBe('issue-1');
+
+    const issueUpdatedHandler = onMock.mock.calls.find(
+      ([channel]) => channel === 'github:issues-updated',
+    )?.[1] as ((payload: { projectId: string }) => void) | undefined;
+    issueUpdatedHandler?.({ projectId: 'other-project' });
+    issueUpdatedHandler?.({ projectId: 'project-1' });
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('issue-graph:get', { projectId: 'project-1' }),
+    );
   });
 
   it('shows preview errors and ignores missing cached issues on node clicks', async () => {
@@ -240,5 +257,25 @@ describe('ProjectGraphTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open node' }));
     expect(useAppStore.getState().activeIssue).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open missing node' }));
+    expect(useAppStore.getState().activeIssue).toBeNull();
+  });
+
+  it('renders non-Error preview failures as strings', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'issue-graph:get') return makeGraph();
+      if (channel === 'issue-graph:preview-run') throw 'preview unavailable';
+      return null;
+    });
+    useAppStore.setState({ activeProjectId: 'project-1', githubIssues: [] } as never);
+
+    renderWithClient();
+
+    expect(await screen.findByTestId('react-flow')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Select graph nodes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview order' }));
+
+    expect(await screen.findByText('preview unavailable')).toBeInTheDocument();
   });
 });

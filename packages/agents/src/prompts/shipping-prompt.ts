@@ -6,6 +6,9 @@ import type {
 } from '@shipcode/shared';
 import { interpolateSkill, resolveSkill, type SkillsRowSource } from '../skills/skill-loader';
 
+/* v8 ignore next -- fallback skill source is only used by direct runtime calls without a project skill store */
+const noopMarkQuarantined = () => {};
+
 /**
  * Build the PR body using the `pr-generation` skill template.
  *
@@ -24,7 +27,7 @@ export function buildPRBody(
   },
 ): string {
   const { skill } = resolveSkill('pr-generation', opts?.projectId ?? null, {
-    skills: opts?.skills ?? { get: () => null, markQuarantined: () => {} },
+    skills: opts?.skills ?? { get: () => null, markQuarantined: noopMarkQuarantined },
   });
 
   const steps = plan.steps

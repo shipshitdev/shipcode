@@ -123,6 +123,56 @@ describe('SettingsQueries', () => {
     expect(s.updateTrack).toBe('nightly');
   });
 
+  it('round-trips advanced valid settings', () => {
+    settings.set({
+      triageModel: 'openrouter',
+      triageModelId: 'anthropic/claude-sonnet-4-6',
+      triageReasoningEffort: 'high',
+      triageAutoApplyThreshold: 0.75,
+      autoRunMaxTasks: 12,
+      onboardingVersion: 4,
+      projectSortOrder: 'recent',
+      worktreeBranchFormat: 'ship/{id}-{slug}',
+      revisionCount: 5,
+      pipelineSpeedProfile: 'thorough',
+      requireApproval: false,
+      maxConcurrentPipelines: 4,
+      maxConcurrentExecutions: 5,
+      maxConcurrentCpuTasks: 2,
+      cpuThrottleThresholdPercent: 95,
+      instantDefaultPanes: 4,
+      devLogLevel: 'debug',
+      autoCommitEnabled: true,
+      autoCommitProvider: 'codex',
+      autoCommitModel: 'gpt-5.4',
+      autoCommitMode: 'single',
+    });
+
+    expect(settings.get()).toMatchObject({
+      triageModel: 'openrouter',
+      triageModelId: 'anthropic/claude-sonnet-4-6',
+      triageReasoningEffort: 'high',
+      triageAutoApplyThreshold: 0.75,
+      autoRunMaxTasks: 12,
+      onboardingVersion: 4,
+      projectSortOrder: 'recent',
+      worktreeBranchFormat: 'ship/{id}-{slug}',
+      revisionCount: 5,
+      pipelineSpeedProfile: 'thorough',
+      requireApproval: false,
+      maxConcurrentPipelines: 4,
+      maxConcurrentExecutions: 5,
+      maxConcurrentCpuTasks: 2,
+      cpuThrottleThresholdPercent: 95,
+      instantDefaultPanes: 4,
+      devLogLevel: 'debug',
+      autoCommitEnabled: true,
+      autoCommitProvider: 'codex',
+      autoCommitModel: 'gpt-5.4',
+      autoCommitMode: 'single',
+    });
+  });
+
   it('set() serializes booleans as string true/false', () => {
     settings.set({ defaultWorktreeEnabled: false });
     const row = db
@@ -317,5 +367,125 @@ describe('SettingsQueries', () => {
     expect(s.reviewerReasoningEffort).toBe('minimal');
     expect(s.executorReasoningEffort).toBe('xhigh');
     expect(s.verifierReasoningEffort).toBe('low');
+  });
+
+  it('falls back from malformed persisted values without rewriting them', () => {
+    const rows: Array<[string, string]> = [
+      ['fontSize', '99'],
+      ['telemetryEnabled', 'maybe'],
+      ['defaultWorktreeEnabled', 'maybe'],
+      ['projectOpenTarget', 'zed'],
+      ['terminalOpenTarget', 'cursor'],
+      ['triageModel', 'gemini'],
+      ['triageReasoningEffort', 'turbo'],
+      ['prdRewriteCli', 'openrouter'],
+      ['prdRewriteReasoningEffort', 'turbo'],
+      ['pipelineSpeedProfile', 'fastest'],
+      ['plannerReasoningEffort', 'turbo'],
+      ['reviewerReasoningEffort', 'turbo'],
+      ['executorReasoningEffort', 'turbo'],
+      ['verifierReasoningEffort', 'turbo'],
+      ['notificationEvents', '{bad json'],
+      ['discordLastDeliveryStatus', '{bad json'],
+      ['telegramLastDeliveryStatus', '{bad json'],
+      ['chatNotificationEvents', '{bad json'],
+      ['cleanupCriteria', '{bad json'],
+      ['maxConcurrentPipelines', '99'],
+      ['maxConcurrentExecutions', '0'],
+      ['maxConcurrentCpuTasks', 'oops'],
+      ['cpuThrottleThresholdPercent', '10'],
+      ['instantDefaultPanes', '7'],
+      ['devLogLevel', 'trace'],
+      ['updateTrack', 'canary'],
+      ['autoCommitProvider', 'gemini'],
+      ['autoCommitMode', 'many'],
+      ['revisionCount', 'oops'],
+      ['autoCommitModel', ''],
+    ];
+    const insert = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
+    for (const row of rows) insert.run(...row);
+
+    const s = settings.get();
+
+    expect(s.fontSize).toBe(DEFAULT_SETTINGS.fontSize);
+    expect(s.telemetryEnabled).toBeNull();
+    expect(s.defaultWorktreeEnabled).toBe(DEFAULT_SETTINGS.defaultWorktreeEnabled);
+    expect(s.projectOpenTarget).toBe(DEFAULT_SETTINGS.projectOpenTarget);
+    expect(s.terminalOpenTarget).toBe(DEFAULT_SETTINGS.terminalOpenTarget);
+    expect(s.triageModel).toBe(DEFAULT_SETTINGS.triageModel);
+    expect(s.triageReasoningEffort).toBe(DEFAULT_SETTINGS.triageReasoningEffort);
+    expect(s.prdRewriteCli).toBe(DEFAULT_SETTINGS.prdRewriteCli);
+    expect(s.prdRewriteReasoningEffort).toBe(DEFAULT_SETTINGS.prdRewriteReasoningEffort);
+    expect(s.pipelineSpeedProfile).toBe(DEFAULT_SETTINGS.pipelineSpeedProfile);
+    expect(s.plannerReasoningEffort).toBe(DEFAULT_SETTINGS.plannerReasoningEffort);
+    expect(s.reviewerReasoningEffort).toBe(DEFAULT_SETTINGS.reviewerReasoningEffort);
+    expect(s.executorReasoningEffort).toBe(DEFAULT_SETTINGS.executorReasoningEffort);
+    expect(s.verifierReasoningEffort).toBe(DEFAULT_SETTINGS.verifierReasoningEffort);
+    expect(s.notificationEvents).toEqual(DEFAULT_SETTINGS.notificationEvents);
+    expect(s.discordLastDeliveryStatus).toBeNull();
+    expect(s.telegramLastDeliveryStatus).toBeNull();
+    expect(s.chatNotificationEvents).toEqual(DEFAULT_SETTINGS.chatNotificationEvents);
+    expect(s.cleanupCriteria).toEqual(DEFAULT_SETTINGS.cleanupCriteria);
+    expect(s.maxConcurrentPipelines).toBe(DEFAULT_SETTINGS.maxConcurrentPipelines);
+    expect(s.maxConcurrentExecutions).toBe(DEFAULT_SETTINGS.maxConcurrentExecutions);
+    expect(s.maxConcurrentCpuTasks).toBe(DEFAULT_SETTINGS.maxConcurrentCpuTasks);
+    expect(s.cpuThrottleThresholdPercent).toBe(DEFAULT_SETTINGS.cpuThrottleThresholdPercent);
+    expect(s.instantDefaultPanes).toBe(DEFAULT_SETTINGS.instantDefaultPanes);
+    expect(s.devLogLevel).toBe(DEFAULT_SETTINGS.devLogLevel);
+    expect(s.updateTrack).toBe(DEFAULT_SETTINGS.updateTrack);
+    expect(s.autoCommitProvider).toBe(DEFAULT_SETTINGS.autoCommitProvider);
+    expect(s.autoCommitMode).toBe(DEFAULT_SETTINGS.autoCommitMode);
+    expect(s.revisionCount).toBe(DEFAULT_SETTINGS.revisionCount);
+    expect(s.autoCommitModel).toBe(DEFAULT_SETTINGS.autoCommitModel);
+  });
+
+  it('validates advanced settings before persisting', () => {
+    expect(() => settings.set({ addProjectStartsIn: 'relative/path' })).toThrow();
+    expect(() => settings.set({ revisionCount: 6 as never })).toThrow('revisionCount');
+    expect(() => settings.set({ pipelineSpeedProfile: 'fast' as unknown as 'smart_fast' })).toThrow(
+      'pipelineSpeedProfile',
+    );
+    expect(() => settings.set({ plannerReasoningEffort: 'turbo' as unknown as 'medium' })).toThrow(
+      'plannerReasoningEffort',
+    );
+    expect(() => settings.set({ telemetryEnabled: 'true' as unknown as boolean })).toThrow(
+      'telemetryEnabled',
+    );
+    expect(() => settings.set({ triageModel: 'gemini' as unknown as 'claude' })).toThrow(
+      'triageModel',
+    );
+    expect(() => settings.set({ triageAutoApplyThreshold: 1.1 })).toThrow(
+      'triageAutoApplyThreshold',
+    );
+    expect(() => settings.set({ worktreeBranchFormat: 'shipcode/{slug}' })).toThrow(
+      'worktreeBranchFormat',
+    );
+    expect(() => settings.set({ worktreeBranchFormat: 'shipcode/{id bad}' })).toThrow(
+      'worktreeBranchFormat',
+    );
+    expect(() => settings.set({ worktreeBranchFormat: 'shipcode/{id} bad' })).toThrow(
+      'worktreeBranchFormat',
+    );
+    expect(() => settings.set({ worktreeBranchFormat: '-shipcode/{id}' })).toThrow(
+      'worktreeBranchFormat',
+    );
+    expect(() => settings.set({ devLogLevel: 'trace' as unknown as 'debug' })).toThrow(
+      'devLogLevel',
+    );
+    expect(() => settings.set({ autoCommitMode: 'many' as unknown as 'split' })).toThrow(
+      'autoCommitMode',
+    );
+    expect(() => settings.set({ autoCommitProvider: 'gemini' as unknown as 'claude' })).toThrow(
+      'autoCommitProvider',
+    );
+    expect(() => settings.set({ autoCommitModel: '' })).toThrow('autoCommitModel');
+    expect(() =>
+      settings.set({
+        cleanupCriteria: {
+          ...DEFAULT_SETTINGS.cleanupCriteria,
+          localBranchMerged: 'yes' as unknown as boolean,
+        },
+      }),
+    ).toThrow('cleanupCriteria.localBranchMerged');
   });
 });

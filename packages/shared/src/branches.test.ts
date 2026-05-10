@@ -133,4 +133,20 @@ describe('normalizeBranches', () => {
       }),
     ).toEqual(['main']);
   });
+
+  it('16. filters empty, detached, remote HEAD, and malformed remote entries', () => {
+    expect(
+      normalizeBranches({
+        raw: [
+          '',
+          '(no branch, rebasing main)',
+          'remotes/origin/HEAD',
+          'remotes/origin',
+          'remotes/origin/feature',
+          'main',
+        ],
+        defaultBranch: 'main',
+      }),
+    ).toEqual(['main', 'origin/feature']);
+  });
 });

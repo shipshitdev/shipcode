@@ -25,6 +25,12 @@ describe('createCliEmitter', () => {
       requireApproval: false,
     } as never);
     emitter.emit({
+      type: 'pipeline:start-context',
+      source: 'manual',
+      autonomous: false,
+      requireApproval: true,
+    } as never);
+    emitter.emit({
       type: 'pipeline:approval-gate',
       outcome: 'approved',
       reviewDecision: 'approve',
@@ -35,6 +41,9 @@ describe('createCliEmitter', () => {
     expect(logSpy).toHaveBeenCalledWith('[12:34:56] Phase: planning');
     expect(logSpy).toHaveBeenCalledWith(
       '[12:34:56] Start: github autonomous=yes requireApproval=no',
+    );
+    expect(logSpy).toHaveBeenCalledWith(
+      '[12:34:56] Start: manual autonomous=no requireApproval=yes',
     );
     expect(logSpy).toHaveBeenCalledWith(
       '[12:34:56] Approval gate: approved after approve (clean plan, low risk)',
@@ -60,11 +69,29 @@ describe('createCliEmitter', () => {
       resolvedModel: 'gpt-5.4',
       costUsd: 0.01,
     } as never);
+    emitter.emit({
+      type: 'pipeline:model-resolved',
+      phase: 'planner',
+      requestedModel: 'claude',
+      resolvedModel: 'claude-sonnet-4.6',
+      tokensUsed: { prompt: 10, completion: 5 },
+      costUsd: null,
+    } as never);
+    emitter.emit({
+      type: 'pipeline:model-resolved',
+      phase: 'reviewer',
+      requestedModel: 'codex',
+      resolvedModel: 'gpt-5.5',
+    } as never);
 
     expect(logSpy).toHaveBeenCalledWith(
       '[12:34:56] executor: routed to anthropic/claude-sonnet-4.6 via openrouter/auto (1200+340 tok, $0.1235)',
     );
     expect(logSpy).toHaveBeenCalledWith('[12:34:56] verifier: routed to gpt-5.4 ($0.0100)');
+    expect(logSpy).toHaveBeenCalledWith(
+      '[12:34:56] planner: routed to claude-sonnet-4.6 via claude (10+5 tok)',
+    );
+    expect(logSpy).toHaveBeenCalledWith('[12:34:56] reviewer: routed to gpt-5.5 via codex');
   });
 
   it('prints parsed artifact summaries and warnings', () => {
@@ -83,6 +110,14 @@ describe('createCliEmitter', () => {
       },
     } as never);
     emitter.emit({
+      type: 'review:parsed',
+      review: {
+        decision: 'approved',
+        confidence: 'medium',
+        findings: [],
+      },
+    } as never);
+    emitter.emit({
       type: 'verification:parsed',
       verification: { result: 'passed' },
     } as never);
@@ -95,6 +130,7 @@ describe('createCliEmitter', () => {
     expect(logSpy).toHaveBeenCalledWith('[12:34:56] Plan generated: Increase test coverage');
     expect(logSpy).toHaveBeenCalledWith('[12:34:56] Review: changes_requested (high)');
     expect(logSpy).toHaveBeenCalledWith('  [major] Missing regression test');
+    expect(logSpy).toHaveBeenCalledWith('[12:34:56] Review: approved (medium)');
     expect(logSpy).toHaveBeenCalledWith('[12:34:56] Verification: passed');
     expect(logSpy).toHaveBeenCalledWith('[12:34:56] Skill fallback: execute (missing skill)');
     expect(logSpy).toHaveBeenCalledWith('[12:34:56] WORKFLOW.md warning: WORKFLOW.md is stale');

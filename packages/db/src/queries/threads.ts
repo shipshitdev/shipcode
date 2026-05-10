@@ -208,7 +208,7 @@ export class ThreadQueries {
             AND done_at IS NOT NULL`,
       )
       .run(projectId, THREAD_KIND.pipeline);
-    return Number(result.changes ?? 0);
+    return Number(result.changes);
   }
 
   recordFailure(id: string, failurePhase: string, lastError?: string): void {
@@ -535,7 +535,7 @@ export class ThreadQueries {
            AND julianday('now') - julianday(updated_at) > ?`,
       )
       .run(kind, days);
-    return Number(result.changes ?? 0);
+    return Number(result.changes);
   }
 }
 
@@ -543,18 +543,18 @@ function mapThread(row: ThreadRow): Thread {
   return {
     id: row.id,
     projectId: row.project_id,
-    kind: row.kind ?? THREAD_KIND.pipeline,
+    kind: row.kind,
     title: row.title,
     prompt: row.prompt,
     status: row.status as ThreadStatus,
     worktreeBranch: row.worktree_branch,
     worktreePath: row.worktree_path,
-    plannerModel: row.planner_model ?? 'claude',
-    reviewerModel: row.reviewer_model ?? 'claude',
-    verifierModel: row.verifier_model ?? 'claude',
-    executorModel: row.executor_model ?? 'claude',
+    plannerModel: row.planner_model as string,
+    reviewerModel: row.reviewer_model as string,
+    verifierModel: row.verifier_model as string,
+    executorModel: row.executor_model as string,
     reviewRound: row.review_round ?? 0,
-    clarificationRound: row.clarification_round ?? 0,
+    clarificationRound: row.clarification_round as number,
     clarificationRequest: parseClarificationRequest(row.clarification_request),
     clarificationAnswers: parseClarificationAnswers(row.clarification_answers),
     answeredClarification: parseAnsweredClarification(row.answered_clarification),
@@ -569,19 +569,19 @@ function mapThread(row: ThreadRow): Thread {
     automationId: row.automation_id ?? null,
     lastError: row.last_error ?? null,
     failurePhase: row.failure_phase ?? null,
-    failureCount: row.failure_count ?? 0,
+    failureCount: row.failure_count,
     pausedPhase: row.paused_phase ?? null,
-    pausedAt: row.paused_at ? (toIsoUtc(row.paused_at) ?? row.paused_at) : null,
-    createdAt: toIsoUtc(row.created_at) ?? row.created_at,
-    updatedAt: toIsoUtc(row.updated_at) ?? row.updated_at,
+    pausedAt: row.paused_at ? toIsoUtc(row.paused_at) : null,
+    createdAt: toIsoUtc(row.created_at) as string,
+    updatedAt: toIsoUtc(row.updated_at) as string,
     plannerResolvedModel: row.planner_resolved_model ?? null,
     reviewerResolvedModel: row.reviewer_resolved_model ?? null,
     revisorResolvedModel: row.revisor_resolved_model ?? null,
     executorResolvedModel: row.executor_resolved_model ?? null,
     verifierResolvedModel: row.verifier_resolved_model ?? null,
-    totalTokensPrompt: row.total_tokens_prompt ?? 0,
-    totalTokensCompletion: row.total_tokens_completion ?? 0,
-    totalCostUsd: row.total_cost_usd ?? 0,
+    totalTokensPrompt: row.total_tokens_prompt as number,
+    totalTokensCompletion: row.total_tokens_completion as number,
+    totalCostUsd: row.total_cost_usd as number,
     doneAt: row.done_at ?? null,
     archivedAt: row.archived_at ?? null,
   };

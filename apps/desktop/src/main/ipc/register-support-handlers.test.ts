@@ -6,6 +6,7 @@ import type { IpcMain } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
+  mockExec,
   mockCheckGhAuth,
   mockCheckSystemHealthWithAuth,
   mockEnhancePrdDraft,
@@ -14,6 +15,7 @@ const {
   mockInspectRepoMemory,
   mockReadMemoryFile,
 } = vi.hoisted(() => ({
+  mockExec: vi.fn(),
   mockCheckGhAuth: vi.fn(),
   mockCheckSystemHealthWithAuth: vi.fn(),
   mockEnhancePrdDraft: vi.fn(),
@@ -22,6 +24,18 @@ const {
   mockInspectRepoMemory: vi.fn(),
   mockReadMemoryFile: vi.fn(),
 }));
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      exec: mockExec,
+    },
+    exec: mockExec,
+  };
+});
 
 vi.mock('@shipcode/agents', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shipcode/agents')>();
@@ -37,7 +51,7 @@ vi.mock('@shipcode/agents', async (importOriginal) => {
   };
 });
 
-import { registerSupportHandlers } from './register-support-handlers';
+import { parseOnboardingRepoList, registerSupportHandlers } from './register-support-handlers';
 
 // ---------------------------------------------------------------------------
 // Minimal test doubles
@@ -127,6 +141,15 @@ beforeEach(() => {
   mockGenerateMemoryFiles.mockResolvedValue({ success: true, error: null });
   mockInspectRepoMemory.mockReturnValue([{ name: 'overview.md' }]);
   mockReadMemoryFile.mockReturnValue('memory body');
+  mockExec.mockImplementation(
+    (
+      _command: string,
+      _options: unknown,
+      callback: (error: Error | null, result: { stdout: string; stderr: string }) => void,
+    ) => {
+      callback(null, { stdout: '', stderr: '' });
+    },
+  );
 
   registerSupportHandlers({
     ipcMain,
@@ -167,6 +190,61 @@ describe('support IPC utilities', () => {
       claude: { ok: true },
       ghAuth: { isAuthenticated: true, user: 'decod3rs' },
     });
+  });
+
+  it('parses onboarding repository output with sorting, de-dupe, and validation', () => {
+    expect(
+      parseOnboardingRepoList(
+        [
+          JSON.stringify({ id: 'repo-z', name: 'shipshitdev/zeta', private: true }),
+          JSON.stringify({ id: 'repo-a', name: ' shipshitdev/alpha ', private: false }),
+          JSON.stringify({ id: 'repo-dupe', name: 'shipshitdev/alpha', private: true }),
+          JSON.stringify({ id: '', name: 'shipshitdev/missing-id', private: false }),
+          JSON.stringify({ id: 'repo-missing-name', name: '   ', private: false }),
+        ].join('\n'),
+      ),
+    ).toEqual([
+      { id: 'repo-a', name: 'shipshitdev/alpha', private: false },
+      { id: 'repo-z', name: 'shipshitdev/zeta', private: true },
+    ]);
+    expect(parseOnboardingRepoList('\n')).toEqual([]);
+  });
+
+  it('lists onboarding repos through gh and clamps lookup failures', async () => {
+    mockExec.mockImplementationOnce(
+      (
+        command: string,
+        options: { timeout?: number; env?: Record<string, string> },
+        callback: (error: Error | null, result: { stdout: string; stderr: string }) => void,
+      ) => {
+        expect(command).toContain('user/repos');
+        expect(options.timeout).toBe(20_000);
+        callback(null, {
+          stdout: [
+            JSON.stringify({ id: 'repo-b', name: 'shipshitdev/beta', private: true }),
+            JSON.stringify({ id: 'repo-a', name: 'shipshitdev/alpha', private: false }),
+          ].join('\n'),
+          stderr: '',
+        });
+      },
+    );
+
+    await expect(getHandler('onboarding:list-repos')()).resolves.toEqual([
+      { id: 'repo-a', name: 'shipshitdev/alpha', private: false },
+      { id: 'repo-b', name: 'shipshitdev/beta', private: true },
+    ]);
+
+    mockExec.mockImplementationOnce(
+      (
+        _command: string,
+        _options: unknown,
+        callback: (error: Error | null, result?: { stdout: string; stderr: string }) => void,
+      ) => {
+        callback(new Error('gh unavailable\nstack'));
+      },
+    );
+
+    await expect(getHandler('onboarding:list-repos')()).rejects.toThrow('gh unavailable');
   });
 });
 
@@ -239,6 +317,38 @@ describe('ai:enhance-prd', () => {
     await expect(
       handler(undefined, { projectId: 'p1', draftBody: null, attachmentSessionId: null }),
     ).rejects.toThrow('boom');
+
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('enhances a PRD with the built-in skill fallback when the repo skill is missing', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-prd-fallback-'));
+    (queries.projects.getById as ReturnType<typeof vi.fn>).mockReturnValue({
+      id: 'p1',
+      path: tempDir,
+    });
+    (queries.settings.get as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      prdRewriteCli: 'codex',
+      prdRewriteClaudeModel: null,
+      prdRewriteCodexModel: null,
+      prdRewriteReasoningEffort: 'medium',
+      executorReasoningEffort: 'medium',
+      openrouterDefaultPaidModel: 'openrouter/auto',
+    });
+
+    await expect(
+      getHandler('ai:enhance-prd')(undefined, {
+        projectId: 'p1',
+        draftBody: 'draft',
+        attachmentSessionId: null,
+      }),
+    ).resolves.toEqual({ body: 'enhanced' });
+    expect(mockEnhancePrdDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skillContent: expect.stringContaining('Required sections'),
+        cwd: tempDir,
+      }),
+    );
 
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
@@ -339,6 +449,56 @@ describe('ai:format-automation', () => {
       }),
     );
   });
+
+  it('formats automation prompts through Claude and Codex model settings', async () => {
+    (queries.projects.getById as ReturnType<typeof vi.fn>).mockReturnValue({
+      id: 'p1',
+      path: '/tmp/proj',
+    });
+    (queries.settings.get as ReturnType<typeof vi.fn>).mockReturnValue({
+      prdRewriteCli: 'claude',
+      prdRewriteClaudeModel: null,
+      prdRewriteCodexModel: null,
+      prdRewriteReasoningEffort: 'medium',
+      executorReasoningEffort: 'high',
+      openrouterDefaultPaidModel: 'openrouter/model',
+    });
+    mockFormatAutomationPrompt.mockResolvedValue({ prompt: '# Formatted' });
+
+    await expect(
+      getHandler('ai:format-automation')(undefined, {
+        projectId: 'p1',
+        prompt: 'claude prompt',
+        provider: 'claude',
+        modelId: null,
+        reasoningEffort: null,
+      }),
+    ).resolves.toEqual({ prompt: '# Formatted' });
+    await expect(
+      getHandler('ai:format-automation')(undefined, {
+        projectId: 'p1',
+        prompt: 'codex prompt',
+        provider: 'codex',
+        modelId: null,
+        reasoningEffort: null,
+      }),
+    ).resolves.toEqual({ prompt: '# Formatted' });
+
+    expect(mockFormatAutomationPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'claude',
+        modelId: null,
+        reasoningEffort: 'medium',
+      }),
+    );
+    expect(mockFormatAutomationPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'codex',
+        modelId: null,
+        reasoningEffort: 'medium',
+      }),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -384,6 +544,25 @@ describe('memory IPC handlers', () => {
       success: false,
       error: 'generation exploded',
     });
+
+    mockGenerateMemoryFiles.mockRejectedValueOnce({ code: 'E_UNKNOWN' });
+    await expect(
+      getHandler('memory:generate')(undefined, { projectId: 'p1', cli: 'claude' }),
+    ).resolves.toEqual({
+      success: false,
+      error: 'Generation failed',
+    });
+  });
+
+  it('rejects memory read and generate requests when the project is missing', async () => {
+    (queries.projects.getById as ReturnType<typeof vi.fn>).mockReturnValue(null);
+
+    expect(() =>
+      getHandler('memory:read')(undefined, { projectId: 'missing', name: 'overview.md' }),
+    ).toThrow('not found');
+    await expect(
+      getHandler('memory:generate')(undefined, { projectId: 'missing', cli: 'claude' }),
+    ).rejects.toThrow('not found');
   });
 });
 
@@ -458,6 +637,161 @@ describe('process manager forwarding', () => {
     processListener('stateChange')('proc-2', 'openrouter', 'exited');
 
     expect(destroyedWindow.webContents.send).not.toHaveBeenCalled();
+  });
+
+  it('skips output and state forwarding when only webContents is destroyed', () => {
+    const destroyedContentsWindow = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => true,
+        send: vi.fn(),
+      },
+    };
+    handlers.clear();
+    registerSupportHandlers({
+      ipcMain,
+      mainWindow: destroyedContentsWindow as never,
+      queries: queries as unknown as never,
+      processManager: processManager as never,
+      pipeline: {} as never,
+      emitter: {} as never,
+      notificationService,
+      chatNotificationService: {} as never,
+    });
+    (processManager as unknown as { get: ReturnType<typeof vi.fn> }).get.mockReturnValue({
+      threadId: 'thread-destroyed-contents',
+      outputMode: 'raw',
+      type: 'claude',
+      state: 'running',
+      exitCode: null,
+    });
+
+    processListener('output')('proc-destroyed-contents', 'raw output');
+    processListener('stateChange')('proc-destroyed-contents', 'claude', 'running');
+
+    expect(destroyedContentsWindow.webContents.send).not.toHaveBeenCalled();
+    expect(queries.terminalEvents.create).toHaveBeenCalledWith('thread-destroyed-contents', {
+      kind: 'raw',
+      content: 'raw output',
+    });
+    expect(queries.terminalEvents.create).toHaveBeenCalledWith(
+      'thread-destroyed-contents',
+      expect.objectContaining({
+        kind: 'lifecycle',
+      }),
+    );
+  });
+
+  it('normalizes codex output once per process and emits exited lifecycle events with exit codes', () => {
+    (processManager as unknown as { get: ReturnType<typeof vi.fn> }).get.mockReturnValue({
+      threadId: 'thread-codex',
+      outputMode: 'normalized',
+      type: 'codex',
+      state: 'running',
+      exitCode: 7,
+    });
+
+    processListener('output')('proc-codex', '{"type":"message","message":"hello"}\n');
+    processListener('output')('proc-codex', '{"type":"message","message":"again"}\n');
+    processListener('stateChange')('proc-codex', 'gemini', 'exited');
+
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('agent:output', {
+      processId: 'proc-codex',
+      chunk: '{"type":"message","message":"hello"}\n',
+      threadId: 'thread-codex',
+    });
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('agent:state', {
+      processId: 'proc-codex',
+      type: 'gemini',
+      state: 'exited',
+      threadId: 'thread-codex',
+    });
+    expect(queries.terminalEvents.create).toHaveBeenCalledWith(
+      'thread-codex',
+      expect.objectContaining({
+        kind: 'lifecycle',
+        message: expect.stringContaining('process exited (code 7)'),
+      }),
+    );
+  });
+
+  it('tolerates renderer send failures while preserving terminal events', () => {
+    (processManager as unknown as { get: ReturnType<typeof vi.fn> }).get.mockReturnValue({
+      threadId: 'thread-send-failure',
+      outputMode: 'raw',
+      type: 'claude',
+      state: 'running',
+      exitCode: null,
+    });
+    (mainWindow.webContents.send as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw new Error('webContents went away');
+    });
+
+    expect(() => processListener('output')('proc-send-failure', 'raw output')).not.toThrow();
+
+    expect(queries.terminalEvents.create).toHaveBeenCalledWith('thread-send-failure', {
+      kind: 'raw',
+      content: 'raw output',
+    });
+  });
+
+  it('tolerates terminal and state renderer send failures after lifecycle events are recorded', () => {
+    (processManager as unknown as { get: ReturnType<typeof vi.fn> }).get.mockReturnValue({
+      threadId: 'thread-state-send-failure',
+      outputMode: 'raw',
+      type: 'openrouter',
+      state: 'running',
+      exitCode: null,
+    });
+    (mainWindow.webContents.send as ReturnType<typeof vi.fn>)
+      .mockImplementationOnce(() => {
+        throw new Error('terminal send failed');
+      })
+      .mockImplementationOnce(() => {
+        throw new Error('state send failed');
+      })
+      .mockImplementationOnce(() => {
+        throw new Error('lifecycle terminal send failed');
+      });
+
+    expect(() => processListener('output')('proc-state-send-failure', 'raw output')).not.toThrow();
+    expect(() =>
+      processListener('stateChange')('proc-state-send-failure', 'openrouter', 'running'),
+    ).not.toThrow();
+
+    expect(queries.terminalEvents.create).toHaveBeenCalledWith('thread-state-send-failure', {
+      kind: 'raw',
+      content: 'raw output',
+    });
+    expect(queries.terminalEvents.create).toHaveBeenCalledWith(
+      'thread-state-send-failure',
+      expect.objectContaining({
+        kind: 'lifecycle',
+      }),
+    );
+  });
+
+  it('forwards output without process metadata and skips lifecycle for non-running states', () => {
+    (processManager as unknown as { get: ReturnType<typeof vi.fn> }).get.mockReturnValue(null);
+
+    processListener('output')('proc-missing', 'orphan output');
+    processListener('stateChange')('proc-missing', 'custom-agent', 'paused');
+
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('agent:output', {
+      processId: 'proc-missing',
+      chunk: 'orphan output',
+      threadId: undefined,
+    });
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('agent:state', {
+      processId: 'proc-missing',
+      type: 'custom-agent',
+      state: 'paused',
+      threadId: undefined,
+    });
+    expect(queries.terminalEvents.create).not.toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ kind: 'lifecycle' }),
+    );
   });
 });
 

@@ -55,4 +55,11 @@ describe('IssueGraphNode', () => {
     expect(screen.getByText('Failed closed issue')).toBeInTheDocument();
     expect(screen.getByText('failed')).toBeInTheDocument();
   });
+
+  it('renders paused issues with the warning badge branch', () => {
+    render(<IssueGraphNode {...makeProps({ pipelineStatus: 'paused', title: 'Paused issue' })} />);
+
+    expect(screen.getByText('Paused issue')).toBeInTheDocument();
+    expect(screen.getByText('paused')).toBeInTheDocument();
+  });
 });

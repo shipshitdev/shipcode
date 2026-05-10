@@ -125,6 +125,7 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
     if (worktreeBranches.has(branch.name)) continue;
     if (!isVerifiedMerged(branch)) continue;
 
+    const compareRef = branch.compareRef as string;
     const pr = prByHead.get(branch.name);
     const remoteBranch = branch.remoteName?.startsWith('origin/')
       ? branch.remoteName.slice('origin/'.length)
@@ -139,7 +140,7 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
           lastCommitDate: branch.lastCommitDate,
           aheadCount: branch.aheadCount ?? 0,
           behindCount: branch.behindCount ?? 0,
-          compareRef: branch.compareRef ?? null,
+          compareRef,
           remoteBranch,
           prNumber: pr?.number ?? null,
         });
@@ -155,7 +156,7 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
         lastCommitDate: branch.lastCommitDate,
         aheadCount: branch.aheadCount ?? 0,
         behindCount: branch.behindCount ?? 0,
-        compareRef: branch.compareRef ?? null,
+        compareRef,
       });
     }
   }
@@ -170,6 +171,7 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
       if (unsafeWorktreeBranches.has(branch.name)) continue;
       if (!isVerifiedMerged(branch)) continue;
       if (!isManagedBranch(branch.name)) continue;
+      const compareRef = branch.compareRef as string;
       const pr = prByHead.get(branch.name);
       items.push({
         id: `remote-merged:${branch.remote}/${branch.name}`,
@@ -179,7 +181,7 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
         lastCommitDate: branch.lastCommitDate,
         aheadCount: branch.aheadCount ?? 0,
         behindCount: branch.behindCount ?? 0,
-        compareRef: branch.compareRef ?? null,
+        compareRef,
         prNumber: pr?.number ?? null,
       });
     }

@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { migrateV38 } from '../schema';
 import { createTestDb } from '../test-helpers';
 import { PipelineStepQueries } from './pipeline-steps';
@@ -43,6 +43,18 @@ describe('pipeline_step_log persistence', () => {
     expect(row.requestedModel).toBe('claude-sonnet-4-6');
     expect(row.completedAt).toBeNull();
     expect(row.durationMs).toBeNull();
+  });
+
+  it('defaults optional start fields to null and returns null for missing ids', () => {
+    const row = queries.start({
+      threadId,
+      phase: 'plan',
+      attempt: 1,
+    });
+
+    expect(row.provider).toBeNull();
+    expect(row.requestedModel).toBeNull();
+    expect(queries.getById('missing')).toBeNull();
   });
 
   it('complete flips status, fills resolved model + tokens, computes duration', async () => {
@@ -106,6 +118,41 @@ describe('pipeline_step_log persistence', () => {
 
     expect(aborted.status).toBe('aborted');
     expect(aborted.errorKind).toBe('aborted');
+  });
+
+  it('throws when completing or reloading missing rows and handles invalid started_at', () => {
+    expect(() => queries.complete('missing', { status: 'failed' })).toThrow(
+      /Failed to load pipeline step row: missing/,
+    );
+
+    db.prepare(
+      `INSERT INTO pipeline_step_log (
+        id, thread_id, phase, attempt, status, started_at
+      ) VALUES ('invalid-start', ?, 'execute', 1, 'started', 'not-a-date')`,
+    ).run(threadId);
+
+    const completed = queries.complete('invalid-start', { status: 'completed' });
+    expect(completed.durationMs).toBeNull();
+
+    const broken = new PipelineStepQueries(db);
+    broken.getById = () => null;
+    expect(() =>
+      broken.start({
+        threadId,
+        phase: 'plan',
+        attempt: 1,
+      }),
+    ).toThrow(/Failed to load pipeline step row/);
+
+    const started = queries.start({ threadId, phase: 'verify', attempt: 1 });
+    const getById = vi
+      .spyOn(queries, 'getById')
+      .mockReturnValueOnce(started)
+      .mockReturnValueOnce(null);
+    expect(() => queries.complete(started.id, { status: 'completed' })).toThrow(
+      /Failed to load pipeline step row/,
+    );
+    getById.mockRestore();
   });
 
   it('listByThread returns rows in start order', () => {

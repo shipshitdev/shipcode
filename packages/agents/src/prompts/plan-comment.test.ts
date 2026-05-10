@@ -26,6 +26,44 @@ function makePlan(overrides: Partial<ShipCodePlan> = {}): ShipCodePlan {
 }
 
 describe('formatPlanComment', () => {
+  it('renders files, steps, out-of-scope items, and dependencies', () => {
+    const body = formatPlanComment(
+      makePlan({
+        files: [
+          {
+            path: 'src/index.ts',
+            action: 'modify',
+            description: 'Update entrypoint',
+          },
+        ],
+        acceptanceCriteria: ['It works'],
+        outOfScope: ['No redesign'],
+        dependencies: ['API key'],
+      }),
+    );
+
+    expect(body).toContain('## Files (1 file)');
+    expect(body).toContain('| modify | src/index.ts | Update entrypoint |');
+    expect(body).toContain('Files: `src/index.ts`');
+    expect(body).toContain('<summary>Out of Scope</summary>');
+    expect(body).toContain('- No redesign');
+    expect(body).toContain('<summary>Dependencies</summary>');
+    expect(body).toContain('- API key');
+  });
+
+  it('uses plural file labels for multi-file plans', () => {
+    const body = formatPlanComment(
+      makePlan({
+        files: [
+          { path: 'src/a.ts', action: 'modify', description: 'A' },
+          { path: 'src/b.ts', action: 'create', description: 'B' },
+        ],
+      }),
+    );
+
+    expect(body).toContain('## Files (2 files)');
+  });
+
   it('preserves acceptance criteria when the body is under the byte limit', () => {
     const body = formatPlanComment(
       makePlan({
@@ -63,5 +101,45 @@ describe('formatPlanComment', () => {
     expect(body).toContain('## Steps');
     expect(body).toContain('_(Truncated');
     expect(body).toContain('<summary>Out of Scope</summary>');
+  });
+
+  it('truncates oversized steps before acceptance criteria and dependencies', () => {
+    const body = formatPlanComment(
+      makePlan({
+        steps: [
+          {
+            order: 1,
+            description: 'Large step',
+            files: [],
+            rationale: 'x'.repeat(70_000),
+          },
+        ],
+        acceptanceCriteria: ['Keep this visible'],
+        dependencies: ['And this'],
+      }),
+    );
+
+    expect(Buffer.byteLength(body, 'utf8')).toBeLessThan(65_000);
+    expect(body).toContain('_(Truncated — 1 steps. View full plan in ShipCode UI.)_');
+    expect(body).toContain('- [ ] Keep this visible');
+    expect(body).toContain('- And this');
+  });
+
+  it('truncates oversized steps through the end when no later sections exist', () => {
+    const body = formatPlanComment(
+      makePlan({
+        steps: [
+          {
+            order: 1,
+            description: 'Large step',
+            files: [],
+            rationale: 'x'.repeat(70_000),
+          },
+        ],
+      }),
+    );
+
+    expect(Buffer.byteLength(body, 'utf8')).toBeLessThan(65_000);
+    expect(body).toContain('_(Truncated — 1 steps. View full plan in ShipCode UI.)_');
   });
 });

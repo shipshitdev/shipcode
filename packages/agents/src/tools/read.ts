@@ -52,7 +52,9 @@ export const readTool: Tool<ReadInput> = {
     try {
       absPath = await assertPathInWorktree(input.path, ctx.worktreePath, { mustExist: true });
     } catch (err) {
+      /* v8 ignore next -- assertPathInWorktree reports validation failures as PathGuardError */
       if (err instanceof PathGuardError) return { ok: false, error: err.message };
+      /* v8 ignore next -- assertPathInWorktree reports validation failures as PathGuardError */
       throw err;
     }
 

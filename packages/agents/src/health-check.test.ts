@@ -1,23 +1,32 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.hoisted runs before vi.mock factories, making these available inside them
-const { mockExec, mockExecFileSync, mockAccess, mockHomedir, mockMkdir, mockPtySpawn } = vi.hoisted(
-  () => ({
-    mockExec: vi.fn(),
-    mockExecFileSync: vi.fn(),
-    mockAccess: vi.fn(),
-    mockHomedir: vi.fn(() => '/mock/home'),
-    mockMkdir: vi.fn(),
-    mockPtySpawn: vi.fn(),
-  }),
-);
+const {
+  mockExec,
+  mockExecFileSync,
+  mockAccess,
+  mockHomedir,
+  mockMkdir,
+  mockReadFile,
+  mockWriteFile,
+  mockPtySpawn,
+} = vi.hoisted(() => ({
+  mockExec: vi.fn(),
+  mockExecFileSync: vi.fn(),
+  mockAccess: vi.fn(),
+  mockHomedir: vi.fn(() => '/mock/home'),
+  mockMkdir: vi.fn(),
+  mockReadFile: vi.fn().mockResolvedValue(''),
+  mockWriteFile: vi.fn().mockResolvedValue(undefined),
+  mockPtySpawn: vi.fn(),
+}));
 
 vi.mock('node:child_process', () => ({ exec: mockExec, execFileSync: mockExecFileSync }));
 vi.mock('node:fs/promises', () => ({
   access: mockAccess,
   mkdir: mockMkdir,
-  readFile: vi.fn().mockResolvedValue(''),
-  writeFile: vi.fn().mockResolvedValue(undefined),
+  readFile: mockReadFile,
+  writeFile: mockWriteFile,
 }));
 vi.mock('node:os', () => ({ homedir: mockHomedir }));
 vi.mock('node-pty', () => ({ spawn: mockPtySpawn }));
@@ -26,8 +35,11 @@ import { type AppSettings, DEFAULT_SETTINGS } from '@shipcode/shared';
 import {
   __resetHealthCheckCachesForTests,
   checkClaudeAuth,
+  checkClaudeModelCapabilities,
+  checkCliModelCapabilities,
   checkCliProviderUsage,
   checkCodexAuth,
+  checkCodexModelCapabilities,
   checkDesktopApps,
   checkGeminiAuth,
   checkGeminiModelCapabilities,
@@ -104,6 +116,8 @@ beforeEach(() => {
   mockExecFileSync.mockReturnValue('');
   mockAccess.mockRejectedValue(new Error('ENOENT'));
   mockMkdir.mockResolvedValue(undefined);
+  mockReadFile.mockResolvedValue('');
+  mockWriteFile.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -181,6 +195,88 @@ function createCodexRefreshPty() {
   };
 }
 
+function createNonExitingPty(text: string, { emitOnWrite = false } = {}) {
+  let onData: ((chunk: string) => void) | null = null;
+  let onExit: ((event: { exitCode: number }) => void) | null = null;
+  let killed = false;
+  let flushed = false;
+
+  const flush = () => {
+    if (flushed) return;
+    flushed = true;
+    queueMicrotask(() => {
+      if (!killed) onData?.(text);
+    });
+  };
+
+  return {
+    write: vi.fn(() => {
+      if (emitOnWrite) flush();
+    }),
+    kill: vi.fn(() => {
+      killed = true;
+      onExit?.({ exitCode: 0 });
+    }),
+    onData: vi.fn((handler: (chunk: string) => void) => {
+      onData = handler;
+      if (!emitOnWrite) queueMicrotask(() => flush());
+    }),
+    onExit: vi.fn((handler: (event: { exitCode: number }) => void) => {
+      onExit = handler;
+    }),
+  };
+}
+
+function createSilentPty() {
+  return {
+    write: vi.fn(),
+    kill: vi.fn(),
+    onData: vi.fn(),
+    onExit: vi.fn(),
+  };
+}
+
+function createPromptThenUsagePty(promptText: string, usageText: string) {
+  let onData: ((chunk: string) => void) | null = null;
+  let onExit: ((event: { exitCode: number }) => void) | null = null;
+  let killed = false;
+  let promptFlushed = false;
+  let usageFlushed = false;
+
+  const flushPrompt = () => {
+    if (promptFlushed) return;
+    promptFlushed = true;
+    queueMicrotask(() => {
+      if (!killed) onData?.(promptText);
+    });
+  };
+
+  const flushUsage = () => {
+    if (usageFlushed) return;
+    usageFlushed = true;
+    queueMicrotask(() => {
+      if (!killed) onData?.(usageText);
+    });
+  };
+
+  return {
+    write: vi.fn(() => {
+      flushUsage();
+    }),
+    kill: vi.fn(() => {
+      killed = true;
+      onExit?.({ exitCode: 0 });
+    }),
+    onData: vi.fn((handler: (chunk: string) => void) => {
+      onData = handler;
+      flushPrompt();
+    }),
+    onExit: vi.fn((handler: (event: { exitCode: number }) => void) => {
+      onExit = handler;
+    }),
+  };
+}
+
 describe('shellExecEnv', () => {
   it('hydrates PATH from the login shell and keeps standard tool locations available', () => {
     const previousBunInstall = process.env.BUN_INSTALL;
@@ -216,6 +312,76 @@ describe('shellExecEnv', () => {
         delete process.env.SHELL;
       } else {
         process.env.SHELL = previousShell;
+      }
+    }
+  });
+
+  it('falls back to conservative executable paths for untrusted shells', () => {
+    const previousBunInstall = process.env.BUN_INSTALL;
+    const previousShell = process.env.SHELL;
+    const previousPath = process.env.PATH;
+    process.env.BUN_INSTALL = '';
+    process.env.SHELL = '/tmp/fake-shell';
+    process.env.PATH = '/custom/bin:/usr/bin';
+
+    try {
+      const env = shellExecEnv();
+
+      expect(env.PATH.split(':')).toEqual(
+        expect.arrayContaining(['/custom/bin', '/mock/home/.bun/bin', '/opt/homebrew/bin']),
+      );
+      expect(mockExecFileSync).not.toHaveBeenCalled();
+    } finally {
+      if (previousBunInstall === undefined) {
+        delete process.env.BUN_INSTALL;
+      } else {
+        process.env.BUN_INSTALL = previousBunInstall;
+      }
+      if (previousShell === undefined) {
+        delete process.env.SHELL;
+      } else {
+        process.env.SHELL = previousShell;
+      }
+      if (previousPath === undefined) {
+        delete process.env.PATH;
+      } else {
+        process.env.PATH = previousPath;
+      }
+    }
+  });
+
+  it('falls back to process PATH when a trusted login shell probe fails', () => {
+    const previousBunInstall = process.env.BUN_INSTALL;
+    const previousShell = process.env.SHELL;
+    const previousPath = process.env.PATH;
+    process.env.BUN_INSTALL = '';
+    process.env.SHELL = '/bin/zsh';
+    process.env.PATH = '/custom/bin';
+    mockExecFileSync.mockImplementation(() => {
+      throw new Error('shell failed');
+    });
+
+    try {
+      const env = shellExecEnv();
+
+      expect(env.PATH.split(':')).toEqual(
+        expect.arrayContaining(['/custom/bin', '/mock/home/.bun/bin', '/usr/bin']),
+      );
+    } finally {
+      if (previousBunInstall === undefined) {
+        delete process.env.BUN_INSTALL;
+      } else {
+        process.env.BUN_INSTALL = previousBunInstall;
+      }
+      if (previousShell === undefined) {
+        delete process.env.SHELL;
+      } else {
+        process.env.SHELL = previousShell;
+      }
+      if (previousPath === undefined) {
+        delete process.env.PATH;
+      } else {
+        process.env.PATH = previousPath;
       }
     }
   });
@@ -312,6 +478,16 @@ describe('parseCodexDebugModels', () => {
     expect(result.models.map((model) => model.value)).toEqual(['gpt-5.4', 'gpt-5.5']);
     expect(result.models.map((model) => model.label)).toEqual(['GPT-5.4', 'GPT-5.5']);
     expect(result.models[1].supportedReasoningEfforts).toEqual(['low', 'xhigh']);
+  });
+
+  it('handles malformed model arrays as an empty catalog', () => {
+    const result = parseCodexDebugModels(
+      JSON.stringify({ models: { not: 'an array' } }),
+      '2026-04-24T00:00:00.000Z',
+    );
+
+    expect(result.models).toEqual([]);
+    expect(result.source).toBe('catalog');
   });
 });
 
@@ -465,6 +641,60 @@ describe('checkSystemHealth', () => {
     expect(result.git.available).toBe(true);
     expect(result.gh.available).toBe(true);
   });
+
+  it('keeps a CLI available when the version command fails', async () => {
+    execRouted({
+      'which claude': { stdout: '/usr/local/bin/claude\n' },
+      '/usr/local/bin/claude --version': new Error('version failed'),
+      'which codex': new Error('not found'),
+      'which gemini': new Error('not found'),
+      'which git': new Error('not found'),
+      'which gh': new Error('not found'),
+    });
+
+    const result = await checkSystemHealth();
+    expect(result.claude).toEqual({
+      available: true,
+      version: null,
+      path: '/usr/local/bin/claude',
+      error: null,
+      authenticated: false,
+    });
+  });
+
+  it('treats an empty which result as a missing CLI', async () => {
+    execRouted({
+      'which claude': { stdout: '' },
+      'which codex': new Error('not found'),
+      'which gemini': new Error('not found'),
+      'which git': new Error('not found'),
+      'which gh': new Error('not found'),
+    });
+
+    const result = await checkSystemHealth();
+    expect(result.claude).toMatchObject({
+      available: false,
+      path: null,
+      error: 'claude not found in PATH',
+    });
+  });
+
+  it('reuses fresh cached system health and shares in-flight checks', async () => {
+    execRouted({
+      which: { stdout: '/usr/local/bin/tool\n' },
+      '--version': { stdout: 'tool 1.0.0\n' },
+    });
+
+    const [first, second] = await Promise.all([checkSystemHealth(), checkSystemHealth()]);
+    expect(second).toEqual(first);
+    const callsAfterFirstPair = mockExec.mock.calls.length;
+
+    await expect(checkSystemHealth()).resolves.toEqual(first);
+    expect(mockExec).toHaveBeenCalledTimes(callsAfterFirstPair);
+
+    await checkSystemHealth({ force: true });
+    expect(mockExec.mock.calls.length).toBeGreaterThan(callsAfterFirstPair);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -505,6 +735,21 @@ describe('checkSystemHealthWithAuth', () => {
       'printenv GEMINI_API_KEY': { stdout: 'gemini-key\n' },
     });
 
+    await expect(checkGeminiAuth()).resolves.toBe(true);
+  });
+
+  it('detects Gemini auth from GOOGLE_API_KEY and CLI auth status fallback', async () => {
+    execRouted({
+      'printenv GEMINI_API_KEY': { stdout: '' },
+      'printenv GOOGLE_API_KEY': { stdout: 'google-key\n' },
+    });
+    await expect(checkGeminiAuth()).resolves.toBe(true);
+
+    execRouted({
+      'printenv GEMINI_API_KEY': { stdout: '' },
+      'printenv GOOGLE_API_KEY': { stdout: '' },
+      'gemini auth status': { stdout: 'logged in\n' },
+    });
     await expect(checkGeminiAuth()).resolves.toBe(true);
   });
 
@@ -557,6 +802,41 @@ describe('checkSystemHealthWithAuth', () => {
     expect(result.codex.authenticated).toBe(false);
   });
 
+  it('shares in-flight authenticated system health checks', async () => {
+    mockExec.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
+      if (typeof opts === 'function') {
+        cb = opts;
+        opts = {};
+      }
+      setTimeout(() => {
+        if (cmd.includes('which')) {
+          (cb as ExecCallback)(null, { stdout: '/usr/local/bin/tool', stderr: '' });
+          return;
+        }
+        if (cmd.includes('claude auth status')) {
+          (cb as ExecCallback)(null, { stdout: 'Authenticated', stderr: '' });
+          return;
+        }
+        if (cmd.includes('printenv OPENAI_API_KEY')) {
+          (cb as ExecCallback)(null, { stdout: 'sk-key\n', stderr: '' });
+          return;
+        }
+        if (cmd.includes('printenv GEMINI_API_KEY')) {
+          (cb as ExecCallback)(null, { stdout: 'gemini-key\n', stderr: '' });
+          return;
+        }
+        (cb as ExecCallback)(null, { stdout: 'version 1.0', stderr: '' });
+      }, 1);
+    });
+
+    const [first, second] = await Promise.all([
+      checkSystemHealthWithAuth(),
+      checkSystemHealthWithAuth(),
+    ]);
+
+    expect(second).toEqual(first);
+  });
+
   it('reuses fresh cached auth health results until forced', async () => {
     mockExec.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
       if (typeof opts === 'function') {
@@ -600,6 +880,24 @@ describe('parseClaudeAuthStatusOutput', () => {
     ).toEqual({
       accountEmail: 'vincent@shipshit.dev',
       loginMethod: 'max',
+    });
+  });
+
+  it('falls back to authMethod and ignores malformed auth status json', () => {
+    expect(
+      parseClaudeAuthStatusOutput(
+        JSON.stringify({
+          email: '',
+          authMethod: 'claude.ai',
+        }),
+      ),
+    ).toEqual({
+      accountEmail: null,
+      loginMethod: 'claude.ai',
+    });
+    expect(parseClaudeAuthStatusOutput('not json')).toEqual({
+      accountEmail: null,
+      loginMethod: null,
     });
   });
 });
@@ -672,11 +970,75 @@ describe('parseClaudeUsageText', () => {
     ]);
   });
 
+  it('falls back to ordered percents when labeled Claude output cannot be paired directly', () => {
+    const status = parseClaudeUsageText(
+      `
+      Current session section
+      15% used
+      Current week section
+      25% used
+      Current week (Haiku) section
+      35% used
+      `,
+      '2026-04-17T06:00:00.000Z',
+    );
+
+    expect(status.windows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'session', leftPercent: 85 }),
+        expect.objectContaining({ key: 'weekly', leftPercent: 65 }),
+      ]),
+    );
+  });
+
   it('returns no-data when output has no recognizable format', () => {
     const status = parseClaudeUsageText('Welcome to Claude Code!\n❯ ', '2026-04-17T06:00:00.000Z');
 
     expect(status.available).toBe(false);
     expect(status.message).toBe('Claude CLI returned no quota data');
+  });
+
+  it('reports load failures and quota warning/block states', () => {
+    expect(
+      parseClaudeUsageText('Failed to load usage data', '2026-04-17T06:00:00.000Z').message,
+    ).toBe('Claude CLI failed to load usage data');
+    expect(
+      parseClaudeUsageText('Current session 0% left Resets 10am', '2026-04-17T06:00:00.000Z').state,
+    ).toBe('blocked');
+    expect(
+      parseClaudeUsageText(
+        'Current week (Opus) 10% left Resets tomorrow',
+        '2026-04-17T06:00:00.000Z',
+      ).state,
+    ).toBe('warning');
+    expect(
+      parseClaudeUsageText(
+        'Current week (Haiku) 100% used Resets tomorrow',
+        '2026-04-17T06:00:00.000Z',
+      ).windows,
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ leftPercent: 0 })]));
+    expect(
+      parseClaudeUsageText(
+        'Current week (all models) 0% left Resets tomorrow',
+        '2026-04-17T06:00:00.000Z',
+      ).state,
+    ).toBe('blocked');
+    expect(
+      parseClaudeUsageText('Current week 0% left Resets tomorrow', '2026-04-17T06:00:00.000Z')
+        .state,
+    ).toBe('blocked');
+    expect(
+      parseClaudeUsageText(
+        'Current session label 101% left\nCurrent week label 101% used\nCurrent week (Opus) label 100% used',
+        '2026-04-17T06:00:00.000Z',
+      ).windows,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'session', leftPercent: 100 }),
+        expect.objectContaining({ key: 'weekly', leftPercent: 0 }),
+        expect.objectContaining({ key: 'model', leftPercent: 0 }),
+      ]),
+    );
   });
 
   it('strips parenthetical suffix from version string', () => {
@@ -688,6 +1050,16 @@ describe('parseClaudeUsageText', () => {
 
     const noVersion = parseClaudeUsageText('', undefined, undefined, null);
     expect(noVersion.version).toBeNull();
+  });
+
+  it('clamps status-bar usage and preserves non-semver Claude versions', () => {
+    const status = parseClaudeUsageText('final 999% used', undefined, undefined, 'dev');
+
+    expect(status.version).toBe('dev');
+    expect(status.state).toBe('blocked');
+    expect(status.windows).toEqual([
+      expect.objectContaining({ key: 'session', leftPercent: 0, usedPercent: 100 }),
+    ]);
   });
 });
 
@@ -710,6 +1082,39 @@ describe('parseCodexStatusText', () => {
       expect.objectContaining({ key: 'session', label: 'Session', leftPercent: 98 }),
       expect.objectContaining({ key: 'weekly', label: 'Weekly', leftPercent: 35 }),
     ]);
+  });
+
+  it('parses international numeric formats and quota states', () => {
+    const blocked = parseCodexStatusText(
+      `
+      Credits: 0
+      Weekly limit 0% left resets tomorrow
+      `,
+      '2026-04-16T16:10:00.000Z',
+      'codex custom-version',
+    );
+    expect(blocked.version).toBe('codex custom-version');
+    expect(blocked.state).toBe('blocked');
+
+    const commaDecimal = parseCodexStatusText(`
+      Credits: 1.234,50
+      5h limit 12% left resets soon
+    `);
+    expect(commaDecimal.creditsRemaining).toBe(1234.5);
+    expect(commaDecimal.state).toBe('warning');
+
+    expect(parseCodexStatusText('Credits: 1,234.50\n').creditsRemaining).toBe(1234.5);
+    expect(parseCodexStatusText('Credits: 1,5\n').creditsRemaining).toBe(1.5);
+    expect(parseCodexStatusText('Credits: 1,234\n').creditsRemaining).toBe(1234);
+    expect(parseCodexStatusText('Credits: 1.234\n').creditsRemaining).toBe(1234);
+  });
+
+  it('reports no-data when codex status output has no quota content', () => {
+    const status = parseCodexStatusText('Welcome to Codex');
+    expect(status.available).toBe(false);
+    expect(status.state).toBe('unknown');
+    expect(status.message).toBe('Codex CLI returned no quota data');
+    expect(parseCodexStatusText('Credits: nope\n5h limit left').creditsRemaining).toBeNull();
   });
 
   it('maps current boxed codex status text into session and weekly windows', () => {
@@ -777,6 +1182,18 @@ describe('parseCodexStatusText', () => {
     const noVersion = parseCodexStatusText('', undefined, null);
     expect(noVersion.version).toBeNull();
   });
+
+  it('blocks on exhausted session quota and keeps ready weekly quota without credits', () => {
+    expect(parseCodexStatusText('5h limit 0% left resets soon').state).toBe('blocked');
+    expect(parseCodexStatusText('Weekly limit 0% left resets next week').state).toBe('blocked');
+
+    const ready = parseCodexStatusText('Weekly limit 100% left resets next week');
+    expect(ready.state).toBe('ready');
+    expect(ready.creditsRemaining).toBeNull();
+
+    const exhaustedWithCredits = parseCodexStatusText('Credits: 10\nWeekly limit 0% left');
+    expect(exhaustedWithCredits.state).toBe('warning');
+  });
 });
 
 describe('checkCliProviderUsage', () => {
@@ -828,6 +1245,45 @@ describe('checkCliProviderUsage', () => {
     expect(result.codex.windows).toEqual(
       expect.arrayContaining([expect.objectContaining({ key: 'session', leftPercent: 98 })]),
     );
+  });
+
+  it('returns unavailable provider usage when CLIs are missing', async () => {
+    execFails('not found');
+
+    const result = await checkCliProviderUsage({ force: true });
+    expect(result.claude).toMatchObject({
+      available: false,
+      source: null,
+      message: 'claude CLI not found in PATH',
+      windows: [],
+    });
+    expect(result.codex).toMatchObject({
+      available: false,
+      source: null,
+      message: 'codex CLI not found in PATH',
+      windows: [],
+    });
+  });
+
+  it('returns unavailable provider usage when probes fail without cached data', async () => {
+    execRouted({
+      'which claude': { stdout: '/usr/local/bin/claude\n' },
+      'which codex': { stdout: '/usr/local/bin/codex\n' },
+      'claude --version': { stdout: '1.0.88\n' },
+      'codex --version': { stdout: '0.121.0\n' },
+      'claude auth status': new Error('auth unavailable'),
+    });
+    mockPtySpawn.mockImplementation(() => {
+      throw new Error('pty unavailable');
+    });
+
+    const result = await checkCliProviderUsage({ force: true });
+    expect(result.claude).toMatchObject({
+      available: false,
+      stale: false,
+    });
+    expect(result.claude.message).toContain('Claude CLI usage unavailable: pty unavailable');
+    expect(result.codex.message).toContain('Codex CLI usage unavailable: pty unavailable');
   });
 
   it('retries codex status when the CLI refreshes limits on the first request', async () => {
@@ -912,6 +1368,424 @@ describe('checkCliProviderUsage', () => {
     await checkCliProviderUsage({ force: true });
     expect(mockPtySpawn).toHaveBeenCalled();
   });
+
+  it('shares in-flight provider usage probes', async () => {
+    mockExec.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
+      if (typeof opts === 'function') {
+        cb = opts;
+        opts = {};
+      }
+      setTimeout(() => {
+        if (cmd.includes('which claude')) {
+          (cb as ExecCallback)(null, { stdout: '/usr/local/bin/claude\n', stderr: '' });
+          return;
+        }
+        if (cmd.includes('which codex')) {
+          (cb as ExecCallback)(null, { stdout: '/usr/local/bin/codex\n', stderr: '' });
+          return;
+        }
+        if (cmd.includes('claude auth status')) {
+          (cb as ExecCallback)(null, { stdout: '{"email":"vincent@shipshit.dev"}', stderr: '' });
+          return;
+        }
+        (cb as ExecCallback)(null, { stdout: '1.0.0\n', stderr: '' });
+      }, 1);
+    });
+    mockPtySpawn.mockImplementation((command: string) =>
+      command.includes('claude')
+        ? createMockPty('Current session 99% left')
+        : createMockPty('Credits: 54.72\n5h limit 98% left resets soon'),
+    );
+
+    const [first, second] = await Promise.all([
+      checkCliProviderUsage({ force: true }),
+      checkCliProviderUsage({ force: true }),
+    ]);
+
+    expect(second).toEqual(first);
+  });
+
+  it('returns stale cached provider usage when a forced refresh fails', async () => {
+    execRouted({
+      'which claude': { stdout: '/usr/local/bin/claude\n' },
+      'which codex': { stdout: '/usr/local/bin/codex\n' },
+      'claude --version': { stdout: '1.0.88\n' },
+      'codex --version': { stdout: '0.121.0\n' },
+      'claude auth status': { stdout: '{"email":"vincent@shipshit.dev"}' },
+    });
+    mockPtySpawn.mockImplementation((command: string) =>
+      command.includes('claude')
+        ? createMockPty('Current session 99% left')
+        : createMockPty('Credits: 54.72\n5h limit 98% left resets soon'),
+    );
+    const first = await checkCliProviderUsage();
+
+    mockPtySpawn.mockImplementation(() => {
+      throw new Error('pty unavailable');
+    });
+    const stale = await checkCliProviderUsage({ force: true });
+
+    expect(stale.claude).toMatchObject({
+      stale: true,
+      windows: first.claude.windows,
+    });
+    expect(stale.codex).toMatchObject({
+      stale: true,
+      creditsRemaining: 54.72,
+    });
+  });
+
+  it('parses Claude usage even when auth details cannot be read', async () => {
+    execRouted({
+      'which claude': { stdout: '/usr/local/bin/claude\n' },
+      'which codex': new Error('not found'),
+      'claude --version': { stdout: '1.0.88\n' },
+      'claude auth status': new Error('auth unavailable'),
+    });
+    mockPtySpawn.mockReturnValue(createMockPty('Current session 88% left'));
+
+    const result = await checkCliProviderUsage({ force: true });
+    expect(result.claude).toMatchObject({
+      available: true,
+      accountEmail: null,
+      loginMethod: null,
+    });
+    expect(result.claude.windows).toEqual([
+      expect.objectContaining({ key: 'session', leftPercent: 88 }),
+    ]);
+  });
+
+  it('settles a Claude usage probe after stop text even when the PTY stays open', async () => {
+    vi.useFakeTimers();
+    execRouted({
+      'which claude': { stdout: '/usr/local/bin/claude\n' },
+      'which codex': new Error('not found'),
+      'claude --version': { stdout: '1.0.88\n' },
+      'claude auth status': new Error('auth unavailable'),
+    });
+    const claudePty = createNonExitingPty('Current session 77% left');
+    mockPtySpawn.mockReturnValue(claudePty);
+
+    const resultPromise = checkCliProviderUsage({ force: true });
+    await vi.advanceTimersByTimeAsync(800);
+    const result = await resultPromise;
+
+    expect(claudePty.kill).toHaveBeenCalled();
+    expect(result.claude.windows).toEqual([
+      expect.objectContaining({ key: 'session', leftPercent: 77 }),
+    ]);
+  });
+
+  it('reports a timed out Claude usage probe when the PTY never emits output', async () => {
+    vi.useFakeTimers();
+    execRouted({
+      'which claude': { stdout: '/usr/local/bin/claude\n' },
+      'which codex': new Error('not found'),
+      'claude --version': { stdout: '1.0.88\n' },
+      'claude auth status': new Error('auth unavailable'),
+    });
+    const claudePty = createSilentPty();
+    mockPtySpawn.mockReturnValue(claudePty);
+
+    const resultPromise = checkCliProviderUsage({ force: true });
+    await vi.advanceTimersByTimeAsync(20_000);
+    const result = await resultPromise;
+
+    expect(claudePty.kill).toHaveBeenCalled();
+    expect(result.claude.available).toBe(false);
+    expect(result.claude.message).toContain(
+      'Claude CLI usage unavailable: /usr/local/bin/claude usage probe timed out',
+    );
+  });
+
+  it('finishes an idle Codex probe with partial output and no exit event', async () => {
+    vi.useFakeTimers();
+    execRouted({
+      'which claude': new Error('not found'),
+      'which codex': { stdout: '/usr/local/bin/codex\n' },
+      'codex --version': { stdout: '0.121.0\n' },
+    });
+    const codexPty = createNonExitingPty('Codex is ready', { emitOnWrite: true });
+    mockPtySpawn.mockReturnValue(codexPty);
+
+    const resultPromise = checkCliProviderUsage({ force: true });
+    await vi.advanceTimersByTimeAsync(1_750);
+    await vi.advanceTimersByTimeAsync(4_050);
+    const result = await resultPromise;
+
+    expect(codexPty.kill).toHaveBeenCalled();
+    expect(result.codex).toMatchObject({
+      available: false,
+      message: 'Codex CLI returned no quota data',
+    });
+  });
+
+  it('returns partial Claude output at the hard timeout when the probe never reaches stop text', async () => {
+    vi.useFakeTimers();
+    execRouted({
+      'which claude': { stdout: '/usr/local/bin/claude\n' },
+      'which codex': new Error('not found'),
+      'claude --version': { stdout: '1.0.88\n' },
+      'claude auth status': new Error('auth unavailable'),
+    });
+    const claudePty = createNonExitingPty('Claude Code is starting');
+    mockPtySpawn.mockReturnValue(claudePty);
+
+    const resultPromise = checkCliProviderUsage({ force: true });
+    await vi.advanceTimersByTimeAsync(20_000);
+    const result = await resultPromise;
+
+    expect(claudePty.kill).toHaveBeenCalled();
+    expect(result.claude).toMatchObject({
+      available: false,
+      message: 'Claude CLI returned no quota data',
+    });
+  });
+
+  it('responds to immediate Claude trust prompts before reading usage output', async () => {
+    vi.useFakeTimers();
+    execRouted({
+      'which claude': { stdout: '/usr/local/bin/claude\n' },
+      'which codex': new Error('not found'),
+      'claude --version': { stdout: '1.0.88\n' },
+      'claude auth status': new Error('auth unavailable'),
+    });
+    const claudePty = createPromptThenUsagePty('Quick safety check:', 'Current session 66% left');
+    mockPtySpawn.mockReturnValue(claudePty);
+
+    const resultPromise = checkCliProviderUsage({ force: true });
+    await vi.advanceTimersByTimeAsync(800);
+    const result = await resultPromise;
+
+    expect(claudePty.write).toHaveBeenCalledWith('\r');
+    expect(result.claude.windows).toEqual([
+      expect.objectContaining({ key: 'session', leftPercent: 66 }),
+    ]);
+  });
+
+  it('clears pending delayed Codex retry sends when stop text arrives first', async () => {
+    vi.useFakeTimers();
+    execRouted({
+      'which claude': new Error('not found'),
+      'which codex': { stdout: '/usr/local/bin/codex\n' },
+      'codex --version': { stdout: '0.121.0\n' },
+    });
+    const codexPty = createNonExitingPty(
+      'refresh requested\nCredits: 2\n5h limit 98% left resets soon',
+      { emitOnWrite: true },
+    );
+    mockPtySpawn.mockReturnValue(codexPty);
+
+    const resultPromise = checkCliProviderUsage({ force: true });
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(1_750);
+    await vi.advanceTimersByTimeAsync(550);
+    const result = await resultPromise;
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    expect(result.codex.creditsRemaining).toBe(2);
+    expect(codexPty.write).toHaveBeenCalledWith('\r');
+    expect(codexPty.write).not.toHaveBeenCalledWith('/status\r');
+  });
+
+  it('does not rewrite Codex trust config when the probe directory is already trusted', async () => {
+    execRouted({
+      'which claude': new Error('not found'),
+      'which codex': { stdout: '/usr/local/bin/codex\n' },
+      'codex --version': { stdout: '0.121.0\n' },
+    });
+    mockReadFile.mockResolvedValue(
+      '[projects."/mock/home/.shipcode/provider-probes/codex"]\ntrust_level = "trusted"\n',
+    );
+    mockPtySpawn.mockReturnValue(createMockPty('Credits: 1\n5h limit 99% left'));
+
+    const result = await checkCliProviderUsage({ force: true });
+
+    expect(result.codex.creditsRemaining).toBe(1);
+    expect(mockWriteFile).not.toHaveBeenCalled();
+  });
+
+  it('creates Codex trust config when the config file cannot be read', async () => {
+    execRouted({
+      'which claude': new Error('not found'),
+      'which codex': { stdout: '/usr/local/bin/codex\n' },
+      'codex --version': { stdout: '0.121.0\n' },
+    });
+    mockReadFile.mockRejectedValue(new Error('ENOENT'));
+    mockPtySpawn.mockReturnValue(createMockPty('Credits: 1\n5h limit 99% left'));
+
+    const result = await checkCliProviderUsage({ force: true });
+
+    expect(result.codex.creditsRemaining).toBe(1);
+    expect(mockMkdir).toHaveBeenCalledWith('/mock/home/.codex', { recursive: true });
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      '/mock/home/.codex/config.toml',
+      '\n[projects."/mock/home/.shipcode/provider-probes/codex"]\ntrust_level = "trusted"\n',
+    );
+  });
+});
+
+describe('CLI model capabilities', () => {
+  it('parses sparse Codex catalog entries with fallback labels and efforts', () => {
+    const result = parseCodexDebugModels(
+      JSON.stringify({
+        models: [
+          {
+            slug: ' custom-model ',
+            display_name: ' ',
+            description: ' ',
+            supported_reasoning_levels: 'bad-shape',
+            default_reasoning_level: 'bad-effort',
+            visibility: 'list',
+          },
+          {
+            slug: 'display-model',
+            display_name: 'Display Model',
+            description: '',
+            supported_reasoning_levels: [{ effort: 'medium' }],
+            default_reasoning_level: 'medium',
+            visibility: 'list',
+          },
+          { slug: 123, visibility: 'list' },
+        ],
+      }),
+      '2026-04-24T00:00:00.000Z',
+    );
+
+    expect(result.models).toEqual([
+      expect.objectContaining({
+        value: 'custom-model',
+        label: 'custom-model',
+        description: null,
+        defaultReasoningEffort: 'low',
+        supportedReasoningEfforts: ['low', 'medium', 'high', 'xhigh'],
+      }),
+      expect.objectContaining({
+        value: 'display-model',
+        label: 'Display Model',
+        defaultReasoningEffort: 'medium',
+        supportedReasoningEfforts: ['medium'],
+      }),
+    ]);
+  });
+
+  it('falls back when the Codex catalog is empty or malformed', async () => {
+    execRouted({
+      'codex debug models': { stdout: JSON.stringify({ models: [] }) },
+    });
+    const empty = await checkCodexModelCapabilities();
+    expect(empty.source).toBe('fallback');
+    expect(empty.error).toContain('returned no selectable models');
+
+    __resetHealthCheckCachesForTests();
+    execRouted({
+      'codex debug models': { stdout: 'not-json' },
+    });
+    const malformed = await checkCodexModelCapabilities();
+    expect(malformed.source).toBe('fallback');
+    expect(malformed.error).toContain('Codex model catalog unavailable');
+  });
+
+  it('reports Claude model capabilities as unavailable when the CLI probe fails', async () => {
+    execRouted({
+      'claude --help': new Error('claude missing'),
+    });
+
+    const result = await checkClaudeModelCapabilities();
+    expect(result).toMatchObject({
+      provider: 'claude',
+      source: 'unavailable',
+      models: [],
+    });
+    expect(result.error).toContain('claude missing');
+  });
+
+  it('reports Gemini model capabilities as unavailable when the CLI probe fails', async () => {
+    execRouted({
+      'gemini --help': new Error('gemini missing'),
+    });
+
+    const result = await checkGeminiModelCapabilities();
+    expect(result).toMatchObject({
+      provider: 'gemini',
+      source: 'unavailable',
+      models: [],
+    });
+    expect(result.error).toContain('gemini missing');
+  });
+
+  it('uses generic catalog failure text for non-Error and empty errors', async () => {
+    mockExec.mockImplementation((_cmd: string, opts: unknown, cb?: unknown) => {
+      if (typeof opts === 'function') {
+        cb = opts;
+      }
+      (cb as ExecCallback)('plain failure' as unknown as Error);
+    });
+
+    const nonError = await checkClaudeModelCapabilities();
+    expect(nonError.error).toContain('usage data unavailable');
+
+    __resetHealthCheckCachesForTests();
+    mockExec.mockImplementation((_cmd: string, opts: unknown, cb?: unknown) => {
+      if (typeof opts === 'function') {
+        cb = opts;
+      }
+      (cb as ExecCallback)(new Error('   '));
+    });
+
+    const emptyError = await checkGeminiModelCapabilities();
+    expect(emptyError.error).toContain('usage data unavailable');
+  });
+
+  it('caches combined CLI model capabilities until forced', async () => {
+    execRouted({
+      'claude --help': { stdout: 'Usage: claude' },
+      'gemini --help': { stdout: 'Usage: gemini' },
+      'codex debug models': {
+        stdout: JSON.stringify({
+          models: [{ slug: 'gpt-5.4', display_name: 'GPT-5.4', visibility: 'list' }],
+        }),
+      },
+    });
+
+    const first = await checkCliModelCapabilities();
+    vi.clearAllMocks();
+
+    await expect(checkCliModelCapabilities()).resolves.toEqual(first);
+    expect(mockExec).not.toHaveBeenCalled();
+
+    await checkCliModelCapabilities({ force: true });
+    expect(mockExec).toHaveBeenCalled();
+  });
+
+  it('shares in-flight CLI model capability checks', async () => {
+    mockExec.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
+      if (typeof opts === 'function') {
+        cb = opts;
+        opts = {};
+      }
+      setTimeout(() => {
+        if (cmd.includes('codex debug models')) {
+          (cb as ExecCallback)(null, {
+            stdout: JSON.stringify({
+              models: [{ slug: 'gpt-5.4', display_name: 'GPT-5.4', visibility: 'list' }],
+            }),
+            stderr: '',
+          });
+          return;
+        }
+        (cb as ExecCallback)(null, { stdout: 'Usage', stderr: '' });
+      }, 1);
+    });
+
+    const [first, second] = await Promise.all([
+      checkCliModelCapabilities(),
+      checkCliModelCapabilities(),
+    ]);
+
+    expect(second).toEqual(first);
+  });
 });
 
 describe('checkOpenRouterAuth', () => {
@@ -972,6 +1846,32 @@ describe('checkOpenRouterAuth', () => {
     }
   });
 
+  it('returns generic unreachable text when fetch throws a non-Error value', async () => {
+    fetchMock.mockRejectedValueOnce('offline');
+
+    const res = await checkOpenRouterAuth('k');
+
+    expect(res).toEqual({
+      ok: false,
+      reason: 'unreachable',
+      message: 'OpenRouter unreachable',
+    });
+  });
+
+  it('returns unreachable on non-auth HTTP errors and tolerates malformed auth JSON', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('oops', { status: 500 }));
+    const error = await checkOpenRouterAuth('key');
+    expect(error.ok).toBe(false);
+    if (!error.ok) {
+      expect(error.reason).toBe('unreachable');
+      expect(error.message).toContain('HTTP 500');
+    }
+
+    fetchMock.mockResolvedValueOnce(new Response('not-json', { status: 200 }));
+    const ok = await checkOpenRouterAuth('key');
+    expect(ok).toEqual({ ok: true, label: undefined });
+  });
+
   it('warns when pinned model is not in the catalog', async () => {
     fetchMock
       .mockResolvedValueOnce(
@@ -1003,6 +1903,17 @@ describe('checkOpenRouterAuth', () => {
 
     const res = await checkOpenRouterAuth('k', 'openrouter/auto');
     expect(res.ok).toBe(true);
+  });
+
+  it('keeps auth valid when pinned model catalog fetch fails', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { label: 'shipcode-dev' } }), { status: 200 }),
+      )
+      .mockRejectedValueOnce(new Error('catalog down'));
+
+    const res = await checkOpenRouterAuth('k', 'openrouter/auto');
+    expect(res).toEqual({ ok: true, label: 'shipcode-dev' });
   });
 });
 
@@ -1053,6 +1964,88 @@ describe('checkOpenRouterHealth', () => {
       result.modelChecks.find((check: { key: string }) => check.key === 'planner')?.status,
     ).toBe('valid');
   });
+
+  it('falls back to process.env when printenv cannot read the OpenRouter key', async () => {
+    const previous = process.env.OPENROUTER_API_KEY;
+    process.env.OPENROUTER_API_KEY = 'env-or-key';
+    execFails('printenv unavailable');
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { label: 'env-key' } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+
+    try {
+      const result = await checkOpenRouterHealth(settings());
+      expect(result.authStatus).toBe('valid');
+      expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer env-or-key');
+    } finally {
+      if (previous === undefined) {
+        delete process.env.OPENROUTER_API_KEY;
+      } else {
+        process.env.OPENROUTER_API_KEY = previous;
+      }
+    }
+  });
+
+  it('reports invalid and unreachable OpenRouter health states', async () => {
+    execRouted({
+      'printenv OPENROUTER_API_KEY': { stdout: 'or-key\n' },
+    });
+    fetchMock.mockResolvedValueOnce(new Response('forbidden', { status: 403 }));
+    const invalid = await checkOpenRouterHealth(settings());
+    expect(invalid.authStatus).toBe('invalid_key');
+    expect(
+      invalid.modelChecks
+        .filter((check) => check.modelId)
+        .every((check) => check.status === 'unverified'),
+    ).toBe(true);
+
+    __resetHealthCheckCachesForTests();
+    fetchMock.mockRejectedValueOnce(new Error('network down'));
+    const unreachable = await checkOpenRouterHealth(settings());
+    expect(unreachable.authStatus).toBe('unreachable');
+  });
+
+  it('marks configured OpenRouter models unverified when the catalog cannot be fetched', async () => {
+    execRouted({
+      'printenv OPENROUTER_API_KEY': { stdout: 'or-key\n' },
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {} }), { status: 200 }))
+      .mockResolvedValueOnce(new Response('down', { status: 500 }));
+
+    const result = await checkOpenRouterHealth(
+      settings({ openrouterExecutorModel: 'openrouter/auto' }),
+    );
+
+    expect(result.authStatus).toBe('valid');
+    expect(result.label).toBeNull();
+    expect(result.message).toBe('Authenticated, but OpenRouter model catalog could not be fetched');
+    expect(result.modelChecks.find((check) => check.key === 'executor')).toMatchObject({
+      modelId: 'openrouter/auto',
+      status: 'unverified',
+    });
+  });
+
+  it('marks configured OpenRouter models unverified when catalog fetch throws', async () => {
+    execRouted({
+      'printenv OPENROUTER_API_KEY': { stdout: 'or-key\n' },
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {} }), { status: 200 }))
+      .mockRejectedValueOnce(new Error('catalog offline'));
+
+    const result = await checkOpenRouterHealth(
+      settings({ openrouterReviewerModel: 'openrouter/auto' }),
+    );
+
+    expect(result.authStatus).toBe('valid');
+    expect(result.modelChecks.find((check) => check.key === 'reviewer')).toMatchObject({
+      modelId: 'openrouter/auto',
+      status: 'unverified',
+    });
+  });
 });
 
 describe('validateOpenRouterModel', () => {
@@ -1073,6 +2066,31 @@ describe('validateOpenRouterModel', () => {
     expect(result.status).toBe('unverified');
   });
 
+  it('returns unverified for empty model slugs and unreachable catalogs', async () => {
+    const empty = await validateOpenRouterModel(settings(), '   ');
+    expect(empty).toEqual({
+      modelId: '',
+      status: 'unverified',
+      message: 'Model slug is required',
+    });
+
+    execRouted({
+      'printenv OPENROUTER_API_KEY': { stdout: 'or-key\n' },
+    });
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { label: 'shipcode-dev' } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ id: 'openrouter/auto' }] }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(new Response('nope', { status: 500 }));
+
+    const result = await validateOpenRouterModel(settings(), 'openrouter/auto');
+    expect(result.status).toBe('unverified');
+    expect(result.message).toBe('OpenRouter model catalog could not be fetched');
+  });
+
   it('returns invalid when the model slug is not in the catalog', async () => {
     execRouted({
       'printenv OPENROUTER_API_KEY': { stdout: 'or-key\n' },
@@ -1090,6 +2108,25 @@ describe('validateOpenRouterModel', () => {
 
     const result = await validateOpenRouterModel(settings(), 'anthropic/claude-sonnet-4-6');
     expect(result.status).toBe('invalid');
+  });
+
+  it('returns valid when the model slug is in the catalog', async () => {
+    execRouted({
+      'printenv OPENROUTER_API_KEY': { stdout: 'or-key\n' },
+    });
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { label: 'shipcode-dev' } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ id: 'openrouter/auto' }] }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ id: 'openrouter/auto' }] }), { status: 200 }),
+      );
+
+    const result = await validateOpenRouterModel(settings(), 'openrouter/auto');
+    expect(result).toEqual({ modelId: 'openrouter/auto', status: 'valid', message: null });
   });
 });
 
@@ -1149,9 +2186,230 @@ describe('checkIntegrationStatus', () => {
     expect(result.desktopApps.finder.available).toBe(process.platform === 'darwin');
     expect(result.desktopApps.cursor.available).toBe(false);
   });
+
+  it('validates chat integrations and reuses matching cached integration status', async () => {
+    execRouted({
+      'which claude': { stdout: '/usr/local/bin/claude\n' },
+      'which codex': { stdout: '/usr/local/bin/codex\n' },
+      'which gemini': { stdout: '/usr/local/bin/gemini\n' },
+      'which git': { stdout: '/usr/bin/git\n' },
+      'which gh': { stdout: '/usr/local/bin/gh\n' },
+      'claude --version': { stdout: 'claude 1.0.0' },
+      'codex --version': { stdout: 'codex 0.1.0' },
+      'gemini --version': { stdout: '0.1.0' },
+      'git --version': { stdout: 'git version 2.43.0' },
+      'gh --version': { stdout: 'gh version 2.40.1' },
+      'claude --help': { stdout: 'Usage: claude' },
+      'gemini --help': { stdout: 'Usage: gemini' },
+      'codex debug models': {
+        stdout: JSON.stringify({
+          models: [{ slug: 'gpt-5.4', display_name: 'GPT-5.4', visibility: 'list' }],
+        }),
+      },
+      'claude auth status': { stdout: 'Authenticated' },
+      'printenv OPENAI_API_KEY': { stdout: 'sk-key\n' },
+      'printenv GEMINI_API_KEY': { stdout: 'gemini-key\n' },
+      'printenv OPENROUTER_API_KEY': { stdout: '' },
+      'gh auth status': { stdout: 'Logged in to github.com account decod3r' },
+    });
+    const withChat = settings({
+      discordEnabled: true,
+      discordWebhookUrl: 'https://discord.com/api/webhooks/id/token',
+      discordLastDeliveryStatus: {
+        provider: 'discord',
+        destination: 'https://discord.com/api/webhooks/id/token',
+        lastAttemptAt: '2026-05-09T00:00:00.000Z',
+        lastSuccessAt: '2026-05-09T00:00:00.000Z',
+        lastError: null,
+      },
+      telegramEnabled: true,
+      telegramBotToken: '123456:abcdefghijklmnopqrstuvwxyz',
+      telegramDefaultChatId: 'shipcode',
+      telegramLastDeliveryStatus: {
+        provider: 'telegram',
+        destination: 'shipcode',
+        lastAttemptAt: '2026-05-09T00:00:00.000Z',
+        lastSuccessAt: null,
+        lastError: 'delivery failed',
+      },
+    });
+
+    const first = await checkIntegrationStatus(withChat);
+    expect(first.discord).toMatchObject({
+      configured: true,
+      validationStatus: 'valid',
+      lastDeliveryStatus: {
+        provider: 'discord',
+        destination: 'https://discord.com/api/webhooks/id/token',
+        lastAttemptAt: '2026-05-09T00:00:00.000Z',
+        lastSuccessAt: '2026-05-09T00:00:00.000Z',
+        lastError: null,
+      },
+    });
+    expect(first.telegram).toMatchObject({
+      configured: true,
+      destinationConfigured: true,
+      validationStatus: 'valid',
+      lastDeliveryStatus: {
+        provider: 'telegram',
+        destination: 'shipcode',
+        lastAttemptAt: '2026-05-09T00:00:00.000Z',
+        lastSuccessAt: null,
+        lastError: 'delivery failed',
+      },
+    });
+
+    vi.clearAllMocks();
+    await expect(checkIntegrationStatus(withChat)).resolves.toEqual(first);
+    expect(mockExec).not.toHaveBeenCalled();
+
+    const invalidChat = await checkIntegrationStatus(
+      settings({
+        discordEnabled: true,
+        discordWebhookUrl: 'not-a-webhook',
+        telegramEnabled: true,
+        telegramBotToken: 'bad-token',
+        telegramDefaultChatId: 'shipcode',
+      }),
+      { force: true },
+    );
+    expect(invalidChat.discord.validationStatus).toBe('invalid');
+    expect(invalidChat.telegram.validationStatus).toBe('invalid');
+
+    const missingTelegramChat = await checkIntegrationStatus(
+      settings({
+        telegramEnabled: true,
+        telegramBotToken: '123456:abcdefghijklmnopqrstuvwxyz',
+        telegramDefaultChatId: '   ',
+      }),
+      { force: true },
+    );
+    expect(missingTelegramChat.telegram).toMatchObject({
+      configured: false,
+      destinationConfigured: false,
+      validationStatus: 'missing',
+      message: 'Telegram default chat ID is not configured',
+    });
+  });
+
+  it('shares in-flight integration status checks', async () => {
+    mockExec.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
+      if (typeof opts === 'function') {
+        cb = opts;
+      }
+      setTimeout(() => {
+        if (cmd.includes('which')) {
+          (cb as ExecCallback)(null, { stdout: '/usr/local/bin/tool\n', stderr: '' });
+          return;
+        }
+        if (cmd.includes('printenv OPENROUTER_API_KEY')) {
+          (cb as ExecCallback)(null, { stdout: '', stderr: '' });
+          return;
+        }
+        if (cmd.includes('gh auth status')) {
+          (cb as ExecCallback)(null, { stdout: 'Logged in to github.com account decod3r' });
+          return;
+        }
+        (cb as ExecCallback)(null, { stdout: 'Usage', stderr: '' });
+      }, 1);
+    });
+
+    const [first, second] = await Promise.all([
+      checkIntegrationStatus(settings(), { force: true }),
+      checkIntegrationStatus(settings(), { force: true }),
+    ]);
+
+    expect(second).toEqual(first);
+  });
 });
 
 describe('checkDesktopApps', () => {
+  it('reports desktop apps unavailable on non-macOS platforms', async () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux',
+    });
+
+    try {
+      const result = await checkDesktopApps();
+      expect(result.cursor).toMatchObject({
+        available: false,
+        error: 'Desktop app detection is currently macOS-only',
+      });
+      expect(result.finder.available).toBe(false);
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform,
+      });
+    }
+  });
+
+  it('detects macOS desktop app paths when platform is darwin', async () => {
+    const originalPlatform = process.platform;
+    const previousHome = process.env.HOME;
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'darwin',
+    });
+    process.env.HOME = '/Users/vincent';
+    mockAccess.mockImplementation((path: string) => {
+      if (path === '/Applications/Cursor.app') return Promise.resolve();
+      if (path === '/Users/vincent/Applications/Ghostty.app') return Promise.resolve();
+      return Promise.reject(new Error('ENOENT'));
+    });
+
+    try {
+      const result = await checkDesktopApps();
+
+      expect(result.finder).toMatchObject({
+        available: true,
+        path: '/System/Library/CoreServices/Finder.app',
+      });
+      expect(result.terminal.available).toBe(true);
+      expect(result.cursor.path).toBe('/Applications/Cursor.app');
+      expect(result.ghostty.path).toBe('/Users/vincent/Applications/Ghostty.app');
+      expect(result.vscode.available).toBe(false);
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform,
+      });
+      if (previousHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = previousHome;
+      }
+    }
+  });
+
+  it.skipIf(process.platform !== 'darwin')(
+    'detects apps installed in the user Applications folder',
+    async () => {
+      const previousHome = process.env.HOME;
+      process.env.HOME = '/Users/vincent';
+      mockAccess.mockImplementation((path: string) => {
+        if (path === '/Users/vincent/Applications/Ghostty.app') return Promise.resolve();
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      try {
+        const result = await checkDesktopApps();
+        expect(result.ghostty).toMatchObject({
+          available: true,
+          path: '/Users/vincent/Applications/Ghostty.app',
+        });
+      } finally {
+        if (previousHome === undefined) {
+          delete process.env.HOME;
+        } else {
+          process.env.HOME = previousHome;
+        }
+      }
+    },
+  );
+
   it.skipIf(process.platform !== 'darwin')(
     'detects installed desktop apps and treats Finder and Terminal as available on macOS',
     async () => {

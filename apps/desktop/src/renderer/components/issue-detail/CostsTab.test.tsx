@@ -17,7 +17,7 @@ vi.mock('../heatmap/ActivityHeatmap', () => ({
   ActivityHeatmap: () => <div data-testid="thread-activity-heatmap" />,
 }));
 
-function renderWithClient(thread: Thread | null = makeThread()) {
+function renderWithClient(thread: Thread | null = makeThread(), projectId = 'project-1') {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, refetchOnWindowFocus: false },
@@ -26,7 +26,7 @@ function renderWithClient(thread: Thread | null = makeThread()) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <CostsTab projectId="project-1" issueNumber={42} thread={thread} />
+      <CostsTab projectId={projectId} issueNumber={42} thread={thread} />
     </QueryClientProvider>,
   );
 }
@@ -205,6 +205,57 @@ describe('CostsTab', () => {
     expect(screen.getByText('No prompt telemetry yet.')).toBeInTheDocument();
   });
 
+  it('handles non-array cost responses and missing thread analytics', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'costs:list-for-issue') return { rows: [] };
+      return null;
+    });
+
+    renderWithClient(null);
+
+    expect(await screen.findByText('No cost data yet.')).toBeInTheDocument();
+    expect(screen.queryByText('Timeline')).not.toBeInTheDocument();
+  });
+
+  it('renders the analytics loading state while thread analytics are pending', async () => {
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === 'costs:list-for-issue') return Promise.resolve([]);
+      if (channel === 'pipeline-analytics:get-thread') return new Promise(() => {});
+      return Promise.resolve(null);
+    });
+
+    const { container } = renderWithClient();
+
+    expect(await screen.findByText('No cost data yet.')).toBeInTheDocument();
+    expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
+  });
+
+  it('renders fallback analytics sections when analytics arrays are omitted', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'costs:list-for-issue') return [];
+      if (channel === 'pipeline-analytics:get-thread') {
+        return {
+          threadId: 'thread-1',
+          skillFallback: {
+            totalResolutions: 0,
+            fallbackCount: 0,
+            fallbackRate: 0,
+            parseFailureRate: 0,
+            retryRate: 0,
+            downstreamSuccessRate: 0,
+            score: 0,
+          },
+        };
+      }
+      return null;
+    });
+
+    renderWithClient();
+
+    expect(await screen.findByText('No phase timing data yet.')).toBeInTheDocument();
+    expect(screen.getByText('No prompt telemetry yet.')).toBeInTheDocument();
+  });
+
   it('renders task totals, heatmap, attempts, current models, and analytics details', async () => {
     invokeMock.mockImplementation(async (channel: string) => {
       if (channel === 'costs:list-for-issue') {
@@ -270,6 +321,134 @@ describe('CostsTab', () => {
       within(screen.getByText('Skill Resolution').parentElement as HTMLElement).getByText('88'),
     ).toBeInTheDocument();
     expect(screen.getByText('explicit · fallback')).toBeInTheDocument();
+  });
+
+  it('renders sparse analytics, fallback labels, and empty step attempts', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'costs:list-for-issue') {
+        return [
+          makeTask({
+            phase: PIPELINE_PHASE.planning,
+            model: null,
+            tokensPrompt: 10,
+            tokensCompletion: 5,
+          }),
+        ];
+      }
+      if (channel === 'pipeline-steps:list-by-thread') {
+        return [
+          makeStep({
+            phase: 'custom_phase' as PipelineStepRecord['phase'],
+            provider: null,
+            resolvedModel: 'unknown-model',
+            requestedModel: null,
+            status: 'started',
+            promptTokens: 4,
+            completionTokens: 5,
+            costUsd: null,
+            durationMs: null,
+            errorKind: null,
+            errorMessage: 'Timed out',
+          }),
+          makeStep({
+            id: 'step-2',
+            provider: null,
+            resolvedModel: null,
+            requestedModel: null,
+            status: 'aborted',
+            promptTokens: null,
+            completionTokens: null,
+            durationMs: 100,
+          }),
+        ];
+      }
+      if (channel === 'pipeline-analytics:get-thread') {
+        return makeAnalytics({
+          phaseTimeline: [
+            {
+              ...makeAnalytics().phaseTimeline[0],
+              terminalStatus: null,
+              errorMessage: 'Phase failed',
+              durationMs: null,
+            },
+          ],
+          promptTelemetry: [
+            {
+              ...makeAnalytics().promptTelemetry[0],
+              phase: 'custom_phase' as PipelineThreadAnalytics['promptTelemetry'][number]['phase'],
+              attempt: null,
+              provider: null,
+              model: null,
+              promptBytes: 512,
+              selectedMaterials: null,
+              promptTokens: null,
+              costUsd: 0,
+            },
+            {
+              ...makeAnalytics().promptTelemetry[0],
+              id: 'prompt-2',
+              model: 'unknown-prompt-model',
+              promptTokens: 1500,
+              selectedMaterials: {
+                count: 0,
+                labels: [],
+                kinds: [],
+              },
+            },
+          ],
+          skillResolutions: [
+            {
+              ...makeAnalytics().skillResolutions[0],
+              id: 'skill-2',
+              fallbackUsed: false,
+              source: 'matched',
+            },
+          ],
+        });
+      }
+      return null;
+    });
+
+    renderWithClient();
+
+    expect((await screen.findAllByText('$1.50')).length).toBeGreaterThan(0);
+    expect(screen.getByText('15')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+
+    expect(await screen.findByText('custom_phase · attempt 1')).toBeInTheDocument();
+    expect(screen.getByText('unknown-model')).toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    expect(screen.getByText('9 tok')).toBeInTheDocument();
+    expect(screen.getByText('Timed out')).toBeInTheDocument();
+    expect(screen.getByText('100ms')).toBeInTheDocument();
+    expect(screen.getByText('running')).toBeInTheDocument();
+    expect(screen.getByText('Phase failed')).toBeInTheDocument();
+    expect(screen.getAllByText('Provider pending')).toHaveLength(1);
+    expect(screen.getByText('512 B')).toBeInTheDocument();
+    expect(screen.getByText('No selected material breakdown recorded.')).toBeInTheDocument();
+    expect(screen.getByText('codex · unknown-prompt-model')).toBeInTheDocument();
+    expect(screen.getByText('2k')).toBeInTheDocument();
+    expect(screen.getByText('matched')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { expanded: true }));
+
+    expect(screen.queryByText('custom_phase · attempt 1')).not.toBeInTheDocument();
+  });
+
+  it('renders no attempts when the attempts query returns a non-array response', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'costs:list-for-issue') return [makeTask()];
+      if (channel === 'pipeline-steps:list-by-thread') return { steps: [] };
+      if (channel === 'pipeline-analytics:get-thread') return makeAnalytics();
+      return null;
+    });
+
+    renderWithClient();
+
+    fireEvent.click(await screen.findByRole('button', { expanded: false }));
+
+    expect(await screen.findByText('No attempts recorded.')).toBeInTheDocument();
   });
 
   it('renders duplicate prompt material kinds once', async () => {

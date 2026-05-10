@@ -4,7 +4,7 @@ import path from 'node:path';
 const ROOT = process.cwd();
 const SEARCH_ROOTS = ['apps', 'packages'];
 const METRIC_KEYS = ['lines', 'statements', 'functions', 'branches'];
-const MIN_COVERAGE = Number(process.env.COVERAGE_MIN ?? 65);
+const MIN_COVERAGE = Number(process.env.COVERAGE_MIN ?? 85);
 
 function findCoverageSummaries() {
   const found = [];

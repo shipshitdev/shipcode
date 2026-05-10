@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   ATTENTION_REQUIRED_NOTIFICATION_KINDS,
   filterAttentionRequiredNotifications,
+  isAttentionRequiredNotification,
   isAttentionRequiredNotificationKind,
+  notificationEventFlagForKind,
 } from './notifications';
 import type { NotificationRecord } from './types';
 
@@ -34,6 +36,7 @@ describe('notifications helpers', () => {
     expect(isAttentionRequiredNotificationKind('completed')).toBe(true);
     expect(isAttentionRequiredNotificationKind('verification_exhausted')).toBe(true);
     expect(isAttentionRequiredNotificationKind('ci_blocked')).toBe(true);
+    expect(isAttentionRequiredNotification(makeNotification({ kind: 'failed' }))).toBe(true);
   });
 
   it('keeps completed notifications in attention-required lists', () => {
@@ -52,5 +55,13 @@ describe('notifications helpers', () => {
       'n4',
       'n5',
     ]);
+  });
+
+  it('maps notification kinds to event toggle keys', () => {
+    expect(notificationEventFlagForKind('approval')).toBe('approval');
+    expect(notificationEventFlagForKind('failed')).toBe('failed');
+    expect(notificationEventFlagForKind('completed')).toBe('completed');
+    expect(notificationEventFlagForKind('verification_exhausted')).toBe('verificationExhausted');
+    expect(notificationEventFlagForKind('ci_blocked')).toBe('ciBlocked');
   });
 });

@@ -48,6 +48,33 @@ Brief memory.`,
     expect(loaded).not.toContain('name: repo_memory');
   });
 
+  it('skips empty memory files', () => {
+    const repoDir = makeRepoDir();
+    const memoryDir = join(repoDir, '.agents/memory');
+    mkdirSync(memoryDir, { recursive: true });
+
+    writeFileSync(join(memoryDir, 'MEMORY.md'), '   \n');
+    writeFileSync(join(memoryDir, 'notes.md'), '# Notes\n\nUseful detail.');
+
+    const loaded = loadRepoContext(repoDir);
+
+    expect(loaded).not.toContain('## MEMORY.md');
+    expect(loaded).toContain('## notes.md');
+  });
+
+  it('sorts non-priority memory files by filename', () => {
+    const repoDir = makeRepoDir();
+    const memoryDir = join(repoDir, '.agents/memory');
+    mkdirSync(memoryDir, { recursive: true });
+
+    writeFileSync(join(memoryDir, 'zeta.md'), 'Zeta');
+    writeFileSync(join(memoryDir, 'alpha.md'), 'Alpha');
+
+    const loaded = loadRepoContext(repoDir);
+
+    expect(loaded.indexOf('## alpha.md')).toBeLessThan(loaded.indexOf('## zeta.md'));
+  });
+
   it('returns a clear fallback string when no repo memory exists', () => {
     const repoDir = makeRepoDir();
 

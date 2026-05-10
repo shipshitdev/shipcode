@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  deriveGithubIssueUrl,
   githubCompareUrl,
+  githubIssuesUrl,
   githubProjectsUrl,
   githubRepoUrl,
   parseGithubProjectUrl,
@@ -9,6 +11,14 @@ import {
 } from './github-url';
 
 describe('parseGithubRemote', () => {
+  it('returns null for missing, malformed, and incomplete remotes', () => {
+    expect(parseGithubRemote(null)).toBeNull();
+    expect(parseGithubRemote('not a remote')).toBeNull();
+    expect(parseGithubRemote('https://github.com/acme')).toBeNull();
+    expect(parseGithubRemote('https://github.com//widget')).toBeNull();
+    expect(parseGithubRemote('ssh://git@github.com')).toBeNull();
+  });
+
   it('parses scp-style GitHub remotes', () => {
     expect(parseGithubRemote('git@github.com:acme/widget.git')).toEqual({
       owner: 'acme',
@@ -32,6 +42,7 @@ describe('parseGithubRemote', () => {
 
   it('rejects non-GitHub remotes', () => {
     expect(parseGithubRemote('https://gitlab.com/acme/widget.git')).toBeNull();
+    expect(parseGithubRemote('git@gitlab.com:acme/widget.git')).toBeNull();
   });
 });
 
@@ -40,6 +51,17 @@ describe('githubRepoUrl', () => {
     expect(githubRepoUrl('https://github.com/acme/widget.git')).toBe(
       'https://github.com/acme/widget',
     );
+  });
+
+  it('builds issue list and issue detail URLs', () => {
+    expect(githubIssuesUrl('https://github.com/acme/widget.git')).toBe(
+      'https://github.com/acme/widget/issues',
+    );
+    expect(githubIssuesUrl('not-a-remote')).toBeNull();
+    expect(deriveGithubIssueUrl('git@github.com:acme/widget.git', 42)).toBe(
+      'https://github.com/acme/widget/issues/42',
+    );
+    expect(deriveGithubIssueUrl(null, 42)).toBeNull();
   });
 });
 
@@ -197,6 +219,11 @@ describe('validateGithubProjectUrl', () => {
     expect(r.ok).toBe(false);
   });
 
+  it('rejects non-numeric classic repo project number', () => {
+    const r = validateGithubProjectUrl('https://github.com/acme/repo/projects/abc');
+    expect(r).toEqual({ ok: false, reason: 'Project number must be numeric' });
+  });
+
   it('rejects project URLs with a .git-suffixed number', () => {
     const r = validateGithubProjectUrl('https://github.com/orgs/acme/projects/3.git');
     expect(r.ok).toBe(false);
@@ -263,6 +290,10 @@ describe('parseGithubProjectUrl', () => {
 
   it('returns null for http (non-https)', () => {
     expect(parseGithubProjectUrl('http://github.com/orgs/acme/projects/3')).toBeNull();
+  });
+
+  it('returns null for malformed URLs', () => {
+    expect(parseGithubProjectUrl('not a url')).toBeNull();
   });
 
   it('returns null for null, undefined, empty, and whitespace inputs', () => {

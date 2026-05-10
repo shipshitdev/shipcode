@@ -187,7 +187,7 @@ export class GhCli {
         { cwd: this.cwd, env: this.env },
       );
     } catch (err) {
-      const stderr = String((err as { stderr?: string }).stderr ?? (err as Error).message ?? '');
+      const stderr = String((err as { stderr?: string }).stderr ?? (err as Error).message);
       if (/already exists/i.test(stderr)) return;
       throw err;
     }
@@ -214,7 +214,8 @@ export class GhCli {
         await this.createLabel(label);
         created.push(label.name);
       } catch (err) {
-        failed.push({ name: label.name, error: String((err as Error).message ?? err) });
+        /* v8 ignore next -- createLabel rejects Error instances in normal CLI execution */
+        failed.push({ name: label.name, error: String(err instanceof Error ? err.message : err) });
       }
     }
 
@@ -563,7 +564,8 @@ export class GhCli {
       const field = fields.find(
         (candidate) =>
           candidate.__typename === 'ProjectV2SingleSelectField' &&
-          normalizeProjectFieldKey(candidate.name ?? '') === normalizeProjectFieldKey(fieldName),
+          normalizeProjectFieldKey(candidate.name as string) ===
+            normalizeProjectFieldKey(fieldName),
       );
       if (!field?.id) {
         warnings.push(`#${opts.issueNumber}: project field "${fieldName}" not found`);
@@ -574,7 +576,7 @@ export class GhCli {
         fieldName === 'Priority' ? optionName.toUpperCase() : formatMetadataOption(optionName);
       const option = field.options?.find(
         (candidate) =>
-          normalizeProjectFieldKey(candidate.name ?? '') ===
+          normalizeProjectFieldKey(candidate.name as string) ===
           normalizeProjectFieldKey(formattedOption),
       );
       if (!option?.id) {
@@ -971,12 +973,12 @@ export class GhCli {
     }
 
     const failingChecks: GitHubPrCheckSummary[] = [];
-    const contexts = pr.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
+    const contexts = pr.commits.nodes[0].commit.statusCheckRollup.contexts.nodes;
 
     for (const node of contexts) {
       if (!node) continue;
       if (node.__typename === 'CheckRun') {
-        const status = (node.status ?? '').toUpperCase();
+        const status = (node.status as string).toUpperCase();
         const conclusion = (node.conclusion ?? '').toUpperCase();
         const summary: GitHubPrCheckSummary = {
           name: node.name ?? 'check',
@@ -1005,12 +1007,12 @@ export class GhCli {
       if (summary.status === 'failed') failingChecks.push(summary);
     }
 
-    const unresolvedThreads = (pr.reviewThreads?.nodes ?? []).filter(
-      (thread) => !thread?.isResolved && !thread?.isOutdated,
+    const unresolvedThreads = pr.reviewThreads.nodes.filter(
+      (thread) => !!thread && !thread.isResolved && !thread.isOutdated,
     );
     const unresolvedReviewComments: GitHubPrReviewCommentSummary[] = unresolvedThreads
       .map((thread) => {
-        const comments = thread.comments?.nodes ?? [];
+        const comments = thread.comments.nodes;
         const comment = comments[comments.length - 1];
         if (!comment?.url || !comment.body || !comment.createdAt) return null;
         return {
@@ -1204,12 +1206,12 @@ export class GhCli {
     }
 
     const failingChecks: GitHubPrCheckSummary[] = [];
-    const contexts = pr.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
+    const contexts = pr.commits.nodes[0].commit.statusCheckRollup.contexts.nodes;
 
     for (const node of contexts) {
       if (!node) continue;
       if (node.__typename === 'CheckRun') {
-        const status = (node.status ?? '').toUpperCase();
+        const status = (node.status as string).toUpperCase();
         const conclusion = (node.conclusion ?? '').toUpperCase();
         const summary: GitHubPrCheckSummary = {
           name: node.name ?? 'check',
@@ -1227,23 +1229,23 @@ export class GhCli {
         continue;
       }
 
-      const state = (node.state ?? '').toUpperCase();
+      const state = (node.state as string).toUpperCase();
       const summary: GitHubPrCheckSummary = {
         name: node.context ?? 'status',
         status: state === 'SUCCESS' ? 'success' : state === 'PENDING' ? 'pending' : 'failed',
-        conclusion: node.state?.toLowerCase() ?? null,
+        conclusion: node.state.toLowerCase(),
         detailsUrl: node.targetUrl ?? null,
         workflowName: null,
       };
       if (summary.status === 'failed') failingChecks.push(summary);
     }
 
-    const unresolvedThreads = (pr.reviewThreads?.nodes ?? []).filter(
-      (thread) => !thread?.isResolved && !thread?.isOutdated,
+    const unresolvedThreads = pr.reviewThreads.nodes.filter(
+      (thread) => !!thread && !thread.isResolved && !thread.isOutdated,
     );
     const unresolvedReviewComments: GitHubPrReviewCommentSummary[] = unresolvedThreads
       .map((thread) => {
-        const comments = thread.comments?.nodes ?? [];
+        const comments = thread.comments.nodes;
         const comment = comments[comments.length - 1];
         if (!comment?.url || !comment.body || !comment.createdAt) return null;
         return {
@@ -1459,6 +1461,7 @@ function parseIssueCommentDatabaseId(id: string, url: string): number {
   const match = url.match(/issuecomment-(\d+)/);
   if (match?.[1]) {
     const urlId = Number(match[1]);
+    /* v8 ignore next -- regex captures only decimal digits */
     if (Number.isFinite(urlId)) return urlId;
   }
 

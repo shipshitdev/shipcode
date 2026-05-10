@@ -44,12 +44,14 @@ import {
   migrateV41,
   migrateV42,
   migrateV43,
+  migrateV44,
   migrateV45,
   migrateV46,
   migrateV47,
   migrateV48,
   migrateV49,
   migrateV50,
+  migrateV51,
   migrateV52,
   migrateV53,
 } from './schema';
@@ -87,6 +89,129 @@ describe('migrate', () => {
     for (const table of ['projects', 'threads', 'plans', 'reviews', 'diffs', 'settings']) {
       expect(tableExists(db, table)).toBe(true);
     }
+  });
+
+  it('skips every versioned migration when schema_version is already newer', () => {
+    db.exec(`
+      CREATE TABLE schema_version (
+        version INTEGER NOT NULL PRIMARY KEY
+      );
+      INSERT INTO schema_version (version) VALUES (999);
+    `);
+
+    for (const runMigration of [
+      migrateV2,
+      migrateV3,
+      migrateV4,
+      migrateV5,
+      migrateV6,
+      migrateV7,
+      migrateV8,
+      migrateV9,
+      migrateV10,
+      migrateV11,
+      migrateV12,
+      migrateV13,
+      migrateV14,
+      migrateV15,
+      migrateV16,
+      migrateV17,
+      migrateV18,
+      migrateV19,
+      migrateV20,
+      migrateV21,
+      migrateV22,
+      migrateV23,
+      migrateV24,
+      migrateV25,
+      migrateV26,
+      migrateV27,
+      migrateV28,
+      migrateV29,
+      migrateV30,
+      migrateV31,
+      migrateV32,
+      migrateV33,
+      migrateV34,
+      migrateV35,
+      migrateV36,
+      migrateV37,
+      migrateV38,
+      migrateV39,
+      migrateV40,
+      migrateV41,
+      migrateV42,
+      migrateV43,
+      migrateV44,
+      migrateV45,
+      migrateV46,
+      migrateV47,
+      migrateV48,
+      migrateV49,
+      migrateV50,
+      migrateV51,
+      migrateV52,
+      migrateV53,
+    ]) {
+      expect(() => runMigration(db)).not.toThrow();
+    }
+
+    expect(
+      db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get(),
+    ).toEqual({ version: 999 });
+  });
+});
+
+describe('migrateV7', () => {
+  it('throws non-duplicate ALTER errors', () => {
+    const db = new DatabaseSync(':memory:');
+    migrate(db);
+    migrateV2(db);
+    migrateV3(db);
+    migrateV4(db);
+    migrateV5(db);
+    migrateV6(db);
+    db.prepare('DROP TABLE projects').run();
+
+    expect(() => migrateV7(db)).toThrow(/no such table: projects/);
+    db.close();
+  });
+
+  it('rethrows non-Error ALTER failures', () => {
+    const fakeDb = {
+      isTransaction: true,
+      exec: (sql: string) => {
+        if (sql.includes('ALTER TABLE')) throw 'alter failed';
+      },
+      prepare: () => ({
+        get: () => undefined,
+        all: () => [],
+        run: () => ({ changes: 1 }),
+      }),
+    } as unknown as DatabaseSync;
+
+    try {
+      migrateV7(fakeDb);
+      throw new Error('Expected migrateV7 to throw');
+    } catch (err) {
+      expect(err).toBe('alter failed');
+    }
+  });
+
+  it('verifies pinned and archived columns before marking the migration applied', () => {
+    const fakeDb = {
+      isTransaction: true,
+      exec: () => undefined,
+      prepare: (sql: string) => ({
+        get: () => (sql.includes('schema_version') ? undefined : {}),
+        all: () => [{ name: 'id' }],
+        run: () => ({ changes: 1 }),
+      }),
+    } as unknown as DatabaseSync;
+
+    expect(() => migrateV7(fakeDb)).toThrow(
+      'migrateV7: projects table is missing pinned/archived columns after ALTER',
+    );
   });
 });
 

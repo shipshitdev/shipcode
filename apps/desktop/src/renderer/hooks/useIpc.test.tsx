@@ -158,6 +158,13 @@ describe('useIpc terminal scoping', () => {
     return { ...view, queryClient };
   }
 
+  it('does nothing when the preload bridge is unavailable', () => {
+    (window as typeof window & { shipcode?: typeof window.shipcode }).shipcode = undefined;
+
+    expect(() => renderHarness()).not.toThrow();
+    expect(listeners.size).toBe(0);
+  });
+
   it('ignores github issue updates for non-selected projects', () => {
     renderHarness();
 
@@ -185,6 +192,32 @@ describe('useIpc terminal scoping', () => {
     });
 
     expect(queryClient.getQueryState(['thread-panel-data', 'project-1'])?.isInvalidated).toBe(true);
+  });
+
+  it('refreshes or clears the active issue when selected project issues update', () => {
+    const refreshed = makeIssue({ id: 'issue-1', title: 'Refreshed', threadId: 'thread-new' });
+    useAppStore.setState({
+      activeIssue: currentIssue,
+      activeThreadId: 'thread-1',
+      githubIssues: [currentIssue],
+    });
+    renderHarness();
+
+    listeners.get('github:issues-updated')?.({
+      projectId: 'project-1',
+      issues: [refreshed],
+    });
+
+    expect(useAppStore.getState().activeIssue?.title).toBe('Refreshed');
+    expect(useAppStore.getState().activeThreadId).toBe('thread-new');
+
+    listeners.get('github:issues-updated')?.({
+      projectId: 'project-1',
+      issues: [],
+    });
+
+    expect(useAppStore.getState().activeIssue).toBeNull();
+    expect(useAppStore.getState().activeThreadId).toBe('thread-new');
   });
 
   it('does not retarget the terminal when a foreign project pipeline starts', async () => {
@@ -235,6 +268,72 @@ describe('useIpc terminal scoping', () => {
     });
   });
 
+  it('upserts full same-project thread records from phase lookup', async () => {
+    const fullThread = makeThread({
+      id: 'thread-100',
+      projectId: 'project-1',
+      status: 'planning',
+      automationId: 'automation-1',
+    });
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread:get') return fullThread;
+      return null;
+    });
+    const { queryClient } = renderHarness();
+    queryClient.setQueryData<ThreadPanelData>(['thread-panel-data', 'project-1'], {
+      project: null,
+      settings: DEFAULT_SETTINGS,
+      threads: [],
+      latestPlanStatusByThreadId: {},
+      branches: [],
+    });
+
+    listeners.get('pipeline:phase')?.({ phase: 'executing', threadId: 'thread-100' });
+
+    await waitFor(() => {
+      expect(useAppStore.getState().terminalVisible).toBe(true);
+      expect(useAppStore.getState().terminalThreadId).toBe('thread-100');
+    });
+    expect(
+      queryClient.getQueryData<ThreadPanelData>(['thread-panel-data', 'project-1'])?.threads,
+    ).toEqual([expect.objectContaining({ id: 'thread-100', status: 'executing' })]);
+  });
+
+  it('updates existing full thread-panel records from phase lookup', async () => {
+    const existingThread = makeThread({
+      id: 'thread-101',
+      projectId: 'project-1',
+      title: 'Old title',
+      status: 'planning',
+    });
+    const fullThread = makeThread({
+      id: 'thread-101',
+      projectId: 'project-1',
+      title: 'Refreshed title',
+      status: 'planning',
+    });
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread:get') return fullThread;
+      return null;
+    });
+    const { queryClient } = renderHarness();
+    queryClient.setQueryData<ThreadPanelData>(['thread-panel-data', 'project-1'], {
+      project: null,
+      settings: DEFAULT_SETTINGS,
+      threads: [existingThread],
+      latestPlanStatusByThreadId: {},
+      branches: [],
+    });
+
+    listeners.get('pipeline:phase')?.({ phase: 'executing', threadId: 'thread-101' });
+
+    await waitFor(() => {
+      expect(
+        queryClient.getQueryData<ThreadPanelData>(['thread-panel-data', 'project-1'])?.threads,
+      ).toEqual([expect.objectContaining({ id: 'thread-101', title: 'Refreshed title' })]);
+    });
+  });
+
   it('updates selected-project issue status locally without refetching github issues', () => {
     useAppStore.setState({
       activeThreadId: 'thread-1',
@@ -254,6 +353,38 @@ describe('useIpc terminal scoping', () => {
       'github:list-issues',
       expect.objectContaining({ projectId: 'project-1' }),
     );
+  });
+
+  it('maps idle phase back to todo and ignores focus when no project is selected', () => {
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      activeThreadId: 'thread-1',
+      activeIssue: currentIssue,
+      githubIssues: [currentIssue],
+    });
+    const { unmount } = renderHarness();
+
+    listeners.get('pipeline:phase')?.({ phase: 'idle', threadId: 'thread-1' });
+
+    expect(useAppStore.getState().githubIssues[0]?.pipelineStatus).toBe('todo');
+    expect(useAppStore.getState().activeIssue?.pipelineStatus).toBe('todo');
+
+    unmount();
+    cleanup();
+    listeners.clear();
+    useAppStore.setState({
+      activeProjectId: null,
+      activeIssue: makeIssue({ threadId: 'thread-no-project' }),
+      githubIssues: [makeIssue({ threadId: 'thread-no-project' })],
+      terminalVisible: false,
+      terminalThreadId: null,
+    });
+    renderHarness();
+
+    listeners.get('pipeline:phase')?.({ phase: 'planning', threadId: 'thread-no-project' });
+
+    expect(useAppStore.getState().terminalVisible).toBe(false);
+    expect(useAppStore.getState().terminalThreadId).toBeNull();
   });
 
   it('updates cached thread-panel data so automation cards move live', () => {
@@ -367,6 +498,22 @@ describe('useIpc terminal scoping', () => {
     expect(useAppStore.getState().currentModels['thread-terminal']).toBe('claude-sonnet-4-5');
   });
 
+  it('skips unresolved model display but still invalidates cost queries', () => {
+    const { queryClient } = renderHarness();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    listeners.get('pipeline:model-resolved')?.({
+      threadId: 'thread-1',
+      phase: 'review',
+      requestedModel: null,
+      resolvedModel: null,
+    });
+
+    expect(useAppStore.getState().currentModels['thread-1']).toBeUndefined();
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['costs-summary'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['costs-project-tasks-count'] });
+  });
+
   it('invalidates plan-history queries when phase event fires for the active thread', () => {
     useAppStore.setState({
       activeThreadId: 'thread-1',
@@ -396,6 +543,37 @@ describe('useIpc terminal scoping', () => {
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['plan-history', 'thread-1'] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['issue-plan-history'] });
+  });
+
+  it('applies review and verification events only to the active thread', () => {
+    useAppStore.setState({
+      activeThreadId: 'thread-1',
+      currentReview: null,
+      currentVerification: null,
+    });
+    renderHarness();
+
+    listeners.get('review:parsed')?.({
+      threadId: 'thread-2',
+      review: { approved: false },
+    });
+    listeners.get('verification:parsed')?.({
+      threadId: 'thread-2',
+      verification: { passed: false },
+    });
+    expect(useAppStore.getState().currentReview).toBeNull();
+    expect(useAppStore.getState().currentVerification).toBeNull();
+
+    listeners.get('review:parsed')?.({
+      threadId: 'thread-1',
+      review: { approved: true },
+    });
+    listeners.get('verification:parsed')?.({
+      threadId: 'thread-1',
+      verification: { passed: true },
+    });
+    expect(useAppStore.getState().currentReview).toEqual({ approved: true });
+    expect(useAppStore.getState().currentVerification).toEqual({ passed: true });
   });
 
   it('maps agent output to threads and throttles last-activity updates', () => {

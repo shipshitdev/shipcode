@@ -96,8 +96,7 @@ async function loadLanguage(language: BundledLanguage): Promise<Highlighter> {
   return highlighter;
 }
 
-function normalizeLanguage(value: string | undefined): BundledLanguage | 'text' {
-  if (!value) return 'text';
+function normalizeLanguage(value: string): BundledLanguage {
   const key = value.toLowerCase();
   if (key === 'ts') return 'typescript';
   if (key === 'js') return 'javascript';
@@ -107,7 +106,7 @@ function normalizeLanguage(value: string | undefined): BundledLanguage | 'text' 
 
 export function languageFromFilePath(filePath: string | undefined): BundledLanguage | 'text' {
   if (!filePath) return 'text';
-  const name = (filePath.split('/').pop() ?? filePath).toLowerCase();
+  const name = filePath.split('/').pop()!.toLowerCase();
   const exact = LANGUAGE_BY_FILENAME[name];
   if (exact) return exact;
   const extension = name.includes('.') ? name.split('.').pop() : null;

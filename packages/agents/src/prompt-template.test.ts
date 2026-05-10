@@ -50,4 +50,17 @@ describe('prompt template substitution', () => {
     expect(marked).toContain(PROMPT_TEMPLATE_SHELL_MARKER);
     expect(stripPromptTemplateShellMarkers(marked)).toBe('run !`pwd`');
   });
+
+  it('adds the global flag to custom placeholder patterns', () => {
+    const result = substitutePromptTemplateArgs(
+      'hello <<NAME>> and <<NAME>>',
+      { NAME: 'world' },
+      {
+        placeholderPattern: /<<([A-Z_]+)>>/,
+      },
+    );
+
+    expect(result.text).toBe('hello world and world');
+    expect(result.referencedKeys).toEqual(['NAME']);
+  });
 });

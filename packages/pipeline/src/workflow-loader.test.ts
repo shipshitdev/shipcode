@@ -6,6 +6,7 @@ import {
   _internals,
   DEFAULT_MAX_CONCURRENT_AGENTS,
   DEFAULT_MAX_TURNS,
+  formatUnknownError,
   loadWorkflowPolicy,
   parseWorkflowPolicy,
   resolveWorkflowPath,
@@ -69,6 +70,34 @@ describe('workflow-loader', () => {
     expect(resolveWorkflowPath(repo)).toBe(preferred);
   });
 
+  it('falls back to root WORKFLOW.md when the preferred path is missing', () => {
+    const repo = tempRepo();
+    const fallback = path.join(repo, 'WORKFLOW.md');
+    writeFileSync(fallback, 'root');
+
+    expect(resolveWorkflowPath(repo)).toBe(fallback);
+  });
+
+  it('loads a root WORKFLOW.md through the uncached loader path', () => {
+    const repo = tempRepo();
+    writeFileSync(path.join(repo, 'WORKFLOW.md'), 'Ship {{ issue.title }}');
+
+    const policy = loadWorkflowPolicy(repo);
+
+    expect(policy.path).toBe(path.join(repo, 'WORKFLOW.md'));
+    expect(policy.promptTemplate).toBe('Ship {{ issue.title }}');
+  });
+
+  it('returns a structured warning when WORKFLOW.md cannot be read', () => {
+    const repo = tempRepo();
+    mkdirSync(path.join(repo, 'WORKFLOW.md'), { recursive: true });
+
+    const policy = loadWorkflowPolicy(repo);
+
+    expect(policy.warning?.code).toBe('workflow_file_unreadable');
+    expect(policy.path).toBe(path.join(repo, 'WORKFLOW.md'));
+  });
+
   it('parses YAML front matter and trimmed prompt body', () => {
     const policy = parseWorkflowPolicy(
       `---
@@ -91,6 +120,19 @@ Plan {{ issue.title }} now.
     expect(policy.agent.maxRetryBackoffMs).toBe(45_000);
   });
 
+  it('returns null promptTemplate when front matter has no body', () => {
+    const policy = parseWorkflowPolicy(
+      `---
+agent:
+  max_concurrent_agents: 2
+---
+`,
+      '/repo/.shipcode/WORKFLOW.md',
+    );
+
+    expect(policy.promptTemplate).toBeNull();
+  });
+
   it('reports invalid YAML parse failures as structured warnings', () => {
     const policy = parseWorkflowPolicy(
       `---
@@ -103,6 +145,19 @@ body`,
 
     expect(policy.warning?.code).toBe('workflow_parse_error');
     expect(policy.promptTemplate).toBeNull();
+  });
+
+  it('formats non-Error thrown values', () => {
+    expect(formatUnknownError('plain failure')).toBe('plain failure');
+  });
+
+  it('reports missing front matter closing delimiters as structured parse warnings', () => {
+    const repo = tempRepo();
+    writeFileSync(path.join(repo, 'WORKFLOW.md'), '---\nagent:\n  max_turns: 3\nbody');
+
+    const parsed = loadWorkflowPolicy(repo);
+    expect(parsed.warning?.code).toBe('workflow_parse_error');
+    expect(parsed.warning?.message).toContain('closing --- delimiter');
   });
 
   it('reports non-map front matter as a structured warning', () => {
@@ -277,6 +332,28 @@ body`,
       );
 
       expect(policy.continuationPromptTemplate).toBeNull();
+    });
+
+    it('defaults to null when continuation_prompt is blank or non-string', () => {
+      expect(
+        parseWorkflowPolicy(
+          `---
+continuation_prompt: "   "
+---
+body`,
+          '/repo/WORKFLOW.md',
+        ).continuationPromptTemplate,
+      ).toBeNull();
+
+      expect(
+        parseWorkflowPolicy(
+          `---
+continuation_prompt: false
+---
+body`,
+          '/repo/WORKFLOW.md',
+        ).continuationPromptTemplate,
+      ).toBeNull();
     });
   });
 });

@@ -32,10 +32,12 @@ function rawAutomationDelimiter(rawPrompt: string): string {
   const base = `AUTOMATION_RAW_${hash}`;
   let delimiter = base;
   let suffix = 1;
+  /* v8 ignore start -- deterministic hash collision guard; impractical to hit without mocking crypto */
   while (rawPrompt.includes(delimiter)) {
     delimiter = `${base}_${suffix}`;
     suffix += 1;
   }
+  /* v8 ignore stop */
   return delimiter;
 }
 

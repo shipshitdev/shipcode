@@ -60,6 +60,14 @@ describe('SHIPCODE_DEFAULT_LABELS', () => {
   });
 });
 
+describe('agent routing labels', () => {
+  it('leaves unrelated labels unchanged', () => {
+    expect(isAgentRoutingLabel('enhancement')).toBe(false);
+    expect(normalizeAgentRoutingLabel('enhancement')).toBe('enhancement');
+    expect(displayAgentLabel('enhancement')).toBe('enhancement');
+  });
+});
+
 describe('SHIPCODE_PIPELINE_LABELS', () => {
   it('has at least one label', () => {
     expect(SHIPCODE_PIPELINE_LABELS.length).toBeGreaterThan(0);
@@ -109,6 +117,10 @@ describe('pipelineLabelForStatus', () => {
     expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.shipping)).toBe(
       'shipcode:pipeline:shipping',
     );
+    expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.clarifying)).toBe(
+      'shipcode:pipeline:clarifying',
+    );
+    expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.paused)).toBe('shipcode:pipeline:paused');
     expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.failed)).toBe('shipcode:pipeline:failed');
   });
 
@@ -146,6 +158,7 @@ describe('label helpers', () => {
     expect(agentLabelForExecutor('codex')).toBe('shipcode:agent:codex');
     expect(displayAgentLabel('shipcode:agent:openrouter/auto')).toBe('openrouter/auto');
     expect(displayAgentLabel('agent:codex')).toBe('codex');
+    expect(displayAgentLabel('custom')).toBe('custom');
   });
 });
 
@@ -178,5 +191,9 @@ describe('macroColumnForStatus', () => {
 
   it('maps deferred → deferred', () => {
     expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.deferred)).toBe('deferred');
+  });
+
+  it('falls back to todo for unknown statuses', () => {
+    expect(macroColumnForStatus('unknown' as never)).toBe('todo');
   });
 });

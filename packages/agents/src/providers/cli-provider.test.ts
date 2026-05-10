@@ -89,6 +89,29 @@ describe('buildClaudeArgs', () => {
     ]);
   });
 
+  it('execute phase honors explicit disallowed tool hints', () => {
+    expect(
+      buildClaudeArgs(
+        req({
+          phase: 'execute',
+          phaseHints: {
+            allowedTools: ['Read'],
+            disallowedTools: ['WebFetch'],
+          },
+        }),
+      ),
+    ).toEqual([
+      '-p',
+      '--allowedTools',
+      'Read',
+      '--disallowedTools',
+      'WebFetch',
+      '--max-thinking-tokens',
+      '32000',
+      '--dangerously-skip-permissions',
+    ]);
+  });
+
   it('maps xhigh to the highest supported Claude thinking budget', () => {
     expect(
       buildClaudeArgs(req({ phase: 'plan', phaseHints: { reasoningEffort: 'xhigh' } })),
@@ -131,6 +154,78 @@ describe('buildClaudeArgs', () => {
     expect(materializeStdinArgsForLegacySpawn(['-p', '--output-format', 'json'], 'PROMPT')).toEqual(
       ['-p', 'PROMPT', '--output-format', 'json'],
     );
+  });
+
+  it('materializes placeholder stdin forms and leaves unrelated args alone', () => {
+    expect(materializeStdinArgsForLegacySpawn(['-p', '-'], 'PROMPT')).toEqual(['-p', 'PROMPT']);
+    expect(materializeStdinArgsForLegacySpawn(['exec', '-', '--json'], 'PROMPT')).toEqual([
+      'exec',
+      'PROMPT',
+      '--json',
+    ]);
+    expect(materializeStdinArgsForLegacySpawn(['--version'], 'PROMPT')).toEqual(['--version']);
+    const args = ['-p', 'existing'];
+    expect(materializeStdinArgsForLegacySpawn(args)).toBe(args);
+  });
+
+  it('review phase supports model and explicit tool hints', () => {
+    expect(
+      buildClaudeArgs(
+        req({
+          phase: 'review',
+          modelHint: 'claude-opus-4-5',
+          phaseHints: {
+            allowedTools: ['Read'],
+            disallowedTools: ['Bash'],
+          },
+        }),
+      ),
+    ).toEqual([
+      '-p',
+      '--model',
+      'claude-opus-4-5',
+      '--output-format',
+      'json',
+      '--max-turns',
+      '1',
+      '--dangerously-skip-permissions',
+      '--disallowedTools',
+      'Bash',
+      '--allowedTools',
+      'Read',
+    ]);
+  });
+
+  it('plan phase honors model, maxTurns, and explicit allowed tools', () => {
+    expect(
+      buildClaudeArgs(
+        req({
+          phase: 'plan',
+          modelHint: 'claude-sonnet-4-6',
+          phaseHints: {
+            maxTurns: 3,
+            allowedTools: ['Read', 'Grep'],
+            disallowedTools: undefined,
+          },
+        }),
+      ),
+    ).toEqual([
+      '-p',
+      '--model',
+      'claude-sonnet-4-6',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--max-turns',
+      '3',
+      '--max-thinking-tokens',
+      '32000',
+      '--dangerously-skip-permissions',
+      '--disallowedTools',
+      'Edit,Write,Bash,NotebookEdit',
+      '--allowedTools',
+      'Read,Grep',
+    ]);
   });
 });
 
@@ -257,6 +352,30 @@ describe('buildCodexArgs', () => {
   it('keeps the Codex prompt in stdin', () => {
     expect(buildCodexStdin(req({ phase: 'review' }))).toContain('PROMPT');
   });
+
+  it('supports model hints and explicit sandbox overrides', () => {
+    expect(
+      buildCodexArgs(
+        req({
+          phase: 'execute',
+          modelHint: 'gpt-5.4',
+          phaseHints: { sandbox: 'workspace-write', reasoningEffort: 'low' },
+        }),
+      ),
+    ).toEqual([
+      '-a',
+      'never',
+      '-m',
+      'gpt-5.4',
+      '-c',
+      'model_reasoning_effort=low',
+      'exec',
+      '-',
+      '--sandbox',
+      'workspace-write',
+      '--json',
+    ]);
+  });
 });
 
 describe('buildCodexPrompt', () => {
@@ -329,6 +448,27 @@ describe('stripCodexProtocol', () => {
 
     expect(stripCodexProtocol(raw, { includeCommandOutput: true })).toBe('$ bun test\nok');
   });
+
+  it('keeps non-protocol content and failed command exit codes', () => {
+    const raw = [
+      'plain stderr',
+      JSON.stringify({ structured: true }),
+      JSON.stringify({ type: 'thread.started' }),
+      JSON.stringify({
+        item: {
+          type: 'command_execution',
+          command: 'bun test',
+          aggregated_output: '\u001b[31mfailed\u001b[0m',
+          exit_code: 1,
+        },
+      }),
+      JSON.stringify({ item: { type: 'command_execution', exit_code: 0 } }),
+    ].join('\n');
+
+    expect(stripCodexProtocol(raw)).toBe(
+      'plain stderr\n{"structured":true}\n$ bun test\nfailed\n[exit 1]',
+    );
+  });
 });
 
 // ─── Provider integration with ProcessManager ─────────────────────────
@@ -338,26 +478,37 @@ describe('stripCodexProtocol', () => {
  * trigger output/exit events synchronously. The trigger helpers
  * return a microtask flush so generate() can resolve cleanly.
  */
-function createMockProcessManager() {
+function createMockProcessManager(options: { withStdin?: boolean; killThrows?: boolean } = {}) {
   type MockListener = (...args: unknown[]) => void;
   const listeners: Record<string, MockListener[]> = {};
   let spawnCount = 0;
-  const spawnCalls: Array<{ command: string; args: string[]; cwd: string; stdin?: string }> = [];
+  const spawnCalls: Array<{
+    command: string;
+    args: string[];
+    cwd: string;
+    stdin?: string;
+    threadId?: string;
+    options?: unknown;
+  }> = [];
 
   const pm = {
-    spawn: vi.fn((_type: string, command: string, args: string[], cwd: string) => {
-      spawnCount++;
-      spawnCalls.push({ command, args, cwd });
-      return { id: `proc-${spawnCount}` };
-    }),
-    spawnWithStdin: vi.fn(
-      (_type: string, command: string, args: string[], cwd: string, stdin: string) => {
+    spawn: vi.fn(
+      (
+        _type: string,
+        command: string,
+        args: string[],
+        cwd: string,
+        threadId?: string,
+        spawnOptions?: unknown,
+      ) => {
         spawnCount++;
-        spawnCalls.push({ command, args, cwd, stdin });
+        spawnCalls.push({ command, args, cwd, threadId, options: spawnOptions });
         return { id: `proc-${spawnCount}` };
       },
     ),
-    kill: vi.fn(),
+    kill: vi.fn(() => {
+      if (options.killThrows) throw new Error('already exited');
+    }),
     on: vi.fn((event: string, handler: MockListener) => {
       const eventListeners = listeners[event] ?? [];
       eventListeners.push(handler);
@@ -366,7 +517,27 @@ function createMockProcessManager() {
     removeListener: vi.fn((event: string, handler: MockListener) => {
       listeners[event] = (listeners[event] ?? []).filter((h) => h !== handler);
     }),
-  } as unknown as ProcessManager;
+  } as unknown as ProcessManager & {
+    spawnWithStdin?: (
+      type: string,
+      command: string,
+      args: string[],
+      cwd: string,
+      stdin: string,
+      threadId?: string,
+      spawnOptions?: unknown,
+    ) => { id: string };
+  };
+
+  if (options.withStdin !== false) {
+    (pm as unknown as { spawnWithStdin: unknown }).spawnWithStdin = vi.fn(
+      (_type, command, args, cwd, stdin, threadId, spawnOptions) => {
+        spawnCount++;
+        spawnCalls.push({ command, args, cwd, stdin, threadId, options: spawnOptions });
+        return { id: `proc-${spawnCount}` };
+      },
+    );
+  }
 
   async function trigger(event: string, ...args: unknown[]) {
     const handlers = [...(listeners[event] ?? [])];
@@ -375,7 +546,12 @@ function createMockProcessManager() {
     await new Promise((r) => setImmediate(r));
   }
 
-  return { pm, trigger, spawnCalls, getSpawnCount: () => spawnCount };
+  function emitSync(event: string, ...args: unknown[]) {
+    const handlers = [...(listeners[event] ?? [])];
+    for (const h of handlers) h(...args);
+  }
+
+  return { pm, trigger, emitSync, spawnCalls, getSpawnCount: () => spawnCount };
 }
 
 describe('createClaudeCliProvider', () => {
@@ -403,6 +579,87 @@ describe('createClaudeCliProvider', () => {
     expect(result.exitCode).toBe(0);
     expect(result.rawOutput).toBe('partial output');
     expect(result.resolvedModel).toBe('claude');
+  });
+
+  it('ignores output and exit events for other process IDs', async () => {
+    const { trigger, spawnCalls, pm } = createMockProcessManager();
+    const provider = createClaudeCliProvider(pm);
+
+    const promise = provider.generate(
+      req({
+        phase: 'plan',
+        promptMaterialSummary: {
+          count: 1,
+          labels: ['issue'],
+          kinds: ['issue_prompt'],
+        },
+      }),
+    );
+    await new Promise((r) => setImmediate(r));
+
+    expect(spawnCalls).toHaveLength(1);
+    await trigger('output', 'other-proc', 'ignored');
+    await trigger('exit', 'other-proc', 99);
+    await trigger('output', 'proc-1', 'kept');
+    await trigger('exit', 'proc-1', 0);
+    await trigger('exit', 'proc-1', 127);
+
+    const result = await promise;
+    expect(result.rawOutput).toBe('kept');
+    expect(result.exitCode).toBe(0);
+    expect(result.promptTelemetry).toEqual(
+      expect.objectContaining({
+        selectedMaterials: {
+          count: 1,
+          labels: ['issue'],
+          kinds: ['issue_prompt'],
+        },
+      }),
+    );
+  });
+
+  it('falls back to legacy spawn args when spawnWithStdin is unavailable', async () => {
+    const { pm, trigger, spawnCalls } = createMockProcessManager({ withStdin: false });
+    const provider = createClaudeCliProvider(pm);
+
+    const promise = provider.generate(req({ phase: 'plan', workspaceRoot: '/tmp/proj' }));
+    await new Promise((r) => setImmediate(r));
+
+    expect(spawnCalls[0].args[1]).toBe('PROMPT');
+    expect(spawnCalls[0].stdin).toBeUndefined();
+    expect(spawnCalls[0].threadId).toBe('t1');
+    expect(spawnCalls[0].options).toEqual({ workspaceRoot: '/tmp/proj' });
+
+    await trigger('exit', 'proc-1', 0);
+    await promise;
+  });
+
+  it('surfaces synchronous spawn failures as binary_missing output', async () => {
+    const { pm } = createMockProcessManager({ withStdin: false });
+    vi.mocked(pm.spawn).mockImplementationOnce(() => {
+      throw new Error('spawn ENOENT');
+    });
+    const provider = createClaudeCliProvider(pm);
+
+    const result = await provider.generate(req({ phase: 'plan' }));
+
+    expect(result.exitCode).toBe(127);
+    expect(result.rawOutput).toBe('spawn ENOENT');
+    expect(result.providerError?.kind).toBe('binary_missing');
+  });
+
+  it('surfaces non-Error synchronous spawn failures as binary_missing output', async () => {
+    const { pm } = createMockProcessManager({ withStdin: false });
+    vi.mocked(pm.spawn).mockImplementationOnce(() => {
+      throw 'spawn failed';
+    });
+    const provider = createClaudeCliProvider(pm);
+
+    const result = await provider.generate(req({ phase: 'plan' }));
+
+    expect(result.exitCode).toBe(127);
+    expect(result.rawOutput).toBe('spawn failed');
+    expect(result.providerError?.kind).toBe('binary_missing');
   });
 
   it('surfaces exit 127 as binary_missing providerError', async () => {
@@ -440,6 +697,49 @@ describe('createClaudeCliProvider', () => {
     expect(result.providerError?.message).toBe('aborted');
   });
 
+  it('force-settles aborted processes when kill throws and no exit event arrives', async () => {
+    vi.useFakeTimers();
+    try {
+      const { pm } = createMockProcessManager({ killThrows: true });
+      const provider = createClaudeCliProvider(pm);
+      const abort = new AbortController();
+
+      const promise = provider.generate(req({ phase: 'plan', signal: abort.signal }));
+
+      abort.abort();
+      await vi.advanceTimersByTimeAsync(2000);
+
+      const result = await promise;
+      expect(result.exitCode).toBe(130);
+      expect(result.providerError?.kind).toBe('aborted');
+      expect(pm.kill).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ignores abort fallback timers after the process exits normally', async () => {
+    vi.useFakeTimers();
+    try {
+      const { pm, emitSync } = createMockProcessManager();
+      const provider = createClaudeCliProvider(pm);
+      const abort = new AbortController();
+
+      const promise = provider.generate(req({ phase: 'plan', signal: abort.signal }));
+
+      abort.abort();
+      emitSync('output', 'proc-1', 'done');
+      emitSync('exit', 'proc-1', 0);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      const result = await promise;
+      expect(result.exitCode).toBe(0);
+      expect(result.rawOutput).toBe('done');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('pre-aborted signal returns immediately without spawning', async () => {
     const { pm } = createMockProcessManager();
     const provider = createClaudeCliProvider(pm);
@@ -450,6 +750,11 @@ describe('createClaudeCliProvider', () => {
     expect(result.exitCode).toBe(130);
     expect(pm.spawn).not.toHaveBeenCalled();
     expect(pm.spawnWithStdin).not.toHaveBeenCalled();
+  });
+
+  it('reports healthy through the provider interface', async () => {
+    const { pm } = createMockProcessManager();
+    await expect(createClaudeCliProvider(pm).healthCheck()).resolves.toEqual({ ok: true });
   });
 });
 
@@ -479,6 +784,20 @@ describe('createCodexCliProvider', () => {
     const result = await promise;
     expect(result.exitCode).toBe(0);
     expect(result.resolvedModel).toBe('codex');
+  });
+
+  it('uses legacy spawn materialization for Codex stdin when needed', async () => {
+    const { pm, trigger, spawnCalls } = createMockProcessManager({ withStdin: false });
+    const provider = createCodexCliProvider(pm);
+
+    const promise = provider.generate(req({ phase: 'review' }));
+    await new Promise((r) => setImmediate(r));
+
+    expect(spawnCalls[0].args[5]).toContain('ShipCode structured-output mode');
+    expect(spawnCalls[0].stdin).toBeUndefined();
+
+    await trigger('exit', 'proc-1', 0);
+    await promise;
   });
 
   it('review phase with reasoningEffort hint sets -c model_reasoning_effort=high', async () => {
@@ -575,5 +894,76 @@ describe('createCodexCliProvider', () => {
 
     const result = await promise;
     expect(result.resolvedModel).toBe('gpt-5.4-mini');
+  });
+
+  it('surfaces codex binary missing, aborts, usage, clarification, and healthCheck', async () => {
+    const { pm, trigger } = createMockProcessManager();
+    const provider = createCodexCliProvider(pm);
+    const abort = new AbortController();
+
+    const missing = provider.generate(req({ phase: 'review' }));
+    await new Promise((r) => setImmediate(r));
+    await trigger('exit', 'proc-1', 127);
+    expect((await missing).providerError?.message).toBe('codex CLI not found on PATH');
+
+    const aborted = provider.generate(req({ phase: 'review', signal: abort.signal }));
+    await new Promise((r) => setImmediate(r));
+    abort.abort();
+    await trigger('exit', 'proc-2', 130);
+    expect((await aborted).providerError?.kind).toBe('aborted');
+
+    const withMetadata = provider.generate(req({ phase: 'review' }));
+    await new Promise((r) => setImmediate(r));
+    await trigger(
+      'output',
+      'proc-3',
+      [
+        JSON.stringify({
+          type: 'response.completed',
+          response: {
+            usage: {
+              input_tokens: 10,
+              output_tokens: 5,
+              input_token_details: { cached_tokens: 2 },
+            },
+          },
+        }),
+        JSON.stringify({
+          item: {
+            type: 'agent_message',
+            text: [
+              '```shipcode-clarification',
+              JSON.stringify({
+                id: 'clarify-1',
+                threadId: 'thread-1',
+                phase: 'plan',
+                summary: 'Need input',
+                questions: [
+                  {
+                    id: 'scope',
+                    title: 'Scope',
+                    prompt: 'Pick a scope.',
+                    description: null,
+                    choices: [
+                      { id: 'narrow', label: 'Narrow', description: 'Smallest useful version.' },
+                      { id: 'wide', label: 'Wide', description: 'Include adjacent cleanup.' },
+                    ],
+                    allowFreeform: false,
+                    freeformPlaceholder: null,
+                  },
+                ],
+              }),
+              '```',
+            ].join('\n'),
+          },
+        }),
+      ].join('\n'),
+    );
+    await trigger('exit', 'proc-3', 0);
+    const result = await withMetadata;
+    expect(result.tokensUsed).toEqual({ prompt: 10, completion: 5 });
+    expect(result.clarificationRequest?.summary).toBe('Need input');
+
+    await expect(provider.healthCheck()).resolves.toEqual({ ok: true });
   });
 });

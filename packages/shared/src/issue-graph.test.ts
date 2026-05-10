@@ -36,6 +36,11 @@ describe('normalizeIssueDependencyEdge', () => {
 });
 
 describe('parseIssueBodyDependencyEdges', () => {
+  it('returns no edges for empty bodies', () => {
+    expect(parseIssueBodyDependencyEdges(42, null)).toEqual([]);
+    expect(parseIssueBodyDependencyEdges(42, '')).toEqual([]);
+  });
+
   it('parses explicit blocks references', () => {
     expect(parseIssueBodyDependencyEdges(42, 'This blocks #7 and blocks: #8.')).toEqual([
       { sourceIssueNumber: 42, targetIssueNumber: 7, edgeType: 'blocks' },
@@ -101,5 +106,32 @@ describe('parseIssueBodyDependencyEdges', () => {
       { sourceIssueNumber: 42, targetIssueNumber: 7, edgeType: 'blocks' },
       { sourceIssueNumber: 42, targetIssueNumber: 8, edgeType: 'blocks' },
     ]);
+  });
+
+  it('falls back to single-reference patterns when dependency clauses are absent', () => {
+    expect(parseIssueBodyDependencyEdges(42, 'depends on: #7\nblocks: #8')).toEqual([
+      { sourceIssueNumber: 7, targetIssueNumber: 42, edgeType: 'depends_on' },
+      { sourceIssueNumber: 42, targetIssueNumber: 8, edgeType: 'blocks' },
+    ]);
+  });
+
+  it('sorts duplicate source and target edges by edge type', () => {
+    expect(parseIssueBodyDependencyEdges(42, 'Blocks #7. Also see #7.')).toEqual([
+      { sourceIssueNumber: 42, targetIssueNumber: 7, edgeType: 'blocks' },
+    ]);
+    expect(parseIssueBodyDependencyEdges(42, 'See #7 and #8.')).toEqual([
+      { sourceIssueNumber: 42, targetIssueNumber: 7, edgeType: 'reference' },
+      { sourceIssueNumber: 42, targetIssueNumber: 8, edgeType: 'reference' },
+    ]);
+  });
+
+  it('ignores malformed clause references and sorts mixed directional edges', () => {
+    expect(parseIssueBodyDependencyEdges(42, 'Depends on #abc and #7. Blocks #2. See #1.')).toEqual(
+      [
+        { sourceIssueNumber: 7, targetIssueNumber: 42, edgeType: 'depends_on' },
+        { sourceIssueNumber: 42, targetIssueNumber: 1, edgeType: 'reference' },
+        { sourceIssueNumber: 42, targetIssueNumber: 2, edgeType: 'blocks' },
+      ],
+    );
   });
 });

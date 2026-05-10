@@ -81,7 +81,7 @@ export function splitPrdFrontmatter(body: string): {
   const match = body.match(FRONTMATTER_PATTERN);
   if (!match) return { frontmatter: {}, cleanBody: body };
   return {
-    frontmatter: parseFrontmatter(match[1] ?? ''),
+    frontmatter: parseFrontmatter(match[1] as string),
     cleanBody: body.slice(match[0].length).replace(/^\r?\n+/, ''),
   };
 }

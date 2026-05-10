@@ -142,9 +142,8 @@ export class TaskGraphQueries {
       }
 
       for (const edge of draft.edges) {
-        const sourceNodeId = nodeIdByStableKey.get(edge.sourceStableKey);
-        const targetNodeId = nodeIdByStableKey.get(edge.targetStableKey);
-        if (!sourceNodeId || !targetNodeId) continue;
+        const sourceNodeId = nodeIdByStableKey.get(edge.sourceStableKey) as string;
+        const targetNodeId = nodeIdByStableKey.get(edge.targetStableKey) as string;
         this.db
           .prepare(
             `INSERT INTO task_edges (
@@ -269,9 +268,9 @@ export class TaskGraphQueries {
                 AND edge.edge_type IN ('depends_on', 'blocks')
                 AND source.status != 'completed'`,
           )
-          .get(node.graphId, targetNodeId) as { count: number } | undefined;
+          .get(node.graphId, targetNodeId) as { count: number };
 
-        if ((blockers?.count ?? 0) === 0) {
+        if (blockers.count === 0) {
           this.db
             .prepare(
               `UPDATE task_nodes
@@ -291,8 +290,8 @@ export class TaskGraphQueries {
             WHERE graph_id = ?
               AND status != 'completed'`,
         )
-        .get(node.graphId) as { count: number } | undefined;
-      if ((remaining?.count ?? 0) === 0) {
+        .get(node.graphId) as { count: number };
+      if (remaining.count === 0) {
         this.updateGraphStatus(node.graphId, 'completed');
       }
     });

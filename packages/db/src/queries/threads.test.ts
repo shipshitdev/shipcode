@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { AutomationQueries } from './automations';
 import { PlanQueries } from './plans';
@@ -34,6 +34,15 @@ describe('ThreadQueries', () => {
     expect(t.prompt).toBe('fix the bug');
     expect(t.title).toBe('Bug fix');
     expect(t.status).toBe('idle');
+  });
+
+  it('fails loudly when a newly inserted thread cannot be reloaded', () => {
+    const getById = vi.spyOn(threads, 'getById').mockReturnValueOnce(null);
+
+    expect(() => threads.create(projectId, 'fix the bug', 'Bug fix')).toThrow(
+      'Failed to load thread after insert',
+    );
+    getById.mockRestore();
   });
 
   it('list() returns threads for a project', () => {
@@ -79,6 +88,50 @@ describe('ThreadQueries', () => {
     expect(threads.getById(completed.id)?.archivedAt).toBeNull();
     expect(threads.getById(active.id)?.archivedAt).toBeNull();
     expect(threads.getById(manual.id)?.archivedAt).toBeNull();
+  });
+
+  it('archiveClosedAutomationRuns() returns zero when nothing matches', () => {
+    expect(threads.archiveClosedAutomationRuns(projectId)).toBe(0);
+  });
+
+  it('lists automation runs and detects active automation work', () => {
+    const automation = automations.create({
+      projectId,
+      name: 'Nightly cleanup',
+      prompt: 'clean',
+      cronExpr: '0 0 * * *',
+    });
+    const older = threads.create(projectId, 'older', 'Older automation');
+    const newer = threads.create(projectId, 'newer', 'Newer automation');
+    const completed = threads.create(projectId, 'done', 'Done automation');
+
+    threads.setAutomationId(older.id, automation.id);
+    threads.setAutomationId(newer.id, automation.id);
+    threads.setAutomationId(completed.id, automation.id);
+    threads.updateStatus(newer.id, 'executing');
+    threads.updateStatus(completed.id, 'completed');
+    db.prepare('UPDATE threads SET created_at = ? WHERE id = ?').run(
+      '2026-04-17T07:00:00.000Z',
+      older.id,
+    );
+    db.prepare('UPDATE threads SET created_at = ? WHERE id = ?').run(
+      '2026-04-17T08:00:00.000Z',
+      newer.id,
+    );
+    db.prepare('UPDATE threads SET created_at = ? WHERE id = ?').run(
+      '2026-04-17T07:30:00.000Z',
+      completed.id,
+    );
+
+    expect(threads.listByAutomationId(automation.id).map((thread) => thread.id)).toEqual([
+      newer.id,
+      completed.id,
+      older.id,
+    ]);
+    expect(threads.hasActiveForAutomation(automation.id)).toBe(true);
+
+    threads.updateStatus(newer.id, 'failed');
+    expect(threads.hasActiveForAutomation(automation.id)).toBe(false);
   });
 
   it('getById() returns thread or null', () => {
@@ -130,6 +183,37 @@ describe('ThreadQueries', () => {
     expect(resumed?.pausedAt).toBeNull();
   });
 
+  it('stores null paused phase when pausing a missing or already-paused thread', () => {
+    const t = threads.create(projectId, 'a', 'A');
+
+    threads.updateStatus(t.id, 'paused');
+    expect(threads.getById(t.id)?.pausedPhase).toBe('idle');
+    expect(() => threads.updateStatus('missing-thread', 'paused')).not.toThrow();
+  });
+
+  it('preserves existing paused phase when pausing an already paused thread', () => {
+    const t = threads.create(projectId, 'a', 'A');
+    threads.updateStatus(t.id, 'executing');
+    threads.updateStatus(t.id, 'paused', 'waiting');
+    threads.updateStatus(t.id, 'paused');
+
+    expect(threads.getById(t.id)).toMatchObject({
+      status: 'paused',
+      pausedPhase: 'executing',
+      lastError: null,
+    });
+  });
+
+  it('updateStatus() stores explicit lastError values', () => {
+    const t = threads.create(projectId, 'a', 'A');
+    threads.updateStatus(t.id, 'failed', 'Boom');
+
+    expect(threads.getById(t.id)).toMatchObject({
+      status: 'failed',
+      lastError: 'Boom',
+    });
+  });
+
   it('recordFailure() clears paused phase metadata', () => {
     const t = threads.create(projectId, 'a', 'A');
     threads.updateStatus(t.id, 'executing');
@@ -141,6 +225,33 @@ describe('ThreadQueries', () => {
     expect(failed?.status).toBe('failed');
     expect(failed?.pausedPhase).toBeNull();
     expect(failed?.pausedAt).toBeNull();
+  });
+
+  it('recordFailure() and resetFailureTracking() manage failure counters', () => {
+    const t = threads.create(projectId, 'a', 'A');
+    threads.recordFailure(t.id, 'planning');
+
+    expect(threads.getById(t.id)).toMatchObject({
+      status: 'failed',
+      failurePhase: 'planning',
+      failureCount: 1,
+      lastError: null,
+    });
+
+    threads.resetFailureTracking(t.id);
+    expect(threads.getById(t.id)).toMatchObject({
+      failurePhase: null,
+      failureCount: 0,
+    });
+  });
+
+  it('clearDoneAt() removes completion timestamps', () => {
+    const t = threads.create(projectId, 'a', 'A');
+    threads.markDone(t.id);
+    expect(threads.getById(t.id)?.doneAt).toBeTruthy();
+
+    threads.clearDoneAt(t.id);
+    expect(threads.getById(t.id)?.doneAt).toBeNull();
   });
 
   it('setWorktree() and clearWorktree()', () => {
@@ -177,6 +288,118 @@ describe('ThreadQueries', () => {
     expect(updated.executorModel).toBe('gpt-4');
     expect(updated.baseBranch).toBe('main');
     expect(updated.forkPointSha).toBe('abc123');
+  });
+
+  it('updateAutonomousFields() persists false autonomous flag', () => {
+    const t = threads.create(projectId, 'a', 'A');
+    threads.updateAutonomousFields(t.id, {
+      autonomous: false,
+      reviewRound: 1,
+      executorModel: 'claude',
+      baseBranch: 'main',
+      forkPointSha: 'def456',
+    });
+
+    expect(threads.getById(t.id)?.autonomous).toBe(false);
+  });
+
+  it('persists and clears clarification state', () => {
+    const t = threads.create(projectId, 'a', 'A');
+    const request = {
+      id: 'clarify-1',
+      threadId: t.id,
+      phase: 'plan' as const,
+      summary: 'Need scope',
+      questions: [
+        {
+          id: 'q1',
+          title: 'Scope',
+          prompt: 'Which scope?',
+          description: null,
+          choices: [
+            { id: 'small', label: 'Small', description: 'Small scope' },
+            { id: 'large', label: 'Large', description: 'Large scope' },
+          ],
+          allowFreeform: true,
+          freeformPlaceholder: null,
+        },
+      ],
+    };
+    const answers = [{ questionId: 'q1', selectedChoiceId: 'small', freeformText: null }];
+
+    threads.setClarificationRequest(t.id, request, 2);
+    expect(threads.getById(t.id)).toMatchObject({
+      clarificationRequest: request,
+      clarificationAnswers: [],
+      clarificationRound: 2,
+      answeredClarification: null,
+    });
+
+    threads.resolveClarification(t.id, request, answers);
+    expect(threads.getById(t.id)).toMatchObject({
+      clarificationRequest: null,
+      clarificationAnswers: [],
+      clarificationRound: 0,
+      answeredClarification: { request, answers },
+    });
+
+    threads.setClarificationRequest(t.id, request, 1);
+    threads.clearPendingClarification(t.id);
+    expect(threads.getById(t.id)).toMatchObject({
+      clarificationRequest: null,
+      clarificationAnswers: [],
+      clarificationRound: 0,
+    });
+
+    threads.setClarificationRequest(t.id, request, 1);
+    threads.resolveClarification(t.id, request, answers);
+    threads.clearClarification(t.id);
+    expect(threads.getById(t.id)).toMatchObject({
+      clarificationRequest: null,
+      clarificationAnswers: [],
+      answeredClarification: null,
+      clarificationRound: 0,
+    });
+  });
+
+  it('maps invalid clarification JSON to null and empty arrays', () => {
+    const t = threads.create(projectId, 'a', 'A');
+    db.prepare(
+      `UPDATE threads
+          SET clarification_request = ?,
+              clarification_answers = ?,
+              answered_clarification = ?
+        WHERE id = ?`,
+    ).run('not json', JSON.stringify([{ nope: true }]), 'not json', t.id);
+
+    expect(threads.getById(t.id)).toMatchObject({
+      clarificationRequest: null,
+      clarificationAnswers: [],
+      answeredClarification: null,
+    });
+  });
+
+  it('maps nullable defaults and blank timestamps on legacy thread rows', () => {
+    const t = threads.create(projectId, 'a', 'A');
+    db.prepare(
+      `UPDATE threads
+          SET review_round = NULL,
+              verification_retries = NULL,
+              clarification_answers = '',
+              paused_at = '',
+              created_at = '',
+              updated_at = ''
+        WHERE id = ?`,
+    ).run(t.id);
+
+    expect(threads.getById(t.id)).toMatchObject({
+      reviewRound: 0,
+      clarificationAnswers: [],
+      verificationRetries: 0,
+      pausedAt: null,
+      createdAt: null,
+      updatedAt: null,
+    });
   });
 
   it('incrementReviewRound() increments by 1', () => {
@@ -223,6 +446,10 @@ describe('ThreadQueries', () => {
       newer.id,
     ]);
     expect(threads.getAwaitingWithApprovedPlan()?.id).toBe(older.id);
+
+    plans.updateStatus(olderPlan.id, 'rejected');
+    plans.updateStatus(newerPlan.id, 'rejected');
+    expect(threads.getAwaitingWithApprovedPlan()).toBeNull();
   });
 
   it('setGithubIssue() and setGithubPr()', () => {
@@ -239,6 +466,23 @@ describe('ThreadQueries', () => {
     expect(updated).toBeTruthy();
     if (!updated) throw new Error('Expected GitHub PR thread');
     expect(updated.githubPrNumber).toBe(99);
+  });
+
+  it('setPhaseModels() stores phase provider selections', () => {
+    const t = threads.create(projectId, 'a', 'A');
+    threads.setPhaseModels(t.id, {
+      plannerModel: 'claude',
+      reviewerModel: 'codex',
+      verifierModel: 'openrouter',
+      executorModel: 'gemini',
+    });
+
+    expect(threads.getById(t.id)).toMatchObject({
+      plannerModel: 'claude',
+      reviewerModel: 'codex',
+      verifierModel: 'openrouter',
+      executorModel: 'gemini',
+    });
   });
 
   it('updateIssueContent() refreshes the stored prompt and title for a reused issue thread', () => {
@@ -264,6 +508,30 @@ describe('ThreadQueries', () => {
     const t = threads.create(projectId, 'a', 'A');
     threads.updateStatus(t.id, 'idle');
     expect(threads.hasActivePipeline(projectId)).toBe(false);
+  });
+
+  it('returns orphaned, stuck, instant, and old-thread query results', () => {
+    const active = threads.create(projectId, 'active', 'Active');
+    const instant = threads.create(projectId, 'instant', 'Instant', 'instant');
+    const oldInstant = threads.create(projectId, 'old instant', 'Old instant', 'instant');
+    const recentPipeline = threads.create(projectId, 'recent', 'Recent');
+    threads.updateStatus(active.id, 'executing');
+
+    db.prepare("UPDATE threads SET updated_at = datetime('now', '-2 hours') WHERE id = ?").run(
+      active.id,
+    );
+    db.prepare("UPDATE threads SET updated_at = datetime('now', '-10 days') WHERE id = ?").run(
+      oldInstant.id,
+    );
+
+    expect(threads.getOrphaned().map((thread) => thread.id)).toContain(active.id);
+    expect(threads.getStuck(60 * 60 * 1000).map((thread) => thread.id)).toContain(active.id);
+    expect(threads.listInstant().map((thread) => thread.id)).toEqual(
+      expect.arrayContaining([instant.id, oldInstant.id]),
+    );
+    expect(threads.deleteOlderThan('instant', 7)).toBe(1);
+    expect(threads.getById(oldInstant.id)).toBeNull();
+    expect(threads.getById(recentPipeline.id)).toBeTruthy();
   });
 
   // ─── Tier 3: telemetry columns ────────────────────────────────

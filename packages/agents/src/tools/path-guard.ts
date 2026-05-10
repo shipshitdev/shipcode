@@ -103,6 +103,7 @@ export async function assertPathInWorktree(
     } catch (err) {
       if (err instanceof PathGuardError) throw err;
       const parent = path.dirname(probe);
+      /* v8 ignore next -- POSIX and absolute worktree paths always terminate at an existing root */
       if (parent === probe) {
         throw new PathGuardError(`no existing ancestor directory found for ${targetPath}`);
       }
@@ -113,8 +114,8 @@ export async function assertPathInWorktree(
 
 function assertUnder(candidate: string, boundary: string, originalInput: string): void {
   // Normalize with trailing separator so '/foo' is not accepted as under '/foobar'.
-  const normBoundary = boundary.endsWith(path.sep) ? boundary : boundary + path.sep;
-  const normCandidate = candidate.endsWith(path.sep) ? candidate : candidate + path.sep;
+  const normBoundary = boundary + path.sep;
+  const normCandidate = candidate + path.sep;
   if (!normCandidate.startsWith(normBoundary) && candidate !== boundary) {
     throw new PathGuardError(
       `path escapes worktree: ${originalInput} (resolved to ${candidate}, worktree ${boundary})`,

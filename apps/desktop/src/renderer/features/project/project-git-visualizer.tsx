@@ -75,7 +75,7 @@ export function ProjectGitVisualizer() {
     queryFn: () =>
       window.shipcode.invoke('git:worktree-diff', {
         projectId: activeProjectId,
-        worktreePath: selectedWorktreePath ?? '',
+        worktreePath: selectedWorktreePath,
       }),
     enabled: !!activeProjectId && !!selectedWorktreePath,
     staleTime: 2_000,

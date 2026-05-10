@@ -275,6 +275,58 @@ describe('IssuesPanel undo close move', () => {
     });
   });
 
+  it('dismisses the close undo toast', async () => {
+    const originalIssue = makeIssue({ id: 'dismiss-issue', issueNumber: 44 });
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread-panel:get-data') return panelData;
+      if (channel === 'github:list-issues') return [originalIssue];
+      if (channel === 'issue:mark-done') return undefined;
+      if (channel === 'github:refresh-issues') return [{ ...originalIssue, state: 'closed' }];
+      return null;
+    });
+
+    renderWithProviders();
+
+    await screen.findByText(originalIssue.title);
+    fireEvent.click(await screen.findByRole('button', { name: 'Trigger close issue' }));
+    expect(await screen.findByText('Closed #44')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss undo' }));
+    expect(screen.queryByText('Closed #44')).not.toBeInTheDocument();
+  });
+
+  it('removes the undo toast when reopening fails', async () => {
+    const originalIssue = makeIssue({ id: 'reopen-fails', issueNumber: 45 });
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread-panel:get-data') return panelData;
+      if (channel === 'github:list-issues') return [originalIssue];
+      if (channel === 'issue:mark-done') return undefined;
+      if (channel === 'github:reopen-issue') throw new Error('reopen failed');
+      if (channel === 'github:refresh-issues') return [originalIssue];
+      return null;
+    });
+
+    renderWithProviders();
+
+    await screen.findByText(originalIssue.title);
+    fireEvent.click(await screen.findByRole('button', { name: 'Trigger close issue' }));
+    expect(await screen.findByText('Closed #45')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('github:reopen-issue', {
+        projectId: project.id,
+        issueNumber: originalIssue.issueNumber,
+      });
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Closed #45')).not.toBeInTheDocument();
+    });
+  });
+
   it('optimistically moves completed linked-PR issues into closed when the badge is clicked', async () => {
     const completedIssue = makeIssue({
       pipelineStatus: 'completed',

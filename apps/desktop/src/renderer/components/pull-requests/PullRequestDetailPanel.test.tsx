@@ -2,7 +2,7 @@
 
 import type { PullRequestDetailResponse } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../../stores/app-store';
 import { PullRequestDetailPanel } from './PullRequestDetailPanel';
@@ -118,5 +118,62 @@ describe('PullRequestDetailPanel', () => {
       ).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: 'Review' })).not.toBeInTheDocument();
+  });
+
+  it('renders failing checks, review comments, and external links', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'github:get-pr-detail') {
+        return makeDetail({
+          diffs: [],
+          failingChecks: [
+            {
+              name: 'test',
+              workflowName: 'CI',
+              status: 'completed',
+              conclusion: 'failure',
+              detailsUrl: 'https://github.com/acme/repo/actions/runs/1',
+            },
+          ],
+          unresolvedReviewCommentCount: 1,
+          unresolvedReviewComments: [
+            {
+              author: 'reviewer',
+              body: 'Needs a tighter assertion',
+              path: 'src/foo.ts',
+              line: 12,
+              url: 'https://github.com/acme/repo/pull/77#discussion_r1',
+            },
+          ],
+        });
+      }
+      return null;
+    });
+
+    const { container } = renderPanel();
+
+    expect(
+      await screen.findByText('No local execution diff is stored for this PR yet.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Failing Checks (1)')).toBeInTheDocument();
+    expect(screen.getByText('test')).toBeInTheDocument();
+    expect(screen.getByText('CI')).toBeInTheDocument();
+    expect(screen.getByText('Review Comments (1)')).toBeInTheDocument();
+    expect(screen.getByText('src/foo.ts:12')).toBeInTheDocument();
+    expect(screen.getByText('Needs a tighter assertion')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'GitHub' }));
+    for (const button of container.querySelectorAll('button.size-5')) {
+      fireEvent.click(button);
+    }
+
+    expect(invokeMock).toHaveBeenCalledWith('shell:open-external', {
+      url: 'https://github.com/acme/repo/pull/77',
+    });
+    expect(invokeMock).toHaveBeenCalledWith('shell:open-external', {
+      url: 'https://github.com/acme/repo/actions/runs/1',
+    });
+    expect(invokeMock).toHaveBeenCalledWith('shell:open-external', {
+      url: 'https://github.com/acme/repo/pull/77#discussion_r1',
+    });
   });
 });

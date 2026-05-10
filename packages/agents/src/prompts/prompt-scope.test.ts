@@ -1,5 +1,5 @@
 import type { ShipCodePlan } from '@shipcode/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { PromptMaterial } from '../prompt-scope';
 import type { SkillsRowSource } from '../skills';
 import { buildExecutionPrompt } from './execute-prompt';
@@ -107,5 +107,58 @@ describe('scoped prompt builders', () => {
     expect(prompt).not.toContain('REPO_GRAPH_SENTINEL');
     expect(prompt).toContain('PLAN_OUTPUT_SENTINEL');
     expect(prompt).toContain('TEST_CONTEXT_SENTINEL');
+  });
+
+  it('execution can build without extra scoped context', () => {
+    const prompt = buildExecutionPrompt(plan, { projectId: null }, { skills });
+
+    expect(prompt).toContain('"objective": "Ship scoped prompts"');
+    expect(prompt).not.toContain('<repo_context>');
+  });
+
+  it('execution reports invalid overrides and falls back to the bundled skill', () => {
+    const onFallback = vi.fn();
+    const onResolved = vi.fn();
+    const quarantined = vi.fn();
+    const badSkills: SkillsRowSource = {
+      get: () => ({
+        content: 'missing frontmatter',
+        baseVersion: 'bad',
+        schemaVersion: 1,
+        status: 'ok',
+      }),
+      markQuarantined: quarantined,
+    };
+
+    const prompt = buildExecutionPrompt(
+      plan,
+      { projectId: 'project-1' },
+      { skills: badSkills, onFallback, onResolved },
+    );
+
+    expect(prompt).toContain('"objective": "Ship scoped prompts"');
+    expect(onResolved).toHaveBeenCalledWith(
+      'plan-execution',
+      expect.objectContaining({ fallbackUsed: true }),
+    );
+    expect(onFallback).toHaveBeenCalledWith(
+      'plan-execution',
+      expect.objectContaining({ code: 'no_frontmatter' }),
+    );
+    expect(quarantined).toHaveBeenCalled();
+  });
+
+  it('execution appends testing and repository convention protocols when context requires them', () => {
+    const contextFiles = `CLAUDE.md\n${'Follow the local conventions. '.repeat(6)}`;
+    const prompt = buildExecutionPrompt(
+      plan,
+      { projectId: null },
+      { skills },
+      { contextFiles, testingContext: 'bun test' },
+    );
+
+    expect(prompt).toContain('<testing_protocol>');
+    expect(prompt).toContain('<context_protocol>');
+    expect(prompt).toContain('<repo_context>');
   });
 });

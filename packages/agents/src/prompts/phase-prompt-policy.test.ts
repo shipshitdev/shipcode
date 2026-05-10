@@ -8,6 +8,7 @@ import {
   PHASE_PROMPT_POLICY,
   resolvePhaseReasoningEffort,
   selectPhasePromptMaterials,
+  toPipelinePromptScope,
 } from './phase-prompt-policy';
 
 const materials: PromptMaterial[] = [
@@ -30,6 +31,7 @@ describe('phase prompt policy', () => {
       'verify',
       'execute',
     ]);
+    expect(toPipelinePromptScope('plan')).toBe(PHASE_PROMPT_POLICY.plan);
   });
 
   it.each([
@@ -63,11 +65,21 @@ describe('phase prompt policy', () => {
     }
   });
 
+  it('sorts selected same-kind materials by label', () => {
+    const selected = selectPhasePromptMaterials('plan', [
+      { kind: 'repo_file_context', label: 'z-memory', content: 'z' },
+      { kind: 'repo_file_context', label: 'a-memory', content: 'a' },
+    ]);
+
+    expect(selected.map((material) => material.label)).toEqual(['a-memory', 'z-memory']);
+  });
+
   it('applies lower-cost default reasoning only when no explicit override is provided', () => {
     expect(resolvePhaseReasoningEffort('review')).toBe('low');
     expect(resolvePhaseReasoningEffort('revision')).toBe('low');
     expect(resolvePhaseReasoningEffort('verify')).toBe('low');
     expect(resolvePhaseReasoningEffort('review', 'high')).toBe('high');
+    expect(resolvePhaseReasoningEffort('review', null)).toBe('low');
     expect(resolvePhaseReasoningEffort('execute')).toBe('medium');
   });
 });

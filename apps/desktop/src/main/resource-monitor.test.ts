@@ -117,6 +117,32 @@ describe('ResourceMonitor', () => {
     });
   });
 
+  it('allows CPU-gated tasks when sampled system CPU is below the configured threshold', () => {
+    vi.spyOn(os, 'cpus')
+      .mockReturnValueOnce(makeCpuSnapshot(100, 200))
+      .mockReturnValueOnce(makeCpuSnapshot(190, 400));
+    const processManager = {
+      listResourceUsage: vi.fn(async () => []),
+    } as unknown as ProcessManager;
+    const queries = {
+      settings: {
+        get: vi.fn(() => ({
+          ...DEFAULT_SETTINGS,
+          cpuThrottleThresholdPercent: 85,
+        })),
+      },
+    } as unknown as Queries;
+    const pipeline = { listActive: vi.fn(() => []) } as unknown as Pipeline;
+
+    const decision = new ResourceMonitor(processManager, queries, pipeline).canStartCpuTask();
+
+    expect(decision).toEqual({
+      allowed: true,
+      cpuPercent: 55,
+      thresholdPercent: 85,
+    });
+  });
+
   it('reuses the last CPU sample when the OS counter delta is not positive', () => {
     vi.spyOn(os, 'cpus')
       .mockReturnValueOnce(makeCpuSnapshot(100, 200))
@@ -133,5 +159,88 @@ describe('ResourceMonitor', () => {
 
     expect(monitor.sampleSystemCpuPercent()).toBe(50);
     expect(monitor.sampleSystemCpuPercent()).toBe(50);
+  });
+
+  it('uses fallback task metadata and default CPU threshold in snapshots', async () => {
+    vi.spyOn(os, 'cpus')
+      .mockReturnValueOnce(makeCpuSnapshot(100, 200))
+      .mockReturnValueOnce(makeCpuSnapshot(110, 400))
+      .mockReturnValueOnce(makeCpuSnapshot(110, 400));
+    const processManager = {
+      listResourceUsage: vi.fn(async () => [
+        {
+          processId: 'proc-thread',
+          type: 'claude',
+          state: 'running',
+          pid: 1234,
+          childPids: [],
+          threadId: 'thread-1',
+          cwd: '/tmp/shipcode',
+          command: 'claude',
+          cpuPercent: 10,
+          memoryBytes: 128,
+          startedAt: 1,
+          lastEventAt: 2,
+        },
+        {
+          processId: 'proc-orphan',
+          type: 'shell',
+          state: 'running',
+          pid: 4321,
+          childPids: [],
+          threadId: null,
+          cwd: '/tmp',
+          command: 'zsh',
+          cpuPercent: 5,
+          memoryBytes: 64,
+          startedAt: 3,
+          lastEventAt: 4,
+        },
+      ]),
+    } as unknown as ProcessManager;
+    const queries = {
+      settings: { get: vi.fn(() => ({ ...DEFAULT_SETTINGS, cpuThrottleThresholdPercent: null })) },
+      threads: {
+        getById: vi.fn(() => ({
+          id: 'thread-1',
+          projectId: 'missing-project',
+          title: 'Detached project task',
+          status: 'executing',
+        })),
+      },
+      projects: { getById: vi.fn(() => null) },
+    } as unknown as Queries;
+    const pipeline = { listActive: vi.fn(() => []) } as unknown as Pipeline;
+
+    const monitor = new ResourceMonitor(processManager, queries, pipeline);
+    expect(monitor.canStartCpuTask()).toEqual({
+      allowed: false,
+      reason: 'System CPU is 95% (threshold 85%)',
+      cpuPercent: 95,
+      thresholdPercent: 85,
+    });
+
+    const snapshot = await monitor.getSnapshot();
+
+    expect(snapshot.highCpu).toBe(true);
+    expect(snapshot.cpuPercent).toBe(95);
+    expect(snapshot.tasks).toEqual([
+      expect.objectContaining({
+        processId: 'proc-thread',
+        projectId: 'missing-project',
+        projectName: null,
+        threadTitle: 'Detached project task',
+        phase: 'executing',
+        highCpu: false,
+      }),
+      expect.objectContaining({
+        processId: 'proc-orphan',
+        projectId: null,
+        projectName: null,
+        threadTitle: null,
+        phase: null,
+        highCpu: false,
+      }),
+    ]);
   });
 });

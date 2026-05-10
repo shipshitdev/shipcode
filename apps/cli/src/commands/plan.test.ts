@@ -123,6 +123,28 @@ describe('planCommand', () => {
     expect(logSpy).toHaveBeenCalledWith('\nThread status: approval');
   });
 
+  it('returns before doing work when onboarding is incomplete', async () => {
+    requireOnboardingMock.mockReturnValueOnce(false);
+
+    await planCommand('42');
+
+    expect(createCliContextMock).not.toHaveBeenCalled();
+  });
+
+  it('passes null when successful routing has no model override', async () => {
+    routeFromLabelsMock.mockReturnValueOnce({ executorModel: 'codex' });
+
+    await planCommand('42');
+
+    expect(startFromGitHubIssueMock).toHaveBeenCalledWith(
+      'project-1',
+      '/repo',
+      expect.any(Object),
+      'codex',
+      { baseBranch: 'main', executorModelOverride: null },
+    );
+  });
+
   it('falls back to Claude routing when label routing returns an error', async () => {
     routeFromLabelsMock.mockReturnValueOnce({ error: 'bad label' });
 

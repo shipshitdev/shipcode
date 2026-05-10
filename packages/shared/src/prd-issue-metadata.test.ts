@@ -38,6 +38,25 @@ Demo`;
       cleanBody: '# PRD: x',
     });
   });
+
+  it('skips malformed and empty frontmatter keys', () => {
+    const raw = `---
+name: demo
+missing-separator
+: ignored
+description: value: with colon
+---
+
+# PRD`;
+
+    expect(splitPrdFrontmatter(raw)).toEqual({
+      frontmatter: {
+        name: 'demo',
+        description: 'value: with colon',
+      },
+      cleanBody: '# PRD',
+    });
+  });
 });
 
 describe('stripPrdFrontmatter', () => {
@@ -50,6 +69,10 @@ name: hello
 Hi`;
 
     expect(stripPrdFrontmatter(raw)).toBe('## Executive Summary\nHi');
+  });
+
+  it('returns the original body when frontmatter is absent', () => {
+    expect(stripPrdFrontmatter('# PRD: no-frontmatter')).toBe('# PRD: no-frontmatter');
   });
 });
 
@@ -117,6 +140,25 @@ blast_radius: Cross_App
       },
       estimatedComplexity: 'high',
       blastRadius: 'cross-app',
+    });
+  });
+
+  it('ignores unknown managed label and frontmatter values', () => {
+    const raw = `---
+estimated_complexity: massive
+blast_radius: everywhere
+---
+
+# PRD: example`;
+
+    expect(readPrdIssueMetadata(raw, ['complexity:unknown', 'blast:unknown'])).toEqual({
+      cleanBody: '# PRD: example',
+      frontmatter: {
+        estimated_complexity: 'massive',
+        blast_radius: 'everywhere',
+      },
+      estimatedComplexity: 'medium',
+      blastRadius: 'contained',
     });
   });
 });

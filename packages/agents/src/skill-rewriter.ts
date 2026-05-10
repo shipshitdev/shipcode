@@ -33,10 +33,12 @@ function delimiterFor(label: string, content: string): string {
   const base = `SHIPCODE_${label}_${hash}`.toUpperCase();
   let delimiter = base;
   let suffix = 1;
+  /* v8 ignore start -- deterministic hash collision guard; impractical to hit without mocking crypto */
   while (content.includes(delimiter)) {
     delimiter = `${base}_${suffix}`;
     suffix += 1;
   }
+  /* v8 ignore stop */
   return delimiter;
 }
 

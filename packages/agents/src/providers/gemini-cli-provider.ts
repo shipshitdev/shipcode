@@ -83,6 +83,7 @@ async function runGeminiCli(
     };
 
     const settle = (result: GeminiRunResult) => {
+      /* v8 ignore next -- listeners are removed during cleanup; guard is for event races */
       if (settled) return;
       settled = true;
       cleanup();

@@ -90,6 +90,20 @@ function projectResponse(opts: {
   });
 }
 
+function rawProjectResponse(projectV2: unknown): string {
+  return JSON.stringify({
+    data: {
+      repository: {
+        featureIssueType: { id: 'IT_feature', isEnabled: true },
+      },
+      organization: {
+        projectV2,
+      },
+      user: null,
+    },
+  });
+}
+
 describe('checkProjectReadiness', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -232,6 +246,81 @@ describe('checkProjectReadiness', () => {
     expect(report.labelSync.failed).toEqual([]);
   });
 
+  it('uses Error messages when a label already exists without stderr', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: labelsJson(SHIPCODE_DEFAULT_LABELS.slice(1).map((label) => label.name)),
+      stderr: '',
+    });
+    mockExecFileAsync
+      .mockRejectedValueOnce(new Error('label already exists'))
+      .mockResolvedValueOnce({ stdout: repoJson(), stderr: '' })
+      .mockResolvedValueOnce({ stdout: projectResponse({}), stderr: '' });
+
+    const report = await checkProjectReadiness({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+    });
+
+    expect(report.ok).toBe(true);
+    expect(report.labelSync.failed).toEqual([]);
+  });
+
+  it('records label creation failures and keeps checking the project', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: labelsJson(SHIPCODE_DEFAULT_LABELS.slice(1).map((label) => label.name)),
+      stderr: '',
+    });
+    mockExecFileAsync
+      .mockRejectedValueOnce(new Error('create failed'))
+      .mockResolvedValueOnce({ stdout: repoJson(), stderr: '' })
+      .mockResolvedValueOnce({ stdout: projectResponse({}), stderr: '' });
+
+    const report = await checkProjectReadiness({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+    });
+
+    expect(report.ok).toBe(false);
+    expect(report.labelSync.failed).toEqual([
+      { name: SHIPCODE_DEFAULT_LABELS[0]?.name, error: 'create failed' },
+    ]);
+    expect(report.items.find((item) => item.key === 'issue-type:feature')?.status).toBe('ready');
+  });
+
+  it('coerces unusual label creation failures into failed sync entries', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: labelsJson(SHIPCODE_DEFAULT_LABELS.slice(1).map((label) => label.name)),
+      stderr: '',
+    });
+    mockExecFileAsync
+      .mockRejectedValueOnce({})
+      .mockResolvedValueOnce({ stdout: repoJson(), stderr: '' })
+      .mockResolvedValueOnce({ stdout: projectResponse({}), stderr: '' });
+
+    const missingMessageReport = await checkProjectReadiness({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+    });
+
+    expect(missingMessageReport.labelSync.failed[0]?.error).toBe('[object Object]');
+
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: labelsJson(SHIPCODE_DEFAULT_LABELS.slice(1).map((label) => label.name)),
+      stderr: '',
+    });
+    mockExecFileAsync
+      .mockRejectedValueOnce('string failure')
+      .mockResolvedValueOnce({ stdout: repoJson(), stderr: '' })
+      .mockResolvedValueOnce({ stdout: projectResponse({}), stderr: '' });
+
+    const stringFailureReport = await checkProjectReadiness({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+    });
+
+    expect(stringFailureReport.labelSync.failed[0]?.error).toBe('string failure');
+  });
+
   it('captures label inspection and repo lookup failures as report items', async () => {
     const onWarn = vi.fn();
     mockExecFileAsync
@@ -257,6 +346,16 @@ describe('checkProjectReadiness', () => {
       'github-repo',
       'error',
     ]);
+
+    mockExecFileAsync
+      .mockResolvedValueOnce({ stdout: labelsJson(), stderr: '' })
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ owner: {}, name: '' }), stderr: '' });
+
+    const noProjectUrlReport = await checkProjectReadiness({
+      cwd: '/repo',
+    });
+
+    expect(noProjectUrlReport.projectUrl).toBeNull();
   });
 
   it('reports GraphQL transport and response errors', async () => {
@@ -298,6 +397,23 @@ describe('checkProjectReadiness', () => {
     expect(graphqlReport.items.find((item) => item.key === 'github-project-query')?.message).toBe(
       'GitHub returned GraphQL errors: first; second',
     );
+
+    mockExecFileAsync
+      .mockResolvedValueOnce({ stdout: labelsJson(), stderr: '' })
+      .mockResolvedValueOnce({ stdout: repoJson(), stderr: '' })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({ errors: [{}] }),
+        stderr: '',
+      });
+
+    const unknownGraphqlReport = await checkProjectReadiness({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+    });
+
+    expect(
+      unknownGraphqlReport.items.find((item) => item.key === 'github-project-query')?.message,
+    ).toBe('GitHub returned GraphQL errors: <unknown>');
   });
 
   it('supports user-owned projects and alternate status option names', async () => {
@@ -403,6 +519,187 @@ describe('checkProjectReadiness', () => {
     ).toEqual(['Medium', 'High']);
     expect(
       wrongShapeReport.items.find((item) => item.key === 'project-field:area-component')?.status,
+    ).toBe('warning');
+  });
+
+  it('reports a missing status field separately from incomplete status options', async () => {
+    mockExecFileAsync
+      .mockResolvedValueOnce({ stdout: labelsJson(), stderr: '' })
+      .mockResolvedValueOnce({ stdout: repoJson(), stderr: '' })
+      .mockResolvedValueOnce({
+        stdout: projectResponse({
+          fields: [
+            {
+              __typename: 'ProjectV2SingleSelectField',
+              name: 'Priority',
+              options: ['P0', 'P1', 'P2', 'P3'],
+            },
+            {
+              __typename: 'ProjectV2SingleSelectField',
+              name: 'Complexity',
+              options: ['Low', 'Medium', 'High'],
+            },
+            {
+              __typename: 'ProjectV2SingleSelectField',
+              name: 'Blast radius',
+              options: ['Contained', 'Cross-Package', 'Cross-App', 'Infra'],
+            },
+          ],
+        }),
+        stderr: '',
+      });
+
+    const missingStatusReport = await checkProjectReadiness({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+    });
+
+    expect(missingStatusReport.ok).toBe(false);
+    expect(
+      missingStatusReport.items.find((item) => item.key === 'project-field:status')?.message,
+    ).toBe('Add a GitHub Projects single-select field named "Status".');
+
+    mockExecFileAsync
+      .mockResolvedValueOnce({ stdout: labelsJson(), stderr: '' })
+      .mockResolvedValueOnce({ stdout: repoJson(), stderr: '' })
+      .mockResolvedValueOnce({
+        stdout: projectResponse({
+          fields: [
+            {
+              __typename: 'ProjectV2SingleSelectField',
+              name: 'Status',
+              options: ['In Progress', 'Human Review', 'Deferred'],
+            },
+            {
+              __typename: 'ProjectV2SingleSelectField',
+              name: 'Priority',
+              options: ['P0', 'P1', 'P2', 'P3'],
+            },
+            {
+              __typename: 'ProjectV2SingleSelectField',
+              name: 'Complexity',
+              options: ['Low', 'Medium', 'High'],
+            },
+            {
+              __typename: 'ProjectV2SingleSelectField',
+              name: 'Blast radius',
+              options: ['Contained', 'Cross-Package', 'Cross-App', 'Infra'],
+            },
+          ],
+        }),
+        stderr: '',
+      });
+
+    const incompleteStatusReport = await checkProjectReadiness({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+    });
+
+    const statusItem = incompleteStatusReport.items.find(
+      (item) => item.key === 'project-field:status',
+    );
+    expect(statusItem?.present).toEqual(['In Progress', 'Human Review', 'Deferred']);
+    expect(statusItem?.missing).toEqual(['Todo', 'Done']);
+  });
+
+  it('keeps the first detected done status when duplicate done-like options exist', async () => {
+    mockExecFileAsync
+      .mockResolvedValueOnce({ stdout: labelsJson(), stderr: '' })
+      .mockResolvedValueOnce({ stdout: repoJson(), stderr: '' })
+      .mockResolvedValueOnce({
+        stdout: projectResponse({
+          fields: [
+            {
+              __typename: 'ProjectV2SingleSelectField',
+              name: 'Status',
+              options: ['Todo', 'In Progress', 'Human Review', 'Done', 'Closed', 'Deferred'],
+            },
+            {
+              __typename: 'ProjectV2SingleSelectField',
+              name: 'Priority',
+              options: ['P0', 'P1', 'P2', 'P3'],
+            },
+            {
+              __typename: 'ProjectV2SingleSelectField',
+              name: 'Complexity',
+              options: ['Low', 'Medium', 'High'],
+            },
+            {
+              __typename: 'ProjectV2SingleSelectField',
+              name: 'Blast radius',
+              options: ['Contained', 'Cross-Package', 'Cross-App', 'Infra'],
+            },
+          ],
+        }),
+        stderr: '',
+      });
+
+    const report = await checkProjectReadiness({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+    });
+
+    expect(report.statusMapping?.done).toEqual({ name: 'Done', color: null });
+  });
+
+  it('handles project fields with missing options and field containers', async () => {
+    mockExecFileAsync
+      .mockResolvedValueOnce({ stdout: labelsJson(), stderr: '' })
+      .mockResolvedValueOnce({ stdout: repoJson(), stderr: '' })
+      .mockResolvedValueOnce({
+        stdout: rawProjectResponse({
+          fields: {
+            nodes: [
+              { __typename: 'ProjectV2SingleSelectField', name: 'Status' },
+              {
+                __typename: 'ProjectV2SingleSelectField',
+                name: 'Priority',
+                options: [{ id: 'p0' }],
+              },
+              {
+                __typename: 'ProjectV2SingleSelectField',
+                name: 'Complexity',
+                options: [{ id: 'low', name: 'Low' }],
+              },
+              {
+                __typename: 'ProjectV2SingleSelectField',
+                name: 'Blast radius',
+                options: [{ id: 'contained', name: 'Contained' }],
+              },
+            ],
+          },
+        }),
+        stderr: '',
+      });
+
+    const missingOptionsReport = await checkProjectReadiness({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+    });
+
+    expect(
+      missingOptionsReport.items.find((item) => item.key === 'project-field:status')?.missing,
+    ).toEqual(['Todo', 'In Progress', 'Human Review', 'Done', 'Deferred']);
+    expect(
+      missingOptionsReport.items.find((item) => item.key === 'project-field:priority')?.present,
+    ).toEqual([]);
+
+    mockExecFileAsync
+      .mockResolvedValueOnce({ stdout: labelsJson(), stderr: '' })
+      .mockResolvedValueOnce({ stdout: repoJson(), stderr: '' })
+      .mockResolvedValueOnce({ stdout: rawProjectResponse({}), stderr: '' });
+
+    const missingFieldsReport = await checkProjectReadiness({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+    });
+
+    expect(missingFieldsReport.ok).toBe(false);
+    expect(
+      missingFieldsReport.items.find((item) => item.key === 'project-field:status')?.message,
+    ).toBe('Add a GitHub Projects single-select field named "Status".');
+    expect(
+      missingFieldsReport.items.find((item) => item.key === 'project-field:area-component')?.status,
     ).toBe('warning');
   });
 });

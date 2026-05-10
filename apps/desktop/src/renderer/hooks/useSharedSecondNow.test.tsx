@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, render, screen } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSharedSecondNow } from './useSharedSecondNow';
 
@@ -44,5 +45,9 @@ describe('useSharedSecondNow', () => {
 
     second.unmount();
     expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the server snapshot for server rendering', () => {
+    expect(renderToString(<ClockHarness label="server" />)).toContain('>0</span>');
   });
 });

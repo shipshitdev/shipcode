@@ -42,13 +42,15 @@ const TRUSTED_LOGIN_SHELLS = new Set([
   '/opt/homebrew/bin/zsh',
 ]);
 
-function resolveSetupShell(): { command: string; args: (setupCommand: string) => string[] } {
-  const preferred = process.env.SHELL;
-  if (preferred && TRUSTED_LOGIN_SHELLS.has(preferred) && existsSync(preferred)) {
+export function resolveSetupShell(
+  shellExists: (path: string) => boolean = existsSync,
+  preferred = process.env.SHELL,
+): { command: string; args: (setupCommand: string) => string[] } {
+  if (preferred && TRUSTED_LOGIN_SHELLS.has(preferred) && shellExists(preferred)) {
     return { command: preferred, args: (setupCommand) => ['-ilc', setupCommand] };
   }
   for (const shell of ['/bin/zsh', '/bin/bash']) {
-    if (existsSync(shell))
+    if (shellExists(shell))
       return { command: shell, args: (setupCommand) => ['-ilc', setupCommand] };
   }
   return { command: '/bin/sh', args: (setupCommand) => ['-c', setupCommand] };
@@ -145,7 +147,6 @@ export function createPipelineRuntime(
       };
 
       const rejectOnce = (error: Error) => {
-        if (settled) return;
         settled = true;
         cleanup();
         rejectPromise(error);

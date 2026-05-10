@@ -32,4 +32,11 @@ describe('InAppNotification', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
+
+  it('renders passive default notifications without optional controls', () => {
+    render(<InAppNotification title="Background sync complete" />);
+
+    expect(screen.getByText('Background sync complete')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
 });

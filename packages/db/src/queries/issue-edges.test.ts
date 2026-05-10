@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { GitHubIssueQueries } from './github-issues';
 import { IssueEdgeQueries } from './issue-edges';
@@ -92,6 +92,49 @@ describe('IssueEdgeQueries', () => {
     expect(issueEdges.deleteEdge(created.id)).toBe(true);
     expect(issueEdges.deleteEdge(created.id)).toBe(false);
     expect(issueEdges.loadProjectGraph(projectId).edges).toEqual([]);
+  });
+
+  it('returns an existing manual edge instead of inserting a duplicate', () => {
+    const issue1 = createIssue(1);
+    const issue2 = createIssue(2);
+
+    const created = issueEdges.createManualEdge({
+      projectId,
+      sourceIssueId: issue1.id,
+      targetIssueId: issue2.id,
+      edgeType: 'blocks',
+    });
+    const duplicate = issueEdges.createManualEdge({
+      projectId,
+      sourceIssueId: issue1.id,
+      targetIssueId: issue2.id,
+      edgeType: 'blocks',
+    });
+
+    expect(duplicate.id).toBe(created.id);
+  });
+
+  it('fails loudly when a manual edge cannot be reloaded after insert', () => {
+    const issue1 = createIssue(1);
+    const issue2 = createIssue(2);
+    const getById = vi.spyOn(issueEdges as unknown as { getById: () => null }, 'getById');
+    getById.mockReturnValueOnce(null);
+
+    expect(() =>
+      issueEdges.createManualEdge({
+        projectId,
+        sourceIssueId: issue1.id,
+        targetIssueId: issue2.id,
+        edgeType: 'blocks',
+      }),
+    ).toThrow('Failed to load manual issue edge after insert');
+    getById.mockRestore();
+  });
+
+  it('returns null when an edge id is missing', () => {
+    const getById = issueEdges as unknown as { getById: (id: string) => unknown };
+
+    expect(getById.getById('missing-edge')).toBeNull();
   });
 
   it('returns a project-scoped graph with issue nodes and sorted edges', () => {

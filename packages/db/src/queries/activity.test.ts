@@ -59,6 +59,19 @@ describe('ActivityQueries', () => {
     expect(entry.metadata).toEqual({ cost: 0.05, tokens: 1200 });
   });
 
+  it('falls back to the raw timestamp when created_at is not ISO parseable', () => {
+    const entry = activity.create({
+      threadId,
+      projectId,
+      kind: 'phase_change',
+      actor: 'system',
+      title: 'Raw timestamp',
+    });
+    db.prepare(`UPDATE activity_log SET created_at = '' WHERE id = ?`).run(entry.id);
+
+    expect(activity.listByThread(threadId)[0].createdAt).toBe('');
+  });
+
   it('create() accepts null threadId and projectId', () => {
     const entry = activity.create({
       threadId: null,

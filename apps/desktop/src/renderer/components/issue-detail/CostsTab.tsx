@@ -392,7 +392,7 @@ export function CostsTab({
       queryKey: ['pipeline-analytics', 'thread', thread?.id],
       queryFn: () =>
         window.shipcode.invoke<PipelineThreadAnalytics>('pipeline-analytics:get-thread', {
-          threadId: thread?.id ?? '',
+          threadId: thread!.id,
         }),
       enabled: Boolean(thread?.id),
     });
@@ -551,7 +551,7 @@ export function CostsTab({
                         {entry.label}
                       </span>
                       <span className="truncate text-[11px] text-primary">
-                        {entry.model ? (MODEL_DISPLAY[entry.model] ?? entry.model) : null}
+                        {MODEL_DISPLAY[entry.model] ?? entry.model}
                       </span>
                     </div>
                   ))}

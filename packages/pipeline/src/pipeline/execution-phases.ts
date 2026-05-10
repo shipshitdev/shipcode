@@ -67,7 +67,10 @@ const DEFAULT_CPU_QUEUE_RETRY_MS = 5_000;
  * Uses the WORKFLOW.md continuation_prompt template if available,
  * otherwise falls back to the built-in default.
  */
-function buildContinuationPrompt(context: PipelineContext, failureReason: string): string {
+/**
+ * @knipignore
+ */
+export function buildContinuationPrompt(context: PipelineContext, failureReason: string): string {
   const template =
     context.workflowPolicy.continuationPromptTemplate ?? DEFAULT_CONTINUATION_PROMPT_TEMPLATE;
 
@@ -80,7 +83,10 @@ function buildContinuationPrompt(context: PipelineContext, failureReason: string
     .trim();
 }
 
-function normalizeFeatureQaResults(
+/**
+ * @knipignore
+ */
+export function normalizeFeatureQaResults(
   results: Array<Omit<FeatureQaResult, 'evidencePaths'> & { evidencePaths?: string[] | null }>,
 ): FeatureQaResult[] {
   return results.map((result) => ({
@@ -145,7 +151,10 @@ export function extractExecutionErrorSnippet(rawOutput: string): string {
  * last_error and notification bodies. Looks for common test failure
  * patterns across Jest, Vitest, Go test, pytest, and plain exit output.
  */
-function extractTestFailureSummary(testOutput: string): string {
+/**
+ * @knipignore
+ */
+export function extractTestFailureSummary(testOutput: string): string {
   if (!testOutput.trim()) return 'Tests failed (no output captured)';
 
   const lines = testOutput.split('\n');
@@ -174,7 +183,7 @@ function extractTestFailureSummary(testOutput: string): string {
     .slice()
     .reverse()
     .find((l) => l.trim().length > 0);
-  return (lastMeaningful ?? 'Tests failed').trim().slice(0, 280);
+  return lastMeaningful!.trim().slice(0, 280);
 }
 
 interface TestFailureFingerprint {
@@ -184,7 +193,13 @@ interface TestFailureFingerprint {
   implicatedFiles: string[];
 }
 
-function buildTestFailureFingerprint(command: string, output: string): TestFailureFingerprint {
+/**
+ * @knipignore
+ */
+export function buildTestFailureFingerprint(
+  command: string,
+  output: string,
+): TestFailureFingerprint {
   const summary = extractTestFailureSummary(output);
   const implicatedFiles = extractImplicatedFiles(`${command}\n${output}`);
   const normalizedOutput = output
@@ -216,12 +231,18 @@ function buildTestFailureFingerprint(command: string, output: string): TestFailu
   };
 }
 
-function extractImplicatedFiles(value: string): string[] {
+/**
+ * @knipignore
+ */
+export function extractImplicatedFiles(value: string): string[] {
   const matches = value.match(/[A-Za-z0-9_./-]+\.(?:test|spec)\.[cm]?[jt]sx?/g) ?? [];
   return Array.from(new Set(matches.map((file) => file.replace(/^\.\//, '')))).slice(0, 20);
 }
 
-function worktreeHasChanges(context: PipelineContext): boolean {
+/**
+ * @knipignore
+ */
+export function worktreeHasChanges(context: PipelineContext): boolean {
   const cwd = context.worktreePath ?? context.projectPath;
   try {
     const status = execFileSync('git', ['status', '--porcelain'], {

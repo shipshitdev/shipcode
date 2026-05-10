@@ -3,6 +3,7 @@
 import type { Project, SystemHealth } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import log from 'electron-log/renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
 import { HealthBanner } from './HealthBanner';
@@ -261,5 +262,74 @@ describe('system shell components', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Project settings' }));
     expect(openProjectSettingsModalMock).toHaveBeenCalledWith(project.id);
+  });
+
+  it('keeps relink success when refreshing issues after relink fails', async () => {
+    const project = makeProject({ path: '/tmp/missing-project' });
+    vi.mocked(window.shipcode.invoke).mockImplementation(
+      async (channel: string, args?: Record<string, unknown>) => {
+        if (channel === 'dialog:open-directory') return '/tmp/relinked';
+        if (channel === 'project:relink-path') {
+          return makeProject({ id: String(args?.projectId ?? project.id), path: '/tmp/relinked' });
+        }
+        if (channel === 'github:refresh-issues') throw new Error('refresh failed');
+        return undefined;
+      },
+    );
+
+    renderWithClient(<ProjectMissingView project={project} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Locate moved folder' }));
+
+    await waitFor(() => {
+      expect(window.shipcode.invoke).toHaveBeenCalledWith('github:refresh-issues', {
+        projectId: project.id,
+        force: true,
+      });
+    });
+    expect(log.error).not.toHaveBeenCalledWith(
+      '[ProjectMissingView] relink failed',
+      expect.any(Error),
+    );
+  });
+
+  it('does not relink when folder selection is cancelled', async () => {
+    vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'dialog:open-directory') return null;
+      return undefined;
+    });
+
+    renderWithClient(
+      <ProjectMissingView project={makeProject({ path: '/tmp/missing-project' })} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Locate moved folder' }));
+
+    await waitFor(() => {
+      expect(window.shipcode.invoke).toHaveBeenCalledWith('dialog:open-directory');
+    });
+    expect(window.shipcode.invoke).not.toHaveBeenCalledWith(
+      'project:relink-path',
+      expect.anything(),
+    );
+  });
+
+  it('logs relink failures from the fallback view', async () => {
+    const failure = new Error('permission denied');
+    vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'dialog:open-directory') return '/tmp/relinked';
+      if (channel === 'project:relink-path') throw failure;
+      return undefined;
+    });
+
+    renderWithClient(
+      <ProjectMissingView project={makeProject({ path: '/tmp/missing-project' })} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Locate moved folder' }));
+
+    await waitFor(() => {
+      expect(log.error).toHaveBeenCalledWith('[ProjectMissingView] relink failed', failure);
+    });
   });
 });

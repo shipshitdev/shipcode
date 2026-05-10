@@ -348,13 +348,73 @@ describe('settings leaf sections', () => {
     render(<NotificationsSettingsSection settings={DEFAULT_SETTINGS} onUpdate={onUpdate} />);
 
     fireEvent.click(screen.getByRole('switch', { name: 'Enable notifications' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'OS notifications' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Dock badge count' }));
     fireEvent.click(screen.getByRole('switch', { name: 'Play sound' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Needs approval' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Pipeline failed' }));
     fireEvent.click(screen.getByRole('switch', { name: 'CI blocked' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Pipeline completed' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Verification retries exhausted' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Chat alert: Needs approval' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Chat alert: Pipeline failed' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Chat alert: CI blocked' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Chat alert: Pipeline completed' }));
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Chat alert: Verification retries exhausted' }),
+    );
 
     expect(onUpdate).toHaveBeenCalledWith({ notificationsEnabled: false });
+    expect(onUpdate).toHaveBeenCalledWith({ notificationOsEnabled: false });
+    expect(onUpdate).toHaveBeenCalledWith({ notificationBadgeEnabled: false });
     expect(onUpdate).toHaveBeenCalledWith({ notificationSoundEnabled: false });
     expect(onUpdate).toHaveBeenCalledWith({
+      notificationEvents: { ...DEFAULT_SETTINGS.notificationEvents, approval: false },
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      notificationEvents: { ...DEFAULT_SETTINGS.notificationEvents, failed: false },
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
       notificationEvents: { ...DEFAULT_SETTINGS.notificationEvents, ciBlocked: false },
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      notificationEvents: { ...DEFAULT_SETTINGS.notificationEvents, completed: false },
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      notificationEvents: {
+        ...DEFAULT_SETTINGS.notificationEvents,
+        verificationExhausted: false,
+      },
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      chatNotificationEvents: {
+        ...DEFAULT_SETTINGS.chatNotificationEvents,
+        approval: false,
+      },
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      chatNotificationEvents: {
+        ...DEFAULT_SETTINGS.chatNotificationEvents,
+        failed: false,
+      },
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      chatNotificationEvents: {
+        ...DEFAULT_SETTINGS.chatNotificationEvents,
+        ciBlocked: false,
+      },
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      chatNotificationEvents: {
+        ...DEFAULT_SETTINGS.chatNotificationEvents,
+        completed: true,
+      },
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      chatNotificationEvents: {
+        ...DEFAULT_SETTINGS.chatNotificationEvents,
+        verificationExhausted: false,
+      },
     });
   });
 
@@ -390,6 +450,49 @@ describe('settings leaf sections', () => {
     expect(onUnarchiveIssue).toHaveBeenCalledWith('issue-2');
   });
 
+  it('renders empty archived lists and disables restore actions while pending', async () => {
+    const empty = render(
+      <ArchivedSettingsSection
+        archivedProjects={[]}
+        archivedIssues={[]}
+        unarchiveProjectPending={false}
+        unarchiveIssuePending={false}
+        onUnarchiveProject={vi.fn()}
+        onUnarchiveIssue={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('No archived projects.')).toBeInTheDocument();
+    const emptyIssuesTab = screen.getByRole('tab', { name: 'Issues' });
+    fireEvent.click(emptyIssuesTab);
+    fireEvent.keyDown(emptyIssuesTab, { key: 'Enter' });
+    await waitFor(() => {
+      expect(emptyIssuesTab).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByText('No archived issues.')).toBeInTheDocument();
+    });
+    empty.unmount();
+
+    render(
+      <ArchivedSettingsSection
+        archivedProjects={[makeProject({ id: 'project-2', name: 'Archive Me' })]}
+        archivedIssues={[makeIssue({ id: 'issue-2', issueNumber: 42, title: 'Restore issue' })]}
+        unarchiveProjectPending={true}
+        unarchiveIssuePending={true}
+        onUnarchiveProject={vi.fn()}
+        onUnarchiveIssue={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeDisabled();
+    const pendingIssuesTab = screen.getByRole('tab', { name: 'Issues' });
+    fireEvent.click(pendingIssuesTab);
+    fireEvent.keyDown(pendingIssuesTab, { key: 'Enter' });
+    await waitFor(() => {
+      expect(pendingIssuesTab).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('button', { name: 'Restore' })).toBeDisabled();
+    });
+  });
+
   it('renders integration status branches and forwards chat setting actions', async () => {
     const onUpdate = vi.fn();
     const onRefetch = vi.fn();
@@ -406,7 +509,7 @@ describe('settings leaf sections', () => {
       />,
     );
 
-    expect(screen.getByText('Loading integration status...')).toBeInTheDocument();
+    expect(screen.getByText(/Loading integration status/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Re-check' })).toBeDisabled();
 
     cleanup();

@@ -31,7 +31,7 @@ import { useAppStore } from '../stores/app-store';
 interface StatCardProps {
   label: string;
   value: string | number;
-  subtitle?: string;
+  subtitle: string;
   tone?: 'default' | 'danger' | 'success' | 'agent';
   icon?: ReactNode;
   onClick?: () => void;
@@ -64,7 +64,7 @@ function StatCard({ label, value, subtitle, tone = 'default', icon, onClick }: S
           {icon && <div style={{ color: iconColor }}>{icon}</div>}
         </div>
         <div className="mt-1 text-xs uppercase tracking-wide text-secondary">{label}</div>
-        {subtitle ? <div className="mt-2 text-[11px] text-muted-foreground">{subtitle}</div> : null}
+        <div className="mt-2 text-[11px] text-muted-foreground">{subtitle}</div>
       </CardContent>
     </Card>
   );
@@ -184,7 +184,7 @@ function useOverviewView() {
                 label: 'Agents Running',
                 value: animatedAgents,
                 subtitle: stats
-                  ? Object.entries(stats.runningByPhase ?? {})
+                  ? Object.entries(stats.runningByPhase)
                       .map(([phase, n]) => `${n} ${phase.replace(/_/g, ' ')}`)
                       .join(', ') || 'idle'
                   : '—',
@@ -304,7 +304,7 @@ function useOverviewView() {
               <StatCard
                 label="Tokens / Cost"
                 value={formatCost(analyticsCost)}
-                subtitle={`${analytics?.tokensByPhase.reduce((sum, phase) => sum + phase.promptTokens + phase.completionTokens, 0).toLocaleString() ?? 0} tokens`}
+                subtitle={`${(analytics?.tokensByPhase.reduce((sum, phase) => sum + phase.promptTokens + phase.completionTokens, 0) ?? 0).toLocaleString()} tokens`}
                 icon={<Bot size={18} />}
               />
             </div>
@@ -326,7 +326,7 @@ function useOverviewView() {
                         </TableRow>
                       </TableHeader>
                       <TableBody className="[&_tr:last-child]:border-0">
-                        {(analytics?.averagePhaseDurations ?? []).slice(0, 5).map((phase) => (
+                        {analytics?.averagePhaseDurations.slice(0, 5).map((phase) => (
                           <TableRow key={phase.phase}>
                             <TableCell>
                               <PhaseChip status={phase.phase} />
@@ -360,7 +360,7 @@ function useOverviewView() {
                         </TableRow>
                       </TableHeader>
                       <TableBody className="[&_tr:last-child]:border-0">
-                        {(analytics?.slowestRecentRuns ?? []).map((run) => (
+                        {analytics?.slowestRecentRuns.map((run) => (
                           <TableRow
                             key={run.threadId}
                             className="cursor-pointer hover:bg-hover"

@@ -3,7 +3,7 @@
 import type { TerminalEventRecord } from '@shipcode/shared';
 import { TooltipProvider } from '@shipcode/ui';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalTranscript } from './TerminalTranscript';
@@ -132,7 +132,7 @@ describe('TerminalTranscript', () => {
     ).toBeInTheDocument();
   });
 
-  it('copies the full console transcript from the transcript action', async () => {
+  it('copies assistant messages from the message action', async () => {
     renderTranscript(
       <TerminalTranscript
         events={[
@@ -143,17 +143,11 @@ describe('TerminalTranscript', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /copy console transcript/i }));
+    fireEvent.click(screen.getByRole('button', { name: /copy message/i }));
 
     const copiedText = writeText.mock.calls[0]?.[0] as string;
-    expect(copiedText).toContain('Assistant\nStep completed');
-    expect(copiedText).toContain(
-      'Bash exit 1\nError: Cannot find module ./reference-portals.service',
-    );
-    expect(copiedText).toContain('ERROR codex_core::session: failed to record rollout items');
-    expect(
-      await screen.findByRole('button', { name: /copied console transcript/i }),
-    ).toBeInTheDocument();
+    expect(copiedText).toBe('Step completed');
+    expect(await screen.findByRole('button', { name: /copied/i })).toBeInTheDocument();
   });
 
   it('can send failed console output to the embedded terminal', () => {
@@ -286,6 +280,175 @@ describe('TerminalTranscript', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('renders informational raw console output without failure actions', () => {
+    renderTranscript(
+      <TerminalTranscript
+        events={[
+          makeTextEvent({
+            id: 'event-raw-info',
+            event: { kind: 'raw', content: 'install completed successfully' },
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('install completed successfully')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /copy failure output/i })).not.toBeInTheDocument();
+  });
+
+  it('renders informational lifecycle output as plain console text', () => {
+    renderTranscript(
+      <TerminalTranscript
+        events={[
+          makeTextEvent({
+            id: 'event-lifecycle-info',
+            event: { kind: 'lifecycle', message: '\u001b[32mProcess started\u001b[0m' },
+          }),
+        ]}
+        compact
+      />,
+    );
+
+    expect(screen.getByText('Process started')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /copy failure output/i })).not.toBeInTheDocument();
+  });
+
+  it('uses compact failure actions and sending state for failed console output', () => {
+    const event = makeRawErrorEvent();
+    const onSendToTerminal = vi.fn();
+
+    renderTranscript(
+      <TerminalTranscript
+        events={[event]}
+        compact
+        onSendToTerminal={onSendToTerminal}
+        sendingToTerminalEventId={event.id}
+      />,
+    );
+
+    const sendButton = screen.getByRole('button', { name: /send failure to terminal/i });
+    expect(sendButton).toBeDisabled();
+    expect(sendButton).toHaveClass('h-5', 'w-5');
+  });
+
+  it('renders error and lifecycle error events with failure actions', async () => {
+    renderTranscript(
+      <TerminalTranscript
+        events={[
+          makeTextEvent({
+            id: 'event-error',
+            event: { kind: 'error', message: '\u001b[31mFatal build failed\u001b[0m' },
+          }),
+          makeTextEvent({
+            id: 'event-lifecycle-error',
+            event: { kind: 'lifecycle', message: 'process exited with code 2' },
+          }),
+          makeToolEndEvent({
+            id: 'event-tool-no-summary',
+            event: { kind: 'tool_end', name: 'Bash', exitCode: 2 },
+          }),
+        ]}
+        onSendToTerminal={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Fatal build failed')).toBeInTheDocument();
+    expect(screen.getByText('process exited with code 2')).toBeInTheDocument();
+    expect(screen.getByText('Exit 2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /copy failure output/i })[0]);
+    expect(writeText).toHaveBeenCalledWith('Fatal build failed');
+    expect(
+      await screen.findByRole('button', { name: /copied failure output/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('omits failure action buttons for empty error output', () => {
+    renderTranscript(
+      <TerminalTranscript
+        events={[
+          makeTextEvent({
+            id: 'event-empty-error',
+            event: { kind: 'error', message: '' },
+          }),
+        ]}
+        onAutoFix={vi.fn()}
+        onSendToTerminal={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Error')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /auto fix/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /send failure to terminal/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('clears copied state when clipboard writing fails and skips unknown events', () => {
+    writeText.mockRejectedValueOnce(new Error('blocked'));
+
+    renderTranscript(
+      <TerminalTranscript
+        events={[
+          makeRawErrorEvent(),
+          makeTextEvent({
+            id: 'event-unknown',
+            event: { kind: 'unknown_event', content: 'invisible' } as never,
+          }),
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /copy failure output/i }));
+
+    expect(writeText).toHaveBeenCalledWith(
+      'ERROR codex_core::session: failed to record rollout items',
+    );
+    expect(screen.queryByText('invisible')).not.toBeInTheDocument();
+  });
+
+  it('resets the prior copy timer when copying another failure', async () => {
+    vi.useFakeTimers();
+    try {
+      renderTranscript(
+        <TerminalTranscript
+          events={[
+            makeRawErrorEvent({ id: 'event-raw-error-1' }),
+            makeRawErrorEvent({
+              id: 'event-raw-error-2',
+              event: { kind: 'raw', content: 'Fatal: second failure' },
+            }),
+          ]}
+        />,
+      );
+
+      fireEvent.click(screen.getAllByRole('button', { name: /copy failure output/i })[0]);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(screen.getByRole('button', { name: /copied failure output/i })).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /copy failure output/i }));
+      expect(writeText).toHaveBeenLastCalledWith('Fatal: second failure');
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(screen.getByRole('button', { name: /copied failure output/i })).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(600);
+      });
+
+      expect(screen.getByRole('button', { name: /copied failure output/i })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('renders tool starts, turn summaries, completion summaries, and clarification copy', () => {
     renderTranscript(
       <TerminalTranscript
@@ -369,5 +532,26 @@ describe('TerminalTranscript', () => {
 
     expect(screen.queryByText('line 0')).not.toBeInTheDocument();
     expect(screen.getByText('line 304')).toBeInTheDocument();
+  });
+
+  it('shows a scroll-to-bottom affordance after scrolling away from the bottom', () => {
+    const { container } = renderTranscript(<TerminalTranscript events={[makeTextEvent()]} />);
+    const scrollContainer = container.firstChild?.firstChild as HTMLDivElement;
+    const scrollTo = vi.fn();
+
+    Object.defineProperties(scrollContainer, {
+      scrollHeight: { configurable: true, value: 1000 },
+      scrollTop: { configurable: true, writable: true, value: 100 },
+      clientHeight: { configurable: true, value: 200 },
+      scrollTo: { configurable: true, value: scrollTo },
+    });
+
+    fireEvent.scroll(scrollContainer);
+
+    const scrollButton = screen.getByRole('button', { name: /scroll to bottom/i });
+    fireEvent.click(scrollButton);
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
+    expect(screen.queryByRole('button', { name: /scroll to bottom/i })).not.toBeInTheDocument();
   });
 });

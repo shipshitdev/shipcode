@@ -20,7 +20,16 @@ vi.mock('electron', () => ({
 vi.mock('@shipcode/agents/source', () => ({
   inspectProjectSetup: mockInspectProjectSetup,
   ServerLifecycleManager: class {
-    start = mockLifecycleStart;
+    readonly logger: (message: string) => void;
+
+    constructor(_processManager: unknown, logger: (message: string) => void) {
+      this.logger = logger;
+    }
+
+    start = (...args: unknown[]) => {
+      this.logger('server ready\n');
+      return mockLifecycleStart(...args);
+    };
     stop = mockLifecycleStop;
   },
 }));
@@ -64,7 +73,11 @@ describe('registerFeatureQaHandlers', () => {
     handlers.clear();
     tempDir = path.join(os.tmpdir(), `shipcode-feature-qa-${Date.now()}`);
     mkdirSync(tempDir, { recursive: true });
+    vi.spyOn(console, 'info').mockImplementation(() => {});
     vi.mocked(shell.openPath).mockClear();
+    mockInspectProjectSetup.mockReset();
+    mockLifecycleStart.mockReset();
+    mockLifecycleStop.mockReset();
     mockInspectProjectSetup.mockReturnValue({
       contract: {
         runtimeQa: {
@@ -86,6 +99,36 @@ describe('registerFeatureQaHandlers', () => {
 
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true });
+    vi.restoreAllMocks();
+  });
+
+  it('lists thread results and returns the latest feature result', () => {
+    const results = [
+      {
+        featureId: 'issue-42',
+        status: 'passed',
+        summary: 'passed',
+        runAt: new Date().toISOString(),
+        evidencePaths: [],
+        flowResults: [],
+      },
+    ] satisfies FeatureQaResult[];
+    const latest = {
+      ...results[0],
+      featureId: 'feature-latest',
+    };
+    const deps = makeDeps(results);
+    vi.mocked(deps.queries.featureQaResults.latestByFeature).mockReturnValue(latest);
+
+    registerFeatureQaHandlers(deps as never);
+    const list = handlers.get('feature-qa:list-by-thread');
+    const latestByFeature = handlers.get('feature-qa:latest-by-feature');
+    if (!list || !latestByFeature) throw new Error('feature QA query handlers not registered');
+
+    expect(list(undefined, { threadId: 'thread-1' })).toBe(results);
+    expect(deps.queries.featureQaResults.listByThread).toHaveBeenCalledWith('thread-1');
+    expect(latestByFeature(undefined, { featureId: 'feature-latest' })).toBe(latest);
+    expect(deps.queries.featureQaResults.latestByFeature).toHaveBeenCalledWith('feature-latest');
   });
 
   it('opens the containing directory for attached evidence files', async () => {
@@ -161,6 +204,81 @@ describe('registerFeatureQaHandlers', () => {
     );
   });
 
+  it('collects assertion evidence paths and skips empty optional evidence lists', async () => {
+    const assertionEvidencePath = path.join(tempDir, 'assertion.png');
+    writeFileSync(assertionEvidencePath, 'png');
+    const deps = makeDeps([
+      {
+        featureId: 'issue-42',
+        status: 'failed',
+        summary: 'failed',
+        runAt: new Date().toISOString(),
+        flowResults: [
+          {
+            id: 'flow-1',
+            title: 'Flow 1',
+            status: 'failed',
+            summary: 'failed',
+            assertions: [
+              {
+                id: 'assertion-1',
+                title: 'Missing button',
+                status: 'failed',
+                message: 'button missing',
+                evidencePath: assertionEvidencePath,
+              },
+              {
+                id: 'assertion-2',
+                title: 'No evidence',
+                status: 'passed',
+                message: 'ok',
+                evidencePath: null,
+              },
+            ],
+          },
+          {
+            id: 'flow-2',
+            title: 'Flow 2',
+            status: 'passed',
+            summary: 'passed',
+          },
+        ],
+      },
+    ] as never);
+
+    registerFeatureQaHandlers(deps as never);
+    const handler = handlers.get('feature-qa:open-evidence');
+    if (!handler) throw new Error('feature-qa:open-evidence handler not registered');
+
+    await handler(undefined, { threadId: 'thread-1', path: assertionEvidencePath });
+
+    expect(shell.openPath).toHaveBeenCalledWith(tempDir);
+  });
+
+  it('rejects shell failures when opening attached evidence', async () => {
+    const evidencePath = path.join(tempDir, 'screenshot.png');
+    writeFileSync(evidencePath, 'png');
+    vi.mocked(shell.openPath).mockResolvedValueOnce('Finder refused');
+    const deps = makeDeps([
+      {
+        featureId: 'issue-42',
+        status: 'failed',
+        summary: 'failed',
+        runAt: new Date().toISOString(),
+        evidencePaths: [evidencePath],
+        flowResults: [],
+      },
+    ]);
+
+    registerFeatureQaHandlers(deps as never);
+    const handler = handlers.get('feature-qa:open-evidence');
+    if (!handler) throw new Error('feature-qa:open-evidence handler not registered');
+
+    await expect(handler(undefined, { threadId: 'thread-1', path: evidencePath })).rejects.toThrow(
+      'Finder refused',
+    );
+  });
+
   it('starts, reuses, reports, and stops a configured manual QA server', async () => {
     const deps = makeDeps([]);
     vi.mocked(deps.processManager.get).mockReturnValue({ state: 'running' });
@@ -183,6 +301,7 @@ describe('registerFeatureQaHandlers', () => {
       expect.any(AbortSignal),
       'thread-1',
     );
+    expect(console.info).toHaveBeenCalledWith('[manual-qa:thread-1] server ready');
 
     await expect(
       start(undefined, { projectId: 'project-1', threadId: 'thread-1' }),
@@ -245,5 +364,17 @@ describe('registerFeatureQaHandlers', () => {
     await expect(
       start(undefined, { projectId: 'project-1', threadId: 'thread-1' }),
     ).rejects.toThrow('Configure a Runtime QA start command');
+  });
+
+  it('treats stopping a missing manual QA server as a no-op', async () => {
+    const deps = makeDeps([]);
+
+    registerFeatureQaHandlers(deps as never);
+    const stop = handlers.get('feature-qa:stop-server');
+    if (!stop) throw new Error('manual QA stop handler not registered');
+
+    await expect(stop(undefined, { threadId: 'missing-thread' })).resolves.toBeUndefined();
+
+    expect(mockLifecycleStop).not.toHaveBeenCalled();
   });
 });

@@ -296,7 +296,7 @@ describe('project settings leaf tabs', () => {
     });
     fireEvent.blur(screen.getByLabelText('GitHub Projects board URL'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Change folder...' }));
+    fireEvent.click(screen.getByRole('button', { name: /Change folder/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Sync existing issues to board' }));
 
     expect(setNameInput).toHaveBeenCalledWith('Gateway Remastered');
@@ -698,7 +698,11 @@ describe('project settings leaf tabs', () => {
       ok: false,
       checkedAt: '2026-05-08T00:00:00.000Z',
       projectUrl: 'https://github.com/orgs/shipshitdev/projects/1',
-      labelSync: { created: [], alreadyPresent: [], failed: [] },
+      labelSync: {
+        created: [{ name: 'shipcode:agent:frontend', color: '0366d6', description: 'Frontend' }],
+        alreadyPresent: [],
+        failed: [],
+      },
       labelNames: SHIPCODE_DEFAULT_LABELS.map((label) => label.name),
       statusMapping: null,
       items: [
@@ -743,10 +747,175 @@ describe('project settings leaf tabs', () => {
     expect(await screen.findByText('Project readiness')).toBeInTheDocument();
     expect(screen.getByText('Priority')).toBeInTheDocument();
     expect(screen.getByText('P0')).toBeInTheDocument();
+    expect(screen.getByText('Created 1 missing ShipCode label.')).toBeInTheDocument();
     expect(screen.getAllByText(/issue types and Projects fields/).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Re-check' }));
     await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
+  });
+
+  it('renders detected and unmapped GitHub board status columns', async () => {
+    const readiness: ProjectReadinessReport = {
+      ok: true,
+      checkedAt: '2026-05-08T00:00:00.000Z',
+      projectUrl: 'https://github.com/orgs/shipshitdev/projects/1',
+      labelSync: { created: [], alreadyPresent: [], failed: [] },
+      labelNames: SHIPCODE_DEFAULT_LABELS.map((label) => label.name),
+      statusMapping: {
+        todo: { name: 'Todo', optionId: 'todo-id' },
+        inProgress: { name: 'In Progress', optionId: 'progress-id' },
+        humanReview: null,
+        done: { name: 'Done', optionId: 'done-id' },
+        deferred: null,
+      },
+      items: [
+        {
+          key: 'shipcode-labels',
+          kind: 'labels',
+          label: 'ShipCode labels',
+          required: true,
+          status: 'ready',
+          message: 'All ShipCode labels are present.',
+        },
+      ],
+    };
+    window.shipcode = {
+      ...window.shipcode,
+      invoke: vi.fn(async () => readiness) as typeof window.shipcode.invoke,
+    };
+
+    renderWithQueryClient(
+      <ProjectSettingsGitHubTab
+        pathExists
+        projectId="project-1"
+        isActive
+        statusMapping={null}
+        hasProjectUrl
+      />,
+    );
+
+    await waitFor(() => expect(screen.getAllByText('Todo').length).toBeGreaterThan(1));
+    expect(screen.getAllByText('In Progress').length).toBeGreaterThan(1);
+    expect(screen.getAllByText('Done').length).toBeGreaterThan(1);
+    expect(screen.getAllByText('not mapped')).toHaveLength(2);
+  });
+
+  it('renders GitHub readiness disabled, error, and label sync states', async () => {
+    const disabledInvoke = vi.fn();
+    window.shipcode = {
+      ...window.shipcode,
+      invoke: disabledInvoke as typeof window.shipcode.invoke,
+    };
+
+    const missingPath = renderWithQueryClient(
+      <ProjectSettingsGitHubTab
+        pathExists={false}
+        projectId="project-1"
+        isActive={true}
+        statusMapping={null}
+        hasProjectUrl={true}
+      />,
+    );
+
+    expect(screen.getByText(/repository folder is missing/i)).toBeInTheDocument();
+    expect(disabledInvoke).not.toHaveBeenCalled();
+    missingPath.unmount();
+
+    const inactive = renderWithQueryClient(
+      <ProjectSettingsGitHubTab
+        pathExists={true}
+        projectId="project-1"
+        isActive={false}
+        statusMapping={null}
+        hasProjectUrl={true}
+      />,
+    );
+
+    expect(screen.getByText(/Status field mapping not detected/)).toBeInTheDocument();
+    expect(disabledInvoke).not.toHaveBeenCalled();
+    inactive.unmount();
+
+    const failedReadiness: ProjectReadinessReport = {
+      ok: false,
+      checkedAt: '2026-05-08T00:00:00.000Z',
+      projectUrl: null,
+      labelSync: {
+        created: [
+          { name: 'shipcode:agent:frontend', color: '0366d6', description: 'Frontend' },
+          { name: 'shipcode:agent:backend', color: '5319e7', description: 'Backend' },
+        ],
+        alreadyPresent: [],
+        failed: [{ name: 'shipcode:agent:backend', error: 'permission denied' }],
+      },
+      labelNames: SHIPCODE_DEFAULT_LABELS.slice(0, -1).map((label) => label.name),
+      statusMapping: null,
+      items: [
+        {
+          key: 'shipcode-labels',
+          kind: 'labels',
+          label: 'ShipCode labels',
+          required: true,
+          status: 'warning',
+          message: 'Some labels were repaired.',
+          missing: ['shipcode:agent:backend'],
+        },
+        {
+          key: 'project-field:priority',
+          kind: 'project-field',
+          label: 'Priority',
+          required: false,
+          status: 'missing',
+          message: 'Optional priority metadata is missing.',
+        },
+      ],
+    };
+    window.shipcode = {
+      ...window.shipcode,
+      invoke: vi.fn(async () => failedReadiness) as typeof window.shipcode.invoke,
+    };
+
+    renderWithQueryClient(
+      <ProjectSettingsGitHubTab
+        pathExists={true}
+        projectId="project-1"
+        isActive={true}
+        statusMapping={null}
+        hasProjectUrl={false}
+      />,
+    );
+
+    expect(await screen.findByText('Some labels were repaired.')).toBeInTheDocument();
+    expect(screen.getByText('Optional priority metadata is missing.')).toBeInTheDocument();
+    expect(screen.getByText(/Set a GitHub Project URL/)).toBeInTheDocument();
+    expect(screen.getByText('Created 2 missing ShipCode labels.')).toBeInTheDocument();
+    expect(screen.getByText('Failed labels:')).toBeInTheDocument();
+    expect(screen.getByText('shipcode:agent:backend: permission denied')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sync 1 missing label' }));
+    await waitFor(() => {
+      expect(window.shipcode.invoke).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('renders GitHub readiness query failures', async () => {
+    window.shipcode = {
+      ...window.shipcode,
+      invoke: vi.fn(async () => {
+        throw new Error('readiness failed');
+      }) as typeof window.shipcode.invoke,
+    };
+
+    renderWithQueryClient(
+      <ProjectSettingsGitHubTab
+        pathExists={true}
+        projectId="project-1"
+        isActive={true}
+        statusMapping={null}
+        hasProjectUrl={true}
+      />,
+    );
+
+    expect(await screen.findAllByText('Error: readiness failed')).toHaveLength(2);
+    expect(screen.getByText(/Status field mapping not detected/)).toBeInTheDocument();
   });
 
   it('renders model preset actions and forwards the apply callback', () => {

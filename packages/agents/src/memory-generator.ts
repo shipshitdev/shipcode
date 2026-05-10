@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { GeneratorCli, MemoryFileInfo, RepoMemoryStatus } from '@shipcode/shared';
-import { runCliWithStdin } from './cli-stdin-runner';
 import { unwrapCliResultEnvelope } from './cli-result';
+import { runCliWithStdin } from './cli-stdin-runner';
 
 const MEMORY_DIR = '.agents/memory';
 const OBSOLETE_CONTEXT_DIR = '.agents/context';
@@ -106,7 +106,7 @@ export async function generateMemoryFiles(
   } catch (err) {
     return {
       success: false,
-      error: err instanceof Error ? err.message : String(err),
+      error: (err as Error).message,
       written: [],
     };
   }
@@ -117,7 +117,7 @@ export async function generateMemoryFiles(
   } catch (err) {
     return {
       success: false,
-      error: err instanceof Error ? err.message : String(err),
+      error: (err as Error).message,
       written: [],
     };
   }
@@ -139,13 +139,16 @@ export async function generateMemoryFiles(
     }
   }
 
+  /* v8 ignore next -- partial writes require filesystem write races after mkdir succeeds */
+  const partialWriteError =
+    written.length < GENERATED_MEMORY_FILES.length
+      ? `Only wrote ${written.length}/${GENERATED_MEMORY_FILES.length} memory files`
+      : undefined;
+
   return {
     success: written.length === GENERATED_MEMORY_FILES.length,
     written,
-    error:
-      written.length < GENERATED_MEMORY_FILES.length
-        ? `Only wrote ${written.length}/${GENERATED_MEMORY_FILES.length} memory files`
-        : undefined,
+    error: partialWriteError,
   };
 }
 

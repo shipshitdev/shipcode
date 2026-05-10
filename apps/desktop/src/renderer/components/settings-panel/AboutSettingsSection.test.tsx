@@ -93,5 +93,88 @@ describe('AboutSettingsSection', () => {
     await waitFor(() => {
       expect(window.shipcode.invoke).toHaveBeenCalledWith('update:check-now');
     });
+    expect(await screen.findByRole('button', { name: /up to date/i })).toBeInTheDocument();
+  });
+
+  it('renders pending and checking update states', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'developer:get-info') return MOCK_INFO;
+      if (channel === 'update:get-status') {
+        return {
+          ...MOCK_UPDATE_STATUS,
+          checkedAt: '2026-05-10T07:00:00.000Z',
+          state: 'checking',
+        } satisfies UpdateStatus;
+      }
+      return undefined;
+    });
+
+    render(<AboutSettingsSection settings={DEFAULT_SETTINGS} onUpdate={vi.fn()} />, {
+      wrapper: createWrapper(),
+    });
+
+    expect(screen.getByRole('button', { name: /check now/i })).toBeInTheDocument();
+    expect(screen.getByText(/No update check has run yet/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /checking/i })).toBeDisabled();
+    expect(screen.getByText(/Checked /i)).toBeInTheDocument();
+  });
+
+  it('renders available and failed update states from status data and events', async () => {
+    let statusListener: ((status: UpdateStatus) => void) | undefined;
+    const unsubscribe = vi.fn();
+    const availableStatus = {
+      ...MOCK_UPDATE_STATUS,
+      latest: '0.2.0',
+      hasUpdate: true,
+      checkedAt: '2026-05-10T07:10:00.000Z',
+      state: 'available',
+    } satisfies UpdateStatus;
+
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'developer:get-info') return MOCK_INFO;
+      if (channel === 'update:get-status') return availableStatus;
+      return undefined;
+    });
+    window.shipcode.on = vi.fn((channel, callback) => {
+      if (channel === 'update:status-changed') {
+        statusListener = callback as (status: UpdateStatus) => void;
+      }
+      return unsubscribe;
+    }) as unknown as typeof window.shipcode.on;
+
+    const { unmount } = render(
+      <AboutSettingsSection settings={DEFAULT_SETTINGS} onUpdate={vi.fn()} />,
+      {
+        wrapper: createWrapper(),
+      },
+    );
+
+    expect(await screen.findByRole('button', { name: /v0.2.0 available/i })).toBeInTheDocument();
+
+    statusListener?.({
+      ...MOCK_UPDATE_STATUS,
+      checkedAt: '2026-05-10T07:15:00.000Z',
+      state: 'error',
+      error: 'network down',
+    });
+
+    expect(await screen.findByRole('button', { name: /check failed/i })).toBeInTheDocument();
+    expect(screen.getByText(/Last check failed .*network down/i)).toBeInTheDocument();
+
+    unmount();
+    expect(unsubscribe).toHaveBeenCalled();
+  });
+
+  it('renders without subscribing when update status events are unavailable', async () => {
+    window.shipcode = {
+      invoke: invokeMock as unknown as typeof window.shipcode.invoke,
+      on: undefined as unknown as typeof window.shipcode.on,
+    };
+
+    render(<AboutSettingsSection settings={DEFAULT_SETTINGS} onUpdate={vi.fn()} />, {
+      wrapper: createWrapper(),
+    });
+
+    expect(await screen.findByText('0.1.0')).toBeInTheDocument();
   });
 });

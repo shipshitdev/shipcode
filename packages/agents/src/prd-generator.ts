@@ -1,6 +1,6 @@
 import type { GeneratorCli, ReasoningEffort } from '@shipcode/shared';
-import { runCliWithStdin } from './cli-stdin-runner';
 import { unwrapCliResultEnvelope } from './cli-result';
+import { runCliWithStdin } from './cli-stdin-runner';
 import {
   mapReasoningEffortToClaudeThinkingTokens,
   mapReasoningEffortToCodex,
@@ -188,9 +188,7 @@ export function extractPrd(text: string): GeneratedPrd {
     parsed = JSON.parse(captured.join('\n').trim());
   } catch (err) {
     throw new Error(
-      `Failed to parse PRD JSON inside \`${PRD_FENCE_TAG}\` block: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      `Failed to parse PRD JSON inside \`${PRD_FENCE_TAG}\` block: ${(err as Error).message}`,
     );
   }
 

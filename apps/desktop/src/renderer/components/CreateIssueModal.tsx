@@ -208,7 +208,7 @@ function buildCreateIssueDraftState({
   mode: 'create' | 'edit';
 }): CreateIssueDraftState {
   if (mode === 'edit' && editingPrd) {
-    const metadata = readPrdIssueMetadata(editingPrd.body ?? '', editingPrd.labels);
+    const metadata = readPrdIssueMetadata(editingPrd.body, editingPrd.labels);
     return {
       ...EMPTY_CREATE_ISSUE_DRAFT,
       selectedProjectId: activeProjectId,
@@ -301,14 +301,11 @@ function useCreateIssueModalView() {
   // ---------------------------------------------------------------------------
 
   const ingestFiles = useCallback(
-    async (files: File[] | string[]) => {
-      if (mode !== 'create') return;
+    async (files: File[]) => {
       setAttachmentErrors([]);
       try {
         const sessionId = await ensureSession();
-        const filePaths = files.map((f) =>
-          typeof f === 'string' ? f : (f as File & { path: string }).path,
-        );
+        const filePaths = files.map((f) => (f as File & { path: string }).path);
         const result = await window.shipcode.invoke<{
           staged: StagedPrdAttachment[];
           errors: string[];
@@ -325,12 +322,11 @@ function useCreateIssueModalView() {
         setAttachmentErrors([clampError(err)]);
       }
     },
-    [ensureSession, mode],
+    [ensureSession],
   );
 
   const handleRemoveAttachment = useCallback(async (attachment: StagedPrdAttachment) => {
-    const id = sessionIdRef.current;
-    if (!id) return;
+    const id = sessionIdRef.current!;
     try {
       await window.shipcode.invoke('prd-attachments:remove', {
         sessionId: id,
@@ -564,7 +560,6 @@ function useCreateIssueModalView() {
     } else {
       if (!derivedTitle || body.trim().length === 0) return;
     }
-    if (mode === 'create' && !derivedTitle) return;
     if (!effectiveProjectId) return;
     setSubmitting(true);
     dispatchDraft({ type: 'error', error: null });
@@ -776,13 +771,7 @@ function useCreateIssueModalView() {
                 mode === 'create' ? 'Describe what you want to build…' : 'PRD markdown...'
               }
               rows={mode === 'create' ? 5 : 14}
-              className={
-                mode === 'edit' && editBodyValid
-                  ? 'font-mono text-xs'
-                  : mode === 'edit'
-                    ? 'font-mono text-xs'
-                    : 'text-[13px]'
-              }
+              className={mode === 'edit' ? 'font-mono text-xs' : 'text-[13px]'}
               disabled={enhancing}
             />
           )}
@@ -832,11 +821,7 @@ function useCreateIssueModalView() {
               onClick={handleEnhance}
               disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
               className="self-start"
-              title={
-                hasAttachments
-                  ? 'Remove attachments before using Format (not yet supported with images)'
-                  : "Let AI structure your idea into a full PRD using this repo's writing-prds skill"
-              }
+              title="Let AI structure your idea into a full PRD using this repo's writing-prds skill"
             >
               <LoadingButtonContent loading={enhancing}>Format</LoadingButtonContent>
             </Button>

@@ -127,6 +127,20 @@ describe('GhSyncQueue', () => {
     expect(queue.size).toBe(0);
   });
 
+  it('uses console.warn as the default write-error handler', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const writeFn = vi.fn(async () => {
+      throw new Error('network timeout');
+    });
+    const queue = new GhSyncQueue(writeFn);
+
+    queue.enqueue(makeOpts());
+    await queue.drain();
+
+    expect(warn).toHaveBeenCalledWith('[gh-status-sync] queued write failed', expect.any(Error));
+    warn.mockRestore();
+  });
+
   it('queue is empty after all writes drain', async () => {
     const writeFn = vi.fn().mockResolvedValue(undefined);
     const queue = new GhSyncQueue(writeFn);
@@ -134,6 +148,52 @@ describe('GhSyncQueue', () => {
     queue.enqueue(makeOpts());
     expect(queue.size).toBe(1);
     await queue.drain();
+    expect(queue.size).toBe(0);
+  });
+
+  it('drain resolves immediately when the queue is empty', async () => {
+    const writeFn = vi.fn().mockResolvedValue(undefined);
+    const queue = new GhSyncQueue(writeFn);
+
+    await expect(queue.drain()).resolves.toBeUndefined();
+
+    expect(writeFn).not.toHaveBeenCalled();
+  });
+
+  it('handles stale queue entries without in-flight work during drain', async () => {
+    const writeFn = vi.fn().mockResolvedValue(undefined);
+    const queue = new GhSyncQueue(writeFn);
+    (
+      queue as unknown as {
+        queue: Map<string, { inflight: Promise<void> | null; pending: GhSyncWriteOpts | null }>;
+      }
+    ).queue.set('/tmp/repo:42', { inflight: null, pending: null });
+
+    await expect(queue.drain()).resolves.toBeUndefined();
+
+    expect(writeFn).not.toHaveBeenCalled();
+    expect(queue.size).toBe(1);
+  });
+
+  it('tolerates entries removed before an in-flight write finishes', async () => {
+    let release!: () => void;
+    const writeFn = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const queue = new GhSyncQueue(writeFn);
+    queue.enqueue(makeOpts());
+    (
+      queue as unknown as {
+        queue: Map<string, { inflight: Promise<void> | null; pending: GhSyncWriteOpts | null }>;
+      }
+    ).queue.delete('/tmp/repo:42');
+
+    release();
+    await queue.drain();
+
     expect(queue.size).toBe(0);
   });
 });

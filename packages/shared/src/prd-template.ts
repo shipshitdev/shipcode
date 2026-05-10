@@ -105,7 +105,7 @@ function stripFencedCodeBlocks(markdown: string): string {
 function getPrdSectionBody(body: string, section: string): string {
   const lines = body.split(/\r?\n/);
   const target = section.toLowerCase();
-  let start = -1;
+  let start = lines.length;
 
   for (let index = 0; index < lines.length; index++) {
     const match = /^#{2,3}\s+(.+)$/.exec(lines[index]);
@@ -114,8 +114,6 @@ function getPrdSectionBody(body: string, section: string): string {
       break;
     }
   }
-
-  if (start === -1) return '';
 
   const sectionLines: string[] = [];
   for (let index = start; index < lines.length; index++) {

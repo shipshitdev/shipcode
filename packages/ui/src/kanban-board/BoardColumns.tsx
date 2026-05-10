@@ -27,24 +27,21 @@ import {
 } from './utils';
 
 const SECTION_HEADER_CLASS: Record<RowTone, string> = {
-  default: 'border-border/60 bg-secondary text-secondary',
-  success:
-    'border-success/20 bg-[color-mix(in_srgb,var(--success)_18%,var(--bg-secondary))] text-success',
-  done: 'border-done/20 bg-[color-mix(in_srgb,var(--done)_18%,var(--bg-secondary))] text-done',
-  agent: 'border-agent/20 bg-[color-mix(in_srgb,var(--agent)_18%,var(--bg-secondary))] text-agent',
-  danger:
-    'border-danger/20 bg-[color-mix(in_srgb,var(--danger)_18%,var(--bg-secondary))] text-danger',
-  warning:
-    'border-warning/20 bg-[color-mix(in_srgb,var(--warning)_18%,var(--bg-secondary))] text-warning',
+  default: 'bg-secondary text-muted-foreground',
+  success: 'bg-secondary text-muted-foreground',
+  done: 'bg-secondary text-muted-foreground',
+  agent: 'bg-secondary text-muted-foreground',
+  danger: 'bg-secondary text-danger',
+  warning: 'bg-secondary text-muted-foreground',
 };
 
 const SECTION_COUNT_CLASS: Record<RowTone, string> = {
   default: 'border-border/60 bg-tertiary text-muted-foreground',
-  success: 'border-success/20 bg-success/15 text-success',
-  done: 'border-done/20 bg-done/15 text-done',
-  agent: 'border-agent/20 bg-agent/15 text-agent',
+  success: 'border-border/60 bg-tertiary text-muted-foreground',
+  done: 'border-border/60 bg-tertiary text-muted-foreground',
+  agent: 'border-border/60 bg-tertiary text-muted-foreground',
   danger: 'border-danger/20 bg-danger/15 text-danger',
-  warning: 'border-warning/20 bg-warning/15 text-warning',
+  warning: 'border-border/60 bg-tertiary text-muted-foreground',
 };
 
 const EMPTY_PHASE_CHIP_MAP = new Map<string, IssuePhaseChip | null>();
@@ -555,7 +552,7 @@ export function StackedColumn({
             key={section.key}
             columnKey={column.key}
             section={section}
-            issues={sectionIssuesByKey.get(section.key) ?? []}
+            issues={sectionIssuesByKey.get(section.key)!}
             collapsed={collapsedSections[section.key] ?? false}
             onToggle={() => toggleSection(section.key)}
             readOnly={readOnly}

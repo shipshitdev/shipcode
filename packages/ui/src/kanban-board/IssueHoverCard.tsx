@@ -120,14 +120,12 @@ export function IssueHoverCard({
   }, [resetKey]);
 
   const fetchSteps = useCallback(() => {
-    if (!canFetchSteps || !onFetchPlanSteps || !issue.threadId) return;
-
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     setPlanStepsLoading(true);
 
-    onFetchPlanSteps(issue.threadId)
+    onFetchPlanSteps!(issue.threadId!)
       .then((steps) => {
         if (!controller.signal.aborted && mountedRef.current) {
           setPlanSteps(steps);
@@ -139,7 +137,7 @@ export function IssueHoverCard({
           setPlanStepsLoading(false);
         }
       });
-  }, [canFetchSteps, onFetchPlanSteps, issue.threadId]);
+  }, [onFetchPlanSteps, issue.threadId]);
 
   const handlePointerEnter = useCallback(() => {
     if (disabled) return;
@@ -160,7 +158,7 @@ export function IssueHoverCard({
   }, []);
 
   const priorityBadge = resolveIssuePriorityBadge(issue);
-  const agentLabels = issue.labels?.filter(isAgentRoutingLabel) ?? [];
+  const agentLabels = issue.labels.filter(isAgentRoutingLabel);
   const lastUpdate = issue.lastPhaseUpdate ? new Date(issue.lastPhaseUpdate).getTime() : null;
   const bodySnippet = issueBodySnippet(issue);
   const anchorChild = isValidElement<{ onPointerEnter?: () => void; onPointerLeave?: () => void }>(

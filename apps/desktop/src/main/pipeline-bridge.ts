@@ -186,8 +186,6 @@ export function createElectronEmitter(
           kind: event.event.kind,
         });
         return;
-      case 'pipeline:output':
-        return;
     }
   }
 

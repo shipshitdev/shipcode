@@ -60,6 +60,20 @@ describe('buildIssueGroupExecutionPreview', () => {
 
     expect(preview.groups).toEqual([['issue-1', 'issue-2']]);
   });
+
+  it('drops unknown selected issues and ignores soft edges', () => {
+    const preview = buildIssueGroupExecutionPreview({
+      selectedIssueIds: ['missing', 'issue-2', 'issue-1'],
+      nodes,
+      edges: [
+        { sourceIssueId: 'issue-1', targetIssueId: 'issue-2', edgeType: 'relates_to' },
+        { sourceIssueId: 'missing', targetIssueId: 'issue-2', edgeType: 'relates_to' },
+      ],
+    });
+
+    expect(preview.issueOrder).toEqual(['issue-1', 'issue-2']);
+    expect(preview.groups).toEqual([['issue-1', 'issue-2']]);
+  });
 });
 
 describe('createIssueGroupRunState', () => {
@@ -94,5 +108,31 @@ describe('createIssueGroupRunState', () => {
     expect(state.getReadyIssueIds()).toEqual(['issue-1', 'issue-2']);
     expect(state.markIssueCompleted('issue-2', true)).toEqual([]);
     expect(state.markIssueCompleted('issue-1', true)).toEqual(['issue-3']);
+  });
+
+  it('sorts multiple newly ready downstream issues by preview order', () => {
+    const state = createIssueGroupRunState({
+      selectedIssueIds: ['issue-4', 'issue-3', 'issue-2', 'issue-1'],
+      nodes,
+      edges: [
+        { sourceIssueId: 'issue-1', targetIssueId: 'issue-4', edgeType: 'blocks' },
+        { sourceIssueId: 'issue-1', targetIssueId: 'issue-3', edgeType: 'blocks' },
+      ],
+    });
+
+    expect(state.getReadyIssueIds()).toEqual(['issue-1', 'issue-2']);
+    expect(state.markIssueCompleted('issue-1', true)).toEqual(['issue-3', 'issue-4']);
+  });
+
+  it('handles empty selections and unknown completions', () => {
+    const state = createIssueGroupRunState({
+      selectedIssueIds: ['missing'],
+      nodes,
+      edges: [],
+    });
+
+    expect(state.getReadyIssueIds()).toEqual([]);
+    expect(state.getBlockedIssueIds()).toEqual([]);
+    expect(state.markIssueCompleted('missing', true)).toEqual([]);
   });
 });

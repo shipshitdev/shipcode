@@ -151,7 +151,7 @@ export class ProjectFailureQueries {
             AND status = 'in_progress'`,
       )
       .run(threadId, commitSha, threadId);
-    return Number(result.changes ?? 0);
+    return Number(result.changes);
   }
 
   private failLoad(id: string): never {
@@ -179,9 +179,9 @@ function mapRow(row: ProjectFailureRow): ProjectFailureRecord {
     implicatedFiles: parseStringArray(row.implicated_files),
     resolvedByThreadId: row.resolved_by_thread_id,
     resolvedCommitSha: row.resolved_commit_sha,
-    resolvedAt: row.resolved_at ? (toIsoUtc(row.resolved_at) ?? row.resolved_at) : null,
-    createdAt: toIsoUtc(row.created_at) ?? row.created_at,
-    updatedAt: toIsoUtc(row.updated_at) ?? row.updated_at,
+    resolvedAt: row.resolved_at ? toIsoUtc(row.resolved_at) : null,
+    createdAt: toIsoUtc(row.created_at) as string,
+    updatedAt: toIsoUtc(row.updated_at) as string,
   };
 }
 

@@ -73,6 +73,15 @@ function positiveInteger(value: unknown): number | null {
 }
 
 /**
+ * Exported for loader error normalization tests.
+ *
+ * @knipignore
+ */
+export function formatUnknownError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
  * Parse `agent.max_concurrent_agents_by_state` from front matter.
  * Keys normalized to lowercase; non-positive/non-numeric values silently dropped.
  */
@@ -109,7 +118,7 @@ function splitWorkflow(raw: string): { frontMatter: string | null; body: string 
   }
 
   return {
-    frontMatter: end[1] ?? '',
+    frontMatter: end[1] as string,
     body: raw.slice(end[0].length).trim(),
   };
 }
@@ -128,7 +137,7 @@ export function parseWorkflowPolicy(raw: string, sourcePath: string): WorkflowPo
         path: sourcePath,
         warning: {
           code: 'workflow_parse_error',
-          message: `WORKFLOW.md front matter could not be parsed: ${error instanceof Error ? error.message : String(error)}`,
+          message: `WORKFLOW.md front matter could not be parsed: ${formatUnknownError(error)}`,
           path: sourcePath,
         },
       };
@@ -208,7 +217,7 @@ function _loadWorkflowPolicyUncached(repoPath: string): WorkflowPolicy {
       path: workflowPath,
       warning: {
         code: 'workflow_file_unreadable',
-        message: `WORKFLOW.md could not be read: ${error instanceof Error ? error.message : String(error)}`,
+        message: `WORKFLOW.md could not be read: ${formatUnknownError(error)}`,
         path: workflowPath,
       },
     };
@@ -222,7 +231,7 @@ function _loadWorkflowPolicyUncached(repoPath: string): WorkflowPolicy {
       path: workflowPath,
       warning: {
         code: 'workflow_parse_error',
-        message: `WORKFLOW.md could not be parsed: ${error instanceof Error ? error.message : String(error)}`,
+        message: `WORKFLOW.md could not be parsed: ${formatUnknownError(error)}`,
         path: workflowPath,
       },
     };

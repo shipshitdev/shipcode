@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { FeatureQaResultQueries } from './feature-qa-results';
 
@@ -40,6 +40,47 @@ describe('FeatureQaResultQueries', () => {
     expect(record.summary).toBe('All flows passed.');
     expect(record.evidencePaths).toBeNull();
     expect(record.runAt).toBeTruthy();
+  });
+
+  it('returns null for missing ids and fails loudly when an inserted result cannot be reloaded', () => {
+    expect(qaResults.getById('missing')).toBeNull();
+
+    const getById = vi.spyOn(qaResults, 'getById').mockReturnValueOnce(null);
+    expect(() =>
+      qaResults.insert({
+        threadId: 't1',
+        featureId: 'issue-42',
+        status: 'passed',
+        flowResults: [],
+        summary: 'done',
+      }),
+    ).toThrow('Failed to load feature QA result after insert');
+    getById.mockRestore();
+  });
+
+  it('normalizes malformed JSON payloads to empty nullable values', () => {
+    db.prepare(
+      `INSERT INTO feature_qa_results
+        (id, thread_id, feature_id, status, flow_results, summary, evidence_paths, run_at, created_at)
+       VALUES (
+         'qa-malformed',
+         't1',
+         'issue-bad',
+         'partial',
+         '{bad',
+         'Malformed payload',
+         '{bad',
+         '',
+         ''
+       )`,
+    ).run();
+
+    expect(qaResults.getById('qa-malformed')).toMatchObject({
+      flowResults: [],
+      evidencePaths: null,
+      runAt: '',
+      createdAt: '',
+    });
   });
 
   it('stores flow results with failure reasons', () => {

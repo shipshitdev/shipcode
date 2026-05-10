@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { GitHubIssueQueries } from './github-issues';
 import { PlanQueries } from './plans';
@@ -63,6 +63,33 @@ describe('GitHubIssueQueries', () => {
     // Should still be one record
     const list = issues.list(projectId);
     expect(list.length).toBe(1);
+  });
+
+  it('upsert() throws if the updated row cannot be reloaded', () => {
+    const existing = issues.upsert(makeIssue());
+    const getByNumber = vi
+      .spyOn(issues, 'getByNumber')
+      .mockReturnValueOnce(existing)
+      .mockReturnValueOnce(null);
+
+    expect(() => issues.upsert(makeIssue({ title: 'Updated Title' }))).toThrow(
+      `Failed to load GitHub issue after update: ${projectId}#1`,
+    );
+
+    getByNumber.mockRestore();
+  });
+
+  it('upsert() throws if the inserted row cannot be reloaded', () => {
+    const getByNumber = vi
+      .spyOn(issues, 'getByNumber')
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(null);
+
+    expect(() => issues.upsert(makeIssue())).toThrow(
+      `Failed to load GitHub issue after insert: ${projectId}#1`,
+    );
+
+    getByNumber.mockRestore();
   });
 
   it('upsert() preserves GitHub updatedAt separately from local fetchedAt', () => {
@@ -155,6 +182,34 @@ describe('GitHubIssueQueries', () => {
     expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('planning');
   });
 
+  it('runInTransaction() commits grouped issue writes', () => {
+    const result = issues.runInTransaction(() => {
+      issues.upsert(makeIssue({ issueNumber: 10, title: 'Ten' }));
+      issues.upsert(makeIssue({ issueNumber: 11, title: 'Eleven' }));
+      return 'committed';
+    });
+
+    expect(result).toBe('committed');
+    expect(
+      issues
+        .list(projectId)
+        .map((issue) => issue.issueNumber)
+        .toSorted(),
+    ).toEqual([10, 11]);
+  });
+
+  it('updateState() persists the GitHub issue open/closed state independently of pipeline status', () => {
+    const record = issues.upsert(makeIssue());
+    issues.updatePipelineStatus(record.id, 'executing');
+
+    issues.updateState(record.id, 'closed');
+
+    expect(issues.getByNumber(projectId, 1)).toMatchObject({
+      state: 'closed',
+      pipelineStatus: 'executing',
+    });
+  });
+
   it('defaults phase model overrides to null', () => {
     const record = issues.upsert(makeIssue());
     expect(record.plannerModelOverride).toBeNull();
@@ -222,6 +277,34 @@ describe('GitHubIssueQueries', () => {
     expect(issues.getByNumber(projectId, 1)?.verifierModelOverride).toBeNull();
   });
 
+  it('updatePhaseModelOverride() round-trips codex for every phase', () => {
+    const record = issues.upsert(makeIssue());
+
+    issues.updatePhaseModelOverride(record.id, 'planner', 'codex');
+    issues.updatePhaseModelOverride(record.id, 'reviewer', 'codex');
+    issues.updatePhaseModelOverride(record.id, 'executor', 'codex');
+    issues.updatePhaseModelOverride(record.id, 'verifier', 'codex');
+
+    expect(issues.getByNumber(projectId, 1)).toMatchObject({
+      plannerModelOverride: 'codex',
+      reviewerModelOverride: 'codex',
+      executorModelOverride: 'codex',
+      verifierModelOverride: 'codex',
+    });
+
+    issues.updatePhaseModelOverride(record.id, 'planner', 'claude');
+    issues.updatePhaseModelOverride(record.id, 'reviewer', 'openrouter');
+    issues.updatePhaseModelOverride(record.id, 'executor', 'claude');
+    issues.updatePhaseModelOverride(record.id, 'verifier', 'openrouter');
+
+    expect(issues.getByNumber(projectId, 1)).toMatchObject({
+      plannerModelOverride: 'claude',
+      reviewerModelOverride: 'openrouter',
+      executorModelOverride: 'claude',
+      verifierModelOverride: 'openrouter',
+    });
+  });
+
   it('updatePhaseModelIdOverride() persists values and can clear them', () => {
     const record = issues.upsert(makeIssue());
 
@@ -246,6 +329,34 @@ describe('GitHubIssueQueries', () => {
     expect(issues.getByNumber(projectId, 1)?.reviewerModelIdOverride).toBeNull();
     expect(issues.getByNumber(projectId, 1)?.executorModelIdOverride).toBeNull();
     expect(issues.getByNumber(projectId, 1)?.verifierModelIdOverride).toBeNull();
+  });
+
+  it('updatePhaseReasoningEffortOverride() persists values for every phase', () => {
+    const record = issues.upsert(makeIssue());
+
+    issues.updatePhaseReasoningEffortOverride(record.id, 'planner', 'low');
+    issues.updatePhaseReasoningEffortOverride(record.id, 'reviewer', 'medium');
+    issues.updatePhaseReasoningEffortOverride(record.id, 'executor', 'high');
+    issues.updatePhaseReasoningEffortOverride(record.id, 'verifier', 'xhigh');
+
+    expect(issues.getByNumber(projectId, 1)).toMatchObject({
+      plannerReasoningEffortOverride: 'low',
+      reviewerReasoningEffortOverride: 'medium',
+      executorReasoningEffortOverride: 'high',
+      verifierReasoningEffortOverride: 'xhigh',
+    });
+
+    issues.updatePhaseReasoningEffortOverride(record.id, 'planner', null);
+    issues.updatePhaseReasoningEffortOverride(record.id, 'reviewer', null);
+    issues.updatePhaseReasoningEffortOverride(record.id, 'executor', null);
+    issues.updatePhaseReasoningEffortOverride(record.id, 'verifier', null);
+
+    expect(issues.getByNumber(projectId, 1)).toMatchObject({
+      plannerReasoningEffortOverride: null,
+      reviewerReasoningEffortOverride: null,
+      executorReasoningEffortOverride: null,
+      verifierReasoningEffortOverride: null,
+    });
   });
 
   it('clearAllPhaseOverridesForProject() clears issue overrides only for the target project', () => {
@@ -337,6 +448,14 @@ describe('GitHubIssueQueries', () => {
     expect(issues.getByNumber(projectId, 1)?.labels).not.toContain('shipcode:blocked:ci');
   });
 
+  it('setCachedLabelPresence() is a no-op for missing issue ids', () => {
+    issues.upsert(makeIssue({ labels: ['shipcode:agent:claude'] }));
+
+    issues.setCachedLabelPresence('missing-issue-id', 'shipcode:blocked:ci', true);
+
+    expect(issues.getByNumber(projectId, 1)?.labels).toEqual(['shipcode:agent:claude']);
+  });
+
   it('linkThread() sets the thread_id', () => {
     const record = issues.upsert(makeIssue());
     const threads = new ThreadQueries(db);
@@ -395,6 +514,61 @@ describe('GitHubIssueQueries', () => {
 
     const orphaned = issues.getOrphanedClaims();
     expect(orphaned.length).toBe(0);
+  });
+
+  it('getEligibleTodoIssues() and countEligibleTodo() filter by state, archive, quick mode, project archive, and priority', () => {
+    const p0 = issues.upsert(makeIssue({ issueNumber: 10, title: 'P0' }));
+    issues.setPriority({
+      id: p0.id,
+      rank: 'p0',
+      raw: 'P0',
+      fetchedAt: '2026-05-01T00:00:00.000Z',
+    });
+    const p2 = issues.upsert(makeIssue({ issueNumber: 11, title: 'P2' }));
+    issues.setPriority({
+      id: p2.id,
+      rank: 'p2',
+      raw: 'P2',
+      fetchedAt: '2026-05-01T00:00:00.000Z',
+    });
+    issues.upsert(makeIssue({ issueNumber: 12, title: 'Unranked' }));
+    issues.upsert(makeIssue({ issueNumber: 13, title: 'Closed state', state: 'closed' }));
+    const executing = issues.upsert(makeIssue({ issueNumber: 14, title: 'Executing' }));
+    issues.updatePipelineStatus(executing.id, 'executing');
+    const archived = issues.upsert(makeIssue({ issueNumber: 15, title: 'Archived' }));
+    issues.archiveIssues([archived.id]);
+
+    const threads = new ThreadQueries(db);
+    const quickThread = threads.create(projectId, 'quick', 'quick');
+    issues.insertQuickTask({
+      projectId,
+      title: 'Quick',
+      body: 'Quick',
+      threadId: quickThread.id,
+    });
+
+    const projects = new ProjectQueries(db);
+    const archivedProjectId = projects.add('/tmp/archived-project').id;
+    const hiddenProjectIssue = issues.upsert(
+      makeIssue({ projectId: archivedProjectId, issueNumber: 16, title: 'Hidden project' }),
+    );
+    issues.setPriority({
+      id: hiddenProjectIssue.id,
+      rank: 'p0',
+      raw: 'P0',
+      fetchedAt: '2026-05-01T00:00:00.000Z',
+    });
+    db.prepare('UPDATE projects SET archived = 1 WHERE id = ?').run(archivedProjectId);
+
+    expect(issues.getEligibleTodoIssues(projectId, []).map((issue) => issue.issueNumber)).toEqual([
+      10, 11, 12,
+    ]);
+    expect(issues.countEligibleTodo(projectId, [])).toBe(3);
+    expect(
+      issues.getEligibleTodoIssues(projectId, ['p2']).map((issue) => issue.issueNumber),
+    ).toEqual([11]);
+    expect(issues.countEligibleTodo(projectId, ['p0', 'p2'])).toBe(2);
+    expect(issues.countEligibleTodo(archivedProjectId, ['p0'])).toBe(0);
   });
 
   describe('close/reopen sync', () => {
@@ -559,6 +733,27 @@ describe('GitHubIssueQueries', () => {
       expect(issues.list(projectId)).toHaveLength(1);
     });
 
+    it('listArchived() returns archived rows across projects newest first', () => {
+      const otherProjectId = new ProjectQueries(db).add('/tmp/other-archived').id;
+      const first = issues.upsert(makeIssue({ issueNumber: 1, title: 'First archived' }));
+      const second = issues.upsert(
+        makeIssue({
+          projectId: otherProjectId,
+          issueNumber: 2,
+          title: 'Second archived',
+        }),
+      );
+      const visible = issues.upsert(makeIssue({ issueNumber: 3, title: 'Visible' }));
+
+      issues.archiveIssues([first.id]);
+      db.prepare(
+        "UPDATE github_issue_cache SET archived_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+1 second') WHERE id = ?",
+      ).run(second.id);
+
+      expect(issues.listArchived().map((issue) => issue.id)).toEqual([second.id, first.id]);
+      expect(issues.listArchived().map((issue) => issue.id)).not.toContain(visible.id);
+    });
+
     it('archiveIssues() only archives the exact ID set (race-safe)', () => {
       const r1 = issues.upsert(makeIssue({ issueNumber: 1 }));
       const r2 = issues.upsert(makeIssue({ issueNumber: 2 }));
@@ -704,6 +899,54 @@ describe('GitHubIssueQueries', () => {
       const t3 = threads.create(projectId, 'c', 'c');
       const c = issues.insertQuickTask({ projectId, title: 'c', body: 'c', threadId: t3.id });
       expect(c.issueNumber).toBe(-3);
+    });
+
+    it('throws if the inserted quick row cannot be reloaded', () => {
+      const threads = new ThreadQueries(db);
+      const thread = threads.create(projectId, 'vanished', 'vanished');
+      const getByNumber = vi.spyOn(issues, 'getByNumber').mockReturnValueOnce(null);
+
+      expect(() =>
+        issues.insertQuickTask({
+          projectId,
+          title: 'vanished',
+          body: 'vanished',
+          threadId: thread.id,
+        }),
+      ).toThrow(`Quick task row vanished after insert: ${projectId}#-1`);
+
+      getByNumber.mockRestore();
+    });
+
+    it('fails after five unique sentinel allocation collisions', () => {
+      const threads = new ThreadQueries(db);
+      const thread = threads.create(projectId, 'collision', 'collision');
+      const originalPrepare = db.prepare.bind(db);
+      const prepare = vi.spyOn(db, 'prepare').mockImplementation((sql) => {
+        if (String(sql).includes('INSERT INTO github_issue_cache')) {
+          return {
+            run: () => {
+              throw new Error(
+                'UNIQUE constraint failed: github_issue_cache.project_id, github_issue_cache.issue_number',
+              );
+            },
+          } as unknown as ReturnType<DatabaseSync['prepare']>;
+        }
+        return originalPrepare(sql);
+      });
+
+      expect(() =>
+        issues.insertQuickTask({
+          projectId,
+          title: 'collision',
+          body: 'collision',
+          threadId: thread.id,
+        }),
+      ).toThrow(
+        'insertQuickTask: failed to allocate sentinel after 5 attempts (last: UNIQUE constraint failed:',
+      );
+
+      prepare.mockRestore();
     });
   });
 });

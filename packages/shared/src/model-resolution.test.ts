@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS } from './constants';
 import {
   getIssueCardPhase,
+  getPhaseDescriptor,
   getPipelineCardPhase,
   resolveEffectivePhaseReasoningEffort,
   resolveEffectivePhaseReasoningEffortForIssue,
@@ -12,6 +13,7 @@ import {
   resolvePhaseModelIdForIssue,
   resolvePhaseReasoningEffort,
   resolvePhaseReasoningEffortForIssue,
+  resolvePipelineSpeedProfile,
   resolveRequireApproval,
   resolveRequireApprovalForIssue,
   resolveRequireApprovalState,
@@ -180,6 +182,17 @@ describe('model-resolution', () => {
     expect(resolvePhaseModel(settings, project, 'verifier')).toBe('openrouter');
   });
 
+  it('falls back to planner descriptor and Claude provider for invalid values', () => {
+    expect(getPhaseDescriptor('unknown' as never).key).toBe('planner');
+    expect(
+      resolvePhaseModel(
+        { ...settings, plannerModel: 'invalid-provider' as never },
+        makeProject(),
+        'planner',
+      ),
+    ).toBe('claude');
+  });
+
   it('lets project overrides shadow the global defaults', () => {
     const project = makeProject({
       plannerModelOverride: 'gemini',
@@ -209,6 +222,12 @@ describe('model-resolution', () => {
     expect(resolvePhaseModelForIssue(settings, project, issue, 'verifier')).toBe('claude');
   });
 
+  it('falls back to project phase selection when issue override is unset', () => {
+    const project = makeProject({ executorModelOverride: 'codex' });
+
+    expect(resolvePhaseModelForIssue(settings, project, makeIssue(), 'executor')).toBe('codex');
+  });
+
   it('lets issue model IDs shadow project and provider defaults', () => {
     const project = makeProject({ executorModelIdOverride: 'gpt-5.4' });
     const issue = makeIssue({
@@ -231,6 +250,7 @@ describe('model-resolution', () => {
 
   it('resolves revision count through app and project inheritance', () => {
     expect(resolveRevisionCount(settings, makeProject())).toBe(0);
+    expect(resolveRevisionCount({ ...settings, revisionCount: 8 as never }, makeProject())).toBe(0);
     expect(resolveRevisionCount({ ...settings, revisionCount: 2 }, makeProject())).toBe(2);
     expect(
       resolveRevisionCount(
@@ -238,6 +258,24 @@ describe('model-resolution', () => {
         makeProject({ revisionCountOverride: 4 }),
       ),
     ).toBe(4);
+  });
+
+  it('resolves pipeline speed profile through project and app settings', () => {
+    expect(
+      resolvePipelineSpeedProfile({ ...settings, pipelineSpeedProfile: 'thorough' }, makeProject()),
+    ).toBe('thorough');
+    expect(
+      resolvePipelineSpeedProfile(
+        { ...settings, pipelineSpeedProfile: 'smart_fast' },
+        makeProject({ pipelineSpeedProfileOverride: 'thorough' }),
+      ),
+    ).toBe('thorough');
+    expect(
+      resolvePipelineSpeedProfile(
+        { ...settings, pipelineSpeedProfile: 'invalid' as never },
+        makeProject({ pipelineSpeedProfileOverride: 'invalid' as never }),
+      ),
+    ).toBe('smart_fast');
   });
 
   it('lets issue revision overrides shadow project and app defaults', () => {
@@ -466,6 +504,70 @@ describe('model-resolution', () => {
       provider: 'codex',
       model: 'gpt-5.4-mini',
       effort: 'high',
+    });
+  });
+
+  it('falls back through thread configured models and project providers for live displays', () => {
+    const project = makeProject({ executorModelOverride: 'gemini' });
+
+    expect(resolveThreadPhasePresentation(settings, project, makeThread(), 'completed')).toBeNull();
+    expect(
+      resolveThreadPhasePresentation(
+        settings,
+        project,
+        makeThread({
+          plannerModel: 'codex',
+          plannerResolvedModel: null,
+          status: 'planning',
+        }),
+        'planning',
+      ),
+    ).toMatchObject({
+      provider: 'codex',
+      model: 'codex',
+    });
+    expect(
+      resolveThreadPhasePresentation(
+        settings,
+        project,
+        makeThread({
+          executorModel: null as never,
+          executorResolvedModel: '<synthetic>',
+        }),
+        'executing',
+      ),
+    ).toEqual({
+      provider: 'gemini',
+      model: 'gemini',
+      effort: 'low',
+    });
+    expect(
+      resolveThreadPhasePresentation(
+        settings,
+        project,
+        makeThread({
+          reviewerModel: 'codex',
+          reviewerResolvedModel: null,
+        }),
+        'reviewing',
+      ),
+    ).toMatchObject({
+      provider: 'codex',
+      model: 'codex',
+    });
+    expect(
+      resolveThreadPhasePresentation(
+        settings,
+        project,
+        makeThread({
+          verifierModel: 'openrouter',
+          verifierResolvedModel: '<synthetic>',
+        }),
+        'verifying',
+      ),
+    ).toMatchObject({
+      provider: 'openrouter',
+      model: 'openrouter',
     });
   });
 });

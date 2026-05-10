@@ -294,6 +294,25 @@ describe('fetchProjectPriorities', () => {
     expect(onWarn).toHaveBeenCalled();
   });
 
+  it('returns empty map on invalid JSON and inaccessible projects', async () => {
+    const onWarn = vi.fn();
+    mockExecFileAsync.mockResolvedValueOnce({ stdout: 'not-json', stderr: '' });
+
+    const invalid = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL, onWarn });
+    expect(invalid.priorities.size).toBe(0);
+    expect(onWarn).toHaveBeenCalledWith(
+      '[project-priority] failed to parse GraphQL response',
+      expect.any(SyntaxError),
+    );
+
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({ data: { organization: { projectV2: null } } }),
+      stderr: '',
+    });
+    const missing = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
+    expect(missing.priorities.size).toBe(0);
+  });
+
   it('returns empty map on exec failure without throwing', async () => {
     mockExecFileAsync.mockRejectedValueOnce(new Error('gh: command failed'));
 
@@ -305,6 +324,40 @@ describe('fetchProjectPriorities', () => {
     });
     expect(out.size).toBe(0);
     expect(onWarn).toHaveBeenCalled();
+  });
+
+  it('handles non-Error exec failures without stderr', async () => {
+    mockExecFileAsync.mockRejectedValueOnce('gh unavailable');
+
+    const onWarn = vi.fn();
+    const { priorities } = await fetchProjectPriorities({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+      onWarn,
+    });
+
+    expect(priorities.size).toBe(0);
+    expect(onWarn).toHaveBeenCalledWith(
+      '[project-priority] gh api graphql failed',
+      'gh unavailable',
+    );
+  });
+
+  it('handles object exec failures with undefined stderr', async () => {
+    mockExecFileAsync.mockRejectedValueOnce({ message: 'gh failed', stderr: undefined });
+
+    const onWarn = vi.fn();
+    const { priorities } = await fetchProjectPriorities({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+      onWarn,
+    });
+
+    expect(priorities.size).toBe(0);
+    expect(onWarn).toHaveBeenCalledWith('[project-priority] gh api graphql failed', {
+      message: 'gh failed',
+      stderr: undefined,
+    });
   });
 
   it('detects missing read:project scope', async () => {
@@ -343,6 +396,180 @@ describe('fetchProjectPriorities', () => {
     const queryArg = args.find((a) => a.startsWith('query=')) ?? '';
     expect(queryArg).toContain('user(login:');
     expect(queryArg).not.toContain('organization(login:');
+  });
+
+  it('skips issue nodes with missing numbers and non-priority values', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: {
+          organization: {
+            projectV2: {
+              items: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  { content: { __typename: 'Issue' } },
+                  {
+                    content: { __typename: 'Issue', number: 2 },
+                    fieldValues: {
+                      nodes: [
+                        { __typename: 'OtherValue', name: 'P0', field: { name: 'Priority' } },
+                        {
+                          __typename: 'ProjectV2ItemFieldSingleSelectValue',
+                          name: 'Todo',
+                          field: { name: 'Status' },
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    content: { __typename: 'Issue', number: 3 },
+                    fieldValues: {
+                      nodes: [
+                        {
+                          __typename: 'ProjectV2ItemFieldSingleSelectValue',
+                          name: 'P1',
+                          field: { name: 'Priority' },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      }),
+      stderr: '',
+    });
+
+    const { priorities } = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
+
+    expect([...priorities.entries()]).toEqual([[3, { rank: 'p1', raw: 'P1' }]]);
+  });
+
+  it('handles sparse Project item payloads and nameless GraphQL errors', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({ data: null, errors: [{}] }),
+      stderr: '',
+    });
+    const onWarn = vi.fn();
+
+    const errorResult = await fetchProjectPriorities({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+      onWarn,
+    });
+
+    expect(errorResult.priorities.size).toBe(0);
+    expect(onWarn).toHaveBeenCalledWith('[project-priority] GraphQL errors: <unknown>');
+
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: {
+          organization: {
+            projectV2: {
+              items: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  {
+                    content: { __typename: 'Issue', number: 4 },
+                    fieldValues: {
+                      nodes: [
+                        {
+                          __typename: 'ProjectV2ItemFieldSingleSelectValue',
+                          name: 'P2',
+                          field: {},
+                        },
+                        {
+                          __typename: 'ProjectV2ItemFieldSingleSelectValue',
+                          field: { name: 'Priority' },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      }),
+      stderr: '',
+    });
+
+    const sparse = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
+
+    expect(sparse.priorities.has(4)).toBe(false);
+  });
+
+  it('handles missing item and field-value connection payloads', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: { organization: { projectV2: {} } },
+      }),
+      stderr: '',
+    });
+
+    const noItems = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
+    expect(noItems.priorities.size).toBe(0);
+
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: {
+          organization: {
+            projectV2: {
+              items: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [{ content: { __typename: 'Issue', number: 9 } }],
+              },
+            },
+          },
+        },
+      }),
+      stderr: '',
+    });
+
+    const noFieldValues = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
+    expect(noFieldValues.priorities.size).toBe(0);
+  });
+
+  it('stops pagination when GitHub reports another page without a cursor', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: buildPage({
+        hasNextPage: true,
+        endCursor: null,
+        nodes: [{ issueNumber: 1, priorityName: 'P0' }],
+      }),
+      stderr: '',
+    });
+
+    const { priorities } = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
+
+    expect(priorities.get(1)).toEqual({ rank: 'p0', raw: 'P0' });
+    expect(mockExecFileAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns when the page cap truncates priority sync', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: buildPage({
+        hasNextPage: true,
+        endCursor: 'NEXT',
+        nodes: [{ issueNumber: 1, priorityName: 'P0' }],
+      }),
+      stderr: '',
+    });
+    const onWarn = vi.fn();
+
+    const { priorities } = await fetchProjectPriorities({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+      maxPages: 1,
+      onWarn,
+    });
+
+    expect(priorities.get(1)).toEqual({ rank: 'p0', raw: 'P0' });
+    expect(onWarn).toHaveBeenCalledWith(
+      '[project-priority] hit page cap of 1; truncating priority sync',
+    );
   });
 
   it('returns empty map for unparseable project URL', async () => {

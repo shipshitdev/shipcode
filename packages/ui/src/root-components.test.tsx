@@ -212,6 +212,38 @@ describe('root UI components', () => {
     view.cleanup();
   });
 
+  it('renders settings sections with partial or absent header content', () => {
+    const titleOnly = renderIntoDom(
+      <SettingsSection title="General">
+        <button type="button">Save</button>
+      </SettingsSection>,
+    );
+    expect(titleOnly.container.querySelector('h4')?.textContent).toBe('General');
+    expect(titleOnly.container.querySelector('p')).toBeNull();
+    titleOnly.cleanup();
+
+    const descriptionOnly = renderIntoDom(
+      <SettingsSection description="Controls workspace defaults.">
+        <button type="button">Reset</button>
+      </SettingsSection>,
+    );
+    expect(descriptionOnly.container.querySelector('h4')).toBeNull();
+    expect(descriptionOnly.container.querySelector('p')?.textContent).toBe(
+      'Controls workspace defaults.',
+    );
+    descriptionOnly.cleanup();
+
+    const bodyOnly = renderIntoDom(
+      <SettingsSection>
+        <button type="button">Apply</button>
+      </SettingsSection>,
+    );
+    const bodyOnlySection = bodyOnly.container.querySelector('[data-slot="settings-section"]');
+    expect(bodyOnlySection?.querySelector('div')).toBeNull();
+    expect(bodyOnlySection?.textContent).toBe('Apply');
+    bodyOnly.cleanup();
+  });
+
   it('renders active and completed phases and only emits clicks for enabled phases', () => {
     const onPhaseClick = vi.fn();
     const view = renderIntoDom(
@@ -276,12 +308,67 @@ describe('root UI components', () => {
     view.cleanup();
   });
 
+  it('renders startup progress error and subtitle-free states', () => {
+    const view = renderIntoDom(
+      <StartupProgress
+        title="Startup failed"
+        steps={[
+          { id: 'bridge', label: 'Connect bridge', status: 'error' },
+          { id: 'projects', label: 'Restore projects', status: 'pending' },
+        ]}
+        className="startup-shell"
+      />,
+    );
+
+    expect(view.container.textContent).toContain('Startup failed');
+    expect(view.container.textContent).toContain('Connect bridge');
+    expect(view.container.querySelector('[aria-busy="false"]')).not.toBeNull();
+    expect(view.container.querySelector('.startup-shell')).not.toBeNull();
+    view.cleanup();
+  });
+
   it('uses noun labels for passive workflow stages', () => {
     const view = renderIntoDom(<PipelineStatus currentPhase="approval" />);
 
     expect(view.container.textContent).toContain('Approval');
     expect(view.container.textContent).not.toContain('Approve');
 
+    view.cleanup();
+  });
+
+  it('renders completed state without a click handler', () => {
+    const view = renderIntoDom(<PipelineStatus currentPhase="completed" />);
+
+    expect(view.container.textContent).toContain('Complete');
+    const buttons = Array.from(view.container.querySelectorAll('button'));
+    expect(buttons.every((button) => !button.disabled)).toBe(true);
+
+    act(() => {
+      buttons[0]?.click();
+      buttons.at(-1)?.click();
+    });
+
+    view.cleanup();
+  });
+
+  it('renders failed pipeline phases without marking future phases complete', () => {
+    const onPhaseClick = vi.fn();
+    const view = renderIntoDom(
+      <PipelineStatus currentPhase="failed" onPhaseClick={onPhaseClick} />,
+    );
+
+    expect(view.container.textContent).not.toContain('Plan');
+
+    const buttons = Array.from(view.container.querySelectorAll('button'));
+    expect(buttons.every((button) => !button.disabled)).toBe(true);
+
+    act(() => {
+      buttons[0]?.click();
+      buttons.at(-1)?.click();
+    });
+
+    expect(onPhaseClick).toHaveBeenCalledWith('planning');
+    expect(onPhaseClick).toHaveBeenCalledWith('completed');
     view.cleanup();
   });
 
@@ -312,6 +399,79 @@ describe('root UI components', () => {
     reviewView.cleanup();
   });
 
+  it('renders review decision, severity, and optional detail variants', () => {
+    const variantReview = {
+      ...review,
+      decision: 'approve',
+      findings: [
+        {
+          id: 'CRITICAL',
+          severity: 'critical',
+          category: 'security',
+          description: 'Critical finding with a file.',
+          filePath: 'packages/ui/src/ReviewViewer.tsx',
+        },
+        {
+          id: 'MINOR',
+          severity: 'minor',
+          category: 'performance',
+          description: 'Minor finding with a suggestion.',
+          suggestion: 'Use the shared renderer.',
+        },
+        {
+          id: 'NIT',
+          severity: 'nit',
+          category: 'design',
+          description: 'Nit finding without optional fields.',
+        },
+      ],
+      suggestedChanges: [],
+    } satisfies PlanReview;
+
+    const view = renderIntoDom(<ReviewViewer review={variantReview} />);
+
+    expect(view.container.textContent).toContain('approve');
+    expect(view.container.textContent).toContain('Critical finding with a file.');
+    expect(view.container.textContent).toContain('packages/ui/src/ReviewViewer.tsx');
+    expect(view.container.textContent).toContain('Use the shared renderer.');
+    expect(view.container.textContent).toContain('Nit finding without optional fields.');
+    expect(view.container.textContent).not.toContain('Suggested Changes');
+
+    view.cleanup();
+  });
+
+  it('renders empty review sections without findings or suggestions', () => {
+    const rejectedReview = {
+      ...review,
+      decision: 'reject',
+      findings: [],
+      suggestedChanges: [],
+    } satisfies PlanReview;
+
+    const view = renderIntoDom(<ReviewViewer review={rejectedReview} />);
+
+    expect(view.container.textContent).toContain('reject');
+    expect(view.container.textContent).not.toContain('Findings');
+    expect(view.container.textContent).not.toContain('Suggested Changes');
+
+    view.cleanup();
+  });
+
+  it('renders the defensive review decision fallback', () => {
+    const malformedReview = {
+      ...review,
+      decision: 'needs_discussion',
+      findings: [],
+      suggestedChanges: [],
+    } as unknown as PlanReview;
+
+    const view = renderIntoDom(<ReviewViewer review={malformedReview} />);
+
+    expect(view.container.textContent).toContain('needs discussion');
+
+    view.cleanup();
+  });
+
   it('renders verification results, evidence, and linked issues', () => {
     const view = renderIntoDom(<VerificationViewer verification={verification} />);
 
@@ -320,6 +480,58 @@ describe('root UI components', () => {
     expect(view.container.textContent).toContain('No minimum threshold configured yet.');
     expect(view.container.textContent).toContain('Coverage is below the floor in one package.');
     expect(view.container.textContent).toContain('packages/ui/src/PipelineStatus.tsx');
+    view.cleanup();
+  });
+
+  it('renders passed verification and optional issue variants', () => {
+    const passedVerification = {
+      ...verification,
+      result: 'passed',
+      summary: 'All acceptance criteria passed.',
+      criteriaResults: [
+        {
+          criterion: 'Coverage threshold enforced',
+          passed: true,
+          evidence: 'Threshold gate passed.',
+        },
+      ],
+      issues: [
+        {
+          severity: 'blocker',
+          description: 'A blocker remains for display purposes.',
+        },
+        {
+          severity: 'warning',
+          description: 'Warning note.',
+        },
+      ],
+    } satisfies VerificationResult;
+
+    const view = renderIntoDom(<VerificationViewer verification={passedVerification} />);
+
+    expect(view.container.textContent).toContain('Passed');
+    expect(view.container.textContent).toContain('Threshold gate passed.');
+    expect(view.container.textContent).toContain('blocker');
+    expect(view.container.textContent).toContain('warning');
+    expect(view.container.textContent).not.toContain('packages/ui/src/PipelineStatus.tsx');
+    view.cleanup();
+  });
+
+  it('renders the defensive verification severity fallback', () => {
+    const defensiveVerification = {
+      ...verification,
+      issues: [
+        {
+          severity: 'info',
+          description: 'Informational verifier note.',
+        },
+      ],
+    } as unknown as VerificationResult;
+
+    const view = renderIntoDom(<VerificationViewer verification={defensiveVerification} />);
+
+    expect(view.container.textContent).toContain('info');
+    expect(view.container.textContent).toContain('Informational verifier note.');
     view.cleanup();
   });
 
@@ -351,6 +563,90 @@ describe('root UI components', () => {
     });
 
     expect(onOpenIssue).toHaveBeenCalledWith('https://github.com/shipcode/shipcode/issues/42');
+    view.cleanup();
+  });
+
+  it('renders task graph optional modes, statuses, files, and disabled issue links', () => {
+    const graph = {
+      ...taskGraph,
+      mode: 'internal',
+      status: 'failed',
+      riskScore: 0.2,
+      assessment: {
+        ...taskGraph.assessment,
+        mode: 'internal',
+        reasons: [],
+      },
+      nodes: [
+        {
+          ...taskGraph.nodes[0],
+          id: 'node-blocked',
+          order: 2,
+          stableKey: 'T2',
+          title: 'Blocked task',
+          status: 'blocked',
+          files: ['a.ts', 'b.ts', 'c.ts', 'd.ts'],
+          suggestedReasoningEffort: 'none',
+          githubIssueNumber: 43,
+        },
+        {
+          ...taskGraph.nodes[1],
+          id: 'node-running',
+          order: 1,
+          stableKey: 'T1',
+          title: 'Running task',
+          status: 'running',
+          githubIssueNumber: null,
+        },
+        {
+          ...taskGraph.nodes[1],
+          id: 'node-pending',
+          order: 3,
+          stableKey: 'T3',
+          title: 'Pending task',
+          status: 'pending',
+          files: [],
+          githubIssueNumber: 44,
+        },
+        {
+          ...taskGraph.nodes[1],
+          id: 'node-failed',
+          order: 4,
+          stableKey: 'T4',
+          title: 'Failed task',
+          status: 'failed',
+          githubIssueNumber: null,
+        },
+      ],
+    } satisfies TaskGraphWithNodes;
+
+    const nullView = renderIntoDom(<TaskGraphViewer graph={null} />);
+    expect(nullView.container.textContent).toBe('');
+    nullView.cleanup();
+
+    const view = renderIntoDom(
+      <TaskGraphViewer
+        graph={graph}
+        className="graph-shell"
+        getIssueUrl={(issueNumber) => (issueNumber === 43 ? null : `/issues/${issueNumber}`)}
+      />,
+    );
+
+    expect(view.container.textContent).toContain('Internal');
+    expect(view.container.textContent).toContain('failed');
+    expect(view.container.textContent).toContain('Risk 20%');
+    expect(view.container.textContent).toContain('Active');
+    expect(view.container.textContent).toContain('T1');
+    expect(view.container.textContent).toContain('Blocked task');
+    expect(view.container.textContent).toContain('+1');
+    expect(view.container.textContent).toContain('Pending task');
+    expect(view.container.textContent).toContain('Failed task');
+    expect(view.container.textContent).not.toContain('none');
+    expect(view.container.querySelector('.graph-shell')).not.toBeNull();
+
+    const disabledButtons = Array.from(view.container.querySelectorAll('button:disabled'));
+    expect(disabledButtons.some((button) => button.textContent?.includes('#43'))).toBe(true);
+    expect(disabledButtons.some((button) => button.textContent?.includes('#44'))).toBe(true);
     view.cleanup();
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   buildQaStateGapMessage,
   extractFeatureQaState,
@@ -61,6 +61,12 @@ describe('extractFeatureQaState', () => {
     expect(result.reason).toContain('no valid fenced JSON block');
   });
 
+  it('returns invalid when the QA State heading has no body', () => {
+    const result = extractFeatureQaState('## QA State');
+    expect(result.status).toBe('invalid');
+    expect(result.reason).toContain('no valid fenced JSON block');
+  });
+
   it('returns invalid when JSON fails Zod validation', () => {
     const badJson = JSON.stringify({ featureId: '', routes: [] });
     const body = buildPrd(`## QA State\n\n\`\`\`json\n${badJson}\n\`\`\``);
@@ -76,6 +82,18 @@ describe('extractFeatureQaState', () => {
     expect(result.status).toBe('invalid');
     expect(result.qaState).toBeNull();
     expect(result.reason).toContain('malformed JSON');
+  });
+
+  it('handles non-Error JSON parse failures', () => {
+    const parse = vi.spyOn(JSON, 'parse').mockImplementationOnce(() => {
+      throw 'parser unavailable';
+    });
+
+    const result = extractFeatureQaState(buildPrd(`## QA State\n\n\`\`\`json\n{}\n\`\`\``));
+
+    expect(result.status).toBe('invalid');
+    expect(result.reason).toContain('parser unavailable');
+    parse.mockRestore();
   });
 
   it('handles QA State at end of document (no next heading)', () => {
@@ -94,6 +112,14 @@ describe('extractFeatureQaState', () => {
 
   it('is case-insensitive for section heading', () => {
     const body = buildPrd(`## qa state\n\n\`\`\`json\n${VALID_QA_JSON}\n\`\`\``);
+    const result = extractFeatureQaState(body);
+    expect(result.status).toBe('present');
+  });
+
+  it('ignores QA State text that is not a section heading', () => {
+    const body = buildPrd(
+      `This paragraph mentions ## QA State inline.\n\n## QA State\n\n\`\`\`json\n${VALID_QA_JSON}\n\`\`\``,
+    );
     const result = extractFeatureQaState(body);
     expect(result.status).toBe('present');
   });
@@ -221,6 +247,10 @@ describe('buildQaStateGapMessage', () => {
     const msg = buildQaStateGapMessage('invalid', 'Missing featureId field', 10);
     expect(msg).toContain('issue #10');
     expect(msg).toContain('Missing featureId field');
+  });
+
+  it('omits falsy issue numbers from gap messages', () => {
+    expect(buildQaStateGapMessage('invalid', 'Missing JSON', 0)).toBe('[QA gap] Missing JSON');
   });
 });
 

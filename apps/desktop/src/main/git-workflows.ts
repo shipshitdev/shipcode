@@ -30,6 +30,31 @@ function isLikelyHookFailure(message: string): boolean {
   return /\b(pre-commit|hook|biome check|Running Biome on staged files)\b/i.test(message);
 }
 
+export function collectDirtyStatusFiles(status: {
+  not_added: string[];
+  modified: string[];
+  created: string[];
+  deleted: string[];
+  renamed: Array<string | { from?: string; to?: string } | null>;
+  staged: string[];
+}): string[] {
+  const dirtySet = new Set<string>();
+  for (const f of status.not_added) dirtySet.add(f);
+  for (const f of status.modified) dirtySet.add(f);
+  for (const f of status.created) dirtySet.add(f);
+  for (const f of status.deleted) dirtySet.add(f);
+  for (const r of status.renamed) {
+    if (typeof r === 'string') dirtySet.add(r);
+    else if (r && typeof r === 'object') {
+      const renamed = r as { from?: string; to?: string };
+      if (renamed.from) dirtySet.add(renamed.from);
+      if (renamed.to) dirtySet.add(renamed.to);
+    }
+  }
+  for (const f of status.staged) dirtySet.add(f);
+  return [...dirtySet];
+}
+
 /**
  * Runs the full auto-commit workflow against a worktree:
  *   enumerate dirty → ask LLM → validate groups → stage+commit each
@@ -51,18 +76,7 @@ export async function runAutoCommitWorkflow(args: {
   ]);
 
   // Aggregate every changed/untracked path into a single dirty set.
-  const dirtySet = new Set<string>();
-  for (const f of status.not_added) dirtySet.add(f);
-  for (const f of status.modified) dirtySet.add(f);
-  for (const f of status.created) dirtySet.add(f);
-  for (const f of status.deleted) dirtySet.add(f);
-  for (const r of status.renamed) {
-    if (typeof r === 'string') dirtySet.add(r);
-    else if (r && typeof r === 'object' && 'to' in r) dirtySet.add((r as { to: string }).to);
-  }
-  for (const f of status.staged) dirtySet.add(f);
-
-  const dirtyFiles = [...dirtySet];
+  const dirtyFiles = collectDirtyStatusFiles(status);
   if (dirtyFiles.length === 0) {
     throw new Error('worktree is clean — nothing to commit');
   }
@@ -173,7 +187,10 @@ export async function runCleanupAnalyze(args: {
     Promise.all(
       worktreeList.map(async (w) => {
         try {
-          return [w.path, await git.getStatus(w.path, baseRef ?? defaultBranch)] as const;
+          return [
+            w.path,
+            await git.getStatus(w.path, baseRef ?? defaultBranch, { preferFallbackRef: true }),
+          ] as const;
         } catch {
           return [w.path, null] as const;
         }
@@ -287,7 +304,9 @@ export async function runCleanupApply(args: {
               item.kind === 'worktree-closed-pr' ||
               item.kind === 'worktree-no-pr-clean'
             ) {
-              const status = await git.getStatus(item.worktreePath, item.compareRef ?? undefined);
+              const status = await git.getStatus(item.worktreePath, item.compareRef ?? undefined, {
+                preferFallbackRef: item.compareRef != null,
+              });
               if (status.isDirty) {
                 throw new Error(`worktree dirty — refusing to remove: ${item.worktreePath}`);
               }

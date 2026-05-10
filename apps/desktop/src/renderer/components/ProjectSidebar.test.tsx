@@ -8,6 +8,7 @@ import {
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
+import { useToastStore } from '../stores/toast-store';
 import {
   makeProviderUsageStatus as makeUsage,
   makeProviderUsageMap as makeUsageMap,
@@ -17,6 +18,49 @@ import { ProjectSidebar } from './ProjectSidebar';
 
 function renderWithProviders() {
   return renderWithQueryClient(<ProjectSidebar />);
+}
+
+function mockSidebarData(
+  invokeMock: ReturnType<typeof vi.fn>,
+  overrides: {
+    projects?: Project[];
+    settings?: typeof DEFAULT_SETTINGS;
+    stats?: Partial<DashboardStats>;
+    notifications?: NotificationRecord[];
+    integrations?: IntegrationStatus;
+  } = {},
+) {
+  invokeMock.mockImplementation(async (channel) => {
+    if (channel === 'projects-visible' || channel === 'project:list-visible') {
+      return overrides.projects ?? [project];
+    }
+    if (channel === 'settings:get') return overrides.settings ?? DEFAULT_SETTINGS;
+    if (channel === 'dashboard:get-stats') {
+      return {
+        agentsRunning: 0,
+        agentsRunningByProject: {},
+        ...overrides.stats,
+      } satisfies Partial<DashboardStats>;
+    }
+    if (channel === 'notification:list') {
+      return overrides.notifications ?? ([] satisfies NotificationRecord[]);
+    }
+    if (channel === 'integrations:check') return overrides.integrations ?? integrations;
+    if (channel === 'provider-usage:check') return makeUsageMap();
+    if (
+      channel === 'project:open-path' ||
+      channel === 'settings:set' ||
+      channel === 'project:pin' ||
+      channel === 'project:archive' ||
+      channel === 'project:remove' ||
+      channel === 'github:refresh-issues'
+    ) {
+      return undefined;
+    }
+    if (channel === 'dialog:open-directory') return '/tmp/relinked';
+    if (channel === 'project:relink-path') return { ...project, path: '/tmp/relinked' };
+    return [];
+  });
 }
 
 async function openProjectActionsMenu() {
@@ -191,6 +235,7 @@ describe('ProjectSidebar', () => {
       settingsVisible: false,
       sidebarCollapsed: false,
     });
+    useToastStore.setState({ toasts: [] });
   });
 
   afterEach(() => {
@@ -553,5 +598,473 @@ describe('ProjectSidebar', () => {
       'title',
       expect.stringContaining('Project model usage running low: Codex CLI session running low'),
     );
+  });
+
+  it('routes top-level navigation, create issue, add repository, and project tabs through the app store', async () => {
+    mockSidebarData(invokeMock, {
+      stats: { agentsRunning: 2 },
+      notifications: [
+        {
+          id: 'notification-1',
+          threadId: 'thread-1',
+          projectId: project.id,
+          kind: 'failed',
+          title: 'Failed',
+          body: 'Needs attention',
+          createdAt: '2026-05-09T00:00:00.000Z',
+          dismissedAt: null,
+        },
+      ],
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('2 live')).toBeInTheDocument();
+    expect(await screen.findByText('1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /New Issue/i }));
+    expect(useAppStore.getState().createIssueModalOpen).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: /Search/i }));
+    expect(useAppStore.getState().commandPaletteOpen).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: /Activity/i }));
+    expect(useAppStore.getState().viewMode).toBe('activity');
+
+    fireEvent.click(screen.getByRole('button', { name: /Overview/i }));
+    expect(useAppStore.getState().viewMode).toBe('overview');
+
+    fireEvent.click(screen.getByRole('button', { name: /Inbox/i }));
+    expect(useAppStore.getState().viewMode).toBe('inbox');
+
+    fireEvent.click(screen.getByRole('button', { name: /Skills/i }));
+    expect(useAppStore.getState().viewMode).toBe('skills');
+
+    fireEvent.click(screen.getByRole('button', { name: /Automations/i }));
+    expect(useAppStore.getState().viewMode).toBe('automations');
+
+    fireEvent.click(screen.getByRole('button', { name: /Costs/i }));
+    expect(useAppStore.getState().viewMode).toBe('costs');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add repository' }));
+    expect(useAppStore.getState().addProjectExplorerOpen).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'ShipCode' }));
+    expect(useAppStore.getState().viewMode).toBe('project');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Git' }));
+    expect(useAppStore.getState().projectTab).toBe('git');
+  });
+
+  it('sorts pinned projects first and applies alpha and added ordering', async () => {
+    const alphaProject = {
+      ...project,
+      id: 'project-alpha',
+      name: 'Alpha',
+      pinned: false,
+      createdAt: '2026-04-12T00:00:00.000Z',
+      updatedAt: '2026-04-16T00:00:00.000Z',
+    };
+    const betaProject = {
+      ...project,
+      id: 'project-beta',
+      name: 'Beta',
+      pinned: false,
+      createdAt: '2026-04-11T00:00:00.000Z',
+      updatedAt: '2026-04-15T00:00:00.000Z',
+    };
+    const pinnedProject = {
+      ...project,
+      id: 'project-pinned',
+      name: 'Pinned',
+      pinned: true,
+      createdAt: '2026-04-13T00:00:00.000Z',
+      updatedAt: '2026-04-10T00:00:00.000Z',
+    };
+
+    mockSidebarData(invokeMock, {
+      projects: [betaProject, pinnedProject, alphaProject],
+      settings: { ...DEFAULT_SETTINGS, projectSortOrder: 'alpha' },
+    });
+
+    const { unmount } = renderWithProviders();
+
+    const pinnedButton = await screen.findByRole('button', { name: 'Pinned' });
+    const alphaButton = screen.getByRole('button', { name: 'Alpha' });
+    const betaButton = screen.getByRole('button', { name: 'Beta' });
+
+    expect(
+      pinnedButton.compareDocumentPosition(alphaButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      alphaButton.compareDocumentPosition(betaButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    unmount();
+    cleanup();
+    invokeMock.mockReset();
+    mockSidebarData(invokeMock, {
+      projects: [alphaProject, betaProject],
+      settings: { ...DEFAULT_SETTINGS, projectSortOrder: 'added' },
+    });
+
+    renderWithProviders();
+
+    const olderButton = await screen.findByRole('button', { name: 'Beta' });
+    const newerButton = screen.getByRole('button', { name: 'Alpha' });
+    expect(
+      olderButton.compareDocumentPosition(newerButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('updates sort order and resizes the sidebar from the drag handle', async () => {
+    mockSidebarData(invokeMock);
+    renderWithProviders();
+
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Sort projects' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Alphabetical/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('settings:set', { projectSortOrder: 'alpha' });
+    });
+
+    const sidebarElement = document.querySelector('[data-project-sidebar]')?.parentElement ?? null;
+    if (!(sidebarElement instanceof HTMLElement)) {
+      throw new Error('Expected project sidebar wrapper');
+    }
+
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'Resize project sidebar' }), {
+      clientX: 256,
+    });
+    fireEvent.mouseMove(document, { clientX: 100 });
+    expect(document.body).toHaveClass('cursor-col-resize', 'select-none');
+    await waitFor(() => {
+      expect(sidebarElement).toHaveStyle({ width: '220px' });
+    });
+    fireEvent.mouseUp(document);
+    expect(document.body).not.toHaveClass('cursor-col-resize', 'select-none');
+  });
+
+  it('handles missing project relink, pin, archive, remove confirmation, and unavailable open target', async () => {
+    const missingProject: Project = {
+      ...project,
+      pathExists: false,
+      setupStatus: 'invalid',
+      pinned: true,
+    };
+    const unavailableIntegrations: IntegrationStatus = {
+      ...integrations,
+      desktopApps: {
+        ...integrations.desktopApps,
+        cursor: { ...integrations.desktopApps.cursor, available: false },
+      },
+    };
+    mockSidebarData(invokeMock, {
+      projects: [missingProject],
+      integrations: unavailableIntegrations,
+    });
+    vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+
+    renderWithProviders();
+
+    expect(await screen.findByText('Missing')).toBeInTheDocument();
+    expect(screen.getByTitle(`Project folder missing: ${project.path}`)).toBeInTheDocument();
+
+    await openProjectActionsMenu();
+    expect(screen.queryByText(/^Open in /)).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Relink folder/i }));
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('dialog:open-directory');
+      expect(invokeMock).toHaveBeenCalledWith('project:relink-path', {
+        projectId: project.id,
+        path: '/tmp/relinked',
+      });
+    });
+
+    await openProjectActionsMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Unpin' }));
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('project:pin', {
+        projectId: project.id,
+        pinned: false,
+      });
+    });
+
+    await openProjectActionsMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Archive' }));
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('project:archive', { projectId: project.id });
+    });
+
+    await openProjectActionsMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+    expect(invokeMock).not.toHaveBeenCalledWith('project:remove', { projectId: project.id });
+
+    await openProjectActionsMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('project:remove', { projectId: project.id });
+    });
+  });
+
+  it('shows mutation failure toasts for project actions', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible') {
+        return [{ ...project, pathExists: false }];
+      }
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats') {
+        return { agentsRunning: 0, agentsRunningByProject: {} } satisfies Partial<DashboardStats>;
+      }
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      if (channel === 'dialog:open-directory') return '/tmp/relinked';
+      if (channel === 'project:archive') throw new Error('archive failed');
+      if (channel === 'project:remove') throw new Error('remove failed');
+      if (channel === 'project:relink-path') throw new Error('relink failed');
+      if (channel === 'project:open-path') throw new Error('open failed');
+      return [];
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    renderWithProviders();
+
+    await openProjectActionsMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Relink folder/i }));
+    await waitFor(() => {
+      expect(useToastStore.getState().toasts[0]).toMatchObject({
+        title: 'Failed to relink project',
+        body: 'relink failed',
+      });
+    });
+
+    await openProjectActionsMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Archive' }));
+    await waitFor(() => {
+      expect(useToastStore.getState().toasts[0]).toMatchObject({
+        title: 'Failed to archive project',
+        body: 'archive failed',
+      });
+    });
+
+    await openProjectActionsMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
+    await waitFor(() => {
+      expect(useToastStore.getState().toasts[0]).toMatchObject({
+        title: 'Failed to remove project',
+        body: 'remove failed',
+      });
+    });
+  });
+
+  it('handles open-path failures, notification callbacks, collapsed state, and recent ordering', async () => {
+    const listeners: Record<string, () => void> = {};
+    window.shipcode.on = vi.fn((channel: string, callback: () => void) => {
+      listeners[channel] = callback;
+      return () => {};
+    }) as unknown as typeof window.shipcode.on;
+    const staleProject = {
+      ...project,
+      id: 'project-stale',
+      name: 'Stale',
+      updatedAt: '',
+    };
+    const freshProject = {
+      ...project,
+      id: 'project-fresh',
+      name: 'Fresh',
+      updatedAt: '2026-04-15T00:00:00.000Z',
+    };
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible') {
+        return [staleProject, freshProject];
+      }
+      if (channel === 'settings:get') {
+        return { ...DEFAULT_SETTINGS, projectSortOrder: 'recent' };
+      }
+      if (channel === 'dashboard:get-stats') {
+        return { agentsRunning: 0, agentsRunningByProject: {} } satisfies Partial<DashboardStats>;
+      }
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      if (channel === 'project:open-path') throw new Error('open failed');
+      return [];
+    });
+    useAppStore.setState({ activeProjectId: null, viewMode: 'overview', sidebarCollapsed: true });
+
+    renderWithProviders();
+
+    const freshButton = await screen.findByRole('button', { name: 'Fresh' });
+    const staleButton = screen.getByRole('button', { name: 'Stale' });
+    expect(
+      freshButton.compareDocumentPosition(staleButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(document.querySelector('[data-project-sidebar]')?.parentElement).toHaveStyle({
+      width: '0px',
+    });
+
+    listeners['notification:fire']?.();
+    listeners['notification:dismiss']?.();
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions for Fresh' }));
+    fireEvent.click(await screen.findByText(/^Open in /));
+
+    await waitFor(() => {
+      expect(useToastStore.getState().toasts[0]).toMatchObject({
+        title: 'Failed to open project folder',
+        body: 'open failed',
+      });
+    });
+  });
+
+  it('handles active removal, relink cancellation, setup/settings shortcuts, warning inbox, and date fallbacks', async () => {
+    const invalidProject = {
+      ...project,
+      setupStatus: 'invalid' satisfies Project['setupStatus'],
+      createdAt: '',
+      updatedAt: '',
+    };
+    const olderProject = {
+      ...project,
+      id: 'project-older',
+      name: 'Older',
+      createdAt: '2026-04-10T00:00:00.000Z',
+      updatedAt: '',
+    };
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible') {
+        return [invalidProject, olderProject];
+      }
+      if (channel === 'settings:get') {
+        return { ...DEFAULT_SETTINGS, projectSortOrder: 'added' };
+      }
+      if (channel === 'dashboard:get-stats') {
+        return { agentsRunning: 0, agentsRunningByProject: {} } satisfies Partial<DashboardStats>;
+      }
+      if (channel === 'notification:list') {
+        return [
+          {
+            id: 'notification-approval',
+            threadId: 'thread-1',
+            projectId: project.id,
+            kind: 'approval',
+            title: 'Approval needed',
+            body: 'Waiting',
+            createdAt: '2026-05-09T00:00:00.000Z',
+            dismissedAt: null,
+          },
+        ] satisfies NotificationRecord[];
+      }
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      if (channel === 'project:remove') return undefined;
+      return [];
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    renderWithProviders();
+
+    const invalidButton = (await screen.findAllByRole('button', { name: /ShipCode/ }))[0];
+    const olderButton = screen.getByRole('button', { name: 'Older' });
+    expect(
+      invalidButton.compareDocumentPosition(olderButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByText('Setup!')).toBeInTheDocument();
+    expect(await screen.findByText('1')).toBeInTheDocument();
+
+    await openProjectActionsMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Settings' }));
+    expect(useAppStore.getState().projectSettingsModalOpen).toBe(true);
+
+    useAppStore.setState({ projectSettingsModalOpen: false, projectSettingsModalInitialTab: null });
+    await openProjectActionsMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Setup' }));
+    expect(useAppStore.getState().projectSettingsModalOpen).toBe(true);
+    expect(useAppStore.getState().projectSettingsModalInitialTab).toBe('setup');
+
+    await openProjectActionsMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
+    await waitFor(() => {
+      expect(useAppStore.getState().activeProjectId).toBeNull();
+      expect(useAppStore.getState().viewMode).toBe('overview');
+    });
+  });
+
+  it('handles cancelled relinks and ignores refresh failures after a successful relink', async () => {
+    const missingProject = { ...project, pathExists: false };
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible')
+        return [missingProject];
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats') {
+        return { agentsRunning: 0, agentsRunningByProject: {} } satisfies Partial<DashboardStats>;
+      }
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      if (channel === 'dialog:open-directory') return null;
+      return [];
+    });
+
+    const { unmount } = renderWithProviders();
+
+    await openProjectActionsMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Relink folder/i }));
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('dialog:open-directory');
+    });
+    expect(invokeMock).not.toHaveBeenCalledWith('project:relink-path', expect.anything());
+
+    unmount();
+    cleanup();
+    invokeMock.mockReset();
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible')
+        return [missingProject];
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats') {
+        return { agentsRunning: 0, agentsRunningByProject: {} } satisfies Partial<DashboardStats>;
+      }
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      if (channel === 'dialog:open-directory') return '/tmp/relinked';
+      if (channel === 'project:relink-path') return { ...project, path: '/tmp/relinked' };
+      if (channel === 'github:refresh-issues') throw new Error('refresh failed');
+      return [];
+    });
+
+    renderWithProviders();
+
+    await openProjectActionsMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Relink folder/i }));
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('github:refresh-issues', {
+        projectId: project.id,
+        force: true,
+      });
+    });
+  });
+
+  it('archives inactive projects without changing the active view', async () => {
+    mockSidebarData(invokeMock, {
+      projects: [{ ...project, id: 'project-inactive', name: 'Inactive' }],
+    });
+    useAppStore.setState({ activeProjectId: project.id, viewMode: 'project' });
+
+    renderWithProviders();
+
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for Inactive' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Archive' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('project:archive', { projectId: 'project-inactive' });
+    });
+    expect(useAppStore.getState().activeProjectId).toBe(project.id);
+    expect(useAppStore.getState().viewMode).toBe('project');
   });
 });

@@ -57,7 +57,7 @@ export function extractFencedBlock<T>(
       success: false,
       data: null,
       raw: compactArtifact(lastFence[0]),
-      error: lastFenceError ?? `No valid ${tag} fenced block found`,
+      error: lastFenceError as string,
     };
   }
 

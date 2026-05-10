@@ -147,7 +147,7 @@ function uniqueSorted<T extends string>(values: Iterable<T>, order?: readonly T[
   return items.sort((a, b) => {
     const ai = order.indexOf(a);
     const bi = order.indexOf(b);
-    return (ai === -1 ? Number.MAX_SAFE_INTEGER : ai) - (bi === -1 ? Number.MAX_SAFE_INTEGER : bi);
+    return ai - bi;
   });
 }
 
@@ -395,9 +395,7 @@ function buildNodeDraft(input: {
     description: input.description,
     status: 'pending',
     files: input.files,
-    acceptanceCriteria: input.acceptanceCriteria.length
-      ? input.acceptanceCriteria
-      : [`Task completed: ${input.title}`],
+    acceptanceCriteria: input.acceptanceCriteria,
     surfaces,
     agentRole,
     suggestedExecutorModel: null,

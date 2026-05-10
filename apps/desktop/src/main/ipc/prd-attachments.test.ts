@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearPrdAttachmentSession,
   createPrdAttachmentSession,
@@ -209,6 +209,42 @@ describe('prd-attachments', () => {
       expect(result.staged).toHaveLength(0);
       expect(result.errors[0]).toMatch(/file not found/i);
     });
+
+    it('rejects directories and missing attachment sessions', () => {
+      const id = openSession();
+      const dirPath = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-attachment-dir-'));
+      tmpFiles.push(dirPath);
+
+      const result = stagePrdAttachments(id, [dirPath]);
+      expect(result.staged).toHaveLength(0);
+      expect(result.errors[0]).toMatch(/directories are not allowed/i);
+      expect(() => stagePrdAttachments('missing-session', [])).toThrow(
+        'No attachment session: missing-session',
+      );
+    });
+
+    it('reports read and copy failures while staging', () => {
+      const id = openSession();
+      const readFail = tmpFile('.png', PNG_MAGIC);
+      const openSpy = vi.spyOn(fs, 'openSync').mockImplementationOnce(() => {
+        throw new Error('cannot open');
+      });
+
+      const readResult = stagePrdAttachments(id, [readFail]);
+      expect(readResult.staged).toHaveLength(0);
+      expect(readResult.errors[0]).toMatch(/cannot read file/i);
+      openSpy.mockRestore();
+
+      const copyFail = tmpFile('.png', PNG_MAGIC);
+      const copySpy = vi.spyOn(fs, 'copyFileSync').mockImplementationOnce(() => {
+        throw new Error('copy failed');
+      });
+
+      const copyResult = stagePrdAttachments(id, [copyFail]);
+      expect(copyResult.staged).toHaveLength(0);
+      expect(copyResult.errors[0]).toMatch(/failed to stage file/i);
+      copySpy.mockRestore();
+    });
   });
 
   describe('removePrdAttachment', () => {
@@ -233,6 +269,27 @@ describe('prd-attachments', () => {
       removePrdAttachment(id, staged[0]?.originalPath);
       expect(fs.existsSync(stagedPath)).toBe(false);
     });
+
+    it('removes by stagedPath, ignores missing attachments, and tolerates unlink failures', () => {
+      const id = openSession();
+      const png = tmpFile('.png', PNG_MAGIC);
+      const { staged } = stagePrdAttachments(id, [png]);
+      expect(staged).toHaveLength(1);
+
+      removePrdAttachment(id, '/tmp/not-attached.png');
+      expect(getPrdAttachmentSessionSummary(id)?.attachments).toHaveLength(1);
+
+      const unlinkSpy = vi.spyOn(fs, 'unlinkSync').mockImplementationOnce(() => {
+        throw new Error('unlink failed');
+      });
+      removePrdAttachment(id, staged[0]?.stagedPath);
+      expect(getPrdAttachmentSessionSummary(id)?.attachments).toHaveLength(0);
+      unlinkSpy.mockRestore();
+
+      expect(() => removePrdAttachment('missing-session', png)).toThrow(
+        'No attachment session: missing-session',
+      );
+    });
   });
 
   describe('clearPrdAttachmentSession', () => {
@@ -256,6 +313,17 @@ describe('prd-attachments', () => {
       const id = openSession();
       clearPrdAttachmentSession(id);
       expect(() => clearPrdAttachmentSession(id)).not.toThrow();
+    });
+
+    it('tolerates temp directory cleanup failures', () => {
+      const id = openSession();
+      const rmSpy = vi.spyOn(fs, 'rmSync').mockImplementationOnce(() => {
+        throw new Error('rm failed');
+      });
+
+      expect(() => clearPrdAttachmentSession(id)).not.toThrow();
+      expect(getPrdAttachmentSessionSummary(id)).toBeNull();
+      rmSpy.mockRestore();
     });
   });
 });

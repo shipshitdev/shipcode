@@ -41,6 +41,42 @@ describe('PRD section validation', () => {
     expect(getMissingRequiredPrdSections(body)).toContain('Executive Summary');
   });
 
+  it('returns missing-section issues before content quality checks', () => {
+    expect(getPrdQualityIssues('## Executive Summary\nEnough context')).toContain(
+      'missing section: Problem Statement',
+    );
+    expect(bodyHasRequiredPrdSections('## Executive Summary\nEnough context')).toBe(false);
+  });
+
+  it('handles empty PRDs and sections at the end of the document', () => {
+    expect(getMissingRequiredPrdSections('')).toContain('Executive Summary');
+    expect(getMissingRequiredPrdSections('## Executive Summary\nEnough context')).not.toContain(
+      'Executive Summary',
+    );
+  });
+
+  it('flags placeholder system specification content', () => {
+    const body = validPrd.replace(
+      '- The feature exposes a concrete observable contract with states and permission boundaries.',
+      '- <placeholder>',
+    );
+
+    expect(getPrdQualityIssues(body)).toContain(
+      'System Specification must contain concrete non-placeholder content',
+    );
+  });
+
+  it('flags blank system specification content', () => {
+    const body = validPrd.replace(
+      '- The feature exposes a concrete observable contract with states and permission boundaries.',
+      '   ',
+    );
+
+    expect(getPrdQualityIssues(body)).toContain(
+      'System Specification must contain concrete non-placeholder content',
+    );
+  });
+
   it('flags missing three-phase breakdown and empty quality sections', () => {
     const body = validPrd
       .replace(
@@ -55,5 +91,16 @@ describe('PRD section validation', () => {
       'Success Criteria must contain at least one concrete bullet',
       'Out of Scope must contain at least one concrete bullet',
     ]);
+  });
+
+  it('flags a phase breakdown with no numbered items', () => {
+    const body = validPrd.replace(
+      /## Feature Phase Breakdown[\s\S]*?## Success Criteria/,
+      '## Feature Phase Breakdown\n- Foundation\n- Runtime\n- Verification\n\n## Success Criteria',
+    );
+
+    expect(getPrdQualityIssues(body)).toContain(
+      'Feature Phase Breakdown must contain exactly three numbered phases',
+    );
   });
 });

@@ -20,4 +20,21 @@ describe('issueBodySnippet', () => {
 
     expect(issueBodySnippet(issue)).toBe('Goal Ship the settings panel with Save support.');
   });
+
+  it('returns null when the body is missing or strips to empty text', () => {
+    expect(issueBodySnippet(makeIssue({ body: null }))).toBeNull();
+    expect(
+      issueBodySnippet(makeIssue({ body: '<!-- hidden -->\n```ts\nconst x = 1\n```' })),
+    ).toBeNull();
+  });
+
+  it('falls back to the full automation body when no goal section exists', () => {
+    const issue = makeIssue({
+      id: 'automation:thread-2',
+      issueNumber: -1_000_002,
+      body: '# Nightly\n\n- Check `bun test`\n- Report status',
+    });
+
+    expect(issueBodySnippet(issue)).toBe('Nightly Check bun test Report status');
+  });
 });

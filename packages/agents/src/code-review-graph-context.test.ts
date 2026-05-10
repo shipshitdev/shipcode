@@ -55,6 +55,54 @@ describe('loadCodeReviewGraphContext', () => {
     expect(materials[0]?.content).not.toContain('Current change impact');
   });
 
+  it('can skip change impact and pass custom timeout/base options', () => {
+    vi.mocked(execFileSync).mockReturnValueOnce('Nodes: 10\n');
+
+    const materials = loadCodeReviewGraphContext('/repo', {
+      timeoutMs: 123,
+      includeChangeImpact: false,
+      changeBase: 'main',
+    });
+
+    expect(execFileSync).toHaveBeenCalledTimes(1);
+    expect(execFileSync).toHaveBeenCalledWith(
+      'uvx',
+      ['code-review-graph', 'status', '--repo', '/repo'],
+      expect.objectContaining({ timeout: 123 }),
+    );
+    expect(materials[0]?.content).not.toContain('Current change impact');
+  });
+
+  it('adds custom change bases and truncates long graph output', () => {
+    vi.mocked(execFileSync)
+      .mockReturnValueOnce(`${'s'.repeat(2100)}\n`)
+      .mockReturnValueOnce(`${'i'.repeat(2100)}\n`);
+
+    const materials = loadCodeReviewGraphContext('/repo', { changeBase: 'origin/main' });
+
+    expect(execFileSync).toHaveBeenNthCalledWith(
+      2,
+      'uvx',
+      [
+        'code-review-graph',
+        'detect-changes',
+        '--brief',
+        '--repo',
+        '/repo',
+        '--base',
+        'origin/main',
+      ],
+      expect.any(Object),
+    );
+    expect(materials[0]?.content).toContain('... truncated ...');
+  });
+
+  it('treats empty graph output as unavailable', () => {
+    vi.mocked(execFileSync).mockReturnValue('');
+
+    expect(loadCodeReviewGraphContext('/repo')).toEqual([]);
+  });
+
   it('silently skips projects without an available graph', () => {
     vi.mocked(execFileSync).mockImplementation(() => {
       throw new Error('missing graph');

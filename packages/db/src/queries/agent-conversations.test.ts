@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { AgentConversationQueries } from './agent-conversations';
 
@@ -42,6 +42,32 @@ describe('AgentConversationQueries', () => {
     expect(record.content).toBe('Plan this issue.');
     expect(record.provider).toBe('claude');
     expect(record.model).toBe('claude-sonnet-4-6');
+  });
+
+  it('returns null for missing ids and fails loudly when an inserted row cannot be reloaded', () => {
+    expect(conversations.getById('missing')).toBeNull();
+
+    const getById = vi.spyOn(conversations, 'getById').mockReturnValueOnce(null);
+    expect(() =>
+      conversations.insert({
+        threadId: 't1',
+        phase: 'plan',
+        speaker: 'planner',
+        role: 'prompt',
+        content: 'p1',
+      }),
+    ).toThrow('Failed to load agent conversation after insert');
+    getById.mockRestore();
+  });
+
+  it('falls back to the raw created_at value when it is not ISO-like', () => {
+    db.prepare(
+      `INSERT INTO agent_conversations
+        (id, thread_id, phase, round, speaker, role, content, created_at)
+       VALUES ('conv-raw-date', 't1', 'plan', 0, 'planner', 'prompt', 'p1', '')`,
+    ).run();
+
+    expect(conversations.getById('conv-raw-date')?.createdAt).toBe('');
   });
 
   it('lists turns by thread in time order', () => {

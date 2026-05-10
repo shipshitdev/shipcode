@@ -190,6 +190,53 @@ describe('AutomationRunDetail', () => {
     expect(screen.queryByText(/Waiting for an execution slot\./)).not.toBeInTheDocument();
   });
 
+  it('approves automation runs awaiting approval', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'thread:get') return makeThread({ status: 'approval' });
+      if (channel === 'plan:list') return [makePlan()];
+      if (channel === 'diff:list') return [];
+      if (channel === 'automations:run-history') return [];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'pipeline:approve') {
+        return undefined;
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('pipeline:approve', { threadId: 'thread-1' });
+    });
+  });
+
+  it('renders the approved waiting state and cancels it', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'thread:get') return makeThread({ status: 'approval' });
+      if (channel === 'plan:list') return [makePlan({ status: 'approved' })];
+      if (channel === 'diff:list') return [];
+      if (channel === 'automations:run-history') return [];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'pipeline:cancel') return undefined;
+      return null;
+    });
+
+    renderWithProviders();
+
+    expect(
+      await screen.findByText(
+        'Approval is confirmed. Execution starts when current slot frees up.',
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('pipeline:cancel', { threadId: 'thread-1' }),
+    );
+  });
+
   it('closes the run detail from the back button and Escape key', async () => {
     invokeMock.mockImplementation(async (channel: string) => {
       if (channel === 'thread:get') return makeThread();
@@ -334,6 +381,30 @@ describe('AutomationRunDetail', () => {
     expect(useAppStore.getState().activeProjectId).toBe('project-1');
     expect(useAppStore.getState().projectTab).toBe('git');
     expect(useAppStore.getState().pendingGitWorktreePath).toBe('/tmp/worktree');
+  });
+
+  it('shows pull request creation errors inline', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'thread:get') {
+        return makeThread({
+          status: 'completed',
+          worktreeBranch: 'shipcode/auto-1',
+          githubRepo: 'decod3rs/shipcode',
+          baseBranch: 'main',
+        });
+      }
+      if (channel === 'plan:list') return [];
+      if (channel === 'diff:list') return [];
+      if (channel === 'automations:run-history') return [];
+      if (channel === 'pipeline:create-pr') throw new Error('draft PR failed');
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Create PR' }));
+
+    expect(await screen.findByText('draft PR failed')).toBeInTheDocument();
   });
 
   it('opens pull request links and switches between run history entries', async () => {

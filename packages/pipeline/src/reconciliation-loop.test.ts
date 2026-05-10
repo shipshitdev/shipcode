@@ -170,6 +170,22 @@ describe('createReconciliationLoop', () => {
       expect(pipeline.cancel).toHaveBeenCalledWith('t2');
     });
 
+    it('records non-Error issue provider failures', async () => {
+      const contexts = new Map([['t1', { githubIssueNumber: 1, projectPath: '/proj' }]]);
+      const pipeline = createMockPipeline(contexts);
+      const issueStateProvider: IssueStateProvider = {
+        getIssueState: vi.fn(async () => {
+          throw 'offline';
+        }),
+      };
+
+      deps = { pipeline, issueStateProvider, log: vi.fn() };
+      const loop = createReconciliationLoop(deps);
+      const result = await loop.tick();
+
+      expect(result.errors).toEqual([{ threadId: 't1', error: 'offline' }]);
+    });
+
     it('supports case-insensitive terminal label matching', async () => {
       const contexts = new Map([['t1', { githubIssueNumber: 7, projectPath: '/proj' }]]);
       const pipeline = createMockPipeline(contexts);
@@ -255,6 +271,42 @@ describe('createReconciliationLoop', () => {
       loop.stop();
       vi.advanceTimersByTime(10_000);
       expect(pipeline.listActive).toHaveBeenCalledTimes(2);
+    });
+
+    it('uses console.log by default and logs non-Error tick failures', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const pipeline = createMockPipeline(new Map());
+      vi.mocked(pipeline.listActive).mockImplementation(() => {
+        throw 'tick exploded';
+      });
+      const issueStateProvider = createMockIssueStateProvider({});
+      const loop = createReconciliationLoop({ pipeline, issueStateProvider }, { intervalMs: 1000 });
+
+      loop.start();
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+
+      expect(logSpy).toHaveBeenCalledWith('[reconcile] tick failed: tick exploded');
+      loop.stop();
+      logSpy.mockRestore();
+    });
+
+    it('uses console.log by default and logs Error tick failures', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const pipeline = createMockPipeline(new Map());
+      vi.mocked(pipeline.listActive).mockImplementation(() => {
+        throw new Error('typed tick exploded');
+      });
+      const issueStateProvider = createMockIssueStateProvider({});
+      const loop = createReconciliationLoop({ pipeline, issueStateProvider }, { intervalMs: 1000 });
+
+      loop.start();
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+
+      expect(logSpy).toHaveBeenCalledWith('[reconcile] tick failed: typed tick exploded');
+      loop.stop();
+      logSpy.mockRestore();
     });
 
     it('start() is idempotent', () => {

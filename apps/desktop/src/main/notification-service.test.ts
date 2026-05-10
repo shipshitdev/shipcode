@@ -241,6 +241,49 @@ describe('NotificationService', () => {
     expect(webContentsSendMock).toHaveBeenCalledWith('notification:fire', record);
   });
 
+  it('fires verification-exhausted and CI-blocked notification copy variants', () => {
+    const thread = makeThread({ id: 'thread-copy', title: '' });
+    (notificationQueries.create as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(
+        makeNotificationRecord({ id: 'verification-1', kind: 'verification_exhausted' }),
+      )
+      .mockReturnValueOnce(
+        makeNotificationRecord({ id: 'verification-2', kind: 'verification_exhausted' }),
+      )
+      .mockReturnValueOnce(makeNotificationRecord({ id: 'ci-1', kind: 'ci_blocked' }));
+    const service = new NotificationService(
+      mainWindow,
+      notificationQueries,
+      settingsQueries,
+      activityQueries,
+    );
+
+    service.fire('verification_exhausted', thread, 'Tests failed with a long summary');
+    service.fire('verification_exhausted', makeThread({ id: 'thread-copy-2', title: '' }));
+    service.fire('ci_blocked', makeThread({ id: 'thread-copy-3', title: 'CI thread' }));
+
+    expect(notificationQueries.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        title: 'Target verification failed',
+        body: expect.stringContaining('Tests failed with a long summary'),
+      }),
+    );
+    expect(notificationQueries.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        body: expect.stringContaining('hit the retry limit'),
+      }),
+    );
+    expect(notificationQueries.create).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        title: 'CI blocked',
+        body: 'CI thread has failing pull request checks',
+      }),
+    );
+  });
+
   it('suppresses a generic failure immediately after verification exhausted', () => {
     const thread = makeThread({ status: 'failed' });
     const service = new NotificationService(
@@ -304,6 +347,60 @@ describe('NotificationService', () => {
     });
   });
 
+  it('ignores OS notification clicks after the window is destroyed', () => {
+    const thread = makeThread({ status: 'failed' });
+    const service = new NotificationService(
+      mainWindow,
+      notificationQueries,
+      settingsQueries,
+      activityQueries,
+    );
+    (mainWindow.isDestroyed as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
+    (notificationQueries.create as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeNotificationRecord({ kind: 'failed' }),
+    );
+
+    service.fire('failed', thread);
+    (mainWindow.isDestroyed as ReturnType<typeof vi.fn>).mockReturnValueOnce(true);
+    notificationClickHandlers[0]?.();
+
+    expect(mainWindow.show).not.toHaveBeenCalled();
+    expect(webContentsSendMock).not.toHaveBeenCalledWith(
+      'notification:focus-thread',
+      expect.anything(),
+    );
+  });
+
+  it('skips OS notifications and badge refresh when those settings are disabled', () => {
+    (settingsQueries.get as ReturnType<typeof vi.fn>).mockReturnValue({
+      notificationsEnabled: true,
+      notificationOsEnabled: false,
+      notificationBadgeEnabled: false,
+      notificationSoundEnabled: true,
+      notificationEvents: {
+        approval: true,
+        failed: true,
+        completed: true,
+        verificationExhausted: true,
+        ciBlocked: true,
+      },
+    });
+    (notificationQueries.create as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeNotificationRecord(),
+    );
+    const service = new NotificationService(
+      mainWindow,
+      notificationQueries,
+      settingsQueries,
+      activityQueries,
+    );
+
+    service.fire('failed', makeThread({ status: 'failed' }));
+
+    expect(notificationShowMock).not.toHaveBeenCalled();
+    expect(setBadgeMock).not.toHaveBeenCalled();
+  });
+
   it('does not create records when notifications or event kinds are disabled', () => {
     const service = new NotificationService(
       mainWindow,
@@ -337,5 +434,65 @@ describe('NotificationService', () => {
     service.fire('completed', makeThread({ id: 'thread-2' }));
 
     expect(notificationQueries.create).not.toHaveBeenCalled();
+  });
+
+  it('lists and dismisses active notifications while updating renderer state', () => {
+    const service = new NotificationService(
+      mainWindow,
+      notificationQueries,
+      settingsQueries,
+      activityQueries,
+    );
+    const active = [
+      makeNotificationRecord({ id: 'notification-1' }),
+      makeNotificationRecord({ id: 'notification-2', kind: 'failed' }),
+    ];
+    (notificationQueries.listActive as ReturnType<typeof vi.fn>).mockReturnValue(active);
+    (notificationQueries.listByThread as ReturnType<typeof vi.fn>).mockReturnValue(active);
+
+    expect(service.listActive()).toBe(active);
+
+    service.dismissByThread('thread-1');
+    expect(notificationQueries.dismissByThread).toHaveBeenCalledWith('thread-1');
+    expect(webContentsSendMock).toHaveBeenCalledWith('notification:dismiss', {
+      id: 'notification-1',
+    });
+    expect(webContentsSendMock).toHaveBeenCalledWith('notification:dismiss', {
+      id: 'notification-2',
+    });
+
+    service.dismiss('notification-1');
+    expect(notificationQueries.dismiss).toHaveBeenCalledWith('notification-1');
+    expect(webContentsSendMock).toHaveBeenCalledWith('notification:dismiss', {
+      id: 'notification-1',
+    });
+
+    service.dismissAll();
+    expect(notificationQueries.dismissAll).toHaveBeenCalled();
+    expect(webContentsSendMock).toHaveBeenCalledWith('notification:dismiss', {
+      id: 'notification-2',
+    });
+  });
+
+  it('does not send dismiss events when the main window is destroyed', () => {
+    (mainWindow.isDestroyed as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    const service = new NotificationService(
+      mainWindow,
+      notificationQueries,
+      settingsQueries,
+      activityQueries,
+    );
+    (notificationQueries.listByThread as ReturnType<typeof vi.fn>).mockReturnValue([
+      makeNotificationRecord({ id: 'notification-thread' }),
+    ]);
+    (notificationQueries.listActive as ReturnType<typeof vi.fn>).mockReturnValue([
+      makeNotificationRecord({ id: 'notification-active' }),
+    ]);
+
+    service.dismissByThread('thread-1');
+    service.dismiss('notification-1');
+    service.dismissAll();
+
+    expect(webContentsSendMock).not.toHaveBeenCalledWith('notification:dismiss', expect.anything());
   });
 });

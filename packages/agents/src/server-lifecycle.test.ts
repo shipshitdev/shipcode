@@ -40,6 +40,19 @@ function mockFreePort(port: number): void {
   mockCreateServer.mockReturnValue(fakeSrv);
 }
 
+function mockFreePortCloseError(error: Error): void {
+  const fakeSrv = {
+    listen: vi.fn((_p: number, cb: () => void) => {
+      cb();
+      return fakeSrv;
+    }),
+    address: vi.fn(() => ({ port: 0 })),
+    close: vi.fn((cb: (err?: Error) => void) => cb(error)),
+    on: vi.fn(),
+  };
+  mockCreateServer.mockReturnValue(fakeSrv);
+}
+
 describe('ServerLifecycleManager', () => {
   let pm: ReturnType<typeof createMockProcessManager>;
   let manager: ServerLifecycleManager;
@@ -108,6 +121,32 @@ describe('ServerLifecycleManager', () => {
     expect(callCount).toBeGreaterThanOrEqual(3);
   });
 
+  it('keeps polling through non-OK readiness responses', async () => {
+    mockFreePort(9998);
+
+    const managed = { id: 'proc-1', state: 'running' } as ManagedProcess;
+    vi.mocked(pm.spawnWithStdin).mockReturnValue(managed);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce({ ok: true }),
+    );
+
+    await expect(manager.start(config, '/project', abortController.signal, 't1')).resolves.toEqual(
+      expect.objectContaining({ processId: 'proc-1' }),
+    );
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects before spawning when free port allocation cannot close its probe server', async () => {
+    mockFreePortCloseError(new Error('close failed'));
+
+    await expect(manager.start(config, '/project', abortController.signal, 't1')).rejects.toThrow(
+      'close failed',
+    );
+    expect(pm.spawnWithStdin).not.toHaveBeenCalled();
+  });
+
   it('stops server and kills via ProcessManager on readiness timeout', async () => {
     vi.useFakeTimers();
     mockFreePort(8888);
@@ -144,8 +183,40 @@ describe('ServerLifecycleManager', () => {
     const server = await manager.start(config, '/project', abortController.signal, 't1');
     expect(server.crashed).toBe(false);
 
+    pm.emit('exit', 'other-proc', 1);
+    expect(server.crashed).toBe(false);
+
     pm.emit('exit', 'proc-crash', 1);
     expect(server.crashed).toBe(true);
+  });
+
+  it('uses zsh when SHELL is not set', async () => {
+    const previousShell = process.env.SHELL;
+    delete process.env.SHELL;
+    mockFreePort(7778);
+    vi.mocked(pm.spawnWithStdin).mockReturnValue({
+      id: 'proc-shell',
+      state: 'running',
+    } as ManagedProcess);
+
+    try {
+      await manager.start(config, '/project', abortController.signal, 't1');
+      expect(pm.spawnWithStdin).toHaveBeenCalledWith(
+        'shell',
+        '/bin/zsh',
+        expect.any(Array),
+        '/project',
+        '',
+        't1',
+        expect.any(Object),
+      );
+    } finally {
+      if (previousShell === undefined) {
+        delete process.env.SHELL;
+      } else {
+        process.env.SHELL = previousShell;
+      }
+    }
   });
 
   it('aborts readiness poll when signal aborted', async () => {
@@ -210,6 +281,47 @@ describe('ServerLifecycleManager', () => {
       vi.mocked(pm.get).mockReturnValue({ state: 'exited' } as ManagedProcess);
       await manager.stop(server);
       expect(emitLog).toHaveBeenCalledWith(expect.stringContaining('Server stopped'));
+    });
+
+    it('waits for the matching exit event before resolving', async () => {
+      const server: RunningServer = {
+        processId: 'proc-wait',
+        baseUrl: 'http://localhost:2222',
+        port: 2222,
+        crashed: false,
+      };
+
+      vi.mocked(pm.get).mockReturnValue({ state: 'running' } as ManagedProcess);
+      const stopPromise = manager.stop(server);
+      let resolved = false;
+      stopPromise.then(() => {
+        resolved = true;
+      });
+
+      pm.emit('exit', 'other-proc');
+      await Promise.resolve();
+      expect(resolved).toBe(false);
+
+      pm.emit('exit', 'proc-wait');
+      await stopPromise;
+      expect(resolved).toBe(true);
+    });
+
+    it('resolves stop after the wait timeout when no exit event arrives', async () => {
+      vi.useFakeTimers();
+      const server: RunningServer = {
+        processId: 'proc-timeout-stop',
+        baseUrl: 'http://localhost:1111',
+        port: 1111,
+        crashed: false,
+      };
+
+      vi.mocked(pm.get).mockReturnValue({ state: 'running' } as ManagedProcess);
+      const stopPromise = manager.stop(server);
+      await vi.advanceTimersByTimeAsync(5000);
+
+      await expect(stopPromise).resolves.toBeUndefined();
+      vi.useRealTimers();
     });
   });
 

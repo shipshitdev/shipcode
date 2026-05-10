@@ -237,6 +237,7 @@ export function AddProjectExplorer() {
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
+              e.stopPropagation();
               handlePathSubmit();
               (e.target as HTMLInputElement).blur();
             }

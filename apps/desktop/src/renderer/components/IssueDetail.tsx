@@ -167,12 +167,11 @@ function useIssueDetailView() {
       e.preventDefault();
       detailDragRef.current = { startX: e.clientX, startW: detailSidebarWidth };
       const onMove = (ev: MouseEvent) => {
-        if (!detailDragRef.current) return;
         // Dragging left = wider sidebar (inverted delta)
-        const delta = detailDragRef.current.startX - ev.clientX;
+        const delta = detailDragRef.current!.startX - ev.clientX;
         const next = Math.min(
           DETAIL_SIDEBAR_MAX,
-          Math.max(DETAIL_SIDEBAR_MIN, detailDragRef.current.startW + delta),
+          Math.max(DETAIL_SIDEBAR_MIN, detailDragRef.current!.startW + delta),
         );
         setDetailSidebarWidth(next);
       };
@@ -199,12 +198,7 @@ function useIssueDetailView() {
   // Shared cache with ProjectSidebar / Titlebar — no extra request.
   const { data: activeProject } = useQuery<Project | null>({
     queryKey: ['project', activeProjectId],
-    queryFn: () => {
-      if (!activeProjectId) {
-        throw new Error('Missing active project id');
-      }
-      return window.shipcode.invoke('project:get', { projectId: activeProjectId });
-    },
+    queryFn: () => window.shipcode.invoke('project:get', { projectId: activeProjectId! }),
     enabled: !!activeProjectId,
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
@@ -241,15 +235,11 @@ function useIssueDetailView() {
 
   const { data: issuePlanHistory } = useQuery<PlanRecord[]>({
     queryKey: ['issue-plan-history', activeProjectId, activeIssue?.issueNumber],
-    queryFn: () => {
-      if (!activeProjectId || !activeIssue) {
-        throw new Error('Missing issue context for plan history');
-      }
-      return window.shipcode.invoke('plan:list-for-issue', {
-        projectId: activeProjectId,
-        issueNumber: activeIssue.issueNumber,
-      });
-    },
+    queryFn: () =>
+      window.shipcode.invoke('plan:list-for-issue', {
+        projectId: activeProjectId!,
+        issueNumber: activeIssue!.issueNumber,
+      }),
     enabled: shouldLoadIssueWidePlanHistory,
     // Push-invalidated by plan:parsed in useIpc.
   });
@@ -265,20 +255,16 @@ function useIssueDetailView() {
   const isPlanHistoryLoading = isThreadPlanHistoryLoading || isIssuePlanHistoryLoading;
   const { data: issueActivity = [] } = useQuery<ActivityEntry[]>({
     queryKey: ['issue-activity', activeProjectId, activeIssue?.issueNumber],
-    queryFn: () => {
-      if (!activeProjectId || !activeIssue) {
-        throw new Error('Missing issue context for activity');
-      }
-      return window.shipcode.invoke('activity:list-for-issue', {
-        projectId: activeProjectId,
-        issueNumber: activeIssue.issueNumber,
+    queryFn: () =>
+      window.shipcode.invoke('activity:list-for-issue', {
+        projectId: activeProjectId!,
+        issueNumber: activeIssue!.issueNumber,
         limit: 200,
-      });
-    },
+      }),
     enabled: !!activeProjectId && !!activeIssue && shouldLoadActivityTab,
     refetchInterval: shouldPollLiveThread && shouldLoadActivityTab ? 60_000 : false,
   });
-  const normalizedIssueActivity = Array.isArray(issueActivity) ? issueActivity : [];
+  const normalizedIssueActivity = issueActivity;
   const planRunGroups = useMemo(() => {
     const groupedRunsByThread = new Map<string, Array<{ order: number; plan: PlanRecord }>>();
     let order = 0;
@@ -289,7 +275,7 @@ function useIssueDetailView() {
     }
     const groupedRuns = [...groupedRunsByThread.entries()].map(([threadId, entries]) => ({
       threadId,
-      order: entries[0]?.order ?? 0,
+      order: entries[0]!.order,
       plans: entries.map((entry) => entry.plan),
     }));
     const totalRuns = groupedRuns.length;
@@ -356,9 +342,8 @@ function useIssueDetailView() {
   const { data: taskGraph = null } = useQuery<TaskGraphWithNodes | null>({
     queryKey: ['task-graph', activeThreadId],
     queryFn: async () => {
-      if (!activeThreadId) throw new Error('Missing active thread id');
       const graph = await window.shipcode.invoke('task-graph:get-latest', {
-        threadId: activeThreadId,
+        threadId: activeThreadId!,
       });
       return graph && Array.isArray(graph.nodes) ? graph : null;
     },
@@ -375,11 +360,8 @@ function useIssueDetailView() {
       (thread?.status === PIPELINE_PHASE.failed || thread?.status === PIPELINE_PHASE.completed),
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset when issue changes
   useEffect(() => {
-    if (activeIssue?.id) {
-      setPhaseModelValidation({});
-      return;
-    }
     setPhaseModelValidation({});
   }, [activeIssue?.id]);
 
@@ -414,12 +396,7 @@ function useIssueDetailView() {
   const { data: expandedPlanDetail, isLoading: isExpandedPlanDetailLoading } =
     useQuery<PlanRecord | null>({
       queryKey: ['plan-by-id', expandedHistoryPlan?.id],
-      queryFn: () => {
-        if (!expandedHistoryPlan?.id) {
-          throw new Error('Missing plan id for expanded history detail');
-        }
-        return window.shipcode.invoke('plan:get-by-id', { planId: expandedHistoryPlan.id });
-      },
+      queryFn: () => window.shipcode.invoke('plan:get-by-id', { planId: expandedHistoryPlan!.id }),
       enabled: shouldFetchExpandedPlanDetail,
       staleTime: STABLE_APP_STATE_STALE_TIME,
     });
@@ -432,12 +409,7 @@ function useIssueDetailView() {
   const { data: fullScreenPlanDetail, isLoading: isFullScreenPlanDetailLoading } =
     useQuery<PlanRecord | null>({
       queryKey: ['plan-by-id', fullScreenPlanBase?.id],
-      queryFn: () => {
-        if (!fullScreenPlanBase?.id) {
-          throw new Error('Missing plan id for full-screen history detail');
-        }
-        return window.shipcode.invoke('plan:get-by-id', { planId: fullScreenPlanBase.id });
-      },
+      queryFn: () => window.shipcode.invoke('plan:get-by-id', { planId: fullScreenPlanBase!.id }),
       enabled: shouldFetchFullScreenPlanDetail,
       staleTime: STABLE_APP_STATE_STALE_TIME,
     });
@@ -481,12 +453,8 @@ function useIssueDetailView() {
     shouldFetchFullScreenPlanDetail,
   ]);
 
-  // Reset raw output toggle when switching threads so stale expanded state doesn't bleed across.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset when thread changes
   useEffect(() => {
-    if (activeThreadId) {
-      setShowRawOutput(false);
-      return;
-    }
     setShowRawOutput(false);
   }, [activeThreadId]);
 
@@ -866,32 +834,28 @@ function useIssueDetailView() {
   };
 
   const handleEditPrd = () => {
-    if (!activeIssue) return;
     openEditPrdModal(activeIssue.issueNumber, activeIssue.body ?? '', activeIssue.labels);
   };
 
   const githubIssueUrl =
-    activeIssue && !activeIssue.isQuickMode && !isAutomationIssue(activeIssue)
+    !activeIssue.isQuickMode && !isAutomationIssue(activeIssue)
       ? deriveGithubIssueUrl(activeProject?.gitRemote ?? null, activeIssue.issueNumber)
       : null;
 
   const handleOpenOnGithub = async () => {
-    if (!githubIssueUrl) return;
-    await window.shipcode.invoke('shell:open-external', { url: githubIssueUrl });
+    await window.shipcode.invoke('shell:open-external', { url: githubIssueUrl! });
   };
-  const issueBranchName =
-    activeIssue && !isAutomationIssue(activeIssue)
-      ? formatIssueBranch(
-          activeIssue.issueNumber,
-          activeIssue.title ?? '',
-          settings?.worktreeBranchFormat ?? null,
-        )
-      : null;
+  const issueBranchName = !isAutomationIssue(activeIssue)
+    ? formatIssueBranch(
+        activeIssue.issueNumber,
+        activeIssue.title,
+        settings?.worktreeBranchFormat ?? null,
+      )
+    : null;
   const handleCopyBranchName = async () => {
-    if (!issueBranchName) return;
     if (branchCopyResetRef.current) clearTimeout(branchCopyResetRef.current);
     try {
-      await navigator.clipboard.writeText(issueBranchName);
+      await navigator.clipboard.writeText(issueBranchName!);
       setBranchCopyState('copied');
     } catch {
       setBranchCopyState('error');
@@ -899,12 +863,11 @@ function useIssueDetailView() {
     branchCopyResetRef.current = setTimeout(() => setBranchCopyState('idle'), 1500);
   };
   const handleOpenPullRequest = async () => {
-    if (!linkedPrUrl) return;
-    await window.shipcode.invoke('shell:open-external', { url: linkedPrUrl });
+    await window.shipcode.invoke('shell:open-external', { url: linkedPrUrl! });
   };
 
   const handleToggleIssueState = async (newState: 'open' | 'closed') => {
-    if (!activeProjectId || !activeIssue || activeIssue.state === newState) return;
+    if (!activeProjectId || activeIssue.state === newState) return;
     setIsTogglingState(true);
     try {
       if (newState === 'closed') {
@@ -941,9 +904,7 @@ function useIssueDetailView() {
   // Executor is locked in once the pipeline is mid-loop. It's editable
   // before the run starts (todo/queued) and after terminal states where
   // the user will kick off a new run (failed/completed/done).
-  const executorEditable = EXECUTOR_EDITABLE_STATUSES.has(
-    activeIssue?.pipelineStatus ?? ISSUE_PIPELINE_STATUS.todo,
-  );
+  const executorEditable = EXECUTOR_EDITABLE_STATUSES.has(activeIssue.pipelineStatus);
   const effectivePhaseProviders = {
     planner: settings
       ? resolvePhaseModelForIssue(settings, activeProject, activeIssue, 'planner')
@@ -1073,17 +1034,15 @@ function useIssueDetailView() {
         : decodePhaseOption(phaseSelectValues.verifier),
   } as const;
   const inheritedRevisionCount = settings ? resolveRevisionCount(settings, activeProject) : 0;
-  const effectiveRevisionCount =
-    settings && activeIssue
-      ? resolveRevisionCountForIssue(settings, activeProject, activeIssue)
-      : inheritedRevisionCount;
+  const effectiveRevisionCount = settings
+    ? resolveRevisionCountForIssue(settings, activeProject, activeIssue)
+    : inheritedRevisionCount;
   const inheritedRequireApproval = settings
     ? resolveRequireApproval(settings, activeProject)
     : false;
-  const effectiveRequireApproval =
-    settings && activeIssue
-      ? resolveRequireApprovalForIssue(settings, activeProject, activeIssue)
-      : inheritedRequireApproval;
+  const effectiveRequireApproval = settings
+    ? resolveRequireApprovalForIssue(settings, activeProject, activeIssue)
+    : inheritedRequireApproval;
   const revisionCountSelectValue =
     activeIssue.revisionCountOverride == null
       ? '__inherit__'
@@ -1098,7 +1057,7 @@ function useIssueDetailView() {
   // ─── Shared render sections ──────────────────────────────────────────────
 
   const handleArchiveConfirmed = () => {
-    if (!activeProjectId || !activeIssue) return;
+    if (!activeProjectId) return;
     window.shipcode
       .invoke('github:archive-issue', {
         projectId: activeProjectId,

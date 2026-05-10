@@ -110,6 +110,7 @@ describe('Titlebar', () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   it('renders the global shell and toggles sidebar, terminal, and settings state', async () => {
@@ -122,6 +123,7 @@ describe('Titlebar', () => {
 
     renderWithProviders();
 
+    expect(await screen.findByTitle('Open agent')).toBeInTheDocument();
     expect(await screen.findByTitle('Show terminal')).toBeInTheDocument();
 
     const sidebarButton = screen.getByTitle('Hide sidebar');
@@ -129,6 +131,12 @@ describe('Titlebar', () => {
     await waitFor(() => {
       expect(screen.getByTitle('Show sidebar')).toBeInTheDocument();
     });
+
+    fireEvent.click(screen.getByTitle('Open agent'));
+    await waitFor(() => {
+      expect(useAppStore.getState().assistantVisible).toBe(true);
+    });
+    expect(screen.getByTitle('Hide agent')).toBeInTheDocument();
 
     const terminalButton = screen.getByTitle('Show terminal');
     fireEvent.click(terminalButton);
@@ -226,6 +234,33 @@ describe('Titlebar', () => {
     });
   });
 
+  it('renders warmup CPU state and empty managed task list', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'health:check') return readyHealth;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      if (channel === 'process:list-resource-usage') {
+        return {
+          capturedAt: '2026-05-08T10:00:00.000Z',
+          cpuPercent: null,
+          cpuCoreCount: 10,
+          highCpu: false,
+          tasks: [],
+        };
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    const trigger = await screen.findByRole('button', { name: 'CPU usage' });
+    expect(trigger).toHaveTextContent('CPU —');
+    fireEvent.click(trigger);
+
+    expect(await screen.findByText('10 cores · warming up')).toBeInTheDocument();
+    expect(screen.getByText('No managed processes are running.')).toBeInTheDocument();
+  });
+
   it('opens a popover with the full CLI summary when the pill is clicked and closes on Escape', async () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'settings:get') return DEFAULT_SETTINGS;
@@ -286,6 +321,65 @@ describe('Titlebar', () => {
     await waitFor(() => {
       expect(screen.queryByText('CLI availability')).not.toBeInTheDocument();
     });
+  });
+
+  it('refreshes provider usage and formats stale checked-at states', async () => {
+    const now = Date.now();
+    const initialUsage = makeUsageMap({
+      codex: makeUsage('codex', {
+        state: 'warning',
+        stale: true,
+        checkedAt: new Date(now - 20_000).toISOString(),
+        windows: [
+          {
+            key: 'session',
+            label: 'Session',
+            usedPercent: null,
+            leftPercent: null,
+            resetsAt: null,
+            resetDescription: null,
+          },
+        ],
+      }),
+      claude: makeUsage('claude', {
+        checkedAt: 'invalid-date',
+        windows: [],
+        message: null,
+        available: false,
+      }),
+    });
+    const refreshedUsage = makeUsageMap({
+      codex: makeUsage('codex', {
+        state: 'ready',
+        checkedAt: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
+      }),
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'health:check') return readyHealth;
+      if (channel === 'provider-usage:check') {
+        return (args as { force?: boolean } | undefined)?.force ? refreshedUsage : initialUsage;
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    const trigger = await screen.findByRole('button', { name: 'CLI availability' });
+    fireEvent.click(trigger);
+
+    expect(await screen.findByText('Checked just now')).toBeInTheDocument();
+    expect(screen.getByText('stale')).toBeInTheDocument();
+    expect(screen.getByText('Usage data unavailable.')).toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle('Refresh CLI status'));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('provider-usage:check', { force: true });
+    });
+    expect(await screen.findByText(/Checked 2h ago/)).toBeInTheDocument();
   });
 
   it('falls back to the provider message inside the popover when usage data is missing', async () => {

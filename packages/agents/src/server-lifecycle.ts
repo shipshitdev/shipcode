@@ -114,13 +114,18 @@ export class ServerLifecycleManager {
         resolve();
         return;
       }
-      const timeout = setTimeout(() => resolve(), 5000);
-      this.processManager.once('exit', (exitId: string) => {
+      const onExit = (exitId: string) => {
         if (exitId === server.processId) {
           clearTimeout(timeout);
+          this.processManager.off('exit', onExit);
           resolve();
         }
-      });
+      };
+      const timeout = setTimeout(() => {
+        this.processManager.off('exit', onExit);
+        resolve();
+      }, 5000);
+      this.processManager.on('exit', onExit);
     });
 
     this.emitLog(`[runtime-qa] Server stopped (port ${server.port})\r\n`);

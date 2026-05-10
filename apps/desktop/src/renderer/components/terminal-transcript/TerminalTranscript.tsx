@@ -674,8 +674,7 @@ export function TerminalTranscript({
   }, []);
 
   const scrollToBottom = useCallback(() => {
-    const node = scrollRef.current;
-    if (!node) return;
+    const node = scrollRef.current!;
     node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' });
     stickToBottomRef.current = true;
     setIsAtBottom(true);

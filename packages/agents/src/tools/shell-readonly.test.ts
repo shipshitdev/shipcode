@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shellReadOnlyTool } from './shell-readonly';
 import type { ToolContext } from './types';
 
@@ -128,10 +128,42 @@ describe('shellReadOnlyTool', () => {
     expect(res.ok).toBe(true);
   });
 
+  it('treats blank cwd forms as the worktree root', async () => {
+    await fs.writeFile(path.join(wt, 'root.txt'), 'x', 'utf-8');
+
+    const dot = await shellReadOnlyTool.execute({ command: 'ls', args: [], cwd: '.' }, ctx);
+    const blank = await shellReadOnlyTool.execute({ command: 'ls', args: [], cwd: '' }, ctx);
+
+    expect(dot.ok).toBe(true);
+    expect(blank.ok).toBe(true);
+    if (dot.ok) expect(dot.content).toContain('root.txt');
+    if (blank.ok) expect(blank.content).toContain('root.txt');
+  });
+
   it('rejects cwd that escapes the worktree', async () => {
     const res = await shellReadOnlyTool.execute({ command: 'ls', args: [], cwd: '../..' }, ctx);
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toMatch(/escape/i);
+  });
+
+  it('accepts absolute cwd paths that resolve inside the worktree', async () => {
+    const absSubdir = path.join(wt, 'abs-subdir');
+    await fs.mkdir(absSubdir, { recursive: true });
+    await fs.writeFile(path.join(absSubdir, 'inside.txt'), 'x', 'utf-8');
+
+    const res = await shellReadOnlyTool.execute({ command: 'ls', args: [], cwd: absSubdir }, ctx);
+
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.content).toContain('inside.txt');
+  });
+
+  it('stringifies non-Error cwd resolution failures', async () => {
+    const realpathSpy = vi.spyOn(fs, 'realpath').mockRejectedValueOnce('realpath failed');
+
+    const res = await shellReadOnlyTool.execute({ command: 'ls', args: [] }, ctx);
+    realpathSpy.mockRestore();
+
+    expect(res).toEqual({ ok: false, error: 'realpath failed' });
   });
 
   // ─── Happy paths ──────────────────────────────────────────────────
@@ -141,6 +173,32 @@ describe('shellReadOnlyTool', () => {
     const res = await shellReadOnlyTool.execute({ command: 'ls', args: [] }, ctx);
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.content).toContain('hello.txt');
+  });
+
+  it('returns no-output content for successful commands with empty stdout and stderr', async () => {
+    await fs.writeFile(path.join(wt, 'empty.txt'), '', 'utf-8');
+    const res = await shellReadOnlyTool.execute(
+      { command: 'grep', args: ['needle', 'empty.txt'] },
+      ctx,
+    );
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.content).toContain('exit 1');
+      expect((res.data as { exitCode: number }).exitCode).toBe(1);
+    }
+  });
+
+  it('rejects pre-aborted executions before spawning', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const res = await shellReadOnlyTool.execute(
+      { command: 'ls', args: [] },
+      { ...ctx, signal: controller.signal },
+    );
+
+    expect(res).toEqual({ ok: false, error: 'aborted' });
   });
 
   it('captures non-zero exit as ok:true with the exit code in the result', async () => {
@@ -187,6 +245,25 @@ describe('shellReadOnlyTool', () => {
       await run('git', ['init', '-q'], { cwd: wt });
       const res = await shellReadOnlyTool.execute({ command: 'git', args: ['status'] }, ctx);
       expect(res.ok).toBe(true);
+    });
+
+    it('accepts harmless git -c config values before an allowed subcommand', async () => {
+      const { execFile } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const run = promisify(execFile);
+      await run('git', ['init', '-q'], { cwd: wt });
+
+      const spaced = await shellReadOnlyTool.execute(
+        { command: 'git', args: ['-c', 'user.name=ShipCode', 'status'] },
+        ctx,
+      );
+      const stuck = await shellReadOnlyTool.execute(
+        { command: 'git', args: ['-cuser.email=shipcode@example.test', 'status'] },
+        ctx,
+      );
+
+      expect(spaced.ok).toBe(true);
+      expect(stuck.ok).toBe(true);
     });
 
     it('rejects git subcommands NOT in the allowlist (new/unknown)', async () => {
@@ -323,6 +400,22 @@ describe('shellReadOnlyTool', () => {
     it('rejects -c without a value', async () => {
       const res = await shellReadOnlyTool.execute({ command: 'git', args: ['-c'] }, ctx);
       expect(res.ok).toBe(false);
+    });
+
+    it('rejects git -c entries without key/value syntax and unknown global options', async () => {
+      const missingEquals = await shellReadOnlyTool.execute(
+        { command: 'git', args: ['-c', 'user.name', 'status'] },
+        ctx,
+      );
+      const unknownOption = await shellReadOnlyTool.execute(
+        { command: 'git', args: ['--no-pager', 'status'] },
+        ctx,
+      );
+
+      expect(missingEquals.ok).toBe(false);
+      expect(unknownOption.ok).toBe(false);
+      if (!missingEquals.ok) expect(missingEquals.error).toMatch(/missing value/);
+      if (!unknownOption.ok) expect(unknownOption.error).toMatch(/not recognized/);
     });
   });
 

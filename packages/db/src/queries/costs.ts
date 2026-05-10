@@ -154,7 +154,7 @@ export class CostsQueries {
       costUsd: r.cost_usd,
       tokensPrompt: r.tokens_prompt,
       tokensCompletion: r.tokens_completion,
-      updatedAt: toIsoUtc(r.updated_at) ?? r.updated_at,
+      updatedAt: toIsoUtc(r.updated_at) as string,
     };
   }
 

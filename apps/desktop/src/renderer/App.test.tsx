@@ -92,6 +92,15 @@ vi.mock('./components/UpdateBanner', () => ({
 vi.mock('./features/automations/create-automation-modal', () => ({
   CreateAutomationModal: () => <div>CreateAutomationModal</div>,
 }));
+vi.mock('./features/automations/automation-detail', () => ({
+  AutomationDetail: () => <div>AutomationDetail</div>,
+}));
+vi.mock('./components/AddProjectExplorer', () => ({
+  AddProjectExplorer: () => <div>AddProjectExplorer</div>,
+}));
+vi.mock('./components/AssistantPanel', () => ({
+  AssistantPanel: () => <div>AssistantPanel</div>,
+}));
 vi.mock('./components/ProjectView', () => ({
   ProjectView: () => <div>ProjectView</div>,
 }));
@@ -281,6 +290,80 @@ describe('App', () => {
       expect(document.documentElement.dataset.fontStyle).toBe('dm-sans');
       expect(document.documentElement.dataset.fontSize).toBe('14');
     });
+  });
+
+  it.each([
+    ['activity', 'ActivityView'],
+    ['costs', 'CostsView'],
+    ['inbox', 'InboxView'],
+    ['automations', 'AutomationsView'],
+  ] as const)('renders the %s top-level view', async (viewMode, expectedText) => {
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      viewMode,
+    });
+
+    renderApp();
+
+    expect(await screen.findByText(expectedText)).toBeInTheDocument();
+  });
+
+  it('renders overview without a selected project and project view for the active project', async () => {
+    renderApp();
+
+    expect(await screen.findByText('OverviewView')).toBeInTheDocument();
+
+    cleanup();
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      viewMode: 'project',
+    });
+    renderApp();
+
+    expect(await screen.findByText('ProjectView')).toBeInTheDocument();
+  });
+
+  it('renders settings, assistant, automation detail, and terminal-only layouts', async () => {
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      settingsVisible: true,
+      assistantVisible: true,
+      terminalVisible: true,
+    });
+
+    const settingsView = renderApp();
+    expect(await screen.findByText('SettingsSidebar')).toBeInTheDocument();
+    expect(await screen.findByText('SettingsPanel')).toBeInTheDocument();
+    expect(await screen.findByText('AssistantPanel')).toBeInTheDocument();
+    expect(await screen.findByText('TerminalDrawer')).toBeInTheDocument();
+    settingsView.unmount();
+
+    useAppStore.setState({
+      settingsVisible: false,
+      assistantVisible: false,
+      activeAutomationThreadId: 'automation-thread-1',
+      terminalVisible: false,
+    });
+    const automationRunView = renderApp();
+    expect(await screen.findByText('AutomationRunDetailPanel')).toBeInTheDocument();
+    automationRunView.unmount();
+
+    useAppStore.setState({
+      activeAutomationThreadId: null,
+      activeAutomationDetailId: 'automation-1',
+    });
+    const automationDetailView = renderApp();
+    expect(await screen.findByText('AutomationDetail')).toBeInTheDocument();
+    automationDetailView.unmount();
+
+    useAppStore.setState({
+      activeAutomationDetailId: null,
+      terminalVisible: true,
+      terminalMaximized: true,
+    });
+    renderApp();
+    expect(await screen.findByText('TerminalDrawer')).toBeInTheDocument();
+    expect(screen.queryByText('ProjectView')).not.toBeInTheDocument();
   });
 
   it('renders the missing project state when the active path is gone', async () => {

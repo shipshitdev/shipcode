@@ -7,7 +7,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ActivePipelineCard } from '@/ActivePipelineCard';
 import { KanbanBoard } from '@/KanbanBoard';
 import { DroppableColumn, StackedColumn } from '@/kanban-board/BoardColumns';
-import { DraggableCard } from '@/kanban-board/IssueCardParts';
+import {
+  DraggableCard,
+  DragOverlayCard,
+  IssueExternalBlockers,
+} from '@/kanban-board/IssueCardParts';
 import { IssueListView } from '@/kanban-board/IssueListView';
 import { COLUMNS } from './constants';
 import { makeIssue as makeBaseIssue, makeProject, renderIntoDom } from './test-helpers';
@@ -30,15 +34,28 @@ const SETTINGS: AppSettings = {
   requireApproval: false,
 };
 
-function expectBadgeGeometry(element: HTMLElement) {
-  expect(element.className).toContain('rounded-md');
-  expect(element.className).toContain('border');
-  expect(element.className).toContain('px-1.5');
-  expect(element.className).toContain('py-0.5');
-  expect(element.className).toContain('text-[10px]');
-  expect(element.className).toContain('font-medium');
-  expect(element.className).toContain('uppercase');
-  expect(element.className).toContain('tracking-wide');
+function openMoreActions(container: HTMLElement) {
+  const trigger = container.querySelector('button[title="More actions"]');
+  if (!(trigger instanceof HTMLButtonElement)) {
+    throw new Error('Expected more actions button');
+  }
+
+  act(() => {
+    trigger.dispatchEvent(
+      new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 }),
+    );
+    trigger.click();
+  });
+}
+
+function menuItem(label: string) {
+  const item = Array.from(document.body.querySelectorAll('[role="menuitem"]')).find((element) =>
+    element.textContent?.includes(label),
+  );
+  if (!(item instanceof HTMLElement)) {
+    throw new Error(`Expected menu item: ${label}`);
+  }
+  return item;
 }
 
 afterEach(() => {
@@ -46,6 +63,34 @@ afterEach(() => {
 });
 
 describe('linked PR affordances', () => {
+  it('renders external blocker badges with singular, plural, and empty states', () => {
+    const empty = renderIntoDom(
+      <IssueExternalBlockers
+        issue={makeIssue({ ciBlocked: false, unresolvedReviewCommentCount: 0 })}
+      />,
+    );
+    expect(empty.container.textContent).toBe('');
+    empty.cleanup();
+
+    const singular = renderIntoDom(
+      <IssueExternalBlockers
+        issue={makeIssue({ ciBlocked: true, unresolvedReviewCommentCount: 1 })}
+      />,
+    );
+    expect(singular.container.textContent).toContain('CI blocked');
+    expect(singular.container.textContent).toContain('1 review');
+    expect(singular.container.textContent).not.toContain('1 reviews');
+    singular.cleanup();
+
+    const plural = renderIntoDom(
+      <IssueExternalBlockers
+        issue={makeIssue({ ciBlocked: false, unresolvedReviewCommentCount: 3 })}
+      />,
+    );
+    expect(plural.container.textContent).toContain('3 reviews');
+    plural.cleanup();
+  });
+
   it('renders the animated background layer only for active cards', () => {
     const activeView = renderIntoDom(
       <DndContext>
@@ -100,6 +145,201 @@ describe('linked PR affordances', () => {
     view.cleanup();
   });
 
+  it('renders creating cards and ignores direct activation while they are staged', () => {
+    const onClick = vi.fn();
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            id: 'creating-issue',
+            issueNumber: 0,
+            title: 'Creating issue',
+            pipelineStatus: 'todo',
+            syncState: 'creating',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          })}
+          onClick={onClick}
+        />
+      </DndContext>,
+    );
+
+    const card = view.container.querySelector('[data-issue-card-id="creating-issue"]');
+    if (!(card instanceof HTMLElement)) {
+      throw new Error('Expected creating issue card');
+    }
+
+    expect(view.container.textContent).toContain('Creating');
+    expect(card.className).toContain('opacity-80');
+    expect(view.container.querySelector('button[title="More actions"]')).toBeNull();
+
+    act(() => {
+      card.click();
+      card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+
+    expect(onClick).not.toHaveBeenCalled();
+    view.cleanup();
+  });
+
+  it('applies selected tone variants for completed and closed cards', () => {
+    const completed = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            id: 'selected-completed',
+            pipelineStatus: 'completed',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          })}
+          isSelected
+          onClick={vi.fn()}
+          readOnly
+        />
+      </DndContext>,
+    );
+    expect(
+      completed.container.querySelector('[data-issue-card-id="selected-completed"]')?.className,
+    ).toContain('ring-1 ring-border-strong');
+    completed.cleanup();
+
+    const closed = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            id: 'selected-closed',
+            pipelineStatus: 'closed',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          })}
+          isSelected
+          onClick={vi.fn()}
+          readOnly
+        />
+      </DndContext>,
+    );
+    expect(
+      closed.container.querySelector('[data-issue-card-id="selected-closed"]')?.className,
+    ).toContain('ring-1 ring-border-strong');
+    closed.cleanup();
+
+    const selectedTodo = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            id: 'selected-todo',
+            pipelineStatus: 'todo',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          })}
+          isSelected
+          onClick={vi.fn()}
+          readOnly
+        />
+      </DndContext>,
+    );
+    const selectedTodoCard = selectedTodo.container.querySelector(
+      '[data-issue-card-id="selected-todo"]',
+    );
+    expect(selectedTodoCard?.className).toContain('ring-1 ring-border-strong');
+    selectedTodo.cleanup();
+
+    const keyboardFocused = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            id: 'keyboard-focused',
+            pipelineStatus: 'todo',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          })}
+          isKeyboardFocused
+          onClick={vi.fn()}
+          readOnly
+        />
+      </DndContext>,
+    );
+    const keyboardFocusedCard = keyboardFocused.container.querySelector(
+      '[data-issue-card-id="keyboard-focused"]',
+    );
+    expect(keyboardFocusedCard?.className).toContain('border-accent/80');
+    expect(keyboardFocusedCard?.getAttribute('data-keyboard-focused')).toBe('true');
+    keyboardFocused.cleanup();
+  });
+
+  it('renders copied branch menu state', () => {
+    const onCopyBranchName = vi.fn();
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            id: 'issue-branch-copied',
+            issueNumber: 208,
+            title: 'Issue with copied branch',
+            pipelineStatus: 'approval',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          })}
+          branchName="shipcode/issue-208"
+          branchCopyState="copied"
+          onClick={vi.fn()}
+          onCopyBranchName={onCopyBranchName}
+        />
+      </DndContext>,
+    );
+
+    openMoreActions(view.container);
+    const menu = document.body.querySelector('[role="menu"]');
+    if (!(menu instanceof HTMLElement)) {
+      throw new Error('Expected actions menu');
+    }
+    act(() => {
+      menu.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+      menu.click();
+    });
+    act(() => menuItem('Copied!').click());
+    expect(onCopyBranchName).toHaveBeenCalledWith(expect.anything(), 'shipcode/issue-208');
+    view.cleanup();
+  });
+
+  it('ignores card keyboard activation when the event is already handled by a child', () => {
+    const onClick = vi.fn();
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            id: 'keyboard-child',
+            pipelineStatus: 'todo',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          })}
+          onClick={onClick}
+          readOnly
+        />
+      </DndContext>,
+    );
+
+    const card = view.container.querySelector('[data-issue-card-id="keyboard-child"]');
+    const title = view.container.querySelector('.line-clamp-1');
+    if (!(card instanceof HTMLElement) || !(title instanceof HTMLElement)) {
+      throw new Error('Expected card and nested title');
+    }
+
+    act(() => {
+      title.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      const prevented = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      prevented.preventDefault();
+      card.dispatchEvent(prevented);
+    });
+
+    expect(onClick).not.toHaveBeenCalled();
+    view.cleanup();
+  });
+
   it('opens the linked PR from a closed card without triggering card selection', () => {
     const onClick = vi.fn();
     const onOpenPullRequest = vi.fn();
@@ -121,6 +361,7 @@ describe('linked PR affordances', () => {
     }
 
     act(() => {
+      button.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
       button.click();
     });
 
@@ -181,15 +422,58 @@ describe('linked PR affordances', () => {
 
     expect(onClick).toHaveBeenCalledTimes(1);
 
-    const button = view.container.querySelector('button[title="Open issue detail"]');
-    if (!(button instanceof HTMLElement)) {
-      throw new Error('Expected issue detail button');
+    expect(view.container.querySelector('button[title="Open issue detail"]')).toBeNull();
+    expect(view.container.querySelector('button[title="More actions"]')).toBeNull();
+    view.cleanup();
+  });
+
+  it('handles compact card keyboard activation and GitHub issue link guards', () => {
+    const onClick = vi.fn();
+    const onOpenPullRequest = vi.fn();
+    const issue = makeIssue({
+      id: 'github-card-link',
+      issueNumber: 88,
+      title: 'GitHub card link',
+      pipelineStatus: 'todo',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+    });
+
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={issue}
+          issueGithubUrl="https://github.com/acme/repo/issues/88"
+          onClick={onClick}
+          onOpenPullRequest={onOpenPullRequest}
+        />
+      </DndContext>,
+    );
+
+    const card = view.container.querySelector('[data-issue-card-id="github-card-link"]');
+    if (!(card instanceof HTMLElement)) {
+      throw new Error('Expected issue card');
     }
 
     act(() => {
-      button.click();
+      card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      card.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+      card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
 
+    expect(onClick).toHaveBeenCalledTimes(2);
+
+    const issueLink = view.container.querySelector('button[title="Open issue on GitHub"]');
+    if (!(issueLink instanceof HTMLButtonElement)) {
+      throw new Error('Expected issue link button');
+    }
+
+    act(() => {
+      issueLink.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      issueLink.click();
+    });
+
+    expect(onOpenPullRequest).toHaveBeenCalledWith('https://github.com/acme/repo/issues/88');
     expect(onClick).toHaveBeenCalledTimes(2);
     view.cleanup();
   });
@@ -236,26 +520,293 @@ describe('linked PR affordances', () => {
     view.cleanup();
   });
 
-  it('styles hover actions with the same badge geometry as status chips', () => {
+  it('handles list-row keyboard activation and nested button pointer guards', () => {
+    const onIssueClick = vi.fn();
+    const onOpenPullRequest = vi.fn();
+    const onArchiveIssue = vi.fn();
+    const closedIssue = makeIssue({
+      id: 'closed-keyboard-row',
+      issueNumber: 77,
+      title: 'Closed keyboard row',
+      pipelineStatus: 'closed',
+      state: 'closed',
+      linkedPrNumber: 78,
+      linkedPrUrl: 'https://github.com/acme/repo/pull/78',
+    });
+
+    const view = renderIntoDom(
+      <DndContext>
+        <IssueListView
+          issues={[closedIssue]}
+          activeId={null}
+          repoUrl="https://github.com/acme/repo"
+          selectedIssueNumber={77}
+          issueRevisionBadgeById={new Map()}
+          issueApprovalBadgeById={new Map()}
+          issuePriorityBadgeById={new Map()}
+          onIssueClick={onIssueClick}
+          onOpenPullRequest={onOpenPullRequest}
+          onArchiveIssue={onArchiveIssue}
+        />
+      </DndContext>,
+    );
+
+    const row = view.container.querySelector('[data-rfd-draggable-id], [role="button"]');
+    const rowButton = Array.from(view.container.querySelectorAll('[role="button"]')).find(
+      (element) => element.textContent?.includes('Closed keyboard row'),
+    );
+    const target = rowButton ?? row;
+    if (!(target instanceof HTMLElement)) {
+      throw new Error('Expected list row');
+    }
+
+    act(() => {
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+
+    expect(onIssueClick).toHaveBeenCalledTimes(2);
+
+    for (const title of [
+      'Open issue on GitHub',
+      'Open pull request on GitHub',
+      'Open issue detail',
+      'Archive issue',
+    ]) {
+      const button = view.container.querySelector(`button[title="${title}"]`);
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error(`Expected nested button: ${title}`);
+      }
+      act(() => {
+        button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      });
+    }
+
+    view.cleanup();
+  });
+
+  it('renders list-row labels, badges, custom dots, and archive actions across issue types', () => {
+    const onIssueClick = vi.fn();
+    const onOpenPullRequest = vi.fn();
+    const onArchiveIssue = vi.fn();
+    const creatingIssue = makeIssue({
+      id: 'creating-issue',
+      issueNumber: -1,
+      title: 'Creating draft issue',
+      pipelineStatus: 'todo',
+      isQuickMode: true,
+    });
+    const quickIssue = makeIssue({
+      id: 'quick-issue',
+      issueNumber: -2,
+      title: 'Quick task',
+      pipelineStatus: 'todo',
+      isQuickMode: true,
+    });
+    const automationIssue = makeIssue({
+      id: 'automation:thread-2',
+      issueNumber: -1_000_002,
+      title: '[Auto] Sweep inbox',
+      pipelineStatus: 'completed',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+    });
+    const closedIssue = makeIssue({
+      id: 'closed-issue',
+      issueNumber: 99,
+      title: 'Closed issue',
+      pipelineStatus: 'closed',
+      state: 'closed',
+      linkedPrNumber: 100,
+      linkedPrUrl: null,
+      ciBlocked: true,
+      unresolvedReviewCommentCount: 2,
+    });
+    const githubIssue = makeIssue({
+      id: 'github-issue',
+      issueNumber: 101,
+      title: 'Open on GitHub',
+      pipelineStatus: 'todo',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+      assignee: 'octocat',
+    });
+
+    const view = renderIntoDom(
+      <DndContext>
+        <IssueListView
+          issues={[creatingIssue, quickIssue, automationIssue, closedIssue, githubIssue]}
+          activeId="other-issue"
+          columnDotColors={{ todo: '#123456' }}
+          selectedIssueNumber={99}
+          repoUrl="https://github.com/acme/repo"
+          issueRevisionBadgeById={
+            new Map([['closed-issue', { label: 'r2', title: 'Revision 2', variant: 'default' }]])
+          }
+          issueApprovalBadgeById={
+            new Map([
+              ['closed-issue', { label: 'Approval', title: 'Needs approval', source: 'issue' }],
+            ])
+          }
+          issuePriorityBadgeById={
+            new Map([
+              [
+                'closed-issue',
+                { label: 'P0', title: 'Priority P0', variant: 'warning', rank: 'p0' },
+              ],
+            ])
+          }
+          issueStalenessById={
+            new Map([
+              [
+                'closed-issue',
+                {
+                  isStale: true,
+                  reason: 'status-stale',
+                  title: 'Needs refresh',
+                  ageMs: 1_000,
+                  since: '2026-04-13T00:00:00.000Z',
+                  thresholdMs: 500,
+                },
+              ],
+            ])
+          }
+          approvedAwaitingExecutionIssueIds={new Set(['creating-issue'])}
+          onIssueClick={onIssueClick}
+          onOpenPullRequest={onOpenPullRequest}
+          onArchiveIssue={onArchiveIssue}
+        />
+      </DndContext>,
+    );
+
+    expect(view.container.textContent).toContain('Creating');
+    expect(view.container.textContent).toContain('Quick');
+    expect(view.container.textContent).toContain('Auto');
+    expect(view.container.textContent).toContain('CI blocked');
+    expect(view.container.textContent).toContain('2 reviews');
+    expect(view.container.textContent).toContain('P0');
+    expect(view.container.textContent).toContain('r2');
+    expect(view.container.textContent).toContain('octocat');
+    expect(view.container.querySelector('[data-staleness-dot="true"]')).toBeTruthy();
+
+    const issueLink = view.container.querySelector('button[title="Open issue on GitHub"]');
+    if (!(issueLink instanceof HTMLButtonElement)) {
+      throw new Error('Expected issue link button');
+    }
+
+    act(() => {
+      issueLink.click();
+    });
+
+    expect(onOpenPullRequest).toHaveBeenCalledWith('https://github.com/acme/repo/issues/101');
+    expect(onIssueClick).not.toHaveBeenCalled();
+
+    const archiveButton = view.container.querySelector('button[title="Archive issue"]');
+    if (!(archiveButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected list archive button');
+    }
+
+    act(() => {
+      archiveButton.click();
+    });
+
+    expect(onArchiveIssue).toHaveBeenCalledWith(closedIssue);
+    view.cleanup();
+  });
+
+  it('renders drag overlay labels for creating, quick, automation, and regular issues', () => {
+    const view = renderIntoDom(
+      <>
+        <DragOverlayCard issue={makeIssue({ syncState: 'creating', title: 'Creating overlay' })} />
+        <DragOverlayCard
+          issue={makeIssue({ issueNumber: -2, isQuickMode: true, title: 'Quick overlay' })}
+        />
+        <DragOverlayCard
+          issue={makeIssue({
+            issueNumber: -1_000_001,
+            title: 'Automation overlay',
+            pipelineStatus: 'approval',
+          })}
+          approvedAwaitingExecution
+        />
+        <DragOverlayCard issue={makeIssue({ issueNumber: 42, title: 'Regular overlay' })} />
+      </>,
+    );
+
+    expect(view.container.textContent).toContain('Creating');
+    expect(view.container.textContent).toContain('Quick');
+    expect(view.container.textContent).toContain('Auto');
+    expect(view.container.textContent).toContain('#42');
+    view.cleanup();
+  });
+
+  it('collapses and expands list columns without dropping the issue counts', () => {
+    const view = renderIntoDom(
+      <DndContext>
+        <IssueListView
+          issues={[
+            makeIssue({
+              id: 'todo-list-issue',
+              issueNumber: 201,
+              title: 'Todo list issue',
+              pipelineStatus: 'todo',
+              linkedPrNumber: null,
+              linkedPrUrl: null,
+            }),
+          ]}
+          activeId={null}
+          issueRevisionBadgeById={new Map()}
+          issueApprovalBadgeById={new Map()}
+          issuePriorityBadgeById={new Map()}
+          onIssueClick={vi.fn()}
+        />
+      </DndContext>,
+    );
+
+    expect(view.container.textContent).toContain('Todo list issue');
+    const todoToggle = Array.from(view.container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Todo'),
+    );
+    if (!(todoToggle instanceof HTMLButtonElement)) {
+      throw new Error('Expected todo column toggle');
+    }
+
+    act(() => {
+      todoToggle.click();
+    });
+
+    expect(view.container.textContent).toContain('(1)');
+    expect(view.container.textContent).not.toContain('Todo list issue');
+
+    act(() => {
+      todoToggle.click();
+    });
+
+    expect(view.container.textContent).toContain('Todo list issue');
+    view.cleanup();
+  });
+
+  it('renders card actions in the compact action menu', () => {
+    const onStartPipeline = vi.fn();
     const todoView = renderIntoDom(
       <DndContext>
         <DraggableCard
           issue={makeIssue({ pipelineStatus: 'todo' })}
           onClick={vi.fn()}
-          onStartPipeline={vi.fn()}
+          onStartPipeline={onStartPipeline}
         />
       </DndContext>,
     );
 
-    const planButton = todoView.container.querySelector('button[title="Start planning"]');
-    if (!(planButton instanceof HTMLButtonElement)) {
-      throw new Error('Expected plan action button');
-    }
-
-    expectBadgeGeometry(planButton);
-    expect(planButton.className).toContain('border-agent/25');
+    openMoreActions(todoView.container);
+    act(() => menuItem('Start Pipeline').click());
+    expect(onStartPipeline).toHaveBeenCalledWith(
+      expect.objectContaining({ pipelineStatus: 'todo' }),
+    );
     todoView.cleanup();
 
+    const onRerun = vi.fn();
     const failedView = renderIntoDom(
       <DndContext>
         <DraggableCard
@@ -265,22 +816,18 @@ describe('linked PR affordances', () => {
             linkedPrUrl: null,
           })}
           onClick={vi.fn()}
-          onRerun={vi.fn()}
+          onRerun={onRerun}
         />
       </DndContext>,
     );
 
-    const retryButton = failedView.container.querySelector('button[title="Retry pipeline"]');
-    if (!(retryButton instanceof HTMLButtonElement)) {
-      throw new Error('Expected retry action button');
-    }
-
-    expectBadgeGeometry(retryButton);
-    expect(retryButton.className).toContain('border-danger/30');
+    openMoreActions(failedView.container);
+    act(() => menuItem('Retry').click());
+    expect(onRerun).toHaveBeenCalledWith(expect.objectContaining({ pipelineStatus: 'failed' }));
     failedView.cleanup();
   });
 
-  it('renders loading affordances for card action badges', () => {
+  it('keeps pending card actions in the compact action menu', () => {
     const retryView = renderIntoDom(
       <DndContext>
         <DraggableCard
@@ -296,13 +843,8 @@ describe('linked PR affordances', () => {
       </DndContext>,
     );
 
-    const retryButton = retryView.container.querySelector('button[title="Retrying pipeline"]');
-    if (!(retryButton instanceof HTMLButtonElement)) {
-      throw new Error('Expected retrying action button');
-    }
-    expect(retryButton.disabled).toBe(true);
-    expect(retryButton.textContent).toContain('RETRY');
-    expect(retryButton.querySelector('.animate-spin')).not.toBeNull();
+    openMoreActions(retryView.container);
+    expect(menuItem('Retry').getAttribute('disabled')).toBeNull();
     retryView.cleanup();
 
     const doneView = renderIntoDom(
@@ -320,14 +862,125 @@ describe('linked PR affordances', () => {
       </DndContext>,
     );
 
-    const closeButton = doneView.container.querySelector('button[title="Closing issue"]');
-    if (!(closeButton instanceof HTMLButtonElement)) {
-      throw new Error('Expected closing issue action button');
-    }
-    expect(closeButton.disabled).toBe(true);
-    expect(closeButton.textContent).toContain('CLOSE');
-    expect(closeButton.querySelector('.animate-spin')).not.toBeNull();
+    openMoreActions(doneView.container);
+    expect(menuItem('Close Issue').getAttribute('disabled')).toBeNull();
     doneView.cleanup();
+  });
+
+  it('routes compact card menu actions for active, paused, completed, and closed issues', () => {
+    const activeIssue = makeIssue({
+      id: 'issue-active-menu',
+      issueNumber: 301,
+      title: 'Active menu issue',
+      pipelineStatus: 'executing',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+    });
+    const onPause = vi.fn();
+    const onCancel = vi.fn();
+    const activeView = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={activeIssue}
+          onClick={vi.fn()}
+          onPause={onPause}
+          onCancel={onCancel}
+        />
+      </DndContext>,
+    );
+
+    openMoreActions(activeView.container);
+    act(() => menuItem('Pause').click());
+    expect(onPause).toHaveBeenCalledWith(activeIssue);
+    activeView.cleanup();
+
+    const cancelView = renderIntoDom(
+      <DndContext>
+        <DraggableCard issue={activeIssue} onClick={vi.fn()} onCancel={onCancel} />
+      </DndContext>,
+    );
+
+    openMoreActions(cancelView.container);
+    act(() => menuItem('Cancel').click());
+    expect(onCancel).toHaveBeenCalledWith(activeIssue);
+    cancelView.cleanup();
+
+    const pausedIssue = makeIssue({
+      id: 'issue-paused-menu',
+      issueNumber: 302,
+      title: 'Paused menu issue',
+      pipelineStatus: 'paused',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+    });
+    const onResume = vi.fn();
+    const pausedView = renderIntoDom(
+      <DndContext>
+        <DraggableCard issue={pausedIssue} onClick={vi.fn()} onResume={onResume} />
+      </DndContext>,
+    );
+
+    openMoreActions(pausedView.container);
+    act(() => menuItem('Resume').click());
+    expect(onResume).toHaveBeenCalledWith(pausedIssue);
+    pausedView.cleanup();
+
+    const completedIssue = makeIssue({
+      id: 'issue-completed-menu',
+      issueNumber: 303,
+      title: 'Completed menu issue',
+      pipelineStatus: 'completed',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+    });
+    const onCreatePr = vi.fn();
+    const onMarkDone = vi.fn();
+    const completedView = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={completedIssue}
+          onClick={vi.fn()}
+          onCreatePr={onCreatePr}
+          onMarkDone={onMarkDone}
+        />
+      </DndContext>,
+    );
+
+    openMoreActions(completedView.container);
+    act(() => menuItem('Create PR').click());
+    expect(onCreatePr).toHaveBeenCalledWith(completedIssue);
+    completedView.cleanup();
+
+    const closeView = renderIntoDom(
+      <DndContext>
+        <DraggableCard issue={completedIssue} onClick={vi.fn()} onMarkDone={onMarkDone} />
+      </DndContext>,
+    );
+
+    openMoreActions(closeView.container);
+    act(() => menuItem('Close Issue').click());
+    expect(onMarkDone).toHaveBeenCalledWith(completedIssue);
+    closeView.cleanup();
+
+    const closedIssue = makeIssue({
+      id: 'issue-closed-menu',
+      issueNumber: 304,
+      title: 'Closed menu issue',
+      pipelineStatus: 'closed',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+    });
+    const onArchiveIssue = vi.fn();
+    const closedView = renderIntoDom(
+      <DndContext>
+        <DraggableCard issue={closedIssue} onClick={vi.fn()} onArchiveIssue={onArchiveIssue} />
+      </DndContext>,
+    );
+
+    openMoreActions(closedView.container);
+    act(() => menuItem('Archive').click());
+    expect(onArchiveIssue).toHaveBeenCalledWith(closedIssue);
+    closedView.cleanup();
   });
 
   it('shows retry affordance on failed automation cards', () => {
@@ -347,20 +1000,14 @@ describe('linked PR affordances', () => {
       </DndContext>,
     );
 
-    const retryButton = view.container.querySelector('button[title="Retry pipeline"]');
-    if (!(retryButton instanceof HTMLButtonElement)) {
-      throw new Error('Expected automation retry action button');
-    }
-
-    act(() => {
-      retryButton.click();
-    });
+    openMoreActions(view.container);
+    act(() => menuItem('Retry').click());
 
     expect(onRerun).toHaveBeenCalledWith(issue);
     view.cleanup();
   });
 
-  it('renders an approval badge on cards with a source tooltip', () => {
+  it('omits approval badges from compact cards', () => {
     const view = renderIntoDom(
       <DndContext>
         <DraggableCard
@@ -376,10 +1023,12 @@ describe('linked PR affordances', () => {
       </DndContext>,
     );
 
-    const badge = Array.from(view.container.querySelectorAll('[title]')).find(
-      (element) => element.getAttribute('title') === 'Approval required via project override',
-    );
-    expect(badge?.textContent).toContain('Approval');
+    expect(view.container.textContent).not.toContain('Approval');
+    expect(
+      Array.from(view.container.querySelectorAll('[title]')).find(
+        (element) => element.getAttribute('title') === 'Approval required via project override',
+      ),
+    ).toBeUndefined();
     view.cleanup();
   });
 
@@ -407,7 +1056,7 @@ describe('linked PR affordances', () => {
 
     expect(view.container.textContent).toContain('Waiting');
     expect(view.container.textContent).toContain('Approved');
-    expect(view.container.textContent).toContain('Waiting for slot');
+    expect(view.container.textContent).toContain('Approved and waiting for execution');
     view.cleanup();
   });
 
@@ -627,13 +1276,10 @@ describe('linked PR affordances', () => {
     const headerRow = executingHeader.parentElement;
     expect(headerRow?.className).toContain('sticky');
     expect(headerRow?.className).toContain('top-0');
-    expect(headerRow?.className).toContain(
-      'bg-[color-mix(in_srgb,var(--agent)_18%,var(--bg-secondary))]',
-    );
-    expect(headerRow?.className).not.toContain('backdrop-blur');
+    expect(headerRow?.className).toContain('bg-secondary');
+    expect(headerRow?.className).toContain('backdrop-blur');
     expect(headerRow?.className).not.toContain('opacity');
-    expect(executingHeader.className).toContain('bg-transparent');
-    expect(executingHeader.className).not.toContain('bg-agent');
+    expect(executingHeader.className).toContain('text-left');
     expect(headerRow?.nextElementSibling?.className).toContain('p-1.5');
     expect(headerRow?.nextElementSibling?.className).not.toContain('pt-0');
     expect(executingHeader.getAttribute('aria-expanded')).toBe('true');
@@ -819,11 +1465,12 @@ describe('linked PR affordances', () => {
       element.textContent?.includes('GPT-5.4 · medium'),
     );
     expect(modelBadge).toBeUndefined();
-    expect(view.container.querySelector('button[title="Open issue detail"]')).toBeTruthy();
+    expect(view.container.querySelector('button[title="More actions"]')).toBeTruthy();
     view.cleanup();
   });
 
-  it('reserves enough card header space when branch copy adds a third action icon', () => {
+  it('moves branch copy into the compact action menu', () => {
+    const onCopyBranchName = vi.fn();
     const lastPhaseUpdate = new Date(1_700_000_000_000).toISOString();
     const view = renderIntoDom(
       <DndContext>
@@ -839,19 +1486,21 @@ describe('linked PR affordances', () => {
           })}
           branchName="shipcode/issue-207"
           onClick={vi.fn()}
-          onCopyBranchName={vi.fn()}
+          onCopyBranchName={onCopyBranchName}
         />
       </DndContext>,
     );
 
-    expect(view.container.querySelector('button[title="Open issue detail"]')).toBeTruthy();
-    expect(view.container.querySelector('button[title^="Copy branch name"]')).toBeTruthy();
+    expect(view.container.querySelector('button[title="Open issue detail"]')).toBeNull();
+    expect(view.container.querySelector('button[title^="Copy branch name"]')).toBeNull();
     expect(view.container.querySelector('button[title="More actions"]')).toBeTruthy();
-    expect(view.container.querySelector('.pr-20')).toBeTruthy();
+    openMoreActions(view.container);
+    act(() => menuItem('Copy branch').click());
+    expect(onCopyBranchName).toHaveBeenCalledWith(expect.anything(), 'shipcode/issue-207');
     view.cleanup();
   });
 
-  it('keeps todo cards compact while preserving two-line titles and the phase action row', () => {
+  it('keeps todo cards compact with single-line titles and menu actions', () => {
     const view = renderIntoDom(
       <DndContext>
         <DraggableCard
@@ -871,7 +1520,9 @@ describe('linked PR affordances', () => {
 
     const card = view.container.querySelector('[data-issue-card-id="issue-todo"]');
     expect(card?.className).toContain('flex-col');
-    expect(view.container.textContent).toContain('todo');
+    expect(view.container.querySelector('.line-clamp-1')).not.toBeNull();
+    expect(view.container.textContent).not.toContain('todo');
+    expect(view.container.querySelector('button[title="More actions"]')).not.toBeNull();
     view.cleanup();
   });
 
@@ -906,6 +1557,52 @@ describe('linked PR affordances', () => {
     const columns = Array.from(view.container.children);
     expect(columns[0]?.className).toContain('min-w-[240px]');
     expect(columns[1]?.className).toContain('min-w-[280px]');
+    view.cleanup();
+  });
+
+  it('passes optional DroppableColumn metadata through card props', () => {
+    const issue = makeIssue({
+      id: 'metadata-issue',
+      issueNumber: -1,
+      isQuickMode: true,
+      title: 'Metadata issue',
+      pipelineStatus: 'todo',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+    });
+    const view = renderIntoDom(
+      <DndContext>
+        <DroppableColumn
+          id="todo"
+          columnKey="todo"
+          columnDotColor="#654321"
+          label="Todo"
+          issues={[issue]}
+          droppable
+          repoUrl="https://github.com/acme/repo"
+          issueBranchNameById={new Map([[issue.id, 'shipcode/metadata']])}
+          branchCopyIssueId={issue.id}
+          branchCopyStatus="error"
+          focusedIssueId={issue.id}
+          startingPipelineId={issue.id}
+          flashingIssueIds={new Set([issue.id])}
+          onIssueClick={vi.fn()}
+          issuePhaseChipById={new Map()}
+          issueRevisionBadgeById={new Map()}
+          issueApprovalBadgeById={new Map()}
+          issuePriorityBadgeById={new Map()}
+          issueStalenessById={new Map()}
+          approvedAwaitingExecutionIssueIds={new Set()}
+        />
+      </DndContext>,
+    );
+
+    expect(
+      view.container.querySelector('[style*="background-color: rgb(101, 67, 33)"]'),
+    ).not.toBeNull();
+    expect(view.container.textContent).toContain('Quick');
+    expect(view.container.querySelector('[data-flashing="true"]')).not.toBeNull();
+    expect(view.container.querySelector('[data-keyboard-focused="true"]')).not.toBeNull();
     view.cleanup();
   });
 
@@ -960,10 +1657,181 @@ describe('linked PR affordances', () => {
     expect(columns[1]?.className).not.toContain('min-w-[280px]');
     view.cleanup();
   });
+
+  it('renders stacked columns with custom dots, section metadata, and no-section columns', () => {
+    const issue = makeIssue({
+      id: 'stacked-metadata',
+      issueNumber: 209,
+      title: 'Stacked metadata issue',
+      pipelineStatus: 'executing',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+    });
+    const onClick = vi.fn();
+    const agentColumn = COLUMNS.find((column) => column.key === 'agent');
+    if (!agentColumn) throw new Error('Expected agent column');
+
+    const view = renderIntoDom(
+      <DndContext>
+        <StackedColumn
+          column={agentColumn}
+          columnDotColor="#abcdef"
+          issues={[issue]}
+          repoUrl="https://github.com/acme/repo"
+          issueBranchNameById={new Map([[issue.id, 'shipcode/stacked']])}
+          branchCopyIssueId={issue.id}
+          branchCopyStatus="copied"
+          focusedIssueId={issue.id}
+          rerunningId={issue.id}
+          pausingId={issue.id}
+          resumingId={issue.id}
+          cancellingId={issue.id}
+          markingDoneId={issue.id}
+          flashingIssueIds={new Set([issue.id])}
+          onIssueClick={onClick}
+          onRerun={vi.fn()}
+          onPause={vi.fn()}
+          onResume={vi.fn()}
+          onCancel={vi.fn()}
+          onOpenPullRequest={vi.fn()}
+          onCopyBranchName={vi.fn()}
+          onMarkDone={vi.fn()}
+          onArchiveIssue={vi.fn()}
+          onCreatePr={vi.fn()}
+          issuePhaseChipById={new Map()}
+          issueRevisionBadgeById={new Map()}
+          issueApprovalBadgeById={new Map()}
+          issuePriorityBadgeById={new Map()}
+          issueStalenessById={new Map()}
+          approvedAwaitingExecutionIssueIds={new Set()}
+        />
+        <StackedColumn
+          column={{ key: 'todo', label: 'No Sections', statuses: ['todo'] }}
+          issues={[makeIssue({ id: 'ignored-no-section', pipelineStatus: 'todo' })]}
+          onIssueClick={vi.fn()}
+          issuePhaseChipById={new Map()}
+          issueRevisionBadgeById={new Map()}
+          issueApprovalBadgeById={new Map()}
+          issuePriorityBadgeById={new Map()}
+        />
+      </DndContext>,
+    );
+
+    expect(
+      view.container.querySelector('[style*="background-color: rgb(171, 205, 239)"]'),
+    ).not.toBeNull();
+    expect(view.container.textContent).toContain('Stacked metadata issue');
+    expect(view.container.textContent).toContain('No Sections');
+    expect(view.container.textContent).not.toContain('ignored-no-section');
+    view.cleanup();
+  });
+
+  it('renders empty droppable stacked sections and suppresses them in read-only mode', () => {
+    const agentColumn = COLUMNS.find((column) => column.key === 'agent');
+    if (!agentColumn) throw new Error('Expected agent column');
+
+    const editable = renderIntoDom(
+      <DndContext>
+        <StackedColumn
+          {...({
+            column: agentColumn,
+            issues: [],
+            onIssueClick: vi.fn(),
+          } as unknown as ComponentProps<typeof StackedColumn>)}
+        />
+      </DndContext>,
+    );
+
+    expect(editable.container.textContent).toContain('Planning');
+    expect(editable.container.querySelector('.border-dashed')).not.toBeNull();
+    editable.cleanup();
+
+    const readOnly = renderIntoDom(
+      <DndContext>
+        <StackedColumn
+          {...({
+            column: agentColumn,
+            issues: [],
+            readOnly: true,
+            onIssueClick: vi.fn(),
+          } as unknown as ComponentProps<typeof StackedColumn>)}
+        />
+      </DndContext>,
+    );
+
+    expect(readOnly.container.querySelector('.border-dashed')).toBeNull();
+    readOnly.cleanup();
+  });
+
+  it('archives all closed issues from the closed stacked section header', () => {
+    const doneColumn = COLUMNS.find((column) => column.key === 'done');
+    if (!doneColumn) throw new Error('Expected done column');
+    const onArchiveAllDone = vi.fn();
+
+    const view = renderIntoDom(
+      <DndContext>
+        <StackedColumn
+          {...({
+            column: doneColumn,
+            issues: [
+              makeIssue({
+                id: 'closed-archive-all',
+                issueNumber: 132,
+                title: 'Closed archive all',
+                pipelineStatus: 'closed',
+              }),
+            ],
+            onIssueClick: vi.fn(),
+            onArchiveAllDone,
+          } as unknown as ComponentProps<typeof StackedColumn>)}
+        />
+      </DndContext>,
+    );
+
+    const archiveAll = view.container.querySelector('button[title="Archive closed issues"]');
+    if (!(archiveAll instanceof HTMLButtonElement)) throw new Error('Expected archive-all button');
+    act(() => archiveAll.click());
+    expect(onArchiveAllDone).toHaveBeenCalledTimes(1);
+    view.cleanup();
+  });
+
+  it('renders droppable columns with default metadata maps and issue link fallbacks', () => {
+    const issue = makeIssue({
+      id: 'todo-default-maps',
+      issueNumber: 133,
+      title: 'Default metadata maps',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+    });
+    const view = renderIntoDom(
+      <DndContext>
+        <DroppableColumn
+          {...({
+            id: 'todo',
+            columnKey: 'todo',
+            label: 'Todo',
+            issues: [issue],
+            droppable: true,
+            repoUrl: null,
+            issuePhaseChipById: undefined,
+            issueRevisionBadgeById: undefined,
+            issueApprovalBadgeById: undefined,
+            issuePriorityBadgeById: undefined,
+            onIssueClick: vi.fn(),
+          } as unknown as ComponentProps<typeof DroppableColumn>)}
+        />
+      </DndContext>,
+    );
+
+    expect(view.container.textContent).toContain('Default metadata maps');
+    expect(view.container.textContent).toContain('#133');
+    expect(view.container.querySelector('button[title="Open issue on GitHub"]')).toBeNull();
+    view.cleanup();
+  });
 });
 
 describe('priority badge rendering', () => {
-  it('DraggableCard renders P0 badge with warning variant', () => {
+  it('DraggableCard keeps P0 priority out of the compact card body', () => {
     const view = renderIntoDom(
       <DndContext>
         <DraggableCard
@@ -984,14 +1852,12 @@ describe('priority badge rendering', () => {
       </DndContext>,
     );
 
-    const badges = Array.from(view.container.querySelectorAll('span'));
-    const p0Badge = badges.find((el) => el.textContent === 'P0');
-    expect(p0Badge).toBeTruthy();
-    expect(p0Badge?.getAttribute('title')).toContain('P0');
+    expect(view.container.textContent).not.toContain('P0');
+    expect(view.container.querySelector('[title="Priority P0 — P0"]')).toBeNull();
     view.cleanup();
   });
 
-  it('DraggableCard renders unknown raw priority with accent variant', () => {
+  it('DraggableCard keeps unknown raw priority out of the compact card body', () => {
     const view = renderIntoDom(
       <DndContext>
         <DraggableCard
@@ -1012,10 +1878,8 @@ describe('priority badge rendering', () => {
       </DndContext>,
     );
 
-    const badges = Array.from(view.container.querySelectorAll('span'));
-    const icebox = badges.find((el) => el.textContent === 'Icebox');
-    expect(icebox).toBeTruthy();
-    expect(icebox?.getAttribute('title')).toContain('uncategorized');
+    expect(view.container.textContent).not.toContain('Icebox');
+    expect(view.container.querySelector('[title="Priority — Icebox (uncategorized)"]')).toBeNull();
     view.cleanup();
   });
 

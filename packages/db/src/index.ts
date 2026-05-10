@@ -11,6 +11,7 @@ export type { PromptTelemetryInsert, PromptTelemetryRecord } from '@shipcode/sha
 // before any user code, so we use createRequire deferred to first call.
 // When bundled as CJS (Electron main), import.meta.url is rewritten to
 // `{}.url` (undefined); fall back to __filename in that case.
+/* v8 ignore next -- Electron CJS bundle fallback is not reachable in Vitest's ESM runtime. */
 const _require = createRequire(typeof __filename === 'string' ? __filename : import.meta.url);
 let _DatabaseSyncCtor: typeof DatabaseSync | null = null;
 function loadDatabaseSync(): typeof DatabaseSync {

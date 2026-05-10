@@ -64,16 +64,14 @@ export function createIssueGroupRunState(input: RunStateInput) {
   for (const edge of hardEdges) {
     pendingPrerequisiteCounts.set(
       edge.targetIssueId,
-      (pendingPrerequisiteCounts.get(edge.targetIssueId) ?? 0) + 1,
+      (pendingPrerequisiteCounts.get(edge.targetIssueId) as number) + 1,
     );
-    dependentsByIssueId.get(edge.sourceIssueId)?.push(edge.targetIssueId);
+    (dependentsByIssueId.get(edge.sourceIssueId) as string[]).push(edge.targetIssueId);
   }
 
   const sortByPreviewOrder = (issueIds: Iterable<string>) =>
     [...issueIds].sort(
-      (a, b) =>
-        (previewIndexByIssueId.get(a) ?? Number.MAX_SAFE_INTEGER) -
-        (previewIndexByIssueId.get(b) ?? Number.MAX_SAFE_INTEGER),
+      (a, b) => (previewIndexByIssueId.get(a) as number) - (previewIndexByIssueId.get(b) as number),
     );
 
   return {
@@ -92,8 +90,8 @@ export function createIssueGroupRunState(input: RunStateInput) {
       completedSuccessfully.add(issueId);
 
       const newlyReady: string[] = [];
-      for (const dependentIssueId of dependentsByIssueId.get(issueId) ?? []) {
-        const nextPendingCount = (pendingPrerequisiteCounts.get(dependentIssueId) ?? 0) - 1;
+      for (const dependentIssueId of dependentsByIssueId.get(issueId) as string[]) {
+        const nextPendingCount = (pendingPrerequisiteCounts.get(dependentIssueId) as number) - 1;
         pendingPrerequisiteCounts.set(dependentIssueId, nextPendingCount);
         if (nextPendingCount === 0) {
           ready.add(dependentIssueId);
@@ -155,14 +153,14 @@ function topologicallyGroupSelection(
   }
 
   for (const edge of edges) {
-    indegree.set(edge.targetIssueId, (indegree.get(edge.targetIssueId) ?? 0) + 1);
-    outgoing.get(edge.sourceIssueId)?.push(edge.targetIssueId);
+    indegree.set(edge.targetIssueId, (indegree.get(edge.targetIssueId) as number) + 1);
+    (outgoing.get(edge.sourceIssueId) as string[]).push(edge.targetIssueId);
   }
 
   const groups: string[][] = [];
   const orderedIssueIds: string[] = [];
-  let frontier = [...selection].filter((issueId) => (indegree.get(issueId) ?? 0) === 0);
-  frontier.sort((a, b) => (issueNumberById.get(a) ?? 0) - (issueNumberById.get(b) ?? 0));
+  let frontier = [...selection].filter((issueId) => indegree.get(issueId) === 0);
+  frontier.sort((a, b) => (issueNumberById.get(a) as number) - (issueNumberById.get(b) as number));
 
   while (frontier.length > 0) {
     groups.push(frontier);
@@ -170,8 +168,8 @@ function topologicallyGroupSelection(
 
     const nextFrontier = new Set<string>();
     for (const issueId of frontier) {
-      for (const dependentIssueId of outgoing.get(issueId) ?? []) {
-        const nextIndegree = (indegree.get(dependentIssueId) ?? 0) - 1;
+      for (const dependentIssueId of outgoing.get(issueId) as string[]) {
+        const nextIndegree = (indegree.get(dependentIssueId) as number) - 1;
         indegree.set(dependentIssueId, nextIndegree);
         if (nextIndegree === 0) {
           nextFrontier.add(dependentIssueId);
@@ -180,7 +178,7 @@ function topologicallyGroupSelection(
     }
 
     frontier = [...nextFrontier].sort(
-      (a, b) => (issueNumberById.get(a) ?? 0) - (issueNumberById.get(b) ?? 0),
+      (a, b) => (issueNumberById.get(a) as number) - (issueNumberById.get(b) as number),
     );
   }
 

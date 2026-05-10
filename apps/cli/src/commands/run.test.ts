@@ -130,6 +130,15 @@ describe('runCommand', () => {
     expect(startFromGitHubIssueMock).not.toHaveBeenCalled();
   });
 
+  it('returns before parsing when onboarding is incomplete', async () => {
+    requireOnboardingMock.mockReturnValueOnce(false);
+
+    await runCommand('not-a-number');
+
+    expect(getIssueMock).not.toHaveBeenCalled();
+    expect(startFromGitHubIssueMock).not.toHaveBeenCalled();
+  });
+
   it('routes executor model and override from labels into startFromGitHubIssue', async () => {
     await runCommand('42');
 
@@ -149,6 +158,24 @@ describe('runCommand', () => {
       },
     );
     expect(logSpy).toHaveBeenCalledWith('Model: openrouter (openrouter/auto)');
+  });
+
+  it('omits the model override label when successful routing has no override', async () => {
+    routeFromLabelsMock.mockReturnValueOnce({ executorModel: 'codex' });
+
+    await runCommand('42');
+
+    expect(startFromGitHubIssueMock).toHaveBeenCalledWith(
+      'project-1',
+      process.cwd(),
+      expect.any(Object),
+      'codex',
+      {
+        baseBranch: 'develop',
+        executorModelOverride: null,
+      },
+    );
+    expect(logSpy).toHaveBeenCalledWith('Model: codex');
   });
 
   it('falls back to claude when label routing returns an error', async () => {

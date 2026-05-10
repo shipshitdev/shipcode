@@ -130,6 +130,15 @@ describe('AutomationScheduler', () => {
     expect(queries.setNextRunAt).toHaveBeenCalledWith('auto-1', null);
   });
 
+  it('fireNow() refreshes next_run_at from an existing scheduled job', async () => {
+    scheduler.schedule(makeAutomation({ id: 'auto-1' }));
+    queries.setNextRunAt.mockClear();
+
+    await scheduler.fireNow('auto-1');
+
+    expect(queries.setNextRunAt).toHaveBeenCalledWith('auto-1', expect.any(String));
+  });
+
   it('fireNow() returns the scheduler queue decision', async () => {
     pipelineScheduler.startOrQueueAutomation.mockResolvedValueOnce({ queued: true });
 

@@ -52,6 +52,7 @@ function CommandPaletteContent() {
   const openInbox = useAppStore((state) => state.openInbox);
   const openCosts = useAppStore((state) => state.openCosts);
   const openSkills = useAppStore((state) => state.openSkills);
+  const openAssistant = useAppStore((state) => state.openAssistant);
   const openTerminalTab = useAppStore((state) => state.openTerminalTab);
   const setProjectTab = useAppStore((state) => state.setProjectTab);
   const navigateToIssue = useAppStore((state) => state.navigateToIssue);
@@ -238,6 +239,9 @@ function CommandPaletteContent() {
           </CommandItem>
           <CommandItem onSelect={() => runAction(() => openSkills())}>
             <span className="flex-1">Skills</span>
+          </CommandItem>
+          <CommandItem onSelect={() => runAction(() => openAssistant())}>
+            <span className="flex-1">Copilot</span>
           </CommandItem>
           <CommandItem onSelect={() => runAction(() => openTerminalTab())}>
             <span className="flex-1">Terminal</span>

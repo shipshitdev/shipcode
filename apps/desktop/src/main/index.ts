@@ -84,6 +84,17 @@ import {
 } from '@shipcode/shared';
 import { AutomationScheduler } from './automation-scheduler';
 import { ChatNotificationService } from './chat-notification-service';
+import {
+  buildAboutPanelOptions,
+  buildApplicationMenuTemplate,
+  buildContentSecurityPolicy,
+  buildMainWindowOptions,
+  buildRendererLoadTarget,
+  formatActivePipelineNames,
+  formatStalledProcessMessage,
+  loadLocalEnvFiles,
+  shouldQuitWhenAllWindowsClosed,
+} from './index-helpers';
 import { registerIpcHandlers } from './ipc';
 import { transitionThreadPhase } from './ipc/helpers';
 import { notifyIssueGraphPipelinePhaseChange } from './ipc/register-issue-graph-handlers';
@@ -102,18 +113,6 @@ let updateService: UpdateService | null = null;
 let confirmQuit = false;
 let quitConfirmationInFlight = false;
 const splashScreen = new SplashScreen();
-
-function formatActivePipelineNames(
-  active: Array<{ threadId: string }>,
-  threads: ThreadQueries | null,
-): string {
-  return active
-    .map((pipelineSummary) => {
-      const thread = threads?.getById(pipelineSummary.threadId);
-      return `• ${thread?.title ?? pipelineSummary.threadId}`;
-    })
-    .join('\n');
-}
 
 function restoreMainWindowAfterQuitCancel(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -152,44 +151,6 @@ async function confirmQuitForActivePipelines(threads: ThreadQueries | null): Pro
   }
 }
 
-function loadLocalEnvFiles() {
-  const desktopRoot = path.resolve(__dirname, '..', '..');
-  const repoRoot = path.resolve(desktopRoot, '..', '..');
-  const candidates = [
-    path.join(repoRoot, '.env'),
-    path.join(repoRoot, '.env.local'),
-    path.join(desktopRoot, '.env'),
-    path.join(desktopRoot, '.env.local'),
-  ];
-
-  for (const filePath of candidates) {
-    if (!fs.existsSync(filePath)) continue;
-    const raw = fs.readFileSync(filePath, 'utf8');
-
-    for (const line of raw.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) continue;
-
-      const normalized = trimmed.startsWith('export ') ? trimmed.slice(7).trim() : trimmed;
-      const envMatch = /^([^=]+)=(.*)$/.exec(normalized);
-      if (!envMatch) continue;
-
-      const key = envMatch[1].trim();
-      if (!key || process.env[key] !== undefined) continue;
-
-      let value = envMatch[2].trim();
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
-      }
-
-      process.env[key] = value;
-    }
-  }
-}
-
 function requireMainWindow(): BrowserWindow {
   if (!mainWindow) throw new Error('Main window not initialized');
   return mainWindow;
@@ -209,21 +170,7 @@ function createWindow() {
   splashScreen.create();
   splashScreen.update('window', 'active', 'Creating the main desktop window.');
 
-  mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 1024,
-    minHeight: 680,
-    backgroundColor: '#050607',
-    show: false,
-    titleBarStyle: 'hiddenInset',
-    webPreferences: {
-      preload: path.join(DIST, 'preload', 'index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-    },
-  });
+  mainWindow = new BrowserWindow(buildMainWindowOptions(DIST));
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
@@ -484,7 +431,7 @@ function createWindow() {
         transitionThreadPhase(requireMainWindow(), queries, emitter, {
           threadId: tid,
           phase: PIPELINE_PHASE.failed,
-          errorMessage: `Agent process stalled — no output for ${Math.round(PROCESS_STALL_TIMEOUT_MS / 1000)}s. Killed by watchdog.`,
+          errorMessage: formatStalledProcessMessage(PROCESS_STALL_TIMEOUT_MS),
         });
       }
     } catch (err) {
@@ -493,20 +440,11 @@ function createWindow() {
   }, 30_000);
 
   // Content-Security-Policy — set before any content loads.
-  // Dev relaxes script-src for Vite's eval-based HMR and allows the WS connection.
-  // Prod is strict: no eval, no remote origins.
-  // 'unsafe-inline' is required in dev for @vitejs/plugin-react's HMR preamble.
-  const scriptSrc = RENDERER_URL ? "'self' 'unsafe-eval' 'unsafe-inline'" : "'self'";
-  const connectSrc = RENDERER_URL ? "'self' ws://localhost:5173 http://localhost:5173" : "'self'";
-  // Dev: notify.wav resolves to http://localhost:5173/...; prod: Vite bundles to blob: URL
-  const mediaSrc = RENDERER_URL ? "'self' http://localhost:5173" : "'self' blob:";
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        'Content-Security-Policy': [
-          `default-src 'none'; script-src ${scriptSrc}; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; connect-src ${connectSrc}; img-src 'self' data: https:; font-src 'self' data:; media-src ${mediaSrc}`,
-        ],
+        'Content-Security-Policy': [buildContentSecurityPolicy(RENDERER_URL)],
       },
     });
   });
@@ -514,11 +452,12 @@ function createWindow() {
   // Load renderer
   splashScreen.completeThrough('ipc');
   splashScreen.update('renderer', 'active', 'Loading the ShipCode workspace.');
-  if (RENDERER_URL) {
-    mainWindow.loadURL(RENDERER_URL);
+  const rendererTarget = buildRendererLoadTarget(RENDERER_URL, RENDERER_HTML);
+  if (rendererTarget.kind === 'url') {
+    mainWindow.loadURL(rendererTarget.url);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadFile(RENDERER_HTML);
+    mainWindow.loadFile(rendererTarget.filePath);
   }
 
   mainWindow.webContents.once('did-fail-load', (_event, _code, description) => {
@@ -549,81 +488,20 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  app.setAboutPanelOptions({
-    applicationName: 'ShipCode',
-    applicationVersion: app.getVersion(),
-    copyright: `Copyright © ${new Date().getFullYear()} ShipCode`,
-    website: 'https://github.com/shipshitdev/shipcode',
-  });
+  app.setAboutPanelOptions(buildAboutPanelOptions(app.getVersion()));
 
-  const menu = Menu.buildFromTemplate([
-    {
-      label: 'ShipCode',
-      submenu: [
-        { label: 'About ShipCode', role: 'about' },
-        {
-          label: 'Check for Update…',
-          click: () => updateService?.checkNow(),
-        },
-        {
-          label: 'GitHub Repository',
-          click: () => shell.openExternal('https://github.com/shipshitdev/shipcode'),
-        },
-        { type: 'separator' },
-        { label: 'Hide ShipCode', role: 'hide' },
-        { label: 'Hide Others', role: 'hideOthers' },
-        { label: 'Show All', role: 'unhide' },
-        { type: 'separator' },
-        { label: 'Quit ShipCode', role: 'quit' },
-      ],
-    },
-    {
-      label: 'Edit',
-      submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
-        { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
-      ],
-    },
-    {
-      label: 'Window',
-      role: 'window',
-      submenu: [
-        { role: 'minimize' },
-        { role: 'zoom' },
-        { type: 'separator' },
-        { role: 'front' },
-        { role: 'close' },
-      ],
-    },
-    {
-      label: 'Community',
-      submenu: [
-        {
-          label: 'GitHub',
-          click: () => shell.openExternal('https://github.com/shipshitdev/shipcode'),
-        },
-        {
-          label: '@shipshitdev on X',
-          click: () => shell.openExternal('https://x.com/shipshitdev'),
-        },
-        {
-          label: 'ShipShitShow on YouTube',
-          click: () => shell.openExternal('https://www.youtube.com/@shipshitshow'),
-        },
-      ],
-    },
-  ]);
+  const menu = Menu.buildFromTemplate(
+    buildApplicationMenuTemplate({
+      updateService,
+      openExternal: (url) => shell.openExternal(url),
+    }),
+  );
   Menu.setApplicationMenu(menu);
   createWindow();
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (shouldQuitWhenAllWindowsClosed()) {
     app.quit();
   }
 });

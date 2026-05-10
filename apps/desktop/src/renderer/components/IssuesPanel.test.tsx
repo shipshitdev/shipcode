@@ -234,7 +234,7 @@ describe('IssuesPanel', () => {
     expect(screen.getByRole('button', { name: /refresh board/i })).toBeInTheDocument();
   });
 
-  it('opens the issue detail sidebar from the explicit card action while collapsed', async () => {
+  it('opens the issue detail sidebar from the card surface while collapsed', async () => {
     const issue = makeIssue();
 
     useAppStore.setState({});
@@ -247,7 +247,7 @@ describe('IssuesPanel', () => {
 
     renderWithProviders();
 
-    fireEvent.click(await screen.findByRole('button', { name: /open issue detail/i }));
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(issue.title, 'i') }));
 
     await waitFor(() => {
       const state = useAppStore.getState();
@@ -310,6 +310,41 @@ describe('IssuesPanel', () => {
       expect(state.terminalThreadId).toBe(automationThread.id);
       expect(state.terminalVisible).toBe(true);
     });
+  });
+
+  it('renders automation thread fallbacks for missing copy and terminal statuses', async () => {
+    const idleAutomation = makeThread({
+      id: 'automation-idle',
+      title: '',
+      prompt: '',
+      status: 'idle',
+      automationId: 'automation-1',
+      updatedAt: '',
+      createdAt: '2026-04-22T09:00:00.000Z',
+    });
+    const closedAutomation = makeThread({
+      id: 'automation-closed',
+      title: 'Closed automation',
+      status: 'executing',
+      automationId: 'automation-2',
+      doneAt: '2026-04-22T10:30:00.000Z',
+    });
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread-panel:get-data') {
+        return {
+          ...panelData,
+          threads: [idleAutomation, closedAutomation],
+        } satisfies ThreadPanelData;
+      }
+      if (channel === 'github:list-issues') return [];
+      return null;
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('Automation run')).toBeInTheDocument();
+    expect(await screen.findByText('Closed automation')).toBeInTheDocument();
   });
 
   it('does not rerender on unrelated app-store updates', async () => {

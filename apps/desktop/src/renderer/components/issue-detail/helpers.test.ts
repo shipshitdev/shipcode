@@ -2,11 +2,14 @@ import type { PlanRecord, ReviewRecord } from '@shipcode/shared';
 import { clampTextBlock } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
 import {
+  decodePhaseOption,
   diagnosePlanParseFailure,
+  encodePhaseOption,
   getFailurePresentation,
   getPlanStatusPresentation,
   resolveClientSidePlan,
   resolveFailingPhaseOutput,
+  safeErrorMessage,
 } from './helpers';
 
 const VALID_PLAN_JSON = JSON.stringify({
@@ -109,6 +112,42 @@ describe('getPlanStatusPresentation', () => {
       style: 'phase-chip',
     });
   });
+
+  it('covers rejected, pending review, and draft plan presentation fallbacks', () => {
+    expect(getPlanStatusPresentation(makePlan({ status: 'rejected' }))).toEqual({
+      label: 'AI rejected',
+      phaseStatus: 'failed',
+      style: 'phase-chip',
+    });
+    expect(getPlanStatusPresentation(makePlan({ status: 'pending_review' }))).toEqual({
+      label: 'AI reviewing',
+      phaseStatus: 'reviewing',
+      style: 'phase-chip',
+    });
+    expect(getPlanStatusPresentation(makePlan({ status: 'draft' }))).toEqual({
+      label: 'Plan drafted',
+      phaseStatus: 'planning',
+      style: 'phase-chip',
+    });
+  });
+});
+
+describe('phase option helpers', () => {
+  it('round-trips provider and model choices with safe provider fallback', () => {
+    expect(encodePhaseOption('openrouter', null)).toBe('openrouter::__default__');
+    expect(decodePhaseOption('openrouter::__default__')).toEqual({
+      provider: 'openrouter',
+      modelId: null,
+    });
+    expect(decodePhaseOption('codex::gpt-5.2')).toEqual({
+      provider: 'codex',
+      modelId: 'gpt-5.2',
+    });
+    expect(decodePhaseOption('unknown::model-x')).toEqual({
+      provider: 'claude',
+      modelId: 'model-x',
+    });
+  });
 });
 
 describe('diagnosePlanParseFailure', () => {
@@ -137,6 +176,26 @@ describe('diagnosePlanParseFailure', () => {
     expect(resolveClientSidePlan(raw)?.objective).toBe('Add feature');
   });
 
+  it('extracts plan fences from Claude result arrays and Codex agent messages', () => {
+    const claudeResult = JSON.stringify({
+      type: 'result',
+      result: [
+        { type: 'tool_use', text: 'ignored' },
+        { type: 'text', text: wrapInFence(VALID_PLAN_JSON) },
+      ],
+    });
+    expect(resolveClientSidePlan(claudeResult)?.objective).toBe('Add feature');
+
+    const codexResult = [
+      JSON.stringify({
+        type: 'item.completed',
+        item: { type: 'agent_message', text: wrapInFence(VALID_PLAN_JSON) },
+      }),
+      'not json',
+    ].join('\n');
+    expect(resolveClientSidePlan(codexResult)?.objective).toBe('Add feature');
+  });
+
   it('returns schema-validation message with field detail for wrong enum', () => {
     const badPlan = JSON.parse(VALID_PLAN_JSON);
     badPlan.files[0].action = 'update'; // invalid — must be create|modify|delete|rename
@@ -150,6 +209,12 @@ describe('diagnosePlanParseFailure', () => {
     delete badPlan.objective;
     const raw = wrapInFence(JSON.stringify(badPlan));
     expect(diagnosePlanParseFailure(raw)).toContain('schema validation failed');
+  });
+
+  it('returns the generic parse failure when a valid plan still cannot be extracted', () => {
+    expect(diagnosePlanParseFailure(wrapInFence(VALID_PLAN_JSON))).toBe(
+      'Plan output could not be parsed. Check devtools console for the full trace.',
+    );
   });
 });
 
@@ -167,11 +232,72 @@ describe('getFailurePresentation', () => {
   });
 
   it('classifies execution/setup failures as worktree execution failures', () => {
-    expect(getFailurePresentation('Setup failed: command failed (1): bun run build')).toEqual({
-      label: 'Target project verification failed',
+    expect(getFailurePresentation('Execution failed: setup failed before agent run')).toEqual({
+      label: 'Worktree execution failed',
+      detail:
+        'This error came from the target project/worktree or the executor run, not from Electron itself.',
+    });
+  });
+
+  it('adds attempt counts and falls back to phase labels for generic failures', () => {
+    expect(
+      getFailurePresentation('command failed (1): bun test', {
+        failurePhase: 'verifying',
+        failureCount: 3,
+      }),
+    ).toEqual({
+      label: 'Target project verification failed (attempt 3)',
       detail:
         'The failing command ran inside the issue worktree, not inside the ShipCode desktop app.',
     });
+
+    expect(
+      getFailurePresentation('unexpected crash', {
+        failurePhase: 'reviewing',
+        failureCount: 2,
+      }),
+    ).toEqual({
+      label: 'Review failed (attempt 2)',
+      detail: null,
+    });
+
+    expect(getFailurePresentation('unexpected crash')).toEqual({
+      label: 'Pipeline error',
+      detail: null,
+    });
+  });
+});
+
+describe('safeErrorMessage', () => {
+  it('returns plain text errors directly', () => {
+    expect(safeErrorMessage('  plain failure  ')).toBe('plain failure');
+  });
+
+  it('extracts clamped result and error messages from JSONL output', () => {
+    expect(safeErrorMessage(JSON.stringify({ type: 'result', result: 'x'.repeat(300) }))).toBe(
+      'x'.repeat(280),
+    );
+    expect(safeErrorMessage(JSON.stringify({ error: 'fatal error' }))).toBe('fatal error');
+    expect(
+      safeErrorMessage(
+        [
+          JSON.stringify({ type: 'event', ignored: true }),
+          JSON.stringify({ type: 'result', errors: ['first structured error'] }),
+        ].join('\n'),
+      ),
+    ).toBe('first structured error');
+  });
+
+  it('falls back to generic copy when structured output has no usable error', () => {
+    expect(safeErrorMessage(JSON.stringify({ type: 'event', ignored: true }))).toBe(
+      'Pipeline failed in the target project/worktree. See terminal output for details.',
+    );
+  });
+});
+
+describe('resolveClientSidePlan', () => {
+  it('returns null when all discovered plan fences are invalid', () => {
+    expect(resolveClientSidePlan(wrapInFence('{ "objective": 42 }'))).toBeNull();
   });
 });
 
@@ -207,6 +333,35 @@ describe('resolveFailingPhaseOutput', () => {
         latestVerificationRawOutput: null,
       }),
     ).toBeNull();
+  });
+
+  it('uses non-failed plan output and review/default fallbacks for failed threads', () => {
+    expect(
+      resolveFailingPhaseOutput({
+        thread: { status: 'planning', failurePhase: null },
+        latestPlanRawOutput: 'planner transcript',
+        latestReviewRawOutput: 'review transcript',
+        latestVerificationRawOutput: 'verification transcript',
+      }),
+    ).toBe('planner transcript');
+
+    expect(
+      resolveFailingPhaseOutput({
+        thread: { status: 'failed', failurePhase: 'reviewing' },
+        latestPlanRawOutput: 'planner transcript',
+        latestReviewRawOutput: null,
+        latestVerificationRawOutput: null,
+      }),
+    ).toBe('planner transcript');
+
+    expect(
+      resolveFailingPhaseOutput({
+        thread: { status: 'failed', failurePhase: 'shipping' },
+        latestPlanRawOutput: 'planner transcript',
+        latestReviewRawOutput: 'review transcript',
+        latestVerificationRawOutput: 'verification transcript',
+      }),
+    ).toBe('verification transcript');
   });
 });
 

@@ -9,8 +9,10 @@ import { TerminalView } from './TerminalView';
 
 vi.mock('./terminal-panes/TerminalPane', () => ({
   TerminalPane: ({
+    threadId,
     title,
     onClose,
+    onCancel,
   }: {
     threadId: string;
     title: string;
@@ -23,6 +25,12 @@ vi.mock('./terminal-panes/TerminalPane', () => ({
       <span>{title}</span>
       <button type="button" onClick={() => onClose('thread-live', false)}>
         Close pane
+      </button>
+      <button type="button" onClick={() => onClose(threadId, true)}>
+        Close running pane
+      </button>
+      <button type="button" onClick={() => onCancel(threadId)}>
+        Cancel pane
       </button>
     </div>
   ),
@@ -94,6 +102,58 @@ describe('TerminalView', () => {
 
     expect(screen.getByText('Claude shell')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument();
+  });
+
+  it('cancels and removes running live panes from pane callbacks', async () => {
+    render(<TerminalView />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel pane' }));
+    expect(invokeMock).toHaveBeenCalledWith('instant:cancel', { threadId: 'thread-live' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close running pane' }));
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('instant:cancel', { threadId: 'thread-live' });
+      expect(useAppStore.getState().terminalPaneThreadIds).not.toContain('thread-live');
+    });
+  });
+
+  it('renders fallback pane titles and alternate split directions', () => {
+    useAppStore.setState({
+      terminalPaneThreadIds: ['thread-live', 'thread-without-title', 'thread-replay'],
+      terminalSplitDirection: 'vertical',
+      terminalPaneMetaByThread: {
+        'thread-live': {
+          mode: 'live',
+          cli: 'shell',
+          title: 'Terminal',
+          state: 'running',
+        },
+        'thread-without-title': {
+          mode: 'replay',
+          cli: 'claude',
+          state: 'exited',
+        },
+        'thread-replay': {
+          mode: 'replay',
+          cli: 'codex',
+          title: 'Replay',
+          state: 'exited',
+        },
+      },
+    } as never);
+
+    const { rerender } = render(<TerminalView />);
+
+    expect(screen.getByText('thread-w')).toBeInTheDocument();
+    expect(screen.getByText('Replay')).toBeInTheDocument();
+
+    useAppStore.setState({
+      terminalPaneThreadIds: ['thread-live', 'thread-without-title'],
+      terminalSplitDirection: 'horizontal',
+    } as never);
+    rerender(<TerminalView />);
+
+    expect(screen.getByText('thread-w')).toBeInTheDocument();
   });
 
   it('cancels running live panes when leaving the terminal page', () => {

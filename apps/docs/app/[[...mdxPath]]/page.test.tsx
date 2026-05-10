@@ -32,6 +32,9 @@ vi.mock('nextra/pages', () => ({
 }));
 
 vi.mock('../../mdx-components', () => ({
+  getMDXComponents: () => ({
+    wrapper: wrapperMock,
+  }),
   useMDXComponents: () => ({
     wrapper: wrapperMock,
   }),
@@ -79,5 +82,29 @@ describe('CatchAllDocsPage', () => {
     expect(html).toContain('data-title="Skills"');
     expect(html).toContain('data-toc-count="2"');
     expect(html).toContain('desktop/skills');
+  });
+
+  it('loads the docs index when mdxPath is omitted', async () => {
+    importPageMock.mockClear();
+    importPageMock
+      .mockResolvedValueOnce({
+        metadata: { title: 'Docs index metadata' },
+      })
+      .mockResolvedValueOnce({
+        default: mdxContentMock,
+        metadata: { title: 'Docs index' },
+        toc: [],
+      });
+
+    await expect(generateMetadata({ params: Promise.resolve({}) })).resolves.toEqual({
+      title: 'Docs index metadata',
+    });
+
+    const html = renderToStaticMarkup(await CatchAllDocsPage({ params: Promise.resolve({}) }));
+
+    expect(importPageMock).toHaveBeenNthCalledWith(1, []);
+    expect(importPageMock).toHaveBeenNthCalledWith(2, []);
+    expect(html).toContain('data-title="Docs index"');
+    expect(html).toContain('index');
   });
 });

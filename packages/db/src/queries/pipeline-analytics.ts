@@ -344,9 +344,9 @@ function summarizePhaseDurations(rows: PhaseDurationRow[]): PipelinePhaseDuratio
       phase,
       runCount: durations.length,
       averageMs: average(durations),
-      medianMs: percentile(durations, 0.5) ?? 0,
-      p75Ms: percentile(durations, 0.75) ?? 0,
-      p95Ms: percentile(durations, 0.95) ?? 0,
+      medianMs: percentile(durations, 0.5) as number,
+      p75Ms: percentile(durations, 0.75) as number,
+      p95Ms: percentile(durations, 0.95) as number,
     }))
     .sort((a, b) => b.averageMs - a.averageMs);
 }
@@ -482,6 +482,5 @@ function percentile(values: number[], pct: number): number | null {
 }
 
 function average(values: number[]): number {
-  if (values.length === 0) return 0;
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }

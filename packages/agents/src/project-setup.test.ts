@@ -149,6 +149,17 @@ describe('project setup detection', () => {
     ).toEqual(['swift test']);
   });
 
+  it('detects xcode workspaces as xcode projects', () => {
+    const projectDir = makeProject();
+    mkdirSync(path.join(projectDir, 'Demo.xcworkspace'));
+
+    const draft = detectProjectSetup(projectDir);
+
+    expect(draft.suggestedContract.setupCommands).toEqual([
+      'xcodebuild -resolvePackageDependencies',
+    ]);
+  });
+
   it('recommends xcode over incidental package.json markers', () => {
     const projectDir = makeProject();
     mkdirSync(path.join(projectDir, 'Demo.xcodeproj'));
@@ -190,6 +201,179 @@ describe('project setup detection', () => {
     ]);
   });
 
+  it('suggests install and script commands for other node package managers', () => {
+    const cases = [
+      {
+        lockfile: 'pnpm-lock.yaml',
+        expectedSetup: 'pnpm install --frozen-lockfile',
+        expectedVerify: 'pnpm run test',
+      },
+      {
+        lockfile: 'yarn.lock',
+        expectedSetup: 'yarn install --frozen-lockfile',
+        expectedVerify: 'yarn run test',
+      },
+      {
+        lockfile: 'package-lock.json',
+        expectedSetup: 'npm ci',
+        expectedVerify: 'npm run test',
+      },
+    ];
+
+    for (const { lockfile, expectedSetup, expectedVerify } of cases) {
+      const projectDir = makeProject();
+      writeFileSync(path.join(projectDir, lockfile), '');
+      writeFileSync(
+        path.join(projectDir, 'package.json'),
+        JSON.stringify({ scripts: { test: 'vitest run' } }),
+      );
+
+      const draft = detectProjectSetup(projectDir);
+      expect(draft.suggestedContract.setupCommands).toEqual([expectedSetup]);
+      expect(draft.suggestedContract.verifyCommands).toEqual([expectedVerify]);
+    }
+  });
+
+  it('uses non-frozen install commands when node lockfiles are absent', () => {
+    const cases = [
+      {
+        marker: 'pnpm-workspace.yaml',
+        packageJson: { packageManager: 'pnpm@10.0.0', scripts: { test: 'vitest run' } },
+        expectedSetup: 'npm install',
+        expectedVerify: 'npm run test',
+      },
+      {
+        marker: 'package.json',
+        packageJson: { scripts: { test: 'vitest run' } },
+        expectedSetup: 'npm install',
+        expectedVerify: 'npm run test',
+      },
+    ];
+
+    for (const { marker, packageJson, expectedSetup, expectedVerify } of cases) {
+      const projectDir = makeProject();
+      if (marker !== 'package.json') writeFileSync(path.join(projectDir, marker), '');
+      writeFileSync(path.join(projectDir, 'package.json'), JSON.stringify(packageJson));
+
+      const draft = detectProjectSetup(projectDir);
+      expect(draft.suggestedContract.setupCommands).toEqual([expectedSetup]);
+      expect(draft.suggestedContract.verifyCommands).toEqual([expectedVerify]);
+    }
+
+    const bunDir = makeProject();
+    writeFileSync(
+      path.join(bunDir, 'package.json'),
+      JSON.stringify({ scripts: { test: 'bun test' } }),
+    );
+    writeFileSync(path.join(bunDir, 'bun.lockb'), '');
+    expect(detectProjectSetup(bunDir).suggestedContract.setupCommands).toEqual([
+      'bun install --frozen-lockfile',
+    ]);
+  });
+
+  it('uses package-manager specific turbo runners for npm and yarn workspaces', () => {
+    const npmDir = makeProject();
+    writeFileSync(path.join(npmDir, 'package-lock.json'), '');
+    writeFileSync(path.join(npmDir, 'turbo.json'), JSON.stringify({ tasks: {} }));
+    writeFileSync(
+      path.join(npmDir, 'package.json'),
+      JSON.stringify({ workspaces: ['apps/*'], scripts: { test: 'turbo run test' } }),
+    );
+    expect(detectProjectSetup(npmDir).suggestedContract.verifyCommands).toEqual([
+      'TURBO_SCM_BASE="$' + '{TURBO_SCM_BASE:-HEAD}" npx turbo run test --affected --concurrency=1',
+    ]);
+
+    const yarnDir = makeProject();
+    writeFileSync(path.join(yarnDir, 'yarn.lock'), '');
+    writeFileSync(path.join(yarnDir, 'turbo.json'), JSON.stringify({ tasks: {} }));
+    writeFileSync(
+      path.join(yarnDir, 'package.json'),
+      JSON.stringify({ workspaces: ['apps/*'], scripts: { test: 'turbo run test' } }),
+    );
+    expect(detectProjectSetup(yarnDir).suggestedContract.verifyCommands).toEqual([
+      'TURBO_SCM_BASE="$' +
+        '{TURBO_SCM_BASE:-HEAD}" yarn turbo run test --affected --concurrency=1',
+    ]);
+  });
+
+  it('detects workspace objects and turbo scripts without turbo.json', () => {
+    const projectDir = makeProject();
+    writeFileSync(path.join(projectDir, 'pnpm-lock.yaml'), '');
+    writeFileSync(
+      path.join(projectDir, 'package.json'),
+      JSON.stringify({
+        workspaces: { packages: ['apps/*'] },
+        scripts: {
+          test: 'turbo run test --filter app',
+        },
+      }),
+    );
+
+    const draft = detectProjectSetup(projectDir);
+    const expectedTurboCommand =
+      'TURBO_SCM_BASE="$' +
+      '{TURBO_SCM_BASE:-HEAD}" pnpm exec turbo run test --affected --concurrency=1';
+
+    expect(draft.suggestedContract.verifyCommands).toEqual([expectedTurboCommand]);
+  });
+
+  it('falls back to npm and no verification when package metadata is unreadable', () => {
+    const projectDir = makeProject();
+    writeFileSync(path.join(projectDir, 'package.json'), '{not json');
+
+    const draft = detectProjectSetup(projectDir);
+
+    expect(
+      draft.profiles.find((profile: { recommended: boolean }) => profile.recommended),
+    ).toMatchObject({
+      kind: 'npm',
+      evidence: expect.arrayContaining(['package.json unreadable']),
+    });
+    expect(draft.suggestedContract.setupCommands).toEqual(['npm install']);
+    expect(draft.suggestedContract.verifyCommands).toEqual([]);
+  });
+
+  it('treats non-object package metadata as unreadable node metadata', () => {
+    const projectDir = makeProject();
+    writeFileSync(path.join(projectDir, 'package.json'), '[]');
+
+    const draft = detectProjectSetup(projectDir);
+
+    expect(draft.profiles[0]).toMatchObject({
+      kind: 'npm',
+      evidence: expect.arrayContaining(['package.json unreadable']),
+    });
+    expect(draft.suggestedContract.verifyCommands).toEqual([]);
+  });
+
+  it('records secondary ecosystem marker evidence', () => {
+    const rustDir = makeProject();
+    writeFileSync(path.join(rustDir, 'Cargo.toml'), '[package]\nname = "demo"\n');
+    writeFileSync(path.join(rustDir, 'Cargo.lock'), '');
+    expect(detectProjectSetup(rustDir).profiles[0].evidence).toContain('Cargo.lock');
+
+    const goDir = makeProject();
+    writeFileSync(path.join(goDir, 'go.mod'), 'module example.com/demo\n');
+    writeFileSync(path.join(goDir, 'go.sum'), '');
+    expect(detectProjectSetup(goDir).profiles[0].evidence).toContain('go.sum');
+
+    const rubyDir = makeProject();
+    writeFileSync(path.join(rubyDir, 'Gemfile'), 'source "https://rubygems.org"\n');
+    writeFileSync(path.join(rubyDir, 'Gemfile.lock'), '');
+    writeFileSync(path.join(rubyDir, '.rspec'), '');
+    expect(detectProjectSetup(rubyDir).profiles[0].evidence).toEqual(
+      expect.arrayContaining(['Gemfile.lock', '.rspec']),
+    );
+
+    const phpDir = makeProject();
+    writeFileSync(path.join(phpDir, 'composer.json'), JSON.stringify({}));
+    writeFileSync(path.join(phpDir, 'composer.lock'), '');
+    writeFileSync(path.join(phpDir, 'phpunit.xml.dist'), '<phpunit />');
+    expect(detectProjectSetup(phpDir).profiles[0].evidence).toEqual(
+      expect.arrayContaining(['composer.lock', 'phpunit.xml.dist']),
+    );
+  });
+
   it('avoids full-root test suggestions for non-javascript workspaces', () => {
     const rustDir = makeProject();
     writeFileSync(path.join(rustDir, 'Cargo.toml'), '[workspace]\nmembers = ["crates/*"]\n');
@@ -203,6 +387,44 @@ describe('project setup detection', () => {
     );
     expect(detectProjectSetup(mavenDir).suggestedContract.verifyCommands).toEqual([]);
     expect(detectProjectSetup(mavenDir).suggestedContract.testingContext).toMatch(/multi-module/i);
+
+    const goWorkspaceDir = makeProject();
+    writeFileSync(path.join(goWorkspaceDir, 'go.work'), 'go 1.23\nuse ./services/api\n');
+    expect(detectProjectSetup(goWorkspaceDir).suggestedContract.verifyCommands).toEqual([]);
+    expect(detectProjectSetup(goWorkspaceDir).suggestedContract.setupCommands).toEqual([]);
+
+    const gradleDir = makeProject();
+    writeFileSync(path.join(gradleDir, 'build.gradle.kts'), 'plugins { java }\n');
+    writeFileSync(path.join(gradleDir, 'settings.gradle.kts'), 'include("api")\n');
+    expect(detectProjectSetup(gradleDir).suggestedContract.verifyCommands).toEqual([]);
+    expect(detectProjectSetup(gradleDir).suggestedContract.testingContext).toMatch(
+      /multi-project Gradle/i,
+    );
+  });
+
+  it('uses checked-in Java wrapper scripts and avoids ambiguous dotnet targets', () => {
+    const mavenDir = makeProject();
+    writeFileSync(path.join(mavenDir, 'pom.xml'), '<project />');
+    writeFileSync(path.join(mavenDir, 'mvnw'), '');
+    expect(detectProjectSetup(mavenDir).suggestedContract.verifyCommands).toEqual(['./mvnw test']);
+
+    const plainMavenDir = makeProject();
+    writeFileSync(path.join(plainMavenDir, 'pom.xml'), '<project />');
+    expect(detectProjectSetup(plainMavenDir).suggestedContract.verifyCommands).toEqual([
+      'mvn test',
+    ]);
+
+    const gradleDir = makeProject();
+    writeFileSync(path.join(gradleDir, 'build.gradle'), 'plugins { id "java" }\n');
+    writeFileSync(path.join(gradleDir, 'gradlew'), '');
+    expect(detectProjectSetup(gradleDir).suggestedContract.verifyCommands).toEqual([
+      './gradlew test',
+    ]);
+
+    const dotnetDir = makeProject();
+    writeFileSync(path.join(dotnetDir, 'One.sln'), '');
+    writeFileSync(path.join(dotnetDir, 'Two.csproj'), '<Project />');
+    expect(detectProjectSetup(dotnetDir).suggestedContract.verifyCommands).toEqual([]);
   });
 
   it('detects explicit framework test markers for script-light stacks', () => {
@@ -224,6 +446,87 @@ describe('project setup detection', () => {
     writeFileSync(path.join(phpDir, 'phpunit.xml'), '<phpunit />');
     expect(detectProjectSetup(phpDir).suggestedContract.verifyCommands).toEqual([
       'vendor/bin/phpunit',
+    ]);
+  });
+
+  it('detects alternate framework markers and conservative no-test fallbacks', () => {
+    const pythonConftestDir = makeProject();
+    writeFileSync(path.join(pythonConftestDir, 'pyproject.toml'), '[project]\nname = "demo"\n');
+    writeFileSync(path.join(pythonConftestDir, 'conftest.py'), '# pytest fixtures\n');
+    expect(detectProjectSetup(pythonConftestDir).suggestedContract.verifyCommands).toEqual([
+      'python -m pytest',
+    ]);
+
+    const pythonRequirementsDir = makeProject();
+    writeFileSync(path.join(pythonRequirementsDir, 'requirements.txt'), 'pytest==8.0.0\n');
+    expect(detectProjectSetup(pythonRequirementsDir).suggestedContract.verifyCommands).toEqual([
+      'python -m pytest',
+    ]);
+
+    const phpDir = makeProject();
+    writeFileSync(path.join(phpDir, 'composer.json'), JSON.stringify({}));
+    expect(detectProjectSetup(phpDir).suggestedContract.verifyCommands).toEqual([]);
+    expect(detectProjectSetup(phpDir).suggestedContract.testingContext).toMatch(
+      /no Composer test/i,
+    );
+  });
+
+  it('suggests setup-only contracts when test markers are absent', () => {
+    const pythonDir = makeProject();
+    writeFileSync(path.join(pythonDir, 'requirements.txt'), 'requests==2.32.0\n');
+    expect(detectProjectSetup(pythonDir).suggestedContract.setupCommands).toEqual([
+      'python -m pip install -r requirements.txt',
+    ]);
+    expect(detectProjectSetup(pythonDir).suggestedContract.verifyCommands).toEqual([]);
+
+    const poetryDir = makeProject();
+    writeFileSync(path.join(poetryDir, 'pyproject.toml'), '[project]\nname = "demo"\n');
+    writeFileSync(path.join(poetryDir, 'poetry.lock'), '');
+    expect(detectProjectSetup(poetryDir).suggestedContract.setupCommands).toEqual([
+      'poetry install --no-interaction',
+    ]);
+
+    const uvDir = makeProject();
+    writeFileSync(path.join(uvDir, 'pyproject.toml'), '[tool.pytest.ini_options]\n');
+    writeFileSync(path.join(uvDir, 'uv.lock'), '');
+    expect(detectProjectSetup(uvDir).suggestedContract.setupCommands).toEqual(['uv sync --frozen']);
+
+    const rubyDir = makeProject();
+    writeFileSync(path.join(rubyDir, 'Gemfile'), 'source "https://rubygems.org"\n');
+    expect(detectProjectSetup(rubyDir).suggestedContract.verifyCommands).toEqual([]);
+
+    const phpDir = makeProject();
+    writeFileSync(
+      path.join(phpDir, 'composer.json'),
+      JSON.stringify({ scripts: { test: 'phpunit --colors=always' } }),
+    );
+    expect(detectProjectSetup(phpDir).suggestedContract.verifyCommands).toEqual(['composer test']);
+  });
+
+  it('returns an unknown profile when no supported markers exist', () => {
+    const projectDir = makeProject();
+    writeFileSync(path.join(projectDir, 'README.md'), '# demo\n');
+
+    const draft = detectProjectSetup(projectDir);
+
+    expect(draft.profiles).toEqual([
+      expect.objectContaining({
+        kind: 'unknown',
+        recommended: true,
+        evidence: ['No supported repo markers detected'],
+      }),
+    ]);
+    expect(draft.suggestedContract.verifyCommands).toEqual([]);
+  });
+
+  it('returns an unknown profile when the project directory cannot be read', () => {
+    const draft = detectProjectSetup(path.join(os.tmpdir(), 'shipcode-missing-project'));
+
+    expect(draft.profiles).toEqual([
+      expect.objectContaining({
+        kind: 'unknown',
+        evidence: ['No supported repo markers detected'],
+      }),
     ]);
   });
 

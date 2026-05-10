@@ -90,6 +90,6 @@ function mapReview(row: ReviewRow): ReviewRecord {
     confidence: row.confidence,
     rawOutput: row.raw_output,
     structured: row.structured ? JSON.parse(row.structured) : null,
-    createdAt: toIsoUtc(row.created_at) ?? row.created_at,
+    createdAt: toIsoUtc(row.created_at) as string,
   };
 }

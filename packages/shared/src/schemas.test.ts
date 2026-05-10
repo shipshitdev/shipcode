@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   criteriaCheckSchema,
+  parseFeatureQaFlowResults,
   planFileChangeSchema,
   planReviewSchema,
   planStepSchema,
@@ -467,5 +468,28 @@ describe('verificationResultSchema', () => {
         issues: [{ ...validIssue, description: '' }],
       }),
     ).toThrow();
+  });
+});
+
+describe('parseFeatureQaFlowResults', () => {
+  it('returns validated flow results and falls back to an empty array on invalid input', () => {
+    const validFlow = {
+      flowName: 'Create project',
+      passed: true,
+      assertions: [
+        {
+          name: 'Project appears',
+          passed: true,
+          expected: 'Project row exists',
+          actual: 'Project row exists',
+          evidencePath: 'artifacts/project.png',
+        },
+      ],
+      evidencePaths: ['artifacts/project.png'],
+    };
+
+    expect(parseFeatureQaFlowResults([validFlow])).toEqual([validFlow]);
+    expect(parseFeatureQaFlowResults([{ ...validFlow, flowName: '' }])).toEqual([]);
+    expect(parseFeatureQaFlowResults('not-json')).toEqual([]);
   });
 });

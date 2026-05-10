@@ -71,4 +71,31 @@ describe('animation hooks', () => {
 
     expect(cancelAnimationFrameMock).toHaveBeenCalledWith(42);
   });
+
+  it('cancels an in-flight animation before starting a new target animation', () => {
+    let frameCallback: FrameRequestCallback | null = null;
+    const requestAnimationFrameMock = vi.fn((callback: FrameRequestCallback) => {
+      frameCallback = callback;
+      return requestAnimationFrameMock.mock.calls.length;
+    });
+    const cancelAnimationFrameMock = vi.fn();
+
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: false })),
+    );
+    vi.stubGlobal('requestAnimationFrame', requestAnimationFrameMock);
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrameMock);
+
+    const { rerender } = render(<AnimatedNumberHarness target={0} duration={100} />);
+    rerender(<AnimatedNumberHarness target={10} duration={100} />);
+
+    act(() => {
+      frameCallback?.(50);
+    });
+    rerender(<AnimatedNumberHarness target={20} duration={100} />);
+
+    expect(cancelAnimationFrameMock).toHaveBeenCalledWith(2);
+    expect(requestAnimationFrameMock).toHaveBeenCalledTimes(3);
+  });
 });

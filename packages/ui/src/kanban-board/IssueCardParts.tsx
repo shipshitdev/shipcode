@@ -7,9 +7,6 @@ import {
   Check,
   Copy,
   GitPullRequest,
-  Loader2,
-  Lock,
-  Maximize2,
   MoreVertical,
   Play,
   RefreshCw,
@@ -23,14 +20,8 @@ import type {
   IssuePipelineStatus,
   IssueStalenessResult,
 } from '@/lib/shipcode';
-import {
-  displayAgentLabel,
-  ISSUE_PIPELINE_STATUS,
-  isAgentRoutingLabel,
-  phaseToProgress,
-} from '@/lib/shipcode';
+import { ISSUE_PIPELINE_STATUS, phaseToProgress } from '@/lib/shipcode';
 import { cn } from '@/lib/utils';
-import { PhaseChip } from '@/PhaseChip';
 import { Badge } from '@/primitives/badge';
 import { Button } from '@/primitives/button';
 import {
@@ -48,12 +39,7 @@ import type {
   IssuePriorityBadge,
   IssueRevisionBadge,
 } from './types';
-import {
-  isAutomationIssue,
-  isIssueCreating,
-  resolveIssuePriorityBadge,
-  statusDotColorClass,
-} from './utils';
+import { isAutomationIssue, isIssueCreating, statusDotColorClass } from './utils';
 
 const ISSUE_CARD_BASE_CLASS =
   'group relative flex shrink-0 flex-col overflow-hidden rounded-md border border-white/[0.04] bg-tertiary p-3 text-left transition-colors outline-none';
@@ -84,15 +70,6 @@ export function IssueExternalBlockers({ issue }: { issue: GitHubIssueCacheRecord
     </>
   );
 }
-
-const ACTION_BADGE_CLASS =
-  'absolute inset-0 inline-flex h-full items-center justify-center gap-1 rounded-sm border px-1.5 py-px text-[10px] font-medium leading-none uppercase tracking-wide opacity-0 transition-opacity group-hover:opacity-100';
-const PLAN_ACTION_BADGE_CLASS =
-  'border-agent/25 bg-agent/10 text-agent hover:border-agent/35 hover:bg-agent/15 hover:text-agent';
-const DANGER_ACTION_BADGE_CLASS =
-  'border-danger/30 bg-danger/15 text-danger hover:border-danger/40 hover:bg-danger/20 hover:text-danger';
-const DONE_ACTION_BADGE_CLASS =
-  'border-done/30 bg-done/15 text-done hover:border-done/40 hover:bg-done/20 hover:text-done';
 
 function issueCardToneClass({
   isCreating,
@@ -126,13 +103,11 @@ function IssueProgressBar({
   status,
   isActive,
   isCompleted,
-  isClosed,
   approvedAwaitingExecution,
 }: {
   status: IssuePipelineStatus;
   isActive: boolean;
   isCompleted: boolean;
-  isClosed: boolean;
   approvedAwaitingExecution: boolean;
 }) {
   if (
@@ -144,24 +119,16 @@ function IssueProgressBar({
     return null;
   }
 
-  const trackClass = isCompleted
-    ? 'bg-success/15'
-    : isClosed
-      ? 'bg-done/15'
-      : approvedAwaitingExecution
-        ? 'bg-agent/15'
-        : 'bg-agent/15';
+  const trackClass = isCompleted ? 'bg-success/15' : 'bg-agent/15';
   const fillClass = isCompleted
     ? 'bg-success'
-    : isClosed
-      ? 'bg-done'
-      : approvedAwaitingExecution
-        ? 'bg-agent'
-        : status === ISSUE_PIPELINE_STATUS.approval ||
-            status === ISSUE_PIPELINE_STATUS.clarifying ||
-            status === ISSUE_PIPELINE_STATUS.paused
-          ? 'bg-warning'
-          : 'bg-agent';
+    : approvedAwaitingExecution
+      ? 'bg-agent'
+      : status === ISSUE_PIPELINE_STATUS.approval ||
+          status === ISSUE_PIPELINE_STATUS.clarifying ||
+          status === ISSUE_PIPELINE_STATUS.paused
+        ? 'bg-warning'
+        : 'bg-agent';
 
   return (
     <div
@@ -179,311 +146,6 @@ function IssueProgressBar({
       )}
     </div>
   );
-}
-
-function phaseAction({
-  issue,
-  status,
-  readOnly,
-  isCreating,
-  isAutomation,
-  isTodo,
-  isActive,
-  isPaused,
-  isFailed,
-  isCompleted,
-  approvedAwaitingExecution,
-  isStartingPipeline,
-  isPausing,
-  isResuming,
-  isCancelling,
-  isRerunning,
-  isMarkingDone,
-  onStartPipeline,
-  onPause,
-  onResume,
-  onCancel,
-  onRerun,
-  onMarkDone,
-}: {
-  issue: GitHubIssueCacheRecord;
-  status: IssuePipelineStatus;
-  readOnly: boolean;
-  isCreating: boolean;
-  isAutomation: boolean;
-  isTodo: boolean;
-  isActive: boolean;
-  isPaused: boolean;
-  isFailed: boolean;
-  isCompleted: boolean;
-  approvedAwaitingExecution: boolean;
-  isStartingPipeline?: boolean;
-  isPausing?: boolean;
-  isResuming?: boolean;
-  isCancelling?: boolean;
-  isRerunning?: boolean;
-  isMarkingDone?: boolean;
-  onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
-  onPause?: (issue: GitHubIssueCacheRecord) => void;
-  onResume?: (issue: GitHubIssueCacheRecord) => void;
-  onCancel?: (issue: GitHubIssueCacheRecord) => void;
-  onRerun?: (issue: GitHubIssueCacheRecord) => void;
-  onMarkDone?: (issue: GitHubIssueCacheRecord) => void;
-}) {
-  if (isCreating) {
-    return (
-      <Badge
-        variant="default"
-        className="inline-flex items-center gap-1 border-agent/25 bg-agent/10 px-1.5 py-px text-[10px] font-medium text-agent"
-        title="Creating issue on GitHub"
-      >
-        <Loader2 size={10} className="animate-spin" />
-        Creating
-        <Lock size={10} />
-      </Badge>
-    );
-  }
-
-  if (readOnly) return <PhaseChip status={status} />;
-
-  if (isTodo && onStartPipeline && !isAutomation) {
-    return (
-      <span className="relative inline-flex items-center">
-        <span
-          className={cn(
-            'pointer-events-none transition-opacity group-hover:opacity-0',
-            isStartingPipeline && 'opacity-0',
-          )}
-        >
-          <PhaseChip status={status} />
-        </span>
-        <Button
-          variant="ghost"
-          size="xs"
-          className={cn(
-            ACTION_BADGE_CLASS,
-            PLAN_ACTION_BADGE_CLASS,
-            isStartingPipeline && 'opacity-100',
-          )}
-          title={isStartingPipeline ? 'Starting pipeline' : 'Start planning'}
-          disabled={isStartingPipeline}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (isStartingPipeline) return;
-            onStartPipeline(issue);
-          }}
-        >
-          {isStartingPipeline ? (
-            <>
-              <Loader2 size={10} className="animate-spin" />
-              PLAN
-            </>
-          ) : (
-            'PLAN'
-          )}
-        </Button>
-      </span>
-    );
-  }
-
-  if (isActive && onPause) {
-    return (
-      <span className="relative inline-flex items-center">
-        <span
-          className={cn(
-            'pointer-events-none transition-opacity group-hover:opacity-0',
-            isPausing && 'opacity-0',
-          )}
-        >
-          <PhaseChip status={status} />
-        </span>
-        <Button
-          variant="ghost"
-          size="xs"
-          className={cn(ACTION_BADGE_CLASS, DANGER_ACTION_BADGE_CLASS, isPausing && 'opacity-100')}
-          title={isPausing ? 'Pausing task' : 'Pause task'}
-          aria-label={isPausing ? 'Pausing task' : 'Pause task'}
-          disabled={isPausing}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (isPausing) return;
-            onPause(issue);
-          }}
-        >
-          {isPausing ? <Loader2 size={10} className="animate-spin" /> : <Square size={10} />}
-        </Button>
-      </span>
-    );
-  }
-
-  if (isPaused && onResume) {
-    return (
-      <span className="relative inline-flex items-center">
-        <span
-          className={cn(
-            'pointer-events-none transition-opacity group-hover:opacity-0',
-            isResuming && 'opacity-0',
-          )}
-        >
-          <PhaseChip status={status} />
-        </span>
-        <Button
-          variant="ghost"
-          size="xs"
-          className={cn(ACTION_BADGE_CLASS, PLAN_ACTION_BADGE_CLASS, isResuming && 'opacity-100')}
-          title={isResuming ? 'Resuming task' : 'Resume task'}
-          aria-label={isResuming ? 'Resuming task' : 'Resume task'}
-          disabled={isResuming}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (isResuming) return;
-            onResume(issue);
-          }}
-        >
-          {isResuming ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} />}
-        </Button>
-      </span>
-    );
-  }
-
-  if (isActive && onCancel) {
-    return (
-      <span className="relative inline-flex items-center">
-        <span
-          className={cn(
-            'pointer-events-none transition-opacity group-hover:opacity-0',
-            isCancelling && 'opacity-0',
-          )}
-        >
-          <PhaseChip status={status} />
-        </span>
-        <Button
-          variant="ghost"
-          size="xs"
-          className={cn(
-            ACTION_BADGE_CLASS,
-            DANGER_ACTION_BADGE_CLASS,
-            isCancelling && 'opacity-100',
-          )}
-          title={isCancelling ? 'Cancelling pipeline' : 'Cancel pipeline'}
-          disabled={isCancelling}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (isCancelling) return;
-            onCancel(issue);
-          }}
-        >
-          {isCancelling ? (
-            <>
-              <Loader2 size={10} className="animate-spin" />
-              CANCEL
-            </>
-          ) : (
-            'CANCEL'
-          )}
-        </Button>
-      </span>
-    );
-  }
-
-  if (isFailed && onRerun) {
-    return (
-      <span className="relative inline-flex items-center">
-        <span
-          className={cn(
-            'pointer-events-none transition-opacity group-hover:opacity-0',
-            isRerunning && 'opacity-0',
-          )}
-        >
-          <PhaseChip status={status} />
-        </span>
-        <Button
-          variant="ghost"
-          size="xs"
-          className={cn(
-            ACTION_BADGE_CLASS,
-            DANGER_ACTION_BADGE_CLASS,
-            'disabled:opacity-100',
-            isRerunning && 'opacity-100',
-          )}
-          title={isRerunning ? 'Retrying pipeline' : 'Retry pipeline'}
-          disabled={isRerunning}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (isRerunning) return;
-            onRerun(issue);
-          }}
-        >
-          {isRerunning ? (
-            <>
-              <Loader2 size={10} className="animate-spin" />
-              RETRY
-            </>
-          ) : (
-            'RETRY'
-          )}
-        </Button>
-      </span>
-    );
-  }
-
-  if (isCompleted && onMarkDone) {
-    return (
-      <span className="relative inline-flex items-center">
-        <span
-          className={cn(
-            'pointer-events-none transition-opacity group-hover:opacity-0',
-            isMarkingDone && 'opacity-0',
-          )}
-        >
-          <PhaseChip status={status} />
-        </span>
-        <Button
-          variant="ghost"
-          size="xs"
-          className={cn(
-            ACTION_BADGE_CLASS,
-            DONE_ACTION_BADGE_CLASS,
-            isMarkingDone && 'opacity-100',
-          )}
-          title={isMarkingDone ? 'Closing issue' : 'Close issue'}
-          disabled={isMarkingDone}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (isMarkingDone) return;
-            onMarkDone(issue);
-          }}
-        >
-          {isMarkingDone ? (
-            <>
-              <Loader2 size={10} className="animate-spin" />
-              CLOSE
-            </>
-          ) : (
-            'CLOSE'
-          )}
-        </Button>
-      </span>
-    );
-  }
-
-  if (approvedAwaitingExecution) {
-    return (
-      <PhaseChip
-        status={status}
-        label="Waiting for slot"
-        className="border-agent/25 bg-agent/10 text-agent"
-      />
-    );
-  }
-
-  return <PhaseChip status={status} />;
 }
 
 export function StalenessDot({
@@ -556,9 +218,6 @@ interface DraggableCardProps {
 function useDraggableCardView({
   issue,
   phaseChip,
-  revisionBadge,
-  approvalBadge,
-  priorityBadge,
   staleness,
   approvedAwaitingExecution = false,
   readOnly = false,
@@ -578,12 +237,6 @@ function useDraggableCardView({
   branchCopyState,
   isSelected,
   isKeyboardFocused,
-  isRerunning,
-  isStartingPipeline,
-  isPausing,
-  isResuming,
-  isCancelling,
-  isMarkingDone,
   isFlashing = false,
   hoverCardEnabled = true,
   onFetchPlanSteps,
@@ -613,7 +266,6 @@ function useDraggableCardView({
   const isTodo = presentationStatus === ISSUE_PIPELINE_STATUS.todo;
   const isCompleted = presentationStatus === ISSUE_PIPELINE_STATUS.completed;
   const isClosed = presentationStatus === ISSUE_PIPELINE_STATUS.closed;
-  const showBranchCopyAction = !!branchName && !!onCopyBranchName && !isAutomation && !readOnly;
   const linkedPrLabel = issue.linkedPrNumber ? `PR #${issue.linkedPrNumber}` : null;
 
   return (
@@ -682,43 +334,10 @@ function useDraggableCardView({
           status={presentationStatus}
           isActive={isActive}
           isCompleted={isCompleted}
-          isClosed={isClosed}
           approvedAwaitingExecution={approvedAwaitingExecution}
         />
-        <StalenessDot staleness={staleness} className="absolute right-2 bottom-2 z-10" />
-        <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
-          {!isCreating && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted-foreground/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
-              title="Open issue detail"
-              aria-label="Open issue detail"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onClick(issue);
-              }}
-            >
-              <Maximize2 size={14} />
-            </Button>
-          )}
-          {showBranchCopyAction && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted-foreground/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
-              title={`Copy branch name (${branchName})`}
-              aria-label={`Copy branch name for issue #${issue.issueNumber}`}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onCopyBranchName(issue, branchName);
-              }}
-            >
-              {branchCopyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
-            </Button>
-          )}
+        <div className="absolute right-1.5 bottom-1.5 z-10 flex items-center gap-1">
+          <StalenessDot staleness={staleness} />
           {!isCreating && !readOnly && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -806,12 +425,7 @@ function useDraggableCardView({
             </DropdownMenu>
           )}
         </div>
-        <div
-          className={cn(
-            'relative flex min-w-0 items-center gap-2',
-            readOnly ? 'pr-7' : showBranchCopyAction ? 'pr-20' : 'pr-14',
-          )}
-        >
+        <div className="relative flex min-w-0 items-center gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {issueGithubUrl &&
             !isCreating &&
@@ -821,7 +435,7 @@ function useDraggableCardView({
               <Button
                 variant="ghost"
                 size="xs"
-                className="h-auto shrink-0 p-0 font-mono text-[11px] text-muted-foreground hover:bg-transparent hover:text-primary hover:underline"
+                className="h-auto shrink-0 p-0 font-mono text-[11px] text-muted-foreground/60 hover:bg-transparent hover:text-primary hover:underline"
                 title="Open issue on GitHub"
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
@@ -832,7 +446,7 @@ function useDraggableCardView({
                 {referenceLabel}
               </Button>
             ) : (
-              <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground/60">
                 {referenceLabel}
               </span>
             )}
@@ -859,90 +473,16 @@ function useDraggableCardView({
           </div>
           <span
             className={cn(
-              'size-2 shrink-0 rounded-full transition-opacity group-hover:opacity-0',
+              'size-2 shrink-0 rounded-full',
               statusDotColorClass(presentationStatus, approvedAwaitingExecution),
             )}
             aria-hidden="true"
           />
         </div>
-        <div className="relative z-10 mt-1.5 w-full min-w-0">
-          <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
+        <div className="relative z-10 mt-1 w-full min-w-0">
+          <span className="line-clamp-1 text-[13px] font-medium leading-snug text-primary">
             {issue.title}
           </span>
-        </div>
-        <div className="relative z-10 mt-2 flex flex-wrap items-center gap-1.5">
-          {priorityBadge ? (
-            <Badge
-              variant={priorityBadge.variant}
-              className="px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"
-              title={priorityBadge.title}
-            >
-              {priorityBadge.label}
-            </Badge>
-          ) : null}
-          {revisionBadge ? (
-            <Badge
-              variant={revisionBadge.variant}
-              className="px-1.5 py-px text-[10px] font-medium"
-              title={revisionBadge.title}
-            >
-              {revisionBadge.label}
-            </Badge>
-          ) : null}
-          {approvedAwaitingExecution ? (
-            <Badge variant="success" className="px-1.5 py-px text-[10px] font-medium">
-              Approved
-            </Badge>
-          ) : null}
-          {approvalBadge && !approvedAwaitingExecution ? (
-            <Badge
-              variant="warning"
-              className="px-1.5 py-px text-[10px] font-medium"
-              title={approvalBadge.title}
-            >
-              {approvalBadge.label}
-            </Badge>
-          ) : null}
-          {issue.labels.flatMap((label) =>
-            !readOnly && isAgentRoutingLabel(label)
-              ? [
-                  <Badge
-                    key={label}
-                    variant="accent"
-                    className="px-1.5 py-px text-[10px] font-medium"
-                    title={label}
-                  >
-                    {displayAgentLabel(label)}
-                  </Badge>,
-                ]
-              : [],
-          )}
-          <IssueExternalBlockers issue={issue} />
-          {phaseAction({
-            issue,
-            status: presentationStatus,
-            readOnly,
-            isCreating,
-            isAutomation,
-            isTodo,
-            isActive,
-            isPaused,
-            isFailed,
-            isCompleted,
-            approvedAwaitingExecution,
-            isStartingPipeline,
-            isPausing,
-            isResuming,
-            isCancelling,
-            isRerunning,
-            isMarkingDone,
-            onStartPipeline,
-            onPause,
-            onResume,
-            onCancel,
-            onRerun,
-            onMarkDone,
-          })}
         </div>
       </div>
     </IssueHoverCard>
@@ -963,14 +503,13 @@ export function DragOverlayCard({
   issue: GitHubIssueCacheRecord;
   approvedAwaitingExecution?: boolean;
 }) {
-  const priorityBadge = resolveIssuePriorityBadge(issue);
   const isCreating = isIssueCreating(issue);
   const presentationStatus = issue.pipelineStatus;
   const referenceLabel = issueReferenceLabel(issue, isCreating);
   return (
     <div className="cursor-grabbing rounded-md border border-white/[0.04] bg-secondary p-3 opacity-80 shadow-lg">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[11px] text-muted-foreground">{referenceLabel}</span>
+        <span className="font-mono text-[11px] text-muted-foreground/60">{referenceLabel}</span>
         <span
           className={cn(
             'size-2 shrink-0 rounded-full',
@@ -979,35 +518,10 @@ export function DragOverlayCard({
           aria-hidden="true"
         />
       </div>
-      <div className="mt-1.5 w-full min-w-0">
-        <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
+      <div className="mt-1 w-full min-w-0">
+        <span className="line-clamp-1 text-[13px] font-medium leading-snug text-primary">
           {issue.title}
         </span>
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {priorityBadge ? (
-          <Badge
-            variant={priorityBadge.variant}
-            className="px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"
-            title={priorityBadge.title}
-          >
-            {priorityBadge.label}
-          </Badge>
-        ) : null}
-        {isCreating ? (
-          <Badge className="inline-flex items-center gap-1 border-agent/25 bg-agent/10 px-1.5 py-px text-[10px] font-medium text-agent">
-            <Loader2 size={10} className="animate-spin" />
-            Creating
-          </Badge>
-        ) : approvedAwaitingExecution ? (
-          <Badge
-            variant="default"
-            className="border-agent/25 bg-agent/10 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-agent"
-          >
-            Waiting for slot
-          </Badge>
-        ) : null}
-        <div className="ml-auto h-5" />
       </div>
     </div>
   );

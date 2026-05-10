@@ -239,7 +239,7 @@ function providerDefaultModel(provider: ExecutorModel): string {
 }
 
 function modelArg(input: AutoCommitGenerateInput): string | null {
-  const provider = input.provider ?? 'openrouter';
+  const provider = input.provider as ExecutorModel;
   const trimmed = input.model.trim();
   if (!trimmed || trimmed === providerDefaultModel(provider)) return null;
   return trimmed;

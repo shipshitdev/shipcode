@@ -18,11 +18,15 @@ export class GitService {
     this.git = simpleGit(projectPath);
   }
 
-  async getStatus(worktreePath?: string, compareFallbackRef?: string): Promise<GitState> {
+  async getStatus(
+    worktreePath?: string,
+    compareFallbackRef?: string,
+    options: { preferFallbackRef?: boolean } = {},
+  ): Promise<GitState> {
     const git = worktreePath ? simpleGit(worktreePath) : this.git;
     const status: StatusResult = await git.status();
     const log = await git.log({ maxCount: 1 });
-    const divergence = await this.getDivergence(git, compareFallbackRef);
+    const divergence = await this.getDivergence(git, compareFallbackRef, options);
     const preCommitHookPath = await this.getPreCommitHookPath(worktreePath);
 
     return {
@@ -135,7 +139,7 @@ export class GitService {
   async addPaths(paths: string[], worktreePath?: string): Promise<void> {
     if (paths.length === 0) return;
     const git = worktreePath ? simpleGit(worktreePath) : this.git;
-    await git.add(paths);
+    await git.raw(['add', '-A', '--', ...paths]);
   }
 
   /** Mixed reset to clear the index without touching the working tree. */
@@ -154,11 +158,17 @@ export class GitService {
   /** Names of files currently in the staging area. */
   async getStagedFiles(worktreePath?: string): Promise<string[]> {
     const git = worktreePath ? simpleGit(worktreePath) : this.git;
-    const raw = await git.diff(['--cached', '--name-only']);
-    return raw
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
+    const raw = await git.diff(['--cached', '--name-status']);
+    return raw.split('\n').flatMap((line) => {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) return [];
+
+      const [status, ...paths] = trimmed.split('\t');
+      if (status.startsWith('R') || status.startsWith('C')) {
+        return paths.filter((candidate) => candidate.length > 0);
+      }
+      return paths[0] ? [paths[0]] : [];
+    });
   }
 
   /** Force-delete a local branch. */
@@ -260,7 +270,7 @@ export class GitService {
       const [behindRaw, aheadRaw] = raw.trim().split(/\s+/);
       return {
         aheadCount: Number.parseInt(aheadRaw ?? '0', 10) || 0,
-        behindCount: Number.parseInt(behindRaw ?? '0', 10) || 0,
+        behindCount: Number.parseInt(behindRaw, 10) || 0,
         compareRef,
       };
     } catch {
@@ -271,8 +281,9 @@ export class GitService {
   private async getDivergence(
     git: SimpleGit,
     compareFallbackRef?: string,
+    options: { preferFallbackRef?: boolean } = {},
   ): Promise<{ aheadCount: number; behindCount: number; compareRef: string | null }> {
-    const compareRef = await this.resolveCompareRef(git, compareFallbackRef);
+    const compareRef = await this.resolveCompareRef(git, compareFallbackRef, options);
     if (!compareRef) return { aheadCount: 0, behindCount: 0, compareRef: null };
 
     try {
@@ -280,7 +291,7 @@ export class GitService {
       const [behindRaw, aheadRaw] = raw.trim().split(/\s+/);
       return {
         aheadCount: Number.parseInt(aheadRaw ?? '0', 10) || 0,
-        behindCount: Number.parseInt(behindRaw ?? '0', 10) || 0,
+        behindCount: Number.parseInt(behindRaw, 10) || 0,
         compareRef,
       };
     } catch {
@@ -291,7 +302,15 @@ export class GitService {
   private async resolveCompareRef(
     git: SimpleGit,
     compareFallbackRef?: string,
+    options: { preferFallbackRef?: boolean } = {},
   ): Promise<string | null> {
+    if (
+      options.preferFallbackRef &&
+      compareFallbackRef &&
+      (await this.refExists(git, compareFallbackRef))
+    ) {
+      return compareFallbackRef;
+    }
     let upstream = '';
     try {
       upstream = (

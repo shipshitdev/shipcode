@@ -126,7 +126,7 @@ export class ProjectQueries {
       if (options?.githubRepoId || options?.githubRepoFullName) {
         this.updateGithubRepoIdentity(existing.id, {
           githubRepoId: options?.githubRepoId ?? null,
-          githubRepoFullName: options?.githubRepoFullName ?? null,
+          githubRepoFullName: options.githubRepoFullName ?? null,
         });
       }
       // Reset stale queued issues so they don't auto-start pipelines on restore.
@@ -212,7 +212,7 @@ export class ProjectQueries {
         ${attentionOnlyGuards}
     `);
     const result = options.ignoreAttentionOnly ? stmt.run(id, id) : stmt.run(id, id, id, id);
-    return (result.changes ?? 0) > 0;
+    return result.changes > 0;
   }
 
   pin(id: string, pinned: boolean): void {
@@ -249,7 +249,7 @@ export class ProjectQueries {
         ${attentionOnlyGuards}
     `);
     const result = options.ignoreAttentionOnly ? stmt.run(id, id) : stmt.run(id, id, id, id);
-    return (result.changes ?? 0) > 0;
+    return result.changes > 0;
   }
 
   unarchive(id: string): void {
@@ -573,7 +573,7 @@ function mapProject(row: ProjectRow): Project {
     githubRepoId: row.github_repo_id ?? null,
     githubRepoFullName: row.github_repo_full_name ?? null,
     starterIssueNumber: row.starter_issue_number ?? null,
-    starterIssueCreatedAt: toIsoUtc(row.starter_issue_created_at) ?? row.starter_issue_created_at,
+    starterIssueCreatedAt: toIsoUtc(row.starter_issue_created_at),
     githubProjectUrl: row.github_project_url ?? null,
     githubStatusMapping: row.github_status_mapping
       ? migrateStatusMapping(JSON.parse(row.github_status_mapping))
@@ -595,16 +595,16 @@ function mapProject(row: ProjectRow): Project {
       row.require_approval_override == null ? null : row.require_approval_override === 1,
     pipelineSpeedProfileOverride: row.pipeline_speed_profile_override ?? null,
     prdQualityGate: row.prd_quality_gate == null ? null : row.prd_quality_gate === 1,
-    discordRouting: row.discord_routing ?? 'inherit',
+    discordRouting: row.discord_routing,
     discordWebhookUrlOverride: row.discord_webhook_url_override ?? null,
-    telegramRouting: row.telegram_routing ?? 'inherit',
+    telegramRouting: row.telegram_routing,
     telegramChatIdOverride: row.telegram_chat_id_override ?? null,
     defaultBranch: row.default_branch,
     pinned: row.pinned === 1,
     archived: row.archived === 1,
     hidden: row.hidden === 1,
     notifyGithubUser: row.notify_github_user ?? null,
-    createdAt: toIsoUtc(row.created_at) ?? row.created_at,
-    updatedAt: toIsoUtc(row.updated_at) ?? row.updated_at,
+    createdAt: toIsoUtc(row.created_at) as string,
+    updatedAt: toIsoUtc(row.updated_at) as string,
   };
 }

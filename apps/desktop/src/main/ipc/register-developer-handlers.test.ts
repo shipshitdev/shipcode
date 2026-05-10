@@ -119,6 +119,28 @@ describe('registerDeveloperHandlers', () => {
     expect(log.default.transports.file.level).toBe('debug');
   });
 
+  it('opens the log directory without fallback when the primary path succeeds', async () => {
+    vi.mocked(shell.openPath).mockResolvedValueOnce('');
+    registerDeveloperHandlers(makeDeps() as never, {} as never);
+
+    await handlers.get('developer:open-log-directory')?.();
+
+    expect(shell.openPath).toHaveBeenCalledTimes(1);
+    expect(shell.openPath).toHaveBeenCalledWith('/logs');
+    expect(app.getPath).not.toHaveBeenCalled();
+  });
+
+  it('throws when both primary and fallback log directory opens fail', async () => {
+    vi.mocked(shell.openPath)
+      .mockResolvedValueOnce('primary failed')
+      .mockResolvedValueOnce('fallback failed');
+    registerDeveloperHandlers(makeDeps() as never, {} as never);
+
+    await expect(handlers.get('developer:open-log-directory')?.()).rejects.toThrow(
+      'fallback failed',
+    );
+  });
+
   it('returns process resource usage and kills managed processes', async () => {
     const deps = makeDeps();
     registerDeveloperHandlers(deps as never, {} as never);
@@ -130,5 +152,17 @@ describe('registerDeveloperHandlers', () => {
 
     handlers.get('process:kill')?.(undefined, { processId: 'proc-1' });
     expect(deps.processManager.kill).toHaveBeenCalledWith('proc-1');
+  });
+
+  it('returns zeroed process resource usage when no resource monitor is registered', async () => {
+    const deps = makeDeps();
+    deps.resourceMonitor = undefined as never;
+    registerDeveloperHandlers(deps as never, {} as never);
+
+    expect(handlers.get('process:list-resource-usage')?.()).toMatchObject({
+      cpuPercent: 0,
+      highCpu: false,
+      tasks: [],
+    });
   });
 });

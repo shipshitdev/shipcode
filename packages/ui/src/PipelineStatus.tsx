@@ -1,4 +1,4 @@
-import { Check, X } from 'lucide-react';
+import { Check } from 'lucide-react';
 import type { PipelinePhase } from '@/lib/shipcode';
 import { cn } from '@/lib/utils';
 import { Button } from '@/primitives/button';
@@ -48,26 +48,18 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
                   'relative inline-flex items-center justify-center size-5 rounded-full text-[10px] font-bold border-2 border-text-muted-foreground text-muted-foreground',
                   isActive && !isFailed && 'bg-accent border-accent text-bg-primary',
                   isCompleted && 'bg-success border-success text-bg-primary',
-                  isFailed && isActive && 'bg-danger border-danger text-bg-primary',
                 )}
               >
                 {isActive && !isFailed && (
                   <span className="absolute inset-[-3px] rounded-full animate-pulse border-2 border-accent/40" />
                 )}
-                {isCompleted ? (
-                  <Check size={12} strokeWidth={3} />
-                ) : isActive && isFailed ? (
-                  <X size={12} strokeWidth={3} />
-                ) : (
-                  index + 1
-                )}
+                {isCompleted ? <Check size={12} strokeWidth={3} /> : index + 1}
               </span>
               {(isActive || isCompleted) && (
                 <span
                   className={cn(
                     isActive && !isFailed && 'text-accent',
                     isCompleted && 'text-success',
-                    isFailed && isActive && 'text-danger',
                   )}
                 >
                   {phase.label}

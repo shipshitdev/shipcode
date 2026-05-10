@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { VerificationResult } from '@shipcode/shared';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { PlanQueries } from './plans';
 import { ProjectQueries } from './projects';
@@ -35,6 +35,22 @@ describe('VerificationQueries', () => {
     expect(v.planId).toBe(planId);
     expect(v.rawOutput).toBe('output');
     expect(v.result).toBe('failed');
+  });
+
+  it('falls back to the raw timestamp when created_at is not ISO parseable', () => {
+    const v = verifications.create(threadId, planId, 'output', null);
+    db.prepare(`UPDATE verifications SET created_at = '' WHERE id = ?`).run(v.id);
+
+    expect(verifications.getLatest(threadId)?.createdAt).toBe('');
+  });
+
+  it('fails loudly when a created verification cannot be reloaded', () => {
+    const getLatest = vi.spyOn(verifications, 'getLatest').mockReturnValueOnce(null);
+
+    expect(() => verifications.create(threadId, planId, 'output', null)).toThrow(
+      'Failed to load verification after insert',
+    );
+    getLatest.mockRestore();
   });
 
   it('create() clamps oversized raw output', () => {

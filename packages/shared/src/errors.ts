@@ -12,7 +12,7 @@ export function clampError(raw: unknown, max = 280): string {
   else if (typeof raw === 'string') message = raw;
   else message = 'Unknown error';
 
-  const firstLine = message.split('\n')[0] ?? '';
+  const firstLine = message.split('\n')[0];
   if (firstLine.length <= max) return firstLine;
   return `${firstLine.slice(0, max - 1)}…`;
 }

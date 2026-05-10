@@ -151,21 +151,15 @@ function ReadinessItemRow({ item }: { item: ProjectReadinessItem }) {
 
 function ProjectReadinessSummary({
   readiness,
-  loading,
   fetching,
   error,
   onRefresh,
 }: {
   readiness: ProjectReadinessReport | undefined;
-  loading: boolean;
   fetching: boolean;
   error: unknown;
   onRefresh: () => void;
 }) {
-  if (loading) {
-    return <div className="text-[12px] text-muted-foreground">Checking GitHub readiness…</div>;
-  }
-
   if (error) {
     return (
       <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-danger">
@@ -265,7 +259,6 @@ export function ProjectSettingsGitHubTab({
         <>
           <ProjectReadinessSummary
             readiness={readinessQuery.data}
-            loading={readinessQuery.isLoading}
             fetching={readinessQuery.isFetching}
             error={readinessQuery.error}
             onRefresh={() => {

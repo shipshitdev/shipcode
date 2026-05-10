@@ -34,6 +34,13 @@ describe('TerminalEventQueries', () => {
     expect(record.createdAt).toBeTruthy();
   });
 
+  it('falls back to the raw timestamp when created_at is not ISO parseable', () => {
+    const record = terminalEvents.create(threadId, { kind: 'text', content: 'raw time' });
+    db.prepare(`UPDATE terminal_events SET created_at = '' WHERE id = ?`).run(record.id);
+
+    expect(terminalEvents.listByThread(threadId)[0].createdAt).toBe('');
+  });
+
   it('listByThread() returns events in insertion order', () => {
     const first = terminalEvents.create(threadId, { kind: 'text', content: 'first' });
     const second = terminalEvents.create(threadId, { kind: 'text', content: 'second' });

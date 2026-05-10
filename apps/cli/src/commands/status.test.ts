@@ -42,6 +42,15 @@ describe('statusCommand', () => {
     expect(getDatabaseMock).not.toHaveBeenCalled();
   });
 
+  it('checks the relative data dir when HOME is unavailable', async () => {
+    delete process.env.HOME;
+    existsSyncMock.mockReturnValueOnce(false);
+
+    await statusCommand();
+
+    expect(existsSyncMock).toHaveBeenCalledWith('.shipcode/data/shipcode.db');
+  });
+
   it('reports when no projects are registered', async () => {
     existsSyncMock.mockReturnValueOnce(true);
     listProjectsMock.mockReturnValueOnce([]);

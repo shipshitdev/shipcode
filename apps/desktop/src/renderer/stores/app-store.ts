@@ -46,8 +46,6 @@ function upsertTerminalEvents(
   previous: TerminalEventRecord[],
   incoming: TerminalEventRecord[],
 ): TerminalEventRecord[] {
-  if (incoming.length === 0) return previous;
-
   const indexById = getOrCreateIndex(threadId, previous);
   const merged = [...previous];
 
@@ -76,6 +74,12 @@ type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skill
 export type ProjectTab = 'issues' | 'git' | 'code' | 'pull-requests' | 'terminal' | 'insights';
 export type TerminalPaneMode = 'replay' | 'live';
 export type AssistantCli = 'claude' | 'codex';
+export interface AssistantUserMessage {
+  id: string;
+  threadId: string;
+  content: string;
+  createdAt: string;
+}
 export type SettingsSection =
   | 'about'
   | 'general'
@@ -108,6 +112,7 @@ interface AppState {
   assistantQueuedPrompt: string | null;
   assistantThreadId: string | null;
   assistantCli: AssistantCli;
+  assistantUserMessages: AssistantUserMessage[];
   commentComposerRequest: { issueId: string; requestId: number } | null;
 
   // Live data
@@ -201,6 +206,7 @@ interface AppState {
   clearAssistantQueuedPrompt: () => void;
   setAssistantThread: (threadId: string | null) => void;
   setAssistantCli: (cli: AssistantCli) => void;
+  appendAssistantUserMessage: (message: Omit<AssistantUserMessage, 'id' | 'createdAt'>) => void;
   setPlan: (plan: ShipCodePlan | null) => void;
   setReview: (review: PlanReview | null) => void;
   setPipelinePhase: (phase: PipelinePhase) => void;
@@ -282,6 +288,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   assistantQueuedPrompt: null,
   assistantThreadId: null,
   assistantCli: 'claude',
+  assistantUserMessages: [],
   commentComposerRequest: null,
   currentPlan: null,
   currentReview: null,
@@ -424,7 +431,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Switching to another issue re-pins the console to that thread.
       terminalThreadId: issue ? (issue.threadId ?? null) : s.terminalThreadId,
       terminalMaximized: issue ? s.terminalMaximized : false,
-      // Auto-open terminal when the selected issue has an agent actively running
+      // Auto-open terminal when the selected issue has an agent actively running.
       terminalVisible:
         issue && AGENT_ACTIVE_STATUSES.has(issue.pipelineStatus) ? true : s.terminalVisible,
     })),
@@ -474,10 +481,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   closeAssistant: () => set({ assistantVisible: false }),
   setAssistantDraft: (draft) => set({ assistantDraft: draft }),
   queueAssistantPrompt: (prompt) =>
-    set({ assistantVisible: true, assistantDraft: prompt, assistantQueuedPrompt: prompt }),
+    set({
+      assistantVisible: true,
+      assistantDraft: prompt,
+      assistantQueuedPrompt: prompt,
+    }),
   clearAssistantQueuedPrompt: () => set({ assistantQueuedPrompt: null }),
   setAssistantThread: (threadId) => set({ assistantThreadId: threadId }),
   setAssistantCli: (cli) => set({ assistantCli: cli }),
+  appendAssistantUserMessage: (message) =>
+    set((s) => ({
+      assistantUserMessages: [
+        ...s.assistantUserMessages,
+        {
+          ...message,
+          id: `${message.threadId}:${Date.now()}:${s.assistantUserMessages.length}`,
+          createdAt: new Date().toISOString(),
+        },
+      ].slice(-200),
+    })),
   setPlan: (plan) => set({ currentPlan: plan }),
   setReview: (review) => set({ currentReview: review }),
   setPipelinePhase: (phase) =>
@@ -486,7 +508,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         ? { pipelinePhase: phase }
         : {
             pipelinePhase: phase,
-            // Only auto-open on the first transition INTO an active run (e.g. idle/queued → planning).
+            // Only auto-open on the first transition INTO an active run (e.g. idle/queued -> planning).
             // If the user closes the terminal mid-run, subsequent phase events (reviewing,
             // executing, verifying) must not reopen it.
             terminalVisible:

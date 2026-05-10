@@ -190,6 +190,7 @@ export class OpenRouterClient {
 
     // Unreachable because the loop either returns or throws, but TS
     // doesn't know that.
+    /* v8 ignore next */
     throw lastError ?? new OpenRouterError('unknown', 'exhausted retries', false);
   }
 
@@ -335,9 +336,11 @@ export class OpenRouterClient {
     let usage: OpenRouterUsage | null = null;
     const fence = new FenceStateMachine((event) => onDelta?.(event));
 
+    /* v8 ignore start -- abort cleanup is defensive around the Web Streams reader */
     const onAbort = () => {
       reader.cancel().catch(() => {});
     };
+    /* v8 ignore stop */
     signal.addEventListener('abort', onAbort, { once: true });
 
     try {

@@ -125,12 +125,14 @@ describe('useTerminalPane', () => {
   });
 
   it('initializes a history terminal and writes canonical rendered events only once', async () => {
+    const stream = [
+      makeRecord('event-1', { kind: 'text', content: 'Hello\nWorld' }),
+      makeRecord('event-2', { kind: 'raw', content: 'ignored raw in history' }),
+      makeRecord('event-action', { kind: 'action', action: 'noop' } as never),
+    ];
     useAppStore.setState({
       canonicalTerminalStream: {
-        'thread-1': [
-          makeRecord('event-1', { kind: 'text', content: 'Hello\nWorld' }),
-          makeRecord('event-2', { kind: 'raw', content: 'ignored raw in history' }),
-        ],
+        'thread-1': stream,
       },
     } as never);
 
@@ -149,9 +151,17 @@ describe('useTerminalPane', () => {
     terminalInstances[0].write.mockClear();
     useAppStore.setState({
       canonicalTerminalStream: {
+        'thread-1': stream,
+      },
+    } as never);
+    expect(terminalInstances[0].write).not.toHaveBeenCalled();
+
+    useAppStore.setState({
+      canonicalTerminalStream: {
         'thread-1': [
           makeRecord('event-1', { kind: 'text', content: 'Hello\nWorld' }),
           makeRecord('event-2', { kind: 'raw', content: 'ignored raw in history' }),
+          makeRecord('event-action', { kind: 'action', action: 'noop' } as never),
           makeRecord('event-3', { kind: 'lifecycle', message: 'Done' }),
         ],
       },
@@ -164,6 +174,7 @@ describe('useTerminalPane', () => {
   });
 
   it('syncs live terminal input, resize, option updates, and raw output', async () => {
+    invokeMock.mockRejectedValue(undefined);
     const { rerender } = render(<TerminalPaneHarness mode="live" isRunning />);
 
     await waitFor(() => {
@@ -219,5 +230,15 @@ describe('useTerminalPane', () => {
 
     unmount();
     expect(terminalInstances[0].dispose).toHaveBeenCalled();
+  });
+
+  it('uses an empty stream when a thread has no terminal events', async () => {
+    render(<TerminalPaneHarness threadId="missing-thread" />);
+
+    await waitFor(() => {
+      expect(terminalInstances[0]?.open).toHaveBeenCalled();
+    });
+
+    expect(terminalInstances[0].write).not.toHaveBeenCalled();
   });
 });

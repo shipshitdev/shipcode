@@ -38,15 +38,21 @@ import type { PipelineHelperEnv } from './shared';
 
 const NO_VALID_PLAN_REASON = 'Plan generation failed — no valid shipcode-plan block was produced.';
 
-function clearRetryTimer(context: PipelineContext): void {
+/**
+ * @knipignore
+ */
+export function clearRetryTimer(context: PipelineContext): void {
   if (!context.retryTimer) return;
   clearTimeout(context.retryTimer);
   context.retryTimer = null;
 }
 
-function formatPlanParseFailure(error?: string): string {
+/**
+ * @knipignore
+ */
+export function formatPlanParseFailure(error?: string): string {
   if (!error) return NO_VALID_PLAN_REASON;
-  return `Plan output could not be parsed — ${clampTextBlock(error.split('\n')[0] ?? error, 280)}`;
+  return `Plan output could not be parsed — ${clampTextBlock(error.split('\n')[0]!, 280)}`;
 }
 
 function formatAnsweredClarification(
@@ -57,7 +63,10 @@ function formatAnsweredClarification(
   return formatted ? `Clarification round ${index + 1}\n${formatted}` : null;
 }
 
-function buildClarificationContext(context: PipelineContext): string | null {
+/**
+ * @knipignore
+ */
+export function buildClarificationContext(context: PipelineContext): string | null {
   const history = context.clarificationHistory ?? [];
   const blocks = history
     .map((answered, index) => formatAnsweredClarification(answered, index))

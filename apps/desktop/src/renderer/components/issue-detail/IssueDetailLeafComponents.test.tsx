@@ -3,11 +3,12 @@
 import type { ActivePipelineSummary, ActivityEntry } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../../stores/app-store';
 import { IssueHistoryTab } from './IssueHistoryTab';
 import { PlanWaiting } from './PlanWaiting';
+import { PrdTab } from './PrdTab';
 
 function renderWithProviders(element: React.ReactNode) {
   const queryClient = new QueryClient({
@@ -92,6 +93,17 @@ describe('issue-detail leaf components', () => {
         threadId: 'thread-1',
         createdAt: new Date(Date.now() - 5_000).toISOString(),
       },
+      {
+        id: 'event-2',
+        projectId: 'project-1',
+        kind: 'thread_created',
+        actor: 'user',
+        title: 'Issue imported',
+        subtitle: null,
+        metadata: null,
+        threadId: null,
+        createdAt: new Date(Date.now() - 10_000).toISOString(),
+      },
     ];
 
     const empty = render(<IssueHistoryTab normalizedIssueActivity={[]} runNumberByThreadId={{}} />);
@@ -103,9 +115,48 @@ describe('issue-detail leaf components', () => {
     );
 
     expect(screen.getByText('Activity')).toBeInTheDocument();
-    expect(screen.getByText('1 events')).toBeInTheDocument();
+    expect(screen.getByText('2 events')).toBeInTheDocument();
     expect(screen.getByText('Plan drafted')).toBeInTheDocument();
     expect(screen.getByText('First draft ready')).toBeInTheDocument();
     expect(screen.getByText('Run 3')).toBeInTheDocument();
+    expect(screen.getByText('Issue imported')).toBeInTheDocument();
+  });
+
+  it('renders PRD body, empty body, and refresh/edit actions', () => {
+    const onEditPrd = vi.fn();
+    const onRefreshFromGithub = vi.fn();
+    const activeIssue = {
+      issueNumber: 42,
+      body: '## Brief\n\n- Ship it',
+    };
+
+    const body = render(
+      <PrdTab
+        activeIssue={activeIssue as never}
+        isRefreshingFromGithub={true}
+        onEditPrd={onEditPrd}
+        onRefreshFromGithub={onRefreshFromGithub}
+      />,
+    );
+
+    expect(screen.getByText('Issue brief')).toBeInTheDocument();
+    expect(screen.getByText('Ship it')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh issue from GitHub' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit issue body' }));
+    expect(onEditPrd).toHaveBeenCalledTimes(1);
+    body.unmount();
+
+    render(
+      <PrdTab
+        activeIssue={{ ...activeIssue, body: '' } as never}
+        isRefreshingFromGithub={false}
+        onEditPrd={onEditPrd}
+        onRefreshFromGithub={onRefreshFromGithub}
+      />,
+    );
+
+    expect(screen.getByText(/This issue has no PRD body yet/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh issue from GitHub' }));
+    expect(onRefreshFromGithub).toHaveBeenCalledTimes(1);
   });
 });

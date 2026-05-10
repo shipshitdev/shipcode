@@ -94,6 +94,8 @@ describe('preload bridge', () => {
       api.invoke('project:list', { projectId: 'project-1', extra: true }),
     ).resolves.toEqual({ ok: true });
     await expect(api.invoke('project:get', ['project-1'])).rejects.toThrow('boom');
+    ipcRendererMock.invoke.mockResolvedValueOnce('primitive-ok');
+    await expect(api.invoke('settings:set', 'worktreeRoot')).resolves.toBe('primitive-ok');
 
     expect(ipcRendererMock.send).toHaveBeenCalledWith(
       'diagnostics:renderer-ipc',
@@ -120,6 +122,14 @@ describe('preload bridge', () => {
         size: 1,
       }),
     );
+    expect(ipcRendererMock.send).toHaveBeenCalledWith(
+      'diagnostics:renderer-ipc',
+      expect.objectContaining({
+        channel: 'settings:set',
+        ok: true,
+        argType: 'string',
+      }),
+    );
     expect(console.warn).toHaveBeenCalledWith(
       '[shipcode][ipc] project:get failed after 25.0ms',
       expect.any(Error),
@@ -130,6 +140,7 @@ describe('preload bridge', () => {
     expect(console.table).toHaveBeenCalledWith([
       expect.objectContaining({ channel: 'project:list', count: 1, errors: 0 }),
       expect.objectContaining({ channel: 'project:get', count: 1, errors: 1 }),
+      expect.objectContaining({ channel: 'settings:set', count: 1, errors: 0 }),
     ]);
     nowSpy.mockRestore();
   });

@@ -4,12 +4,14 @@ import type { IpcMain } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
-const { startOrQueueMock } = vi.hoisted(() => ({
+const { schedulerOptions, startOrQueueMock } = vi.hoisted(() => ({
+  schedulerOptions: [] as Array<{ getMainWindow: () => unknown }>,
   startOrQueueMock: vi.fn(async () => undefined),
 }));
 
 vi.mock('../pipeline-scheduler', () => ({
-  PipelineScheduler: vi.fn().mockImplementation(function MockPipelineScheduler() {
+  PipelineScheduler: vi.fn().mockImplementation(function MockPipelineScheduler(options) {
+    schedulerOptions.push(options);
     return {
       startOrQueue: startOrQueueMock,
     };
@@ -111,12 +113,14 @@ function makeDeps(graph = makeGraph()) {
 describe('registerIssueGraphHandlers', () => {
   beforeEach(() => {
     handlers.clear();
+    schedulerOptions.length = 0;
     startOrQueueMock.mockClear();
   });
 
   it('registers graph CRUD and preview handlers', async () => {
     const deps = makeDeps();
     registerIssueGraphHandlers(deps as never);
+    expect(schedulerOptions[0]?.getMainWindow()).toBe(deps.mainWindow);
 
     expect(handlers.get('issue-graph:get')?.(undefined, { projectId: 'project-1' })).toEqual(
       makeGraph(),
@@ -186,6 +190,149 @@ describe('registerIssueGraphHandlers', () => {
       phase: PIPELINE_PHASE.failed,
     });
     notifyIssueGraphPipelinePhaseChange({ threadId: 'thread-3', phase: PIPELINE_PHASE.planning });
+  });
+
+  it('skips missing ready issues when confirming grouped runs', async () => {
+    const deps = makeDeps();
+    vi.mocked(deps.queries.githubIssues.list).mockReturnValue([
+      {
+        id: 'issue-2',
+        projectId: 'project-1',
+        issueNumber: 2,
+        pipelineStatus: ISSUE_PIPELINE_STATUS.todo,
+        threadId: 'thread-2',
+      },
+    ]);
+    registerIssueGraphHandlers(deps as never);
+
+    const confirm = handlers.get('issue-graph:confirm-run');
+    if (!confirm) throw new Error('issue-graph:confirm-run handler missing');
+
+    await confirm(undefined, { projectId: 'project-1', selectedIssueIds: ['issue-1', 'issue-2'] });
+
+    expect(deps.queries.githubIssues.list).toHaveBeenCalledWith('project-1');
+  });
+
+  it('ignores unrelated phase changes and missing newly ready issues', async () => {
+    const deps = makeDeps();
+    registerIssueGraphHandlers(deps as never);
+
+    const confirm = handlers.get('issue-graph:confirm-run');
+    if (!confirm) throw new Error('issue-graph:confirm-run handler missing');
+
+    await confirm(undefined, { projectId: 'project-1', selectedIssueIds: ['issue-1', 'issue-2'] });
+    startOrQueueMock.mockClear();
+
+    notifyIssueGraphPipelinePhaseChange({
+      threadId: 'missing-thread',
+      phase: PIPELINE_PHASE.completed,
+    });
+    vi.mocked(deps.queries.githubIssues.getByThreadId).mockReturnValueOnce({
+      id: 'foreign-issue',
+      projectId: 'other-project',
+      issueNumber: 9,
+      pipelineStatus: ISSUE_PIPELINE_STATUS.completed,
+      threadId: 'thread-foreign',
+    });
+    notifyIssueGraphPipelinePhaseChange({
+      threadId: 'thread-foreign',
+      phase: PIPELINE_PHASE.completed,
+    });
+
+    vi.mocked(deps.queries.githubIssues.list).mockReturnValue([
+      {
+        id: 'issue-1',
+        projectId: 'project-1',
+        issueNumber: 1,
+        pipelineStatus: ISSUE_PIPELINE_STATUS.completed,
+        threadId: 'thread-1',
+      },
+    ]);
+    notifyIssueGraphPipelinePhaseChange({
+      threadId: 'thread-1',
+      phase: PIPELINE_PHASE.completed,
+    });
+
+    expect(deps.queries.githubIssues.list).toHaveBeenCalledWith('project-1');
+  });
+
+  it('continues grouped runs when a newly ready issue was already started or fails to start', async () => {
+    const noDependencyGraph: ProjectIssueGraph = {
+      ...makeGraph(),
+      edges: [],
+    };
+    const deps = makeDeps(noDependencyGraph);
+    registerIssueGraphHandlers(deps as never);
+
+    const confirm = handlers.get('issue-graph:confirm-run');
+    if (!confirm) throw new Error('issue-graph:confirm-run handler missing');
+
+    await confirm(undefined, { projectId: 'project-1', selectedIssueIds: ['issue-1', 'issue-2'] });
+    startOrQueueMock.mockClear();
+
+    notifyIssueGraphPipelinePhaseChange({
+      threadId: 'thread-1',
+      phase: PIPELINE_PHASE.completed,
+    });
+
+    expect(startOrQueueMock).not.toHaveBeenCalled();
+
+    const dependentDeps = makeDeps();
+    registerIssueGraphHandlers(dependentDeps as never);
+    const dependentConfirm = handlers.get('issue-graph:confirm-run');
+    if (!dependentConfirm) throw new Error('issue-graph:confirm-run handler missing');
+
+    await dependentConfirm(undefined, {
+      projectId: 'project-1',
+      selectedIssueIds: ['issue-1', 'issue-2'],
+    });
+    startOrQueueMock.mockClear();
+    startOrQueueMock.mockRejectedValueOnce(new Error('queue failed'));
+
+    notifyIssueGraphPipelinePhaseChange({
+      threadId: 'thread-1',
+      phase: PIPELINE_PHASE.completed,
+    });
+
+    await new Promise((resolve) => queueMicrotask(resolve));
+    expect(startOrQueueMock).toHaveBeenCalledWith('project-1', 2);
+  });
+
+  it('deletes grouped runs once selected issues are terminal', async () => {
+    const deps = makeDeps();
+    registerIssueGraphHandlers(deps as never);
+
+    const confirm = handlers.get('issue-graph:confirm-run');
+    if (!confirm) throw new Error('issue-graph:confirm-run handler missing');
+
+    await confirm(undefined, { projectId: 'project-1', selectedIssueIds: ['issue-1', 'issue-2'] });
+    vi.mocked(deps.queries.githubIssues.list).mockReturnValue([
+      {
+        id: 'issue-1',
+        projectId: 'project-1',
+        issueNumber: 1,
+        pipelineStatus: ISSUE_PIPELINE_STATUS.completed,
+        threadId: 'thread-1',
+      },
+      {
+        id: 'issue-2',
+        projectId: 'project-1',
+        issueNumber: 2,
+        pipelineStatus: ISSUE_PIPELINE_STATUS.failed,
+        threadId: 'thread-2',
+      },
+    ]);
+
+    notifyIssueGraphPipelinePhaseChange({
+      threadId: 'thread-1',
+      phase: PIPELINE_PHASE.completed,
+    });
+    notifyIssueGraphPipelinePhaseChange({
+      threadId: 'thread-1',
+      phase: PIPELINE_PHASE.completed,
+    });
+
+    expect(startOrQueueMock).toHaveBeenCalledWith('project-1', 2);
   });
 
   it('refreshes body-derived dependency edges and skips unknown issue references', () => {

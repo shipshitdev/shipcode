@@ -48,7 +48,7 @@ const analysis: CleanupAnalyzeResult = {
   ],
 };
 
-function renderCleanupModal() {
+function renderCleanupModal({ open = true, onClose = vi.fn() } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
   });
@@ -56,8 +56,8 @@ function renderCleanupModal() {
   return render(
     <QueryClientProvider client={queryClient}>
       <CleanupModal
-        open
-        onClose={vi.fn()}
+        open={open}
+        onClose={onClose}
         projectId="project-1"
         criteria={DEFAULT_SETTINGS.cleanupCriteria}
       />
@@ -111,5 +111,137 @@ describe('CleanupModal', () => {
         itemIds: analysis.items.map((item) => item.id),
       });
     });
+  });
+
+  it('toggles individual items and whole groups without selecting blocked local work', async () => {
+    const blockedAnalysis: CleanupAnalyzeResult = {
+      ...analysis,
+      protectedBranches: [],
+      items: [
+        ...analysis.items,
+        {
+          id: 'wt-dirty:/tmp/dirty',
+          kind: 'worktree-no-pr-clean',
+          worktreePath: '/tmp/dirty',
+          branch: 'ship/dirty',
+          dirty: true,
+          aheadCount: 2,
+          behindCount: 0,
+          compareRef: 'origin/main',
+        },
+        {
+          id: 'local-no-remote:ship/local',
+          kind: 'local-branch-no-remote',
+          branch: 'ship/local',
+          lastCommitDate: '2026-05-02T00:00:00.000Z',
+          aheadCount: 0,
+          behindCount: 0,
+          compareRef: null,
+        },
+      ],
+    };
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'git:cleanup-analyze') return blockedAnalysis;
+      if (channel === 'git:cleanup-apply') return { succeeded: [], failed: [] };
+      return null;
+    });
+
+    renderCleanupModal();
+
+    expect(await screen.findByText('ship/dirty')).toBeInTheDocument();
+    expect(screen.getByText(/LOCAL WORK/)).toBeInTheDocument();
+    expect(screen.getByText(/\+2 ahead vs origin\/main/)).toBeInTheDocument();
+    expect(screen.getByText('ship/local')).toBeInTheDocument();
+
+    const dirtyCheckbox = screen.getByLabelText(/ship\/dirty/);
+    expect(dirtyCheckbox).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Apply (3)' })).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText(/ship\/13-done/));
+    expect(screen.getByRole('button', { name: 'Apply (2)' })).toBeDisabled();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Clear' })[0]);
+    expect(screen.getByRole('button', { name: 'Apply (1)' })).toBeDisabled();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Select all' })[0]);
+    expect(screen.getByRole('button', { name: 'Apply (2)' })).toBeDisabled();
+  });
+
+  it('renders analyze and apply failures', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'git:cleanup-analyze') throw new Error('analysis failed');
+      return null;
+    });
+
+    renderCleanupModal();
+
+    expect(await screen.findByText('analysis failed')).toBeInTheDocument();
+
+    cleanup();
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'git:cleanup-analyze') return analysis;
+      if (channel === 'git:cleanup-apply') throw new Error('apply failed');
+      return null;
+    });
+
+    renderCleanupModal();
+
+    await screen.findByText('Confirm cleanup');
+    fireEvent.click(
+      screen.getByLabelText(
+        'I reviewed this exact list and want to delete only these selected cleanup items.',
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Apply (3)' }));
+
+    expect(await screen.findByText('apply failed')).toBeInTheDocument();
+  });
+
+  it('renders partial cleanup results and resets when closed', async () => {
+    const onClose = vi.fn();
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'git:cleanup-analyze') return analysis;
+      if (channel === 'git:cleanup-apply') {
+        return {
+          succeeded: [analysis.items[0].id],
+          failed: [{ itemId: analysis.items[1].id, error: 'branch locked' }],
+        };
+      }
+      return null;
+    });
+
+    const { rerender } = renderCleanupModal({ onClose });
+
+    await screen.findByText('Confirm cleanup');
+    fireEvent.click(
+      screen.getByLabelText(
+        'I reviewed this exact list and want to delete only these selected cleanup items.',
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Apply (3)' }));
+
+    expect(await screen.findByText('Removed 1 item.')).toBeInTheDocument();
+    expect(await screen.findByText('1 failed:')).toBeInTheDocument();
+    expect(screen.getByText(/branch locked/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!);
+    expect(onClose).toHaveBeenCalled();
+
+    rerender(
+      <QueryClientProvider
+        client={
+          new QueryClient({
+            defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+          })
+        }
+      >
+        <CleanupModal
+          open={false}
+          onClose={onClose}
+          projectId="project-1"
+          criteria={DEFAULT_SETTINGS.cleanupCriteria}
+        />
+      </QueryClientProvider>,
+    );
   });
 });

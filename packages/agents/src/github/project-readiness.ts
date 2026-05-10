@@ -419,7 +419,7 @@ function addFieldReadinessItems(
       areaField
         ? `Found "${areaField.name}" for product taxonomy.`
         : 'Optional product taxonomy should live in an Area or Component field, not labels.',
-      areaField ? { present: [areaField.name ?? ''] } : { missing: ['Area or Component'] },
+      areaField ? { present: [areaField.name as string] } : { missing: ['Area or Component'] },
     ),
   );
 

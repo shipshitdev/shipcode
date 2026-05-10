@@ -4,7 +4,11 @@ import type { Project } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EMPTY_OVERRIDES } from './project-settings-modal/shared';
+import {
+  buildProjectDraft,
+  EMPTY_OVERRIDES,
+  formatInheritedSummary,
+} from './project-settings-modal/shared';
 import { GeneralSettingsSection } from './settings-panel/GeneralSettingsSection';
 import { TerminalDrawerEmptyState } from './terminal-drawer/TerminalDrawerEmptyState';
 
@@ -136,5 +140,27 @@ describe('misc leaf components', () => {
     expect(screen.getByTestId('phase-row-reviewer')).toHaveTextContent('Reviewer');
     expect(screen.getByTestId('phase-row-executor')).toHaveTextContent('Executor');
     expect(screen.getByTestId('phase-row-verifier')).toHaveTextContent('Verifier');
+  });
+
+  it('formats inherited project model summaries without explicit model ids', () => {
+    const projectDraft = buildProjectDraft(
+      makeProject({
+        plannerModelOverride: 'claude',
+        plannerModelIdOverride: null,
+        plannerReasoningEffortOverride: 'low',
+      }),
+      {
+        ...EMPTY_OVERRIDES,
+        plannerModelOverride: 'claude',
+        plannerModelIdOverride: null,
+        plannerReasoningEffortOverride: 'low',
+      },
+    );
+
+    expect(projectDraft).not.toBeNull();
+    expect(formatInheritedSummary(DEFAULT_SETTINGS, projectDraft!, 'planner')).toMatch(
+      /^Anthropic \/ None$/,
+    );
+    expect(buildProjectDraft(null, EMPTY_OVERRIDES)).toBeNull();
   });
 });

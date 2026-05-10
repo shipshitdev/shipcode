@@ -109,6 +109,15 @@ describe('retryCommand', () => {
     expect(getThreadByIssueMock).not.toHaveBeenCalled();
   });
 
+  it('returns before parsing when onboarding is incomplete', async () => {
+    requireOnboardingMock.mockReturnValueOnce(false);
+
+    await retryCommand('abc');
+
+    expect(createCliContextMock).not.toHaveBeenCalled();
+    expect(getThreadByIssueMock).not.toHaveBeenCalled();
+  });
+
   it('exits when no thread exists for the issue', async () => {
     getThreadByIssueMock.mockReturnValueOnce(null);
 
@@ -183,6 +192,18 @@ describe('retryCommand', () => {
 
     expect(startVerificationMock).toHaveBeenCalledWith('thread-1');
     expect(startExecutionMock).not.toHaveBeenCalled();
+  });
+
+  it('exits when verification retry has no structured plan', async () => {
+    getLatestCheckpointMock.mockReturnValueOnce({
+      phase: 'verifying',
+      reason: 'verification failed',
+    });
+    getLatestPlanMock.mockReturnValueOnce({ id: 'plan-1', structured: null });
+
+    await expect(retryCommand('42')).rejects.toThrow('process.exit:1');
+
+    expect(errorSpy).toHaveBeenCalledWith('No plan found for retry.');
   });
 
   it('re-runs verification when the latest verification is for an older plan', async () => {

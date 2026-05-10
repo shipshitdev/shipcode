@@ -148,6 +148,44 @@ describe('InboxView', () => {
     expect(screen.queryByText('Execution failed for demo task')).toBeNull();
   });
 
+  it('shows empty, error, and filter-empty states', async () => {
+    vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'notification:list') return [notifications[1]];
+      return null;
+    });
+
+    const { unmount } = renderWithProviders();
+
+    expect(await screen.findByText('Execution failed for demo task')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: /Needs approval/i })[0]);
+    expect(
+      await screen.findByText('No notifications match the current filter.'),
+    ).toBeInTheDocument();
+
+    unmount();
+    cleanup();
+
+    vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'notification:list') return [];
+      return null;
+    });
+    renderWithProviders();
+    expect(await screen.findByText('All caught up. No pending notifications.')).toBeInTheDocument();
+
+    cleanup();
+
+    vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'notification:list') throw new Error('offline');
+      return null;
+    });
+    renderWithProviders();
+    expect(await screen.findByText('Failed to load notifications.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => {
+      expect(window.shipcode.invoke).toHaveBeenCalledWith('notification:list');
+    });
+  });
+
   it('places the timestamp in the rightmost column with hover actions in the same cell', async () => {
     renderWithProviders();
 
@@ -212,6 +250,91 @@ describe('InboxView', () => {
     });
   });
 
+  it('dismisses one notification, dismisses all, and toggles sort order', async () => {
+    renderWithProviders();
+
+    expect(await screen.findByText('Execution failed for demo task')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Newest' }));
+    expect(screen.getByRole('button', { name: 'Oldest' })).toBeInTheDocument();
+
+    const title = screen.getByText('Approval needed for demo task');
+    const row = title.closest('tr');
+    expect(row).not.toBeNull();
+
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole('button', {
+        name: /Dismiss notification/i,
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Read all' }));
+
+    await waitFor(() => {
+      expect(window.shipcode.invoke).toHaveBeenCalledWith('notification:dismiss', {
+        id: 'notification-1',
+      });
+      expect(window.shipcode.invoke).toHaveBeenCalledWith('notification:dismiss-all');
+    });
+  });
+
+  it('dismisses a notification from quick view', async () => {
+    renderWithProviders();
+
+    const title = await screen.findByText('Approval needed for demo task');
+    const row = title.closest('tr');
+    expect(row).not.toBeNull();
+
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole('button', { name: /Quick view/i }),
+    );
+    expect(await screen.findAllByText('Pipeline paused before execution.')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    await waitFor(() => {
+      expect(window.shipcode.invoke).toHaveBeenCalledWith('notification:dismiss', {
+        id: 'notification-1',
+      });
+    });
+  });
+
+  it('retries a failed notification from quick view', async () => {
+    renderWithProviders();
+
+    const title = await screen.findByText('Execution failed for demo task');
+    const row = title.closest('tr');
+    expect(row).not.toBeNull();
+
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole('button', { name: /Quick view/i }),
+    );
+    expect(await screen.findAllByText('The executor exited non-zero.')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'RETRY' }));
+
+    await waitFor(() => {
+      expect(window.shipcode.invoke).toHaveBeenCalledWith('pipeline:retry', {
+        threadId: 'thread-2',
+      });
+    });
+  });
+
+  it('opens full detail from quick view', async () => {
+    renderWithProviders();
+
+    const title = await screen.findByText('Approval needed for demo task');
+    const row = title.closest('tr');
+    expect(row).not.toBeNull();
+
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole('button', { name: /Quick view/i }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Open full detail' }));
+
+    await waitFor(() => {
+      expect(window.shipcode.invoke).toHaveBeenCalledWith('github:list-issues', {
+        projectId: 'project-1',
+      });
+    });
+  });
+
   it('opens the issue matched by github issue number when the notification has a stale thread id', async () => {
     const fallbackIssue = makeIssue({ threadId: 'replacement-thread', issueNumber: 42 });
     vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {
@@ -261,6 +384,83 @@ describe('InboxView', () => {
       expect(useAppStore.getState().activeIssue).toBeNull();
       expect(useAppStore.getState().activeThreadId).toBe('thread-2');
     });
+  });
+
+  it('handles notifications that cannot navigate to an issue', async () => {
+    const localNotification: NotificationRecord = {
+      id: 'local-only',
+      projectId: null,
+      threadId: null,
+      kind: 'failed',
+      title: 'Local failure without project',
+      body: null,
+      createdAt: '2026-04-21T12:00:00.000Z',
+      dismissedAt: null,
+    };
+    vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'notification:list') return [localNotification];
+      return null;
+    });
+
+    const { unmount } = renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Open issue detail/i }));
+    expect(screen.queryByRole('button', { name: /Quick view/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Retry pipeline/i })).not.toBeInTheDocument();
+    expect(window.shipcode.invoke).not.toHaveBeenCalledWith(
+      'github:list-issues',
+      expect.anything(),
+    );
+
+    unmount();
+    cleanup();
+
+    const threadlessNotification: NotificationRecord = {
+      ...notifications[0],
+      id: 'threadless',
+      threadId: null,
+      title: 'Project notification without thread',
+    };
+    vi.mocked(window.shipcode.invoke).mockClear();
+    vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'notification:list') return [threadlessNotification];
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Open issue detail/i }));
+    await waitFor(() => {
+      expect(useAppStore.getState().activeProjectId).toBe('project-1');
+      expect(useAppStore.getState().viewMode).toBe('inbox');
+    });
+    expect(window.shipcode.invoke).not.toHaveBeenCalledWith(
+      'github:list-issues',
+      expect.anything(),
+    );
+  });
+
+  it('leaves selection unchanged when a thread has no issue or automation link', async () => {
+    vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'notification:list') return notifications;
+      if (channel === 'github:list-issues') return [];
+      if (channel === 'thread:get') return { id: 'thread-1', projectId: 'project-1' } as Thread;
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Open issue detail: Approval needed/i }),
+    );
+
+    await waitFor(() => {
+      expect(window.shipcode.invoke).toHaveBeenCalledWith('thread:get', {
+        threadId: 'thread-1',
+      });
+    });
+    expect(useAppStore.getState().activeIssue).toBeNull();
+    expect(useAppStore.getState().activeAutomationThreadId).toBeNull();
   });
 
   it('restores the previous project and inbox view when issue navigation fails', async () => {

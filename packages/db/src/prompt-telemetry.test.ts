@@ -48,4 +48,47 @@ describe('prompt telemetry persistence', () => {
     expect(queries.listByThread(threadId)).toEqual([record]);
     expect(queries.listByInvocation(threadId, 'thread-1:plan:1')).toEqual([record]);
   });
+
+  it('maps optional fields, invalid selected materials, missing rows, and failed reloads', () => {
+    const queries = new PromptTelemetryQueries(db);
+    const minimal = queries.create({
+      threadId,
+      phase: 'execute',
+      invocationId: 'thread-1:execute',
+      promptCharacters: 10,
+      promptBytes: 11,
+      promptLines: 1,
+    });
+
+    expect(minimal).toMatchObject({
+      attempt: null,
+      provider: null,
+      model: null,
+      selectedMaterials: null,
+      promptTokens: null,
+      completionTokens: null,
+      costUsd: null,
+    });
+    expect(queries.getById('missing')).toBeNull();
+
+    db.prepare(
+      `INSERT INTO prompt_telemetry (
+        id, thread_id, phase, invocation_id, prompt_characters, prompt_bytes, prompt_lines, selected_materials
+      ) VALUES ('bad-selected-materials', ?, 'plan', 'bad', 1, 1, 1, '{bad')`,
+    ).run(threadId);
+    expect(queries.getById('bad-selected-materials')?.selectedMaterials).toBeNull();
+
+    const broken = new PromptTelemetryQueries(db);
+    broken.getById = () => null;
+    expect(() =>
+      broken.create({
+        threadId,
+        phase: 'review',
+        invocationId: 'broken',
+        promptCharacters: 1,
+        promptBytes: 1,
+        promptLines: 1,
+      }),
+    ).toThrow(/Failed to load prompt telemetry after insert/);
+  });
 });

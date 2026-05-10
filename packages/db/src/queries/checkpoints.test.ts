@@ -54,4 +54,47 @@ describe('CheckpointQueries', () => {
       first.id,
     ]);
   });
+
+  it('maps null branch and invalid timestamps, returns null for missing rows, and fails if insert reload is missing', () => {
+    const dataDir = mkdtempSync(path.join(os.tmpdir(), 'shipcode-db-checkpoints-'));
+    tempDirs.push(dataDir);
+    const db = getDatabase(dataDir);
+    const projects = new ProjectQueries(db);
+    const threads = new ThreadQueries(db);
+    const checkpoints = new CheckpointQueries(db);
+
+    const project = projects.add('/tmp/checkpoints-project-mapping');
+    const thread = threads.create(project.id, 'Prompt', 'Thread title');
+
+    db.prepare(
+      `INSERT INTO pipeline_checkpoints (
+        id, thread_id, project_id, phase, reason, label, branch, commit_sha, created_at
+      ) VALUES (
+        'checkpoint-invalid-date', ?, ?, 'verifying', 'before_verify', 'Before verify', NULL, 'abc123', ''
+      )`,
+    ).run(thread.id, project.id);
+
+    const row = checkpoints.getById('checkpoint-invalid-date');
+    expect(row).toMatchObject({
+      id: 'checkpoint-invalid-date',
+      branch: null,
+      createdAt: '',
+    });
+    expect(checkpoints.getById('missing')).toBeNull();
+    expect(checkpoints.getLatest('missing-thread')).toBeNull();
+
+    const broken = new CheckpointQueries(db);
+    broken.getById = () => null;
+    expect(() =>
+      broken.create({
+        threadId: thread.id,
+        projectId: project.id,
+        phase: 'verifying',
+        reason: 'before_verify',
+        label: 'Before verify',
+        branch: null,
+        commitSha: 'def456',
+      }),
+    ).toThrow(/Failed to load checkpoint after insert/);
+  });
 });

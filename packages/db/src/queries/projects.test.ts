@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { GitHubIssueQueries } from './github-issues';
 import { ProjectQueries } from './projects';
@@ -25,6 +25,13 @@ describe('ProjectQueries', () => {
     expect(p.defaultBranch).toBe('main');
     expect(p.createdAt).toBeTruthy();
     expect(p.updatedAt).toBeTruthy();
+  });
+
+  it('fails loudly when a newly inserted project cannot be reloaded', () => {
+    const getById = vi.spyOn(projects, 'getById').mockReturnValueOnce(null);
+
+    expect(() => projects.add('/tmp/load-failure')).toThrow('Failed to load project after insert');
+    getById.mockRestore();
   });
 
   it('getById() returns project or null', () => {
@@ -222,6 +229,31 @@ describe('ProjectQueries', () => {
     expect(updated.prdQualityGate).toBeNull();
   });
 
+  it('rejects invalid project pipeline speed override', () => {
+    const p = projects.add('/tmp/project-overrides-invalid');
+
+    expect(() =>
+      projects.updateModelOverrides(p.id, {
+        plannerModelOverride: null,
+        reviewerModelOverride: null,
+        executorModelOverride: null,
+        verifierModelOverride: null,
+        plannerModelIdOverride: null,
+        reviewerModelIdOverride: null,
+        executorModelIdOverride: null,
+        verifierModelIdOverride: null,
+        plannerReasoningEffortOverride: null,
+        reviewerReasoningEffortOverride: null,
+        executorReasoningEffortOverride: null,
+        verifierReasoningEffortOverride: null,
+        revisionCountOverride: null,
+        requireApprovalOverride: null,
+        pipelineSpeedProfileOverride: 'fast' as unknown as 'smart_fast',
+        prdQualityGate: null,
+      }),
+    ).toThrow('pipelineSpeedProfileOverride');
+  });
+
   it('persists GitHub repo identity and starter issue metadata', () => {
     const project = projects.add('/tmp/repo-identity', {
       githubRepoId: 'R_kgDOStarter',
@@ -240,6 +272,126 @@ describe('ProjectQueries', () => {
     const updated = projects.getById(project.id);
     expect(updated?.starterIssueNumber).toBe(101);
     expect(updated?.starterIssueCreatedAt).toBe('2026-04-21T10:00:00.000Z');
+  });
+
+  it('updates existing project identity on idempotent add and can resolve by full name fallback', () => {
+    const project = projects.add('/tmp/repo-identity-update');
+
+    const restored = projects.add('/tmp/repo-identity-update', {
+      githubRepoId: null,
+      githubRepoFullName: 'shipshitdev/shipcode',
+    });
+
+    expect(restored.id).toBe(project.id);
+    expect(restored.githubRepoId).toBeNull();
+    expect(restored.githubRepoFullName).toBe('shipshitdev/shipcode');
+    expect(projects.getByGithubRepoIdentity(null, 'shipshitdev/shipcode')?.id).toBe(project.id);
+    expect(projects.getByGithubRepoIdentity('missing', 'shipshitdev/shipcode')?.id).toBe(
+      project.id,
+    );
+    expect(projects.getByGithubRepoIdentity(null, null)).toBeNull();
+  });
+
+  it('clears full name when an idempotent add only provides a repo id', () => {
+    const project = projects.add('/tmp/repo-identity-id-only', {
+      githubRepoFullName: 'shipshitdev/old',
+    });
+
+    const restored = projects.add(project.path, {
+      githubRepoId: 'R_kgDOOnlyId',
+    });
+
+    expect(restored.githubRepoId).toBe('R_kgDOOnlyId');
+    expect(restored.githubRepoFullName).toBeNull();
+    expect(projects.getByGithubRepoIdentity(null, 'missing/repo')).toBeNull();
+  });
+
+  it('fails loudly when a restored project cannot be reloaded', () => {
+    const project = projects.add('/tmp/reload-restored');
+    const getById = vi.spyOn(projects, 'getById').mockReturnValueOnce(null);
+
+    expect(() => projects.add(project.path)).toThrow(
+      `Failed to load restored project: ${project.id}`,
+    );
+    getById.mockRestore();
+  });
+
+  it('uses current time when starter issue creation time is omitted', () => {
+    const project = projects.add('/tmp/repo-starter-now');
+
+    projects.markStarterIssueSeeded(project.id, { starterIssueNumber: 202 });
+
+    const updated = projects.getById(project.id);
+    expect(updated?.starterIssueNumber).toBe(202);
+    expect(updated?.starterIssueCreatedAt).toBeTruthy();
+  });
+
+  it('updates individual git fields and notification handle', () => {
+    const project = projects.add('/tmp/repo-individual-fields');
+
+    projects.updateDefaultBranch(project.id, 'develop');
+    projects.updateGitRemote(project.id, 'git@github.com:shipshitdev/shipcode.git');
+    projects.updateNotifyGithubUser(project.id, '@decod3rs');
+
+    let updated = projects.getById(project.id);
+    expect(updated?.defaultBranch).toBe('develop');
+    expect(updated?.gitRemote).toBe('git@github.com:shipshitdev/shipcode.git');
+    expect(updated?.notifyGithubUser).toBe('@decod3rs');
+
+    projects.updateGitRemote(project.id, null);
+    projects.updateNotifyGithubUser(project.id, '');
+    updated = projects.getById(project.id);
+    expect(updated?.gitRemote).toBeNull();
+    expect(updated?.notifyGithubUser).toBeNull();
+  });
+
+  it('round-trips GitHub status mappings and migrates legacy values', () => {
+    const project = projects.add('/tmp/repo-status-mapping');
+
+    projects.setGithubStatusMapping(project.id, {
+      todo: { name: 'Todo', color: 'GREEN' },
+      inProgress: { name: 'In Progress', color: null },
+      humanReview: null,
+      done: { name: 'Done', color: 'PURPLE' },
+    });
+
+    expect(projects.getById(project.id)?.githubStatusMapping).toEqual({
+      todo: { name: 'Todo', color: 'GREEN' },
+      inProgress: { name: 'In Progress', color: null },
+      humanReview: null,
+      done: { name: 'Done', color: 'PURPLE' },
+    });
+
+    db.prepare('UPDATE projects SET github_status_mapping = ? WHERE id = ?').run(
+      JSON.stringify({
+        todo: 'Todo',
+        inProgress: { name: 'Doing', color: 3 },
+        humanReview: { name: 12, color: 'RED' },
+        done: 12,
+      }),
+      project.id,
+    );
+
+    expect(projects.getById(project.id)?.githubStatusMapping).toEqual({
+      todo: { name: 'Todo', color: null },
+      inProgress: { name: 'Doing', color: null },
+      humanReview: null,
+      done: null,
+    });
+
+    db.prepare('UPDATE projects SET github_status_mapping = ? WHERE id = ?').run(
+      JSON.stringify('legacy'),
+      project.id,
+    );
+    expect(projects.getById(project.id)?.githubStatusMapping).toEqual({
+      todo: null,
+      inProgress: null,
+      humanReview: null,
+      done: null,
+    });
+
+    projects.clearGithubStatusMapping(project.id);
+    expect(projects.getById(project.id)?.githubStatusMapping).toBeNull();
   });
 
   it('updateNotificationRouting() persists values and clears back to inherit/null', () => {
@@ -346,6 +498,41 @@ describe('ProjectQueries', () => {
 
     const all = projects.list();
     expect(all.length).toBe(2);
+  });
+
+  it('getOrCreateInstantProject creates a hidden reusable project', () => {
+    const first = projects.getOrCreateInstantProject('/Users/tester');
+    const second = projects.getOrCreateInstantProject('/ignored');
+
+    expect(first.id).toBe(second.id);
+    expect(first.name).toBe(ProjectQueries.INSTANT_PROJECT_NAME);
+    expect(first.path).toBe('/Users/tester');
+    expect(first.hidden).toBe(true);
+    expect(projects.listVisible().some((project) => project.id === first.id)).toBe(false);
+  });
+
+  it('fails loudly when an instant project cannot be reloaded after creation', () => {
+    const getById = vi.spyOn(projects, 'getById').mockReturnValueOnce(null);
+
+    expect(() => projects.getOrCreateInstantProject('/Users/tester')).toThrow(
+      'Failed to create instant project',
+    );
+    getById.mockRestore();
+  });
+
+  it('normalizes blank project timestamps to null', () => {
+    const project = projects.add('/tmp/raw-project-fields');
+    db.prepare(
+      `UPDATE projects
+          SET created_at = '',
+              updated_at = ''
+        WHERE id = ?`,
+    ).run(project.id);
+
+    expect(projects.getById(project.id)).toMatchObject({
+      createdAt: null,
+      updatedAt: null,
+    });
   });
 
   // === hasLiveWork / archiveIfIdle / removeIfIdle ===

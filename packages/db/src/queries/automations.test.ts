@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { closeDatabase, getDatabase } from '../index';
 import { AutomationQueries } from './automations';
 import { ProjectQueries } from './projects';
@@ -44,6 +44,46 @@ describe('AutomationQueries', () => {
     expect(automations.list(project.id)).toHaveLength(1);
     expect(automations.listAll()).toHaveLength(1);
     expect(automations.listEnabled()).toHaveLength(1);
+  });
+
+  it('fails loudly when a newly inserted automation cannot be reloaded', () => {
+    const { dataDir, automations, project } = setup();
+    tempDirs.push(dataDir);
+
+    const getById = vi.spyOn(automations, 'getById').mockReturnValueOnce(null);
+    expect(() =>
+      automations.create({
+        projectId: project.id,
+        name: 'Broken',
+        prompt: 'p',
+        cronExpr: '0 * * * *',
+      }),
+    ).toThrow('Failed to create automation');
+    getById.mockRestore();
+  });
+
+  it('creates an automation with explicit executor preferences and disabled state', () => {
+    const { dataDir, automations, project } = setup();
+    tempDirs.push(dataDir);
+
+    const created = automations.create({
+      projectId: project.id,
+      name: 'Nightly',
+      prompt: 'Run the nightly fix loop',
+      cronExpr: '0 2 * * *',
+      enabled: false,
+      executorProvider: 'codex',
+      executorModelId: 'gpt-5.4',
+      executorReasoningEffort: 'high',
+    });
+
+    expect(created).toMatchObject({
+      enabled: false,
+      executorProvider: 'codex',
+      executorModelId: 'gpt-5.4',
+      executorReasoningEffort: 'high',
+    });
+    expect(automations.listEnabled()).toHaveLength(0);
   });
 
   it('listEnabled excludes disabled automations', () => {
@@ -90,6 +130,29 @@ describe('AutomationQueries', () => {
 
     const due = automations.listDue(new Date().toISOString());
     expect(due.map((a) => a.id)).toEqual([past.id]);
+  });
+
+  it('listDue excludes disabled and unscheduled automations', () => {
+    const { dataDir, automations, project } = setup();
+    tempDirs.push(dataDir);
+
+    const unscheduled = automations.create({
+      projectId: project.id,
+      name: 'Unscheduled',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+    const disabled = automations.create({
+      projectId: project.id,
+      name: 'Disabled',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+      enabled: false,
+    });
+    automations.setNextRunAt(disabled.id, '2020-01-01T00:00:00.000Z');
+
+    expect(automations.listDue('2026-05-09T00:00:00.000Z')).toEqual([]);
+    expect(automations.getById(unscheduled.id)?.nextRunAt).toBeNull();
   });
 
   it('setEnabled toggles the flag', () => {
@@ -201,5 +264,64 @@ describe('AutomationQueries', () => {
     expect(updated.cronExpr).toBe('*/5 * * * *');
     expect(updated.name).toBe('A');
     expect(updated.enabled).toBe(true);
+  });
+
+  it('update can clear executor preferences and rejects missing rows', () => {
+    const { dataDir, automations, project } = setup();
+    tempDirs.push(dataDir);
+
+    const a = automations.create({
+      projectId: project.id,
+      name: 'A',
+      prompt: 'p1',
+      cronExpr: '0 * * * *',
+      executorProvider: 'claude',
+      executorModelId: 'claude-opus-4-1',
+      executorReasoningEffort: 'xhigh',
+    });
+
+    const updated = automations.update(a.id, {
+      name: 'B',
+      prompt: 'p2',
+      cronExpr: '*/15 * * * *',
+      enabled: false,
+      executorProvider: null,
+      executorModelId: null,
+      executorReasoningEffort: null,
+    });
+
+    expect(updated).toMatchObject({
+      name: 'B',
+      prompt: 'p2',
+      cronExpr: '*/15 * * * *',
+      enabled: false,
+      executorProvider: null,
+      executorModelId: null,
+      executorReasoningEffort: null,
+    });
+    expect(() => automations.update('missing-automation', { name: 'Nope' })).toThrow(
+      'Automation missing-automation not found',
+    );
+  });
+
+  it('fails loudly when an updated automation disappears before reload', () => {
+    const { dataDir, automations, project } = setup();
+    tempDirs.push(dataDir);
+
+    const a = automations.create({
+      projectId: project.id,
+      name: 'A',
+      prompt: 'p1',
+      cronExpr: '0 * * * *',
+    });
+    const getById = vi
+      .spyOn(automations, 'getById')
+      .mockReturnValueOnce(a)
+      .mockReturnValueOnce(null);
+
+    expect(() => automations.update(a.id, { name: 'B' })).toThrow(
+      `Automation ${a.id} disappeared after update`,
+    );
+    getById.mockRestore();
   });
 });

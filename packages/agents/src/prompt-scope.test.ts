@@ -74,4 +74,13 @@ describe('prompt scope policies', () => {
       kinds: ['issue_prompt', 'plan_output', 'review_feedback', 'testing_context'],
     });
   });
+
+  it('sorts materials with the same kind by label', () => {
+    const selected = selectPromptMaterials('plan', [
+      { kind: 'repo_file_context', label: 'z-memory', content: 'z' },
+      { kind: 'repo_file_context', label: 'a-memory', content: 'a' },
+    ]);
+
+    expect(selected.map((material) => material.label)).toEqual(['a-memory', 'z-memory']);
+  });
 });

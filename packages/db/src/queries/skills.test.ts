@@ -31,6 +31,13 @@ describe('SkillsQueries', () => {
     expect(row?.status).toBe('ok');
   });
 
+  it('falls back to the raw timestamp when updated_at is not ISO parseable', () => {
+    skills.set(null, 'plan-generation', 'content', 'v1', 1);
+    db.prepare(`UPDATE skills SET updated_at = '' WHERE phase = ?`).run('plan-generation');
+
+    expect(skills.get(null, 'plan-generation')?.updatedAt).toBe('');
+  });
+
   it('set() upserts: a second set replaces content', () => {
     skills.set(null, 'plan-generation', 'first', 'v1', 1);
     skills.set(null, 'plan-generation', 'second', 'v2', 2);

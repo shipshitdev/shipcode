@@ -69,7 +69,7 @@ function extractCodexUsage(buffer: string): CliUsage | null {
     const usage = response?.usage ?? (parsed.usage as Record<string, number> | undefined);
     if (usage && (usage.input_tokens != null || usage.prompt_tokens != null)) {
       return {
-        inputTokens: usage.input_tokens ?? usage.prompt_tokens ?? 0,
+        inputTokens: usage.input_tokens ?? usage.prompt_tokens,
         outputTokens: usage.output_tokens ?? usage.completion_tokens ?? 0,
         costUsd: 0, // Codex CLI doesn't report cost_usd
       };

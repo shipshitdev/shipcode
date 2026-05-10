@@ -1,6 +1,10 @@
 import { ISSUE_PIPELINE_STATUS, PIPELINE_PHASE } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type GhSyncDeps, syncThreadAndIssuePhase } from './phase-sync';
+import {
+  type GhSyncDeps,
+  mapPhaseToIssuePipelineStatus,
+  syncThreadAndIssuePhase,
+} from './phase-sync';
 
 // ---------------------------------------------------------------------------
 // Minimal fakes for ThreadQueries / GitHubIssueQueries
@@ -168,5 +172,62 @@ describe('syncThreadAndIssuePhase', () => {
     );
 
     expect(githubIssues.updatePipelineStatus).toHaveBeenCalled();
+  });
+
+  it('maps idle to todo for issue pipeline status', () => {
+    expect(mapPhaseToIssuePipelineStatus(PIPELINE_PHASE.idle)).toBe(ISSUE_PIPELINE_STATUS.todo);
+  });
+
+  it('records failed status through updateStatus when recordFailure is unavailable', () => {
+    const threads = makeThreads() as ReturnType<typeof makeThreads> & {
+      recordFailure?: unknown;
+    };
+    delete threads.recordFailure;
+    const githubIssues = makeGithubIssues();
+
+    syncThreadAndIssuePhase(
+      threads as never,
+      githubIssues as never,
+      't-1',
+      PIPELINE_PHASE.failed,
+      'boom',
+    );
+
+    expect(threads.updateStatus).toHaveBeenCalledWith('t-1', PIPELINE_PHASE.failed, 'boom');
+  });
+
+  it('updates thread status with an error message and skips issue sync when no issue exists', () => {
+    const threads = makeThreads({ githubIssueNumber: null });
+    const githubIssues = makeGithubIssues();
+
+    syncThreadAndIssuePhase(
+      threads as never,
+      githubIssues as never,
+      't-1',
+      PIPELINE_PHASE.executing,
+      'still running',
+    );
+
+    expect(threads.updateStatus).toHaveBeenCalledWith(
+      't-1',
+      PIPELINE_PHASE.executing,
+      'still running',
+    );
+    expect(githubIssues.getByNumber).not.toHaveBeenCalled();
+  });
+
+  it('skips issue status writes when the linked issue row is missing', () => {
+    const threads = makeThreads();
+    const githubIssues = makeGithubIssues();
+    githubIssues.getByNumber.mockReturnValueOnce(null);
+
+    syncThreadAndIssuePhase(
+      threads as never,
+      githubIssues as never,
+      't-1',
+      PIPELINE_PHASE.executing,
+    );
+
+    expect(githubIssues.updatePipelineStatus).not.toHaveBeenCalled();
   });
 });

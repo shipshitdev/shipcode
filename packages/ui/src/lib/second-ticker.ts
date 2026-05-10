@@ -16,13 +16,12 @@ function emit() {
 }
 
 function start() {
-  if (intervalId !== null || typeof window === 'undefined') return;
+  if (intervalId !== null) return;
   intervalId = window.setInterval(emit, 1_000);
 }
 
 function stop() {
-  if (intervalId === null || typeof window === 'undefined') return;
-  window.clearInterval(intervalId);
+  window.clearInterval(intervalId as number);
   intervalId = null;
 }
 

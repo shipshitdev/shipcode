@@ -55,6 +55,30 @@ describe('createProviderRegistry', () => {
     expect(() => registry.for('gh', 'plan')).toThrow(/'gh' is not an LLM agent/);
   });
 
+  it('throws for shell agent (not a provider-backed LLM)', () => {
+    expect(() => registry.for('shell', 'execute')).toThrow(/'shell' is a bare terminal/);
+  });
+
+  it('throws when gemini is requested but no gemini provider is registered', () => {
+    const withoutGemini = createProviderRegistry({ claude, codex, openrouter });
+
+    expect(() => withoutGemini.for('gemini', 'plan')).toThrow(
+      /provider for agent 'gemini' is not registered/,
+    );
+    expect(withoutGemini.all().has('gemini-cli')).toBe(false);
+  });
+
+  it('throws when the selected provider does not support the requested phase', () => {
+    const planOnlyOpenRouter = makeProvider('openrouter', ['plan']);
+    const limited = createProviderRegistry({
+      claude,
+      codex,
+      openrouter: planOnlyOpenRouter,
+    });
+
+    expect(() => limited.for('openrouter', 'execute')).toThrow(/does not support phase 'execute'/);
+  });
+
   it('all() returns a map keyed by provider id', () => {
     const all = registry.all();
     expect(all.get('claude-cli')).toBe(claude);

@@ -40,6 +40,7 @@ describe('ReviewQueries', () => {
     expect(r.decision).toBe('approve');
     expect(r.confidence).toBe('high');
     expect(r.structured).toEqual(structured);
+    expect(reviews.getByPlanId(planId)?.structured).toEqual(structured);
   });
 
   it('create() with null structured defaults to request_changes/low', () => {
@@ -47,6 +48,13 @@ describe('ReviewQueries', () => {
     expect(r.decision).toBe('request_changes');
     expect(r.confidence).toBe('low');
     expect(r.structured).toBeNull();
+  });
+
+  it('normalizes blank created_at values to null', () => {
+    const r = reviews.create(planId, 'raw review', null);
+    db.prepare(`UPDATE reviews SET created_at = '' WHERE id = ?`).run(r.id);
+
+    expect(reviews.getByPlanId(planId)?.createdAt).toBeNull();
   });
 
   it('create() clamps oversized raw output', () => {

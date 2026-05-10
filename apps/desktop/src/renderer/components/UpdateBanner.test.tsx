@@ -99,7 +99,9 @@ describe('UpdateBanner', () => {
 
     expect(await screen.findByText(/ShipCode v0.2.0 is available/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
-    expect(screen.queryByText(/ShipCode v0.2.0 is available/)).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText(/ShipCode v0.2.0 is available/)).not.toBeInTheDocument();
+    });
 
     statusListener?.(makeStatus({ releaseTag: 'v0.3.0', latest: '0.3.0' }));
     expect(await screen.findByText(/ShipCode v0.3.0 is available/)).toBeInTheDocument();

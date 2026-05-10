@@ -220,4 +220,30 @@ describe('HeatmapQueries.byScope', () => {
     expect(queries.byScope({ scope: 'global', rangeDays: 90 })).toHaveLength(90);
     expect(queries.byScope({ scope: 'global', rangeDays: 365 })).toHaveLength(365);
   });
+
+  it('ignores aggregate rows outside the enumerated range and rejects unknown scopes', () => {
+    const fakeDb = {
+      prepare: (() => {
+        let call = 0;
+        return () => ({
+          all: () => {
+            call++;
+            if (call === 1) {
+              return [
+                { day: ymd(0), cost: null, tokens: null, runs: null },
+                { day: '1900-01-01', cost: 1, tokens: 2, runs: 3 },
+              ];
+            }
+            return [{ pr_date: null }, { pr_date: '1900-01-01' }];
+          },
+        });
+      })(),
+    } as unknown as DatabaseSync;
+
+    const rows = new HeatmapQueries(fakeDb).byScope({ scope: 'global', rangeDays: 30 });
+    expect(rows.every((row) => row.costUsd === 0 && row.prsOpened === 0)).toBe(true);
+    expect(() => queries.byScope({ scope: 'workspace' as never, rangeDays: 30 })).toThrow(
+      'unknown scope',
+    );
+  });
 });

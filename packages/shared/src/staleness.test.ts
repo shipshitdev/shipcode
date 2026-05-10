@@ -23,6 +23,32 @@ describe('resolveIssueStaleness', () => {
     ).toBeNull();
   });
 
+  it('ignores inactive statuses and invalid timestamps', () => {
+    expect(
+      resolveIssueStaleness({
+        pipelineStatus: 'todo',
+        statusUpdatedAt: isoAgo(30 * 24 * 60 * 60 * 1000),
+        now,
+      }),
+    ).toBeNull();
+    expect(
+      resolveIssueStaleness({
+        pipelineStatus: 'queued',
+        statusUpdatedAt: 'not-a-date',
+        issueUpdatedAt: null,
+        now: Number.NaN,
+      }),
+    ).toBeNull();
+    expect(
+      resolveIssueStaleness({
+        pipelineStatus: 'queued',
+        statusUpdatedAt: null,
+        issueUpdatedAt: null,
+        now: nowMs,
+      }),
+    ).toBeNull();
+  });
+
   it('flags queued issues older than seven days', () => {
     const result = resolveIssueStaleness({
       pipelineStatus: 'queued',
@@ -44,6 +70,27 @@ describe('resolveIssueStaleness', () => {
         pipelineStatus: 'executing',
         statusUpdatedAt: isoAgo(9 * 24 * 60 * 60 * 1000),
         issueUpdatedAt: isoAgo(60 * 1000),
+        now,
+      }),
+    ).toBeNull();
+  });
+
+  it('keeps the newest active timestamp when issue updates are older than status updates', () => {
+    expect(
+      resolveIssueStaleness({
+        pipelineStatus: 'executing',
+        statusUpdatedAt: isoAgo(60 * 1000),
+        issueUpdatedAt: isoAgo(9 * 24 * 60 * 60 * 1000),
+        now,
+      }),
+    ).toBeNull();
+  });
+
+  it('clamps future timestamps to zero age', () => {
+    expect(
+      resolveIssueStaleness({
+        pipelineStatus: 'queued',
+        statusUpdatedAt: new Date(nowMs + 60 * 1000).toISOString(),
         now,
       }),
     ).toBeNull();
@@ -75,6 +122,19 @@ describe('resolveIssueStaleness', () => {
     ).toBeNull();
   });
 
+  it('does not flag failed pipelines without a usable timestamp', () => {
+    expect(
+      resolveIssueStaleness({
+        pipelineStatus: 'failed',
+        threadStatus: 'failed',
+        threadUpdatedAt: '',
+        statusUpdatedAt: null,
+        issueUpdatedAt: null,
+        now,
+      }),
+    ).toBeNull();
+  });
+
   it('flags failed pipelines older than 24 hours', () => {
     const result = resolveIssueStaleness({
       pipelineStatus: 'failed',
@@ -88,6 +148,36 @@ describe('resolveIssueStaleness', () => {
       reason: 'pipeline-failed',
       title: 'Failed pipeline 25h ago',
       thresholdMs: KANBAN_FAILED_PIPELINE_STALENESS_THRESHOLD_MS,
+    });
+  });
+
+  it('falls back to status timestamps for failed pipelines without a failed thread timestamp', () => {
+    const result = resolveIssueStaleness({
+      pipelineStatus: 'failed',
+      threadStatus: 'executing',
+      statusUpdatedAt: isoAgo(49 * 60 * 60 * 1000),
+      issueUpdatedAt: isoAgo(10 * 60 * 60 * 1000),
+      now: new Date(now),
+    });
+
+    expect(result).toMatchObject({
+      reason: 'pipeline-failed',
+      title: 'Failed pipeline 2d ago',
+    });
+  });
+
+  it('falls back to issue timestamps for failed pipelines when status timestamp is absent', () => {
+    const result = resolveIssueStaleness({
+      pipelineStatus: 'failed',
+      threadStatus: 'executing',
+      statusUpdatedAt: null,
+      issueUpdatedAt: isoAgo(50 * 60 * 60 * 1000),
+      now,
+    });
+
+    expect(result).toMatchObject({
+      reason: 'pipeline-failed',
+      title: 'Failed pipeline 2d ago',
     });
   });
 });

@@ -8,7 +8,7 @@ import type {
   GitWorktreeSummary,
 } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../../stores/app-store';
@@ -48,8 +48,23 @@ vi.mock('@shipcode/ui', async (importOriginal) => {
 });
 
 vi.mock('../../components/CleanupModal', () => ({
-  CleanupModal: ({ open, projectId }: { open: boolean; projectId: string }) =>
-    open ? <div data-testid="cleanup-modal">cleanup {projectId}</div> : null,
+  CleanupModal: ({
+    open,
+    onClose,
+    projectId,
+  }: {
+    open: boolean;
+    onClose: () => void;
+    projectId: string;
+  }) =>
+    open ? (
+      <div data-testid="cleanup-modal">
+        cleanup {projectId}
+        <button type="button" onClick={onClose}>
+          Close cleanup
+        </button>
+      </div>
+    ) : null,
 }));
 
 function renderWithClient() {
@@ -162,7 +177,7 @@ describe('ProjectGitVisualizer', () => {
           groupIndex: 1,
           error: 'hook failed',
           hookFailure: true,
-          hookPath: '.git/hooks/pre-commit',
+          hookPath: null,
         },
       },
     ] as AutoCommitResult[];
@@ -185,12 +200,17 @@ describe('ProjectGitVisualizer', () => {
 
     renderWithClient();
 
-    expect(await screen.findByTestId('selected-worktree')).toHaveTextContent('/repo/worktree');
+    expect(await screen.findByTestId('selected-worktree')).toHaveTextContent('/repo');
     expect(useAppStore.getState().pendingGitWorktreePath).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select worktree' }));
+    expect(await screen.findByTestId('selected-worktree')).toHaveTextContent('/repo/worktree');
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh graph' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cleanup' }));
     expect(screen.getByTestId('cleanup-modal')).toHaveTextContent('project-1');
+    fireEvent.click(screen.getByRole('button', { name: 'Close cleanup' }));
+    expect(screen.queryByTestId('cleanup-modal')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Auto-commit/i }));
     expect(await screen.findByText(/Created 1 commit/)).toHaveTextContent('single-commit fallback');
@@ -199,9 +219,6 @@ describe('ProjectGitVisualizer', () => {
     expect(await screen.findByText(/Pre-commit hook blocked auto-commit/)).toHaveTextContent(
       'hook failed',
     );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Select worktree' }));
-    expect(await screen.findByTestId('selected-worktree')).toHaveTextContent('/repo/worktree');
   });
 
   it('clears unmatched pending worktrees and reports diff or auto-commit errors', async () => {
@@ -223,6 +240,164 @@ describe('ProjectGitVisualizer', () => {
     expect(useAppStore.getState().pendingGitWorktreePath).toBeNull();
     expect(await screen.findByText('diff unavailable')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Auto-commit/i })).toBeDisabled();
+  });
+
+  it('renders fallback errors and auto-commit message permutations', async () => {
+    const autoCommitResults: AutoCommitResult[] = [
+      {
+        commits: [
+          { sha: 'abc', message: 'one' },
+          { sha: 'def', message: 'two' },
+        ],
+        fallbackUsed: false,
+        preCommitHookPath: null,
+      },
+      {
+        commits: [],
+        fallbackUsed: false,
+        preCommitHookPath: null,
+        partialFailure: {
+          groupIndex: 0,
+          error: 'group failed',
+          hookFailure: false,
+          hookPath: null,
+        },
+      },
+      {
+        commits: [{ sha: 'abc', message: 'one' }],
+        fallbackUsed: false,
+        preCommitHookPath: null,
+        partialFailure: {
+          groupIndex: 1,
+          error: 'hook failed',
+          hookFailure: true,
+          hookPath: '.git/hooks/pre-commit',
+        },
+      },
+    ] as AutoCommitResult[];
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'settings:get') return makeSettings();
+      if (channel === 'git:visualizer-data') return makeData([makeWorktree({ path: '/repo' })]);
+      if (channel === 'git:worktree-diff') throw 'diff string failure';
+      if (channel === 'git:auto-commit') {
+        const result = autoCommitResults.shift();
+        if (!result) throw 'commit string failure';
+        return result;
+      }
+      return null;
+    });
+    useAppStore.setState({ activeProjectId: 'project-1' } as never);
+
+    renderWithClient();
+
+    expect(await screen.findByText('Unable to load worktree diff.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Auto-commit/i }));
+    expect(await screen.findByText(/Created 2 commits\./)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Auto-commit/i }));
+    expect(
+      await screen.findByText(/Committed 0 of 1 groups, then failed: group failed/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Auto-commit/i }));
+    expect(
+      await screen.findByText(/Pre-commit hook blocked auto-commit \(.git\/hooks\/pre-commit\)/),
+    ).toHaveTextContent('hook failed');
+
+    fireEvent.click(screen.getByRole('button', { name: /Auto-commit/i }));
+    expect(await screen.findByText('Auto-commit failed.')).toBeInTheDocument();
+  });
+
+  it('shows pending auto-commit state until the commit finishes', async () => {
+    let resolveCommit: (result: AutoCommitResult) => void = () => {};
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === 'settings:get') return Promise.resolve(makeSettings());
+      if (channel === 'git:visualizer-data') {
+        return Promise.resolve(makeData([makeWorktree({ path: '/repo' })]));
+      }
+      if (channel === 'git:worktree-diff') return Promise.resolve([]);
+      if (channel === 'git:auto-commit') {
+        return new Promise((resolve) => {
+          resolveCommit = resolve as (result: AutoCommitResult) => void;
+        });
+      }
+      return Promise.resolve(null);
+    });
+    useAppStore.setState({ activeProjectId: 'project-1' } as never);
+
+    renderWithClient();
+
+    const autoCommitButton = await screen.findByRole('button', { name: /Auto-commit/i });
+    fireEvent.click(autoCommitButton);
+
+    await waitFor(() => expect(autoCommitButton).toBeDisabled());
+    resolveCommit({
+      commits: [{ sha: 'abc', message: 'one' }],
+      fallbackUsed: false,
+      preCommitHookPath: null,
+    } as AutoCommitResult);
+    expect(await screen.findByText('Created 1 commit.')).toBeInTheDocument();
+  });
+
+  it('renders generic git-state errors and clean-worktree auto-commit title', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'settings:get') return makeSettings();
+      if (channel === 'git:visualizer-data') throw 'git failed';
+      return null;
+    });
+    useAppStore.setState({ activeProjectId: 'project-1' } as never);
+
+    renderWithClient();
+
+    expect(await screen.findByText('Unable to load git state.')).toBeInTheDocument();
+
+    cleanup();
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'settings:get') return makeSettings();
+      if (channel === 'git:visualizer-data') {
+        return makeData([makeWorktree({ path: '/repo', isDirty: false })]);
+      }
+      if (channel === 'git:worktree-diff') return [];
+      return null;
+    });
+
+    renderWithClient();
+
+    const autoCommitButton = await screen.findByRole('button', { name: /Auto-commit/i });
+    expect(autoCommitButton).toBeDisabled();
+    expect(autoCommitButton).toHaveAttribute('title', 'Worktree clean');
+  });
+
+  it('renders Error auto-commit failures and hides cleanup until settings load', async () => {
+    let resolveSettings: (settings: AppSettings) => void = () => {};
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === 'settings:get') {
+        return new Promise((resolve) => {
+          resolveSettings = resolve as (settings: AppSettings) => void;
+        });
+      }
+      if (channel === 'git:visualizer-data') {
+        return Promise.resolve(makeData([makeWorktree({ path: '/repo' })]));
+      }
+      if (channel === 'git:worktree-diff') return Promise.resolve([]);
+      if (channel === 'git:auto-commit') {
+        return Promise.reject(new Error('commit exploded'));
+      }
+      return Promise.resolve(null);
+    });
+    useAppStore.setState({ activeProjectId: 'project-1' } as never);
+
+    renderWithClient();
+
+    const autoCommitButton = await screen.findByRole('button', { name: /Auto-commit/i });
+    expect(screen.queryByTestId('cleanup-modal')).not.toBeInTheDocument();
+
+    resolveSettings(makeSettings());
+    await waitFor(() => expect(autoCommitButton).toBeEnabled());
+
+    fireEvent.click(autoCommitButton);
+    expect(await screen.findByText('commit exploded')).toBeInTheDocument();
   });
 
   it('clears selection when there are no worktrees', async () => {

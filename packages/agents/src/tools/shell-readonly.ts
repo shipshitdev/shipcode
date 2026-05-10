@@ -322,8 +322,8 @@ async function resolveWorktreeCwd(worktreePath: string, sub: string | undefined)
     throw new Error(`cwd '${sub}' does not exist or is unreachable: ${(err as Error).message}`);
   }
 
-  const boundary = worktreeReal.endsWith(path.sep) ? worktreeReal : worktreeReal + path.sep;
-  const candidateNorm = candidateReal.endsWith(path.sep) ? candidateReal : candidateReal + path.sep;
+  const boundary = worktreeReal + path.sep;
+  const candidateNorm = candidateReal + path.sep;
   if (candidateNorm !== boundary && !candidateNorm.startsWith(boundary)) {
     throw new Error(
       `cwd '${sub}' escapes the worktree (resolves to ${candidateReal}, worktree is ${worktreeReal})`,

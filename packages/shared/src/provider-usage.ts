@@ -19,8 +19,9 @@ export interface ProviderSelectionAssessment {
   message: string | null;
 }
 
-export interface ProjectProviderWarning extends ProviderSelectionAssessment {
+export interface ProjectProviderWarning extends Omit<ProviderSelectionAssessment, 'message'> {
   severity: 'warning' | 'blocked';
+  message: string;
   phase: ResolvedPhaseModel;
   phases: ResolvedPhaseModel[];
   provider: Extract<ExecutorModel, 'claude' | 'codex'>;
@@ -155,7 +156,7 @@ export function getProjectProviderWarnings(
 
   const deduped = new Map<string, ProjectProviderWarning>();
   for (const warning of warnings) {
-    const key = warning.message ?? `${warning.provider}:${warning.phase}`;
+    const key = warning.message;
     const existing = deduped.get(key);
     if (!existing) {
       deduped.set(key, warning);
@@ -163,10 +164,6 @@ export function getProjectProviderWarnings(
     }
 
     existing.phases = [...new Set([...existing.phases, ...warning.phases])];
-    if (existing.severity === 'warning' && warning.severity === 'blocked') {
-      existing.severity = 'blocked';
-      existing.phase = warning.phase;
-    }
   }
   return [...deduped.values()];
 }

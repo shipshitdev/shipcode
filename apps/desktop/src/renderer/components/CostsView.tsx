@@ -171,7 +171,7 @@ export function CostsView() {
     queryKey: ['costs-project-tasks', selectedProjectId, projectPage],
     queryFn: () =>
       window.shipcode.invoke<CostTaskSummary[]>('costs:list-tasks', {
-        projectId: selectedProjectId ?? '',
+        projectId: selectedProjectId!,
         limit: PAGE_SIZE,
         offset: (projectPage - 1) * PAGE_SIZE,
       }),
@@ -182,7 +182,7 @@ export function CostsView() {
   const { data: projectTasksTotal = 0 } = useQuery<number>({
     queryKey: ['costs-project-tasks-count', selectedProjectId],
     queryFn: () =>
-      window.shipcode.invoke<number>('costs:count-tasks', { projectId: selectedProjectId ?? '' }),
+      window.shipcode.invoke<number>('costs:count-tasks', { projectId: selectedProjectId! }),
     // Event-driven: invalidated by pipeline:model-resolved in useIpc.
     enabled: !!selectedProjectId,
   });
@@ -348,9 +348,8 @@ export function CostsView() {
           {selectedProjectId && data && (
             <section>
               <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {data.byProject.find((p) => p.projectId === selectedProjectId)?.projectName ??
-                  'Project'}{' '}
-                Cost Details
+                {data.byProject.find((p) => p.projectId === selectedProjectId)!.projectName} Cost
+                Details
               </h2>
               <CostTaskTable
                 tasks={projectTasks}

@@ -1,15 +1,24 @@
+// @vitest-environment jsdom
+
 import type { AppSettings, GitHubIssueCacheRecord, Project, Thread } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
 import {
   compareIssues,
+  customCollisionDetection,
+  dragOverlayBorderClass,
+  formatDate,
   isApprovedAwaitingExecutionIssue,
   issueMatchesColumn,
   issueMatchesSection,
+  resolveColumnDotColor,
   resolveIssueApprovalBadge,
   resolveIssuePhaseChip,
   resolveIssuePriorityBadge,
   resolveIssueRevisionBadge,
+  rowToneFor,
+  sectionToneFor,
+  statusDotColorClass,
 } from './utils';
 
 function makeIssue(
@@ -163,6 +172,27 @@ const SETTINGS: AppSettings = {
 };
 
 describe('compareIssues', () => {
+  it('keeps creating issues first and sorts creating ties by newest fetch time', () => {
+    const oldCreating = {
+      ...makeIssue(1, 'Old creating'),
+      syncState: 'creating' as const,
+      fetchedAt: '2026-04-13T12:00:00.000Z',
+    };
+    const newCreating = {
+      ...makeIssue(2, 'New creating'),
+      syncState: 'creating' as const,
+      fetchedAt: '2026-04-13T13:00:00.000Z',
+    };
+    const normal = makeIssue(3, 'Normal');
+
+    const sorted = [normal, oldCreating, newCreating].toSorted((a, b) =>
+      compareIssues(a, b, 'priority'),
+    );
+
+    expect(sorted.map((issue) => issue.issueNumber)).toEqual([2, 1, 3]);
+    expect(compareIssues(normal, newCreating, 'priority')).toBe(1);
+  });
+
   it('sorts priority mode by label rank before issue number', () => {
     const issues = [
       makeIssue(12, 'No priority'),
@@ -197,6 +227,40 @@ describe('compareIssues', () => {
     expect(sorted[sorted.length - 1].issueNumber).toBe(99);
   });
 
+  it('sorts all project priority ranks and falls back to title for exact priority/id ties', () => {
+    const p1 = { ...makeIssue(10, 'P1'), priorityRank: 'p1' as const };
+    const p2 = { ...makeIssue(20, 'P2'), priorityRank: 'p2' as const };
+    const p3 = { ...makeIssue(30, 'P3'), priorityRank: 'p3' as const };
+    const alpha = makeIssue(40, 'Alpha');
+    const beta = makeIssue(40, 'Beta');
+
+    expect([p3, p2, p1].toSorted((a, b) => compareIssues(a, b, 'priority'))).toEqual([p1, p2, p3]);
+    expect(compareIssues(alpha, beta, 'priority')).toBeLessThan(0);
+  });
+
+  it('recognizes remaining legacy priority label aliases', () => {
+    const p0 = makeIssue(1, 'Highest', ['priority/highest']);
+    const p1 = makeIssue(2, 'Medium', ['priority/medium']);
+    const p2 = makeIssue(3, 'Low', ['priority/low']);
+    const p3 = makeIssue(4, 'P3', ['priority:p3']);
+
+    const sorted = [p3, p2, p1, p0].toSorted((a, b) => compareIssues(a, b, 'priority'));
+
+    expect(sorted.map((issue) => issue.issueNumber)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('recognizes remaining P0 priority aliases', () => {
+    for (const [index, label] of [
+      'p0',
+      'priority/critical',
+      'priority:urgent',
+      'priority:high',
+    ].entries()) {
+      const issue = makeIssue(index + 1, label, [label]);
+      expect(compareIssues(issue, makeIssue(99, 'No priority'), 'priority')).toBeLessThan(0);
+    }
+  });
+
   it('sorts title mode alphabetically and breaks ties by newest issue number', () => {
     const issues = [makeIssue(9, 'Beta'), makeIssue(4, 'Alpha'), makeIssue(11, 'Alpha')];
 
@@ -218,6 +282,12 @@ describe('compareIssues', () => {
 });
 
 describe('resolveIssuePhaseChip', () => {
+  it('returns null when the issue status has no active card phase', () => {
+    const issue = makeIssue(40, 'Closed');
+    issue.pipelineStatus = 'closed';
+    expect(resolveIssuePhaseChip(issue, SETTINGS, makeProject(), null)).toBeNull();
+  });
+
   it('falls back when a resolved model contains the synthetic placeholder', () => {
     const issue = makeIssue(42, 'Planning issue');
     issue.pipelineStatus = 'planning';
@@ -271,6 +341,102 @@ describe('resolveIssuePhaseChip', () => {
       provider: 'codex',
       model: 'gpt-5.4',
       effort: 'xhigh',
+    });
+  });
+
+  it('resolves executor and verifier phase chips with and without settings', () => {
+    const executing = makeIssue(54, 'Execute');
+    executing.pipelineStatus = 'executing';
+    const verifying = makeIssue(55, 'Verify');
+    verifying.pipelineStatus = 'verifying';
+
+    expect(
+      resolveIssuePhaseChip(
+        executing,
+        SETTINGS,
+        makeProject(),
+        makeThread({ executorResolvedModel: '<synthetic>', executorModel: 'codex' }),
+      ),
+    ).toMatchObject({ phase: 'executor', provider: 'claude', model: 'codex' });
+    expect(resolveIssuePhaseChip(verifying, null, null, makeThread())).toMatchObject({
+      phase: 'verifier',
+      provider: 'claude',
+      model: 'claude',
+      effort: null,
+    });
+  });
+
+  it('resolves phase chips when settings or stored phase models are missing', () => {
+    const reviewing = makeIssue(56, 'Review without settings');
+    reviewing.pipelineStatus = 'reviewing';
+    const executing = makeIssue(57, 'Execute without settings');
+    executing.pipelineStatus = 'executing';
+    const verifying = makeIssue(58, 'Verify with settings');
+    verifying.pipelineStatus = 'verifying';
+
+    expect(resolveIssuePhaseChip(reviewing, null, null, makeThread())).toMatchObject({
+      phase: 'reviewer',
+      provider: 'claude',
+      model: 'codex',
+      effort: null,
+    });
+    expect(
+      resolveIssuePhaseChip(reviewing, null, null, makeThread({ reviewerModel: null as never })),
+    ).toMatchObject({
+      phase: 'reviewer',
+      provider: 'claude',
+      model: 'codex',
+      effort: null,
+    });
+    expect(resolveIssuePhaseChip(executing, null, null, makeThread())).toMatchObject({
+      phase: 'executor',
+      provider: 'claude',
+      model: 'claude',
+      effort: null,
+    });
+    expect(resolveIssuePhaseChip(verifying, null, null, null)).toMatchObject({
+      phase: 'verifier',
+      provider: 'claude',
+      model: 'claude',
+      effort: null,
+    });
+    expect(
+      resolveIssuePhaseChip(
+        verifying,
+        SETTINGS,
+        makeProject(),
+        makeThread({ verifierModel: null as never }),
+      ),
+    ).toMatchObject({
+      phase: 'verifier',
+      provider: 'claude',
+      model: 'claude',
+      effort: 'medium',
+    });
+  });
+
+  it('falls back to effective configured models when no thread model exists', () => {
+    const reviewing = makeIssue(61, 'Review via settings');
+    reviewing.pipelineStatus = 'reviewing';
+    const executing = makeIssue(62, 'Execute via settings');
+    executing.pipelineStatus = 'executing';
+    const verifying = makeIssue(63, 'Verify via settings');
+    verifying.pipelineStatus = 'verifying';
+
+    expect(resolveIssuePhaseChip(reviewing, SETTINGS, makeProject(), null)).toMatchObject({
+      phase: 'reviewer',
+      provider: 'codex',
+      model: 'codex',
+    });
+    expect(resolveIssuePhaseChip(executing, SETTINGS, makeProject(), null)).toMatchObject({
+      phase: 'executor',
+      provider: 'claude',
+      model: 'claude',
+    });
+    expect(resolveIssuePhaseChip(verifying, SETTINGS, makeProject(), null)).toMatchObject({
+      phase: 'verifier',
+      provider: 'claude',
+      model: 'claude',
     });
   });
 });
@@ -343,6 +509,13 @@ describe('resolveIssueApprovalBadge', () => {
 
     expect(badge).toBeNull();
   });
+
+  it('hides approval badges for automation issues and missing settings', () => {
+    const automation = makeIssue(-1_000_001, 'Automation');
+
+    expect(resolveIssueApprovalBadge(automation, SETTINGS, makeProject())).toBeNull();
+    expect(resolveIssueApprovalBadge(makeIssue(50, 'No settings'), null, makeProject())).toBeNull();
+  });
 });
 
 describe('resolveIssueRevisionBadge', () => {
@@ -392,12 +565,46 @@ describe('resolveIssueRevisionBadge', () => {
     issue.pipelineStatus = 'failed';
 
     const badge = resolveIssueRevisionBadge(issue, SETTINGS, makeProject(), makeThread());
+    const missingRoundBadge = resolveIssueRevisionBadge(
+      issue,
+      SETTINGS,
+      makeProject(),
+      makeThread({ reviewRound: null as never }),
+    );
 
     expect(badge).toEqual({
       label: 'v1',
       title: 'Plan version 1; no revisions configured',
       variant: 'danger',
     });
+    expect(missingRoundBadge?.label).toBe('v1');
+  });
+
+  it('hides revision badges for automation issues and missing settings', () => {
+    const automation = makeIssue(-1_000_002, 'Automation');
+
+    expect(resolveIssueRevisionBadge(automation, SETTINGS, makeProject(), null)).toBeNull();
+    expect(
+      resolveIssueRevisionBadge(makeIssue(54, 'No settings'), null, makeProject(), null),
+    ).toBeNull();
+  });
+
+  it('tones revision badges for non-default statuses', () => {
+    const statuses = [
+      ['approval', 'warning'],
+      ['completed', 'success'],
+      ['closed', 'done'],
+      ['deferred', 'default'],
+      ['executing', 'info'],
+    ] as const;
+
+    for (const [status, variant] of statuses) {
+      const issue = makeIssue(60, status);
+      issue.pipelineStatus = status;
+      expect(resolveIssueRevisionBadge(issue, SETTINGS, makeProject(), makeThread())?.variant).toBe(
+        variant,
+      );
+    }
   });
 });
 
@@ -430,6 +637,16 @@ describe('approved-awaiting-execution helpers', () => {
       issueMatchesSection(issue, { key: 'approval', statuses: ['approval'] }, approvedIds),
     ).toBe(false);
   });
+
+  it('matches normal columns and sections when issues are not execution waiters', () => {
+    const issue = makeIssue(56, 'Normal todo');
+    issue.pipelineStatus = 'todo';
+
+    expect(issueMatchesColumn(issue, { key: 'todo', statuses: ['todo'] })).toBe(true);
+    expect(issueMatchesColumn(issue, { key: 'agent', statuses: ['executing'] })).toBe(false);
+    expect(issueMatchesSection(issue, { key: 'backlog', statuses: ['todo'] })).toBe(true);
+    expect(issueMatchesSection(issue, { key: 'active', statuses: ['executing'] })).toBe(false);
+  });
 });
 
 describe('resolveIssuePriorityBadge', () => {
@@ -455,17 +672,25 @@ describe('resolveIssuePriorityBadge', () => {
     expect(badge?.label).toBe('P0');
     expect(badge?.variant).toBe('warning');
     expect(badge?.rank).toBe('p0');
+    expect(resolveIssuePriorityBadge(withPriority('p0', null))?.title).toBe(
+      'Priority P0 — critical',
+    );
   });
 
   it('renders P1 with info variant', () => {
     const badge = resolveIssuePriorityBadge(withPriority('p1', 'High'));
     expect(badge?.label).toBe('P1');
     expect(badge?.variant).toBe('info');
+    expect(resolveIssuePriorityBadge(withPriority('p1', null))?.title).toBe('Priority P1 — high');
   });
 
   it('renders P2 and P3 with default variant', () => {
-    expect(resolveIssuePriorityBadge(withPriority('p2', 'Medium'))?.variant).toBe('default');
-    expect(resolveIssuePriorityBadge(withPriority('p3', 'Low'))?.variant).toBe('default');
+    expect(resolveIssuePriorityBadge(withPriority('p2', 'Medium'))?.title).toBe(
+      'Priority P2 — Medium',
+    );
+    expect(resolveIssuePriorityBadge(withPriority('p2', null))?.title).toBe('Priority P2 — medium');
+    expect(resolveIssuePriorityBadge(withPriority('p3', 'Low'))?.title).toBe('Priority P3 — Low');
+    expect(resolveIssuePriorityBadge(withPriority('p3', null))?.title).toBe('Priority P3 — low');
   });
 
   it('renders unknown raw option with accent variant and verbatim label', () => {
@@ -473,5 +698,101 @@ describe('resolveIssuePriorityBadge', () => {
     expect(badge?.label).toBe('Icebox');
     expect(badge?.variant).toBe('accent');
     expect(badge?.rank).toBeNull();
+  });
+});
+
+describe('status and tone helpers', () => {
+  it('maps issue statuses to dot and row tones', () => {
+    expect(statusDotColorClass('approval', true)).toBe('bg-agent');
+    expect(statusDotColorClass('failed')).toBe('bg-danger');
+    expect(statusDotColorClass('clarifying')).toBe('bg-warning');
+    expect(statusDotColorClass('completed')).toBe('bg-success');
+    expect(statusDotColorClass('closed')).toBe('bg-done');
+    expect(statusDotColorClass('executing')).toBe('bg-agent');
+    expect(statusDotColorClass('todo')).toBe('bg-muted-foreground/40');
+
+    expect(rowToneFor('todo', true)).toBe('agent');
+    expect(rowToneFor('failed')).toBe('danger');
+    expect(rowToneFor('approval')).toBe('warning');
+    expect(rowToneFor('completed')).toBe('success');
+    expect(rowToneFor('closed')).toBe('done');
+    expect(rowToneFor('executing')).toBe('agent');
+    expect(rowToneFor('todo')).toBe('default');
+  });
+
+  it('maps section tone and formatting fallbacks', () => {
+    expect(sectionToneFor('todo', 'failed')).toBe('danger');
+    expect(sectionToneFor('human', 'approval')).toBe('warning');
+    expect(sectionToneFor('agent', 'planning')).toBe('agent');
+    expect(sectionToneFor('done', 'completed')).toBe('done');
+    expect(sectionToneFor('todo', 'backlog')).toBe('default');
+    expect(dragOverlayBorderClass('failed')).toBe('');
+    expect(resolveColumnDotColor('todo', null)).toBeNull();
+    expect(formatDate('2026-04-13T12:00:00.000Z')).toBe('Apr 13, 2026');
+  });
+
+  it('falls back to rectangle collisions when the pointer has no target', () => {
+    const collisions = customCollisionDetection({
+      active: {
+        id: 'active',
+        data: { current: {} },
+        rect: { current: { initial: null, translated: null } },
+      },
+      collisionRect: { top: 0, bottom: 10, left: 0, right: 10, width: 10, height: 10 },
+      droppableRects: new Map([
+        ['drop-1', { top: 0, bottom: 10, left: 0, right: 10, width: 10, height: 10 }],
+      ]),
+      droppableContainers: [
+        {
+          id: 'drop-1',
+          key: 'drop-1',
+          data: { current: {} },
+          disabled: false,
+          node: { current: document.createElement('div') },
+          rect: { current: { top: 0, bottom: 10, left: 0, right: 10, width: 10, height: 10 } },
+        },
+      ],
+      pointerCoordinates: null,
+    });
+
+    expect(collisions.map((collision) => collision.id)).toEqual(['drop-1']);
+  });
+
+  it('prefers pointer collisions when pointer coordinates hit a droppable', () => {
+    const collisions = customCollisionDetection({
+      active: {
+        id: 'active',
+        data: { current: {} },
+        rect: { current: { initial: null, translated: null } },
+      },
+      collisionRect: { top: 100, bottom: 110, left: 100, right: 110, width: 10, height: 10 },
+      droppableRects: new Map([
+        ['pointer-drop', { top: 0, bottom: 10, left: 0, right: 10, width: 10, height: 10 }],
+        ['rect-drop', { top: 100, bottom: 110, left: 100, right: 110, width: 10, height: 10 }],
+      ]),
+      droppableContainers: [
+        {
+          id: 'pointer-drop',
+          key: 'pointer-drop',
+          data: { current: {} },
+          disabled: false,
+          node: { current: document.createElement('div') },
+          rect: { current: { top: 0, bottom: 10, left: 0, right: 10, width: 10, height: 10 } },
+        },
+        {
+          id: 'rect-drop',
+          key: 'rect-drop',
+          data: { current: {} },
+          disabled: false,
+          node: { current: document.createElement('div') },
+          rect: {
+            current: { top: 100, bottom: 110, left: 100, right: 110, width: 10, height: 10 },
+          },
+        },
+      ],
+      pointerCoordinates: { x: 5, y: 5 },
+    });
+
+    expect(collisions.map((collision) => collision.id)).toEqual(['pointer-drop']);
   });
 });

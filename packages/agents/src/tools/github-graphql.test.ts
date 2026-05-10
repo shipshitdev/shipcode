@@ -38,8 +38,16 @@ describe('countTopLevelOperations', () => {
     expect(countTopLevelOperations('query A { hi(s:"mutation X{}") }')).toBe(1);
   });
 
+  it('handles escaped and unterminated string literals', () => {
+    expect(countTopLevelOperations('query A { hi(s:"query \\"nested\\"") }')).toBe(1);
+    expect(countTopLevelOperations('query A { hi(s:"unterminated\n) }')).toBe(1);
+    expect(countTopLevelOperations('query A { hi(s:"unterminated')).toBe(1);
+  });
+
   it('does not double-count operation keyword in a comment', () => {
     expect(countTopLevelOperations('# mutation Y { y }\nquery A { a }')).toBe(1);
+    expect(countTopLevelOperations('# mutation Y { y }')).toBe(0);
+    expect(countTopLevelOperations('query A { a } # trailing mutation B { b }\n')).toBe(1);
   });
 
   it('returns 0 on an empty document', () => {
@@ -49,6 +57,11 @@ describe('countTopLevelOperations', () => {
 
   it('handles block strings', () => {
     expect(countTopLevelOperations('query A { hi(s:"""mutation Z {}""") }')).toBe(1);
+  });
+
+  it('handles unterminated block strings and stray closing braces', () => {
+    expect(countTopLevelOperations('query A { hi(s:"""unterminated')).toBe(1);
+    expect(countTopLevelOperations('} query A { viewer { login } }')).toBe(1);
   });
 });
 
@@ -105,6 +118,25 @@ describe('github_graphql tool', () => {
     expect(env.error.code).toBe('auth_missing');
   });
 
+  it('returns auth_missing when getToken throws', async () => {
+    const result = await githubGraphqlTool.execute(
+      { query: '{ viewer { login } }' },
+      makeCtx({
+        githubGraphql: {
+          getToken: () => {
+            throw new Error('keychain locked');
+          },
+        },
+      }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const env = JSON.parse(result.error) as { error: { code: string; message: string } };
+    expect(env.error.code).toBe('auth_missing');
+    expect(env.error.message).toContain('keychain locked');
+  });
+
   it('passes query + variables through to the GraphQL endpoint with bearer token', async () => {
     const fetchMock = vi.fn(
       async () =>
@@ -141,6 +173,81 @@ describe('github_graphql tool', () => {
       query: expect.any(String),
       variables: { n: 42 },
     });
+  });
+
+  it('uses the ambient fetch and tolerates default repo lookup failures', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ data: { ok: true } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await githubGraphqlTool.execute(
+      { query: '{ viewer { login } }' },
+      makeCtx({
+        githubGraphql: {
+          getToken: () => TOKEN,
+          getDefaultRepo: () => {
+            throw new Error('repo unavailable');
+          },
+        },
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    vi.unstubAllGlobals();
+  });
+
+  it('treats an undefined default repo as absent', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ data: { ok: true } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+
+    const result = await githubGraphqlTool.execute(
+      { query: '{ viewer { login } }' },
+      makeCtx({
+        githubGraphql: {
+          getToken: () => TOKEN,
+          getDefaultRepo: () => undefined,
+          fetch: fetchMock as unknown as typeof fetch,
+        },
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('skips default repo lookup when an explicit repo is provided', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ data: { ok: true } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    const getDefaultRepo = vi.fn();
+
+    const result = await githubGraphqlTool.execute(
+      { query: '{ viewer { login } }', repo: { owner: 'acme', repo: 'repo' } },
+      makeCtx({
+        githubGraphql: {
+          getToken: () => TOKEN,
+          getDefaultRepo,
+          fetch: fetchMock as unknown as typeof fetch,
+        },
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(getDefaultRepo).not.toHaveBeenCalled();
   });
 
   it('does not echo the bearer token into the success envelope', async () => {
@@ -218,6 +325,28 @@ describe('github_graphql tool', () => {
     expect(env.error.status).toBe(500);
   });
 
+  it('handles non-2xx responses whose body cannot be read', async () => {
+    const response = new Response('unreadable', { status: 502 });
+    vi.spyOn(response, 'text').mockRejectedValueOnce(new Error('body locked'));
+    const fetchMock = vi.fn(async () => response);
+
+    const result = await githubGraphqlTool.execute(
+      { query: '{ viewer { login } }' },
+      makeCtx({
+        githubGraphql: {
+          getToken: () => TOKEN,
+          fetch: fetchMock as unknown as typeof fetch,
+        },
+      }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const env = JSON.parse(result.error) as { error: { status?: number; body?: string } };
+    expect(env.error.status).toBe(502);
+    expect(env.error.body).toBe('');
+  });
+
   it('reports transport error when fetch throws', async () => {
     const fetchMock = vi.fn(async () => {
       throw new Error('ECONNRESET');
@@ -236,6 +365,32 @@ describe('github_graphql tool', () => {
     const env = JSON.parse(result.error) as { error: { code: string; message: string } };
     expect(env.error.code).toBe('transport');
     expect(env.error.message).toContain('ECONNRESET');
+  });
+
+  it('reports invalid JSON responses as transport errors', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response('not json', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+
+    const result = await githubGraphqlTool.execute(
+      { query: '{ viewer { login } }' },
+      makeCtx({
+        githubGraphql: {
+          getToken: () => TOKEN,
+          fetch: fetchMock as unknown as typeof fetch,
+        },
+      }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const env = JSON.parse(result.error) as { error: { code: string; message: string } };
+    expect(env.error.code).toBe('transport');
+    expect(env.error.message).toContain('invalid JSON response');
   });
 
   it('reads token at call time (rotation safe)', async () => {
