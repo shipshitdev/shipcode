@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,28 +15,7 @@ vi.mock('node:child_process', () => {
 });
 
 import { generateContextFiles } from './context-generator';
-
-function createFakeProc() {
-  const proc = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter;
-    stderr: EventEmitter;
-    stdin: { write: (chunk: string) => boolean; end: () => void };
-  };
-  proc.stdout = new EventEmitter();
-  proc.stderr = new EventEmitter();
-  proc.stdin = {
-    write: () => true,
-    end: () => undefined,
-  };
-  return {
-    proc,
-    close: (code: number, options?: { stdout?: string; stderr?: string }) => {
-      if (options?.stdout) proc.stdout.emit('data', options.stdout);
-      if (options?.stderr) proc.stderr.emit('data', options.stderr);
-      proc.emit('close', code);
-    },
-  };
-}
+import { createFakeProc } from './test-fake-proc';
 
 describe('generateContextFiles', () => {
   afterEach(() => {

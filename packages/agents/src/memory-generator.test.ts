@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,34 +19,7 @@ import {
   listMemoryFiles,
   readMemoryFile,
 } from './memory-generator';
-
-function createFakeProc() {
-  const proc = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter;
-    stderr: EventEmitter;
-    stdin: { chunks: string[]; write: (chunk: string) => boolean; end: () => void };
-    kill: (signal: string) => void;
-  };
-  proc.stdout = new EventEmitter();
-  proc.stderr = new EventEmitter();
-  proc.stdin = {
-    chunks: [],
-    write: (chunk: string) => {
-      proc.stdin.chunks.push(chunk);
-      return true;
-    },
-    end: () => {},
-  };
-  proc.kill = vi.fn();
-  return {
-    proc,
-    close: (code: number, options?: { stdout?: string; stderr?: string }) => {
-      if (options?.stdout) proc.stdout.emit('data', options.stdout);
-      if (options?.stderr) proc.stderr.emit('data', options.stderr);
-      proc.emit('close', code);
-    },
-  };
-}
+import { createFakeProc } from './test-fake-proc';
 
 describe('generateMemoryFiles', () => {
   afterEach(() => {
@@ -55,7 +27,7 @@ describe('generateMemoryFiles', () => {
   });
 
   it('writes the generated memory files from a Claude result envelope', async () => {
-    const fake = createFakeProc();
+    const fake = createFakeProc({ kill: true });
     mockSpawn.mockReturnValueOnce(fake.proc);
 
     const projectPath = mkdtempSync(join(tmpdir(), 'shipcode-memory-generator-'));
@@ -118,7 +90,7 @@ describe('generateMemoryFiles', () => {
   });
 
   it('passes missing source markers to Codex and parses a raw fenced response', async () => {
-    const fake = createFakeProc();
+    const fake = createFakeProc({ captureStdin: true, kill: true });
     mockSpawn.mockReturnValueOnce(fake.proc);
     const projectPath = mkdtempSync(join(tmpdir(), 'shipcode-memory-codex-'));
 
@@ -130,7 +102,7 @@ describe('generateMemoryFiles', () => {
       expect.arrayContaining(['exec', '-', '--sandbox', 'read-only']),
       expect.objectContaining({ cwd: projectPath }),
     );
-    expect(fake.proc.stdin.chunks.join('')).toContain('### README.md\n(not found)');
+    expect(fake.stdinWrites.join('')).toContain('### README.md\n(not found)');
 
     fake.close(0, {
       stdout:

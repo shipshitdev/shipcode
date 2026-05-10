@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mockSpawn = vi.hoisted(() => vi.fn());
@@ -12,39 +11,7 @@ vi.mock('./health-check', () => ({
 }));
 
 import { runCliWithStdin } from './cli-stdin-runner';
-
-function createFakeProc() {
-  const proc = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter;
-    stderr: EventEmitter;
-    stdin: { write: (chunk: string) => boolean; end: () => void };
-    kill: (signal: string) => void;
-  };
-  proc.stdout = new EventEmitter();
-  proc.stderr = new EventEmitter();
-  const stdinWrites: string[] = [];
-  let stdinEnded = false;
-  proc.stdin = {
-    write: (chunk: string) => {
-      stdinWrites.push(chunk);
-      return true;
-    },
-    end: () => {
-      stdinEnded = true;
-    },
-  };
-  proc.kill = vi.fn();
-  return {
-    proc,
-    stdinWrites,
-    isStdinEnded: () => stdinEnded,
-    close: (code: number, options?: { stdout?: string; stderr?: string }) => {
-      if (options?.stdout) proc.stdout.emit('data', options.stdout);
-      if (options?.stderr) proc.stderr.emit('data', options.stderr);
-      proc.emit('close', code);
-    },
-  };
-}
+import { createFakeProc } from './test-fake-proc';
 
 describe('runCliWithStdin', () => {
   afterEach(() => {
@@ -53,7 +20,7 @@ describe('runCliWithStdin', () => {
   });
 
   it('pipes stdin and surfaces a short stdout-derived error when stderr is empty', async () => {
-    const fake = createFakeProc();
+    const fake = createFakeProc({ captureStdin: true, kill: true });
     mockSpawn.mockReturnValueOnce(fake.proc);
 
     const promise = runCliWithStdin({
