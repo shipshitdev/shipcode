@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  execSyncMock,
+  execFileSyncMock,
   existsSyncMock,
   readFileSyncMock,
   enhancePrdDraftMock,
   createCliContextMock,
   requireOnboardingMock,
 } = vi.hoisted(() => ({
-  execSyncMock: vi.fn(),
+  execFileSyncMock: vi.fn(),
   existsSyncMock: vi.fn(),
   readFileSyncMock: vi.fn(),
   enhancePrdDraftMock: vi.fn(),
@@ -17,7 +17,7 @@ const {
 }));
 
 vi.mock('node:child_process', () => ({
-  execSync: execSyncMock,
+  execFileSync: execFileSyncMock,
 }));
 
 vi.mock('node:fs', () => ({
@@ -65,7 +65,7 @@ describe('prdCommand', () => {
     enhancePrdDraftMock.mockResolvedValue({
       body: '# Enhanced PRD',
     });
-    execSyncMock.mockReturnValue(JSON.stringify([]));
+    execFileSyncMock.mockReturnValue(JSON.stringify([]));
   });
 
   it('returns before touching the repo when onboarding is incomplete', async () => {
@@ -85,14 +85,24 @@ describe('prdCommand', () => {
   });
 
   it('enhances an existing GitHub issue PRD', async () => {
-    execSyncMock.mockReturnValueOnce(
+    execFileSyncMock.mockReturnValueOnce(
       JSON.stringify([{ number: 12, title: 'Coverage PRD', body: 'Existing body' }]),
     );
 
     await prdCommand('Coverage "PRD"');
 
-    expect(execSyncMock).toHaveBeenCalledWith(
-      'gh issue list --search "Coverage \\"PRD\\"" --json number,title,body --limit 1',
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'gh',
+      [
+        'issue',
+        'list',
+        '--search',
+        'Coverage "PRD"',
+        '--json',
+        'number,title,body',
+        '--limit',
+        '1',
+      ],
       { cwd: process.cwd(), timeout: 15_000, encoding: 'utf-8' },
     );
     expect(enhancePrdDraftMock).toHaveBeenCalledWith({
@@ -108,8 +118,18 @@ describe('prdCommand', () => {
     expect(logSpy).toHaveBeenCalledWith('  gh issue edit 12 --body-file <file>');
   });
 
+  it('treats an existing issue with a null body as an empty draft', async () => {
+    execFileSyncMock.mockReturnValueOnce(
+      JSON.stringify([{ number: 12, title: 'Coverage PRD', body: null }]),
+    );
+
+    await prdCommand('Coverage PRD');
+
+    expect(enhancePrdDraftMock).toHaveBeenCalledWith(expect.objectContaining({ draftBody: '' }));
+  });
+
   it('generates a new draft with the repo skill when issue search returns no matches', async () => {
-    execSyncMock.mockReturnValueOnce(JSON.stringify([]));
+    execFileSyncMock.mockReturnValueOnce(JSON.stringify([]));
 
     await prdCommand('New coverage plan');
 
@@ -134,7 +154,7 @@ describe('prdCommand', () => {
 
   it('uses the fallback template and new issue instructions when search fails', async () => {
     existsSyncMock.mockReturnValueOnce(false);
-    execSyncMock.mockImplementationOnce(() => {
+    execFileSyncMock.mockImplementationOnce(() => {
       throw new Error('gh unavailable');
     });
 

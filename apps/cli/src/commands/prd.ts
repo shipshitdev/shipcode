@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { enhancePrdDraft } from '@shipcode/agents';
@@ -37,8 +37,9 @@ export async function prdCommand(keywords: string) {
   let existingNumber: number | null = null;
 
   try {
-    const stdout = execSync(
-      `gh issue list --search "${keywords.replace(/"/g, '\\"')}" --json number,title,body --limit 1`,
+    const stdout = execFileSync(
+      'gh',
+      ['issue', 'list', '--search', keywords, '--json', 'number,title,body', '--limit', '1'],
       { cwd, timeout: 15_000, encoding: 'utf-8' },
     );
     const results = JSON.parse(stdout) as Array<{ number: number; title: string; body: string }>;

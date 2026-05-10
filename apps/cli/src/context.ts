@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {
   createClaudeCliProvider,
@@ -58,7 +59,7 @@ export interface CliContext {
  * Every CLI command calls this once — single source of truth for initialization.
  */
 export function createCliContext(cwd: string): CliContext {
-  const dataDir = path.join(process.env.HOME ?? '', '.shipcode', 'data');
+  const dataDir = path.join(os.homedir(), '.shipcode', 'data');
   fs.mkdirSync(dataDir, { recursive: true });
 
   const db = getDatabase(dataDir);
