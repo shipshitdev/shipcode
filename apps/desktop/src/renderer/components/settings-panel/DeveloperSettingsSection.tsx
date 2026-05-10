@@ -28,17 +28,16 @@ export function DeveloperSettingsSection({
     staleTime: Number.POSITIVE_INFINITY,
   });
 
-  const handleCopyDiagnostics = async () => {
-    if (!info) return;
+  const handleCopyDiagnostics = async (developerInfo: DeveloperInfo) => {
     const lines = [
-      `ShipCode v${info.appVersion}`,
-      `Electron ${info.electronVersion} / Node ${info.nodeVersion}`,
-      `${info.platform} (${info.osRelease})`,
+      `ShipCode v${developerInfo.appVersion}`,
+      `Electron ${developerInfo.electronVersion} / Node ${developerInfo.nodeVersion}`,
+      `${developerInfo.platform} (${developerInfo.osRelease})`,
       '',
-      `claude: ${info.cliVersions.claude ?? 'not found'}`,
-      `codex: ${info.cliVersions.codex ?? 'not found'}`,
-      `git: ${info.cliVersions.git ?? 'not found'}`,
-      `gh: ${info.cliVersions.gh ?? 'not found'}`,
+      `claude: ${developerInfo.cliVersions.claude ?? 'not found'}`,
+      `codex: ${developerInfo.cliVersions.codex ?? 'not found'}`,
+      `git: ${developerInfo.cliVersions.git ?? 'not found'}`,
+      `gh: ${developerInfo.cliVersions.gh ?? 'not found'}`,
     ];
     await navigator.clipboard.writeText(lines.join('\n'));
     setIsCopied(true);
@@ -72,24 +71,26 @@ export function DeveloperSettingsSection({
           label="Copy diagnostics"
           description="Copies app version, OS, and CLI versions to clipboard for bug reports."
         >
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={!info}
-            onClick={() => void handleCopyDiagnostics()}
-          >
-            {isCopied ? (
-              <>
-                <Check size={14} className="mr-1.5" />
-                Copied
-              </>
-            ) : (
-              <>
-                <Copy size={14} className="mr-1.5" />
-                Copy
-              </>
-            )}
-          </Button>
+          {info ? (
+            <Button variant="secondary" size="sm" onClick={() => void handleCopyDiagnostics(info)}>
+              {isCopied ? (
+                <>
+                  <Check size={14} className="mr-1.5" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy size={14} className="mr-1.5" />
+                  Copy
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button variant="secondary" size="sm" disabled>
+              <Copy size={14} className="mr-1.5" />
+              Copy
+            </Button>
+          )}
         </SettingsRow>
       </SettingsSection>
 

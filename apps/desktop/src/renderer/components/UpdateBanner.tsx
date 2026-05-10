@@ -66,9 +66,7 @@ export function UpdateBanner() {
             size="sm"
             className="h-7 gap-1 px-2 text-[11px] text-accent hover:bg-accent/15"
             onClick={() =>
-              status.releaseUrl
-                ? void window.shipcode.invoke('shell:open-external', { url: status.releaseUrl })
-                : undefined
+              void window.shipcode.invoke('shell:open-external', { url: status.releaseUrl })
             }
           >
             <ExternalLink size={12} />

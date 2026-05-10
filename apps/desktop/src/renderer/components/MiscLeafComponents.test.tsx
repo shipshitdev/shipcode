@@ -161,6 +161,17 @@ describe('misc leaf components', () => {
     expect(formatInheritedSummary(DEFAULT_SETTINGS, projectDraft!, 'planner')).toMatch(
       /^Anthropic \/ None$/,
     );
+    expect(
+      formatInheritedSummary(
+        { ...DEFAULT_SETTINGS, openrouterPlannerModel: 'anthropic/planner' },
+        {
+          ...projectDraft!,
+          plannerModelOverride: 'openrouter',
+          plannerModelIdOverride: null,
+        },
+        'planner',
+      ),
+    ).toBe('OpenRouter / anthropic/planner / Low');
     expect(buildProjectDraft(null, EMPTY_OVERRIDES)).toBeNull();
   });
 });

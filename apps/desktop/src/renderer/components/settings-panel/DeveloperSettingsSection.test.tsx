@@ -133,6 +133,52 @@ describe('DeveloperSettingsSection', () => {
         expect.stringContaining('ShipCode v0.1.0'),
       );
     });
+    expect(screen.getByRole('button', { name: /copied/i })).toBeInTheDocument();
+    await waitFor(
+      () => {
+        expect(screen.getByRole('button', { name: /^copy$/i })).toBeInTheDocument();
+      },
+      { timeout: 2500 },
+    );
+  });
+
+  it('renders loading placeholders and copies missing CLI versions as not found', async () => {
+    const onUpdate = vi.fn();
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'developer:get-info') {
+        return {
+          ...MOCK_INFO,
+          cliVersions: {
+            claude: null,
+            codex: null,
+            git: null,
+            gh: null,
+          },
+        };
+      }
+      return undefined;
+    });
+
+    render(<DeveloperSettingsSection settings={DEFAULT_SETTINGS} onUpdate={onUpdate} />, {
+      wrapper: createWrapper(),
+    });
+
+    expect(screen.getAllByText('...')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: /^copy$/i })).toBeDisabled();
+
+    await waitFor(() => {
+      expect(screen.getByText('0.1.0')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^copy$/i }));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        expect.stringContaining('claude: not found'),
+      );
+    });
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      expect.stringContaining('gh: not found'),
+    );
   });
 
   it('invokes developer:open-devtools on button click', async () => {

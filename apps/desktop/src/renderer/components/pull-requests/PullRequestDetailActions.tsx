@@ -82,11 +82,9 @@ export function PullRequestDetailActions({
 
   return (
     <div className="flex items-center gap-2">
-      {canReview ? (
-        <Button onClick={() => void handleAiReview()} disabled={isReviewing}>
-          <LoadingButtonContent loading={isReviewing}>Review</LoadingButtonContent>
-        </Button>
-      ) : null}
+      <Button onClick={() => void handleAiReview()} disabled={isReviewing}>
+        <LoadingButtonContent loading={isReviewing}>Review</LoadingButtonContent>
+      </Button>
       {canAddressComments ? (
         <Button
           variant="secondary"

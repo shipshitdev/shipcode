@@ -76,6 +76,25 @@ describe('PullRequestDetailActions', () => {
     expect(setProjectTabMock).toHaveBeenCalledWith('terminal');
   });
 
+  it('starts an AI review without a custom prompt when the skill is missing', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'skills:load-content') return null;
+      if (channel === 'instant:run') return { threadId: 'review-thread' };
+      return null;
+    });
+
+    renderActions();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        'instant:run',
+        expect.objectContaining({ customSystemPrompt: undefined }),
+      );
+    });
+  });
+
   it('starts an address-comments run only when open PRs have unresolved comments', async () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'skills:load-content') return 'address workflow';
@@ -107,6 +126,37 @@ describe('PullRequestDetailActions', () => {
       state: 'running',
     });
     expect(setProjectTabMock).toHaveBeenCalledWith('terminal');
+  });
+
+  it('starts an address-comments run without a custom prompt when the skill is missing', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'skills:load-content') return null;
+      if (channel === 'instant:run') return { threadId: 'address-thread' };
+      return null;
+    });
+
+    renderActions({ hasUnresolvedComments: true });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Address Comments' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        'instant:run',
+        expect.objectContaining({ customSystemPrompt: undefined }),
+      );
+    });
+  });
+
+  it('does nothing when addressing comments without an active project', () => {
+    useAppStore.setState({ activeProjectId: null } as never);
+
+    renderActions({ hasUnresolvedComments: true });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Address Comments' }));
+
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(addTerminalPaneMock).not.toHaveBeenCalled();
+    expect(setProjectTabMock).not.toHaveBeenCalled();
   });
 
   it('hides actions for closed PRs and does nothing without an active project', async () => {

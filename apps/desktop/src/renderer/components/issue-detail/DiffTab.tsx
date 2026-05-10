@@ -67,7 +67,12 @@ export function DiffTab({ diffs, threadStatus }: { diffs: DiffRecord[]; threadSt
         className="max-w-[95vw] h-[90vh] flex flex-col overflow-hidden p-0"
         headerClassName="shrink-0 border-b border-border px-6 py-4"
         headerAction={
-          <Button variant="ghost" className="size-7 p-0" onClick={() => setIsFullScreen(false)}>
+          <Button
+            variant="ghost"
+            className="size-7 p-0"
+            onClick={() => setIsFullScreen(false)}
+            aria-label="Close full screen diff"
+          >
             <X size={15} strokeWidth={2.25} />
           </Button>
         }

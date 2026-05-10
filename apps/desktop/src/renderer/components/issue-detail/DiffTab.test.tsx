@@ -84,4 +84,19 @@ describe('DiffTab', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
+
+  it('renders a singular file count and closes from the custom header action', async () => {
+    render(<DiffTab diffs={[diffs[0]!]} />);
+
+    expect(screen.getByText('1 file')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Full screen diff' }));
+    const dialog = screen.getByRole('dialog');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close full screen diff' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
 });

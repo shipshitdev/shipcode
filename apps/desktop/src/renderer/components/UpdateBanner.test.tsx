@@ -61,6 +61,7 @@ describe('UpdateBanner', () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   it('renders update details, copies the Homebrew command, and opens release notes', async () => {
@@ -79,6 +80,12 @@ describe('UpdateBanner', () => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('brew upgrade --cask shipcode');
     });
     expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    await waitFor(
+      () => {
+        expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Release notes' }));
 
@@ -102,6 +109,12 @@ describe('UpdateBanner', () => {
     await waitFor(() => {
       expect(screen.queryByText(/ShipCode v0.2.0 is available/)).not.toBeInTheDocument();
     });
+
+    statusListener?.(makeStatus({ releaseTag: 'v0.4.0', latest: '0.4.0' }));
+    expect(await screen.findByText(/ShipCode v0.4.0 is available/)).toBeInTheDocument();
+    statusListener?.(makeStatus({ releaseTag: 'v0.5.0', latest: '0.5.0' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(await screen.findByText(/ShipCode v0.5.0 is available/)).toBeInTheDocument();
 
     statusListener?.(makeStatus({ releaseTag: 'v0.3.0', latest: '0.3.0' }));
     expect(await screen.findByText(/ShipCode v0.3.0 is available/)).toBeInTheDocument();
@@ -127,5 +140,19 @@ describe('UpdateBanner', () => {
 
     expect(await screen.findByText(/ShipCode v0.2.0 is available/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Release notes' })).not.toBeInTheDocument();
+  });
+
+  it('renders without an update event subscription and ignores dismisses without a tag', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'update:get-status') return makeStatus({ releaseTag: null });
+      return null;
+    });
+    delete (window.shipcode as { on?: typeof window.shipcode.on }).on;
+
+    renderBanner();
+
+    expect(await screen.findByText(/ShipCode v0.2.0 is available/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.getByText(/ShipCode v0.2.0 is available/)).toBeInTheDocument();
   });
 });

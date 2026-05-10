@@ -11,14 +11,14 @@ Verification snapshot:
 ```text
 node scripts/coverage-summary.mjs
 
-apps/desktop: lines 98.98%, statements 98.12%, functions 98.02%, branches 91.85%
+apps/desktop: lines 99.00%, statements 98.21%, functions 98.16%, branches 92.05%
 apps/docs: 100%
 apps/web: 100%
 packages/agents: 100%
 packages/db: 100%
 packages/pipeline: lines 98.95%, statements 98.51%, functions 99.15%, branches 93.49%
 packages/ui: 100%
-overall: lines 99.36%, statements 98.86%, functions 98.76%, branches 95.01%
+overall: lines 99.37%, statements 98.91%, functions 98.85%, branches 95.12%
 ```
 
 ## Already Clean
@@ -50,19 +50,12 @@ Remaining files below 100:
 
 ```text
 apps/desktop/src/main/index.ts: lines 98.38, statements 95.52, functions 96.87, branches 68.11
-apps/desktop/src/renderer/components/issue-detail/DiffTab.tsx: lines 87.50, statements 87.50, functions 75, branches 90
-apps/desktop/src/renderer/components/project-settings-modal/shared.ts: lines 100, statements 100, functions 100, branches 75
 apps/desktop/src/renderer/App.tsx: lines 86.36, statements 87.03, functions 89.13, branches 77.57
-apps/desktop/src/renderer/components/UpdateBanner.tsx: lines 100, statements 92.30, functions 90.90, branches 77.77
-apps/desktop/src/renderer/components/pull-requests/PullRequestDetailActions.tsx: lines 100, statements 97.14, functions 100, branches 77.77
-apps/desktop/src/renderer/components/settings-panel/DeveloperSettingsSection.tsx: lines 100, statements 89.47, functions 87.50, branches 77.77
 apps/desktop/src/renderer/components/IssuesPanel.tsx: lines 99.16, statements 97.61, functions 97.18, branches 79.60
 apps/desktop/src/main/git-workflows.ts: lines 98.43, statements 98.57, functions 100, branches 79.62
 apps/desktop/src/main/ipc/register-pr-handlers.ts: lines 100, statements 96.15, functions 100, branches 80
 apps/desktop/src/main/ipc/register-quick-task-handlers.ts: lines 92, statements 92.85, functions 80, branches 87.50
 apps/desktop/src/renderer/components/TerminalView.tsx: lines 97.50, statements 97.82, functions 94.11, branches 80
-apps/desktop/src/renderer/components/project-settings-modal/ProjectSettingsContextTab.tsx: lines 83.33, statements 85.71, functions 80, branches 100
-apps/desktop/src/preload/index.ts: lines 100, statements 96.15, functions 100, branches 81.81
 apps/desktop/src/renderer/components/SkillsView.tsx: lines 96.03, statements 95.48, functions 97.50, branches 81.81
 apps/desktop/src/renderer/features/automations/create-automation-modal.tsx: lines 92.10, statements 89.68, functions 82.05, branches 85.36
 apps/desktop/src/renderer/components/issue-detail/PipelineTab.tsx: lines 98.93, statements 96.96, functions 97.56, branches 82.25
@@ -105,7 +98,7 @@ apps/desktop/src/main/splash-screen.ts: lines 100, statements 100, functions 91.
 apps/desktop/src/renderer/components/issue-detail/ApprovalSection.tsx: lines 100, statements 91.66, functions 100, branches 94.44
 apps/desktop/src/main/logger.service.ts: lines 92, statements 92.59, functions 100, branches 100
 apps/desktop/src/renderer/telemetry.ts: lines 100, statements 100, functions 100, branches 92.85
-apps/desktop/src/main/ipc/register-support-handlers.ts: lines 100, statements 97.03, functions 95.65, branches 93.06
+apps/desktop/src/main/ipc/register-support-handlers.ts: lines 100, statements 97.03, functions 95.65, branches 94.05
 apps/desktop/src/renderer/components/issue-detail/helpers.ts: lines 100, statements 100, functions 100, branches 93.33
 apps/desktop/src/renderer/components/settings-panel/PipelineSettingsSection.tsx: lines 100, statements 100, functions 100, branches 93.43
 apps/desktop/src/renderer/components/project-settings-modal/ProjectSettingsModelsTab.tsx: lines 100, statements 100, functions 100, branches 93.75
@@ -117,12 +110,12 @@ apps/desktop/src/main/ipc/register-project-handlers.ts: lines 100, statements 10
 apps/desktop/src/renderer/components/IssueDetail.tsx: lines 99.77, statements 98.15, functions 99.21, branches 95.01
 apps/desktop/src/renderer/components/terminal-panes/TerminalPane.tsx: lines 100, statements 100, functions 100, branches 95.16
 apps/desktop/src/renderer/components/pull-requests/PullRequestsPanel.tsx: lines 100, statements 95.23, functions 100, branches 96
-apps/desktop/src/renderer/components/CreateIssueModal.tsx: lines 97.85, statements 97.74, functions 95.52, branches 96.96
 apps/desktop/src/renderer/components/project-settings-modal/ProjectSettingsSetupTab.tsx: lines 100, statements 100, functions 100, branches 95.83
 apps/desktop/src/main/update-service.ts: lines 100, statements 100, functions 100, branches 96.15
 apps/desktop/src/renderer/components/settings-panel/GeneralSettingsSection.tsx: lines 100, statements 100, functions 100, branches 96.15
 apps/desktop/src/main/telemetry.ts: lines 100, statements 100, functions 100, branches 96.29
 apps/desktop/src/main/ipc/prd-attachments.ts: lines 98.76, statements 98.86, functions 100, branches 96.87
+apps/desktop/src/renderer/components/CreateIssueModal.tsx: lines 97.85, statements 98.12, functions 97.01, branches 96.96
 apps/desktop/src/renderer/components/ProjectSidebar.tsx: lines 98.21, statements 98.44, functions 98.79, branches 96.96
 apps/desktop/src/renderer/components/CommandPalette.tsx: lines 100, statements 100, functions 100, branches 97.29
 apps/desktop/src/renderer/components/settings-panel/IntegrationsSettingsSection.tsx: lines 100, statements 100, functions 100, branches 97.29
@@ -132,6 +125,7 @@ apps/desktop/src/main/ipc/register-instant-handlers.ts: lines 100, statements 99
 
 Notes:
 - Desktop is the main remaining surface.
+- Full desktop verification at this snapshot: `140` files passed, `1347` tests passed.
 - Best next order: attack the lowest-branch files first, then the low-line/function files.
 - Several renderer branch gaps are likely optional empty/error states. Prefer behavior tests in the nearest existing `*.test.tsx`.
 - For main-process IPC gaps, keep IPC error clamping rules: renderer-facing errors stay first-line and short; full stacks only in main-process logs.
