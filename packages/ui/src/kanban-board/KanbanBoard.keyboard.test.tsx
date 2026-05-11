@@ -546,21 +546,14 @@ describe('KanbanBoard keyboard navigation', () => {
       />,
     );
 
-    const trigger = view.container.querySelector('button[aria-label="More actions"]');
-    if (!(trigger instanceof HTMLButtonElement)) throw new Error('Expected more actions trigger');
+    const startButton = view.container.querySelector('button[title="Start planning"]');
+    if (!(startButton instanceof HTMLButtonElement))
+      throw new Error('Expected start planning button');
     act(() => {
-      trigger.dispatchEvent(
+      startButton.dispatchEvent(
         new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 }),
       );
-      trigger.click();
-    });
-
-    const item = Array.from(document.body.querySelectorAll('[role^="menuitem"]')).find((element) =>
-      element.textContent?.includes('Start Pipeline'),
-    );
-    if (!(item instanceof HTMLElement)) throw new Error('Expected start pipeline menu item');
-    act(() => {
-      item.click();
+      startButton.click();
     });
 
     expect(view.container.textContent).toContain('Todo top');

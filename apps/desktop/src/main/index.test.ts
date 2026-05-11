@@ -208,6 +208,7 @@ function installMocks() {
     SkillsQueries: QueryMock,
     TerminalEventQueries: QueryMock,
     ThreadQueries: QueryMock,
+    TriageRuleQueries: QueryMock,
     VerificationQueries: QueryMock,
   }));
   vi.doMock('@shipcode/db/source', () => ({

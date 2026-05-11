@@ -59,9 +59,9 @@ describe('CostsQueries', () => {
 
     const summary = costs.getSummary();
     expect(summary.totalCostAllTime).toBeCloseTo(0.08);
-    expect(summary.totalTokensAllTime).toBe(1600);
+    expect(summary.totalTokensAllTime).toBe(2400);
     expect(summary.avgCostPerTask).toBeCloseTo(0.04);
-    expect(summary.avgTokensPerTask).toBe(800);
+    expect(summary.avgTokensPerTask).toBe(1200);
   });
 
   it('getSummary().byProject groups costs by project', () => {

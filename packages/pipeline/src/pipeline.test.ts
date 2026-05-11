@@ -589,7 +589,7 @@ function createMockDeps() {
         );
       },
     ),
-    get: vi.fn(() => ({ state: 'running' })),
+    get: vi.fn(() => ({ state: 'exited' })),
     kill: vi.fn(),
     on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       const eventListeners = listeners[event] ?? [];

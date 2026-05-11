@@ -210,7 +210,7 @@ describe('visual QA runtime test generation', () => {
       runtimeQa: {
         server: {
           command: 'bun run dev --host 127.0.0.1',
-          readinessUrl: 'http://127.0.0.1:$PORT',
+          readinessUrl: 'http://127.0.0.1:3000/healthz',
           startupTimeoutMs: 60_000,
           portEnvVar: 'PORT',
         },

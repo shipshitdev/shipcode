@@ -320,7 +320,7 @@ describe('linked PR affordances', () => {
     );
 
     const card = view.container.querySelector('[data-issue-card-id="keyboard-child"]');
-    const title = view.container.querySelector('.line-clamp-1');
+    const title = view.container.querySelector('.line-clamp-2');
     if (!(card instanceof HTMLElement) || !(title instanceof HTMLElement)) {
       throw new Error('Expected card and nested title');
     }
@@ -799,8 +799,10 @@ describe('linked PR affordances', () => {
       </DndContext>,
     );
 
-    openMoreActions(todoView.container);
-    act(() => menuItem('Start Pipeline').click());
+    const startButton = todoView.container.querySelector('button[title="Start planning"]');
+    if (!(startButton instanceof HTMLButtonElement))
+      throw new Error('Expected start planning button');
+    act(() => startButton.click());
     expect(onStartPipeline).toHaveBeenCalledWith(
       expect.objectContaining({ pipelineStatus: 'todo' }),
     );
@@ -821,8 +823,10 @@ describe('linked PR affordances', () => {
       </DndContext>,
     );
 
-    openMoreActions(failedView.container);
-    act(() => menuItem('Retry').click());
+    const retryButton = failedView.container.querySelector('button[title="Retry pipeline"]');
+    if (!(retryButton instanceof HTMLButtonElement))
+      throw new Error('Expected retry pipeline button');
+    act(() => retryButton.click());
     expect(onRerun).toHaveBeenCalledWith(expect.objectContaining({ pipelineStatus: 'failed' }));
     failedView.cleanup();
   });
@@ -843,8 +847,10 @@ describe('linked PR affordances', () => {
       </DndContext>,
     );
 
-    openMoreActions(retryView.container);
-    expect(menuItem('Retry').getAttribute('disabled')).toBeNull();
+    const retryButton = retryView.container.querySelector('button[title="Retrying pipeline"]');
+    if (!(retryButton instanceof HTMLButtonElement))
+      throw new Error('Expected retrying pipeline button');
+    expect(retryButton.disabled).toBe(true);
     retryView.cleanup();
 
     const doneView = renderIntoDom(
@@ -1000,8 +1006,10 @@ describe('linked PR affordances', () => {
       </DndContext>,
     );
 
-    openMoreActions(view.container);
-    act(() => menuItem('Retry').click());
+    const retryButton = view.container.querySelector('button[title="Retry pipeline"]');
+    if (!(retryButton instanceof HTMLButtonElement))
+      throw new Error('Expected retry pipeline button');
+    act(() => retryButton.click());
 
     expect(onRerun).toHaveBeenCalledWith(issue);
     view.cleanup();
@@ -1520,7 +1528,7 @@ describe('linked PR affordances', () => {
 
     const card = view.container.querySelector('[data-issue-card-id="issue-todo"]');
     expect(card?.className).toContain('flex-col');
-    expect(view.container.querySelector('.line-clamp-1')).not.toBeNull();
+    expect(view.container.querySelector('.line-clamp-2')).not.toBeNull();
     expect(view.container.textContent).not.toContain('todo');
     expect(view.container.querySelector('button[title="More actions"]')).not.toBeNull();
     view.cleanup();

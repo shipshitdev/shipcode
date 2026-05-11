@@ -163,7 +163,7 @@ describe('enhancePrdDraft', () => {
   });
 
   it('defaults to Claude without model args and preserves prompt frontmatter in stdin', async () => {
-    const fake = createFakeProc();
+    const fake = createFakeProc({ captureStdin: true });
     mockSpawn.mockReturnValueOnce(fake.proc);
 
     const promise = enhancePrdDraft({

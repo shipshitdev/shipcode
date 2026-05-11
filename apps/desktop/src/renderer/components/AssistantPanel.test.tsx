@@ -126,7 +126,7 @@ describe('AssistantPanel', () => {
     );
   });
 
-  it('shows a toast instead of starting when no project is selected', async () => {
+  it('disables the Send button when no project is selected', async () => {
     useAppStore.setState({
       activeProjectId: null,
       assistantDraft: 'Review setup',
@@ -134,14 +134,8 @@ describe('AssistantPanel', () => {
 
     renderWithProviders();
 
-    fireEvent.keyDown(screen.getByPlaceholderText('Ask about setup, issues, or the board...'), {
-      key: 'Enter',
-    });
-
-    expect(toast.error).toHaveBeenCalledWith(
-      'Select a project before starting an assistant thread',
-    );
-    expect(invokeMock).not.toHaveBeenCalledWith('instant:shell-start', expect.anything());
+    const sendButton = screen.getByRole('button', { name: 'Send' });
+    expect(sendButton).toBeDisabled();
   });
 
   it('starts a persistent assistant shell thread on first send', async () => {

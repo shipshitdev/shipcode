@@ -85,7 +85,7 @@ describe('runCliWithStdin', () => {
 
   it('terminates timed-out CLI processes', async () => {
     vi.useFakeTimers();
-    const fake = createFakeProc();
+    const fake = createFakeProc({ kill: true });
     mockSpawn.mockReturnValueOnce(fake.proc);
 
     const promise = runCliWithStdin({
