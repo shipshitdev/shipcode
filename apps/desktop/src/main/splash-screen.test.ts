@@ -22,7 +22,6 @@ const { browserWindowInstances, nativeThemeMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('electron', () => ({
-  app: { getVersion: () => '0.1.0' },
   nativeTheme: nativeThemeMock,
   BrowserWindow: vi.fn(
     class {
@@ -68,8 +67,8 @@ describe('SplashScreen', () => {
 
     expect(browserWindowInstances).toHaveLength(1);
     expect(browserWindowInstances[0].options).toMatchObject({
-      width: 480,
-      height: 430,
+      width: 440,
+      height: 400,
       frame: false,
       show: true,
       webPreferences: {

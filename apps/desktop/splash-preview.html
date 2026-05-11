@@ -15,6 +15,7 @@
   --muted: #52525b;
   --agent: #38bdf8;
   --success: #22c55e;
+  --success-muted: rgba(34, 197, 94, 0.5);
   --danger: #ef4444;
 }
 
@@ -31,53 +32,48 @@ body {
 }
 
 main {
-  width: 420px;
-  padding: 32px 28px;
+  width: 400px;
+  padding: 32px 24px;
 }
 
 header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 28px;
+  gap: 14px;
+  margin-bottom: 24px;
 }
 
 .mark {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
 }
 
-
 h1 {
   margin: 0;
-  font-size: 20px;
-  line-height: 1.2;
-  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
-.version {
-  margin: 3px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
+.list-wrapper {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
 }
 
 .progress-track {
-  height: 3px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.06);
-  margin-bottom: 20px;
-  overflow: hidden;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .progress-fill {
   height: 100%;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--agent), #a55eea);
+  background: var(--primary);
   transition: width 0.4s ease;
 }
 
@@ -85,10 +81,6 @@ ol {
   list-style: none;
   padding: 0;
   margin: 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--panel);
-  overflow: hidden;
 }
 
 li {
@@ -96,17 +88,15 @@ li {
   grid-template-columns: 18px 1fr;
   gap: 10px;
   align-items: center;
-  padding: 10px 14px;
+  padding: 9px 14px;
   transition: opacity 0.25s ease, background 0.25s ease;
 }
 
-li + li {
-  border-top: 1px solid var(--border);
-}
+li + li { border-top: 1px solid var(--border); }
 
-li.pending { opacity: 0.45; }
+li.pending { opacity: 0.4; }
 li.active { opacity: 1; background: rgba(56, 189, 248, 0.04); }
-li.complete { opacity: 0.85; }
+li.complete { opacity: 0.7; }
 li.error { opacity: 1; background: rgba(239, 68, 68, 0.04); }
 
 .copy { min-width: 0; }
@@ -116,11 +106,11 @@ li.error { opacity: 1; background: rgba(239, 68, 68, 0.04); }
   font-size: 13px;
   line-height: 18px;
   font-weight: 500;
-  color: var(--secondary);
+  color: var(--muted);
 }
 
 .active .label { color: var(--primary); font-weight: 600; }
-.complete .label { color: var(--secondary); }
+.complete .label { color: var(--secondary); font-weight: 500; }
 .error .label { color: var(--danger); font-weight: 600; }
 
 .detail {
@@ -130,6 +120,8 @@ li.error { opacity: 1; background: rgba(239, 68, 68, 0.04); }
   font-size: 11px;
   line-height: 15px;
 }
+
+.active .detail { color: var(--secondary); }
 
 .icon {
   width: 18px;
@@ -145,13 +137,9 @@ li.error { opacity: 1; background: rgba(239, 68, 68, 0.04); }
   display: block;
 }
 
-.active .icon svg {
-  animation: spin 0.8s linear infinite;
-}
+.active .icon svg { animation: spin 0.8s linear infinite; }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Preview controls */
 .preview-controls {
@@ -181,7 +169,7 @@ li.error { opacity: 1; background: rgba(239, 68, 68, 0.04); }
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 10px;
   overflow: hidden;
-  width: 480px;
+  width: 440px;
 }
   </style>
 </head>
@@ -189,14 +177,13 @@ li.error { opacity: 1; background: rgba(239, 68, 68, 0.04); }
   <div class="window-frame">
   <main>
     <header>
-      <div class="mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="40" height="40"><rect width="1024" height="1024" rx="224" ry="224" fill="#0d1117"/><rect x="184" y="192" width="176" height="500" rx="56" ry="56" fill="#45aaf2"/><rect x="424" y="192" width="176" height="560" rx="56" ry="56" fill="#20bf6b"/><rect x="664" y="192" width="176" height="620" rx="56" ry="56" fill="#a55eea"/></svg></div>
-      <div>
-        <h1>Starting ShipCode</h1>
-        <p class="version">v0.1.0</p>
-      </div>
+      <div class="mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="140 150 780 720" width="36" height="36"><rect x="184" y="192" width="176" height="500" rx="56" ry="56" fill="#45aaf2"/><rect x="424" y="192" width="176" height="560" rx="56" ry="56" fill="#20bf6b"/><rect x="664" y="192" width="176" height="620" rx="56" ry="56" fill="#a55eea"/></svg></div>
+      <h1>Starting ShipCode</h1>
     </header>
-    <div class="progress-track"><div class="progress-fill" id="progress" style="width: 0%"></div></div>
-    <ol id="steps"></ol>
+    <div class="list-wrapper">
+      <div class="progress-track"><div class="progress-fill" id="progress" style="width: 0%"></div></div>
+      <ol id="steps"></ol>
+    </div>
   </main>
   </div>
 
@@ -224,7 +211,7 @@ li.error { opacity: 1; background: rgba(239, 68, 68, 0.04); }
     var icons = {
       pending: '<svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="7.5" stroke="#52525b" stroke-width="1.5"/></svg>',
       active: '<svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="7.5" stroke="rgba(56,189,248,0.25)" stroke-width="1.5"/><path d="M9 1.5A7.5 7.5 0 0 1 16.5 9" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round"/></svg>',
-      complete: '<svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="8.5" fill="#22c55e"/><path d="M5.5 9.5L7.5 11.5L12.5 6.5" stroke="#050607" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      complete: '<svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="7.5" stroke="rgba(34,197,94,0.5)" stroke-width="1.5"/><path d="M5.5 9.5L7.5 11.5L12.5 6.5" stroke="rgba(34,197,94,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
       error: '<svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="8.5" fill="rgba(239,68,68,0.18)" stroke="#ef4444" stroke-width="1"/><path d="M6.5 6.5L11.5 11.5M11.5 6.5L6.5 11.5" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/></svg>'
     };
 
