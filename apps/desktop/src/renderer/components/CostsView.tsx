@@ -7,6 +7,7 @@ import type {
 } from '@shipcode/shared';
 import {
   formatCost,
+  formatDurationMilliseconds,
   formatTokenCount,
   modelDisplay,
   sanitizeResolvedModel,
@@ -592,17 +593,6 @@ function StatCard({ label, value, subtitle }: { label: string; value: string; su
   );
 }
 
-function formatDurationCompact(ms: number | null | undefined): string {
-  if (ms == null) return '—';
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  const minutes = Math.floor(ms / 60_000);
-  const seconds = Math.round((ms % 60_000) / 1000);
-  if (minutes < 60) return `${minutes}m ${seconds}s`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
-}
-
 function TimeToPrCard({
   label,
   ms,
@@ -616,7 +606,7 @@ function TimeToPrCard({
     <div className="rounded-lg border border-border bg-secondary p-4">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</div>
       <div className="mt-1 text-2xl font-bold tabular-nums text-primary">
-        {formatDurationCompact(ms)}
+        {formatDurationMilliseconds(ms)}
       </div>
       {samples != null && (
         <div className="mt-0.5 text-[11px] text-muted">

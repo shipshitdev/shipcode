@@ -1,16 +1,5 @@
-import type { PipelinePhaseDurationSummary } from '@shipcode/shared';
+import { formatDurationMilliseconds, type PipelinePhaseDurationSummary } from '@shipcode/shared';
 import { cn } from '@shipshitdev/ui';
-
-function formatDuration(ms: number | null | undefined): string {
-  if (ms == null) return '—';
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  const minutes = Math.floor(ms / 60_000);
-  const seconds = Math.round((ms % 60_000) / 1000);
-  if (minutes < 60) return `${minutes}m ${seconds}s`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
-}
 
 export function PhaseDurationsChart({
   phaseDurations,
@@ -65,8 +54,8 @@ export function PhaseDurationsChart({
                   />
                 </div>
                 <div className="flex justify-between text-[10px] text-muted">
-                  <span>avg {formatDuration(entry.average)}</span>
-                  <span>p75 {formatDuration(entry.p75)}</span>
+                  <span>avg {formatDurationMilliseconds(entry.average)}</span>
+                  <span>p75 {formatDurationMilliseconds(entry.p75)}</span>
                 </div>
               </div>
             </div>
