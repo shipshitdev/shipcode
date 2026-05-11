@@ -1,0 +1,293 @@
+<!doctype html>
+<html data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ShipCode — Splash Preview</title>
+  <style>
+:root {
+  color-scheme: dark;
+  --bg: #050607;
+  --panel: #0b0d10;
+  --border: rgba(255, 255, 255, 0.1);
+  --primary: #f4f4f5;
+  --secondary: #a1a1aa;
+  --muted: #71717a;
+  --agent: #38bdf8;
+  --success: #22c55e;
+  --danger: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  color: var(--primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+main {
+  width: 420px;
+  padding: 28px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--agent);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+h1 {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+p {
+  margin: 4px 0 0;
+  color: var(--secondary);
+  font-size: 13px;
+}
+
+ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+li {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  padding: 10px 12px;
+}
+
+.copy {
+  min-width: 0;
+}
+
+.label {
+  display: block;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.detail {
+  display: block;
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.pending .label {
+  color: var(--muted);
+}
+
+.active .label {
+  color: var(--agent);
+}
+
+.complete .label {
+  color: var(--success);
+}
+
+.error .label {
+  color: var(--danger);
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 999px;
+  border: 1.5px solid var(--muted);
+}
+
+.active .icon {
+  border-color: rgba(56, 189, 248, 0.25);
+  border-top-color: var(--agent);
+  animation: spin 0.8s linear infinite;
+}
+
+.complete .icon {
+  border-color: var(--success);
+  background: var(--success);
+  position: relative;
+}
+
+.complete .icon::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  width: 5px;
+  height: 8px;
+  border: solid #050607;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.error .icon {
+  border-color: var(--danger);
+  background: rgba(239, 68, 68, 0.18);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Preview controls — not part of actual splash */
+.preview-controls {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 100;
+}
+.preview-controls button {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.preview-controls button:hover {
+  color: var(--primary);
+  border-color: var(--agent);
+}
+
+/* Simulated window frame outline */
+.window-frame {
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  overflow: hidden;
+  width: 480px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+}
+  </style>
+</head>
+<body>
+  <div class="window-frame">
+  <main>
+    <header>
+      <div class="mark">SC</div>
+      <div>
+        <h1>Starting ShipCode</h1>
+        <p id="subtitle">Preparing the desktop app.</p>
+      </div>
+    </header>
+    <ol id="steps"></ol>
+  </main>
+  </div>
+
+  <div class="preview-controls">
+    <button onclick="showState('all-pending')">All Pending</button>
+    <button onclick="showState('mid-boot')">Mid-Boot</button>
+    <button onclick="showState('all-done')">All Done</button>
+    <button onclick="showState('error')">Error</button>
+    <button onclick="showState('animate')">Animate</button>
+  </div>
+
+  <script>
+    const stepsEl = document.getElementById('steps');
+
+    const BASE_STEPS = [
+      { id: 'window',   label: 'Create app window',       status: 'pending' },
+      { id: 'database', label: 'Open local database',     status: 'pending' },
+      { id: 'services', label: 'Start desktop services',  status: 'pending' },
+      { id: 'pipeline', label: 'Restore pipeline state',  status: 'pending' },
+      { id: 'ipc',      label: 'Register app bridge',     status: 'pending' },
+      { id: 'renderer', label: 'Load workspace',          status: 'pending' },
+    ];
+
+    function render(steps) {
+      stepsEl.innerHTML = steps.map((step) =>
+        '<li class="' + step.status + '">' +
+          '<span class="icon"></span>' +
+          '<span class="copy">' +
+            '<span class="label">' + step.label + '</span>' +
+            (step.detail ? '<span class="detail">' + step.detail + '</span>' : '') +
+          '</span>' +
+        '</li>'
+      ).join('');
+    }
+
+    const STATES = {
+      'all-pending': () => BASE_STEPS.map(s => ({...s})),
+      'mid-boot': () => BASE_STEPS.map((s, i) => ({
+        ...s,
+        status: i < 2 ? 'complete' : i === 2 ? 'active' : 'pending',
+        detail: i === 2 ? 'Initializing agent pool…' : undefined,
+      })),
+      'all-done': () => BASE_STEPS.map(s => ({...s, status: 'complete'})),
+      'error': () => BASE_STEPS.map((s, i) => ({
+        ...s,
+        status: i < 3 ? 'complete' : i === 3 ? 'error' : 'pending',
+        detail: i === 3 ? 'Connection to database failed' : undefined,
+      })),
+    };
+
+    function showState(name) {
+      if (name === 'animate') {
+        animateBoot();
+        return;
+      }
+      render(STATES[name]());
+    }
+
+    function animateBoot() {
+      const steps = BASE_STEPS.map(s => ({...s}));
+      render(steps);
+      let i = 0;
+      const interval = setInterval(() => {
+        if (i > 0) steps[i - 1].status = 'complete';
+        if (i < steps.length) {
+          steps[i].status = 'active';
+          steps[i].detail = 'Working…';
+        }
+        render(steps);
+        i++;
+        if (i > steps.length) clearInterval(interval);
+      }, 600);
+    }
+
+    // Start with mid-boot state (most interesting visually)
+    showState('mid-boot');
+  </script>
+</body>
+</html>

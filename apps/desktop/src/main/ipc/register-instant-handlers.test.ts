@@ -125,7 +125,7 @@ describe('registerInstantHandlers', () => {
     };
     processManager = {
       spawn: vi.fn(() => ({ id: `proc-${createThreadCounter || 1}` })),
-      spawnWithStdin: vi.fn(() => ({ id: 'proc-1' })),
+      spawnWithStdin: vi.fn(() => ({ id: `proc-${createThreadCounter || 1}` })),
       on: vi.fn((_event: string, handler: (processId: string, exitCode: number) => void) => {
         exitHandlers.push(handler);
       }),
@@ -201,7 +201,7 @@ describe('registerInstantHandlers', () => {
       'Audit my shell setup',
       'instant',
     );
-    expect(processManager.spawn).toHaveBeenCalledWith(
+    expect(processManager.spawnWithStdin).toHaveBeenCalledWith(
       'codex',
       'codex',
       expect.arrayContaining([
@@ -210,12 +210,13 @@ describe('registerInstantHandlers', () => {
         '-c',
         'model_reasoning_effort=medium',
         'exec',
-        'Audit my shell setup',
+        '-',
         '--sandbox',
         'read-only',
         '--json',
       ]),
       expect.any(String),
+      'Audit my shell setup',
       'thread-created-1',
     );
 
@@ -229,14 +230,15 @@ describe('registerInstantHandlers', () => {
         reasoningEffort: 'medium',
       }),
     ).resolves.toEqual({ threadId: 'thread-created-2' });
-    expect(processManager.spawn).toHaveBeenLastCalledWith(
+    expect(processManager.spawnWithStdin).toHaveBeenLastCalledWith(
       'claude',
       'claude',
       expect.arrayContaining([
         '-p',
-        'Fix lint',
         '--model',
         'claude-sonnet-4-6',
+        '--output-format',
+        'stream-json',
         '--allowedTools',
         'Edit,Write,Bash,Glob,Grep,Read',
         '--dangerously-skip-permissions',
@@ -244,6 +246,7 @@ describe('registerInstantHandlers', () => {
         '8000',
       ]),
       '/tmp/repo',
+      'Fix lint',
       'thread-created-2',
     );
 
@@ -255,18 +258,20 @@ describe('registerInstantHandlers', () => {
         reasoningEffort: 'high',
       }),
     ).resolves.toEqual({ threadId: 'thread-created-3' });
-    expect(processManager.spawn).toHaveBeenLastCalledWith(
+    expect(processManager.spawnWithStdin).toHaveBeenLastCalledWith(
       'claude',
       'claude',
       [
         '-p',
-        'Audit dotfiles',
+        '--output-format',
+        'stream-json',
         '--allowedTools',
         'Read,Glob,Grep',
         '--max-thinking-tokens',
         '32000',
       ],
       expect.any(String),
+      'Audit dotfiles',
       'thread-created-3',
     );
 
@@ -319,17 +324,19 @@ describe('registerInstantHandlers', () => {
       }),
     ).resolves.toEqual({ threadId: 'thread-created-1' });
 
-    expect(processManager.spawn).toHaveBeenCalledWith(
+    expect(processManager.spawnWithStdin).toHaveBeenCalledWith(
       'claude',
       'claude',
       [
         '-p',
-        'Small edit',
+        '--output-format',
+        'stream-json',
         '--allowedTools',
         'Edit,Write,Bash,Glob,Grep,Read',
         '--dangerously-skip-permissions',
       ],
       '/tmp/repo',
+      'Small edit',
       'thread-created-1',
     );
   });
@@ -346,12 +353,13 @@ describe('registerInstantHandlers', () => {
         cli: 'claude',
       }),
     ).resolves.toEqual({ threadId: 'thread-created-1' });
-    expect(processManager.spawn).toHaveBeenCalledWith(
+    expect(processManager.spawnWithStdin).toHaveBeenCalledWith(
       'claude',
       'claude',
       [
         '-p',
-        'Default effort edit',
+        '--output-format',
+        'stream-json',
         '--allowedTools',
         'Edit,Write,Bash,Glob,Grep,Read',
         '--dangerously-skip-permissions',
@@ -359,6 +367,7 @@ describe('registerInstantHandlers', () => {
         '32000',
       ],
       '/tmp/repo',
+      'Default effort edit',
       'thread-created-1',
     );
 
@@ -370,20 +379,22 @@ describe('registerInstantHandlers', () => {
         modelId: 'claude-sonnet-4-6',
       }),
     ).resolves.toEqual({ threadId: 'thread-created-2' });
-    expect(processManager.spawn).toHaveBeenLastCalledWith(
+    expect(processManager.spawnWithStdin).toHaveBeenLastCalledWith(
       'claude',
       'claude',
       [
         '-p',
-        'Read home',
         '--model',
         'claude-sonnet-4-6',
+        '--output-format',
+        'stream-json',
         '--allowedTools',
         'Read,Glob,Grep',
         '--max-thinking-tokens',
         '32000',
       ],
       expect.any(String),
+      'Read home',
       'thread-created-2',
     );
   });
@@ -427,11 +438,12 @@ describe('registerInstantHandlers', () => {
       'Inspect screenshot',
       'instant',
     );
-    expect(processManager.spawn).toHaveBeenCalledWith(
+    expect(processManager.spawnWithStdin).toHaveBeenCalledWith(
       'codex',
       'codex',
-      expect.arrayContaining([expect.stringContaining('Screenshot files available at:')]),
+      expect.arrayContaining(['exec', '-', '--sandbox', 'workspace-write', '--json']),
       '/tmp/repo',
+      expect.stringContaining('Screenshot files available at:'),
       'thread-created-1',
     );
 
@@ -675,7 +687,14 @@ describe('registerInstantHandlers', () => {
     expect(processManager.spawnWithStdin).toHaveBeenCalledWith(
       'claude',
       'claude',
-      ['-p', '--allowedTools', 'Edit,Write,Bash,Glob,Grep,Read', '--dangerously-skip-permissions'],
+      [
+        '-p',
+        '--output-format',
+        'stream-json',
+        '--allowedTools',
+        'Edit,Write,Bash,Glob,Grep,Read',
+        '--dangerously-skip-permissions',
+      ],
       '/tmp/repo',
       expect.stringContaining('Thread prompt:\nThread-only prompt'),
       'thread-created-1',

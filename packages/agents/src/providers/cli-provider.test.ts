@@ -81,6 +81,8 @@ describe('buildClaudeArgs', () => {
   it('execute phase uses stdin prompt mode', () => {
     expect(buildClaudeArgs(req({ phase: 'execute' }))).toEqual([
       '-p',
+      '--output-format',
+      'stream-json',
       '--allowedTools',
       'Edit,Write,Bash,Glob,Grep,Read',
       '--max-thinking-tokens',
@@ -102,6 +104,8 @@ describe('buildClaudeArgs', () => {
       ),
     ).toEqual([
       '-p',
+      '--output-format',
+      'stream-json',
       '--allowedTools',
       'Read',
       '--disallowedTools',
@@ -185,7 +189,7 @@ describe('buildClaudeArgs', () => {
       '--model',
       'claude-opus-4-5',
       '--output-format',
-      'json',
+      'stream-json',
       '--max-turns',
       '1',
       '--dangerously-skip-permissions',

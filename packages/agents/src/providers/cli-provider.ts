@@ -213,7 +213,7 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
       return { args, stdin: req.prompt };
     }
     case 'execute': {
-      const execArgs = ['-p', ...modelArgs];
+      const execArgs = ['-p', ...modelArgs, '--output-format', 'stream-json'];
       /* v8 ignore next -- execute always has default allowed tools */
       if (allowedTools) execArgs.push('--allowedTools', allowedTools.join(','));
       /* v8 ignore next -- execute normally has no disallowed tools unless explicitly configured */
@@ -229,7 +229,7 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
           '-p',
           ...modelArgs,
           '--output-format',
-          'json',
+          'stream-json',
           '--max-turns',
           '1',
           '--dangerously-skip-permissions',

@@ -352,7 +352,7 @@ export function registerInstantHandlers({
       const title = args.prompt.slice(0, 60);
       const thread = queries.threads.create(projectId, fullPrompt, title, 'instant');
 
-      // 5. Build CLI args
+      // 5. Build CLI args (prompt piped via stdin, not argv)
       let cliArgs: string[];
       if (args.cli === 'claude') {
         const effectiveEffort = resolveProviderReasoningEffort(
@@ -367,11 +367,11 @@ export function registerInstantHandlers({
               ? ['--max-thinking-tokens', '32000']
               : [];
         if (args.scope === 'user') {
-          // Read-only mode for user scope — no write access to $HOME
           cliArgs = [
             '-p',
-            fullPrompt,
             ...(args.modelId ? ['--model', args.modelId] : []),
+            '--output-format',
+            'stream-json',
             '--allowedTools',
             'Read,Glob,Grep',
             ...thinkingArgs,
@@ -379,8 +379,9 @@ export function registerInstantHandlers({
         } else {
           cliArgs = [
             '-p',
-            fullPrompt,
             ...(args.modelId ? ['--model', args.modelId] : []),
+            '--output-format',
+            'stream-json',
             '--allowedTools',
             'Edit,Write,Bash,Glob,Grep,Read',
             '--dangerously-skip-permissions',
@@ -388,7 +389,6 @@ export function registerInstantHandlers({
           ];
         }
       } else {
-        // Codex
         const sandbox = args.scope === 'user' ? 'read-only' : 'workspace-write';
         const effectiveEffort = resolveProviderReasoningEffort(
           'codex',
@@ -400,15 +400,22 @@ export function registerInstantHandlers({
           '-c',
           `model_reasoning_effort=${effectiveEffort}`,
           'exec',
-          fullPrompt,
+          '-',
           '--sandbox',
           sandbox,
           '--json',
         ];
       }
 
-      // 6. Spawn process
-      const proc = processManager.spawn(args.cli, args.cli, cliArgs, cwd, thread.id);
+      // 6. Spawn process (prompt piped via stdin)
+      const proc = processManager.spawnWithStdin(
+        args.cli,
+        args.cli,
+        cliArgs,
+        cwd,
+        fullPrompt,
+        thread.id,
+      );
       runningInstants.set(thread.id, {
         processId: proc.id,
         cli: args.cli,
@@ -546,6 +553,8 @@ export function registerInstantHandlers({
               'claude',
               [
                 '-p',
+                '--output-format',
+                'stream-json',
                 '--allowedTools',
                 'Edit,Write,Bash,Glob,Grep,Read',
                 '--dangerously-skip-permissions',

@@ -2,6 +2,9 @@
 
 AI Agents that ship working code. GitHub issue in, reviewed PR out.
 
+> [!WARNING]
+> This project is under active development and is a work in progress. Features may be incomplete, APIs may change, and there may be bugs. Contributions and feedback welcome!
+
 <p align="center">
   <img src="docs/cli-demo.png" alt="ShipCode CLI running a full pipeline" width="720" />
 </p>
