@@ -686,21 +686,6 @@ export function AssistantPanel() {
             Running
           </Badge>
         ) : null}
-        <Select
-          value={assistantCli}
-          onValueChange={(next) => setAssistantCli(next as AssistantCli)}
-        >
-          <SelectTrigger
-            aria-label="Assistant CLI"
-            className="h-7 w-[92px] shrink-0 rounded-md bg-primary text-[11px]"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="claude">Claude CLI</SelectItem>
-            <SelectItem value="codex">Codex CLI</SelectItem>
-          </SelectContent>
-        </Select>
         <Button
           type="button"
           variant="ghost"
@@ -759,7 +744,7 @@ export function AssistantPanel() {
       </div>
 
       <div className="shrink-0 border-t border-border bg-primary p-3">
-        <div className="relative w-full">
+        <div className="flex w-full flex-col rounded-lg border border-border bg-elevated">
           <Textarea
             value={assistantDraft}
             onChange={(event) => setAssistantDraft(event.target.value)}
@@ -770,38 +755,52 @@ export function AssistantPanel() {
               }
             }}
             placeholder="Ask about setup, issues, or the board..."
-            className="min-h-[92px] w-full resize-none pb-12 pr-24 text-xs"
+            className="min-h-[76px] resize-none border-0 bg-transparent text-xs shadow-none focus-visible:ring-0"
           />
-          {transcriptRunning ? (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={handleCancel}
-              disabled={!assistantThreadId}
-              className="absolute right-2 bottom-2 h-7 gap-1.5 text-xs"
-              title="Stop"
+          <div className="flex items-center gap-1 border-t border-border/50 px-2 py-1.5">
+            <Select
+              value={assistantCli}
+              onValueChange={(next) => setAssistantCli(next as AssistantCli)}
             >
-              <Square size={11} />
-              Stop
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              disabled={!assistantDraft.trim() || isSubmitting || !activeProjectId}
-              onClick={handleSubmit}
-              className={cn(
-                'absolute right-2 bottom-2 h-7 gap-1.5 text-xs',
-                isSubmitting && 'opacity-80',
-              )}
-              title="Send"
-            >
-              <Send size={12} />
-              Send
-            </Button>
-          )}
+              <SelectTrigger
+                aria-label="Assistant CLI"
+                className="h-6 w-auto gap-1 rounded border-0 bg-transparent px-1.5 text-[10px] text-muted-foreground hover:text-primary"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="claude">Claude</SelectItem>
+                <SelectItem value="codex">Codex</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex-1" />
+            {transcriptRunning ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleCancel}
+                disabled={!assistantThreadId}
+                className="h-6 gap-1.5 text-[10px]"
+                title="Stop"
+              >
+                <Square size={10} />
+                Stop
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="default"
+                size="icon"
+                disabled={!assistantDraft.trim() || isSubmitting || !activeProjectId}
+                onClick={handleSubmit}
+                className={cn('h-6 w-6 rounded-full', isSubmitting && 'opacity-80')}
+                title="Send"
+              >
+                <Send size={12} />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </section>

@@ -196,6 +196,8 @@ describe('generateCommitGroups', () => {
         '--max-turns',
         '1',
         '--dangerously-skip-permissions',
+        '--disallowedTools',
+        'Edit,Write,MultiEdit,Bash,NotebookEdit,Read,Glob,Grep,Task,WebSearch,WebFetch',
       ],
       expect.objectContaining({ cwd: '/repo', stdio: ['pipe', 'pipe', 'pipe'] }),
     );

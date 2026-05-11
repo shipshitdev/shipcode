@@ -253,7 +253,15 @@ function runClaudeText(
   const selectedModel = modelArg(input);
   const args = ['-p'];
   if (selectedModel) args.push('--model', selectedModel);
-  args.push('--output-format', 'text', '--max-turns', '1', '--dangerously-skip-permissions');
+  args.push(
+    '--output-format',
+    'text',
+    '--max-turns',
+    '1',
+    '--dangerously-skip-permissions',
+    '--disallowedTools',
+    'Edit,Write,MultiEdit,Bash,NotebookEdit,Read,Glob,Grep,Task,WebSearch,WebFetch',
+  );
   return runCliText('claude', args, `${systemPrompt}\n\n${userPrompt}`, input);
 }
 
@@ -294,7 +302,6 @@ function runCliText(
     const proc = spawn(command, args, {
       cwd: input.cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: process.env,
     });
     let stdout = '';
     let stderr = '';

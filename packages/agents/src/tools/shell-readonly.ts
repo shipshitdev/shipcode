@@ -124,6 +124,15 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
 
+    // Reject argv arguments that are absolute paths or contain `..` —
+    // they could read files outside the worktree (e.g. `cat /etc/passwd`).
+    if (input.command !== 'git') {
+      const pathViolation = validateArgvPaths(input.args, resolvedCwd);
+      if (pathViolation !== null) {
+        return { ok: false, error: pathViolation };
+      }
+    }
+
     if (ctx.signal.aborted) return { ok: false, error: 'aborted' };
 
     try {
@@ -171,6 +180,38 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
     }
   },
 };
+
+/**
+ * Reject argv arguments that look like absolute paths or contain `..`
+ * segments that resolve outside the worktree. This prevents the model
+ * from using allowlisted read-only binaries (cat, head, grep, etc.)
+ * to exfiltrate host secrets via absolute paths.
+ */
+function validateArgvPaths(args: string[], resolvedCwd: string): string | null {
+  for (const arg of args) {
+    if (arg.startsWith('-')) continue;
+    if (path.isAbsolute(arg)) {
+      return `absolute paths are not allowed in shell args (got '${arg}'). Use paths relative to the worktree.`;
+    }
+    const resolved = path.resolve(resolvedCwd, arg);
+    const norm = path.normalize(resolved);
+    if (!norm.startsWith(resolvedCwd)) {
+      return `arg '${arg}' resolves outside the worktree. Use paths relative to the worktree root.`;
+    }
+  }
+  return null;
+}
+
+/** Git subcommand-specific flags that execute programs or write files. */
+const GIT_DANGEROUS_SUBCOMMAND_FLAGS = new Set([
+  '--exec',
+  '--ext-diff',
+  '--textconv',
+  '--open-files-in-pager',
+  '-O',
+  '--output',
+  '--output-directory',
+]);
 
 /**
  * Walk git's arg list, rejecting any global option that can:
@@ -228,9 +269,21 @@ function validateGitArgs(args: string[]): string | null {
       if (!GIT_ALLOWED_SET.has(arg)) {
         return `git subcommand '${arg}' is not in the read-only allowlist (${GIT_ALLOWED_SUBCOMMANDS.join(', ')}). Use the edit/write tools for file changes.`;
       }
-      // Stop scanning — anything after the subcommand is that
-      // subcommand's own args, and we trust our subcommand allowlist
-      // to mean "these are read-only and do not take shell-injection flags".
+      // Scan post-subcommand args for flags that execute programs or
+      // write files, bypassing the read-only contract.
+      for (let j = i + 1; j < args.length; j++) {
+        const subArg = args[j];
+        if (GIT_DANGEROUS_SUBCOMMAND_FLAGS.has(subArg)) {
+          return `git flag '${subArg}' is blocked (can execute programs or write files outside the worktree).`;
+        }
+        // Also catch --output=<path> and -O<cmd> stuck forms
+        if (subArg.startsWith('--output=') || subArg.startsWith('--output-directory=')) {
+          return `git flag '${subArg}' is blocked (writes files outside the worktree).`;
+        }
+        if (subArg.startsWith('-O') && subArg.length > 2) {
+          return `git flag '${subArg}' is blocked (--open-files-in-pager executes programs).`;
+        }
+      }
       return null;
     }
 
@@ -281,10 +334,36 @@ function validateGitConfigValue(entry: string): string | null {
     'core.pager',
     'core.askpass',
     'core.hookspath',
+    'core.fsmonitor',
+    'core.alternateRefsCommand',
     'credential.helper',
     'pager',
     'http.sslcapath',
   ]);
+
+  // Block diff/merge/filter driver commands and gpg program overrides.
+  // These config keys execute their values as binaries.
+  const COMMAND_CONFIG_PREFIXES = [
+    'diff.', // diff.<driver>.command, diff.<driver>.textconv
+    'merge.', // merge.<driver>.driver
+    'filter.', // filter.<name>.smudge, filter.<name>.clean, filter.<name>.process
+    'gpg.', // gpg.<format>.program, gpg.ssh.program
+  ];
+  if (COMMAND_CONFIG_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+    const subKey = key.split('.').pop() ?? '';
+    const dangerousSuffixes = [
+      'command',
+      'textconv',
+      'driver',
+      'smudge',
+      'clean',
+      'process',
+      'program',
+    ];
+    if (dangerousSuffixes.includes(subKey)) {
+      return `git '-c ${entry}' is blocked (${key} executes its value as a program).`;
+    }
+  }
   if (COMMAND_CONFIG_KEYS.has(key)) {
     return `git '-c ${entry}' is blocked (${key} is a command-style config).`;
   }

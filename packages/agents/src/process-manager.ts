@@ -77,7 +77,8 @@ function mergeSafeEnv(
   const env: Record<string, string> = { ...filterEnv(baseEnv), FORCE_COLOR: '1' };
   for (const [key, val] of Object.entries(extraEnv ?? {})) {
     if (!key || key.includes('=') || key.includes('\0') || val.includes('\0')) continue;
-    env[key] = val;
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — strip C0 control chars from env values to prevent header injection
+    env[key] = val.replace(/[\n\r\x00-\x1f]/g, '');
   }
   return env;
 }
@@ -124,6 +125,8 @@ function resolveCommand(command: string): string {
 }
 
 let cachedEnv: Record<string, string> | null = null;
+let cachedEnvTimestamp = 0;
+const CACHED_ENV_TTL_MS = 5 * 60 * 1000;
 const execFileAsync = promisify(execFile);
 
 export type ManagedProcessOutputMode = 'normalized' | 'raw';
@@ -261,8 +264,9 @@ export class ProcessManager extends EventEmitter {
     // continue.
     assertWorkspacePolicy(cwd, options);
 
-    if (!cachedEnv) {
+    if (!cachedEnv || Date.now() - cachedEnvTimestamp > CACHED_ENV_TTL_MS) {
       cachedEnv = getShellEnv();
+      cachedEnvTimestamp = Date.now();
     }
 
     const resolvedCommand = resolveCommand(command);
@@ -370,8 +374,9 @@ export class ProcessManager extends EventEmitter {
 
     assertWorkspacePolicy(cwd, options);
 
-    if (!cachedEnv) {
+    if (!cachedEnv || Date.now() - cachedEnvTimestamp > CACHED_ENV_TTL_MS) {
       cachedEnv = getShellEnv();
+      cachedEnvTimestamp = Date.now();
     }
 
     const resolvedCommand = resolveCommand(command);

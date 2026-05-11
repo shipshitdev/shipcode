@@ -42,7 +42,7 @@ describe('buildClaudeArgs', () => {
       '32000',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,Bash,NotebookEdit',
+      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,WebFetch,WebSearch',
     ]);
   });
 
@@ -58,7 +58,7 @@ describe('buildClaudeArgs', () => {
       '32000',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,Bash,NotebookEdit',
+      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,WebFetch,WebSearch',
     ]);
   });
 
@@ -74,7 +74,7 @@ describe('buildClaudeArgs', () => {
       '32000',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,Bash,NotebookEdit',
+      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,WebFetch,WebSearch',
     ]);
   });
 
@@ -126,7 +126,7 @@ describe('buildClaudeArgs', () => {
       '32000',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,Bash,NotebookEdit',
+      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,WebFetch,WebSearch',
     ]);
   });
 
@@ -142,7 +142,7 @@ describe('buildClaudeArgs', () => {
       '1',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,Bash,NotebookEdit',
+      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,WebFetch,WebSearch',
     ]);
   });
 
@@ -222,7 +222,7 @@ describe('buildClaudeArgs', () => {
       '32000',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,Bash,NotebookEdit',
+      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,WebFetch,WebSearch',
       '--allowedTools',
       'Read,Grep',
     ]);

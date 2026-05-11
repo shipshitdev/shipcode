@@ -185,7 +185,7 @@ function runSkillCliWithStdin(
           })(),
           '--dangerously-skip-permissions',
           '--disallowedTools',
-          'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebSearch,WebFetch',
+          'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebSearch,WebFetch',
         ]
       : [
           '-a',

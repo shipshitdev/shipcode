@@ -113,6 +113,10 @@ function runPrdCliWithStdin(
   modelId?: string | null,
   reasoningEffort?: ReasoningEffort,
 ): Promise<string> {
+  if (modelId && !/^[a-zA-Z0-9._:/@-]+$/.test(modelId)) {
+    throw new Error(`Invalid model ID: ${modelId}`);
+  }
+
   const args =
     cli === 'claude'
       ? [
@@ -133,7 +137,7 @@ function runPrdCliWithStdin(
           })(),
           '--dangerously-skip-permissions',
           '--disallowedTools',
-          'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebSearch,WebFetch',
+          'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebSearch,WebFetch',
         ]
       : [
           '-a',

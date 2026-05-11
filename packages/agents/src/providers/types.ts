@@ -40,10 +40,58 @@ export const PHASE_TOOL_POLICIES: Record<
   ProviderPhase,
   { allowedTools?: string[]; disallowedTools?: string[]; sandbox?: 'read-only' | 'workspace-write' }
 > = {
-  plan: { disallowedTools: ['Edit', 'Write', 'Bash', 'NotebookEdit'], sandbox: 'read-only' },
-  revision: { disallowedTools: ['Edit', 'Write', 'Bash', 'NotebookEdit'], sandbox: 'read-only' },
-  review: { disallowedTools: ['Edit', 'Write', 'Bash', 'NotebookEdit'], sandbox: 'read-only' },
-  verify: { disallowedTools: ['Edit', 'Write', 'Bash', 'NotebookEdit'], sandbox: 'read-only' },
+  plan: {
+    disallowedTools: [
+      'Edit',
+      'Write',
+      'MultiEdit',
+      'Bash',
+      'NotebookEdit',
+      'NotebookRead',
+      'WebFetch',
+      'WebSearch',
+    ],
+    sandbox: 'read-only',
+  },
+  revision: {
+    disallowedTools: [
+      'Edit',
+      'Write',
+      'MultiEdit',
+      'Bash',
+      'NotebookEdit',
+      'NotebookRead',
+      'WebFetch',
+      'WebSearch',
+    ],
+    sandbox: 'read-only',
+  },
+  review: {
+    disallowedTools: [
+      'Edit',
+      'Write',
+      'MultiEdit',
+      'Bash',
+      'NotebookEdit',
+      'NotebookRead',
+      'WebFetch',
+      'WebSearch',
+    ],
+    sandbox: 'read-only',
+  },
+  verify: {
+    disallowedTools: [
+      'Edit',
+      'Write',
+      'MultiEdit',
+      'Bash',
+      'NotebookEdit',
+      'NotebookRead',
+      'WebFetch',
+      'WebSearch',
+    ],
+    sandbox: 'read-only',
+  },
   execute: {
     allowedTools: ['Edit', 'Write', 'Bash', 'Glob', 'Grep', 'Read'],
     sandbox: 'workspace-write',

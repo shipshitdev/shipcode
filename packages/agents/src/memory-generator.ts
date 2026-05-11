@@ -283,9 +283,9 @@ function runMemoryCliWithStdin(
           'json',
           '--max-turns',
           '1',
-          '--tools',
-          '',
           '--dangerously-skip-permissions',
+          '--disallowedTools',
+          'Edit,Write,MultiEdit,Bash,NotebookEdit,Read,Glob,Grep,Task,WebSearch,WebFetch',
         ]
       : ['-a', 'never', '-c', 'model_reasoning_effort=high', 'exec', '-', '--sandbox', 'read-only'];
 

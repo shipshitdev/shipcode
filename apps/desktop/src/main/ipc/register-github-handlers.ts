@@ -1153,6 +1153,14 @@ export function registerGitHubHandlers({
     },
   );
 
+  const VALID_PHASE_ROLES = new Set(['planner', 'reviewer', 'executor', 'verifier'] as const);
+  type PhaseRole = 'planner' | 'reviewer' | 'executor' | 'verifier';
+  function assertPhaseRole(phase: string): asserts phase is PhaseRole {
+    if (!VALID_PHASE_ROLES.has(phase as PhaseRole)) {
+      throw new Error(`Invalid phase role: ${phase}`);
+    }
+  }
+
   ipcMain.handle(
     'github:set-phase-model-override',
     (
@@ -1169,6 +1177,7 @@ export function registerGitHubHandlers({
         model: ExecutorModel;
       },
     ) => {
+      assertPhaseRole(phase);
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
       if (model !== 'claude' && model !== 'codex' && model !== 'openrouter') {
@@ -1195,6 +1204,7 @@ export function registerGitHubHandlers({
         phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
       },
     ) => {
+      assertPhaseRole(phase);
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
 
@@ -1220,8 +1230,12 @@ export function registerGitHubHandlers({
         modelId: string;
       },
     ) => {
+      assertPhaseRole(phase);
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+      if (modelId && !/^[a-zA-Z0-9._:/@-]+$/.test(modelId)) {
+        throw new Error(`Invalid model ID: ${modelId}`);
+      }
       queries.githubIssues.updatePhaseModelIdOverride(issue.id, phase, modelId.trim() || null);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
       return queries.githubIssues.getByNumber(projectId, issueNumber);
@@ -1242,6 +1256,7 @@ export function registerGitHubHandlers({
         phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
       },
     ) => {
+      assertPhaseRole(phase);
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
       queries.githubIssues.updatePhaseModelIdOverride(issue.id, phase, null);
@@ -1336,6 +1351,7 @@ export function registerGitHubHandlers({
         effort: ReasoningEffort;
       },
     ) => {
+      assertPhaseRole(phase);
       const VALID_EFFORTS: readonly string[] = [
         'none',
         'minimal',
@@ -1369,6 +1385,7 @@ export function registerGitHubHandlers({
         phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
       },
     ) => {
+      assertPhaseRole(phase);
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
       queries.githubIssues.updatePhaseReasoningEffortOverride(issue.id, phase, null);

@@ -514,10 +514,24 @@ export function registerInstantHandlers({
   ipcMain.handle('instant:cancel', (_event, { threadId }: { threadId: string }) => {
     const session = runningInstants.get(threadId);
     if (session) {
+      // Remove exit listener BEFORE kill to prevent it from overwriting
+      // the 'Cancelled by user' status with 'Process exited with code N'.
+      processManager.removeAllListeners('exit');
       processManager.kill(session.processId);
       runningInstants.delete(threadId);
       queries.threads.updateStatus(threadId, 'failed', 'Cancelled by user');
       log.info(`[instant] cancelled ${session.mode} thread ${threadId}`);
+      // Re-register exit listeners for remaining sessions
+      for (const [remainingThreadId, remainingSession] of runningInstants.entries()) {
+        registerExitTracking(
+          processManager,
+          queries,
+          remainingThreadId,
+          remainingSession.processId,
+          remainingSession.cli,
+          remainingSession.mode,
+        );
+      }
     }
   });
 

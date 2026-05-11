@@ -261,9 +261,27 @@ export const repoSetupEnvFileSchema = z.object({
 
 export const runtimeQaServerSchema = z.object({
   command: z.string().min(1),
-  readinessUrl: z.string().min(1),
+  readinessUrl: z
+    .string()
+    .min(1)
+    .refine(
+      (url) => {
+        try {
+          const parsed = new URL(url);
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+          const host = parsed.hostname;
+          return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+        } catch {
+          return false;
+        }
+      },
+      { message: 'readinessUrl must be http/https on localhost, 127.0.0.1, or ::1' },
+    ),
   startupTimeoutMs: z.number().int().min(1000).default(60_000),
-  portEnvVar: z.string().min(1).default('PORT'),
+  portEnvVar: z
+    .string()
+    .regex(/^[A-Z_][A-Z0-9_]*$/, 'portEnvVar must be a valid POSIX env identifier')
+    .default('PORT'),
 });
 
 export const runtimeQaConfigSchema = z.object({
