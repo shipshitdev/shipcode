@@ -38,7 +38,7 @@ export function CostByProjectChart({
   const total = pieData.reduce((sum, entry) => sum + entry.value, 0);
 
   return (
-    <div className={cn('rounded-xl border border-border bg-elevated p-4', className)}>
+    <div className={cn('rounded-xl border border-border bg-secondary p-4', className)}>
       <div className="mb-3">
         <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted">
           {displayMode === '$' ? 'Cost by Project' : 'Tokens by Project'}

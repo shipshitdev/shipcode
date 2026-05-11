@@ -163,7 +163,7 @@ export class CostsQueries {
       .prepare(
         `SELECT
            COALESCE(SUM(total_cost_usd), 0) as total_cost_all_time,
-           COALESCE(SUM(total_tokens_prompt), 0) as total_tokens,
+           COALESCE(SUM(total_tokens_prompt + total_tokens_completion), 0) as total_tokens,
            COUNT(*) as task_count
          FROM threads WHERE status != ?`,
       )

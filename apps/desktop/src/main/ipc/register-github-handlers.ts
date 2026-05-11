@@ -1233,10 +1233,11 @@ export function registerGitHubHandlers({
       assertPhaseRole(phase);
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-      if (modelId && !/^[a-zA-Z0-9._:/@-]+$/.test(modelId)) {
-        throw new Error(`Invalid model ID: ${modelId}`);
+      const trimmed = modelId.trim();
+      if (trimmed && !/^[a-zA-Z0-9._:/@-]+$/.test(trimmed)) {
+        throw new Error(`Invalid model ID: ${trimmed}`);
       }
-      queries.githubIssues.updatePhaseModelIdOverride(issue.id, phase, modelId.trim() || null);
+      queries.githubIssues.updatePhaseModelIdOverride(issue.id, phase, trimmed || null);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
       return queries.githubIssues.getByNumber(projectId, issueNumber);
     },

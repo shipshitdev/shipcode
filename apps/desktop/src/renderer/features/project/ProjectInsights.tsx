@@ -87,7 +87,7 @@ export function ProjectInsights() {
           </div>
 
           {/* Activity heatmap */}
-          <section className="rounded-xl border border-border bg-elevated p-4">
+          <section className="rounded-xl border border-border bg-secondary p-4">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-primary">Activity</h3>
               <p className="text-[11px] text-muted-foreground">

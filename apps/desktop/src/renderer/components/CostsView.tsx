@@ -278,7 +278,7 @@ export function CostsView() {
           ) : null}
 
           {/* Activity heatmap — renders immediately, manages own data fetching */}
-          <section className="rounded-xl border border-border bg-elevated p-4">
+          <section className="rounded-xl border border-border bg-secondary p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-primary">Activity</h3>
               <p className="text-[11px] text-muted-foreground">All projects</p>
