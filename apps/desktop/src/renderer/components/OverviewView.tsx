@@ -311,8 +311,8 @@ function useOverviewView() {
 
             <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
               {(analytics?.averagePhaseDurations.length ?? 0) === 0 ? (
-                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
-                  No phase timing data yet.
+                <div className="flex items-center justify-center rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                  No phase timing data yet. Ship a pipeline to see breakdowns here.
                 </div>
               ) : (
                 <Card>
@@ -346,8 +346,8 @@ function useOverviewView() {
               )}
 
               {(analytics?.slowestRecentRuns.length ?? 0) === 0 ? (
-                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
-                  No completed PR runs yet.
+                <div className="flex items-center justify-center rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                  No completed PR runs yet. Ship a pipeline to see timing data here.
                 </div>
               ) : (
                 <Card>

@@ -1,6 +1,6 @@
 {
   "tags": ["bun", "github-actions", "node"],
   "sentinels": ["bun.lock", "package.json"],
-  "detectedAt": "2026-05-10T15:13:12.319Z",
+  "detectedAt": "2026-05-11T08:54:26.910Z",
   "rootPath": "/Users/decod3rs/www/shipshitdev/public/shipcode"
 }

@@ -1,4 +1,6 @@
+import crypto from 'node:crypto';
 import os from 'node:os';
+import { extractCodexThreadId } from '@shipcode/agents';
 import {
   type InstantFixScope,
   type ReasoningEffort,
@@ -15,6 +17,11 @@ type RunningInstantSession = {
   cli: InstantCli | 'shell';
   mode: 'run' | 'shell';
   processId: string;
+  sessionId?: string;
+  modelId?: string | null;
+  reasoningEffort?: ReasoningEffort;
+  cwd?: string;
+  isProcessingTurn?: boolean;
 };
 
 /** threadId → process metadata mapping for cancel/input/resize support. */
@@ -127,23 +134,65 @@ function buildClaudeShellEffort(
   }
 }
 
-function buildClaudeShellArgs(args: {
+function buildClaudeAssistantArgs(args: {
   modelId?: string | null;
   reasoningEffort?: ReasoningEffort;
-  initialPrompt?: string | null;
+  sessionId: string;
 }): string[] {
   const effort = buildClaudeShellEffort(args.reasoningEffort, args.modelId);
+  const thinkingArgs =
+    effort === 'high'
+      ? ['--max-thinking-tokens', '32000']
+      : effort === 'medium'
+        ? ['--max-thinking-tokens', '8000']
+        : [];
   return [
+    '-p',
     ...(args.modelId ? ['--model', args.modelId] : []),
-    ...(effort ? ['--effort', effort] : []),
-    ...(args.initialPrompt ? [args.initialPrompt] : []),
+    '--output-format',
+    'stream-json',
+    '--session-id',
+    args.sessionId,
+    '--allowedTools',
+    'Edit,Write,Bash,Glob,Grep,Read',
+    '--dangerously-skip-permissions',
+    '--max-turns',
+    '50',
+    ...thinkingArgs,
   ];
 }
 
-function buildCodexShellArgs(args: {
+function buildClaudeAssistantResumeArgs(args: {
   modelId?: string | null;
   reasoningEffort?: ReasoningEffort;
-  initialPrompt?: string | null;
+  sessionId: string;
+}): string[] {
+  const effort = buildClaudeShellEffort(args.reasoningEffort, args.modelId);
+  const thinkingArgs =
+    effort === 'high'
+      ? ['--max-thinking-tokens', '32000']
+      : effort === 'medium'
+        ? ['--max-thinking-tokens', '8000']
+        : [];
+  return [
+    '-p',
+    '--resume',
+    args.sessionId,
+    ...(args.modelId ? ['--model', args.modelId] : []),
+    '--output-format',
+    'stream-json',
+    '--allowedTools',
+    'Edit,Write,Bash,Glob,Grep,Read',
+    '--dangerously-skip-permissions',
+    '--max-turns',
+    '50',
+    ...thinkingArgs,
+  ];
+}
+
+function buildCodexAssistantArgs(args: {
+  modelId?: string | null;
+  reasoningEffort?: ReasoningEffort;
 }): string[] {
   const effort = resolveProviderReasoningEffort(
     'codex',
@@ -154,10 +203,60 @@ function buildCodexShellArgs(args: {
     ...(args.modelId ? ['-m', args.modelId] : []),
     '-c',
     `model_reasoning_effort=${effort}`,
+    'exec',
+    '-',
     '--sandbox',
     'workspace-write',
-    ...(args.initialPrompt ? [args.initialPrompt] : []),
+    '--json',
   ];
+}
+
+function buildCodexAssistantResumeArgs(args: {
+  modelId?: string | null;
+  reasoningEffort?: ReasoningEffort;
+  threadId: string;
+}): string[] {
+  const effort = resolveProviderReasoningEffort(
+    'codex',
+    args.reasoningEffort ?? 'high',
+    args.modelId,
+  ).effective;
+  return [
+    ...(args.modelId ? ['-m', args.modelId] : []),
+    '-c',
+    `model_reasoning_effort=${effort}`,
+    'exec',
+    'resume',
+    args.threadId,
+    '-',
+    '--sandbox',
+    'workspace-write',
+    '--json',
+  ];
+}
+
+function captureCodexThreadId(
+  processManager: IpcHandlerDeps['processManager'],
+  processId: string,
+  onThreadId: (id: string) => void,
+) {
+  let buf = '';
+  const outputHandler = (pid: string, data: string) => {
+    if (pid !== processId) return;
+    buf += data;
+    const threadId = extractCodexThreadId(buf);
+    if (threadId) {
+      processManager.removeListener('output', outputHandler);
+      onThreadId(threadId);
+    }
+  };
+  processManager.on('output', outputHandler);
+  const exitHandler = (pid: string) => {
+    if (pid !== processId) return;
+    processManager.removeListener('output', outputHandler);
+    processManager.removeListener('exit', exitHandler);
+  };
+  processManager.on('exit', exitHandler);
 }
 
 function registerExitTracking(
@@ -171,7 +270,13 @@ function registerExitTracking(
   const exitHandler = (exitedProcessId: string, exitCode: number) => {
     if (exitedProcessId !== processId) return;
     processManager.removeListener('exit', exitHandler);
-    runningInstants.delete(threadId);
+    // Skip status update if session was already removed (e.g. by instant:cancel)
+    const session = runningInstants.get(threadId);
+    if (!session) return;
+    // For shell mode, only clean up on final exit (run mode cleans up always)
+    if (mode === 'run') {
+      runningInstants.delete(threadId);
+    }
     queries.threads.updateStatus(
       threadId,
       exitCode === 0 ? 'completed' : 'failed',
@@ -348,33 +453,51 @@ export function registerInstantHandlers({
       )}`.trim();
       const title = initialPrompt
         ? initialPrompt.slice(0, 60)
-        : `${formatInstantCliLabel(args.cli)} shell`;
+        : `${formatInstantCliLabel(args.cli)} assistant`;
       const thread = queries.threads.create(project.id, initialPrompt, title, 'instant');
 
+      const sessionId = args.cli === 'claude' ? crypto.randomUUID() : undefined;
       const cliArgs =
         args.cli === 'claude'
-          ? buildClaudeShellArgs({
+          ? buildClaudeAssistantArgs({
               modelId: args.modelId,
               reasoningEffort: args.reasoningEffort,
-              initialPrompt: initialPrompt || null,
+              sessionId: sessionId!,
             })
-          : buildCodexShellArgs({
+          : buildCodexAssistantArgs({
               modelId: args.modelId,
               reasoningEffort: args.reasoningEffort,
-              initialPrompt: initialPrompt || null,
             });
 
-      const proc = processManager.spawn(args.cli, args.cli, cliArgs, project.path, thread.id, {
-        outputMode: 'raw',
-      });
+      const proc = processManager.spawnWithStdin(
+        args.cli,
+        args.cli,
+        cliArgs,
+        project.path,
+        initialPrompt || 'hello',
+        thread.id,
+      );
 
-      runningInstants.set(thread.id, {
+      const session: RunningInstantSession = {
         processId: proc.id,
         cli: args.cli,
         mode: 'shell',
-      });
+        sessionId,
+        modelId: args.modelId,
+        reasoningEffort: args.reasoningEffort,
+        cwd: project.path,
+      };
+      runningInstants.set(thread.id, session);
 
-      log.info(`[instant] started ${args.cli} shell for thread ${thread.id} (cwd=${project.path})`);
+      if (args.cli === 'codex') {
+        captureCodexThreadId(processManager, proc.id, (threadId) => {
+          session.sessionId = threadId;
+        });
+      }
+
+      log.info(
+        `[instant] started ${args.cli} assistant for thread ${thread.id} (cwd=${project.path})`,
+      );
 
       registerExitTracking(processManager, queries, thread.id, proc.id, args.cli, 'shell');
 
@@ -495,7 +618,72 @@ export function registerInstantHandlers({
     (_event, { threadId, data }: { threadId: string; data: string }) => {
       const session = runningInstants.get(threadId);
       if (!session || session.mode !== 'shell') return;
-      processManager.write(session.processId, data);
+
+      // Bare shell sessions still use PTY stdin
+      if (session.cli === 'shell') {
+        processManager.write(session.processId, data);
+        return;
+      }
+
+      if (session.isProcessingTurn) {
+        log.warn(`[instant] follow-up blocked — turn still running for thread ${threadId}`);
+        return;
+      }
+
+      if (!session.sessionId) {
+        log.warn(`[instant] follow-up blocked — no session ID yet for thread ${threadId}`);
+        return;
+      }
+
+      const followupPrompt = data.replace(/\n$/, '');
+      if (!followupPrompt) return;
+
+      // Kill any previous process still running for this thread
+      const prevProc = processManager.get(session.processId);
+      if (prevProc && prevProc.state !== 'exited') {
+        processManager.kill(session.processId);
+      }
+
+      session.isProcessingTurn = true;
+
+      const cliArgs =
+        session.cli === 'claude'
+          ? buildClaudeAssistantResumeArgs({
+              modelId: session.modelId,
+              reasoningEffort: session.reasoningEffort,
+              sessionId: session.sessionId,
+            })
+          : buildCodexAssistantResumeArgs({
+              modelId: session.modelId,
+              reasoningEffort: session.reasoningEffort,
+              threadId: session.sessionId,
+            });
+
+      const proc = processManager.spawnWithStdin(
+        session.cli,
+        session.cli,
+        cliArgs,
+        session.cwd!,
+        followupPrompt,
+        threadId,
+      );
+
+      session.processId = proc.id;
+
+      if (session.cli === 'codex') {
+        captureCodexThreadId(processManager, proc.id, (newThreadId) => {
+          session.sessionId = newThreadId;
+        });
+      }
+
+      const exitHandler = (exitedProcessId: string) => {
+        if (exitedProcessId !== proc.id) return;
+        processManager.removeListener('exit', exitHandler);
+        session.isProcessingTurn = false;
+      };
+      processManager.on('exit', exitHandler);
+
+      log.info(`[instant] resumed ${session.cli} session for thread ${threadId}`);
     },
   );
 
@@ -514,24 +702,10 @@ export function registerInstantHandlers({
   ipcMain.handle('instant:cancel', (_event, { threadId }: { threadId: string }) => {
     const session = runningInstants.get(threadId);
     if (session) {
-      // Remove exit listener BEFORE kill to prevent it from overwriting
-      // the 'Cancelled by user' status with 'Process exited with code N'.
-      processManager.removeAllListeners('exit');
       processManager.kill(session.processId);
       runningInstants.delete(threadId);
       queries.threads.updateStatus(threadId, 'failed', 'Cancelled by user');
       log.info(`[instant] cancelled ${session.mode} thread ${threadId}`);
-      // Re-register exit listeners for remaining sessions
-      for (const [remainingThreadId, remainingSession] of runningInstants.entries()) {
-        registerExitTracking(
-          processManager,
-          queries,
-          remainingThreadId,
-          remainingSession.processId,
-          remainingSession.cli,
-          remainingSession.mode,
-        );
-      }
     }
   });
 

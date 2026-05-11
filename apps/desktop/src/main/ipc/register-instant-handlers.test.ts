@@ -76,6 +76,7 @@ describe('registerInstantHandlers', () => {
     write: ReturnType<typeof vi.fn>;
     resize: ReturnType<typeof vi.fn>;
     kill: ReturnType<typeof vi.fn>;
+    get: ReturnType<typeof vi.fn>;
   };
   let exitHandlers: Array<(processId: string, exitCode: number) => void>;
   let createThreadCounter: number;
@@ -132,6 +133,7 @@ describe('registerInstantHandlers', () => {
       write: vi.fn(),
       resize: vi.fn(),
       kill: vi.fn(),
+      get: vi.fn(() => null),
     };
 
     registerInstantHandlers({
@@ -448,13 +450,14 @@ describe('registerInstantHandlers', () => {
     );
   });
 
-  it('starts interactive shells, forwards terminal input and resize, and records exits', async () => {
+  it('starts structured assistant sessions and spawns resume processes for follow-ups', async () => {
     const shellStart = handlers.get('instant:shell-start');
     const shellInput = handlers.get('instant:shell-input');
     const shellResize = handlers.get('instant:shell-resize');
     if (!shellStart || !shellInput || !shellResize)
       throw new Error('shell handlers not registered');
 
+    // Claude assistant session uses spawnWithStdin with structured output flags
     await expect(
       shellStart(undefined, {
         projectId: 'project-1',
@@ -470,20 +473,29 @@ describe('registerInstantHandlers', () => {
       'Inspect failures',
       'instant',
     );
-    expect(processManager.spawn).toHaveBeenCalledWith(
+    expect(processManager.spawnWithStdin).toHaveBeenCalledWith(
       'claude',
       'claude',
-      ['--model', 'claude-sonnet-4-6', '--effort', 'high', 'Inspect failures'],
+      expect.arrayContaining([
+        '-p',
+        '--output-format',
+        'stream-json',
+        '--session-id',
+        expect.any(String),
+        '--model',
+        'claude-sonnet-4-6',
+        '--dangerously-skip-permissions',
+      ]),
       '/tmp/repo',
+      'Inspect failures',
       'thread-created-1',
-      { outputMode: 'raw' },
     );
 
-    shellInput(undefined, { threadId: 'thread-created-1', data: 'bun test\n' });
+    // Resize still works (no-ops for pipe-based processes)
     shellResize(undefined, { threadId: 'thread-created-1', cols: 120.8, rows: 32.2 });
-    expect(processManager.write).toHaveBeenCalledWith('proc-1', 'bun test\n');
     expect(processManager.resize).toHaveBeenCalledWith('proc-1', 120, 32);
 
+    // Exit tracking updates status
     exitHandlers.at(-1)?.('proc-1', 0);
     expect(processManager.removeListener).toHaveBeenCalledWith('exit', expect.any(Function));
     expect(queries.threads.updateStatus).toHaveBeenCalledWith(
@@ -492,64 +504,22 @@ describe('registerInstantHandlers', () => {
       undefined,
     );
 
-    shellInput(undefined, { threadId: 'thread-created-1', data: 'ignored' });
-    expect(processManager.write).toHaveBeenCalledTimes(1);
-
-    await expect(
-      shellStart(undefined, {
-        projectId: 'project-1',
-        cli: 'claude',
-        reasoningEffort: 'medium',
-        initialPrompt: 'Inspect medium',
-      }),
-    ).resolves.toEqual({ threadId: 'thread-created-2' });
-    expect(processManager.spawn).toHaveBeenLastCalledWith(
-      'claude',
-      'claude',
-      ['--effort', 'medium', 'Inspect medium'],
-      '/tmp/repo',
-      'thread-created-2',
-      { outputMode: 'raw' },
-    );
-
+    // Empty title when no prompt
     await expect(
       shellStart(undefined, {
         projectId: 'project-1',
         cli: 'claude',
         modelId: 'claude-sonnet-4-6',
       }),
-    ).resolves.toEqual({ threadId: 'thread-created-3' });
+    ).resolves.toEqual({ threadId: 'thread-created-2' });
     expect(queries.threads.create).toHaveBeenLastCalledWith(
       'project-1',
       '',
-      'Claude shell',
+      'Claude assistant',
       'instant',
     );
-    expect(processManager.spawn).toHaveBeenLastCalledWith(
-      'claude',
-      'claude',
-      ['--model', 'claude-sonnet-4-6', '--effort', 'high'],
-      '/tmp/repo',
-      'thread-created-3',
-      { outputMode: 'raw' },
-    );
 
-    await expect(
-      shellStart(undefined, {
-        projectId: 'project-1',
-        cli: 'claude',
-        reasoningEffort: 'low',
-      }),
-    ).resolves.toEqual({ threadId: 'thread-created-4' });
-    expect(processManager.spawn).toHaveBeenLastCalledWith(
-      'claude',
-      'claude',
-      [],
-      '/tmp/repo',
-      'thread-created-4',
-      { outputMode: 'raw' },
-    );
-
+    // Codex assistant session uses exec - --json
     await expect(
       shellStart(undefined, {
         projectId: 'project-1',
@@ -558,37 +528,24 @@ describe('registerInstantHandlers', () => {
         reasoningEffort: 'medium',
         initialPrompt: 'Investigate failing tests',
       }),
-    ).resolves.toEqual({ threadId: 'thread-created-5' });
-    expect(processManager.spawn).toHaveBeenLastCalledWith(
+    ).resolves.toEqual({ threadId: 'thread-created-3' });
+    expect(processManager.spawnWithStdin).toHaveBeenLastCalledWith(
       'codex',
       'codex',
-      [
+      expect.arrayContaining([
         '-m',
         'gpt-5.4-mini',
         '-c',
         'model_reasoning_effort=medium',
+        'exec',
+        '-',
         '--sandbox',
         'workspace-write',
-        'Investigate failing tests',
-      ],
+        '--json',
+      ]),
       '/tmp/repo',
-      'thread-created-5',
-      { outputMode: 'raw' },
-    );
-
-    await expect(
-      shellStart(undefined, {
-        projectId: 'project-1',
-        cli: 'codex',
-      }),
-    ).resolves.toEqual({ threadId: 'thread-created-6' });
-    expect(processManager.spawn).toHaveBeenLastCalledWith(
-      'codex',
-      'codex',
-      ['-c', 'model_reasoning_effort=high', '--sandbox', 'workspace-write'],
-      '/tmp/repo',
-      'thread-created-6',
-      { outputMode: 'raw' },
+      'Investigate failing tests',
+      'thread-created-3',
     );
 
     queries.projects.getById.mockReturnValueOnce(null);

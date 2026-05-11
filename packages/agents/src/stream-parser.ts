@@ -26,10 +26,14 @@ import {
   extractClaudeModel,
   extractCliUsage,
   extractCodexModel,
+  extractCodexThreadId,
   resolveCliText,
   stripAnsi,
   stripSystemEvents,
 } from './parsers/cli-ndjson';
+
+export { extractCodexThreadId } from './parsers/cli-ndjson';
+
 import { extractFencedBlock, type ParseResult } from './parsers/fenced-output';
 
 export type { ParseResult } from './parsers/fenced-output';

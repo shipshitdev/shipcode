@@ -581,13 +581,15 @@ export function AssistantPanel() {
       }
       setIsSubmitting(true);
       try {
-        if (assistantThreadId && transcriptRunning) {
+        if (assistantThreadId && !transcriptRunning) {
+          // Follow-up turn: resume existing session
           await window.shipcode.invoke('instant:shell-input', {
             threadId: assistantThreadId,
-            data: `${trimmed}\n`,
+            data: trimmed,
           });
           appendAssistantUserMessage({ threadId: assistantThreadId, content: trimmed });
-        } else {
+        } else if (!assistantThreadId || !transcriptRunning) {
+          // First turn: start new session
           const setup = await window.shipcode
             .invoke<ProjectSetupDraft>('project:get-setup', { projectId: activeProjectId })
             .catch(() => null);

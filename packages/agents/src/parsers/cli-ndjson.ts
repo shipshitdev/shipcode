@@ -183,6 +183,21 @@ export function resolveCliText(buffer: string): string {
 }
 
 /**
+ * Codex `--json`: the `{"type":"thread.started","thread_id":"..."}` event
+ * carries the resumable thread ID for `codex exec resume <id>`.
+ */
+export function extractCodexThreadId(buffer: string): string | null {
+  for (const line of buffer.split('\n')) {
+    const parsed = parseJsonLine(line);
+    if (!parsed) continue;
+    if (parsed.type === 'thread.started' && typeof parsed.thread_id === 'string') {
+      return parsed.thread_id;
+    }
+  }
+  return null;
+}
+
+/**
  * Strip Claude CLI system/hook NDJSON lines from raw output before
  * storage. These have `"type":"system"` or `"type":"rate_limit_event"`
  * and originate from hooks running inside the subprocess — not LLM output.

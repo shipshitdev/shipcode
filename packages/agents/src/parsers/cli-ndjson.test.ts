@@ -3,6 +3,7 @@ import {
   extractClaudeModel,
   extractCliUsage,
   extractCodexModel,
+  extractCodexThreadId,
   resolveCliText,
   stripSystemEvents,
 } from './cli-ndjson';
@@ -116,6 +117,16 @@ describe('cli-ndjson parser helpers', () => {
         ].join('\n'),
       ),
     ).toBe('first\n\nsecond');
+  });
+
+  it('extracts Codex thread ID from thread.started event', () => {
+    const buffer = [
+      JSON.stringify({ type: 'thread.started', thread_id: '019e1648-b0ba-75a3-89b7-a6647c0d11e8' }),
+      JSON.stringify({ type: 'turn.started' }),
+    ].join('\n');
+    expect(extractCodexThreadId(buffer)).toBe('019e1648-b0ba-75a3-89b7-a6647c0d11e8');
+    expect(extractCodexThreadId('not json\ngarbage')).toBeNull();
+    expect(extractCodexThreadId(JSON.stringify({ type: 'turn.started' }))).toBeNull();
   });
 
   it('falls back to raw text and strips only system protocol events', () => {

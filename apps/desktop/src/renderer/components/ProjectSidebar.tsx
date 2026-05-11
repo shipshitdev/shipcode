@@ -616,7 +616,11 @@ function useProjectSidebarView() {
                               size="icon"
                               className={cn(
                                 'h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100',
-                                warningBadgeLabel ? 'text-warning' : 'text-muted-foreground',
+                                hasBlockedWarning
+                                  ? 'text-danger'
+                                  : warningBadgeLabel
+                                    ? 'text-warning'
+                                    : 'text-muted-foreground',
                               )}
                               aria-label={`More actions for ${project.name}`}
                               title={warningTitle}

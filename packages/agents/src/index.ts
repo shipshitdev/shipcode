@@ -207,5 +207,5 @@ export {
   validateSkill,
 } from './skills';
 export type { ParseResult } from './stream-parser';
-export { StreamParser } from './stream-parser';
+export { extractCodexThreadId, StreamParser } from './stream-parser';
 export type { TerminalEvent } from './terminal-events';
