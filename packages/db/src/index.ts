@@ -75,6 +75,7 @@ import {
   migrateV51,
   migrateV52,
   migrateV53,
+  migrateV54,
 } from './schema';
 
 export { ActivityQueries } from './queries/activity';
@@ -111,6 +112,7 @@ export { SkillsQueries } from './queries/skills';
 export { TaskGraphQueries } from './queries/task-graphs';
 export { TerminalEventQueries } from './queries/terminal-events';
 export { ThreadQueries } from './queries/threads';
+export { TriageRuleQueries } from './queries/triage-rules';
 export { VerificationQueries } from './queries/verifications';
 export { transaction } from './utils';
 
@@ -184,6 +186,7 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV51(db);
   migrateV52(db);
   migrateV53(db);
+  migrateV54(db);
 
   // Startup cleanup: reset unclaimed queued issues to todo on every launch.
   // An unclaimed queued issue has no active worker holding it — it's stale state

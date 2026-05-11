@@ -16,7 +16,7 @@ import { Button, Keycap, Modal, ModalFooter } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
-import { Bell, Code2, FolderGit, Settings, Terminal, Workflow } from 'lucide-react';
+import { Bell, Code2, FolderGit, Settings, Tags, Terminal, Workflow } from 'lucide-react';
 import {
   type Dispatch,
   type SetStateAction,
@@ -53,6 +53,7 @@ import {
   type ProjectOverrideState,
   type ProjectTab,
 } from './project-settings-modal/shared';
+import { TriageRulesTab } from './project-settings-modal/TriageRulesTab';
 import { SettingsNavigation, type SettingsNavigationItem } from './SettingsNavigation';
 
 const PROJECT_SETTINGS_SECTIONS = [
@@ -80,6 +81,11 @@ const PROJECT_SETTINGS_SECTIONS = [
     key: 'github',
     label: 'GitHub',
     icon: <FolderGit size={14} />,
+  },
+  {
+    key: 'triage',
+    label: 'Triage rules',
+    icon: <Tags size={14} />,
   },
   {
     key: 'context',
@@ -1055,6 +1061,13 @@ function useProjectSettingsModalView() {
                     isActive={activeTab === 'github'}
                     statusMapping={project?.githubStatusMapping ?? null}
                     hasProjectUrl={!!project?.githubProjectUrl}
+                  />
+                )}
+
+                {activeTab === 'triage' && (
+                  <TriageRulesTab
+                    projectId={projectSettingsModalProjectId ?? ''}
+                    isActive={activeTab === 'triage'}
                   />
                 )}
 

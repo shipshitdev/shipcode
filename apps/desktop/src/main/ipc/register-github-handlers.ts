@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  applyTriageRulesOnce,
   checkProjectReadiness,
   enhancePrdDraft,
   fetchProjectPriorities,
@@ -190,6 +191,7 @@ export function registerGitHubHandlers({
         }
 
         const ghCli = new GhCli(project.path);
+        const triageRules = queries.triageRules?.list(projectId) ?? [];
         const githubRemoteRef = parseGithubRemote(project.gitRemote);
         let githubRepoFullName =
           project.githubRepoFullName ??
@@ -211,7 +213,8 @@ export function registerGitHubHandlers({
         });
 
         // Batch upsert in a single transaction to avoid per-issue WAL overhead.
-        const newIssues: Array<{ number: number; url: string }> = [];
+        const newIssues: Array<{ number: number; url: string; record: GitHubIssueCacheRecord }> =
+          [];
         queries.githubIssues.runInTransaction(() => {
           for (const issue of issues) {
             const existingIssue = queries.githubIssues.getByNumber(projectId, issue.number);
@@ -231,8 +234,8 @@ export function registerGitHubHandlers({
               syncOpenIssueState(queries, record);
             }
 
-            if (!existingIssue) {
-              newIssues.push({ number: issue.number, url: issue.url });
+            if (!existingIssue && record.state === 'open' && !record.rulesAppliedAt) {
+              newIssues.push({ number: issue.number, url: issue.url, record });
             }
           }
         });
@@ -246,6 +249,34 @@ export function registerGitHubHandlers({
               'github:refresh-issues',
             ),
           ),
+        );
+
+        await Promise.all(
+          newIssues.map(async ({ record }) => {
+            const result = await applyTriageRulesOnce({
+              issue: record,
+              rules: triageRules,
+              ghCli,
+              markApplied: (issueId) => queries.githubIssues.markTriageRulesApplied(issueId),
+              recordFailure: (issueId, reason) =>
+                queries.githubIssues.recordTriageRulesFailure(issueId, reason),
+              onWarn: (message, err) => log.warn(message, err),
+            });
+
+            if (result.status !== 'applied') return;
+
+            const refreshedIssue = result.refreshedIssue;
+            queries.githubIssues.upsert({
+              projectId,
+              issueNumber: refreshedIssue.number,
+              title: refreshedIssue.title,
+              body: refreshedIssue.body,
+              labels: refreshedIssue.labels,
+              assignee: refreshedIssue.assignee,
+              state: refreshedIssue.state,
+              updatedAt: refreshedIssue.updatedAt ?? null,
+            });
+          }),
         );
 
         const staleApprovalCount = force ? queries.githubIssues.resetStaleApproval(projectId) : 0;

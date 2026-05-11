@@ -1608,3 +1608,44 @@ export function migrateV53(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (53)`);
   });
 }
+
+export function migrateV54(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 54) return;
+
+  transaction(db, () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS triage_rules (
+        id          TEXT PRIMARY KEY,
+        project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        order_index INTEGER NOT NULL,
+        name        TEXT NOT NULL,
+        enabled     INTEGER NOT NULL DEFAULT 1,
+        conditions  TEXT NOT NULL,
+        actions     TEXT NOT NULL,
+        created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_triage_rules_project_order
+        ON triage_rules(project_id, order_index ASC);
+      CREATE INDEX IF NOT EXISTS idx_triage_rules_project_enabled_order
+        ON triage_rules(project_id, enabled, order_index ASC);
+    `);
+
+    execAlterTablesIfMissing(db, [
+      'ALTER TABLE github_issue_cache ADD COLUMN rules_applied_at TEXT',
+      'ALTER TABLE github_issue_cache ADD COLUMN triage_failure_reason TEXT',
+    ]);
+
+    db.exec(`
+      UPDATE github_issue_cache
+         SET rules_applied_at = COALESCE(rules_applied_at, ${ISO_NOW_SQL})
+       WHERE rules_applied_at IS NULL;
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (54)`);
+  });
+}

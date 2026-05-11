@@ -24,7 +24,11 @@ export {
 } from './context-generator';
 export { loadRepoContext, loadStructuredRepoContext } from './context-loader';
 export { GhCli } from './github/gh-cli';
-export { IssuePoller } from './github/issue-poller';
+export type {
+  ApplyTriageRulesOnceOptions,
+  ApplyTriageRulesOnceResult,
+} from './github/issue-poller';
+export { applyTriageRulesOnce, IssuePoller } from './github/issue-poller';
 export type { IssueTriageRecommendation, IssueTriageRunResult } from './github/issue-triage';
 export {
   buildTriagePrompt,

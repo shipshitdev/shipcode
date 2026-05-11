@@ -34,6 +34,7 @@ export * from './sqlite-time';
 export * from './staleness';
 export * from './task-graph';
 export * from './tokens';
+export * from './triage-rules';
 export * from './types';
 export * from './unified-diff';
 // worktree-path uses node:path — import directly from '@shipcode/shared/worktree-path'
