@@ -89,7 +89,9 @@ li {
   gap: 10px;
   align-items: center;
   padding: 9px 14px;
-  transition: opacity 0.25s ease, background 0.25s ease;
+  transition:
+    opacity 0.25s ease,
+    background 0.25s ease;
 }
 
 li + li {
