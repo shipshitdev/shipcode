@@ -113,7 +113,7 @@ describe('planning phase helpers', () => {
       clarificationAnswers: [
         { questionId: 'storage', selectedChoiceId: 'a', freeformText: 'Local first.' },
       ],
-    } as PipelineContext);
+    } as unknown as PipelineContext);
 
     expect(current).toContain('Need Storage');
     expect(current).toContain('Local first.');
@@ -123,7 +123,7 @@ describe('planning phase helpers', () => {
         clarificationHistory: [],
         clarificationRequest: null,
         clarificationAnswers: [],
-      } as PipelineContext),
+      } as unknown as PipelineContext),
     ).toBeNull();
   });
 });

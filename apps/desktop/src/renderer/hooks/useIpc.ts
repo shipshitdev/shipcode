@@ -125,13 +125,16 @@ export function useIpc() {
       window.shipcode.on('pipeline:phase', (data) => {
         const store = useAppStore.getState();
         const selectedProjectId = store.activeProjectId;
+        const assistantThreadId = store.assistantThreadId;
         const maybeSelectedProjectThread =
           store.activeIssue?.threadId === data.threadId ||
           store.githubIssues.some((issue) => issue.threadId === data.threadId);
         const focusThreadIfSelectedProject = () => {
+          if (assistantThreadId === data.threadId) return;
           if (selectedProjectId == null) return;
           if (maybeSelectedProjectThread) {
             const latest = useAppStore.getState();
+            if (latest.assistantThreadId === data.threadId) return;
             if (latest.activeProjectId !== selectedProjectId) return;
             if (data.phase === PIPELINE_PHASE.planning) latest.openTerminal();
             if (data.phase !== PIPELINE_PHASE.idle) latest.setTerminalThread(data.threadId);
@@ -141,6 +144,7 @@ export function useIpc() {
             .invoke('thread:get', { threadId: data.threadId })
             .then((thread) => {
               const latest = useAppStore.getState();
+              if (latest.assistantThreadId === data.threadId) return;
               if (latest.activeProjectId !== selectedProjectId) return;
               const threadProjectId =
                 typeof thread === 'object' && thread !== null

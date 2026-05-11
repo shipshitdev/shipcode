@@ -50,6 +50,41 @@ describe('cost chart components', () => {
     expect(screen.getByText('13k')).toBeInTheDocument();
   });
 
+  it('aggregates duplicate project names into a single entry', () => {
+    const byProject = [
+      {
+        projectId: 'p1',
+        projectName: 'shipcode',
+        totalCostUsd: 5,
+        totalTokensPrompt: 1_000,
+        totalTokensCompletion: 500,
+        taskCount: 2,
+      },
+      {
+        projectId: 'p2',
+        projectName: 'shipcode',
+        totalCostUsd: 3,
+        totalTokensPrompt: 2_000,
+        totalTokensCompletion: 1_000,
+        taskCount: 1,
+      },
+      {
+        projectId: 'p3',
+        projectName: 'docs',
+        totalCostUsd: 1,
+        totalTokensPrompt: 500,
+        totalTokensCompletion: 200,
+        taskCount: 1,
+      },
+    ];
+
+    render(<CostByProjectChart byProject={byProject} displayMode="$" />);
+    const labels = screen.getAllByText('shipcode');
+    expect(labels).toHaveLength(1);
+    expect(screen.getByText('$8.00')).toBeInTheDocument();
+    expect(screen.getByText('$9.00')).toBeInTheDocument();
+  });
+
   it('renders phase token and cost charts with legends and empty state', () => {
     const tokensByPhase = [
       {

@@ -45,7 +45,11 @@ export interface ToolContext {
  */
 export interface GithubGraphqlDeps {
   getToken(): Promise<string | null> | string | null;
-  getDefaultRepo?(): Promise<GithubRepoCoords | null> | GithubRepoCoords | null;
+  getDefaultRepo?():
+    | Promise<GithubRepoCoords | null | undefined>
+    | GithubRepoCoords
+    | null
+    | undefined;
   /** Override for tests. Defaults to global `fetch`. */
   fetch?: typeof fetch;
 }

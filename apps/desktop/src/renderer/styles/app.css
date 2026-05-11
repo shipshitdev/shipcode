@@ -80,6 +80,24 @@
   }
 }
 
+@keyframes assistant-thinking-letter-tone {
+  0%,
+  100% {
+    color: var(--text-muted);
+  }
+  45% {
+    color: var(--text-primary);
+  }
+  70% {
+    color: var(--text-secondary);
+  }
+}
+
+.assistant-thinking-letter {
+  animation: assistant-thinking-letter-tone 1.45s ease-in-out infinite;
+  animation-delay: calc(var(--thinking-letter-index) * 70ms);
+}
+
 [data-theme="light"] {
   --bg-primary: #f6f4ef;
   --bg-secondary: #efeae1;
@@ -189,17 +207,6 @@
 }
 
 /* Terminal drawer enter/exit */
-@keyframes terminal-enter {
-  from {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
 @keyframes terminal-exit {
   from {
     transform: translateY(0);
@@ -211,8 +218,32 @@
   }
 }
 
-@utility animate-terminal-enter {
-  animation: terminal-enter 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+.terminal-drawer-shell {
+  height: var(--terminal-drawer-height);
+  opacity: 1;
+  transition:
+    height 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.terminal-drawer-shell[data-dragging="true"] {
+  transition: none;
+}
+
+@starting-style {
+  .terminal-drawer-shell {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+.assistant-panel-slot {
+  width: 0;
+  transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.assistant-panel-slot[data-open="true"] {
+  width: 390px;
 }
 
 @utility animate-terminal-exit {
@@ -284,7 +315,7 @@
   .animate-slide-progress,
   .animate-slide-progress-card,
   .animate-card-flash,
-  .animate-terminal-enter,
+  .assistant-thinking-letter,
   .animate-terminal-exit,
   .animate-settings-enter,
   .animate-view-enter,
@@ -294,6 +325,11 @@
     animation: none !important;
     /* biome-ignore lint/complexity/noImportantStyles: reduced-motion override must beat utility transforms */
     transform: none !important;
+  }
+
+  .terminal-drawer-shell,
+  .assistant-panel-slot {
+    transition: none;
   }
 }
 
@@ -409,10 +445,10 @@
     width: 4px;
   }
   .kanban-scroll::-webkit-scrollbar-thumb {
-    background: color-mix(in srgb, var(--column-scrollbar) 50%, transparent);
+    background: var(--border);
   }
   .kanban-scroll::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in srgb, var(--column-scrollbar) 75%, transparent);
+    background: var(--text-muted);
   }
 
   .kanban-board-scroll::-webkit-scrollbar {

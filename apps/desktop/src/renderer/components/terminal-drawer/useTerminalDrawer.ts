@@ -68,6 +68,7 @@ export function useTerminalDrawer() {
   const setTerminalMaximized = useAppStore((s) => s.setTerminalMaximized);
   const activeProjectId = useAppStore((s) => s.activeProjectId);
   const terminalThreadId = useAppStore((s) => s.terminalThreadId);
+  const assistantThreadId = useAppStore((s) => s.assistantThreadId);
   const githubIssues = useAppStore((s) => s.githubIssues);
   const activeIssue = useAppStore((s) => s.activeIssue);
   const scopedIssues = useMemo(
@@ -104,11 +105,13 @@ export function useTerminalDrawer() {
   const syntheticActiveTargets = useMemo(
     () =>
       activePipelines.flatMap((summary) =>
-        summary.projectId === activeProjectId && !issueThreadIds.has(summary.threadId)
+        summary.projectId === activeProjectId &&
+        summary.threadId !== assistantThreadId &&
+        !issueThreadIds.has(summary.threadId)
           ? [activeSummaryTarget(summary)]
           : [],
       ),
-    [activePipelines, activeProjectId, issueThreadIds],
+    [activePipelines, activeProjectId, assistantThreadId, issueThreadIds],
   );
   const runningTargets = useMemo(
     () => [...runningIssueTargets, ...syntheticActiveTargets],
@@ -134,7 +137,9 @@ export function useTerminalDrawer() {
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
   const explicitThreadTarget =
-    explicitThread && explicitThread.projectId === activeProjectId
+    explicitThread &&
+    explicitThread.projectId === activeProjectId &&
+    explicitThread.id !== assistantThreadId
       ? threadTarget(explicitThread)
       : null;
   const activeIssueMatch =

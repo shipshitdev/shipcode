@@ -215,6 +215,7 @@ describe('App', () => {
       projectSettingsModalOpen: false,
       projectSettingsModalProjectId: null,
       projectSettingsModalInitialTab: null,
+      projectTab: 'issues',
       currentModels: {},
       canonicalTerminalStream: {},
     });
@@ -364,6 +365,21 @@ describe('App', () => {
     renderApp();
     expect(await screen.findByText('TerminalDrawer')).toBeInTheDocument();
     expect(screen.queryByText('ProjectView')).not.toBeInTheDocument();
+  });
+
+  it('does not render the docked console below the terminal tab', async () => {
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      viewMode: 'project',
+      projectTab: 'terminal',
+      terminalVisible: true,
+      terminalMaximized: true,
+    });
+
+    renderApp();
+
+    expect(await screen.findByText('ProjectView')).toBeInTheDocument();
+    expect(screen.queryByText('TerminalDrawer')).not.toBeInTheDocument();
   });
 
   it('renders the missing project state when the active path is gone', async () => {

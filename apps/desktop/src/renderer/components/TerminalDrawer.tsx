@@ -1,5 +1,6 @@
 import type { TerminalEventRecord } from '@shipcode/shared';
 import { Button, cn } from '@shipshitdev/ui';
+import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { useAppStore } from '../stores/app-store';
@@ -166,11 +167,11 @@ export function TerminalDrawer({ isExiting = false }: { isExiting?: boolean }) {
   return (
     <div
       className={cn(
-        'flex flex-col border-t border-border bg-secondary shrink-0',
-        isExiting ? 'animate-terminal-exit' : 'animate-terminal-enter',
-        !isDragging && 'transition-[height] duration-200 ease-out',
+        'flex shrink-0 flex-col overflow-hidden border-t border-border bg-secondary',
+        isExiting ? 'animate-terminal-exit' : 'terminal-drawer-shell',
       )}
-      style={{ height: resolvedHeight }}
+      data-dragging={isDragging ? 'true' : undefined}
+      style={{ '--terminal-drawer-height': `${resolvedHeight}px` } as CSSProperties}
     >
       <Button
         type="button"

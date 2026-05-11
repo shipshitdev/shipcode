@@ -717,14 +717,14 @@ function useProjectSidebarView() {
                     </div>
 
                     {viewMode === 'project' && activeProjectId === project.id && (
-                      <div className="ml-5 space-y-0.5 pb-1">
+                      <div className="ml-5 pb-1">
                         {PROJECT_TAB_ITEMS.map(({ key, label, icon: Icon }) => (
                           <Button
                             key={key}
                             variant="ghost"
                             className={cn(
-                              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-1.5 text-[12px] font-normal text-muted-foreground app-region-no-drag',
-                              projectTab === key && 'bg-tertiary/60 text-primary font-medium',
+                              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-1.5 text-[12px] font-normal text-secondary app-region-no-drag',
+                              projectTab === key && 'text-primary font-medium',
                             )}
                             onClick={(e) => {
                               e.stopPropagation();

@@ -156,6 +156,32 @@ describe('TerminalView', () => {
     expect(screen.getByText('thread-w')).toBeInTheDocument();
   });
 
+  it('filters assistant panes out of the terminal page', () => {
+    useAppStore.setState({
+      assistantThreadId: 'assistant-thread-1',
+      terminalPaneThreadIds: ['assistant-thread-1', 'thread-live'],
+      terminalPaneMetaByThread: {
+        'assistant-thread-1': {
+          mode: 'replay',
+          cli: 'claude',
+          title: 'ShipCode Assistant',
+          state: 'exited',
+        },
+        'thread-live': {
+          mode: 'live',
+          cli: 'shell',
+          title: 'Terminal',
+          state: 'running',
+        },
+      },
+    } as never);
+
+    render(<TerminalView />);
+
+    expect(screen.queryByText('ShipCode Assistant')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Terminal').length).toBeGreaterThan(0);
+  });
+
   it('cancels running live panes when leaving the terminal page', () => {
     useAppStore.setState({
       terminalPaneThreadIds: ['thread-live', 'thread-replay'],

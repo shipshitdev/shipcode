@@ -621,7 +621,7 @@ describe('OpenRouterClient', () => {
           throw 'plain json failure';
         },
         headers: new Headers(),
-      } as Response);
+      } as unknown as Response);
       await expect(
         client.chat(
           { model: 'm', messages: [{ role: 'user', content: 'x' }], stream: false },

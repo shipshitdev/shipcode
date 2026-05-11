@@ -258,7 +258,7 @@ async function checkDesktopAppByName(
       key,
       label: DESKTOP_APP_LABELS[key],
       available: true,
-      path: ALWAYS_AVAILABLE_PATHS[key],
+      path: ALWAYS_AVAILABLE_PATHS[key] ?? null,
       error: null,
     };
   }
@@ -785,7 +785,9 @@ function deriveUsageState(
   }
 
   const relevant = windows.filter((window) => window.leftPercent != null);
-  if (relevant.some((window) => window.leftPercent <= 15)) return 'warning';
+  if (relevant.some((window) => window.leftPercent != null && window.leftPercent <= 15)) {
+    return 'warning';
+  }
   return relevant.length > 0 ? 'ready' : 'unknown';
 }
 
@@ -1489,7 +1491,7 @@ export async function checkSystemHealthWithAuth(options: CacheOptions = {}): Pro
       ...health,
       claude: { ...health.claude, authenticated: health.claude.available && claudeAuth },
       codex: { ...health.codex, authenticated: health.codex.available && codexAuth },
-      gemini: { ...gemini, authenticated: gemini.available && geminiAuth },
+      ...(gemini ? { gemini: { ...gemini, authenticated: gemini.available && geminiAuth } } : {}),
     };
     systemHealthWithAuthCache = createTimedCacheEntry(result);
     return result;

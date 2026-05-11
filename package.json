@@ -1,6 +1,6 @@
 {
   "devDependencies": {
-    "@biomejs/biome": "2.4.14",
+    "@biomejs/biome": "2.4.15",
     "@google/design.md": "0.1.1",
     "@types/node": "25.6.2",
     "@vitest/coverage-v8": "4.1.5",

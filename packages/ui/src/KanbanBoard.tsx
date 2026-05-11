@@ -202,6 +202,48 @@ function useKanbanBoardView({
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIssue = boardIssues.find((issue) => issue.id === activeId);
   const boardRootRef = useRef<HTMLDivElement | null>(null);
+  const boardScrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = boardScrollRef.current;
+    if (!el) return;
+
+    let isScrolling = false;
+    let startX = 0;
+    let scrollLeft = 0;
+
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('[data-issue-card-id]') || target.closest('button')) return;
+      isScrolling = true;
+      startX = event.pageX - el.offsetLeft;
+      scrollLeft = el.scrollLeft;
+      el.style.cursor = 'grabbing';
+      event.preventDefault();
+    };
+
+    const onMouseMove = (event: MouseEvent) => {
+      if (!isScrolling) return;
+      const x = event.pageX - el.offsetLeft;
+      el.scrollLeft = scrollLeft - (x - startX);
+    };
+
+    const onMouseUp = () => {
+      if (!isScrolling) return;
+      isScrolling = false;
+      el.style.cursor = '';
+    };
+
+    el.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      el.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
   const [view, setView] = useState<BoardView>('kanban');
   const [sortOrder, setSortOrder] = useState<BoardSortOrder>('priority');
   const [approvalFilter, setApprovalFilter] = useState<'all' | 'needs-approval'>('all');
@@ -771,6 +813,7 @@ function useKanbanBoardView({
           )}
           {view !== 'list' && (
             <div
+              ref={boardScrollRef}
               className={cn(
                 'kanban-board-scroll flex min-h-0 flex-1 gap-0.5 overflow-y-hidden p-3 px-2',
                 compact ? 'overflow-x-hidden' : 'overflow-x-auto',

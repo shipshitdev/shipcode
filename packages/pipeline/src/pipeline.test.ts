@@ -947,7 +947,9 @@ describe('createPipeline', () => {
 
     it('persists and comments task graphs when a structured plan is accepted', async () => {
       const graph = makeTaskGraph();
-      vi.mocked(mock.deps.taskGraphs?.replaceForPlan).mockReturnValue(graph);
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.replaceForPlan).mockReturnValue(graph);
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
 
@@ -965,7 +967,9 @@ describe('createPipeline', () => {
     });
 
     it('continues when task graph persistence fails for an accepted plan', async () => {
-      vi.mocked(mock.deps.taskGraphs?.replaceForPlan).mockImplementation(() => {
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.replaceForPlan).mockImplementation(() => {
         throw new Error('task graph db offline');
       });
       const pipeline = createPipeline(mock.deps);
@@ -2211,7 +2215,7 @@ Custom prompt`,
         if (cmd.startsWith('git rev-parse')) return 'abc123';
         return '';
       });
-      const graph = {
+      const graph: TaskGraphWithNodes = {
         ...makeTaskGraph(),
         status: 'active',
         nodes: makeTaskGraph().nodes.map((node) => ({ ...node, status: 'completed' as const })),
@@ -2274,7 +2278,7 @@ Custom prompt`,
     });
 
     it('resets terminal task graph nodes before retry execution', async () => {
-      const terminalGraph = {
+      const terminalGraph: TaskGraphWithNodes = {
         ...makeTaskGraph(),
         status: 'failed',
         nodes: makeTaskGraph().nodes.map((node) => ({
@@ -2282,7 +2286,7 @@ Custom prompt`,
           status: 'failed' as const,
         })),
       };
-      const resetGraph = {
+      const resetGraph: TaskGraphWithNodes = {
         ...makeTaskGraph(),
         nodes: makeTaskGraph().nodes.map((node, index) => ({
           ...node,
@@ -2874,7 +2878,7 @@ Custom prompt`,
 
     it('reports execution provider errors from the async execution body', async () => {
       const provider: AgentProvider = {
-        id: 'claude',
+        id: 'claude-cli',
         supports: new Set(['execute']),
         generate: vi.fn(async () => {
           throw new Error('provider failed');
@@ -3405,7 +3409,9 @@ Custom prompt`,
     });
 
     it('continues when verifier feature QA persistence fails', async () => {
-      vi.mocked(mock.deps.featureQaResults?.insert).mockImplementation(() => {
+      const featureQaResults = mock.deps.featureQaResults;
+      if (!featureQaResults) throw new Error('Expected feature QA deps');
+      vi.mocked(featureQaResults.insert).mockImplementation(() => {
         throw new Error('qa db offline');
       });
       const pipeline = createPipeline(mock.deps);
@@ -3445,7 +3451,7 @@ Custom prompt`,
 
     it('reports verifier provider errors', async () => {
       const provider: AgentProvider = {
-        id: 'claude',
+        id: 'claude-cli',
         supports: new Set(['verify']),
         generate: vi.fn(async () => {
           throw new Error('verifier failed');
@@ -3951,10 +3957,12 @@ Custom prompt`,
     it('fails verification preflight when setup-before-verify commands fail', async () => {
       const pipeline = createPipeline(mock.deps);
       const context = seedVerifyCommandContext(pipeline, 'node -e "process.exit(0)"');
+      const repoSetupContract = context.repoSetupContract;
+      if (!repoSetupContract) throw new Error('Expected repo setup contract');
       context.repoSetupContract = {
-        ...context.repoSetupContract,
+        ...repoSetupContract,
         contract: {
-          ...context.repoSetupContract.contract,
+          ...repoSetupContract.contract,
           setupCommands: ['setup-fails'],
           setupBeforeVerify: true,
         },
@@ -4039,7 +4047,9 @@ Custom prompt`,
     });
 
     it('blocks a duplicate test fix when the shared failure is already resolved', async () => {
-      vi.mocked(mock.deps.projectFailures?.claimOrCreate).mockReturnValueOnce({
+      const projectFailures = mock.deps.projectFailures;
+      if (!projectFailures) throw new Error('Expected project failure deps');
+      vi.mocked(projectFailures.claimOrCreate).mockReturnValueOnce({
         id: 'failure-1',
         projectId: 'project-1',
         baseBranch: 'main',
@@ -4074,7 +4084,9 @@ Custom prompt`,
     });
 
     it('blocks a duplicate test fix when another thread owns the shared failure', async () => {
-      vi.mocked(mock.deps.projectFailures?.claimOrCreate).mockReturnValueOnce({
+      const projectFailures = mock.deps.projectFailures;
+      if (!projectFailures) throw new Error('Expected project failure deps');
+      vi.mocked(projectFailures.claimOrCreate).mockReturnValueOnce({
         id: 'failure-1',
         projectId: 'project-1',
         baseBranch: 'main',
@@ -4974,7 +4986,7 @@ Custom prompt`,
       const context = requireContext(pipeline);
       context.githubIssueNumber = 42;
       context.projectId = 'project-1';
-      context.baseBranch = null;
+      context.baseBranch = null as never;
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git rev-parse')) return 'feat/branch';

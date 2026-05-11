@@ -13,20 +13,25 @@ export function TerminalView() {
   const terminalPaneThreadIds = useAppStore((state) => state.terminalPaneThreadIds);
   const terminalSplitDirection = useAppStore((state) => state.terminalSplitDirection);
   const terminalPaneMetaByThread = useAppStore((state) => state.terminalPaneMetaByThread);
+  const assistantThreadId = useAppStore((state) => state.assistantThreadId);
   const removeTerminalPane = useAppStore((state) => state.removeTerminalPane);
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const { openProjectTerminal, openingTerminal } = useOpenProjectTerminal();
   const livePaneRef = useRef<Array<{ threadId: string; isRunning: boolean }>>([]);
+  const visibleTerminalPaneThreadIds = useMemo(
+    () => terminalPaneThreadIds.filter((threadId) => threadId !== assistantThreadId),
+    [assistantThreadId, terminalPaneThreadIds],
+  );
 
   useEffect(() => {
-    livePaneRef.current = terminalPaneThreadIds.map((threadId) => {
+    livePaneRef.current = visibleTerminalPaneThreadIds.map((threadId) => {
       const meta = terminalPaneMetaByThread[threadId];
       return {
         threadId,
         isRunning: meta?.mode === 'live' && meta.state !== 'exited',
       };
     });
-  }, [terminalPaneMetaByThread, terminalPaneThreadIds]);
+  }, [terminalPaneMetaByThread, visibleTerminalPaneThreadIds]);
 
   useEffect(() => {
     return () => {
@@ -48,7 +53,9 @@ export function TerminalView() {
     <Button
       variant="default"
       size="sm"
-      disabled={!activeProjectId || openingTerminal || terminalPaneThreadIds.length >= MAX_PANES}
+      disabled={
+        !activeProjectId || openingTerminal || visibleTerminalPaneThreadIds.length >= MAX_PANES
+      }
       onClick={handleOpenTerminal}
     >
       <Plus size={14} />
@@ -79,15 +86,15 @@ export function TerminalView() {
   );
 
   const gridClass = useMemo(() => {
-    const count = terminalPaneThreadIds.length;
+    const count = visibleTerminalPaneThreadIds.length;
     if (count <= 1) return 'flex flex-col';
     if (count === 2) {
       return terminalSplitDirection === 'horizontal' ? 'grid grid-cols-2' : 'grid grid-rows-2';
     }
     return 'grid grid-cols-2 grid-rows-2';
-  }, [terminalPaneThreadIds.length, terminalSplitDirection]);
+  }, [terminalSplitDirection, visibleTerminalPaneThreadIds.length]);
 
-  if (terminalPaneThreadIds.length === 0) {
+  if (visibleTerminalPaneThreadIds.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-muted-foreground">
         <Terminal size={32} className="text-muted-foreground" />
@@ -106,7 +113,7 @@ export function TerminalView() {
       />
 
       <div className={cn('flex-1 min-h-0 gap-1 p-1', gridClass)}>
-        {terminalPaneThreadIds.map((threadId) => (
+        {visibleTerminalPaneThreadIds.map((threadId) => (
           <TerminalPane
             key={threadId}
             threadId={threadId}

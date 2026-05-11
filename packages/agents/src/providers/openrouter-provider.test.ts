@@ -136,17 +136,17 @@ describe('createOpenRouterProvider', () => {
     const res = await provider.generate(
       req({
         promptMaterialSummary: {
-          files: ['src/index.ts'],
-          totalBytes: 12,
-          truncated: false,
+          count: 1,
+          labels: ['src/index.ts'],
+          kinds: ['repo_file_context'],
         },
       }),
     );
 
     expect(res.promptTelemetry?.selectedMaterials).toEqual({
-      files: ['src/index.ts'],
-      totalBytes: 12,
-      truncated: false,
+      count: 1,
+      labels: ['src/index.ts'],
+      kinds: ['repo_file_context'],
     });
   });
 

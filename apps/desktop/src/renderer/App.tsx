@@ -153,6 +153,7 @@ export function App() {
   const assistantVisible = useAppStore((state) => state.assistantVisible);
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const viewMode = useAppStore((state) => state.viewMode);
+  const projectTab = useAppStore((state) => state.projectTab);
   const hasActiveIssue = useAppStore((state) => state.activeIssue !== null);
   const hasActiveAutomationThread = useAppStore((state) => state.activeAutomationThreadId !== null);
   const hasActiveAutomationDetail = useAppStore((state) => state.activeAutomationDetailId !== null);
@@ -317,7 +318,8 @@ export function App() {
     viewMode === 'project' &&
     !!activeProjectId &&
     activeProject?.pathExists === false;
-  const hideMainContentForTerminal = terminalVisible && terminalMaximized;
+  const isTerminalTab = viewMode === 'project' && projectTab === 'terminal';
+  const hideMainContentForTerminal = terminalVisible && terminalMaximized && !isTerminalTab;
 
   // Build a key that changes when the active view changes, for crossfade animation
   const viewKey = settingsVisible
@@ -346,12 +348,12 @@ export function App() {
             !hasActiveAutomationDetail && <ProjectSidebar />
           )}
           {/* Center column — main view above, terminal dock below. */}
-          <div className="flex flex-col flex-1 overflow-hidden min-h-0">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {!hideMainContentForTerminal && (
               <Suspense fallback={<ViewLoadingFallback />}>
                 <div
                   key={viewKey}
-                  className="flex flex-1 overflow-hidden min-h-0 bg-primary animate-view-enter"
+                  className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-primary animate-view-enter"
                 >
                   {settingsVisible ? (
                     <SettingsPanel />
@@ -381,9 +383,15 @@ export function App() {
                 </div>
               </Suspense>
             )}
-            {terminalVisible && <TerminalDrawer />}
+            {terminalVisible && !isTerminalTab && <TerminalDrawer />}
           </div>
-          {assistantVisible && <AssistantPanel />}
+          <div
+            className="assistant-panel-slot min-h-0 shrink-0 overflow-hidden"
+            data-open={assistantVisible ? 'true' : undefined}
+            aria-hidden={!assistantVisible}
+          >
+            {assistantVisible && <AssistantPanel />}
+          </div>
         </div>
         <CommandPalette />
         <Suspense fallback={null}>

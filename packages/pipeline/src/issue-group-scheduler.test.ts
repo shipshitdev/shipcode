@@ -66,8 +66,8 @@ describe('buildIssueGroupExecutionPreview', () => {
       selectedIssueIds: ['missing', 'issue-2', 'issue-1'],
       nodes,
       edges: [
-        { sourceIssueId: 'issue-1', targetIssueId: 'issue-2', edgeType: 'relates_to' },
-        { sourceIssueId: 'missing', targetIssueId: 'issue-2', edgeType: 'relates_to' },
+        { sourceIssueId: 'issue-1', targetIssueId: 'issue-2', edgeType: 'reference' },
+        { sourceIssueId: 'missing', targetIssueId: 'issue-2', edgeType: 'reference' },
       ],
     });
 

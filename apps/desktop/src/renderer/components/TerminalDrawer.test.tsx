@@ -263,6 +263,13 @@ describe('TerminalDrawer', () => {
     expect(container.firstElementChild).toHaveClass('animate-terminal-exit');
   });
 
+  it('uses the layout height transition while open', () => {
+    const { container } = renderWithProviders();
+
+    expect(container.firstElementChild).toHaveClass('terminal-drawer-shell');
+    expect(container.firstElementChild).toHaveStyle({ '--terminal-drawer-height': '250px' });
+  });
+
   it('falls back to the selected project running issue when the stored thread is foreign', () => {
     useAppStore.setState({
       activeProjectId: 'project-1',
@@ -593,6 +600,42 @@ describe('TerminalDrawer', () => {
     expect(await screen.findByText('Quick terminal session')).toBeInTheDocument();
     expect(screen.getByText('Session')).toBeInTheDocument();
     expect(screen.getByText('instant output')).toBeInTheDocument();
+  });
+
+  it('does not display the assistant thread as a console target', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'thread:get') {
+        return {
+          id: 'assistant-thread-1',
+          projectId: 'project-1',
+          title: 'ShipCode Assistant',
+          status: 'failed',
+          githubIssueNumber: null,
+          automationId: null,
+          kind: 'instant',
+        };
+      }
+      return null;
+    });
+
+    (window as typeof window & { shipcode: typeof window.shipcode }).shipcode = {
+      invoke: invoke as unknown as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
+    };
+
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      assistantThreadId: 'assistant-thread-1',
+      terminalThreadId: 'assistant-thread-1',
+      activeIssue: null,
+      githubIssues: [],
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('No issue selected for this project')).toBeInTheDocument();
+    expect(screen.queryByText('ShipCode Assistant')).not.toBeInTheDocument();
   });
 
   it('opens an embedded bare shell from the header button', async () => {
@@ -1129,14 +1172,14 @@ describe('TerminalDrawer', () => {
     const resizeHandle = screen.getByLabelText('Resize terminal drawer');
     expect(resizeHandle).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Minimize terminal to window' })).toBeInTheDocument();
-    expect(resizeHandle.parentElement).toHaveStyle({ height: '9999px' });
+    expect(resizeHandle.parentElement).toHaveStyle({ '--terminal-drawer-height': '9999px' });
     expect(useAppStore.getState().terminalMaximized).toBe(false);
 
     fireEvent.mouseDown(resizeHandle, { clientY: 500 });
     fireEvent.mouseMove(window, { clientY: 520 });
     fireEvent.mouseUp(window);
 
-    expect(resizeHandle.parentElement).toHaveStyle({ height: '9979px' });
+    expect(resizeHandle.parentElement).toHaveStyle({ '--terminal-drawer-height': '9979px' });
   });
 
   it('resets a resized or maximized terminal back to the default drawer size', () => {
@@ -1150,26 +1193,26 @@ describe('TerminalDrawer', () => {
 
     const resizeHandle = screen.getByLabelText('Resize terminal drawer');
     const drawer = resizeHandle.parentElement;
-    expect(drawer).toHaveStyle({ height: '250px' });
+    expect(drawer).toHaveStyle({ '--terminal-drawer-height': '250px' });
 
     fireEvent.mouseDown(resizeHandle, { clientY: 500 });
     fireEvent.mouseMove(window, { clientY: 400 });
     fireEvent.mouseUp(window);
 
-    expect(drawer).toHaveStyle({ height: '350px' });
+    expect(drawer).toHaveStyle({ '--terminal-drawer-height': '350px' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset terminal size' }));
 
     expect(useAppStore.getState().terminalMaximized).toBe(false);
     expect(screen.getByLabelText('Resize terminal drawer')).toBeInTheDocument();
-    expect(drawer).toHaveStyle({ height: '250px' });
+    expect(drawer).toHaveStyle({ '--terminal-drawer-height': '250px' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Maximize terminal' }));
     fireEvent.click(screen.getByRole('button', { name: 'Reset terminal size' }));
 
     expect(useAppStore.getState().terminalMaximized).toBe(false);
     expect(screen.getByLabelText('Resize terminal drawer').parentElement).toHaveStyle({
-      height: '250px',
+      '--terminal-drawer-height': '250px',
     });
   });
 
@@ -1184,7 +1227,7 @@ describe('TerminalDrawer', () => {
 
     const resizeHandle = screen.getByLabelText('Resize terminal drawer');
     const drawer = resizeHandle.parentElement;
-    expect(drawer).toHaveStyle({ height: '250px' });
+    expect(drawer).toHaveStyle({ '--terminal-drawer-height': '250px' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Minimize terminal to one line' }));
 
@@ -1192,19 +1235,19 @@ describe('TerminalDrawer', () => {
     expect(screen.getByLabelText('Resize terminal drawer')).toBeInTheDocument();
     expect(screen.getByText(/Thinking/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Restore terminal drawer' })).toBeInTheDocument();
-    expect(drawer).toHaveStyle({ height: '42px' });
+    expect(drawer).toHaveStyle({ '--terminal-drawer-height': '42px' });
 
     fireEvent.mouseDown(resizeHandle, { clientY: 500 });
     fireEvent.mouseMove(window, { clientY: 300 });
     fireEvent.mouseUp(window);
 
-    expect(drawer).toHaveStyle({ height: '242px' });
+    expect(drawer).toHaveStyle({ '--terminal-drawer-height': '242px' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Minimize terminal to one line' }));
     fireEvent.click(screen.getByRole('button', { name: 'Restore terminal drawer' }));
 
     expect(screen.getByLabelText('Resize terminal drawer')).toBeInTheDocument();
-    expect(drawer).toHaveStyle({ height: '250px' });
+    expect(drawer).toHaveStyle({ '--terminal-drawer-height': '250px' });
   });
 
   it('shows waiting-for-execution copy for approved slot waiters', async () => {

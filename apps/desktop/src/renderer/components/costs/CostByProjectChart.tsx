@@ -24,9 +24,15 @@ export function CostByProjectChart({
 }) {
   if (byProject.length < 2) return null;
 
-  const pieData = byProject.map((p, i) => ({
-    name: p.projectName,
-    value: displayMode === '$' ? p.totalCostUsd : p.totalTokensPrompt + p.totalTokensCompletion,
+  const aggregated = new Map<string, number>();
+  for (const p of byProject) {
+    const value =
+      displayMode === '$' ? p.totalCostUsd : p.totalTokensPrompt + p.totalTokensCompletion;
+    aggregated.set(p.projectName, (aggregated.get(p.projectName) ?? 0) + value);
+  }
+  const pieData = [...aggregated.entries()].map(([name, value], i) => ({
+    name,
+    value,
     fill: PROJECT_COLORS[i % PROJECT_COLORS.length],
   }));
   const total = pieData.reduce((sum, entry) => sum + entry.value, 0);

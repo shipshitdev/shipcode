@@ -179,10 +179,7 @@ describe('syncThreadAndIssuePhase', () => {
   });
 
   it('records failed status through updateStatus when recordFailure is unavailable', () => {
-    const threads = makeThreads() as ReturnType<typeof makeThreads> & {
-      recordFailure?: unknown;
-    };
-    delete threads.recordFailure;
+    const { recordFailure: _recordFailure, ...threads } = makeThreads();
     const githubIssues = makeGithubIssues();
 
     syncThreadAndIssuePhase(
@@ -219,7 +216,7 @@ describe('syncThreadAndIssuePhase', () => {
   it('skips issue status writes when the linked issue row is missing', () => {
     const threads = makeThreads();
     const githubIssues = makeGithubIssues();
-    githubIssues.getByNumber.mockReturnValueOnce(null);
+    githubIssues.getByNumber.mockReturnValueOnce(null as never);
 
     syncThreadAndIssuePhase(
       threads as never,

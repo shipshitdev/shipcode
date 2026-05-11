@@ -75,6 +75,10 @@ describe('AssistantPanel', () => {
       canonicalTerminalStream: {},
       assistantUserMessages: [],
     });
+    window.shipcode = {
+      invoke: vi.fn(),
+      on: vi.fn(() => () => {}),
+    };
     window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke;
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'settings:get') return settings;
@@ -185,8 +189,20 @@ describe('AssistantPanel', () => {
         },
       },
       profiles: [
-        { id: 'bun', label: 'Bun', recommended: true },
-        { id: 'electron', label: 'Electron', recommended: false },
+        {
+          kind: 'bun',
+          label: 'Bun',
+          recommended: true,
+          evidence: ['bun.lock'],
+          suggestedContract: setupDraft.suggestedContract,
+        },
+        {
+          kind: 'npm',
+          label: 'Electron',
+          recommended: false,
+          evidence: ['package.json'],
+          suggestedContract: setupDraft.suggestedContract,
+        },
       ],
     } as ProjectSetupDraft;
     invokeMock.mockImplementation(async (channel) => {
@@ -293,7 +309,7 @@ describe('AssistantPanel', () => {
     });
   });
 
-  it('sends follow-up prompts into the existing running thread', async () => {
+  it('keeps running threads in stop mode instead of sending follow-up prompts', async () => {
     useAppStore.setState({
       assistantThreadId: 'assistant-thread-1',
       canonicalTerminalStream: {
@@ -313,14 +329,12 @@ describe('AssistantPanel', () => {
     fireEvent.change(screen.getByPlaceholderText('Ask about setup, issues, or the board...'), {
       target: { value: 'Now create the issue draft' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('instant:shell-input', {
-        threadId: 'assistant-thread-1',
-        data: 'Now create the issue draft\n',
-      });
+    fireEvent.keyDown(screen.getByPlaceholderText('Ask about setup, issues, or the board...'), {
+      key: 'Enter',
     });
+
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalledWith('instant:shell-input', expect.anything());
     expect(invokeMock).not.toHaveBeenCalledWith('instant:shell-start', expect.anything());
   });
 
@@ -352,13 +366,32 @@ describe('AssistantPanel', () => {
     expect(useAppStore.getState().assistantThreadId).toBeNull();
   });
 
-  it('opens the assistant raw terminal in replay mode for an exited thread', async () => {
-    const addTerminalPane = vi.fn();
-    const openTerminalTab = vi.fn();
+  it('shows an animated thinking state and replaces Send with Stop while running', async () => {
     useAppStore.setState({
       assistantThreadId: 'assistant-thread-1',
-      addTerminalPane,
-      openTerminalTab,
+      canonicalTerminalStream: {
+        'assistant-thread-1': [
+          {
+            id: 'event-1',
+            threadId: 'assistant-thread-1',
+            createdAt: '2026-05-09T00:00:00.000Z',
+            event: { kind: 'lifecycle', message: 'Claude CLI process started' },
+          },
+        ],
+      },
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByLabelText('Thinking')).toBeInTheDocument();
+    expect(screen.getByText('T')).toHaveClass('assistant-thinking-letter');
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
+  });
+
+  it('does not expose assistant threads as raw terminal sessions', async () => {
+    useAppStore.setState({
+      assistantThreadId: 'assistant-thread-1',
       canonicalTerminalStream: {
         'assistant-thread-1': [
           {
@@ -373,15 +406,8 @@ describe('AssistantPanel', () => {
 
     renderWithProviders();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Raw' }));
-
-    expect(addTerminalPane).toHaveBeenCalledWith('assistant-thread-1', {
-      mode: 'replay',
-      title: 'ShipCode Assistant',
-      cli: 'claude',
-      state: 'exited',
-    });
-    expect(openTerminalTab).toHaveBeenCalled();
+    await screen.findByText('ShipCode Assistant');
+    expect(screen.queryByRole('button', { name: 'Raw' })).not.toBeInTheDocument();
   });
 
   it('hydrates an empty assistant transcript from terminal history', async () => {
@@ -451,7 +477,7 @@ describe('AssistantPanel', () => {
     expect(screen.getByText('The co-pilot rail is ready.')).toBeInTheDocument();
   });
 
-  it('keeps raw console events out of the conversation timeline', async () => {
+  it('shows raw assistant activity as fallback conversation steps', async () => {
     useAppStore.setState({
       assistantThreadId: 'assistant-thread-1',
       assistantUserMessages: [
@@ -468,7 +494,11 @@ describe('AssistantPanel', () => {
             id: 'raw-1',
             threadId: 'assistant-thread-1',
             createdAt: '2026-05-09T00:00:01.000Z',
-            event: { kind: 'raw', content: 'stderr: verbose cli log' },
+            event: {
+              kind: 'raw',
+              content:
+                '\u001b[2m19:54:30\u001b[0m\nFetch project board items\ncommand gh project item-list\nDo you want to proceed?',
+            },
           },
           {
             id: 'tool-1',
@@ -489,7 +519,9 @@ describe('AssistantPanel', () => {
     renderWithProviders();
 
     expect(await screen.findByText('Setup is configured.')).toBeInTheDocument();
-    expect(screen.queryByText('stderr: verbose cli log')).not.toBeInTheDocument();
+    expect(screen.getByText('Fetch project board items')).toBeInTheDocument();
+    expect(screen.getByText('command gh project item-list')).toBeInTheDocument();
+    expect(screen.getByText('Do you want to proceed?')).toBeInTheDocument();
   });
 
   it('summarizes assistant thinking, completed tools, failures, and errors', async () => {
@@ -514,7 +546,7 @@ describe('AssistantPanel', () => {
             id: 'tool-end-1',
             threadId: 'assistant-thread-1',
             createdAt: '2026-05-09T00:00:03.000Z',
-            event: { kind: 'tool_end', exitCode: 1 },
+            event: { kind: 'tool_end', name: 'shell', exitCode: 1 },
           },
           {
             id: 'error-1',
@@ -530,7 +562,50 @@ describe('AssistantPanel', () => {
 
     expect(await screen.findByText('Tools: 1 (1 failed)')).toBeInTheDocument();
     expect(screen.getByText('Errors: 1')).toBeInTheDocument();
-    expect(screen.getByText('Thinking: Checking setup')).toBeInTheDocument();
-    expect(screen.getByText('Waiting for assistant output...')).toBeInTheDocument();
+    expect(screen.getAllByText('Thinking: Checking setup').length).toBeGreaterThan(0);
+  });
+
+  it('renders thinking, tool calls, and errors inline in the timeline', async () => {
+    useAppStore.setState({
+      assistantThreadId: 'assistant-thread-1',
+      assistantUserMessages: [],
+      canonicalTerminalStream: {
+        'assistant-thread-1': [
+          {
+            id: 'thinking-1',
+            threadId: 'assistant-thread-1',
+            createdAt: '2026-05-09T00:00:01.000Z',
+            event: { kind: 'thinking', content: 'Analyzing the project structure to find config' },
+          },
+          {
+            id: 'tool-start-1',
+            threadId: 'assistant-thread-1',
+            createdAt: '2026-05-09T00:00:02.000Z',
+            event: { kind: 'tool_start', name: 'read', summary: 'package.json' },
+          },
+          {
+            id: 'tool-end-1',
+            threadId: 'assistant-thread-1',
+            createdAt: '2026-05-09T00:00:03.000Z',
+            event: { kind: 'tool_end', name: 'read', durationMs: 1200, exitCode: 0 },
+          },
+          {
+            id: 'error-1',
+            threadId: 'assistant-thread-1',
+            createdAt: '2026-05-09T00:00:04.000Z',
+            event: { kind: 'error', message: 'Rate limit exceeded' },
+          },
+        ],
+      },
+    });
+
+    renderWithProviders();
+
+    const thinkingMatches = await screen.findAllByText(/Thinking: Analyzing the project/);
+    expect(thinkingMatches.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('read')).toBeInTheDocument();
+    expect(screen.getByText('package.json')).toBeInTheDocument();
+    expect(screen.getByText('1.2s')).toBeInTheDocument();
+    expect(screen.getByText('Rate limit exceeded')).toBeInTheDocument();
   });
 });

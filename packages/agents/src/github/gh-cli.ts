@@ -973,12 +973,12 @@ export class GhCli {
     }
 
     const failingChecks: GitHubPrCheckSummary[] = [];
-    const contexts = pr.commits.nodes[0].commit.statusCheckRollup.contexts.nodes;
+    const contexts = pr.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
 
     for (const node of contexts) {
       if (!node) continue;
       if (node.__typename === 'CheckRun') {
-        const status = (node.status as string).toUpperCase();
+        const status = (node.status ?? '').toUpperCase();
         const conclusion = (node.conclusion ?? '').toUpperCase();
         const summary: GitHubPrCheckSummary = {
           name: node.name ?? 'check',
@@ -1007,12 +1007,12 @@ export class GhCli {
       if (summary.status === 'failed') failingChecks.push(summary);
     }
 
-    const unresolvedThreads = pr.reviewThreads.nodes.filter(
+    const unresolvedThreads = (pr.reviewThreads?.nodes ?? []).filter(
       (thread) => !!thread && !thread.isResolved && !thread.isOutdated,
     );
     const unresolvedReviewComments: GitHubPrReviewCommentSummary[] = unresolvedThreads
       .map((thread) => {
-        const comments = thread.comments.nodes;
+        const comments = thread.comments?.nodes ?? [];
         const comment = comments[comments.length - 1];
         if (!comment?.url || !comment.body || !comment.createdAt) return null;
         return {
@@ -1206,12 +1206,12 @@ export class GhCli {
     }
 
     const failingChecks: GitHubPrCheckSummary[] = [];
-    const contexts = pr.commits.nodes[0].commit.statusCheckRollup.contexts.nodes;
+    const contexts = pr.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
 
     for (const node of contexts) {
       if (!node) continue;
       if (node.__typename === 'CheckRun') {
-        const status = (node.status as string).toUpperCase();
+        const status = (node.status ?? '').toUpperCase();
         const conclusion = (node.conclusion ?? '').toUpperCase();
         const summary: GitHubPrCheckSummary = {
           name: node.name ?? 'check',
@@ -1229,23 +1229,23 @@ export class GhCli {
         continue;
       }
 
-      const state = (node.state as string).toUpperCase();
+      const state = (node.state ?? '').toUpperCase();
       const summary: GitHubPrCheckSummary = {
         name: node.context ?? 'status',
         status: state === 'SUCCESS' ? 'success' : state === 'PENDING' ? 'pending' : 'failed',
-        conclusion: node.state.toLowerCase(),
+        conclusion: node.state?.toLowerCase() ?? null,
         detailsUrl: node.targetUrl ?? null,
         workflowName: null,
       };
       if (summary.status === 'failed') failingChecks.push(summary);
     }
 
-    const unresolvedThreads = pr.reviewThreads.nodes.filter(
+    const unresolvedThreads = (pr.reviewThreads?.nodes ?? []).filter(
       (thread) => !!thread && !thread.isResolved && !thread.isOutdated,
     );
     const unresolvedReviewComments: GitHubPrReviewCommentSummary[] = unresolvedThreads
       .map((thread) => {
-        const comments = thread.comments.nodes;
+        const comments = thread.comments?.nodes ?? [];
         const comment = comments[comments.length - 1];
         if (!comment?.url || !comment.body || !comment.createdAt) return null;
         return {

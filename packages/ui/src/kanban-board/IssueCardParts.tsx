@@ -7,6 +7,7 @@ import {
   Check,
   Copy,
   GitPullRequest,
+  Loader2,
   MoreVertical,
   Play,
   RefreshCw,
@@ -237,6 +238,8 @@ function useDraggableCardView({
   branchCopyState,
   isSelected,
   isKeyboardFocused,
+  isStartingPipeline,
+  isRerunning,
   isFlashing = false,
   hoverCardEnabled = true,
   onFetchPlanSteps,
@@ -336,95 +339,6 @@ function useDraggableCardView({
           isCompleted={isCompleted}
           approvedAwaitingExecution={approvedAwaitingExecution}
         />
-        <div className="absolute right-1.5 bottom-1.5 z-10 flex items-center gap-1">
-          <StalenessDot staleness={staleness} />
-          {!isCreating && !readOnly && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="text-muted-foreground/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
-                  title="More actions"
-                  aria-label="More actions"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <MoreVertical size={14} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => event.stopPropagation()}
-              >
-                {branchName && onCopyBranchName && !isAutomation && (
-                  <DropdownMenuItem onClick={() => onCopyBranchName(issue, branchName)}>
-                    {branchCopyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
-                    {branchCopyState === 'copied' ? 'Copied!' : 'Copy branch'}
-                  </DropdownMenuItem>
-                )}
-                {isTodo && onStartPipeline && !isAutomation && (
-                  <DropdownMenuItem onClick={() => onStartPipeline(issue)}>
-                    <Play size={14} />
-                    Start Pipeline
-                  </DropdownMenuItem>
-                )}
-                {isActive && onPause && (
-                  <DropdownMenuItem onClick={() => onPause(issue)}>
-                    <Square size={14} />
-                    Pause
-                  </DropdownMenuItem>
-                )}
-                {isPaused && onResume && (
-                  <DropdownMenuItem onClick={() => onResume(issue)}>
-                    <Play size={14} />
-                    Resume
-                  </DropdownMenuItem>
-                )}
-                {isActive && onCancel && (
-                  <DropdownMenuItem
-                    className="text-danger focus:text-danger"
-                    onClick={() => onCancel(issue)}
-                  >
-                    <XCircle size={14} />
-                    Cancel
-                  </DropdownMenuItem>
-                )}
-                {isFailed && onRerun && (
-                  <DropdownMenuItem onClick={() => onRerun(issue)}>
-                    <RefreshCw size={14} />
-                    Retry
-                  </DropdownMenuItem>
-                )}
-                {isCompleted && onCreatePr && !issue.linkedPrNumber && (
-                  <DropdownMenuItem onClick={() => onCreatePr(issue)}>
-                    <GitPullRequest size={14} />
-                    Create PR
-                  </DropdownMenuItem>
-                )}
-                {(isCompleted || isFailed) && onMarkDone && (
-                  <DropdownMenuItem onClick={() => onMarkDone(issue)}>
-                    <Check size={14} />
-                    Close Issue
-                  </DropdownMenuItem>
-                )}
-                {isClosed && onArchiveIssue && !isAutomation && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="text-muted-foreground focus:text-muted-foreground"
-                      onClick={() => onArchiveIssue(issue)}
-                    >
-                      <Archive size={14} />
-                      Archive
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
         <div className="relative flex min-w-0 items-center gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {issueGithubUrl &&
@@ -435,7 +349,7 @@ function useDraggableCardView({
               <Button
                 variant="ghost"
                 size="xs"
-                className="h-auto shrink-0 p-0 font-mono text-[11px] text-muted-foreground/60 hover:bg-transparent hover:text-primary hover:underline"
+                className="h-auto shrink-0 p-0 font-mono text-[11px] text-muted-foreground hover:bg-transparent hover:text-primary hover:underline"
                 title="Open issue on GitHub"
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
@@ -446,7 +360,7 @@ function useDraggableCardView({
                 {referenceLabel}
               </Button>
             ) : (
-              <span className="shrink-0 font-mono text-[11px] text-muted-foreground/60">
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
                 {referenceLabel}
               </span>
             )}
@@ -480,9 +394,132 @@ function useDraggableCardView({
           />
         </div>
         <div className="relative z-10 mt-1 w-full min-w-0">
-          <span className="line-clamp-1 text-[13px] font-medium leading-snug text-primary">
+          <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
             {issue.title}
           </span>
+        </div>
+        <div className="relative z-10 mt-1.5 flex items-center gap-1.5">
+          {isTodo && onStartPipeline && !isAutomation && !readOnly && (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-6 gap-1 rounded border border-agent/30 bg-agent/10 px-2 text-[10px] font-semibold uppercase tracking-wide text-agent hover:border-agent/50 hover:bg-agent/20 hover:text-agent"
+              title={isStartingPipeline ? 'Starting pipeline' : 'Start planning'}
+              disabled={isStartingPipeline}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (isStartingPipeline) return;
+                onStartPipeline(issue);
+              }}
+            >
+              {isStartingPipeline ? (
+                <Loader2 size={10} className="animate-spin" />
+              ) : (
+                <Play size={10} />
+              )}
+              {isStartingPipeline ? 'Starting' : 'Start'}
+            </Button>
+          )}
+          {isFailed && onRerun && !readOnly && (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-6 gap-1 rounded border border-danger/30 bg-danger/10 px-2 text-[10px] font-semibold uppercase tracking-wide text-danger hover:border-danger/50 hover:bg-danger/20 hover:text-danger"
+              title={isRerunning ? 'Retrying pipeline' : 'Retry pipeline'}
+              disabled={isRerunning}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (isRerunning) return;
+                onRerun(issue);
+              }}
+            >
+              {isRerunning ? (
+                <Loader2 size={10} className="animate-spin" />
+              ) : (
+                <RefreshCw size={10} />
+              )}
+              {isRerunning ? 'Retrying' : 'Retry'}
+            </Button>
+          )}
+          <div className="ml-auto flex items-center gap-1">
+            {!isFailed && <StalenessDot staleness={staleness} />}
+            {!isCreating && !readOnly && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
+                    title="More actions"
+                    aria-label="More actions"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <MoreVertical size={14} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {branchName && onCopyBranchName && !isAutomation && (
+                    <DropdownMenuItem onClick={() => onCopyBranchName(issue, branchName)}>
+                      {branchCopyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
+                      {branchCopyState === 'copied' ? 'Copied!' : 'Copy branch'}
+                    </DropdownMenuItem>
+                  )}
+                  {isActive && onPause && (
+                    <DropdownMenuItem onClick={() => onPause(issue)}>
+                      <Square size={14} />
+                      Pause
+                    </DropdownMenuItem>
+                  )}
+                  {isPaused && onResume && (
+                    <DropdownMenuItem onClick={() => onResume(issue)}>
+                      <Play size={14} />
+                      Resume
+                    </DropdownMenuItem>
+                  )}
+                  {isActive && onCancel && (
+                    <DropdownMenuItem
+                      className="text-danger focus:text-danger"
+                      onClick={() => onCancel(issue)}
+                    >
+                      <XCircle size={14} />
+                      Cancel
+                    </DropdownMenuItem>
+                  )}
+                  {isCompleted && onCreatePr && !issue.linkedPrNumber && (
+                    <DropdownMenuItem onClick={() => onCreatePr(issue)}>
+                      <GitPullRequest size={14} />
+                      Create PR
+                    </DropdownMenuItem>
+                  )}
+                  {(isCompleted || isFailed) && onMarkDone && (
+                    <DropdownMenuItem onClick={() => onMarkDone(issue)}>
+                      <Check size={14} />
+                      Close Issue
+                    </DropdownMenuItem>
+                  )}
+                  {isClosed && onArchiveIssue && !isAutomation && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-muted-foreground focus:text-muted-foreground"
+                        onClick={() => onArchiveIssue(issue)}
+                      >
+                        <Archive size={14} />
+                        Archive
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         </div>
       </div>
     </IssueHoverCard>
@@ -509,7 +546,7 @@ export function DragOverlayCard({
   return (
     <div className="cursor-grabbing rounded-md border border-white/[0.04] bg-secondary p-3 opacity-80 shadow-lg">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[11px] text-muted-foreground/60">{referenceLabel}</span>
+        <span className="font-mono text-[11px] text-muted-foreground">{referenceLabel}</span>
         <span
           className={cn(
             'size-2 shrink-0 rounded-full',
@@ -519,7 +556,7 @@ export function DragOverlayCard({
         />
       </div>
       <div className="mt-1 w-full min-w-0">
-        <span className="line-clamp-1 text-[13px] font-medium leading-snug text-primary">
+        <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
           {issue.title}
         </span>
       </div>

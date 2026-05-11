@@ -1,4 +1,9 @@
-import type { PromptMaterial, ProviderPhase, SkillValidationError } from '@shipcode/agents/source';
+import type {
+  PromptMaterial,
+  ProviderPhase,
+  ResolveResult,
+  SkillValidationError,
+} from '@shipcode/agents/source';
 import type {
   ClarificationRequest,
   GitHubPrCheckSummary,
@@ -27,6 +32,7 @@ export interface PipelineContextHelpers {
     deps: {
       skills: PipelineDeps['skills'];
       onFallback: (phase: PhaseSkillKey, error: SkillValidationError | undefined) => void;
+      onResolved: (phase: PhaseSkillKey, result: ResolveResult) => void;
     };
   };
   listActive: () => ActivePipelineSummary[];
