@@ -575,10 +575,6 @@ export function AssistantPanel() {
     async (prompt: string) => {
       const trimmed = prompt.trim();
       if (!trimmed || isSubmitting) return;
-      if (!activeProjectId) {
-        toast.error('Select a project before starting an assistant thread');
-        return;
-      }
       setIsSubmitting(true);
       try {
         if (assistantThreadId && !transcriptRunning) {
@@ -590,14 +586,17 @@ export function AssistantPanel() {
           appendAssistantUserMessage({ threadId: assistantThreadId, content: trimmed });
         } else if (!assistantThreadId || !transcriptRunning) {
           // First turn: start new session
-          const setup = await window.shipcode
-            .invoke<ProjectSetupDraft>('project:get-setup', { projectId: activeProjectId })
-            .catch(() => null);
-          const project =
-            activeProject ??
-            (await window.shipcode
-              .invoke<Project | null>('project:get', { projectId: activeProjectId })
-              .catch(() => null));
+          const setup = activeProjectId
+            ? await window.shipcode
+                .invoke<ProjectSetupDraft>('project:get-setup', { projectId: activeProjectId })
+                .catch(() => null)
+            : null;
+          const project = activeProjectId
+            ? (activeProject ??
+              (await window.shipcode
+                .invoke<Project | null>('project:get', { projectId: activeProjectId })
+                .catch(() => null)))
+            : null;
           const customSystemPrompt = buildAssistantSystemPrompt({
             project,
             activeIssueTitle: activeIssue?.title ?? null,
@@ -611,7 +610,7 @@ export function AssistantPanel() {
               : settings?.prdRewriteCodexModel;
           const initialPrompt = `${customSystemPrompt}\n\nUser request:\n${trimmed}`;
           const result = await window.shipcode.invoke<{ threadId: string }>('instant:shell-start', {
-            projectId: activeProjectId,
+            projectId: activeProjectId ?? null,
             cli: assistantCli,
             modelId: modelId ?? null,
             reasoningEffort: 'medium',

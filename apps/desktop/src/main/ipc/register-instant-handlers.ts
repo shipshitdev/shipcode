@@ -151,6 +151,7 @@ function buildClaudeAssistantArgs(args: {
     ...(args.modelId ? ['--model', args.modelId] : []),
     '--output-format',
     'stream-json',
+    '--verbose',
     '--session-id',
     args.sessionId,
     '--allowedTools',
@@ -181,6 +182,7 @@ function buildClaudeAssistantResumeArgs(args: {
     ...(args.modelId ? ['--model', args.modelId] : []),
     '--output-format',
     'stream-json',
+    '--verbose',
     '--allowedTools',
     'Edit,Write,Bash,Glob,Grep,Read',
     '--dangerously-skip-permissions',
@@ -372,6 +374,7 @@ export function registerInstantHandlers({
             ...(args.modelId ? ['--model', args.modelId] : []),
             '--output-format',
             'stream-json',
+            '--verbose',
             '--allowedTools',
             'Read,Glob,Grep',
             ...thinkingArgs,
@@ -382,6 +385,7 @@ export function registerInstantHandlers({
             ...(args.modelId ? ['--model', args.modelId] : []),
             '--output-format',
             'stream-json',
+            '--verbose',
             '--allowedTools',
             'Edit,Write,Bash,Glob,Grep,Read',
             '--dangerously-skip-permissions',
@@ -438,7 +442,7 @@ export function registerInstantHandlers({
     async (
       _event,
       args: {
-        projectId: string;
+        projectId?: string | null;
         cli: InstantCli;
         modelId?: string | null;
         reasoningEffort?: ReasoningEffort;
@@ -452,8 +456,18 @@ export function registerInstantHandlers({
         args.reasoningEffort ?? 'high',
       );
 
-      const project = queries.projects.getById(args.projectId);
-      if (!project) throw new Error(`Project not found: ${args.projectId}`);
+      let projectId: string;
+      let cwd: string;
+      if (args.projectId) {
+        const project = queries.projects.getById(args.projectId);
+        if (!project) throw new Error(`Project not found: ${args.projectId}`);
+        projectId = project.id;
+        cwd = project.path;
+      } else {
+        const instantProject = queries.projects.getOrCreateInstantProject(os.homedir());
+        projectId = instantProject.id;
+        cwd = os.homedir();
+      }
 
       const initialPrompt = `${args.initialPrompt?.trim() ?? ''}${buildAttachmentContext(
         args.attachmentSessionId,
@@ -461,7 +475,7 @@ export function registerInstantHandlers({
       const title = initialPrompt
         ? initialPrompt.slice(0, 60)
         : `${formatInstantCliLabel(args.cli)} assistant`;
-      const thread = queries.threads.create(project.id, initialPrompt, title, 'instant');
+      const thread = queries.threads.create(projectId, initialPrompt, title, 'instant');
 
       const sessionId = args.cli === 'claude' ? crypto.randomUUID() : undefined;
       const cliArgs =
@@ -480,7 +494,7 @@ export function registerInstantHandlers({
         args.cli,
         args.cli,
         cliArgs,
-        project.path,
+        cwd,
         initialPrompt || 'hello',
         thread.id,
       );
@@ -492,7 +506,7 @@ export function registerInstantHandlers({
         sessionId,
         modelId: args.modelId,
         reasoningEffort: args.reasoningEffort,
-        cwd: project.path,
+        cwd,
       };
       runningInstants.set(thread.id, session);
 
@@ -502,9 +516,7 @@ export function registerInstantHandlers({
         });
       }
 
-      log.info(
-        `[instant] started ${args.cli} assistant for thread ${thread.id} (cwd=${project.path})`,
-      );
+      log.info(`[instant] started ${args.cli} assistant for thread ${thread.id} (cwd=${cwd})`);
 
       registerExitTracking(processManager, queries, thread.id, proc.id, args.cli, 'shell');
 
@@ -555,6 +567,7 @@ export function registerInstantHandlers({
                 '-p',
                 '--output-format',
                 'stream-json',
+                '--verbose',
                 '--allowedTools',
                 'Edit,Write,Bash,Glob,Grep,Read',
                 '--dangerously-skip-permissions',

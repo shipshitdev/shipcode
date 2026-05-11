@@ -22,6 +22,7 @@ const INITIAL_STEPS: SplashStep[] = [
 function splashHtml(steps: SplashStep[]): string {
   const initial = JSON.stringify(steps).replace(/</g, '\\u003c');
   const theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+  const version = app.getVersion();
 
   return `<!doctype html>
 <html data-theme="${theme}">
@@ -34,12 +35,13 @@ function splashHtml(steps: SplashStep[]): string {
 <body>
   <main>
     <header>
-      <div class="mark">SC</div>
+      <div class="mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="40" height="40"><rect width="1024" height="1024" rx="224" ry="224" fill="#0d1117"/><rect x="184" y="192" width="176" height="500" rx="56" ry="56" fill="#45aaf2"/><rect x="424" y="192" width="176" height="560" rx="56" ry="56" fill="#20bf6b"/><rect x="664" y="192" width="176" height="620" rx="56" ry="56" fill="#a55eea"/></svg></div>
       <div>
         <h1>Starting ShipCode</h1>
-        <p id="subtitle">Preparing the desktop app.</p>
+        <p class="version">v${version}</p>
       </div>
     </header>
+    <div class="progress-track"><div class="progress-fill" id="progress" style="width: 0%"></div></div>
     <ol id="steps"></ol>
   </main>
   <script>
@@ -52,8 +54,20 @@ function splashHtml(steps: SplashStep[]): string {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
     }
+    var progressEl = document.getElementById('progress');
+    var icons = {
+      pending: '<svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="7.5" stroke="#52525b" stroke-width="1.5"/></svg>',
+      active: '<svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="7.5" stroke="rgba(56,189,248,0.25)" stroke-width="1.5"/><path d="M9 1.5A7.5 7.5 0 0 1 16.5 9" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round"/></svg>',
+      complete: '<svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="8.5" fill="#22c55e"/><path d="M5.5 9.5L7.5 11.5L12.5 6.5" stroke="#050607" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      error: '<svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="8.5" fill="rgba(239,68,68,0.18)" stroke="#ef4444" stroke-width="1"/><path d="M6.5 6.5L11.5 11.5M11.5 6.5L6.5 11.5" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/></svg>'
+    };
     function render(steps) {
-      stepsEl.innerHTML = steps.map((step) => '<li class="' + step.status + '"><span class="icon"></span><span class="copy"><span class="label">' + escapeText(step.label) + '</span>' + (step.detail ? '<span class="detail">' + escapeText(step.detail) + '</span>' : '') + '</span></li>').join('');
+      var done = steps.filter(function(s) { return s.status === 'complete'; }).length;
+      var pct = Math.round((done / steps.length) * 100);
+      progressEl.style.width = pct + '%';
+      stepsEl.innerHTML = steps.map(function(step) {
+        return '<li class="' + step.status + '"><span class="icon">' + icons[step.status] + '</span><span class="copy"><span class="label">' + escapeText(step.label) + '</span>' + (step.detail ? '<span class="detail">' + escapeText(step.detail) + '</span>' : '') + '</span></li>';
+      }).join('');
     }
     window.setShipCodeSplashSteps = render;
     render(${initial});
@@ -78,6 +92,7 @@ export class SplashScreen {
       minimizable: false,
       fullscreenable: false,
       frame: false,
+      hasShadow: false,
       show: true,
       backgroundColor: '#050607',
       title: 'Starting ShipCode',

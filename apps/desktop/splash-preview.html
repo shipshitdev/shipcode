@@ -9,18 +9,16 @@
   color-scheme: dark;
   --bg: #050607;
   --panel: #0b0d10;
-  --border: rgba(255, 255, 255, 0.1);
+  --border: rgba(255, 255, 255, 0.06);
   --primary: #f4f4f5;
   --secondary: #a1a1aa;
-  --muted: #71717a;
+  --muted: #52525b;
   --agent: #38bdf8;
   --success: #22c55e;
   --danger: #ef4444;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
@@ -34,71 +32,96 @@ body {
 
 main {
   width: 420px;
-  padding: 28px;
+  padding: 32px 28px;
 }
 
 header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 22px;
+  gap: 16px;
+  margin-bottom: 28px;
 }
 
 .mark {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  border-radius: 8px;
-  background: rgba(56, 189, 248, 0.1);
-  color: var(--agent);
-  font-weight: 700;
-  letter-spacing: 0;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
 }
+
 
 h1 {
   margin: 0;
-  font-size: 19px;
+  font-size: 20px;
   line-height: 1.2;
-  letter-spacing: 0;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
-p {
-  margin: 4px 0 0;
-  color: var(--secondary);
-  font-size: 13px;
+.version {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--agent), #a55eea);
+  transition: width 0.4s ease;
 }
 
 ol {
   list-style: none;
   padding: 0;
   margin: 0;
-  display: grid;
-  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
 }
 
 li {
   display: grid;
   grid-template-columns: 18px 1fr;
   gap: 10px;
-  align-items: start;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--panel);
-  padding: 10px 12px;
+  align-items: center;
+  padding: 10px 14px;
+  transition: opacity 0.25s ease, background 0.25s ease;
 }
 
-.copy {
-  min-width: 0;
+li + li {
+  border-top: 1px solid var(--border);
 }
+
+li.pending { opacity: 0.45; }
+li.active { opacity: 1; background: rgba(56, 189, 248, 0.04); }
+li.complete { opacity: 0.85; }
+li.error { opacity: 1; background: rgba(239, 68, 68, 0.04); }
+
+.copy { min-width: 0; }
 
 .label {
   display: block;
   font-size: 13px;
   line-height: 18px;
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--secondary);
 }
+
+.active .label { color: var(--primary); font-weight: 600; }
+.complete .label { color: var(--secondary); }
+.error .label { color: var(--danger); font-weight: 600; }
 
 .detail {
   display: block;
@@ -108,66 +131,29 @@ li {
   line-height: 15px;
 }
 
-.pending .label {
-  color: var(--muted);
-}
-
-.active .label {
-  color: var(--agent);
-}
-
-.complete .label {
-  color: var(--success);
-}
-
-.error .label {
-  color: var(--danger);
-}
-
 .icon {
-  width: 16px;
-  height: 16px;
-  margin-top: 1px;
-  border-radius: 999px;
-  border: 1.5px solid var(--muted);
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
 }
 
-.active .icon {
-  border-color: rgba(56, 189, 248, 0.25);
-  border-top-color: var(--agent);
+.icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.active .icon svg {
   animation: spin 0.8s linear infinite;
 }
 
-.complete .icon {
-  border-color: var(--success);
-  background: var(--success);
-  position: relative;
-}
-
-.complete .icon::after {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 2px;
-  width: 5px;
-  height: 8px;
-  border: solid #050607;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-.error .icon {
-  border-color: var(--danger);
-  background: rgba(239, 68, 68, 0.18);
-}
-
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
-/* Preview controls — not part of actual splash */
+/* Preview controls */
 .preview-controls {
   position: fixed;
   bottom: 16px;
@@ -191,13 +177,11 @@ li {
   border-color: var(--agent);
 }
 
-/* Simulated window frame outline */
 .window-frame {
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 10px;
   overflow: hidden;
   width: 480px;
-  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
 }
   </style>
 </head>
@@ -205,12 +189,13 @@ li {
   <div class="window-frame">
   <main>
     <header>
-      <div class="mark">SC</div>
+      <div class="mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="40" height="40"><rect width="1024" height="1024" rx="224" ry="224" fill="#0d1117"/><rect x="184" y="192" width="176" height="500" rx="56" ry="56" fill="#45aaf2"/><rect x="424" y="192" width="176" height="560" rx="56" ry="56" fill="#20bf6b"/><rect x="664" y="192" width="176" height="620" rx="56" ry="56" fill="#a55eea"/></svg></div>
       <div>
         <h1>Starting ShipCode</h1>
-        <p id="subtitle">Preparing the desktop app.</p>
+        <p class="version">v0.1.0</p>
       </div>
     </header>
+    <div class="progress-track"><div class="progress-fill" id="progress" style="width: 0%"></div></div>
     <ol id="steps"></ol>
   </main>
   </div>
@@ -224,9 +209,10 @@ li {
   </div>
 
   <script>
-    const stepsEl = document.getElementById('steps');
+    var stepsEl = document.getElementById('steps');
+    var progressEl = document.getElementById('progress');
 
-    const BASE_STEPS = [
+    var BASE_STEPS = [
       { id: 'window',   label: 'Create app window',       status: 'pending' },
       { id: 'database', label: 'Open local database',     status: 'pending' },
       { id: 'services', label: 'Start desktop services',  status: 'pending' },
@@ -235,46 +221,55 @@ li {
       { id: 'renderer', label: 'Load workspace',          status: 'pending' },
     ];
 
+    var icons = {
+      pending: '<svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="7.5" stroke="#52525b" stroke-width="1.5"/></svg>',
+      active: '<svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="7.5" stroke="rgba(56,189,248,0.25)" stroke-width="1.5"/><path d="M9 1.5A7.5 7.5 0 0 1 16.5 9" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round"/></svg>',
+      complete: '<svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="8.5" fill="#22c55e"/><path d="M5.5 9.5L7.5 11.5L12.5 6.5" stroke="#050607" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      error: '<svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="8.5" fill="rgba(239,68,68,0.18)" stroke="#ef4444" stroke-width="1"/><path d="M6.5 6.5L11.5 11.5M11.5 6.5L6.5 11.5" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/></svg>'
+    };
+
     function render(steps) {
-      stepsEl.innerHTML = steps.map((step) =>
-        '<li class="' + step.status + '">' +
-          '<span class="icon"></span>' +
+      var done = steps.filter(function(s) { return s.status === 'complete'; }).length;
+      var pct = Math.round((done / steps.length) * 100);
+      progressEl.style.width = pct + '%';
+      stepsEl.innerHTML = steps.map(function(step) {
+        return '<li class="' + step.status + '">' +
+          '<span class="icon">' + icons[step.status] + '</span>' +
           '<span class="copy">' +
             '<span class="label">' + step.label + '</span>' +
             (step.detail ? '<span class="detail">' + step.detail + '</span>' : '') +
           '</span>' +
-        '</li>'
-      ).join('');
+        '</li>';
+      }).join('');
     }
 
-    const STATES = {
-      'all-pending': () => BASE_STEPS.map(s => ({...s})),
-      'mid-boot': () => BASE_STEPS.map((s, i) => ({
-        ...s,
-        status: i < 2 ? 'complete' : i === 2 ? 'active' : 'pending',
-        detail: i === 2 ? 'Initializing agent pool…' : undefined,
-      })),
-      'all-done': () => BASE_STEPS.map(s => ({...s, status: 'complete'})),
-      'error': () => BASE_STEPS.map((s, i) => ({
-        ...s,
-        status: i < 3 ? 'complete' : i === 3 ? 'error' : 'pending',
-        detail: i === 3 ? 'Connection to database failed' : undefined,
-      })),
+    var STATES = {
+      'all-pending': function() { return BASE_STEPS.map(function(s) { return Object.assign({}, s); }); },
+      'mid-boot': function() { return BASE_STEPS.map(function(s, i) {
+        return Object.assign({}, s, {
+          status: i < 2 ? 'complete' : i === 2 ? 'active' : 'pending',
+          detail: i === 2 ? 'Initializing agent pool…' : undefined
+        });
+      }); },
+      'all-done': function() { return BASE_STEPS.map(function(s) { return Object.assign({}, s, { status: 'complete' }); }); },
+      'error': function() { return BASE_STEPS.map(function(s, i) {
+        return Object.assign({}, s, {
+          status: i < 3 ? 'complete' : i === 3 ? 'error' : 'pending',
+          detail: i === 3 ? 'Connection to database failed' : undefined
+        });
+      }); }
     };
 
     function showState(name) {
-      if (name === 'animate') {
-        animateBoot();
-        return;
-      }
+      if (name === 'animate') { animateBoot(); return; }
       render(STATES[name]());
     }
 
     function animateBoot() {
-      const steps = BASE_STEPS.map(s => ({...s}));
+      var steps = BASE_STEPS.map(function(s) { return Object.assign({}, s); });
       render(steps);
-      let i = 0;
-      const interval = setInterval(() => {
+      var i = 0;
+      var interval = setInterval(function() {
         if (i > 0) steps[i - 1].status = 'complete';
         if (i < steps.length) {
           steps[i].status = 'active';
@@ -286,7 +281,6 @@ li {
       }, 600);
     }
 
-    // Start with mid-boot state (most interesting visually)
     showState('mid-boot');
   </script>
 </body>

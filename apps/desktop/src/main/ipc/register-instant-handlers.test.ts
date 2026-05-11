@@ -239,6 +239,7 @@ describe('registerInstantHandlers', () => {
         'claude-sonnet-4-6',
         '--output-format',
         'stream-json',
+        '--verbose',
         '--allowedTools',
         'Edit,Write,Bash,Glob,Grep,Read',
         '--dangerously-skip-permissions',
@@ -265,6 +266,7 @@ describe('registerInstantHandlers', () => {
         '-p',
         '--output-format',
         'stream-json',
+        '--verbose',
         '--allowedTools',
         'Read,Glob,Grep',
         '--max-thinking-tokens',
@@ -331,6 +333,7 @@ describe('registerInstantHandlers', () => {
         '-p',
         '--output-format',
         'stream-json',
+        '--verbose',
         '--allowedTools',
         'Edit,Write,Bash,Glob,Grep,Read',
         '--dangerously-skip-permissions',
@@ -360,6 +363,7 @@ describe('registerInstantHandlers', () => {
         '-p',
         '--output-format',
         'stream-json',
+        '--verbose',
         '--allowedTools',
         'Edit,Write,Bash,Glob,Grep,Read',
         '--dangerously-skip-permissions',
@@ -388,6 +392,7 @@ describe('registerInstantHandlers', () => {
         'claude-sonnet-4-6',
         '--output-format',
         'stream-json',
+        '--verbose',
         '--allowedTools',
         'Read,Glob,Grep',
         '--max-thinking-tokens',
@@ -492,6 +497,7 @@ describe('registerInstantHandlers', () => {
         '-p',
         '--output-format',
         'stream-json',
+        '--verbose',
         '--session-id',
         expect.any(String),
         '--model',
@@ -567,6 +573,23 @@ describe('registerInstantHandlers', () => {
         cli: 'codex',
       }),
     ).rejects.toThrow('Project not found: missing-project');
+
+    // No projectId falls back to __instant__ project with homedir cwd
+    await expect(
+      shellStart(undefined, {
+        cli: 'claude',
+        initialPrompt: 'Cross-project task',
+      }),
+    ).resolves.toEqual({ threadId: expect.any(String) });
+    expect(queries.projects.getOrCreateInstantProject).toHaveBeenCalledWith(expect.any(String));
+    expect(processManager.spawnWithStdin).toHaveBeenLastCalledWith(
+      'claude',
+      'claude',
+      expect.arrayContaining(['-p', '--output-format', 'stream-json', '--verbose']),
+      expect.any(String),
+      'Cross-project task',
+      expect.any(String),
+    );
   });
 
   it('starts bare shells, clamps unsafe resize values, cancels sessions, lists and cleans up', async () => {
@@ -691,6 +714,7 @@ describe('registerInstantHandlers', () => {
         '-p',
         '--output-format',
         'stream-json',
+        '--verbose',
         '--allowedTools',
         'Edit,Write,Bash,Glob,Grep,Read',
         '--dangerously-skip-permissions',

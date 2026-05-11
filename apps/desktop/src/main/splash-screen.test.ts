@@ -22,6 +22,7 @@ const { browserWindowInstances, nativeThemeMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('electron', () => ({
+  app: { getVersion: () => '0.1.0' },
   nativeTheme: nativeThemeMock,
   BrowserWindow: vi.fn(
     class {
