@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mockSpawn = vi.hoisted(() => vi.fn());
@@ -18,6 +17,7 @@ import {
   formatAutomationPrompt,
 } from './automation-formatter';
 import { OpenRouterClient } from './providers/openrouter-http';
+import { createFakeProc } from './test-fake-proc';
 
 function sseResponse(chunks: string[]): Response {
   const encoder = new TextEncoder();
@@ -33,37 +33,6 @@ function sseResponse(chunks: string[]): Response {
   });
 }
 
-function createFakeProc() {
-  const proc = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter;
-    stderr: EventEmitter;
-    stdin: { write: (chunk: string) => boolean; end: () => void };
-  };
-  proc.stdout = new EventEmitter();
-  proc.stderr = new EventEmitter();
-  const stdinWrites: string[] = [];
-  let stdinEnded = false;
-  proc.stdin = {
-    write: (chunk: string) => {
-      stdinWrites.push(chunk);
-      return true;
-    },
-    end: () => {
-      stdinEnded = true;
-    },
-  };
-  return {
-    proc,
-    stdinWrites,
-    isStdinEnded: () => stdinEnded,
-    close: (code: number, options?: { stdout?: string; stderr?: string }) => {
-      if (options?.stdout) proc.stdout.emit('data', options.stdout);
-      if (options?.stderr) proc.stderr.emit('data', options.stderr);
-      proc.emit('close', code);
-    },
-  };
-}
-
 describe('formatAutomationPrompt', () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -71,7 +40,7 @@ describe('formatAutomationPrompt', () => {
   });
 
   it('pipes the formatter prompt through Claude stdin', async () => {
-    const fake = createFakeProc();
+    const fake = createFakeProc({ captureStdin: true });
     mockSpawn.mockReturnValueOnce(fake.proc);
 
     const promise = formatAutomationPrompt({
@@ -104,7 +73,7 @@ describe('formatAutomationPrompt', () => {
   });
 
   it('uses Codex CLI when selected', async () => {
-    const fake = createFakeProc();
+    const fake = createFakeProc({ captureStdin: true });
     mockSpawn.mockReturnValueOnce(fake.proc);
 
     const promise = formatAutomationPrompt({
