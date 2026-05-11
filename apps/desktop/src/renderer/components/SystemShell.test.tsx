@@ -267,10 +267,13 @@ describe('system shell components', () => {
   it('keeps relink success when refreshing issues after relink fails', async () => {
     const project = makeProject({ path: '/tmp/missing-project' });
     vi.mocked(window.shipcode.invoke).mockImplementation(
-      async (channel: string, args?: Record<string, unknown>) => {
+      async (channel: string, args?: unknown) => {
         if (channel === 'dialog:open-directory') return '/tmp/relinked';
         if (channel === 'project:relink-path') {
-          return makeProject({ id: String(args?.projectId ?? project.id), path: '/tmp/relinked' });
+          return makeProject({
+            id: String((args as Record<string, unknown>)?.projectId ?? project.id),
+            path: '/tmp/relinked',
+          });
         }
         if (channel === 'github:refresh-issues') throw new Error('refresh failed');
         return undefined;

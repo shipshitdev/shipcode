@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { PipelinePhaseDurationSummary, PipelineTokensByPhase } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -88,20 +89,20 @@ describe('cost chart components', () => {
   it('renders phase token and cost charts with legends and empty state', () => {
     const tokensByPhase = [
       {
-        phase: 'plan',
+        phase: 'plan' as const,
         promptTokens: 20_000,
         completionTokens: 5_000,
         costUsd: 1.25,
         attemptCount: 2,
       },
       {
-        phase: 'execute',
+        phase: 'execute' as const,
         promptTokens: 50_000,
         completionTokens: 10_000,
         costUsd: 4.5,
         attemptCount: 3,
       },
-    ];
+    ] satisfies PipelineTokensByPhase[];
 
     const { rerender } = render(<TokensByPhaseChart tokensByPhase={[]} displayMode="tokens" />);
     expect(screen.getByText('No token usage data yet.')).toBeInTheDocument();
@@ -123,7 +124,7 @@ describe('cost chart components', () => {
   it('renders phase duration rows across duration formats and empty state', () => {
     const phaseDurations = [
       {
-        phase: 'review_plan',
+        phase: 'review_plan' as PipelinePhaseDurationSummary['phase'],
         runCount: 3,
         averageMs: 500,
         medianMs: 450,
@@ -131,7 +132,7 @@ describe('cost chart components', () => {
         p95Ms: 950,
       },
       {
-        phase: 'execute',
+        phase: 'execute' as PipelinePhaseDurationSummary['phase'],
         runCount: 3,
         averageMs: 12_500,
         medianMs: 11_000,
@@ -139,14 +140,14 @@ describe('cost chart components', () => {
         p95Ms: 90_000,
       },
       {
-        phase: 'verify',
+        phase: 'verify' as PipelinePhaseDurationSummary['phase'],
         runCount: 3,
         averageMs: 3_900_000,
         medianMs: 3_600_000,
         p75Ms: null,
         p95Ms: null,
       },
-    ];
+    ] as unknown as PipelinePhaseDurationSummary[];
 
     const { rerender } = render(<PhaseDurationsChart phaseDurations={[]} />);
     expect(screen.getByText('No phase timing data yet.')).toBeInTheDocument();

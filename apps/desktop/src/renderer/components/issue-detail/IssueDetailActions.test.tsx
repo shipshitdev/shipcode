@@ -55,6 +55,8 @@ const makeThread = (overrides: Partial<Thread> = {}): Thread => ({
 
 const clarificationRequest: ClarificationRequest = {
   id: 'clarify-1',
+  threadId: 'thread-1',
+  phase: 'plan',
   summary: 'Need deployment details.',
   questions: [
     {
@@ -63,6 +65,7 @@ const clarificationRequest: ClarificationRequest = {
       prompt: 'Where should this deploy?',
       description: 'Pick the closest match.',
       allowFreeform: false,
+      freeformPlaceholder: null,
       choices: [
         {
           id: 'prod',
@@ -81,6 +84,7 @@ const clarificationRequest: ClarificationRequest = {
       id: 'q2',
       title: 'Notes',
       prompt: 'Any extra constraints?',
+      description: null,
       allowFreeform: true,
       freeformPlaceholder: 'Add constraints',
       choices: [],
@@ -399,13 +403,17 @@ describe('IssueDetailActions', () => {
     const props = baseProps({
       clarificationRequest: {
         id: 'clarify-freeform',
+        threadId: 'thread-1',
+        phase: 'plan' as const,
         summary: 'Need one answer.',
         questions: [
           {
             id: 'q-freeform',
             title: 'Constraint',
             prompt: 'What should ShipCode avoid?',
+            description: null,
             allowFreeform: true,
+            freeformPlaceholder: null,
             choices: [],
           },
         ],
@@ -431,13 +439,17 @@ describe('IssueDetailActions', () => {
     const initialProps = baseProps({
       clarificationRequest: {
         id: 'clarify-dynamic',
+        threadId: 'thread-1',
+        phase: 'plan' as const,
         summary: 'Initial question.',
         questions: [
           {
             id: 'q1',
             title: 'First',
             prompt: 'First question?',
+            description: null,
             allowFreeform: true,
+            freeformPlaceholder: null,
             choices: [],
           },
         ],
@@ -453,13 +465,17 @@ describe('IssueDetailActions', () => {
         props={baseProps({
           clarificationRequest: {
             id: 'clarify-dynamic',
+            threadId: 'thread-1',
+            phase: 'plan' as const,
             summary: 'Replacement question.',
             questions: [
               {
                 id: 'q2',
                 title: 'Second',
                 prompt: 'Second question?',
+                description: null,
                 allowFreeform: false,
+                freeformPlaceholder: null,
                 choices: [
                   {
                     id: 'choice-2',

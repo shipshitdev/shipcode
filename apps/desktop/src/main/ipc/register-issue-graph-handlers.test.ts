@@ -10,7 +10,9 @@ const { schedulerOptions, startOrQueueMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('../pipeline-scheduler', () => ({
-  PipelineScheduler: vi.fn().mockImplementation(function MockPipelineScheduler(options) {
+  PipelineScheduler: vi.fn().mockImplementation(function MockPipelineScheduler(options: {
+    getMainWindow: () => unknown;
+  }) {
     schedulerOptions.push(options);
     return {
       startOrQueue: startOrQueueMock,
@@ -294,7 +296,7 @@ describe('registerIssueGraphHandlers', () => {
       phase: PIPELINE_PHASE.completed,
     });
 
-    await new Promise((resolve) => queueMicrotask(resolve));
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
     expect(startOrQueueMock).toHaveBeenCalledWith('project-1', 2);
   });
 
@@ -321,7 +323,7 @@ describe('registerIssueGraphHandlers', () => {
         pipelineStatus: ISSUE_PIPELINE_STATUS.failed,
         threadId: 'thread-2',
       },
-    ]);
+    ] as never);
 
     notifyIssueGraphPipelinePhaseChange({
       threadId: 'thread-1',

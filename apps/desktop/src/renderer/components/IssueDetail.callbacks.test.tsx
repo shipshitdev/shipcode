@@ -582,7 +582,11 @@ describe('IssueDetail callback harness', () => {
       invoke: invokeMock as unknown as typeof window.shipcode.invoke,
       on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
     };
-    navigator.clipboard = { writeText: vi.fn() } as unknown as Clipboard;
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn() },
+      writable: true,
+      configurable: true,
+    });
     useAppStore.setState({
       activeProjectId: 'project-1',
       activeThreadId: 'thread-1',
@@ -683,6 +687,8 @@ describe('IssueDetail callback harness', () => {
   it('submits clarification answers when the thread is waiting for planner input', async () => {
     const clarificationRequest = {
       id: 'clarify-1',
+      threadId: 'test-thread',
+      phase: 'plan' as const,
       summary: 'Need product input',
       questions: [
         {
@@ -690,6 +696,7 @@ describe('IssueDetail callback harness', () => {
           title: 'Scope',
           prompt: 'What should ship?',
           description: null,
+          freeformPlaceholder: null,
           choices: [],
           allowFreeform: true,
         },
@@ -1179,7 +1186,11 @@ describe('IssueDetail callback harness', () => {
 
   it('reports clipboard write failures on the branch copy control', async () => {
     const writeText = vi.fn().mockRejectedValue(new Error('blocked'));
-    navigator.clipboard = { writeText } as unknown as Clipboard;
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
 
     renderWithProviders();
 
@@ -1195,7 +1206,11 @@ describe('IssueDetail callback harness', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout');
     const writeText = vi.fn().mockResolvedValue(undefined);
-    navigator.clipboard = { writeText } as unknown as Clipboard;
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
 
     renderWithProviders();
 

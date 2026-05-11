@@ -699,7 +699,7 @@ describe('project settings leaf tabs', () => {
       checkedAt: '2026-05-08T00:00:00.000Z',
       projectUrl: 'https://github.com/orgs/shipshitdev/projects/1',
       labelSync: {
-        created: [{ name: 'shipcode:agent:frontend', color: '0366d6', description: 'Frontend' }],
+        created: ['shipcode:agent:frontend'],
         alreadyPresent: [],
         failed: [],
       },
@@ -762,10 +762,10 @@ describe('project settings leaf tabs', () => {
       labelSync: { created: [], alreadyPresent: [], failed: [] },
       labelNames: SHIPCODE_DEFAULT_LABELS.map((label) => label.name),
       statusMapping: {
-        todo: { name: 'Todo', optionId: 'todo-id' },
-        inProgress: { name: 'In Progress', optionId: 'progress-id' },
+        todo: { name: 'Todo', color: null },
+        inProgress: { name: 'In Progress', color: null },
         humanReview: null,
-        done: { name: 'Done', optionId: 'done-id' },
+        done: { name: 'Done', color: null },
         deferred: null,
       },
       items: [
@@ -840,10 +840,7 @@ describe('project settings leaf tabs', () => {
       checkedAt: '2026-05-08T00:00:00.000Z',
       projectUrl: null,
       labelSync: {
-        created: [
-          { name: 'shipcode:agent:frontend', color: '0366d6', description: 'Frontend' },
-          { name: 'shipcode:agent:backend', color: '5319e7', description: 'Backend' },
-        ],
+        created: ['shipcode:agent:frontend', 'shipcode:agent:backend'],
         alreadyPresent: [],
         failed: [{ name: 'shipcode:agent:backend', error: 'permission denied' }],
       },

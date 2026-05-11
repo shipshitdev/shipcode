@@ -96,8 +96,8 @@ describe('issue-detail leaf components', () => {
       {
         id: 'event-2',
         projectId: 'project-1',
-        kind: 'thread_created',
-        actor: 'user',
+        kind: 'pipeline_started',
+        actor: 'human',
         title: 'Issue imported',
         subtitle: null,
         metadata: null,

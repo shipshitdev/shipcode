@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 
-import { type AppSettings, DEFAULT_SETTINGS, type Project } from '@shipcode/shared';
+import {
+  type AppSettings,
+  DEFAULT_SETTINGS,
+  type OpenRouterModelValidation,
+  type Project,
+} from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProjectPhaseSettingsRow } from './ProjectPhaseSettingsRow';
 import type { ProjectOverrideState } from './shared';
@@ -136,10 +141,14 @@ function renderRow({
       settings={settings}
       projectDraft={projectDraft}
       overrides={overrides}
-      setOverrides={setOverrides}
+      setOverrides={setOverrides as unknown as Dispatch<SetStateAction<ProjectOverrideState>>}
       integrationStatus={integrationStatus}
       modelValidation={modelValidation}
-      setModelValidation={setModelValidation}
+      setModelValidation={
+        setModelValidation as unknown as Dispatch<
+          SetStateAction<Partial<Record<string, OpenRouterModelValidation | null>>>
+        >
+      }
     />,
   );
   return { setModelValidation, setOverrides };
@@ -295,7 +304,7 @@ describe('ProjectPhaseSettingsRow callback coverage', () => {
         },
       } as never,
       modelValidation: {
-        planner: { status: 'invalid', message: 'Model unavailable' },
+        planner: { modelId: 'test-model', status: 'invalid', message: 'Model unavailable' },
       },
     });
 

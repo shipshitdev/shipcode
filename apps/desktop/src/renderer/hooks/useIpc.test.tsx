@@ -159,7 +159,8 @@ describe('useIpc terminal scoping', () => {
   }
 
   it('does nothing when the preload bridge is unavailable', () => {
-    (window as typeof window & { shipcode?: typeof window.shipcode }).shipcode = undefined;
+    (window as typeof window & { shipcode: typeof window.shipcode | undefined }).shipcode =
+      undefined as never;
 
     expect(() => renderHarness()).not.toThrow();
     expect(listeners.size).toBe(0);

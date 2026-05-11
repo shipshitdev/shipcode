@@ -13,17 +13,45 @@ describe('renderer telemetry', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.shipcode.invoke = vi.fn(() =>
-      Promise.resolve({ enabled: false, dsnConfigured: true, envDisabled: false }),
+      Promise.resolve({
+        enabled: false,
+        dsnConfigured: true,
+        envDisabled: false,
+        initialized: false,
+        pendingConsent: false,
+        disabledReason: null,
+      }),
     );
   });
 
   it('initializes once when telemetry is enabled and closes when disabled', async () => {
-    await syncRendererTelemetry({ enabled: true, dsnConfigured: true, envDisabled: false });
-    await syncRendererTelemetry({ enabled: true, dsnConfigured: true, envDisabled: false });
+    await syncRendererTelemetry({
+      enabled: true,
+      dsnConfigured: true,
+      envDisabled: false,
+      initialized: true,
+      pendingConsent: false,
+      disabledReason: null,
+    });
+    await syncRendererTelemetry({
+      enabled: true,
+      dsnConfigured: true,
+      envDisabled: false,
+      initialized: true,
+      pendingConsent: false,
+      disabledReason: null,
+    });
 
     expect(sentryAdapter.init).toHaveBeenCalledTimes(1);
 
-    await syncRendererTelemetry({ enabled: false, dsnConfigured: true, envDisabled: false });
+    await syncRendererTelemetry({
+      enabled: false,
+      dsnConfigured: true,
+      envDisabled: false,
+      initialized: true,
+      pendingConsent: false,
+      disabledReason: null,
+    });
 
     expect(sentryAdapter.close).toHaveBeenCalledWith(2000);
   });
@@ -38,10 +66,24 @@ describe('renderer telemetry', () => {
   it('captures renderer exceptions with context when enabled', async () => {
     const error = new Error('boom');
     window.shipcode.invoke = vi.fn(() =>
-      Promise.resolve({ enabled: true, dsnConfigured: true, envDisabled: false }),
+      Promise.resolve({
+        enabled: true,
+        dsnConfigured: true,
+        envDisabled: false,
+        initialized: true,
+        pendingConsent: false,
+        disabledReason: null,
+      }),
     );
 
-    await syncRendererTelemetry({ enabled: true, dsnConfigured: true, envDisabled: false });
+    await syncRendererTelemetry({
+      enabled: true,
+      dsnConfigured: true,
+      envDisabled: false,
+      initialized: true,
+      pendingConsent: false,
+      disabledReason: null,
+    });
     await captureRendererException(error, {
       tags: { surface: 'renderer' },
       extra: { issueNumber: 42 },

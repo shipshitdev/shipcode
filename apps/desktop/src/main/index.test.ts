@@ -79,14 +79,14 @@ const telemetryMock = {
 };
 
 const processManagerMock = {
-  killStalled: vi.fn(() => []),
+  killStalled: vi.fn(() => [] as string[]),
   get: vi.fn(),
   killAll: vi.fn(),
   killAllAndWait: vi.fn(async () => undefined),
 };
 
 const pipelineMock = {
-  listActive: vi.fn(() => []),
+  listActive: vi.fn(() => [] as { threadId: string }[]),
 };
 
 const reconciliationLoopMock = {
@@ -148,7 +148,10 @@ class QueryMock {
     if (throwOnGetStuck) throw new Error('watchdog database failed');
     return stuckThreads;
   });
-  create = vi.fn((_threadId: string, record: unknown) => ({ id: 'terminal-1', ...record }));
+  create = vi.fn((_threadId: string, record: unknown) => ({
+    id: 'terminal-1',
+    ...(record as Record<string, unknown>),
+  }));
 }
 
 function installMocks() {
@@ -330,12 +333,11 @@ describe('main index bootstrap', () => {
 
   it('logs telemetry init failures and keeps the CPU task gate permissive before resource monitor setup', async () => {
     telemetryMock.configureMainTelemetry.mockRejectedValueOnce(new Error('telemetry failed'));
-    createPipelineMock.mockImplementationOnce(
-      (deps: { cpuTaskGate: { canStartCpuTask: () => unknown } }) => {
-        expect(deps.cpuTaskGate.canStartCpuTask()).toEqual({ allowed: true });
-        return pipelineMock;
-      },
-    );
+    createPipelineMock.mockImplementationOnce(((...args: unknown[]) => {
+      const deps = args[0] as { cpuTaskGate: { canStartCpuTask: () => unknown } };
+      expect(deps.cpuTaskGate.canStartCpuTask()).toEqual({ allowed: true });
+      return pipelineMock;
+    }) as () => typeof pipelineMock);
 
     await importMain();
     await Promise.resolve();
@@ -349,7 +351,7 @@ describe('main index bootstrap', () => {
   it('runs startup callbacks registered by the pipeline and renderer boot process', async () => {
     process.env.OPENROUTER_API_KEY = 'openrouter-key';
     stuckThreads.push({ id: 'stuck-thread' });
-    processManagerMock.killStalled.mockReturnValue(['proc-1', 'proc-2']);
+    processManagerMock.killStalled.mockReturnValue(['proc-1', 'proc-2'] as string[]);
     processManagerMock.get.mockImplementation((id: string) =>
       id === 'proc-1'
         ? { threadId: 'stalled-thread', type: 'claude' }
@@ -358,7 +360,9 @@ describe('main index bootstrap', () => {
 
     await importMain();
 
-    const emitterCallbacks = createElectronEmitterMock.mock.calls[0]?.[1] as {
+    const emitterCallbacks = (
+      createElectronEmitterMock.mock.calls[0] as unknown as unknown[]
+    )?.[1] as {
       onPipelineTerminal: (event: { threadId: string; phase: string }) => void;
       onExecutionSlotFreed: () => void;
     };
@@ -381,7 +385,9 @@ describe('main index bootstrap', () => {
       expect.objectContaining({ message: 'promotion failed' }),
     );
 
-    const reconciliationOptions = createReconciliationLoopMock.mock.calls[0]?.[0] as {
+    const reconciliationOptions = (
+      createReconciliationLoopMock.mock.calls[0] as unknown as unknown[]
+    )?.[0] as {
       issueStateProvider: {
         getIssueState: (projectPath: string, issueNumber: number) => Promise<unknown>;
       };
@@ -394,7 +400,9 @@ describe('main index bootstrap', () => {
     reconciliationOptions.onReconciliationCancel('thread-2', 'closed upstream');
     reconciliationOptions.log('reconciled');
 
-    const openRouterOptions = createOpenRouterProviderMock.mock.calls[0]?.[0] as {
+    const openRouterOptions = (
+      createOpenRouterProviderMock.mock.calls[0] as unknown as unknown[]
+    )?.[0] as {
       getApiKey: () => string | undefined;
       getSettings: () => unknown;
     };
@@ -491,10 +499,10 @@ describe('main index bootstrap', () => {
     pipelineMock.listActive.mockReturnValue([{ threadId: 'active-thread' }]);
     dialogMock.showMessageBox.mockResolvedValueOnce({ response: 0 });
 
-    const event = { preventDefault: vi.fn() };
-    const closeHandler = windows[0]?.listeners('close')[0] as (
-      event: typeof event,
-    ) => Promise<void>;
+    const event: { preventDefault: () => void } = { preventDefault: vi.fn() };
+    const closeHandler = windows[0]?.listeners('close')[0] as (event: {
+      preventDefault: () => void;
+    }) => Promise<void>;
     await closeHandler(event);
 
     expect(event.preventDefault).toHaveBeenCalled();
@@ -508,10 +516,10 @@ describe('main index bootstrap', () => {
   it('lets an inactive window close without confirmation', async () => {
     await importMain();
 
-    const event = { preventDefault: vi.fn() };
-    const closeHandler = windows[0]?.listeners('close')[0] as (
-      event: typeof event,
-    ) => Promise<void>;
+    const event: { preventDefault: () => void } = { preventDefault: vi.fn() };
+    const closeHandler = windows[0]?.listeners('close')[0] as (event: {
+      preventDefault: () => void;
+    }) => Promise<void>;
     await closeHandler(event);
 
     expect(event.preventDefault).not.toHaveBeenCalled();
@@ -560,7 +568,9 @@ describe('main index bootstrap', () => {
   it('wires external links in the application menu', async () => {
     await importMain();
 
-    const template = menuMock.buildFromTemplate.mock.calls[0]?.[0] as Array<{
+    const template = (
+      menuMock.buildFromTemplate.mock.calls[0] as unknown as unknown[]
+    )?.[0] as Array<{
       click?: () => void;
       submenu?: unknown[];
     }>;

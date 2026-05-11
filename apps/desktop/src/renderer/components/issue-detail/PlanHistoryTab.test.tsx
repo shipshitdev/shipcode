@@ -147,7 +147,7 @@ describe('PlanHistoryTab', () => {
       id: 'plan-empty',
       rawOutput: '',
       structured: null,
-      status: 'failed',
+      status: 'rejected',
     });
 
     renderTab(

@@ -294,6 +294,8 @@ describe('registerGitHubHandlers', () => {
       list: vi.fn(() => listResult),
       reconcileCompletedFromEvidence: vi.fn(),
       resetStaleApproval: vi.fn(() => 0),
+      markTriageRulesApplied: vi.fn(),
+      recordTriageRulesFailure: vi.fn(),
       runInTransaction: vi.fn((fn: () => unknown) => fn()),
       ...overrides,
     };
@@ -2543,7 +2545,7 @@ describe('registerGitHubHandlers', () => {
       state: 'open',
       url: 'https://github.com/acme/repo/issues/77',
     });
-    addIssueToProjectMock.mockResolvedValue({ alreadyPresent: false, warning: 'ignored' });
+    addIssueToProjectMock.mockResolvedValue({ alreadyPresent: false });
     setIssueProjectMetadataMock.mockRejectedValue(new Error('Metadata field unavailable'));
     const queries = {
       projects: {
@@ -3646,10 +3648,10 @@ describe('registerGitHubHandlers', () => {
     const labelSync = {
       created: ['agent:codex'],
       alreadyPresent: ['shipcode'],
-      failed: [],
+      failed: [] as string[],
     };
     listRepoLabelsWithMetaMock.mockResolvedValue(labels);
-    ensureLabelsMock.mockResolvedValue(labelSync);
+    ensureLabelsMock.mockResolvedValue(labelSync as never);
     const queries = {
       projects: {
         getById: vi.fn(() => baseProject),

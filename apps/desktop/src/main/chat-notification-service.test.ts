@@ -1,5 +1,5 @@
 import type { ProjectQueries, SettingsQueries } from '@shipcode/db';
-import type { Project, Thread } from '@shipcode/shared';
+import type { PipelinePhase, Project, Thread } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatNotificationService } from './chat-notification-service';
@@ -291,7 +291,7 @@ describe('ChatNotificationService', () => {
       'ci_blocked',
       makeThread({
         id: 'thread-ci',
-        status: 'blocked',
+        status: 'blocked' as PipelinePhase,
       }),
     );
     await new Promise((resolve) => setTimeout(resolve, 0));

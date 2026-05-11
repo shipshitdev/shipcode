@@ -124,7 +124,8 @@ function makeGraph(): ProjectIssueGraph {
 describe('ProjectGraphTab', () => {
   const invokeMock = vi.fn<(channel: string, args?: unknown) => Promise<unknown>>();
   const onMock = vi.fn(
-    (_channel: string, _handler: (payload: { projectId: string }) => void) => {},
+    (_channel: string, _handler: (payload: { projectId: string }) => void): (() => void) =>
+      () => {},
   );
 
   beforeEach(() => {

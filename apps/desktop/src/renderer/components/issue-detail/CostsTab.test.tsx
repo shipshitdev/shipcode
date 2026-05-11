@@ -5,6 +5,7 @@ import type {
   CostTaskSummary,
   PipelineStepRecord,
   PipelineThreadAnalytics,
+  SkillResolutionSource,
   Thread,
 } from '@shipcode/shared';
 import { PIPELINE_PHASE } from '@shipcode/shared';
@@ -401,7 +402,7 @@ describe('CostsTab', () => {
               ...makeAnalytics().skillResolutions[0],
               id: 'skill-2',
               fallbackUsed: false,
-              source: 'matched',
+              source: 'matched' as SkillResolutionSource,
             },
           ],
         });

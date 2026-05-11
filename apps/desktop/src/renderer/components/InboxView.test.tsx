@@ -390,10 +390,10 @@ describe('InboxView', () => {
     const localNotification: NotificationRecord = {
       id: 'local-only',
       projectId: null,
-      threadId: null,
+      threadId: '',
       kind: 'failed',
       title: 'Local failure without project',
-      body: null,
+      body: '',
       createdAt: '2026-04-21T12:00:00.000Z',
       dismissedAt: null,
     };
@@ -418,7 +418,7 @@ describe('InboxView', () => {
     const threadlessNotification: NotificationRecord = {
       ...notifications[0],
       id: 'threadless',
-      threadId: null,
+      threadId: '',
       title: 'Project notification without thread',
     };
     vi.mocked(window.shipcode.invoke).mockClear();

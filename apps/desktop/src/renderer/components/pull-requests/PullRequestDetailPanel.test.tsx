@@ -129,7 +129,7 @@ describe('PullRequestDetailPanel', () => {
             {
               name: 'test',
               workflowName: 'CI',
-              status: 'completed',
+              status: 'success',
               conclusion: 'failure',
               detailsUrl: 'https://github.com/acme/repo/actions/runs/1',
             },
@@ -142,6 +142,7 @@ describe('PullRequestDetailPanel', () => {
               path: 'src/foo.ts',
               line: 12,
               url: 'https://github.com/acme/repo/pull/77#discussion_r1',
+              createdAt: '2024-01-01T00:00:00Z',
             },
           ],
         });

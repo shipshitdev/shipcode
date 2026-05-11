@@ -381,7 +381,7 @@ describe('createElectronEmitter event forwarding and terminal bookkeeping', () =
   });
 
   it('skips activity and failure capture when no thread is found', () => {
-    deps.threads.getById = vi.fn(() => null);
+    deps.threads.getById = vi.fn(() => null as any);
     const emitter = createElectronEmitter(mainWindow as never, deps as never);
 
     emitter.emit({

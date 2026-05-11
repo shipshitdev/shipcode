@@ -17,8 +17,8 @@ describe('getAutomationRunTotalTokens', () => {
   it('treats missing token fields as zero', () => {
     expect(
       getAutomationRunTotalTokens({
-        totalTokensPrompt: null,
-        totalTokensCompletion: null,
+        totalTokensPrompt: 0,
+        totalTokensCompletion: 0,
         lastError: null,
         totalCostUsd: 0,
         executorResolvedModel: null,

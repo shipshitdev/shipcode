@@ -146,7 +146,7 @@ const status: IntegrationStatus = {
     enabled: true,
     configured: true,
     destinationConfigured: true,
-    validationStatus: 'unknown',
+    validationStatus: 'missing',
     message: 'Telegram has not been checked',
     lastDeliveryStatus: {
       provider: 'telegram',

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { DashboardOverview } from '@shipcode/shared';
+import type { ActivePipelineSummary, DashboardOverview } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -375,16 +375,16 @@ describe('OverviewView', () => {
   });
 
   it('expands running agents, paginates tables, and navigates rows with cached issue matches', async () => {
-    const running = Array.from({ length: 5 }, (_, index) => ({
+    const running: ActivePipelineSummary[] = Array.from({ length: 5 }, (_, index) => ({
       threadId: `thread-${index + 1}`,
       projectId: 'project-1',
       projectName: 'ShipCode',
       threadTitle: `Running agent ${index + 1}`,
-      phase: 'executing',
+      phase: 'executing' as const,
       startedAt: Date.now() - index * 1000,
       activeProcessId: `process-${index + 1}`,
       githubIssueNumber: index + 1,
-      modelProvider: 'claude',
+      modelProvider: 'claude' as const,
       model: 'claude-sonnet-4',
       reasoningEffort: 'medium',
     }));

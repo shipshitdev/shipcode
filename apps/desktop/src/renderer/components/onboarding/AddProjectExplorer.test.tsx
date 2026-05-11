@@ -168,7 +168,8 @@ describe('AddProjectExplorer', () => {
       if (channel === 'fs:resolve-start-dir') return { resolvedPath: '/Users/vincent' };
       if (channel === 'fs:list-directories') return { entries: [], error: null };
       if (channel === 'project:add') return project;
-      if (channel === 'github:refresh-issues') throw new Error(`Refresh failed ${args?.projectId}`);
+      if (channel === 'github:refresh-issues')
+        throw new Error(`Refresh failed ${(args as { projectId?: string })?.projectId}`);
       return null;
     });
 

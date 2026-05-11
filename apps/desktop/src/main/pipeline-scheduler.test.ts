@@ -162,11 +162,10 @@ function makeBaseSettings(overrides: Record<string, unknown> = {}) {
   };
 }
 
-const makeMainWindow = () =>
-  ({
-    isDestroyed: vi.fn(() => false),
-    webContents: { send: vi.fn() },
-  }) as never;
+const makeMainWindow = () => ({
+  isDestroyed: vi.fn(() => false),
+  webContents: { send: vi.fn() },
+});
 
 describe('PipelineScheduler', () => {
   let queries: ReturnType<typeof makeQueries>;
@@ -189,7 +188,7 @@ describe('PipelineScheduler', () => {
         getById: vi.fn((_id?: string) => makeProject() as ReturnType<typeof makeProject> | null),
       },
       threads: {
-        getById: vi.fn(() => null),
+        getById: vi.fn(() => null as unknown),
         listAwaitingWithApprovedPlans: vi.fn(() => [] as unknown[]),
         getByProjectAndGithubIssue: vi.fn(() => null),
         create: vi.fn(() => ({
@@ -256,7 +255,7 @@ describe('PipelineScheduler', () => {
       queries: queries as never,
       pipeline: pipeline as never,
       emitter: { emit: vi.fn() } as never,
-      getMainWindow: () => mainWindow,
+      getMainWindow: () => mainWindow as never,
     });
   });
 
