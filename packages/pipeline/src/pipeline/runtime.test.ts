@@ -505,6 +505,60 @@ describe('createPipelineRuntime', () => {
     });
   });
 
+  it('formats non-Error setup preparation failures', async () => {
+    const projectPath = tempDir('project');
+    const worktreePath = tempDir('worktree');
+    mockLoadRepoSetupContract.mockReturnValue({
+      path: path.join(projectPath, '.shipcode/setup.json'),
+      contract: {
+        version: 1,
+        setupCommands: ['bun install'],
+        verifyCommands: [],
+        envFiles: [],
+        setupBeforeVerify: false,
+        testingContext: null,
+      },
+    });
+    const { deps } = makeDeps();
+    deps.processManager.spawnWithStdin = vi.fn(() => {
+      throw 'spawn string failure';
+    }) as never;
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    await expect(
+      runtime.prepareWorktree(makeContext({ projectPath, worktreePath }), 'execute'),
+    ).resolves.toEqual({
+      ok: false,
+      error: 'command error: bun install — spawn string failure',
+    });
+  });
+
+  it('rejects env file targets that escape the worktree root', async () => {
+    const projectPath = tempDir('project');
+    const worktreePath = tempDir('worktree');
+    writeFileSync(path.join(projectPath, '.env.test'), 'SECRET=1');
+    mockLoadRepoSetupContract.mockReturnValue({
+      path: path.join(projectPath, '.shipcode/setup.json'),
+      contract: {
+        version: 1,
+        setupCommands: [],
+        verifyCommands: [],
+        envFiles: [{ source: '.env.test', target: '../outside.env', required: true }],
+        setupBeforeVerify: false,
+        testingContext: null,
+      },
+    });
+    const { deps } = makeDeps();
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    await expect(
+      runtime.prepareWorktree(makeContext({ projectPath, worktreePath }), 'execute'),
+    ).resolves.toEqual({
+      ok: false,
+      error: 'env file target "../outside.env" escapes the project root',
+    });
+  });
+
   it('handles optional env files, escaped env paths, and verify setup opt-in', async () => {
     const projectPath = tempDir('project');
     const worktreePath = tempDir('worktree');
@@ -1738,5 +1792,60 @@ describe('createPipelineRuntime', () => {
         edges: [],
       } as never),
     ).resolves.toBeUndefined();
+  });
+
+  it('records provider failures without Error instances or provider metadata', async () => {
+    const provider = {
+      id: 'stub-provider',
+      generate: vi.fn(async () => {
+        throw 'provider string failure';
+      }),
+    } as unknown as AgentProvider;
+    const { deps } = makeDeps(provider);
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+
+    await expect(runtime.runProviderPhase(context, 'plan', 'prompt', [], {})).rejects.toBe(
+      'provider string failure',
+    );
+
+    expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
+      'step-1',
+      expect.objectContaining({
+        status: 'failed',
+        errorKind: 'unknown',
+        errorMessage: 'provider string failure',
+      }),
+    );
+    expect(deps.agentConversations?.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ content: '[error] provider string failure' }),
+    );
+  });
+
+  it('records nonzero provider exits without providerError details', async () => {
+    const provider = {
+      id: 'stub-provider',
+      generate: vi.fn(async () => ({
+        rawOutput: 'failed',
+        exitCode: 2,
+      })),
+    } as unknown as AgentProvider;
+    const { deps } = makeDeps(provider);
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+
+    await expect(runtime.runProviderPhase(context, 'execute', 'prompt', [], {})).resolves.toEqual(
+      expect.objectContaining({ rawOutput: 'failed', exitCode: 2 }),
+    );
+
+    expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
+      'step-1',
+      expect.objectContaining({
+        status: 'failed',
+        errorKind: 'unknown',
+        errorMessage: null,
+        resolvedModel: null,
+      }),
+    );
   });
 });
