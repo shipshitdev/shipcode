@@ -295,6 +295,15 @@ describe('createPipelineRuntime', () => {
     expect(runtime.buildRepoSetupPlannerNote(context)).toBe('');
   });
 
+  it('returns empty verification commands when neither setup contract nor settings provide one', () => {
+    mockLoadRepoSetupContract.mockReturnValue(null);
+    const { deps } = makeDeps();
+    deps.settings.get = vi.fn(() => ({ ...DEFAULT_SETTINGS, testCommand: '   ' })) as never;
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    expect(runtime.getVerifyCommands(makeContext())).toEqual([]);
+  });
+
   it('selects trusted login shells with fallback to sh', () => {
     const preferred = resolveSetupShell((shell) => shell === '/bin/zsh', '/bin/zsh');
     expect(preferred.command).toBe('/bin/zsh');
@@ -325,6 +334,46 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
 
     expect(runtime.buildRepoSetupPlannerNote(makeContext())).toBe('');
+  });
+
+  it('short-circuits verify setup when no setup or env propagation is required', async () => {
+    mockLoadRepoSetupContract.mockReturnValue({
+      path: '/repo/.shipcode/setup.json',
+      contract: {
+        version: 1,
+        setupCommands: ['bun install'],
+        verifyCommands: [],
+        envFiles: [],
+        setupBeforeVerify: false,
+        testingContext: null,
+      },
+    });
+    const { deps } = makeDeps();
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    await expect(runtime.prepareWorktree(makeContext(), 'verify')).resolves.toEqual({ ok: true });
+    expect(deps.processManager.spawnWithStdin).not.toHaveBeenCalled();
+  });
+
+  it('formats setup planner notes for required env files', () => {
+    mockLoadRepoSetupContract.mockReturnValue({
+      path: '/repo/.shipcode/setup.json',
+      contract: {
+        version: 1,
+        setupCommands: [],
+        verifyCommands: [],
+        envFiles: [{ source: '.env.required', required: true }],
+        setupBeforeVerify: false,
+        testingContext: null,
+      },
+    });
+    const { deps } = makeDeps();
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    const note = runtime.buildRepoSetupPlannerNote(makeContext());
+
+    expect(note).toContain('`.env.required`');
+    expect(note).not.toContain('(optional)');
   });
 
   it('copies env files and runs setup commands before execution', async () => {
@@ -400,6 +449,31 @@ describe('createPipelineRuntime', () => {
     await expect(promise).resolves.toEqual({
       ok: false,
       error: 'command failed (1): bun test — failure one failure two failure three',
+    });
+  });
+
+  it('formats failed setup commands without empty output snippets', async () => {
+    const projectPath = tempDir('project');
+    const worktreePath = tempDir('worktree');
+    mockLoadRepoSetupContract.mockReturnValue({
+      path: path.join(projectPath, '.shipcode/setup.json'),
+      contract: {
+        version: 1,
+        setupCommands: ['bun install'],
+        verifyCommands: [],
+        envFiles: [],
+        setupBeforeVerify: false,
+        testingContext: null,
+      },
+    });
+    const { deps, emitProcess } = makeDeps();
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const promise = runtime.prepareWorktree(makeContext({ projectPath, worktreePath }), 'execute');
+    emitProcess('exit', 'proc-1', 2);
+
+    await expect(promise).resolves.toEqual({
+      ok: false,
+      error: 'command failed (2): bun install',
     });
   });
 
@@ -765,6 +839,73 @@ describe('createPipelineRuntime', () => {
     expect(deps.promptTelemetry?.create).toHaveBeenCalled();
   });
 
+  it('passes executor model overrides and omits workspace roots outside worktrees', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['execute']),
+      generate: vi.fn(async (request) => ({
+        rawOutput: JSON.stringify({
+          cwd: request.cwd,
+          modelHint: request.modelHint,
+          workspaceRoot: 'workspaceRoot' in request ? request.workspaceRoot : null,
+          maxTurns: request.phaseHints?.maxTurns ?? null,
+        }),
+        exitCode: 0,
+      })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    const result = await runtime.runProviderPhase(
+      makeContext({
+        worktreePath: null,
+        executorModelOverride: 'claude-sonnet',
+      }),
+      'execute',
+      'prompt',
+      [],
+      {},
+    );
+
+    expect(JSON.parse(result.rawOutput)).toEqual({
+      cwd: '/repo',
+      modelHint: 'claude-sonnet',
+      workspaceRoot: null,
+      maxTurns: null,
+    });
+  });
+
+  it('passes revision model hints with planner turn limits', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['revision']),
+      generate: vi.fn(async (request) => ({
+        rawOutput: JSON.stringify({
+          modelHint: request.modelHint,
+          maxTurns: request.phaseHints?.maxTurns,
+        }),
+        exitCode: 0,
+      })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    const result = await runtime.runProviderPhase(
+      makeContext({ plannerModelIdOverride: 'claude-opus' }),
+      'revision',
+      'prompt',
+      [],
+      {},
+    );
+
+    expect(JSON.parse(result.rawOutput)).toEqual({
+      modelHint: 'claude-opus',
+      maxTurns: 1,
+    });
+  });
+
   it('keeps provider success nonfatal when step completion logging fails', async () => {
     const provider: AgentProvider = {
       id: 'claude-cli',
@@ -917,6 +1058,32 @@ describe('createPipelineRuntime', () => {
         status: 'failed',
         errorKind: 'rate_limit',
         errorMessage: 'slow down',
+      }),
+    );
+  });
+
+  it('records provider-aborted non-zero exits as aborted steps', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['verify']),
+      generate: vi.fn(async () => ({
+        rawOutput: 'aborted',
+        exitCode: 1,
+        providerError: { kind: 'aborted' as const, message: 'stopped', retryable: false },
+      })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    await runtime.runProviderPhase(makeContext(), 'verify', 'prompt', [], {});
+
+    expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
+      'step-1',
+      expect.objectContaining({
+        status: 'aborted',
+        errorKind: 'aborted',
+        errorMessage: 'stopped',
       }),
     );
   });
