@@ -22,7 +22,7 @@ import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { ArrowDown, ArrowUp, Plus, Save, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type EditableTriageRuleCondition = TriageRuleCondition & { clientId: string };
 type EditableTriageRule = Omit<TriageRuleDraft, 'conditions'> & {
@@ -83,10 +83,10 @@ function labelsToText(labels: readonly string[]): string {
 }
 
 function textToLabels(value: string): string[] {
-  return value
-    .split(',')
-    .map((label) => label.trim())
-    .filter(Boolean);
+  return value.split(',').flatMap((label) => {
+    const trimmed = label.trim();
+    return trimmed ? [trimmed] : [];
+  });
 }
 
 function toDraft(rule: EditableTriageRule): TriageRuleDraft {
@@ -112,7 +112,12 @@ function replaceAt<T>(items: readonly T[], index: number, next: T): T[] {
 export function TriageRulesTab({ projectId, isActive }: { projectId: string; isActive: boolean }) {
   const queryClient = useQueryClient();
   const [rules, setRules] = useState<EditableTriageRule[]>([]);
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirtyState] = useState(false);
+  const dirtyRef = useRef(false);
+  const setDirty = (value: boolean) => {
+    dirtyRef.current = value;
+    setDirtyState(value);
+  };
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const rulesQuery = useQuery<TriageRule[]>({
@@ -121,17 +126,14 @@ export function TriageRulesTab({ projectId, isActive }: { projectId: string; isA
     enabled: isActive && !!projectId,
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: projectId triggers reset when switching projects
   useEffect(() => {
-    setRules([]);
-    setDirty(false);
+    if (dirtyRef.current && rulesQuery.data) return;
+    setRules(rulesQuery.data ? rulesQuery.data.map(toEditableRule) : []);
+    dirtyRef.current = false;
+    setDirtyState(false);
     setSaveError(null);
-    if (!projectId) return;
-  }, [projectId]);
-
-  useEffect(() => {
-    if (!rulesQuery.data || dirty) return;
-    setRules(rulesQuery.data.map(toEditableRule));
-  }, [dirty, rulesQuery.data]);
+  }, [projectId, rulesQuery.data]);
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -213,7 +215,7 @@ export function TriageRulesTab({ projectId, isActive }: { projectId: string; isA
   }
 
   if (rulesQuery.isLoading) {
-    return <div className="text-[12px] text-muted-foreground">Loading triage rules...</div>;
+    return <div className="text-[12px] text-muted-foreground">Loading triage rules…</div>;
   }
 
   if (rulesQuery.error) {

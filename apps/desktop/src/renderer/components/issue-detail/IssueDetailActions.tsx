@@ -440,7 +440,7 @@ export function buildIssueDetailActions({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-danger/60 hover:bg-danger/10 hover:text-danger"
+              className="size-6 text-danger/60 hover:bg-danger/10 hover:text-danger"
               onClick={() =>
                 navigator.clipboard.writeText(
                   [thread?.lastError, failingPhaseOutput].filter(Boolean).join('\n\n'),
@@ -454,7 +454,7 @@ export function buildIssueDetailActions({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-danger/60 hover:bg-danger/10 hover:text-danger"
+                className="size-6 text-danger/60 hover:bg-danger/10 hover:text-danger"
                 title={showRawOutput ? 'Hide raw output' : 'Show raw output'}
                 aria-label={showRawOutput ? 'Hide raw output' : 'Show raw output'}
                 onClick={() => onShowRawOutputChange(!showRawOutput)}

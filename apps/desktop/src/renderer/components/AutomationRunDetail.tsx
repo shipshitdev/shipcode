@@ -272,7 +272,7 @@ function useAutomationRunDetailView() {
           size="icon"
           onClick={handleClose}
           aria-label="Back to board"
-          className="h-6 w-6 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
+          className="size-6 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
         >
           <ArrowLeft className="size-4" />
         </Button>
@@ -284,7 +284,7 @@ function useAutomationRunDetailView() {
           <Button
             variant="outline"
             size="icon"
-            className="h-6 w-6 text-warning hover:bg-warning/10"
+            className="size-6 text-warning hover:bg-warning/10"
             title="Pause task"
             aria-label="Pause task"
             onClick={handlePause}
@@ -297,7 +297,7 @@ function useAutomationRunDetailView() {
           <Button
             variant="outline"
             size="icon"
-            className="h-6 w-6 text-agent hover:bg-agent/10"
+            className="size-6 text-agent hover:bg-agent/10"
             title="Resume task"
             aria-label="Resume task"
             onClick={handleResume}
@@ -521,7 +521,7 @@ function useAutomationRunDetailView() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-4 w-4 text-muted-foreground/60 hover:text-primary"
+                          className="size-4 text-muted-foreground/60 hover:text-primary"
                           title="Edit automation model"
                           onClick={() => openCreateAutomationModal(automationId)}
                         >
@@ -564,7 +564,7 @@ function useAutomationRunDetailView() {
                     onClick={() => {
                       if (thread.worktreeBranch) handleCopyBranch(thread.worktreeBranch);
                     }}
-                    className="h-6 w-6 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
+                    className="size-6 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
                     title="Copy branch name"
                   >
                     <Copy className="size-3" />
@@ -573,7 +573,7 @@ function useAutomationRunDetailView() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 text-muted-foreground"
+                      className="size-6 text-muted-foreground"
                       onClick={() =>
                         navigateToGitWorktree(thread.projectId, thread.worktreePath as string)
                       }
@@ -592,7 +592,7 @@ function useAutomationRunDetailView() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 text-muted-foreground"
+                        className="size-6 text-muted-foreground"
                         onClick={() =>
                           window.shipcode.invoke('shell:open-external', { url: compareUrl })
                         }
@@ -644,7 +644,7 @@ function useAutomationRunDetailView() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-muted-foreground"
+                    className="size-6 text-muted-foreground"
                     onClick={() =>
                       window.shipcode.invoke('shell:open-external', {
                         url: `https://github.com/${thread.githubRepo}/pull/${thread.githubPrNumber}`,

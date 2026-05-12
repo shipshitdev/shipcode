@@ -89,7 +89,7 @@ export function TerminalPane({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-danger"
+              className="size-6 text-danger"
               title="Stop"
               onClick={() => onCancel(threadId)}
             >
@@ -99,7 +99,7 @@ export function TerminalPane({
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-muted-foreground"
+            className="size-6 text-muted-foreground"
             title="Close pane"
             onClick={() => onClose(threadId, isRunning)}
           >

@@ -845,7 +845,7 @@ function useCreateIssueModalView() {
                     variant="ghost"
                     size="icon"
                     aria-label={`Remove ${a.fileName}`}
-                    className="h-6 w-6 shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-danger"
+                    className="size-6 shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-danger"
                     onClick={(e) => {
                       e.stopPropagation();
                       void handleRemoveAttachment(a);

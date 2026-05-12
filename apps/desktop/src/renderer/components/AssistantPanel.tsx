@@ -135,16 +135,19 @@ type ConversationItem =
   | { id: string; kind: 'error'; message: string; createdAt: string };
 
 function rawActivityLines(content: string): string[] {
-  const clean = stripAnsi(content)
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !/^[\d:.\s]+$/.test(line))
-    .filter((line) => !/^esc to cancel/i.test(line))
-    .filter((line) => !/^ctrl[+-]/i.test(line));
-
-  return clean.slice(-6);
+  const lines: string[] = [];
+  for (const raw of stripAnsi(content).replace(/\r/g, '\n').split('\n')) {
+    const line = raw.trim();
+    if (
+      !line ||
+      /^[\d:.\s]+$/.test(line) ||
+      /^esc to cancel/i.test(line) ||
+      /^ctrl[+-]/i.test(line)
+    )
+      continue;
+    lines.push(line);
+  }
+  return lines.slice(-6);
 }
 
 function buildConversationItems(records: TerminalEventRecord[]): ConversationItem[] {
@@ -309,14 +312,18 @@ function AssistantTimeline({
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const items = useMemo(() => {
     if (!threadId) return [];
-    const userItems: ConversationItem[] = userMessages
-      .filter((message) => message.threadId === threadId)
-      .map((message) => ({
-        id: message.id,
-        kind: 'user',
-        content: message.content,
-        createdAt: message.createdAt,
-      }));
+    const userItems: ConversationItem[] = userMessages.flatMap((message) =>
+      message.threadId === threadId
+        ? [
+            {
+              id: message.id,
+              kind: 'user' as const,
+              content: message.content,
+              createdAt: message.createdAt,
+            },
+          ]
+        : [],
+    );
     const eventItems = buildConversationItems(events);
     return [...userItems, ...eventItems].sort((a, b) =>
       a.createdAt === b.createdAt
@@ -334,7 +341,7 @@ function AssistantTimeline({
 
   if (items.length === 0) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col gap-3 px-5 py-5 text-sm text-secondary">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-5 text-sm text-secondary">
         <AgentActivityOverview events={events} isRunning={isRunning} />
         <div className="flex flex-1 items-center justify-center">
           {isRunning ? <AnimatedThinkingWord /> : 'No assistant messages yet.'}
@@ -344,7 +351,7 @@ function AssistantTimeline({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+    <div className="min-h-0 flex-1 overflow-y-auto p-3">
       <div className="mx-auto flex flex-col gap-3">
         {items.map((item) => {
           if (item.kind === 'user') {
@@ -691,7 +698,7 @@ export function AssistantPanel() {
           type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-primary"
+          className="size-7 text-muted-foreground hover:text-primary"
           onClick={handleNewThread}
           disabled={!assistantThreadId}
           title="New assistant thread"
@@ -702,7 +709,7 @@ export function AssistantPanel() {
           type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-primary"
+          className="size-7 text-muted-foreground hover:text-primary"
           onClick={closeAssistant}
           title="Close assistant"
         >

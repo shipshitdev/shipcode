@@ -42,7 +42,7 @@ export function DiffTab({ diffs, threadStatus }: { diffs: DiffRecord[]; threadSt
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6"
+              className="size-6"
               onClick={() => setIsFullScreen(true)}
               title="Full screen diff"
               aria-label="Full screen diff"

@@ -149,6 +149,7 @@ function useIssueDetailView() {
   const [isTogglingState, setIsTogglingState] = useState(false);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
+  const showRawOutputThreadRef = useRef<string | null>(null);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showMarkAsDoneConfirm, setShowMarkAsDoneConfirm] = useState(false);
   const [branchCopyState, setBranchCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
@@ -453,10 +454,10 @@ function useIssueDetailView() {
     shouldFetchFullScreenPlanDetail,
   ]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset when thread changes
-  useEffect(() => {
-    setShowRawOutput(false);
-  }, [activeThreadId]);
+  if (showRawOutputThreadRef.current !== activeThreadId) {
+    showRawOutputThreadRef.current = activeThreadId;
+    if (showRawOutput) setShowRawOutput(false);
+  }
 
   useEffect(() => {
     if (prevIssueSelectionKeyRef.current === issueSelectionKey) return;
@@ -1111,7 +1112,7 @@ function useIssueDetailView() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 text-muted-foreground"
+          className="size-7 text-muted-foreground"
           onClick={() => selectIssue(null)}
           title="Back to board"
           aria-label="Back to board"

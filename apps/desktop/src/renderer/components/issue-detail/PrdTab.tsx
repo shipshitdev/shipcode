@@ -29,7 +29,7 @@ export function PrdTab({
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6"
+            className="size-6"
             onClick={onRefreshFromGithub}
             disabled={isRefreshingFromGithub}
             title="Re-fetch issue from GitHub"
@@ -40,7 +40,7 @@ export function PrdTab({
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6"
+            className="size-6"
             onClick={onEditPrd}
             title="Edit issue body"
             aria-label="Edit issue body"

@@ -211,7 +211,7 @@ function ConversationTurn({
             variant="ghost"
             size="icon"
             onClick={onCopy}
-            className="h-6 w-6 text-muted-foreground hover:text-foreground transition-colors p-0.5"
+            className="size-6 text-muted-foreground hover:text-foreground transition-colors p-0.5"
           >
             {isCopied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
           </Button>

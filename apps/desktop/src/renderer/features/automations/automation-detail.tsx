@@ -87,7 +87,7 @@ export function AutomationDetail() {
           size="icon"
           onClick={openAutomations}
           aria-label="Back to automations"
-          className="h-6 w-6 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
+          className="size-6 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
         >
           <ArrowLeft className="size-4" />
         </Button>
@@ -268,7 +268,7 @@ export function AutomationDetail() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-4 w-4 text-muted-foreground/60 hover:text-primary"
+                    className="size-4 text-muted-foreground/60 hover:text-primary"
                     title="Edit automation model"
                     onClick={() => openCreateAutomationModal(automation.id)}
                   >
