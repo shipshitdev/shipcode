@@ -4,7 +4,7 @@ import { PhaseChip } from '@shipcode/ui';
 import { Button, cn } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Cron } from 'croner';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Pencil } from 'lucide-react';
 import { useAppStore } from '../../stores/app-store';
 import { AutomationPromptMarkdown } from './automation-prompt-markdown';
 import { formatAutomationRelativeTime } from './automation-time';
@@ -46,6 +46,7 @@ export function AutomationDetail() {
   const automationId = useAppStore((s) => s.activeAutomationDetailId);
   const openAutomations = useAppStore((s) => s.openAutomations);
   const selectAutomationThread = useAppStore((s) => s.selectAutomationThread);
+  const openCreateAutomationModal = useAppStore((s) => s.openCreateAutomationModal);
 
   const { data: automation, isLoading: isAutomationLoading } = useQuery<Automation | null>({
     queryKey: ['automation', automationId],
@@ -258,16 +259,33 @@ export function AutomationDetail() {
             )}
 
             {/* Executor Override */}
-            {automation?.executorProvider && (
+            {automation && (
               <div className="min-w-0">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Executor
-                </span>
-                <p className="mt-0.5 text-sm text-primary">{automation.executorProvider}</p>
-                {automation.executorModelId && (
-                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                    {automation.executorModelId}
-                  </p>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Executor
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 text-muted-foreground/60 hover:text-primary"
+                    title="Edit automation model"
+                    onClick={() => openCreateAutomationModal(automation.id)}
+                  >
+                    <Pencil className="size-3" />
+                  </Button>
+                </div>
+                {automation.executorProvider ? (
+                  <>
+                    <p className="mt-0.5 text-sm text-primary">{automation.executorProvider}</p>
+                    {automation.executorModelId && (
+                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        {automation.executorModelId}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="mt-0.5 text-sm text-muted-foreground">Project default</p>
                 )}
               </div>
             )}

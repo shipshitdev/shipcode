@@ -240,6 +240,7 @@ function useDraggableCardView({
   isKeyboardFocused,
   isStartingPipeline,
   isRerunning,
+  isCancelling,
   isFlashing = false,
   hoverCardEnabled = true,
   onFetchPlanSteps,
@@ -441,6 +442,28 @@ function useDraggableCardView({
                 <RefreshCw size={10} />
               )}
               {isRerunning ? 'Retrying' : 'Retry'}
+            </Button>
+          )}
+          {isActive && onCancel && !readOnly && (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-6 gap-1 rounded border border-danger/30 bg-danger/10 px-2 text-[10px] font-semibold uppercase tracking-wide text-danger hover:border-danger/50 hover:bg-danger/20 hover:text-danger"
+              title={isCancelling ? 'Cancelling' : 'Cancel pipeline'}
+              disabled={isCancelling}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (isCancelling) return;
+                onCancel(issue);
+              }}
+            >
+              {isCancelling ? (
+                <Loader2 size={10} className="animate-spin" />
+              ) : (
+                <XCircle size={10} />
+              )}
+              {isCancelling ? 'Cancelling' : 'Cancel'}
             </Button>
           )}
           <div className="ml-auto flex items-center gap-1">

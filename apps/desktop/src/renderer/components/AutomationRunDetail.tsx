@@ -17,6 +17,7 @@ import {
   ExternalLink,
   GitBranch,
   GitPullRequest,
+  Pencil,
   Play,
   RefreshCw,
   Square,
@@ -46,6 +47,7 @@ function useAutomationRunDetailView() {
   const threadId = useAppStore((s) => s.activeAutomationThreadId);
   const selectAutomationThread = useAppStore((s) => s.selectAutomationThread);
   const navigateToGitWorktree = useAppStore((s) => s.navigateToGitWorktree);
+  const openCreateAutomationModal = useAppStore((s) => s.openCreateAutomationModal);
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<'run' | 'plans' | 'diff' | 'history'>('run');
@@ -511,9 +513,22 @@ function useAutomationRunDetailView() {
               <div className="grid grid-cols-1 gap-3">
                 {thread.executorResolvedModel && (
                   <div>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                      Executor
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        Executor
+                      </span>
+                      {automationId && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-4 w-4 text-muted-foreground/60 hover:text-primary"
+                          title="Edit automation model"
+                          onClick={() => openCreateAutomationModal(automationId)}
+                        >
+                          <Pencil className="size-3" />
+                        </Button>
+                      )}
+                    </div>
                     <p className="mt-0.5 truncate text-sm text-primary">
                       {thread.executorResolvedModel}
                     </p>
