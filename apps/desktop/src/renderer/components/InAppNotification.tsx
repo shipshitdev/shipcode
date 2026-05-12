@@ -1,6 +1,6 @@
 import { Button, cn } from '@shipshitdev/ui';
 import { X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 
 type InAppNotificationTone = 'default' | 'success' | 'warning' | 'danger';
 
@@ -20,6 +20,26 @@ interface InAppNotificationProps {
   dismissLabel?: string;
   onClick?: () => void;
   onDismiss?: () => void;
+}
+
+export function useToastExit(autoDismissAfterMs: number | undefined, onHide: () => void) {
+  const [isExiting, setIsExiting] = useState(false);
+
+  const triggerExit = useCallback(
+    (callback = onHide) => {
+      setIsExiting(true);
+      setTimeout(callback, 220);
+    },
+    [onHide],
+  );
+
+  useEffect(() => {
+    if (autoDismissAfterMs === undefined) return;
+    const id = setTimeout(triggerExit, autoDismissAfterMs);
+    return () => clearTimeout(id);
+  }, [autoDismissAfterMs, triggerExit]);
+
+  return { isExiting, triggerExit };
 }
 
 export function InAppNotification({
