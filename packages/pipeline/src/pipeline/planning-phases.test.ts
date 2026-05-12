@@ -39,11 +39,14 @@ describe('planning phase helpers', () => {
 
   it('clears retry timers when present and no-ops without one', () => {
     vi.useFakeTimers();
-    const timer = setTimeout(() => {}, 1000);
-    const context = { retryTimer: timer } as PipelineContext;
+    const callback = vi.fn();
+    const timer = setTimeout(callback, 1000);
+    const context = { retryTimer: timer } as unknown as PipelineContext;
 
     clearRetryTimer(context);
     expect(context.retryTimer).toBeNull();
+    vi.runOnlyPendingTimers();
+    expect(callback).not.toHaveBeenCalled();
 
     clearRetryTimer(context);
     expect(context.retryTimer).toBeNull();
@@ -58,6 +61,9 @@ describe('planning phase helpers', () => {
     );
     expect(formatPlanParseFailure('x'.repeat(400))).toHaveLength(
       'Plan output could not be parsed — '.length + 280,
+    );
+    expect(formatPlanParseFailure('   {"unexpected":true}')).toBe(
+      'Plan output could not be parsed — {"unexpected":true}',
     );
   });
 
@@ -125,5 +131,24 @@ describe('planning phase helpers', () => {
         clarificationAnswers: [],
       } as unknown as PipelineContext),
     ).toBeNull();
+  });
+
+  it('formats selected clarification choices without freeform notes', () => {
+    const context = {
+      clarificationHistory: [
+        {
+          request: clarificationRequest('clarify-1', 'storage', 'Storage'),
+          answers: [{ questionId: 'storage', selectedChoiceId: 'a', freeformText: null }],
+        },
+      ],
+      clarificationRequest: null,
+      clarificationAnswers: [],
+    } as unknown as PipelineContext;
+
+    const result = buildClarificationContext(context);
+
+    expect(result).toContain('Storage A');
+    expect(result).toContain('Use Storage A');
+    expect(result).not.toContain('Extra note:');
   });
 });
