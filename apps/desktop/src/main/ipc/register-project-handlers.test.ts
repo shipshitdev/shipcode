@@ -262,6 +262,10 @@ describe('registerProjectHandlers', () => {
     configureMainTelemetryMock.mockResolvedValue(undefined);
   });
 
+  async function flushBackgroundTasks() {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
   function registerOpenPathHandler(project: Project = baseProject) {
     const queries = {
       projects: {
@@ -1344,6 +1348,9 @@ describe('registerProjectHandlers', () => {
       repo: { id: 'R_kgDOStarter', name: 'shipshitdev/shipcode' },
     })) as Project;
 
+    expect(result.starterIssueNumber).toBeNull();
+    await flushBackgroundTasks();
+
     expect(createIssueMock).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Ship your first change with ShipCode',
@@ -1362,7 +1369,6 @@ describe('registerProjectHandlers', () => {
       projectId: 'project-1',
       issues,
     });
-    expect(result.starterIssueNumber).toBe(101);
   });
 
   it('reuses an existing seeded starter issue for the same GitHub repo identity', async () => {
@@ -1463,12 +1469,14 @@ describe('registerProjectHandlers', () => {
       repo: { id: 'R_kgDOStarter', name: 'shipshitdev/shipcode' },
     })) as Project;
 
+    expect(result.starterIssueNumber).toBeNull();
+    await flushBackgroundTasks();
+
     expect(createIssueMock).not.toHaveBeenCalled();
     expect(queries.projects.markStarterIssueSeeded).toHaveBeenCalledWith('project-1', {
       starterIssueNumber: 55,
       starterIssueCreatedAt: '2026-04-20T00:00:00.000Z',
     });
-    expect(result.starterIssueNumber).toBe(55);
   });
 
   it('adds GitHub projects even when repo metadata and starter issue seeding fail', async () => {
@@ -1550,6 +1558,7 @@ describe('registerProjectHandlers', () => {
         repo: { id: 'R_repo', name: 'shipshitdev/shipcode' },
       }),
     ).resolves.toMatchObject({ id: 'project-1' });
+    await flushBackgroundTasks();
     expect(createIssueMock).toHaveBeenCalledTimes(1);
     expect(queries.projects.markStarterIssueSeeded).not.toHaveBeenCalled();
   });

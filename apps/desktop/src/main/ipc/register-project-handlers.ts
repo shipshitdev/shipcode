@@ -367,6 +367,51 @@ async function ensureStarterIssue({
   }
 }
 
+async function runProjectGithubOnboarding({
+  mainWindow,
+  queries,
+  projectId,
+  projectPath,
+}: {
+  mainWindow: import('electron').BrowserWindow;
+  queries: IpcHandlerDeps['queries'];
+  projectId: string;
+  projectPath: string;
+}): Promise<void> {
+  const project = queries.projects.getById(projectId);
+  if (!project?.githubRepoFullName) return;
+
+  try {
+    const ghCli = new GhCli(projectPath);
+    const labelResult = await ghCli.ensureLabels(SHIPCODE_DEFAULT_LABELS);
+    log.info(
+      `[project:add] ShipCode label readiness created=${labelResult.created.length} alreadyPresent=${labelResult.alreadyPresent.length} failed=${labelResult.failed.length}`,
+    );
+  } catch (error) {
+    log.warn('[project:add] failed to ensure ShipCode labels:', error);
+  }
+
+  await ensureStarterIssue({ mainWindow, queries, projectId });
+}
+
+function enqueueProjectGithubOnboarding({
+  mainWindow,
+  queries,
+  projectId,
+  projectPath,
+}: {
+  mainWindow: import('electron').BrowserWindow;
+  queries: IpcHandlerDeps['queries'];
+  projectId: string;
+  projectPath: string;
+}): void {
+  void runProjectGithubOnboarding({ mainWindow, queries, projectId, projectPath }).catch(
+    (error) => {
+      log.warn('[project:add] failed to complete GitHub onboarding:', error);
+    },
+  );
+}
+
 function resolveProjectOpenTarget(
   settings: AppSettings,
   desktopApps: DesktopAppHealthMap,
@@ -472,16 +517,12 @@ export function registerProjectHandlers({
         const repoIdentity = await resolveGithubRepoIdentity(projectPath, remote, repo);
         if (repoIdentity) {
           queries.projects.updateGithubRepoIdentity(project.id, repoIdentity);
-          try {
-            const ghCli = new GhCli(projectPath);
-            const labelResult = await ghCli.ensureLabels(SHIPCODE_DEFAULT_LABELS);
-            log.info(
-              `[project:add] ShipCode label readiness created=${labelResult.created.length} alreadyPresent=${labelResult.alreadyPresent.length} failed=${labelResult.failed.length}`,
-            );
-          } catch (error) {
-            log.warn('[project:add] failed to ensure ShipCode labels:', error);
-          }
-          await ensureStarterIssue({ mainWindow, queries, projectId: project.id });
+          enqueueProjectGithubOnboarding({
+            mainWindow,
+            queries,
+            projectId: project.id,
+            projectPath,
+          });
         }
 
         return enrichProjectPath(queries.projects.getById(project.id));
