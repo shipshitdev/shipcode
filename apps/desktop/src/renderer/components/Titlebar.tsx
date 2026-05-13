@@ -245,7 +245,7 @@ function ProviderStatusBadge({
           <Button
             variant="ghost"
             size="icon"
-            className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground hover:text-primary"
+            className="mt-0.5 size-5 shrink-0 text-muted-foreground hover:text-primary"
             onClick={onRefresh}
             disabled={isRefreshing}
             title="Refresh CLI status"
@@ -427,7 +427,7 @@ function ResourceUsageBadge() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 shrink-0 text-muted-foreground hover:text-danger"
+                      className="size-6 shrink-0 text-muted-foreground hover:text-danger"
                       title="Kill process"
                       aria-label={`Kill ${title}`}
                       disabled={killProcess.isPending}

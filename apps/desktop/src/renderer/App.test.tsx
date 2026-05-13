@@ -101,7 +101,7 @@ vi.mock('./components/AddProjectExplorer', () => ({
 vi.mock('./components/AssistantPanel', () => ({
   AssistantPanel: () => <div>AssistantPanel</div>,
 }));
-vi.mock('./components/ProjectView', () => ({
+vi.mock('./features/project/project-view', () => ({
   ProjectView: () => <div>ProjectView</div>,
 }));
 vi.mock('./components/IssuesPanel', () => ({

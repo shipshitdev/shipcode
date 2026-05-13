@@ -105,7 +105,7 @@ export function ProjectSettingsGeneralTab({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="size-7"
               title="Re-read origin URL from local git config"
               disabled={refreshGitRemotePending}
               onClick={onRefreshGitRemote}
@@ -153,7 +153,7 @@ export function ProjectSettingsGeneralTab({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="size-7"
                 title="Refresh branches"
                 disabled={refreshBranchesPending}
                 onClick={onRefreshBranches}
@@ -167,7 +167,7 @@ export function ProjectSettingsGeneralTab({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="size-7"
                 title="Load branches"
                 disabled={refreshBranchesPending}
                 onClick={onRefreshBranches}

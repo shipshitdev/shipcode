@@ -6,7 +6,6 @@ import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { useAppStore } from '../stores/app-store';
 import { toast } from '../stores/toast-store';
 import { EMPTY_STREAM, PHASE_LABELS, type TerminalDrawerTarget } from './terminal-drawer/constants';
-import { TerminalDrawerEmptyState } from './terminal-drawer/TerminalDrawerEmptyState';
 import { TerminalDrawerHeader } from './terminal-drawer/TerminalDrawerHeader';
 import { useTerminalDrawer } from './terminal-drawer/useTerminalDrawer';
 import {
@@ -200,7 +199,16 @@ export function TerminalDrawer({ isExiting = false }: { isExiting?: boolean }) {
       />
       <div className="relative flex-1 overflow-hidden min-h-0">
         {showEmptyState ? (
-          <TerminalDrawerEmptyState />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
+            <div className="max-w-sm text-center">
+              <div className="text-sm font-medium text-primary">
+                No issue selected for this project
+              </div>
+              <div className="mt-1 text-xs leading-5 text-secondary">
+                Console output will appear when you select or start an issue in this project.
+              </div>
+            </div>
+          </div>
         ) : displayTarget && terminalThreadId ? (
           <TerminalDrawerTranscript
             approvedAwaitingExecution={approvedAwaitingExecution}
@@ -209,7 +217,16 @@ export function TerminalDrawer({ isExiting = false }: { isExiting?: boolean }) {
             onOpenTarget={handleRunningTargetSelect}
           />
         ) : (
-          <TerminalDrawerEmptyState />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
+            <div className="max-w-sm text-center">
+              <div className="text-sm font-medium text-primary">
+                No issue selected for this project
+              </div>
+              <div className="mt-1 text-xs leading-5 text-secondary">
+                Console output will appear when you select or start an issue in this project.
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

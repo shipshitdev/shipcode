@@ -472,7 +472,7 @@ function useProjectSidebarView() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 text-muted-foreground"
+                  className="size-6 text-muted-foreground"
                   title={`Sort: ${SORT_LABELS[sortOrder]}`}
                   aria-label="Sort projects"
                 >
@@ -493,7 +493,7 @@ function useProjectSidebarView() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-muted-foreground app-region-no-drag"
+              className="size-6 text-muted-foreground app-region-no-drag"
               title="Add repository"
               aria-label="Add repository"
               onClick={() => openAddProjectExplorer()}

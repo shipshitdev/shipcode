@@ -1032,7 +1032,7 @@ function useIssuesPanelView() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-muted-foreground hover:bg-transparent hover:text-primary"
+              className="size-6 text-muted-foreground hover:bg-transparent hover:text-primary"
               title="Dismiss undo"
               aria-label="Dismiss undo"
               onClick={() => setDoneUndo(null)}

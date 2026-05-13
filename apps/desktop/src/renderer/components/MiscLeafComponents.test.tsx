@@ -10,7 +10,6 @@ import {
   formatInheritedSummary,
 } from './project-settings-modal/shared';
 import { GeneralSettingsSection } from './settings-panel/GeneralSettingsSection';
-import { TerminalDrawerEmptyState } from './terminal-drawer/TerminalDrawerEmptyState';
 
 vi.mock('./project-settings-modal/ProjectPhaseSettingsRow', () => ({
   ProjectPhaseSettingsRow: ({ phase, label }: { phase: string; label: string }) => (
@@ -66,15 +65,6 @@ afterEach(() => {
 });
 
 describe('misc leaf components', () => {
-  it('renders the terminal drawer empty state copy', () => {
-    render(<TerminalDrawerEmptyState />);
-
-    expect(screen.getByText('No issue selected for this project')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Console output will appear when you select or start an issue/i),
-    ).toBeInTheDocument();
-  });
-
   it('updates worktree settings and re-runs setup from the general settings section', () => {
     const onUpdate = vi.fn();
     const onUpdateWorktreeRoot = vi.fn();

@@ -269,7 +269,7 @@ function useInboxView() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6"
+                    className="size-6"
                     onClick={() => setQuickViewNotification(n)}
                     aria-label={`Quick view: ${n.title}`}
                   >
@@ -306,7 +306,7 @@ function useInboxView() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6"
+                  className="size-6"
                   onClick={() => dismiss.mutate(n.id)}
                   disabled={dismiss.isPending && dismiss.variables === n.id}
                   aria-label={`Dismiss notification: ${n.title}`}

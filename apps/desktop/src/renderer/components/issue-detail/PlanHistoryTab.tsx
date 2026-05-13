@@ -73,7 +73,7 @@ export function PlanHistoryTab({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6"
+              className="size-6"
               onClick={(event) => {
                 event.stopPropagation();
                 onPlanHistoryCollapsedChange(!planHistoryCollapsed);
@@ -144,7 +144,7 @@ export function PlanHistoryTab({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6 shrink-0 text-muted-foreground hover:text-primary"
+                              className="size-6 shrink-0 text-muted-foreground hover:text-primary"
                               aria-label="View plan full screen"
                               onClick={() => onFullScreenPlan(plan.id)}
                             >

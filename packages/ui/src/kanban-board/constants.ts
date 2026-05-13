@@ -154,18 +154,6 @@ export const COLUMN_SCROLLBAR_COLOR: Record<ColumnKey, string> = {
   deferred: 'var(--text-muted)',
 };
 
-/** Maps GitHub ProjectV2SingleSelectFieldOption color enum → CSS hex. */
-export const GH_OPTION_COLOR_HEX: Record<string, string> = {
-  GRAY: '#6e7681',
-  BLUE: '#388bfd',
-  GREEN: '#3fb950',
-  YELLOW: '#d29922',
-  ORANGE: '#db6d28',
-  RED: '#f85149',
-  PINK: '#db61a2',
-  PURPLE: '#a371f7',
-};
-
 export const DRAGGABLE_STATUSES: IssuePipelineStatus[] = [
   ISSUE_PIPELINE_STATUS.todo,
   ISSUE_PIPELINE_STATUS.queued,

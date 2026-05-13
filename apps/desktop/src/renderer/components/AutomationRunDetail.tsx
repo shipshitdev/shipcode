@@ -17,6 +17,7 @@ import {
   ExternalLink,
   GitBranch,
   GitPullRequest,
+  Pencil,
   Play,
   RefreshCw,
   Square,
@@ -39,6 +40,7 @@ function useAutomationRunDetailView() {
   const threadId = useAppStore((s) => s.activeAutomationThreadId);
   const selectAutomationThread = useAppStore((s) => s.selectAutomationThread);
   const navigateToGitWorktree = useAppStore((s) => s.navigateToGitWorktree);
+  const openCreateAutomationModal = useAppStore((s) => s.openCreateAutomationModal);
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<'run' | 'plans' | 'diff' | 'history'>('run');
@@ -263,7 +265,7 @@ function useAutomationRunDetailView() {
           size="icon"
           onClick={handleClose}
           aria-label="Back to board"
-          className="h-6 w-6 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
+          className="size-6 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
         >
           <ArrowLeft className="size-4" />
         </Button>
@@ -275,7 +277,7 @@ function useAutomationRunDetailView() {
           <Button
             variant="outline"
             size="icon"
-            className="h-6 w-6 text-warning hover:bg-warning/10"
+            className="size-6 text-warning hover:bg-warning/10"
             title="Pause task"
             aria-label="Pause task"
             onClick={handlePause}
@@ -288,7 +290,7 @@ function useAutomationRunDetailView() {
           <Button
             variant="outline"
             size="icon"
-            className="h-6 w-6 text-agent hover:bg-agent/10"
+            className="size-6 text-agent hover:bg-agent/10"
             title="Resume task"
             aria-label="Resume task"
             onClick={handleResume}
@@ -504,9 +506,22 @@ function useAutomationRunDetailView() {
               <div className="grid grid-cols-1 gap-3">
                 {thread.executorResolvedModel && (
                   <div>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                      Executor
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        Executor
+                      </span>
+                      {automationId && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-4 text-muted-foreground/60 hover:text-primary"
+                          title="Edit automation model"
+                          onClick={() => openCreateAutomationModal(automationId)}
+                        >
+                          <Pencil className="size-3" />
+                        </Button>
+                      )}
+                    </div>
                     <p className="mt-0.5 truncate text-sm text-primary">
                       {thread.executorResolvedModel}
                     </p>
@@ -542,7 +557,7 @@ function useAutomationRunDetailView() {
                     onClick={() => {
                       if (thread.worktreeBranch) handleCopyBranch(thread.worktreeBranch);
                     }}
-                    className="h-6 w-6 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
+                    className="size-6 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
                     title="Copy branch name"
                   >
                     <Copy className="size-3" />
@@ -551,7 +566,7 @@ function useAutomationRunDetailView() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 text-muted-foreground"
+                      className="size-6 text-muted-foreground"
                       onClick={() =>
                         navigateToGitWorktree(thread.projectId, thread.worktreePath as string)
                       }
@@ -570,7 +585,7 @@ function useAutomationRunDetailView() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 text-muted-foreground"
+                        className="size-6 text-muted-foreground"
                         onClick={() =>
                           window.shipcode.invoke('shell:open-external', { url: compareUrl })
                         }
@@ -622,7 +637,7 @@ function useAutomationRunDetailView() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-muted-foreground"
+                    className="size-6 text-muted-foreground"
                     onClick={() =>
                       window.shipcode.invoke('shell:open-external', {
                         url: `https://github.com/${thread.githubRepo}/pull/${thread.githubPrNumber}`,
