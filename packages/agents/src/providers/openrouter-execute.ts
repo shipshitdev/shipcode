@@ -253,14 +253,23 @@ export async function executeViaOpenRouter(
 
         // Summarize tool args for terminal display
         let argSummary = '';
+        let parsedCommand: string | undefined;
+        let parsedFilePath: string | undefined;
+        let parsedPattern: string | undefined;
         try {
           const parsed = JSON.parse(call.function.arguments);
-          argSummary = parsed.file_path ?? parsed.pattern ?? parsed.command?.slice(0, 60) ?? '';
+          parsedCommand = typeof parsed.command === 'string' ? parsed.command : undefined;
+          parsedFilePath = typeof parsed.file_path === 'string' ? parsed.file_path : undefined;
+          parsedPattern = typeof parsed.pattern === 'string' ? parsed.pattern : undefined;
+          argSummary = parsedFilePath ?? parsedPattern ?? parsedCommand?.slice(0, 60) ?? '';
         } catch {}
         emit?.({
           kind: 'tool_start',
           name: call.function.name,
           summary: `${call.function.name} ${argSummary}`.trim(),
+          ...(parsedCommand ? { command: parsedCommand } : {}),
+          ...(parsedFilePath ? { filePath: parsedFilePath } : {}),
+          ...(parsedPattern ? { pattern: parsedPattern } : {}),
         });
 
         const toolStart = Date.now();

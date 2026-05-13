@@ -8,6 +8,8 @@ import {
   normalizeAgentRoutingLabel,
   PIPELINE_LABEL_PREFIX,
   pipelineLabelForStatus,
+  pipelineStatusFromLabel,
+  pipelineStatusFromLabels,
   SHIPCODE_LABEL_PREFIX,
 } from './github-labels';
 import {
@@ -154,6 +156,27 @@ describe('label helpers', () => {
     expect(isPipelineStateLabel('shipcode:agent:codex')).toBe(false);
   });
 
+  it('maps namespaced pipeline labels back to issue statuses', () => {
+    expect(pipelineStatusFromLabel('shipcode:pipeline:paused')).toBe(ISSUE_PIPELINE_STATUS.paused);
+    expect(pipelineStatusFromLabel('shipcode:pipeline:queued')).toBe(ISSUE_PIPELINE_STATUS.queued);
+    expect(pipelineStatusFromLabel('shipcode:pipeline:unknown')).toBeNull();
+    expect(pipelineStatusFromLabel('enhancement')).toBeNull();
+  });
+
+  it('resolves multiple pipeline labels with terminal/manual states first', () => {
+    expect(
+      pipelineStatusFromLabels([
+        'shipcode:pipeline:queued',
+        'shipcode:pipeline:executing',
+        'shipcode:pipeline:failed',
+      ]),
+    ).toBe(ISSUE_PIPELINE_STATUS.failed);
+    expect(pipelineStatusFromLabels(['shipcode:pipeline:queued', 'shipcode:pipeline:paused'])).toBe(
+      ISSUE_PIPELINE_STATUS.paused,
+    );
+    expect(pipelineStatusFromLabels(['enhancement'])).toBeNull();
+  });
+
   it('formats agent labels for display', () => {
     expect(agentLabelForExecutor('codex')).toBe('shipcode:agent:codex');
     expect(displayAgentLabel('shipcode:agent:openrouter/auto')).toBe('openrouter/auto');
@@ -181,6 +204,7 @@ describe('macroColumnForStatus', () => {
   it('maps human-review statuses → human_review', () => {
     expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.clarifying)).toBe('human_review');
     expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.approval)).toBe('human_review');
+    expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.paused)).toBe('human_review');
     expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.failed)).toBe('human_review');
   });
 

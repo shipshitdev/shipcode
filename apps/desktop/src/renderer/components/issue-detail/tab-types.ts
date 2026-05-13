@@ -1,7 +1,14 @@
 import type { ExecutorModel, PlanRecord, ResolvedPhaseModel } from '@shipcode/shared';
 
 export type PhaseKey = ResolvedPhaseModel;
-export type IssueDetailTab = 'prd' | 'comments' | 'history' | 'diff' | 'activity' | 'conversations';
+export type IssueDetailTab =
+  | 'prd'
+  | 'console'
+  | 'comments'
+  | 'history'
+  | 'diff'
+  | 'activity'
+  | 'conversations';
 
 export type PhaseSelection = {
   provider: ExecutorModel;

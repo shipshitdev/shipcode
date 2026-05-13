@@ -40,6 +40,22 @@ function classifyConsoleLine(content: string): ConsoleSeverity {
   return 'info';
 }
 
+type ToolCategory = 'bash' | 'file' | 'search' | 'default';
+
+function toolCategory(name: string): ToolCategory {
+  if (name === 'Bash') return 'bash';
+  if (name === 'Read' || name === 'Write' || name === 'Edit') return 'file';
+  if (name === 'Glob' || name === 'Grep') return 'search';
+  return 'default';
+}
+
+const TOOL_BADGE_CLASSES: Record<ToolCategory, string> = {
+  bash: 'border border-sky-500/25 bg-sky-500/15 text-sky-400',
+  file: 'border border-emerald-500/25 bg-emerald-500/15 text-emerald-400',
+  search: 'border border-violet-500/25 bg-violet-500/15 text-violet-400',
+  default: 'border border-border/50 bg-secondary/60 text-muted-foreground',
+};
+
 function formatTokens(usage: { prompt: number; completion: number } | undefined, costUsd?: number) {
   const parts: string[] = [];
   if (usage) parts.push(`${usage.prompt}+${usage.completion} tok`);
@@ -284,13 +300,22 @@ function transcriptRow({
         </div>
       );
     }
-    case 'tool_start':
+    case 'tool_start': {
+      const cat = toolCategory(event.name);
+      const displayText = event.command
+        ? `$ ${event.command}`
+        : event.filePath && event.pattern
+          ? `"${event.pattern}" in ${event.filePath}`
+          : (event.filePath ?? event.pattern ?? stripAnsi(event.summary));
       return (
-        <div className="mb-3 rounded-md border border-border/50 bg-secondary/50 px-3 py-2">
+        <div className="mb-3 rounded-md border border-border/40 bg-secondary/30 px-3 py-2">
           <div className="flex items-center gap-2">
             <Badge
               variant="default"
-              className="shrink-0 rounded-sm px-1.5 py-0 text-[9px] font-bold tracking-wide"
+              className={cn(
+                'shrink-0 rounded-sm px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide',
+                TOOL_BADGE_CLASSES[cat],
+              )}
             >
               {event.name || 'TOOL'}
             </Badge>
@@ -298,14 +323,16 @@ function transcriptRow({
           </div>
           <pre
             className={cn(
-              'mt-1.5 whitespace-pre-wrap break-words font-mono text-primary',
+              'mt-1.5 whitespace-pre-wrap break-words font-mono',
+              cat === 'bash' ? 'text-primary/90' : 'text-primary/75',
               compact ? 'text-[11px] leading-4' : 'text-[12px] leading-[1.55]',
             )}
           >
-            {stripAnsi(event.summary)}
+            {displayText}
           </pre>
         </div>
       );
+    }
     case 'tool_end': {
       const failed = typeof event.exitCode === 'number' && event.exitCode !== 0;
       const outputSummary = failed ? event.outputSummary?.trim() : undefined;

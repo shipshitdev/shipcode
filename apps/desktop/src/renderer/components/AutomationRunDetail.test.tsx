@@ -168,6 +168,31 @@ describe('AutomationRunDetail', () => {
     expect(await screen.findByText('No prompt recorded.')).toBeInTheDocument();
   });
 
+  it('renders closed automation runs as closed and lets them move back to completed', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'thread:get') {
+        return makeThread({ status: 'completed', doneAt: '2026-05-13T08:00:00.000Z' });
+      }
+      if (channel === 'plan:list') return [];
+      if (channel === 'diff:list') return [];
+      if (channel === 'automations:run-history') return [];
+      if (channel === 'thread:set-done-status') return makeThread({ status: 'completed' });
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.pointerDown(await screen.findByRole('button', { name: /closed/i }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /completed/i }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('thread:set-done-status', {
+        threadId: 'thread-1',
+        status: 'completed',
+      }),
+    );
+  });
+
   it('clamps approval errors with the shared renderer error helper', async () => {
     const rawError = `${'Approval is already confirmed. '.repeat(20)}\nWaiting for an execution slot.`;
     const expectedError = `${rawError.split('\n')[0].slice(0, 279)}…`;

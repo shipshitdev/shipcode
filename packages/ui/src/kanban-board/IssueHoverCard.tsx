@@ -3,6 +3,7 @@
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { cloneElement, isValidElement, useCallback, useEffect, useRef, useState } from 'react';
 import { modelDisplay } from '@/lib/model-display';
+import { useSharedSecondNow } from '@/lib/second-ticker';
 import {
   displayAgentLabel,
   type GitHubIssueCacheRecord,
@@ -81,6 +82,16 @@ function PlanStepsSection({ steps }: { steps: PlanStepSummary[] }) {
           <span className="text-[10px] text-muted-foreground/60 pl-[18px]">+ {overflow} more</span>
         )}
       </div>
+    </div>
+  );
+}
+
+function HoverElapsedMeta({ isActive, lastUpdate }: { isActive: boolean; lastUpdate: number }) {
+  const now = useSharedSecondNow();
+
+  return (
+    <div className="text-[10px] text-muted-foreground shrink-0">
+      {isActive ? 'Running' : 'Last activity'} {formatElapsedDuration(lastUpdate, now)} ago
     </div>
   );
 }
@@ -297,11 +308,7 @@ export function IssueHoverCard({
             ) : (
               <span />
             )}
-            {lastUpdate && (
-              <div className="text-[10px] text-muted-foreground shrink-0">
-                {isActive ? 'Running' : 'Last activity'} {formatElapsedDuration(lastUpdate)} ago
-              </div>
-            )}
+            {lastUpdate && <HoverElapsedMeta isActive={isActive} lastUpdate={lastUpdate} />}
           </div>
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>

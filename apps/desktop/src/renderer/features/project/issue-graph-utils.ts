@@ -12,8 +12,11 @@ export interface IssueGraphNodeData extends Record<string, unknown> {
   state: string;
 }
 
-const NODE_WIDTH = 220;
-const NODE_HEIGHT = 88;
+const NODE_WIDTH = 288;
+const NODE_HEIGHT = 112;
+const COMPONENT_GAP_X = 80;
+const COMPONENT_GAP_Y = 80;
+const MAX_LAYOUT_ROW_WIDTH = 1180;
 const ACTIVE_PIPELINE_STATUSES = new Set<IssuePipelineStatus>([
   ISSUE_PIPELINE_STATUS.planning,
   ISSUE_PIPELINE_STATUS.reviewing,
@@ -78,11 +81,104 @@ export function formatPreviewGroups(graph: ProjectIssueGraph, groups: string[][]
 }
 
 function layoutGraph(nodes: Array<Node<IssueGraphNodeData>>, edges: Edge[]) {
+  const components = connectedComponents(nodes, edges);
+  if (components.length > 1) {
+    return layoutComponents(nodes, edges, components);
+  }
+
+  return layoutComponent(nodes, edges);
+}
+
+function connectedComponents(nodes: Array<Node<IssueGraphNodeData>>, edges: Edge[]) {
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const adjacency = new Map(nodes.map((node) => [node.id, new Set<string>()] as const));
+
+  for (const edge of edges) {
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) continue;
+    adjacency.get(edge.source)?.add(edge.target);
+    adjacency.get(edge.target)?.add(edge.source);
+  }
+
+  const visited = new Set<string>();
+  const components: string[][] = [];
+
+  for (const node of nodes) {
+    if (visited.has(node.id)) continue;
+
+    const stack = [node.id];
+    const component: string[] = [];
+    visited.add(node.id);
+
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      component.push(current);
+      for (const next of adjacency.get(current) ?? []) {
+        if (visited.has(next)) continue;
+        visited.add(next);
+        stack.push(next);
+      }
+    }
+
+    components.push(component);
+  }
+
+  return components.sort((a, b) => b.length - a.length);
+}
+
+function layoutComponents(
+  nodes: Array<Node<IssueGraphNodeData>>,
+  edges: Edge[],
+  components: string[][],
+) {
+  const nodeById = new Map(nodes.map((node) => [node.id, node] as const));
+  const componentLayouts = components.map((component) => {
+    const componentIds = new Set(component);
+    const componentNodes = component.map((id) => nodeById.get(id)!);
+    const componentEdges = edges.filter(
+      (edge) => componentIds.has(edge.source) && componentIds.has(edge.target),
+    );
+    const laidOutNodes = layoutComponent(componentNodes, componentEdges);
+    const bounds = layoutBounds(laidOutNodes);
+    return { nodes: laidOutNodes, bounds };
+  });
+
+  const positioned = new Map<string, Node<IssueGraphNodeData>>();
+  let cursorX = 0;
+  let cursorY = 0;
+  let rowHeight = 0;
+
+  for (const component of componentLayouts) {
+    const width = component.bounds.width;
+    const height = component.bounds.height;
+    if (cursorX > 0 && cursorX + width > MAX_LAYOUT_ROW_WIDTH) {
+      cursorX = 0;
+      cursorY += rowHeight + COMPONENT_GAP_Y;
+      rowHeight = 0;
+    }
+
+    for (const node of component.nodes) {
+      positioned.set(node.id, {
+        ...node,
+        position: {
+          x: cursorX + node.position.x - component.bounds.minX,
+          y: cursorY + node.position.y - component.bounds.minY,
+        },
+      });
+    }
+
+    cursorX += width + COMPONENT_GAP_X;
+    rowHeight = Math.max(rowHeight, height);
+  }
+
+  return nodes.map((node) => positioned.get(node.id)!);
+}
+
+function layoutComponent(nodes: Array<Node<IssueGraphNodeData>>, edges: Edge[]) {
   const graph = new dagre.graphlib.Graph();
   graph.setGraph({
     rankdir: 'TB',
-    ranksep: 72,
-    nodesep: 44,
+    ranksep: 96,
+    nodesep: 56,
     marginx: 24,
     marginy: 24,
   });
@@ -107,4 +203,25 @@ function layoutGraph(nodes: Array<Node<IssueGraphNodeData>>, edges: Edge[]) {
       },
     };
   });
+}
+
+function layoutBounds(nodes: Array<Node<IssueGraphNodeData>>) {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const node of nodes) {
+    minX = Math.min(minX, node.position.x);
+    minY = Math.min(minY, node.position.y);
+    maxX = Math.max(maxX, node.position.x + NODE_WIDTH);
+    maxY = Math.max(maxY, node.position.y + NODE_HEIGHT);
+  }
+
+  return {
+    minX,
+    minY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
 }

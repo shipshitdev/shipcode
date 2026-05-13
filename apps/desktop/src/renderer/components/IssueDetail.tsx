@@ -1492,6 +1492,7 @@ function useIssueDetailView() {
       activeIssue={activeIssue}
       activeTab={activeTab}
       activeThreadId={activeThreadId}
+      approvedAwaitingExecution={approvedAwaitingExecution}
       checkpoints={checkpoints}
       currentPhaseSelections={currentPhaseSelections}
       diffs={diffs}

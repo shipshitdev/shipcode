@@ -58,6 +58,7 @@ and debugging.
 | `shipcode:pipeline:testing` | `#d93f0b` | Agent is running tests. |
 | `shipcode:pipeline:verifying` | `#d93f0b` | Agent is verifying the result. |
 | `shipcode:pipeline:shipping` | `#0e8a16` | Agent is opening or merging a PR. |
+| `shipcode:pipeline:paused` | `#6e7781` | Pipeline is paused and can be resumed. |
 | `shipcode:pipeline:failed` | `#b60205` | Pipeline encountered an error. |
 
 ### System Labels

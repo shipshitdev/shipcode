@@ -29,7 +29,7 @@ export function IssueGraphNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'min-w-[220px] rounded-xl border px-3 py-2 shadow-sm shadow-black/25 transition-shadow',
+        'w-72 rounded-md border px-4 py-3 shadow-sm shadow-black/25 transition-shadow',
         STATUS_STYLES[payload.pipelineStatus],
         payload.state === 'closed' && 'opacity-75',
         selected && 'ring-2 ring-agent/50 shadow-lg',
@@ -38,8 +38,12 @@ export function IssueGraphNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} className="!h-2.5 !w-2.5 !border-0 !bg-agent" />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[11px] font-semibold text-secondary">#{payload.issueNumber}</div>
-          <div className="line-clamp-2 text-sm font-medium text-primary">{payload.title}</div>
+          <div className="font-mono text-xs font-semibold text-secondary">
+            #{payload.issueNumber}
+          </div>
+          <div className="mt-1 line-clamp-2 text-sm font-medium leading-5 text-primary">
+            {payload.title}
+          </div>
         </div>
         <Badge
           variant={
@@ -49,7 +53,7 @@ export function IssueGraphNode({ data, selected }: NodeProps) {
                 ? 'warning'
                 : 'info'
           }
-          className="text-[10px]"
+          className="shrink-0 px-1.5 py-px text-[10px]"
         >
           {payload.pipelineStatus}
         </Badge>

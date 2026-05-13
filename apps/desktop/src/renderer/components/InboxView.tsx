@@ -13,8 +13,6 @@ import {
   Card,
   CardContent,
   cn,
-  Modal,
-  ModalFooter,
   Pagination,
   Skeleton,
   Table,
@@ -91,9 +89,6 @@ function useInboxView() {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [showOnlyApprovalRequired, setShowOnlyApprovalRequired] = useState(false);
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
-  const [quickViewNotification, setQuickViewNotification] = useState<NotificationRecord | null>(
-    null,
-  );
   const pageScopeKey = `${sortOrder}:${showOnlyApprovalRequired ? 'approval' : 'all'}`;
   const [pageState, setPageState] = useState({ key: pageScopeKey, page: 1 });
   const page = pageState.key === pageScopeKey ? pageState.page : 1;
@@ -270,13 +265,14 @@ function useInboxView() {
                     variant="ghost"
                     size="icon"
                     className="size-6"
-                    onClick={() => setQuickViewNotification(n)}
-                    aria-label={`Quick view: ${n.title}`}
+                    onClick={() => goToIssue(n)}
+                    disabled={navigatingId === n.id}
+                    aria-label={`Open detail: ${n.title}`}
                   >
                     <Maximize2 size={14} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Quick view</TooltipContent>
+                <TooltipContent>Open detail</TooltipContent>
               </Tooltip>
             )}
             {(n.kind === 'failed' || n.kind === 'verification_exhausted') && n.threadId && (
@@ -421,86 +417,6 @@ function useInboxView() {
           )}
         </div>
       </div>
-
-      {quickViewNotification && (
-        <Modal
-          open={quickViewNotification !== null}
-          onClose={() => setQuickViewNotification(null)}
-          title={
-            <div className="flex items-center gap-2">
-              <Badge variant={KIND_BADGE_VARIANT[quickViewNotification.kind]}>
-                {KIND_LABEL[quickViewNotification.kind]}
-              </Badge>
-            </div>
-          }
-          className="max-w-[480px]"
-        >
-          <div className="space-y-3 py-2">
-            <h3 className="text-[15px] font-semibold text-primary leading-snug">
-              {quickViewNotification.title}
-            </h3>
-            {quickViewNotification.body && (
-              <p className="text-[13px] text-secondary leading-relaxed line-clamp-6">
-                {quickViewNotification.body}
-              </p>
-            )}
-          </div>
-          <ModalFooter>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                dismiss.mutate(quickViewNotification.id);
-                setQuickViewNotification(null);
-              }}
-              disabled={dismiss.isPending && dismiss.variables === quickViewNotification.id}
-            >
-              Dismiss
-            </Button>
-            {(quickViewNotification.kind === 'failed' ||
-              quickViewNotification.kind === 'verification_exhausted') &&
-              quickViewNotification.threadId && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={cn(RETRY_BADGE_CLASS)}
-                  disabled={
-                    retryPipeline.isPending &&
-                    retryPipeline.variables?.threadId === quickViewNotification.threadId
-                  }
-                  onClick={() => {
-                    retryPipeline.mutate({
-                      threadId: quickViewNotification.threadId,
-                      notificationId: quickViewNotification.id,
-                    });
-                    setQuickViewNotification(null);
-                  }}
-                >
-                  {retryPipeline.isPending &&
-                  retryPipeline.variables?.threadId === quickViewNotification.threadId ? (
-                    <>
-                      <Loader2 size={10} className="animate-spin" />
-                      RETRY
-                    </>
-                  ) : (
-                    'RETRY'
-                  )}
-                </Button>
-              )}
-            <Button
-              size="sm"
-              onClick={() => {
-                const n = quickViewNotification;
-                setQuickViewNotification(null);
-                goToIssue(n);
-              }}
-              disabled={navigatingId === quickViewNotification.id}
-            >
-              {navigatingId === quickViewNotification.id ? 'Opening…' : 'Open full detail'}
-            </Button>
-          </ModalFooter>
-        </Modal>
-      )}
     </div>
   );
 }

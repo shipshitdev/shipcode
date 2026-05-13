@@ -531,6 +531,14 @@
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.32);
 }
 
+.shipcode-issue-graph .react-flow__edge {
+  opacity: 0.9;
+}
+
+.shipcode-issue-graph .react-flow__edge-path {
+  stroke-width: 1.8;
+}
+
 .shipcode-issue-graph .react-flow__minimap-mask {
   fill: rgb(5 6 7 / 0.68);
 }
@@ -547,6 +555,6 @@
 
 .shipcode-issue-graph .react-flow__edge-text {
   fill: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
 }

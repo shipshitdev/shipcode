@@ -77,6 +77,7 @@ function issueCardToneClass({
   isSelected,
   isCompleted,
   isClosed,
+  isFailed,
 }: {
   isCreating: boolean;
   isSelected?: boolean;
@@ -95,6 +96,11 @@ function issueCardToneClass({
   }
   if (isClosed) {
     return isSelected ? 'ring-1 ring-border-strong' : 'opacity-70 hover:opacity-80';
+  }
+  if (isFailed) {
+    return isSelected
+      ? 'ring-1 ring-danger/40 border-danger/30'
+      : 'border-danger/25 hover:border-danger/40';
   }
   if (isSelected) return 'ring-1 ring-border-strong';
   return 'hover:border-white/[0.08]';

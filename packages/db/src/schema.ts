@@ -1760,3 +1760,16 @@ export function migrateV57(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (57)`);
   });
 }
+
+export function migrateV58(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 58) return;
+
+  transaction(db, () => {
+    execAlterTableIfMissing(db, 'ALTER TABLE github_issue_cache ADD COLUMN issue_type TEXT');
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (58)`);
+  });
+}

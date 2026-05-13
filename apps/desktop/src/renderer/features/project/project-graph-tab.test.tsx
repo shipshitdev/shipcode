@@ -16,6 +16,9 @@ vi.mock('@xyflow/react', () => ({
   ReactFlow: ({
     children,
     edges,
+    fitViewOptions,
+    maxZoom,
+    minZoom,
     nodes,
     onConnect,
     onEdgesDelete,
@@ -24,6 +27,9 @@ vi.mock('@xyflow/react', () => ({
   }: {
     children: ReactNode;
     edges: Array<{ id: string }>;
+    fitViewOptions?: { padding: number; maxZoom: number };
+    maxZoom?: number;
+    minZoom?: number;
     nodes: Array<{ id: string }>;
     onConnect: (connection: { source?: string | null; target?: string | null }) => void;
     onEdgesDelete: (edges: Array<{ id: string }>) => void;
@@ -33,6 +39,9 @@ vi.mock('@xyflow/react', () => ({
     <div data-testid="react-flow">
       <div data-testid="node-count">{nodes.length}</div>
       <div data-testid="edge-count">{edges.length}</div>
+      <div data-testid="zoom-limits">
+        {minZoom}:{maxZoom}:{fitViewOptions?.maxZoom}
+      </div>
       <button
         type="button"
         onClick={() => onSelectionChange({ nodes: [{ id: 'issue-1' }, { id: 'issue-2' }] })}
@@ -187,6 +196,7 @@ describe('ProjectGraphTab', () => {
     expect(await screen.findByTestId('react-flow')).toBeInTheDocument();
     expect(screen.getByTestId('node-count')).toHaveTextContent('2');
     expect(screen.getByTestId('edge-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('zoom-limits')).toHaveTextContent('0.55:1.6:1');
 
     fireEvent.click(screen.getByRole('button', { name: 'Select graph nodes' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select same nodes' }));

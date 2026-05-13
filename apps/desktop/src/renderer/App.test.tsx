@@ -420,6 +420,8 @@ describe('App', () => {
     useAppStore.setState({
       activeProjectId: 'project-1',
       viewMode: 'project',
+      terminalVisible: true,
+      terminalMaximized: true,
       activeIssue: {
         id: 'issue-1',
         projectId: 'project-1',
@@ -435,6 +437,7 @@ describe('App', () => {
 
     const issueDetailPanel = await within(view.container).findByText('IssueDetailPanel');
     expect(issueDetailPanel).toBeInTheDocument();
+    expect(screen.queryByText('TerminalDrawer')).not.toBeInTheDocument();
     // IssueDetail now replaces center column — no overlay panel
     expect(view.container.querySelector('[data-slot="overlay-panel"]')).toBeNull();
   });

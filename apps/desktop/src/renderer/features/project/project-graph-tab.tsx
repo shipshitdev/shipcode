@@ -189,9 +189,14 @@ export function ProjectGraphTab({ embedded = false }: { embedded?: boolean }) {
   }
 
   return (
-    <div className={cn('flex flex-1 min-h-0 min-w-0 bg-primary', embedded ? 'h-full p-3' : 'p-4')}>
-      <Card className="min-h-[520px] min-w-0 flex-1 overflow-hidden bg-primary">
-        <CardContent className="relative h-full min-h-[520px] p-0">
+    <div className={cn('flex flex-1 min-h-0 min-w-0 bg-primary', embedded ? 'h-full' : 'p-4')}>
+      <Card
+        className={cn(
+          'min-w-0 flex-1 overflow-hidden bg-primary',
+          embedded ? 'min-h-0 rounded-none border-0' : 'min-h-[520px]',
+        )}
+      >
+        <CardContent className={cn('relative h-full p-0', embedded ? 'min-h-0' : 'min-h-[520px]')}>
           {selectedIssueIds.length > 0 || previewGroups.length > 0 || previewError ? (
             <div className="pointer-events-none absolute right-3 top-3 z-10 w-[min(360px,calc(100%-24px))]">
               <div className="pointer-events-auto rounded-md border border-border bg-secondary/95 p-3 shadow-lg shadow-black/30 backdrop-blur">
@@ -246,6 +251,9 @@ export function ProjectGraphTab({ embedded = false }: { embedded?: boolean }) {
             nodeTypes={nodeTypes}
             colorMode={resolvedTheme}
             fitView
+            fitViewOptions={{ padding: 0.18, maxZoom: 1 }}
+            minZoom={0.55}
+            maxZoom={1.6}
             selectionOnDrag
             selectionMode={SelectionMode.Partial}
             deleteKeyCode={deleteKeyCode}

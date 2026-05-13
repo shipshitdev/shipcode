@@ -36,6 +36,33 @@ export function isPipelineStateLabel(label: string): boolean {
   return label.startsWith(PIPELINE_LABEL_PREFIX);
 }
 
+export function pipelineStatusFromLabel(label: string): IssuePipelineStatus | null {
+  if (!isPipelineStateLabel(label)) return null;
+  const status = label.slice(PIPELINE_LABEL_PREFIX.length);
+  return Object.values(ISSUE_PIPELINE_STATUS).includes(status as IssuePipelineStatus)
+    ? (status as IssuePipelineStatus)
+    : null;
+}
+
+const PIPELINE_LABEL_STATUS_PRIORITY: readonly IssuePipelineStatus[] = [
+  ISSUE_PIPELINE_STATUS.failed,
+  ISSUE_PIPELINE_STATUS.paused,
+  ISSUE_PIPELINE_STATUS.shipping,
+  ISSUE_PIPELINE_STATUS.verifying,
+  ISSUE_PIPELINE_STATUS.testing,
+  ISSUE_PIPELINE_STATUS.executing,
+  ISSUE_PIPELINE_STATUS.revising,
+  ISSUE_PIPELINE_STATUS.reviewing,
+  ISSUE_PIPELINE_STATUS.clarifying,
+  ISSUE_PIPELINE_STATUS.planning,
+  ISSUE_PIPELINE_STATUS.queued,
+];
+
+export function pipelineStatusFromLabels(labels: readonly string[]): IssuePipelineStatus | null {
+  const statuses = new Set(labels.map(pipelineStatusFromLabel).filter((status) => status !== null));
+  return PIPELINE_LABEL_STATUS_PRIORITY.find((status) => statuses.has(status)) ?? null;
+}
+
 export function agentLabelForExecutor(
   executor: string,
 ): `${typeof SHIPCODE_AGENT_LABEL_PREFIX}${string}` {

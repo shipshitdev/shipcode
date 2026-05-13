@@ -319,7 +319,8 @@ export function App() {
     !!activeProjectId &&
     activeProject?.pathExists === false;
   const isTerminalTab = viewMode === 'project' && projectTab === 'terminal';
-  const hideMainContentForTerminal = terminalVisible && terminalMaximized && !isTerminalTab;
+  const hideMainContentForTerminal =
+    terminalVisible && terminalMaximized && !isTerminalTab && !hasActiveIssue;
 
   // Build a key that changes when the active view changes, for crossfade animation
   const viewKey = settingsVisible
@@ -383,7 +384,7 @@ export function App() {
                 </div>
               </Suspense>
             )}
-            {terminalVisible && !isTerminalTab && <TerminalDrawer />}
+            {terminalVisible && !isTerminalTab && !hasActiveIssue && <TerminalDrawer />}
           </div>
           <div
             className="assistant-panel-slot min-h-0 shrink-0 overflow-hidden"

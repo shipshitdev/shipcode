@@ -7,10 +7,10 @@ import type { GhStatusMapping, IssuePipelineStatus } from '@shipcode/shared';
 
 export interface GhSyncWriteOpts {
   projectPath: string;
-  projectUrl: string;
+  projectUrl: string | null;
   issueNumber: number;
   pipelineStatus: IssuePipelineStatus;
-  statusMapping: GhStatusMapping;
+  statusMapping: GhStatusMapping | null;
 }
 
 interface GhSyncQueueEntry {

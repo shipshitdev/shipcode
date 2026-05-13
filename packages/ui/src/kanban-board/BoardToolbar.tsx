@@ -338,6 +338,18 @@ function ViewSwitcher({
         size="icon-sm"
         className={cn(
           'rounded-none text-muted-foreground',
+          view === 'kanban' && 'bg-accent/15 text-accent',
+        )}
+        onClick={() => onViewChange('kanban')}
+        title="Board view"
+      >
+        <Columns3 size={14} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className={cn(
+          'rounded-none border-l border-border text-muted-foreground',
           view === 'list' && 'bg-accent/15 text-accent',
         )}
         onClick={() => onViewChange('list')}
@@ -359,18 +371,6 @@ function ViewSwitcher({
           <Workflow size={14} />
         </Button>
       )}
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className={cn(
-          'rounded-none border-l border-border text-muted-foreground',
-          view === 'kanban' && 'bg-accent/15 text-accent',
-        )}
-        onClick={() => onViewChange('kanban')}
-        title="Board view"
-      >
-        <Columns3 size={14} />
-      </Button>
     </div>
   );
 }

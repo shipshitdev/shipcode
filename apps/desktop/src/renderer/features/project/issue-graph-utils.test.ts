@@ -127,6 +127,27 @@ describe('buildIssueFlowGraph', () => {
 
     expect(flowGraph.edges[0]).toEqual(expect.objectContaining({ animated: true }));
   });
+
+  it('packs disconnected issues into readable rows instead of one long line', () => {
+    const flowGraph = buildIssueFlowGraph({
+      ...graph,
+      nodes: Array.from({ length: 8 }, (_, index) => ({
+        issueId: `issue-${index + 1}`,
+        projectId: 'project-1',
+        issueNumber: index + 1,
+        title: `Issue ${index + 1}`,
+        state: 'open',
+        pipelineStatus: 'todo',
+        threadId: null,
+      })),
+      edges: [],
+    });
+
+    const uniqueYPositions = new Set(flowGraph.nodes.map((node) => node.position.y));
+
+    expect(uniqueYPositions.size).toBeGreaterThan(1);
+    expect(Math.max(...flowGraph.nodes.map((node) => node.position.x))).toBeLessThan(1180);
+  });
 });
 
 describe('formatPreviewGroups', () => {

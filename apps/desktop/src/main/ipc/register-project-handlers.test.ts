@@ -1930,6 +1930,7 @@ describe('registerProjectHandlers', () => {
           .mockReturnValueOnce({ id: 'thread-1', status: 'executing' })
           .mockReturnValueOnce({ id: 'thread-1', status: 'failed' }),
         markDone: vi.fn(),
+        clearDoneAt: vi.fn(),
       },
     };
 
@@ -1956,6 +1957,59 @@ describe('registerProjectHandlers', () => {
     markDone(undefined, { threadId: 'thread-1' });
 
     expect(queries.threads.markDone).toHaveBeenCalledWith('thread-1');
+  });
+
+  it('changes completed automation runs between completed and closed', () => {
+    const completedThread = { id: 'thread-1', status: 'completed' };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor' })),
+      },
+      threads: {
+        getById: vi
+          .fn()
+          .mockReturnValueOnce(completedThread)
+          .mockReturnValueOnce({ ...completedThread, doneAt: '2026-05-13T08:00:00.000Z' })
+          .mockReturnValueOnce({ ...completedThread, doneAt: '2026-05-13T08:00:00.000Z' })
+          .mockReturnValueOnce({ ...completedThread, doneAt: null })
+          .mockReturnValueOnce({ id: 'thread-1', status: 'executing' }),
+        markDone: vi.fn(),
+        clearDoneAt: vi.fn(),
+      },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const setDoneStatus = handlers.get('thread:set-done-status');
+    if (!setDoneStatus) throw new Error('thread:set-done-status handler not registered');
+
+    expect(setDoneStatus(undefined, { threadId: 'thread-1', status: 'closed' })).toEqual({
+      ...completedThread,
+      doneAt: '2026-05-13T08:00:00.000Z',
+    });
+    expect(queries.threads.markDone).toHaveBeenCalledWith('thread-1');
+
+    expect(setDoneStatus(undefined, { threadId: 'thread-1', status: 'completed' })).toEqual({
+      ...completedThread,
+      doneAt: null,
+    });
+    expect(queries.threads.clearDoneAt).toHaveBeenCalledWith('thread-1');
+
+    expect(() => setDoneStatus(undefined, { threadId: 'thread-1', status: 'closed' })).toThrow(
+      'Cannot change done status while in executing phase',
+    );
   });
 
   it('resolves filesystem start directories and lists child directories with error states', async () => {

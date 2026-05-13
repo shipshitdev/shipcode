@@ -1,6 +1,11 @@
 import fs from 'node:fs';
 import { loadWorkflowPolicy } from '@shipcode/pipeline';
-import type { ExecutorModel, GitHubIssueCacheRecord, PipelinePhase } from '@shipcode/shared';
+import type {
+  ExecutorModel,
+  GitHubIssueCacheRecord,
+  IssuePipelineStatus,
+  PipelinePhase,
+} from '@shipcode/shared';
 import {
   clampError,
   EXECUTION_PHASES,
@@ -12,6 +17,7 @@ import {
   resolvePhaseModelIdForIssue,
 } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
+import { syncIssuePipelineLabelSoon } from './github-pipeline-label-sync';
 import {
   assertCliPhaseModelsSupported,
   resolveProjectPhaseModels,
@@ -129,6 +135,7 @@ export class PipelineScheduler {
       !this._isPerStateSlotAvailable(project.path, PIPELINE_PHASE.planning)
     ) {
       queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.queued);
+      this._syncPipelineLabel(project.path, issue.issueNumber, ISSUE_PIPELINE_STATUS.queued);
       this._sendIssuesUpdated(projectId);
       log.info(
         `[scheduler] queued issue #${issueNumber} (${activeCount}/${pipelineCap} slots used)`,
@@ -169,6 +176,7 @@ export class PipelineScheduler {
       !this._isPerStateSlotAvailable(project.path, PIPELINE_PHASE.planning)
     ) {
       queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.queued);
+      this._syncPipelineLabel(project.path, issue.issueNumber, ISSUE_PIPELINE_STATUS.queued);
       this._sendIssuesUpdated(projectId);
       log.info(
         `[scheduler] queued quick task ${issueNumber} (${activeCount}/${pipelineCap} slots used)`,
@@ -383,6 +391,7 @@ export class PipelineScheduler {
     }
 
     queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.planning);
+    this._syncPipelineLabel(project.path, issue.issueNumber, ISSUE_PIPELINE_STATUS.planning);
     const thread =
       reusableThread && REUSABLE_THREAD_STATUSES.has(reusableThread.status)
         ? reusableThread
@@ -457,6 +466,7 @@ export class PipelineScheduler {
     }
 
     queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.planning);
+    this._syncPipelineLabel(project.path, issue.issueNumber, ISSUE_PIPELINE_STATUS.planning);
     this._sendIssuesUpdated(issue.projectId);
 
     const phaseModels = this._resolvePhaseModels(settings, project, issue);
@@ -629,5 +639,18 @@ export class PipelineScheduler {
     } catch {
       /* window destroyed */
     }
+  }
+
+  private _syncPipelineLabel(
+    projectPath: string,
+    issueNumber: number,
+    status: IssuePipelineStatus,
+  ): void {
+    syncIssuePipelineLabelSoon({
+      projectPath,
+      issueNumber,
+      status,
+      source: 'scheduler',
+    });
   }
 }

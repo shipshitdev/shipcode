@@ -31,7 +31,7 @@ const SECTION_HEADER_CLASS: Record<RowTone, string> = {
   success: 'bg-secondary text-muted-foreground',
   done: 'bg-secondary text-muted-foreground',
   agent: 'bg-secondary text-muted-foreground',
-  danger: 'bg-secondary text-danger',
+  danger: 'bg-secondary text-muted-foreground',
   warning: 'bg-secondary text-muted-foreground',
 };
 
@@ -40,7 +40,7 @@ const SECTION_COUNT_CLASS: Record<RowTone, string> = {
   success: 'border-border/60 bg-tertiary text-muted-foreground',
   done: 'border-border/60 bg-tertiary text-muted-foreground',
   agent: 'border-border/60 bg-tertiary text-muted-foreground',
-  danger: 'border-danger/20 bg-danger/15 text-danger',
+  danger: 'border-border/60 bg-tertiary text-muted-foreground',
   warning: 'border-border/60 bg-tertiary text-muted-foreground',
 };
 
@@ -291,13 +291,13 @@ function SectionBlock({
     <div
       ref={section.droppable ? setNodeRef : undefined}
       className={cn(
-        'relative border-t border-border first:border-t-0',
+        'border-t border-border first:border-t-0',
         section.droppable && isOver && 'bg-tertiary/40',
       )}
     >
       <div
         className={cn(
-          'sticky top-0 z-10 flex w-full items-center justify-between gap-2 border-b border-transparent px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide backdrop-blur-sm',
+          'sticky top-0 z-20 flex w-full items-center justify-between gap-2 border-b border-transparent px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide',
           'transition-colors',
           compact ? 'bg-secondary text-secondary' : SECTION_HEADER_CLASS[tone],
           section.droppable && isOver && 'border-accent/50 bg-tertiary text-primary',
@@ -346,7 +346,7 @@ function SectionBlock({
       {!empty && !collapsed && (
         <div
           className={cn(
-            'flex flex-col gap-1 p-1.5',
+            'relative z-0 flex flex-col gap-1 p-1.5',
             section.droppable &&
               isOver &&
               'rounded-md border border-dashed border-accent bg-tertiary',
@@ -544,7 +544,7 @@ export function StackedColumn({
         </div>
       </div>
       <div
-        className="kanban-scroll min-h-0 flex-1 overflow-y-auto supports-[scrollbar-gutter:stable]:[scrollbar-gutter:stable]"
+        className="kanban-scroll isolate min-h-0 flex-1 overflow-y-auto supports-[scrollbar-gutter:stable]:[scrollbar-gutter:stable]"
         style={{ '--column-scrollbar': COLUMN_SCROLLBAR_COLOR[column.key] } as React.CSSProperties}
       >
         {(column.sections ?? []).map((section) => (

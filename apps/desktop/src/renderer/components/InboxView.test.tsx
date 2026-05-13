@@ -197,7 +197,7 @@ describe('InboxView', () => {
     expect(cells).toHaveLength(3);
     expect(cells[1]).toHaveTextContent('Execution failed for demo task');
     expect(cells[2]).toHaveTextContent(formatRelativeTime(notifications[1].createdAt));
-    expect(within(cells[2]).getByRole('button', { name: /Quick view/i })).toBeInTheDocument();
+    expect(within(cells[2]).getByRole('button', { name: /Open detail/i })).toBeInTheDocument();
     expect(within(cells[2]).getByRole('button', { name: /Retry pipeline/i })).toBeInTheDocument();
     expect(
       within(cells[2]).getByRole('button', { name: /Dismiss notification/i }),
@@ -276,7 +276,7 @@ describe('InboxView', () => {
     });
   });
 
-  it('dismisses a notification from quick view', async () => {
+  it('opens full detail from the hover detail button', async () => {
     renderWithProviders();
 
     const title = await screen.findByText('Approval needed for demo task');
@@ -284,49 +284,8 @@ describe('InboxView', () => {
     expect(row).not.toBeNull();
 
     fireEvent.click(
-      within(row as HTMLTableRowElement).getByRole('button', { name: /Quick view/i }),
+      within(row as HTMLTableRowElement).getByRole('button', { name: /Open detail/i }),
     );
-    expect(await screen.findAllByText('Pipeline paused before execution.')).toHaveLength(2);
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
-
-    await waitFor(() => {
-      expect(window.shipcode.invoke).toHaveBeenCalledWith('notification:dismiss', {
-        id: 'notification-1',
-      });
-    });
-  });
-
-  it('retries a failed notification from quick view', async () => {
-    renderWithProviders();
-
-    const title = await screen.findByText('Execution failed for demo task');
-    const row = title.closest('tr');
-    expect(row).not.toBeNull();
-
-    fireEvent.click(
-      within(row as HTMLTableRowElement).getByRole('button', { name: /Quick view/i }),
-    );
-    expect(await screen.findAllByText('The executor exited non-zero.')).toHaveLength(2);
-    fireEvent.click(screen.getByRole('button', { name: 'RETRY' }));
-
-    await waitFor(() => {
-      expect(window.shipcode.invoke).toHaveBeenCalledWith('pipeline:retry', {
-        threadId: 'thread-2',
-      });
-    });
-  });
-
-  it('opens full detail from quick view', async () => {
-    renderWithProviders();
-
-    const title = await screen.findByText('Approval needed for demo task');
-    const row = title.closest('tr');
-    expect(row).not.toBeNull();
-
-    fireEvent.click(
-      within(row as HTMLTableRowElement).getByRole('button', { name: /Quick view/i }),
-    );
-    fireEvent.click(await screen.findByRole('button', { name: 'Open full detail' }));
 
     await waitFor(() => {
       expect(window.shipcode.invoke).toHaveBeenCalledWith('github:list-issues', {
@@ -405,7 +364,7 @@ describe('InboxView', () => {
     const { unmount } = renderWithProviders();
 
     fireEvent.click(await screen.findByRole('button', { name: /Open issue detail/i }));
-    expect(screen.queryByRole('button', { name: /Quick view/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open detail/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Retry pipeline/i })).not.toBeInTheDocument();
     expect(window.shipcode.invoke).not.toHaveBeenCalledWith(
       'github:list-issues',

@@ -7,12 +7,25 @@ import {
   PIPELINE_PHASE,
 } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
-import { Badge, Button, cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
+import {
+  Badge,
+  Button,
+  cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
   Copy,
   ExternalLink,
   GitBranch,
@@ -218,6 +231,28 @@ function useAutomationRunDetailView() {
     }
   }, [threadId, thread?.projectId, thread?.automationId, queryClient]);
 
+  const handleDoneStatusChange = useCallback(
+    async (status: 'completed' | 'closed') => {
+      if (!threadId) return;
+      setIsSubmitting(true);
+      try {
+        await window.shipcode.invoke('thread:set-done-status', { threadId, status });
+        queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
+        if (thread?.projectId) {
+          queryClient.invalidateQueries({ queryKey: ['thread-panel-data', thread.projectId] });
+        }
+        if (thread?.automationId) {
+          queryClient.invalidateQueries({
+            queryKey: ['automation-run-history', thread.automationId],
+          });
+        }
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [threadId, thread?.projectId, thread?.automationId, queryClient],
+  );
+
   const handleCopyBranch = useCallback((branch: string) => {
     navigator.clipboard.writeText(branch);
     setCopiedBranch(true);
@@ -252,7 +287,12 @@ function useAutomationRunDetailView() {
     thread?.status === PIPELINE_PHASE.failed || thread?.status === PIPELINE_PHASE.idle;
   const isCompleted = thread?.status === PIPELINE_PHASE.completed;
   const isClosed = !!thread?.doneAt;
-  const canClose = (isFailed || isCompleted) && !isClosed;
+  const canClose = isFailed && !isClosed;
+  const canChangeDoneStatus =
+    isCompleted || (isClosed && thread?.status === PIPELINE_PHASE.completed);
+  const presentationStatus: PipelinePhase | 'closed' = isClosed
+    ? 'closed'
+    : (thread?.status ?? PIPELINE_PHASE.idle);
   const hasError = !!thread?.lastError;
 
   return (
@@ -272,7 +312,41 @@ function useAutomationRunDetailView() {
         <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-primary">
           {thread?.title ?? 'Automation run'}
         </h3>
-        {thread && <PhaseChip status={thread.status} />}
+        {thread &&
+          (canChangeDoneStatus ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="h-auto gap-1 px-0 py-0 hover:bg-transparent"
+                  disabled={isSubmitting}
+                >
+                  <PhaseChip status={presentationStatus} />
+                  <ChevronDown className="size-3 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  disabled={!isClosed}
+                  onClick={() => void handleDoneStatusChange('completed')}
+                >
+                  <CheckCircle2 className="mr-2 size-3.5 text-success" />
+                  Completed
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={isClosed}
+                  onClick={() => void handleDoneStatusChange('closed')}
+                >
+                  <CheckCircle2 className="mr-2 size-3.5 text-done" />
+                  Closed
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <PhaseChip status={presentationStatus} />
+          ))}
         {isActive && (
           <Button
             variant="outline"

@@ -511,7 +511,14 @@ export interface AnsweredClarification {
 export type CanonicalTerminalEvent =
   | { kind: 'text'; content: string }
   | { kind: 'thinking'; content: string }
-  | { kind: 'tool_start'; name: string; summary: string }
+  | {
+      kind: 'tool_start';
+      name: string;
+      summary: string;
+      command?: string;
+      filePath?: string;
+      pattern?: string;
+    }
   | {
       kind: 'tool_end';
       name: string;

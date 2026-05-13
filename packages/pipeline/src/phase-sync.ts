@@ -21,10 +21,10 @@ export interface GhSyncDeps {
   getProject: (projectId: string) => Project | null;
   syncToGithub: (opts: {
     projectPath: string;
-    projectUrl: string;
+    projectUrl: string | null;
     issueNumber: number;
     pipelineStatus: IssuePipelineStatus;
-    statusMapping: GhStatusMapping;
+    statusMapping: GhStatusMapping | null;
   }) => Promise<void>;
 }
 
@@ -62,7 +62,7 @@ export function syncThreadAndIssuePhase(
   // Fire-and-forget GH Projects v2 Status + pipeline label sync
   if (ghSync && thread.projectId) {
     const project = ghSync.getProject(thread.projectId);
-    if (project?.githubProjectUrl && project.githubStatusMapping) {
+    if (project) {
       void ghSync
         .syncToGithub({
           projectPath: project.path,

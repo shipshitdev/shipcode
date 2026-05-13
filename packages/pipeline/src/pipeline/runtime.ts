@@ -722,29 +722,31 @@ export function createPipelineRuntime(
   async function performGhSync(opts: GhSyncWriteOpts): Promise<void> {
     const ghCli = new GhCli(opts.projectPath);
 
-    // 1. Write GH Projects v2 Status field
-    const macroCol = macroColumnForStatus(opts.pipelineStatus);
-    const ghStatusName =
-      macroCol === 'todo'
-        ? opts.statusMapping.todo?.name
-        : macroCol === 'in_progress'
-          ? opts.statusMapping.inProgress?.name
-          : macroCol === 'human_review'
-            ? opts.statusMapping.humanReview?.name
-            : opts.statusMapping.done?.name;
-    if (ghStatusName) {
-      try {
-        await ghCli.setIssueProjectMetadata({
-          issueNumber: opts.issueNumber,
-          projectUrl: opts.projectUrl,
-          metadata: { status: ghStatusName },
-        });
-      } catch (err) {
-        console.warn('[gh-status-sync] setIssueProjectMetadata failed', err);
+    // 1. Write GH Projects v2 Status field when configured.
+    if (opts.projectUrl && opts.statusMapping) {
+      const macroCol = macroColumnForStatus(opts.pipelineStatus);
+      const ghStatusName =
+        macroCol === 'todo'
+          ? opts.statusMapping.todo?.name
+          : macroCol === 'in_progress'
+            ? opts.statusMapping.inProgress?.name
+            : macroCol === 'human_review'
+              ? opts.statusMapping.humanReview?.name
+              : opts.statusMapping.done?.name;
+      if (ghStatusName) {
+        try {
+          await ghCli.setIssueProjectMetadata({
+            issueNumber: opts.issueNumber,
+            projectUrl: opts.projectUrl,
+            metadata: { status: ghStatusName },
+          });
+        } catch (err) {
+          console.warn('[gh-status-sync] setIssueProjectMetadata failed', err);
+        }
       }
     }
 
-    // 2. Toggle pipeline labels — remove stale, set current
+    // 2. Toggle pipeline labels on every state update — remove stale, set current.
     const targetLabel = pipelineLabelForStatus(opts.pipelineStatus);
     try {
       const issue = await ghCli.getIssue(opts.issueNumber);

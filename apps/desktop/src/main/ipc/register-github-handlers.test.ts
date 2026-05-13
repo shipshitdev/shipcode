@@ -481,6 +481,97 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
+  it('serializes new issue project board attachments during refresh', async () => {
+    const projectWithBoard = {
+      ...baseProject,
+      path: '/tmp',
+      githubProjectUrl: 'https://github.com/orgs/acme/projects/1',
+    };
+    const firstRecord = { ...baseIssue, id: 'issue-41', issueNumber: 41, threadId: null };
+    const secondRecord = { ...baseIssue, id: 'issue-42', issueNumber: 42, threadId: null };
+    const cachedAfterSync = [firstRecord, secondRecord];
+    const firstAttach = deferred<{ alreadyPresent: boolean }>();
+    const secondAttach = deferred<{ alreadyPresent: boolean }>();
+
+    listAllIssuesMock.mockResolvedValue([
+      {
+        number: 41,
+        title: 'First',
+        body: 'First body',
+        labels: [],
+        assignee: null,
+        state: 'open',
+        updatedAt: null,
+        url: 'https://github.com/acme/repo/issues/41',
+      },
+      {
+        number: 42,
+        title: 'Second',
+        body: 'Second body',
+        labels: [],
+        assignee: null,
+        state: 'open',
+        updatedAt: null,
+        url: 'https://github.com/acme/repo/issues/42',
+      },
+    ]);
+    addIssueToProjectMock
+      .mockReturnValueOnce(firstAttach.promise)
+      .mockReturnValueOnce(secondAttach.promise);
+
+    const queries = {
+      projects: {
+        getById: vi.fn(() => projectWithBoard),
+        updateGithubRepoIdentity: vi.fn(),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          list: vi.fn().mockReturnValueOnce([]).mockReturnValue(cachedAfterSync),
+          getByNumber: vi.fn(() => null),
+          upsert: vi.fn((input: { issueNumber: number }) =>
+            input.issueNumber === 41 ? firstRecord : secondRecord,
+          ),
+          updateState: vi.fn(),
+          clearArchivedAt: vi.fn(),
+          setPriority: vi.fn(),
+          setIssueType: vi.fn(),
+          archiveIssues: vi.fn(),
+        },
+        cachedAfterSync,
+      ),
+      issueEdges: {
+        replaceBodyEdges: vi.fn(),
+      },
+      threads: {
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const refresh = handlers.get('github:refresh-issues');
+    if (!refresh) throw new Error('github:refresh-issues handler not registered');
+
+    const result = refresh(undefined, { projectId: 'project-1', force: true }) as Promise<unknown>;
+
+    await vi.waitFor(() => expect(addIssueToProjectMock).toHaveBeenCalledTimes(1));
+    firstAttach.resolve({ alreadyPresent: false });
+
+    await vi.waitFor(() => expect(addIssueToProjectMock).toHaveBeenCalledTimes(2));
+    secondAttach.resolve({ alreadyPresent: false });
+    await expect(result).resolves.toEqual(cachedAfterSync);
+  });
+
   it('refresh maps GitHub board statuses for todo, deferred, done, and ignored columns', async () => {
     const projectWithBoard = {
       ...baseProject,
@@ -504,6 +595,13 @@ describe('registerGitHubHandlers', () => {
       issueNumber: 14,
       pipelineStatus: 'executing',
     };
+    const labeledIssue = {
+      ...baseIssue,
+      id: 'labeled',
+      issueNumber: 15,
+      labels: ['shipcode:pipeline:failed'],
+      pipelineStatus: 'failed',
+    };
     const quickIssue = {
       ...baseIssue,
       id: 'quick',
@@ -517,6 +615,7 @@ describe('registerGitHubHandlers', () => {
       doneIssue,
       reviewIssue,
       activeIssue,
+      labeledIssue,
       quickIssue,
     ];
     listAllIssuesMock.mockResolvedValue([]);
@@ -527,6 +626,7 @@ describe('registerGitHubHandlers', () => {
         [12, { raw: 'Done' }],
         [13, { raw: 'Human Review' }],
         [14, { raw: 'Done' }],
+        [15, { raw: 'In Progress' }],
         [-15, { raw: 'Done' }],
       ]),
     );
@@ -580,6 +680,7 @@ describe('registerGitHubHandlers', () => {
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('done', 'closed');
     expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith('review', null);
     expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith('active', 'closed');
+    expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith('labeled', 'queued');
     expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith('quick', 'closed');
   });
 
@@ -2364,6 +2465,8 @@ describe('registerGitHubHandlers', () => {
         upsert: vi.fn(),
         list: vi.fn(() => [createdRecord]),
         getByNumber: vi.fn(() => createdRecord),
+        setPriority: vi.fn(),
+        setIssueType: vi.fn(),
       },
     };
 
@@ -2443,6 +2546,8 @@ describe('registerGitHubHandlers', () => {
         upsert: vi.fn(),
         list: vi.fn(() => [createdRecord]),
         getByNumber: vi.fn(() => createdRecord),
+        setIssueType: vi.fn(),
+        setPriority: vi.fn(),
       },
     };
 
@@ -2492,6 +2597,13 @@ describe('registerGitHubHandlers', () => {
         blastRadius: 'contained',
       },
     });
+    expect(queries.githubIssues.setIssueType).toHaveBeenCalledWith({
+      id: 'issue-77',
+      issueType: 'Feature',
+    });
+    expect(queries.githubIssues.setPriority).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'issue-77', rank: 'p3', raw: 'P3' }),
+    );
   });
 
   it('throws when a newly created issue cannot be read back from the cache', async () => {
@@ -2822,6 +2934,7 @@ describe('registerGitHubHandlers', () => {
       githubIssues: {
         list: vi.fn(() => [issueA, issueB, quickIssue]),
         setPriority: vi.fn(),
+        setIssueType: vi.fn(),
       },
     };
 

@@ -704,6 +704,27 @@ export function registerProjectHandlers({
     queries.threads.markDone(threadId);
   });
 
+  ipcMain.handle(
+    'thread:set-done-status',
+    (_event, { threadId, status }: { threadId: string; status: 'completed' | 'closed' }) => {
+      const thread = queries.threads.getById(threadId);
+      if (!thread) throw new Error(`Thread ${threadId} not found`);
+      if (thread.status !== PIPELINE_PHASE.completed) {
+        throw new Error(`Cannot change done status while in ${thread.status} phase`);
+      }
+
+      if (status === 'closed') {
+        queries.threads.markDone(threadId);
+      } else {
+        queries.threads.clearDoneAt(threadId);
+      }
+
+      const updated = queries.threads.getById(threadId);
+      if (!updated) throw new Error(`Thread ${threadId} not found after status update`);
+      return updated;
+    },
+  );
+
   ipcMain.handle('checkpoint:list', (_event, { threadId }: { threadId: string }) => {
     return queries.checkpoints.list(threadId);
   });

@@ -14,6 +14,7 @@ import type {
 } from '@shipcode/shared';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
 import { CommentsTab } from './CommentsTab';
+import { ConsoleTab } from './ConsoleTab';
 import { ConversationsTab } from './ConversationsTab';
 import { DiffTab } from './DiffTab';
 import { IssueHistoryTab } from './IssueHistoryTab';
@@ -25,6 +26,7 @@ interface IssueDetailTabsProps {
   activeIssue: GitHubIssueCacheRecord;
   activeTab: IssueDetailTab;
   activeThreadId: string | null;
+  approvedAwaitingExecution: boolean;
   checkpoints: PipelineCheckpoint[];
   currentPhaseSelections: Record<PhaseKey, PhaseSelection>;
   diffs: DiffRecord[];
@@ -86,6 +88,7 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
     activeIssue,
     activeTab,
     activeThreadId,
+    approvedAwaitingExecution,
     diffs,
     effectiveExpanded,
     isRefreshingFromGithub,
@@ -113,6 +116,7 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
   } = props;
   const orderedTabs: Array<{ value: IssueDetailTab; label: string }> = [
     { value: 'prd', label: 'Issue' },
+    { value: 'console', label: 'Console' },
     ...(activeIssue.isQuickMode
       ? []
       : ([{ value: 'comments' as const, label: 'Comments' }] as const)),
@@ -152,6 +156,14 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
           isRefreshingFromGithub={isRefreshingFromGithub}
           onEditPrd={onEditPrd}
           onRefreshFromGithub={onRefreshFromGithub}
+        />
+      </TabsContent>
+
+      <TabsContent value="console" className={'mt-0'}>
+        <ConsoleTab
+          activeThreadId={activeThreadId}
+          approvedAwaitingExecution={approvedAwaitingExecution}
+          threadPhase={threadPhase}
         />
       </TabsContent>
 

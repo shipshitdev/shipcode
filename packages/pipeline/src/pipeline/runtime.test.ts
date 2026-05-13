@@ -1208,6 +1208,43 @@ describe('createPipelineRuntime', () => {
     );
   });
 
+  it('syncs pipeline labels even when GitHub project status mapping is not configured', async () => {
+    mockGhCli.getIssue.mockResolvedValue({
+      labels: ['shipcode:pipeline:queued', 'enhancement'],
+    });
+    mockGhCli.setIssueLabelPresence.mockResolvedValue(undefined);
+    const { deps } = makeDeps();
+    deps.threads.getById = vi.fn(() => ({
+      id: 'thread-1',
+      projectId: 'project-1',
+      githubIssueNumber: 42,
+      status: 'executing',
+    })) as never;
+    deps.githubIssues.getByNumber = vi.fn(() => ({ id: 'issue-1' })) as never;
+    deps.projects.getById = vi.fn(() => ({
+      id: 'project-1',
+      path: '/repo',
+      githubProjectUrl: null,
+      githubStatusMapping: null,
+    })) as never;
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    runtime.emitPhase('thread-1', 'paused');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(mockGhCli.setIssueProjectMetadata).not.toHaveBeenCalled();
+    expect(mockGhCli.setIssueLabelPresence).toHaveBeenCalledWith(
+      42,
+      'shipcode:pipeline:queued',
+      false,
+    );
+    expect(mockGhCli.setIssueLabelPresence).toHaveBeenCalledWith(
+      42,
+      'shipcode:pipeline:paused',
+      true,
+    );
+  });
+
   it('logs queued GitHub sync writer failures', async () => {
     vi.mocked(GhCli).mockImplementationOnce(function GhCli() {
       throw new Error('gh unavailable');

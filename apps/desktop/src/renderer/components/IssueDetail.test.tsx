@@ -5,9 +5,11 @@ import {
   type GitHubIssueCacheRecord,
   type PlanRecord,
   type ReviewRecord,
+  type TerminalEventRecord,
   type Thread,
   type VerificationRecord,
 } from '@shipcode/shared';
+import { TooltipProvider } from '@shipcode/ui';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -217,7 +219,9 @@ function renderWithProviders() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <IssueDetail />
+      <TooltipProvider>
+        <IssueDetail />
+      </TooltipProvider>
     </QueryClientProvider>,
   );
 }
@@ -1201,6 +1205,7 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     expect(screen.getByRole('tab', { name: 'Issue' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Console' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Comments' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Plans' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Activity' })).toBeInTheDocument();
@@ -1239,7 +1244,49 @@ describe('IssueDetail', () => {
     });
 
     const tabLabels = screen.getAllByRole('tab').map((tab) => tab.textContent?.trim());
-    expect(tabLabels).toEqual(['Issue', 'Comments', 'Plans', 'Diff', 'Activity', 'Conversations']);
+    expect(tabLabels).toEqual([
+      'Issue',
+      'Console',
+      'Comments',
+      'Plans',
+      'Diff',
+      'Activity',
+      'Conversations',
+    ]);
+  });
+
+  it('renders persisted console output inside issue detail', async () => {
+    const thread = makeThread({ status: 'executing' });
+    const event: TerminalEventRecord = {
+      id: 'event-1',
+      threadId: thread.id,
+      event: { kind: 'text', content: 'console output from executor' },
+      createdAt: new Date().toISOString(),
+    };
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'executing' }),
+      pipelinePhase: 'executing',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'terminal:list') return [event];
+      return args ?? [];
+    });
+
+    renderWithProviders();
+
+    const consoleTab = screen.getByRole('tab', { name: 'Console' });
+    fireEvent.mouseDown(consoleTab, { button: 0 });
+    fireEvent.click(consoleTab);
+
+    expect(await screen.findByText('console output from executor')).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledWith('terminal:list', {
+      threadId: thread.id,
+      limit: 2000,
+    });
   });
 
   it('pipeline start card is above the tab bar when pipeline not started', async () => {

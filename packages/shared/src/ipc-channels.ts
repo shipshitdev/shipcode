@@ -181,6 +181,10 @@ export interface IpcInvokeChannels {
   'thread:create': { args: { projectId: string; prompt: string }; result: Thread };
   'thread:get': { args: { threadId: string }; result: Thread | null };
   'thread:mark-done': { args: { threadId: string }; result: undefined };
+  'thread:set-done-status': {
+    args: { threadId: string; status: 'completed' | 'closed' };
+    result: Thread;
+  };
   'checkpoint:list': { args: { threadId: string }; result: PipelineCheckpoint[] };
   'checkpoint:restore': {
     args: { threadId: string; checkpointId: string };

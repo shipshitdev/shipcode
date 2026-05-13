@@ -1285,7 +1285,7 @@ describe('linked PR affordances', () => {
     expect(headerRow?.className).toContain('sticky');
     expect(headerRow?.className).toContain('top-0');
     expect(headerRow?.className).toContain('bg-secondary');
-    expect(headerRow?.className).toContain('backdrop-blur');
+    expect(headerRow?.className).toContain('z-20');
     expect(headerRow?.className).not.toContain('opacity');
     expect(executingHeader.className).toContain('text-left');
     expect(headerRow?.nextElementSibling?.className).toContain('p-1.5');

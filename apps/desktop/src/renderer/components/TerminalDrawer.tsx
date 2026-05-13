@@ -1,18 +1,13 @@
-import type { TerminalEventRecord } from '@shipcode/shared';
 import { Button, cn } from '@shipshitdev/ui';
 import type { CSSProperties } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { useAppStore } from '../stores/app-store';
 import { toast } from '../stores/toast-store';
-import { EMPTY_STREAM, PHASE_LABELS, type TerminalDrawerTarget } from './terminal-drawer/constants';
+import type { TerminalDrawerTarget } from './terminal-drawer/constants';
 import { TerminalDrawerHeader } from './terminal-drawer/TerminalDrawerHeader';
 import { useTerminalDrawer } from './terminal-drawer/useTerminalDrawer';
-import {
-  type TerminalAutoFixRequest,
-  type TerminalFailureActionRequest,
-  TerminalTranscript,
-} from './terminal-transcript/TerminalTranscript';
+import { ThreadConsoleTranscript } from './terminal-transcript/ThreadConsoleTranscript';
 
 interface TerminalDrawerTranscriptProps {
   approvedAwaitingExecution: boolean;
@@ -27,107 +22,17 @@ function TerminalDrawerTranscript({
   terminalThreadId,
   onOpenTarget,
 }: TerminalDrawerTranscriptProps) {
-  const canonicalStream = useAppStore(
-    (state) => state.canonicalTerminalStream[terminalThreadId] ?? EMPTY_STREAM,
-  );
-  const hydrateCanonicalEvents = useAppStore((state) => state.hydrateCanonicalEvents);
-  const addTerminalPane = useAppStore((state) => state.addTerminalPane);
-  const setProjectTab = useAppStore((state) => state.setProjectTab);
-  const [autoFixingEventId, setAutoFixingEventId] = useState<string | null>(null);
-  const [sendingToTerminalEventId, setSendingToTerminalEventId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (canonicalStream.length > 0) return;
-
-    let cancelled = false;
-    void window.shipcode
-      .invoke<TerminalEventRecord[]>('terminal:list', {
-        threadId: terminalThreadId,
-        limit: 2000,
-      })
-      .then((events) => {
-        if (cancelled || !Array.isArray(events) || events.length === 0) return;
-        hydrateCanonicalEvents(terminalThreadId, events);
-      })
-      .catch(() => {
-        // Best-effort hydration only.
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [canonicalStream.length, hydrateCanonicalEvents, terminalThreadId]);
-
-  const pendingLabel =
-    canonicalStream.length === 0 && displayTarget.phase
-      ? approvedAwaitingExecution
-        ? 'Waiting for execution slot'
-        : (PHASE_LABELS[displayTarget.phase] ?? 'Working')
-      : null;
   const handleAction = useCallback(() => {
     onOpenTarget(displayTarget);
   }, [displayTarget, onOpenTarget]);
-  const handleAutoFix = useCallback(
-    async ({ record, output }: TerminalAutoFixRequest) => {
-      if (autoFixingEventId) return;
-
-      setAutoFixingEventId(record.id);
-      try {
-        await window.shipcode.invoke('pipeline:auto-fix', {
-          threadId: terminalThreadId,
-          failureOutput: output,
-        });
-      } catch (error) {
-        toast.error('Auto Fix failed', error instanceof Error ? error.message : undefined);
-      } finally {
-        setAutoFixingEventId(null);
-      }
-    },
-    [autoFixingEventId, terminalThreadId],
-  );
-  const handleSendToTerminal = useCallback(
-    async ({ record, output }: TerminalFailureActionRequest) => {
-      if (sendingToTerminalEventId) return;
-
-      setSendingToTerminalEventId(record.id);
-      try {
-        const result = await window.shipcode.invoke<{
-          threadId: string;
-          cli: 'claude' | 'codex';
-          title: string;
-        }>('instant:fix-thread-failure', {
-          threadId: terminalThreadId,
-          failureOutput: output,
-        });
-        addTerminalPane(result.threadId, {
-          mode: 'replay',
-          cli: result.cli,
-          title: result.title,
-          state: 'running',
-        });
-        setProjectTab('terminal');
-      } catch (error) {
-        toast.error(
-          'Failed to send to terminal',
-          error instanceof Error ? error.message : undefined,
-        );
-      } finally {
-        setSendingToTerminalEventId(null);
-      }
-    },
-    [addTerminalPane, sendingToTerminalEventId, setProjectTab, terminalThreadId],
-  );
 
   return (
-    <TerminalTranscript
-      events={canonicalStream}
-      pendingLabel={pendingLabel}
+    <ThreadConsoleTranscript
+      threadId={terminalThreadId}
+      phase={displayTarget.phase}
+      approvedAwaitingExecution={approvedAwaitingExecution}
       emptyMessage="No console output yet."
       onAction={displayTarget.kind === 'issue' ? handleAction : undefined}
-      onAutoFix={handleAutoFix}
-      onSendToTerminal={handleSendToTerminal}
-      autoFixingEventId={autoFixingEventId}
-      sendingToTerminalEventId={sendingToTerminalEventId}
     />
   );
 }

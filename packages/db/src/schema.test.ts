@@ -56,6 +56,9 @@ import {
   migrateV53,
   migrateV54,
   migrateV55,
+  migrateV56,
+  migrateV57,
+  migrateV58,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -149,6 +152,9 @@ const migrations = [
   migrateV53,
   migrateV54,
   migrateV55,
+  migrateV56,
+  migrateV57,
+  migrateV58,
 ] as const;
 
 function migrateThrough(db: DatabaseSync, target: (db: DatabaseSync) => void): void {
@@ -1394,5 +1400,48 @@ describe('migrateV53', () => {
   it('is idempotent', () => {
     migrateV53(db);
     expect(() => migrateV53(db)).not.toThrow();
+  });
+});
+
+describe('migrateV58', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('repairs a newer schema_version database missing issue_type', () => {
+    migrateThrough(db, migrateV54);
+    expect(columnExists(db, 'github_issue_cache', 'issue_type')).toBe(false);
+
+    db.exec(`
+      DELETE FROM schema_version;
+      INSERT INTO schema_version (version) VALUES (57);
+    `);
+
+    migrateV58(db);
+
+    expect(columnExists(db, 'github_issue_cache', 'issue_type')).toBe(true);
+    expect(
+      (
+        db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as {
+          version: number;
+        }
+      ).version,
+    ).toBe(58);
+  });
+
+  it('is idempotent', () => {
+    migrateThrough(db, migrateV58);
+    expect(() => migrateV58(db)).not.toThrow();
+
+    const issueTypeColumns = getColumns(db, 'github_issue_cache').filter(
+      (column) => column.name === 'issue_type',
+    );
+    expect(issueTypeColumns).toHaveLength(1);
   });
 });

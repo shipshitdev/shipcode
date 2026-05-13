@@ -28,8 +28,10 @@ import {
   PIPELINE_PHASE,
   parseGithubProjectUrl,
   parseGithubRemote,
+  pipelineStatusFromLabels,
   SHIPCODE_DEFAULT_LABELS,
 } from '@shipcode/shared';
+import { syncIssuePipelineLabelSoon } from '../github-pipeline-label-sync';
 import log, { logEvent } from '../logger.service';
 import { PipelineScheduler } from '../pipeline-scheduler';
 import {
@@ -72,6 +74,8 @@ function resolveOpenIssuePipelineStatus(
   issue: GitHubIssueCacheRecord,
   thread: ReturnType<IpcHandlerDeps['queries']['threads']['getById']>,
 ): IssuePipelineStatus {
+  const labelStatus = pipelineStatusFromLabels(issue.labels);
+  if (labelStatus) return labelStatus;
   if (thread) {
     return thread.status === PIPELINE_PHASE.idle
       ? ISSUE_PIPELINE_STATUS.todo
@@ -80,6 +84,22 @@ function resolveOpenIssuePipelineStatus(
   return issue.linkedPrNumber != null
     ? ISSUE_PIPELINE_STATUS.completed
     : ISSUE_PIPELINE_STATUS.todo;
+}
+
+function updateIssuePipelineStatus(
+  projectPath: string,
+  queries: IpcHandlerDeps['queries'],
+  issue: Pick<GitHubIssueCacheRecord, 'id' | 'issueNumber'>,
+  status: IssuePipelineStatus,
+  source: string,
+): void {
+  queries.githubIssues.updatePipelineStatus(issue.id, status);
+  syncIssuePipelineLabelSoon({
+    projectPath,
+    issueNumber: issue.issueNumber,
+    status,
+    source,
+  });
 }
 
 function syncOpenIssueState(
@@ -239,17 +259,15 @@ export function registerGitHubHandlers({
             }
           }
         });
-        await Promise.all(
-          newIssues.map((issue) =>
-            attachIssueToConfiguredProjectBoard(
-              project,
-              ghCli,
-              issue.number,
-              issue.url,
-              'github:refresh-issues',
-            ),
-          ),
-        );
+        for (const issue of newIssues) {
+          await attachIssueToConfiguredProjectBoard(
+            project,
+            ghCli,
+            issue.number,
+            issue.url,
+            'github:refresh-issues',
+          );
+        }
 
         await Promise.all(
           newIssues.map(async ({ record }) => {
@@ -321,7 +339,7 @@ export function registerGitHubHandlers({
               });
               queries.githubIssues.setIssueType({
                 id: cachedIssue.id,
-                issueType: priorityResult.issueTypes.get(cachedIssue.issueNumber) ?? null,
+                issueType: priorityResult.issueTypes?.get(cachedIssue.issueNumber) ?? null,
               });
             }
           } catch (err) {
@@ -349,9 +367,13 @@ export function registerGitHubHandlers({
                 ISSUE_PIPELINE_STATUS.testing,
                 ISSUE_PIPELINE_STATUS.verifying,
                 ISSUE_PIPELINE_STATUS.shipping,
+                ISSUE_PIPELINE_STATUS.paused,
+                ISSUE_PIPELINE_STATUS.failed,
               ]);
               for (const cachedIssue of cachedAfterIssueSync) {
-                // Never override an issue actively being worked by the pipeline
+                // Pipeline labels are the exact ShipCode state; board columns are only macro status.
+                if (pipelineStatusFromLabels(cachedIssue.labels)) continue;
+                // Never override an issue actively being worked by the pipeline.
                 if (ACTIVE_PIPELINE_STATUSES.has(cachedIssue.pipelineStatus)) continue;
                 if (cachedIssue.isQuickMode) continue;
 
@@ -367,7 +389,13 @@ export function registerGitHubHandlers({
                 else if (macroColumn === 'done') targetStatus = ISSUE_PIPELINE_STATUS.closed;
 
                 if (targetStatus && targetStatus !== cachedIssue.pipelineStatus) {
-                  queries.githubIssues.updatePipelineStatus(cachedIssue.id, targetStatus);
+                  updateIssuePipelineStatus(
+                    project.path,
+                    queries,
+                    cachedIssue,
+                    targetStatus,
+                    'github:refresh-issues',
+                  );
                 }
               }
             } catch (err) {
@@ -568,7 +596,13 @@ export function registerGitHubHandlers({
       }
 
       try {
-        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.closed);
+        updateIssuePipelineStatus(
+          project.path,
+          queries,
+          issue,
+          ISSUE_PIPELINE_STATUS.closed,
+          'github:archive-issue',
+        );
         queries.githubIssues.archiveIssues([issue.id]);
       } catch (err) {
         log.error('[github:archive-issue] DB archive failed:', err);
@@ -616,7 +650,13 @@ export function registerGitHubHandlers({
         queries.githubIssues.updateState(issue.id, 'closed');
       }
 
-      queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.closed);
+      updateIssuePipelineStatus(
+        project.path,
+        queries,
+        issue,
+        ISSUE_PIPELINE_STATUS.closed,
+        'issue:mark-done',
+      );
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );
@@ -636,15 +676,33 @@ export function registerGitHubHandlers({
 
       if (issue.state === 'closed') {
         queries.githubIssues.updateState(issue.id, 'closed');
-        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.closed);
+        updateIssuePipelineStatus(
+          project.path,
+          queries,
+          issue,
+          ISSUE_PIPELINE_STATUS.closed,
+          'github:mark-done',
+        );
       } else if (hasCompletionEvidence) {
         queries.githubIssues.updateState(issue.id, 'open');
-        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.completed);
+        updateIssuePipelineStatus(
+          project.path,
+          queries,
+          issue,
+          ISSUE_PIPELINE_STATUS.completed,
+          'github:mark-done',
+        );
       } else {
         const ghCli = new GhCli(project.path);
         await ghCli.closeIssue(issueNumber);
         queries.githubIssues.updateState(issue.id, 'closed');
-        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.closed);
+        updateIssuePipelineStatus(
+          project.path,
+          queries,
+          issue,
+          ISSUE_PIPELINE_STATUS.closed,
+          'github:mark-done',
+        );
       }
 
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
@@ -667,7 +725,13 @@ export function registerGitHubHandlers({
       }
 
       queries.githubIssues.updateState(issue.id, 'closed');
-      queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.closed);
+      updateIssuePipelineStatus(
+        project.path,
+        queries,
+        issue,
+        ISSUE_PIPELINE_STATUS.closed,
+        'github:close-issue',
+      );
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );
@@ -1009,7 +1073,7 @@ export function registerGitHubHandlers({
           });
           queries.githubIssues.setIssueType({
             id: issue.id,
-            issueType: priorityResult.issueTypes.get(issue.issueNumber) ?? null,
+            issueType: priorityResult.issueTypes?.get(issue.issueNumber) ?? null,
           });
         }
         const refreshedIssues = queries.githubIssues.list(projectId);

@@ -13,25 +13,42 @@
 import type { TerminalEvent } from '../../terminal-events';
 import { FenceStateMachine } from './fence-suppression';
 
-function formatToolCall(name: string, input: Record<string, unknown>): string {
+interface ToolCallResult {
+  summary: string;
+  command?: string;
+  filePath?: string;
+  pattern?: string;
+}
+
+function formatToolCall(name: string, input: Record<string, unknown>): ToolCallResult {
   switch (name) {
     case 'Read':
-      return `Read ${input.file_path ?? ''}`;
+      return { summary: `Read ${input.file_path ?? ''}`, filePath: String(input.file_path ?? '') };
     case 'Write':
-      return `Write ${input.file_path ?? ''}`;
+      return { summary: `Write ${input.file_path ?? ''}`, filePath: String(input.file_path ?? '') };
     case 'Edit':
-      return `Edit ${input.file_path ?? ''}`;
+      return { summary: `Edit ${input.file_path ?? ''}`, filePath: String(input.file_path ?? '') };
     case 'Glob':
-      return `Glob ${input.pattern ?? ''}`;
-    case 'Grep':
-      return `Grep "${input.pattern ?? ''}"${input.path ? ` in ${input.path}` : ''}`;
+      return { summary: `Glob ${input.pattern ?? ''}`, pattern: String(input.pattern ?? '') };
+    case 'Grep': {
+      const pat = String(input.pattern ?? '');
+      const path = input.path ? String(input.path) : undefined;
+      return {
+        summary: `Grep "${pat}"${path ? ` in ${path}` : ''}`,
+        pattern: pat,
+        filePath: path,
+      };
+    }
     case 'Bash': {
       const cmd = String(input.command ?? '');
-      return `$ ${cmd.length > 60 ? `${cmd.slice(0, 60)}...` : cmd}`;
+      return {
+        summary: `$ ${cmd.length > 60 ? `${cmd.slice(0, 60)}...` : cmd}`,
+        command: cmd,
+      };
     }
     default: {
       const first = Object.values(input)[0];
-      return first ? `${name}: ${String(first).slice(0, 60)}` : name;
+      return { summary: first ? `${name}: ${String(first).slice(0, 60)}` : name };
     }
   }
 }
@@ -115,10 +132,14 @@ export class ClaudeNormalizer {
         } else if (c.type === 'tool_use') {
           const name = c.name as string;
           const input = (c.input ?? {}) as Record<string, unknown>;
+          const { summary, command, filePath, pattern } = formatToolCall(name, input);
           this.onEvent({
             kind: 'tool_start',
             name,
-            summary: formatToolCall(name, input),
+            summary,
+            ...(command ? { command } : {}),
+            ...(filePath ? { filePath } : {}),
+            ...(pattern ? { pattern } : {}),
           });
         }
       }

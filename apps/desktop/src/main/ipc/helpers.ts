@@ -271,8 +271,9 @@ export async function attachIssueToConfiguredProjectBoard(
     });
     return null;
   } catch (err) {
-    log.warn(`[${source}] project attach failed for #${issueNumber}:`, err);
-    return clampError(err);
+    const message = clampError(err);
+    log.warn(`[${source}] project attach failed for #${issueNumber}: ${message}`);
+    return message;
   }
 }
 

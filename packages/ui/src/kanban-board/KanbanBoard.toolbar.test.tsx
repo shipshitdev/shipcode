@@ -240,6 +240,11 @@ describe('KanbanBoard toolbar', () => {
 
     expect(view.container.querySelector('[data-testid="dnd-context"]')).not.toBeNull();
     expect(view.container.textContent).not.toContain('Graph body');
+    expect(
+      Array.from(view.container.querySelectorAll('button[title$=" view"]')).map((button) =>
+        button.getAttribute('title'),
+      ),
+    ).toEqual(['Board view', 'List view', 'Graph view']);
 
     clickControl(view.container, 'button[title="List view"]');
     expect(view.container.querySelector('[data-testid="dnd-context"]')).not.toBeNull();
