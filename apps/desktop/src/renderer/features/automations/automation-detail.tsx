@@ -4,21 +4,12 @@ import { PhaseChip } from '@shipcode/ui';
 import { Button, cn } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Cron } from 'croner';
+import { formatTimestamp, SHORT_TIMESTAMP_FORMAT } from '../../components/format-timestamp';
 import { ArrowLeft, Loader2, Pencil } from 'lucide-react';
 import { useAppStore } from '../../stores/app-store';
 import { AutomationPromptMarkdown } from './automation-prompt-markdown';
 import { formatAutomationRelativeTime } from './automation-time';
 import { describeAutomationRun, getAutomationRunTotalTokens } from './run-presentation';
-
-function formatTimestamp(date: string | null): string {
-  if (!date) return '—';
-  return new Date(date).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
 
 function describeCron(expr: string): string {
   try {
@@ -163,7 +154,7 @@ export function AutomationDetail() {
                           {describeAutomationRun(run, { errorMaxLength: 120 })}
                         </span>
                         <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                          <span>{formatTimestamp(run.createdAt)}</span>
+                          <span>{formatTimestamp(run.createdAt, SHORT_TIMESTAMP_FORMAT)}</span>
                           {run.failureCount > 0 && (
                             <>
                               <span>·</span>
@@ -293,8 +284,8 @@ export function AutomationDetail() {
             {/* Timestamps */}
             {automation && (
               <div className="space-y-0.5 text-[11px] text-muted-foreground">
-                <p>Created {formatTimestamp(automation.createdAt)}</p>
-                <p>Updated {formatTimestamp(automation.updatedAt)}</p>
+                <p>Created {formatTimestamp(automation.createdAt, SHORT_TIMESTAMP_FORMAT)}</p>
+                <p>Updated {formatTimestamp(automation.updatedAt, SHORT_TIMESTAMP_FORMAT)}</p>
               </div>
             )}
           </div>

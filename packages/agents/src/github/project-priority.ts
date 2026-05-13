@@ -194,11 +194,7 @@ export async function fetchProjectPriorities(
       '-F',
       `number=${number}`,
     ];
-    if (cursor) {
-      args.push('-F', `cursor=${cursor}`);
-    } else {
-      args.push('-F', 'cursor=');
-    }
+    args.push('-F', cursor ? `cursor=${cursor}` : 'cursor=');
 
     let stdout: string;
     try {

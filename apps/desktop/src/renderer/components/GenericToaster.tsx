@@ -1,19 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
 import { type ToastRecord, toastTone, useToastStore } from '../stores/toast-store';
-import { InAppNotification } from './InAppNotification';
+import { InAppNotification, useToastExit } from './InAppNotification';
 
 function ToastRow({ toast, onHide }: { toast: ToastRecord; onHide: () => void }) {
-  const [isExiting, setIsExiting] = useState(false);
-
-  const triggerExit = useCallback(() => {
-    setIsExiting(true);
-    setTimeout(onHide, 220);
-  }, [onHide]);
-
-  useEffect(() => {
-    const id = setTimeout(triggerExit, 4000);
-    return () => clearTimeout(id);
-  }, [triggerExit]);
+  const { isExiting, triggerExit } = useToastExit(4_000, onHide);
 
   return (
     <div className={isExiting ? 'animate-toast-exit' : 'animate-toast-enter'}>
@@ -21,7 +10,7 @@ function ToastRow({ toast, onHide }: { toast: ToastRecord; onHide: () => void })
         title={toast.title}
         description={toast.body}
         tone={toastTone(toast.kind)}
-        onDismiss={triggerExit}
+        onDismiss={() => triggerExit()}
       />
     </div>
   );

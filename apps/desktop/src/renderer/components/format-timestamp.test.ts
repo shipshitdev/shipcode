@@ -16,6 +16,10 @@ describe('format-timestamp', () => {
     );
   });
 
+  it('formats empty timestamps as a dash', () => {
+    expect(formatTimestamp(null)).toBe('—');
+  });
+
   it('returns the current ISO timestamp', () => {
     expect(currentIsoTimestamp()).toBe('2026-05-10T08:00:00.000Z');
   });
