@@ -37,7 +37,6 @@ interface IssueDetailTabsProps {
   isRefreshingFromGithub: boolean;
   isSubmitting: boolean;
   isShowingAllPlanRuns: boolean;
-  linkedPrUrl: string | null;
   effectiveRequireApproval: boolean;
   effectiveRevisionCount: number;
   inheritedRequireApproval: boolean;

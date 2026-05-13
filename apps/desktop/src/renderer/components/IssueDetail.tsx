@@ -37,7 +37,7 @@ import {
   resolveRevisionCountForIssue,
   stripIssueTitlePriorityPrefix,
 } from '@shipcode/shared';
-import { isAutomationIssue, PhaseChip, resolveIssuePriorityBadge } from '@shipcode/ui';
+import { isAutomationIssue, PhaseChip } from '@shipcode/ui';
 import {
   Badge,
   Button,
@@ -47,6 +47,11 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -565,6 +570,20 @@ function useIssueDetailView() {
     activeIssue?.pipelineStatus === ISSUE_PIPELINE_STATUS.completed &&
     !activeIssue.linkedPrNumber &&
     !!thread?.githubRepo;
+
+  const updateMetadata = useMutation({
+    mutationFn: (args: { issueType?: string | null; priority?: string | null }) =>
+      window.shipcode.invoke('github:update-issue-metadata', {
+        projectId: activeProjectId!,
+        issueNumber: activeIssue!.issueNumber,
+        ...args,
+      }),
+    onSuccess: () => {
+      if (activeProjectId) {
+        queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
+      }
+    },
+  });
 
   if (!activeIssue) return null;
 
@@ -1394,7 +1413,6 @@ function useIssueDetailView() {
       )}
     </div>
   );
-  const issuePriorityBadge = resolveIssuePriorityBadge(activeIssue);
   const displayIssueTitle = stripIssueTitlePriorityPrefix(activeIssue.title);
   const issueType = activeIssue.issueType?.trim() || null;
   const issueBadges = (
@@ -1433,41 +1451,64 @@ function useIssueDetailView() {
   );
   const hasPrFeedbackBlockers =
     activeIssue.ciBlocked || activeIssue.unresolvedReviewCommentCount > 0;
-  const issueMetadataRows = [
-    {
-      label: 'Type',
-      value: issueType,
-      missing: 'No type',
-    },
-    {
-      label: 'Priority',
-      value: issuePriorityBadge?.label ?? activeIssue.priorityRaw ?? null,
-      missing: 'No priority',
-    },
-  ];
-  const issueMetadataSection = !activeIssue.isQuickMode ? (
+  const isRealIssue = !activeIssue.isQuickMode;
+  const issueMetadataSection = isRealIssue ? (
     <section className="space-y-2 border-b border-border pb-4">
-      <h2 className="text-xs font-semibold text-secondary">Issue</h2>
       <dl className="space-y-2">
-        {issueMetadataRows.map((row) => (
-          <div key={row.label} className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-3">
-            <dt className="text-xs text-muted-foreground">{row.label}</dt>
+        <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-3">
+          <dt className="text-xs text-muted-foreground">Type</dt>
+          <dd className="min-w-0">
+            <Select
+              value={issueType ?? '__none__'}
+              onValueChange={(value) => {
+                updateMetadata.mutate({ issueType: value === '__none__' ? null : value });
+              }}
+            >
+              <SelectTrigger className="h-7 w-full text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No type</SelectItem>
+                <SelectItem value="Bug">Bug</SelectItem>
+                <SelectItem value="Feature">Feature</SelectItem>
+                <SelectItem value="Task">Task</SelectItem>
+                <SelectItem value="Enhancement">Enhancement</SelectItem>
+              </SelectContent>
+            </Select>
+          </dd>
+        </div>
+        <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-3">
+          <dt className="text-xs text-muted-foreground">Priority</dt>
+          <dd className="min-w-0">
+            <Select
+              value={activeIssue.priorityRaw ?? '__none__'}
+              onValueChange={(value) => {
+                updateMetadata.mutate({ priority: value === '__none__' ? null : value });
+              }}
+            >
+              <SelectTrigger className="h-7 w-full text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No priority</SelectItem>
+                <SelectItem value="P0">P0 — Critical</SelectItem>
+                <SelectItem value="P1">P1 — High</SelectItem>
+                <SelectItem value="P2">P2 — Medium</SelectItem>
+                <SelectItem value="P3">P3 — Low</SelectItem>
+              </SelectContent>
+            </Select>
+          </dd>
+        </div>
+        {thread?.worktreeBranch && (
+          <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-3">
+            <dt className="text-xs text-muted-foreground">Branch</dt>
             <dd className="min-w-0">
-              {row.value ? (
-                <Badge
-                  variant={
-                    row.label === 'Priority' ? (issuePriorityBadge?.variant ?? 'info') : 'default'
-                  }
-                  className="text-[11px]"
-                >
-                  {row.value}
-                </Badge>
-              ) : (
-                <span className="text-xs text-muted-foreground">{row.missing}</span>
-              )}
+              <span className="block truncate font-mono text-[11px] text-primary">
+                {thread.worktreeBranch}
+              </span>
             </dd>
           </div>
-        ))}
+        )}
       </dl>
     </section>
   ) : null;
@@ -1536,7 +1577,6 @@ function useIssueDetailView() {
       isRefreshingFromGithub={isRefreshingFromGithub}
       isSubmitting={isSubmitting}
       isShowingAllPlanRuns={isShowingAllPlanRuns}
-      linkedPrUrl={linkedPrUrl}
       effectiveRequireApproval={effectiveRequireApproval}
       effectiveRevisionCount={effectiveRevisionCount}
       inheritedRequireApproval={inheritedRequireApproval}
@@ -1690,6 +1730,12 @@ function useIssueDetailView() {
             {/* Details */}
             {issueMetadataSection}
             {issueBadges && <div>{issueBadges}</div>}
+            {/* Costs */}
+            <CostsTab
+              projectId={activeProjectId ?? ''}
+              issueNumber={activeIssue.issueNumber}
+              thread={thread}
+            />
             {/* Pipeline */}
             <PipelineTab
               activeIssue={activeIssue}
@@ -1706,7 +1752,6 @@ function useIssueDetailView() {
               inheritedRevisionCount={inheritedRevisionCount}
               integrationStatus={integrationStatus}
               isSubmitting={isSubmitting}
-              linkedPrUrl={linkedPrUrl}
               phaseEffortSelectValues={phaseEffortSelectValues}
               phaseModelValidation={phaseModelValidation}
               phaseSelectValues={phaseSelectValues}
@@ -1738,12 +1783,6 @@ function useIssueDetailView() {
               onStabilizePr={() => {
                 void handleStabilizePr();
               }}
-            />
-            {/* Costs */}
-            <CostsTab
-              projectId={activeProjectId ?? ''}
-              issueNumber={activeIssue.issueNumber}
-              thread={thread}
             />
           </div>
         </div>

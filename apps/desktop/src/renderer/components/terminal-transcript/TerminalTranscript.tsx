@@ -2,7 +2,20 @@ import type { CanonicalTerminalEvent, TerminalEventRecord } from '@shipcode/shar
 import { ERROR_PATTERNS, formatClockTime, stripAnsi } from '@shipcode/shared';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@shipcode/ui';
 import { Badge, Button, cn } from '@shipshitdev/ui';
-import { ArrowDownToLine, Check, Copy, Loader2, Terminal, Wand2 } from 'lucide-react';
+import {
+  ArrowDownToLine,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Info,
+  Loader2,
+  Search,
+  SquarePen,
+  Terminal,
+  Wand2,
+  Wrench,
+} from 'lucide-react';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export interface TerminalFailureActionRequest {
@@ -55,6 +68,152 @@ const TOOL_BADGE_CLASSES: Record<ToolCategory, string> = {
   search: 'border border-violet-500/25 bg-violet-500/15 text-violet-400',
   default: 'border border-border/50 bg-secondary/60 text-muted-foreground',
 };
+
+// --- Work log grouping ---
+
+type TranscriptSegment =
+  | { type: 'single'; record: TerminalEventRecord }
+  | { type: 'worklog'; records: TerminalEventRecord[] };
+
+function isWorkEvent(record: TerminalEventRecord): boolean {
+  const e = record.event;
+  if (e.kind === 'tool_start') return true;
+  if (e.kind === 'tool_end') {
+    return typeof e.exitCode !== 'number' || e.exitCode === 0;
+  }
+  if (e.kind === 'lifecycle') return classifyConsoleLine(stripAnsi(e.message)) === 'info';
+  if (e.kind === 'raw') return classifyConsoleLine(stripAnsi(e.content)) === 'info';
+  return false;
+}
+
+function groupTranscriptEvents(events: TerminalEventRecord[]): TranscriptSegment[] {
+  const segments: TranscriptSegment[] = [];
+  let currentGroup: TerminalEventRecord[] = [];
+
+  for (const record of events) {
+    if (isWorkEvent(record)) {
+      currentGroup.push(record);
+    } else {
+      if (currentGroup.length > 0) {
+        segments.push({ type: 'worklog', records: currentGroup });
+        currentGroup = [];
+      }
+      segments.push({ type: 'single', record });
+    }
+  }
+  if (currentGroup.length > 0) {
+    segments.push({ type: 'worklog', records: currentGroup });
+  }
+  return segments;
+}
+
+const DEFAULT_WORKLOG_VISIBLE = 6;
+
+function workLogRowIcon(record: TerminalEventRecord) {
+  const e = record.event;
+  if (e.kind === 'tool_start') {
+    const cat = toolCategory(e.name);
+    if (cat === 'bash') return <Terminal size={14} className="text-sky-400/70" />;
+    if (cat === 'file') return <SquarePen size={14} className="text-emerald-400/70" />;
+    if (cat === 'search') return <Search size={14} className="text-violet-400/70" />;
+    return <Wrench size={14} className="text-muted-foreground/60" />;
+  }
+  if (e.kind === 'tool_end') return <Check size={14} className="text-emerald-400/70" />;
+  if (e.kind === 'lifecycle') return <Info size={14} className="text-muted-foreground/50" />;
+  return <Terminal size={14} className="text-muted-foreground/50" />;
+}
+
+function workLogRowLabel(record: TerminalEventRecord): string {
+  const e = record.event;
+  if (e.kind === 'tool_start') {
+    if (e.name === 'Bash') return 'Command run';
+    if (e.name === 'Read') return 'File read';
+    if (e.name === 'Write' || e.name === 'Edit') return 'File change';
+    if (e.name === 'Grep' || e.name === 'Glob') return 'Search';
+    return e.name;
+  }
+  if (e.kind === 'tool_end') {
+    const dur = typeof e.durationMs === 'number' ? ` (${(e.durationMs / 1000).toFixed(1)}s)` : '';
+    return `Completed${dur}`;
+  }
+  if (e.kind === 'lifecycle') return stripAnsi(e.message);
+  if (e.kind === 'raw') return stripAnsi(e.content);
+  return '';
+}
+
+function workLogRowDetail(record: TerminalEventRecord): string {
+  const e = record.event;
+  if (e.kind === 'tool_start') {
+    const detail = e.command ?? e.filePath ?? e.pattern ?? stripAnsi(e.summary);
+    return `${e.name}: ${detail}`;
+  }
+  if (e.kind === 'tool_end') return e.name;
+  return '';
+}
+
+function WorkLogRow({ record, compact }: { record: TerminalEventRecord; compact: boolean }) {
+  const detail = workLogRowDetail(record);
+  return (
+    <div className="flex items-center gap-2 px-1 py-0.5">
+      <span className="flex size-5 shrink-0 items-center justify-center">
+        {workLogRowIcon(record)}
+      </span>
+      <span
+        className={cn('min-w-0 flex-1 truncate font-mono', compact ? 'text-[11px]' : 'text-[12px]')}
+      >
+        <span className="text-muted-foreground/90">{workLogRowLabel(record)}</span>
+        {detail && <span className="text-muted-foreground/50"> &ndash; {detail}</span>}
+      </span>
+    </div>
+  );
+}
+
+function WorkLogCard({ records, compact }: { records: TerminalEventRecord[]; compact: boolean }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const hiddenCount =
+    !isExpanded && records.length > DEFAULT_WORKLOG_VISIBLE
+      ? records.length - DEFAULT_WORKLOG_VISIBLE
+      : 0;
+  const visibleRecords =
+    isExpanded || records.length <= DEFAULT_WORKLOG_VISIBLE
+      ? records
+      : records.slice(0, DEFAULT_WORKLOG_VISIBLE);
+
+  return (
+    <div className="mb-3 rounded-xl border border-border/45 bg-secondary/20 px-2 py-1.5">
+      <div className="flex items-center justify-between px-1 pb-1">
+        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60">
+          Work log ({records.length})
+        </span>
+        {hiddenCount > 0 && (
+          <button
+            type="button"
+            className="flex items-center gap-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/50 hover:text-muted-foreground/80"
+            onClick={() => setIsExpanded(true)}
+          >
+            Show {hiddenCount} more
+            <ChevronDown size={10} />
+          </button>
+        )}
+        {isExpanded && records.length > DEFAULT_WORKLOG_VISIBLE && (
+          <button
+            type="button"
+            className="flex items-center gap-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/50 hover:text-muted-foreground/80"
+            onClick={() => setIsExpanded(false)}
+          >
+            Show less
+            <ChevronUp size={10} />
+          </button>
+        )}
+      </div>
+      <div className="space-y-0.5">
+        {visibleRecords.map((record) => (
+          <WorkLogRow key={record.id} record={record} compact={compact} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function formatTokens(usage: { prompt: number; completion: number } | undefined, costUsd?: number) {
   const parts: string[] = [];
@@ -645,33 +804,41 @@ export function TerminalTranscript({
     [],
   );
 
+  const groupedSegments = useMemo(() => groupTranscriptEvents(visibleEvents), [visibleEvents]);
+
   const plainRows = useMemo(
     () =>
-      visibleEvents.map((record) => (
-        <Fragment key={record.id}>
-          {transcriptRow({
-            record,
-            compact,
-            onAction,
-            onAutoFix,
-            onSendToTerminal,
-            onCopyFailure: handleCopyFailure,
-            autoFixingEventId,
-            sendingToTerminalEventId,
-            copiedEventId,
-          })}
-        </Fragment>
-      )),
+      groupedSegments.map((segment, idx) => {
+        if (segment.type === 'worklog') {
+          const key = segment.records[0]?.id ?? `wl-${idx}`;
+          return <WorkLogCard key={key} records={segment.records} compact={compact} />;
+        }
+        return (
+          <Fragment key={segment.record.id}>
+            {transcriptRow({
+              record: segment.record,
+              compact,
+              onAction,
+              onAutoFix,
+              onSendToTerminal,
+              onCopyFailure: handleCopyFailure,
+              autoFixingEventId,
+              sendingToTerminalEventId,
+              copiedEventId,
+            })}
+          </Fragment>
+        );
+      }),
     [
       autoFixingEventId,
       compact,
       copiedEventId,
+      groupedSegments,
       handleCopyFailure,
       onAction,
       onAutoFix,
       onSendToTerminal,
       sendingToTerminalEventId,
-      visibleEvents,
     ],
   );
 

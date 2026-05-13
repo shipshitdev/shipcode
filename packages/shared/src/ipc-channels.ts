@@ -481,6 +481,15 @@ export interface IpcInvokeChannels {
     args: { projectId: string; issueNumber: number };
     result: undefined;
   };
+  'github:update-issue-metadata': {
+    args: {
+      projectId: string;
+      issueNumber: number;
+      issueType?: string | null;
+      priority?: string | null;
+    };
+    result: GitHubIssueCacheRecord | null;
+  };
 
   // Plans & Reviews (backfill)
   'plan:list': { args: { threadId: string }; result: PlanRecord[] };

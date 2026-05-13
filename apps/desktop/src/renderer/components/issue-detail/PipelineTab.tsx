@@ -87,7 +87,6 @@ function usePipelineTabView({
   inheritedRevisionCount,
   integrationStatus,
   isSubmitting,
-  linkedPrUrl,
   phaseEffortSelectValues,
   phaseModelValidation,
   phaseSelectValues,
@@ -120,7 +119,6 @@ function usePipelineTabView({
   inheritedRevisionCount: number;
   integrationStatus?: IntegrationStatus;
   isSubmitting: boolean;
-  linkedPrUrl: string | null;
   phaseEffortSelectValues: Record<PhaseKey, string>;
   phaseModelValidation: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
   phaseSelectValues: Record<PhaseKey, string>;
@@ -279,14 +277,14 @@ function usePipelineTabView({
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                   {role}
                 </span>
-                <div className="flex min-w-0 gap-2">
+                <div className="flex min-w-0 flex-col gap-1.5">
                   <Select
                     value={phaseSelectValues[phase]}
                     onValueChange={(value: string) => onPhaseAgentChange(phase, value)}
                     disabled={!executorEditable}
                   >
                     <SelectTrigger
-                      className="h-6 min-w-0 flex-1 text-[11px]"
+                      className="h-7 w-full text-[11px]"
                       data-testid={`phase-provider-select-${phase}`}
                     >
                       <SelectValue>
@@ -362,7 +360,7 @@ function usePipelineTabView({
                     onValueChange={(next) => onPhaseEffortChange(phase, next)}
                     disabled={!executorEditable}
                   >
-                    <SelectTrigger className="h-6 min-w-0 flex-1 text-[11px]">
+                    <SelectTrigger className="h-7 w-full text-[11px]">
                       <SelectValue>
                         {isEffortInherited ? (
                           <InheritValueDisplay
@@ -476,54 +474,6 @@ function usePipelineTabView({
           {`${effectiveRevisionCount} revision${effectiveRevisionCount === 1 ? '' : 's'} before approval/execution.`}
         </span>
       </div>
-
-      {thread ? (
-        <div className="mb-5">
-          <div className="mb-2 flex items-center justify-between">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">Branch</h4>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {thread.worktreeBranch ? (
-              <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
-                <span className="truncate font-mono text-[11px] text-primary">
-                  {thread.worktreeBranch}
-                </span>
-              </div>
-            ) : null}
-            {activeIssue.linkedPrNumber && linkedPrUrl ? (
-              <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Pull Request
-                  </span>
-                  <Badge
-                    variant={activeIssue.linkedPrIsDraft ? 'warning' : 'success'}
-                    className="text-[10px]"
-                  >
-                    {activeIssue.linkedPrIsDraft ? 'Draft' : 'Ready'}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-mono text-[11px] text-primary">
-                    #{activeIssue.linkedPrNumber}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-6 text-muted-foreground"
-                    onClick={() =>
-                      window.shipcode.invoke('shell:open-external', { url: linkedPrUrl })
-                    }
-                    title="Open pull request on GitHub"
-                  >
-                    <ExternalLink size={12} />
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
 
       {taskGraph ? (
         <details className="mb-5 rounded-md border border-border bg-secondary/20 px-3 py-2">

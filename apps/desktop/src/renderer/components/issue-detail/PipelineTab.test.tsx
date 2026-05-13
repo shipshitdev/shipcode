@@ -119,7 +119,6 @@ function renderPipelineTab({
   hasPrFeedbackBlockers = false,
   integrationStatus,
   isSubmitting = false,
-  linkedPrUrl = null,
   currentPhaseReasoningEfforts,
   currentPhaseSelections,
   phaseEffortSelectValues,
@@ -142,7 +141,6 @@ function renderPipelineTab({
   hasPrFeedbackBlockers?: boolean;
   integrationStatus?: IntegrationStatus;
   isSubmitting?: boolean;
-  linkedPrUrl?: string | null;
   currentPhaseReasoningEfforts?: Record<PhaseKey, ReasoningEffort>;
   currentPhaseSelections?: Record<PhaseKey, PhaseSelection>;
   phaseEffortSelectValues?: Record<PhaseKey, string>;
@@ -196,7 +194,6 @@ function renderPipelineTab({
       inheritedRevisionCount={0}
       integrationStatus={integrationStatus}
       isSubmitting={isSubmitting}
-      linkedPrUrl={linkedPrUrl}
       phaseEffortSelectValues={
         phaseEffortSelectValues ?? {
           planner: '__inherit__',
@@ -253,8 +250,7 @@ describe('PipelineTab', () => {
     renderPipelineTab();
 
     expect(screen.getByText('Agents')).toBeInTheDocument();
-    expect(screen.getByText('Branch')).toBeInTheDocument();
-    expect(screen.getByText('ship/42-issue-title')).toBeInTheDocument();
+    expect(screen.queryByText('Branch')).not.toBeInTheDocument();
     expect(screen.queryByText('Pipeline')).not.toBeInTheDocument();
   });
 
@@ -848,11 +844,9 @@ describe('PipelineTab', () => {
         prLastSyncAt: '2026-05-01T10:00:00.000Z',
       },
       hasPrFeedbackBlockers: true,
-      linkedPrUrl: 'https://github.com/acme/repo/pull/77',
       onStabilizePr,
     });
 
-    expect(screen.getByText('Draft')).toBeInTheDocument();
     expect(screen.getByText('1 failing check')).toBeInTheDocument();
     expect(screen.getByText('1 unresolved review')).toBeInTheDocument();
     expect(screen.getByText('CI / test')).toBeInTheDocument();
@@ -891,16 +885,11 @@ describe('PipelineTab', () => {
           },
         ],
       },
-      linkedPrUrl: 'https://github.com/acme/repo/pull/77',
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open pull request on GitHub' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open Comment' }));
 
-    expect(invoke).toHaveBeenCalledWith('shell:open-external', {
-      url: 'https://github.com/acme/repo/pull/77',
-    });
     expect(invoke).toHaveBeenCalledWith('shell:open-external', {
       url: 'https://github.com/acme/repo/actions/runs/1',
     });

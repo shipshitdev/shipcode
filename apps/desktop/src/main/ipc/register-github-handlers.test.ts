@@ -31,6 +31,7 @@ const {
   listRepoLabelsWithMetaMock,
   ensureLabelsMock,
   addIssueToProjectMock,
+  setIssueLabelPresenceMock,
   setIssueProjectMetadataMock,
   syncIssueLabelsMock,
 } = vi.hoisted(() => ({
@@ -52,6 +53,7 @@ const {
   listIssueCommentsMock: vi.fn(async () => [] as Array<unknown>),
   listRepoLabelsWithMetaMock: vi.fn(async () => [] as Array<unknown>),
   addIssueToProjectMock: vi.fn(async () => ({ alreadyPresent: false })),
+  setIssueLabelPresenceMock: vi.fn(async () => undefined),
   setIssueProjectMetadataMock: vi.fn(async () => [] as string[]),
   syncIssueLabelsMock: vi.fn(async () => undefined),
   ensureLabelsMock: vi.fn(async () => ({
@@ -77,6 +79,7 @@ vi.mock('@shipcode/agents', async () => {
     listRepoLabelsWithMeta = listRepoLabelsWithMetaMock;
     ensureLabels = ensureLabelsMock;
     addIssueToProject = addIssueToProjectMock;
+    setIssueLabelPresence = setIssueLabelPresenceMock;
     setIssueProjectMetadata = setIssueProjectMetadataMock;
     syncIssueLabels = syncIssueLabelsMock;
   }
@@ -264,6 +267,8 @@ describe('registerGitHubHandlers', () => {
     listRepoLabelsWithMetaMock.mockResolvedValue([]);
     addIssueToProjectMock.mockReset();
     addIssueToProjectMock.mockResolvedValue({ alreadyPresent: false });
+    setIssueLabelPresenceMock.mockReset();
+    setIssueLabelPresenceMock.mockResolvedValue(undefined);
     setIssueProjectMetadataMock.mockReset();
     setIssueProjectMetadataMock.mockResolvedValue([]);
     syncIssueLabelsMock.mockReset();
@@ -498,6 +503,14 @@ describe('registerGitHubHandlers', () => {
       pipelineStatus: 'todo',
       threadId: null,
     };
+    const staleExecutingNoThreadIssue = {
+      ...baseIssue,
+      id: 'issue-stale-executing-no-thread',
+      issueNumber: 62,
+      labels: ['shipcode:pipeline:queued', 'shipcode:pipeline:executing'],
+      pipelineStatus: 'executing',
+      threadId: null,
+    };
     const liveQueuedIssue = {
       ...baseIssue,
       id: 'issue-live-queued',
@@ -506,7 +519,12 @@ describe('registerGitHubHandlers', () => {
       pipelineStatus: 'queued',
       threadId: null,
     };
-    const cachedAfterSync = [failedThreadIssue, staleQueuedLabelIssue, liveQueuedIssue];
+    const cachedAfterSync = [
+      failedThreadIssue,
+      staleQueuedLabelIssue,
+      staleExecutingNoThreadIssue,
+      liveQueuedIssue,
+    ];
 
     listAllIssuesMock.mockResolvedValue([
       {
@@ -539,7 +557,29 @@ describe('registerGitHubHandlers', () => {
         updatedAt: null,
         url: 'https://github.com/acme/repo/issues/61',
       },
+      {
+        number: 62,
+        title: staleExecutingNoThreadIssue.title,
+        body: staleExecutingNoThreadIssue.body,
+        labels: staleExecutingNoThreadIssue.labels,
+        assignee: null,
+        state: 'open',
+        updatedAt: null,
+        url: 'https://github.com/acme/repo/issues/62',
+      },
     ]);
+    getIssueMock.mockImplementation(async (issueNumber: number) => {
+      const issue = cachedAfterSync.find((candidate) => candidate.issueNumber === issueNumber);
+      return {
+        number: issueNumber,
+        title: issue?.title ?? 'Issue title',
+        body: issue?.body ?? 'Issue body',
+        labels: issue?.labels ?? [],
+        assignee: null,
+        state: 'open',
+        author: null,
+      };
+    });
 
     const queries = {
       projects: {
@@ -602,8 +642,32 @@ describe('registerGitHubHandlers', () => {
       'todo',
     );
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      'issue-stale-executing-no-thread',
+      'todo',
+    );
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
       'issue-live-queued',
       'queued',
+    );
+    await vi.waitFor(() => {
+      expect(setIssueLabelPresenceMock).toHaveBeenCalledWith(
+        50,
+        'shipcode:pipeline:executing',
+        false,
+      );
+      expect(setIssueLabelPresenceMock).toHaveBeenCalledWith(50, 'shipcode:pipeline:failed', true);
+      expect(setIssueLabelPresenceMock).toHaveBeenCalledWith(60, 'shipcode:pipeline:queued', false);
+      expect(setIssueLabelPresenceMock).toHaveBeenCalledWith(
+        62,
+        'shipcode:pipeline:executing',
+        false,
+      );
+      expect(setIssueLabelPresenceMock).toHaveBeenCalledWith(62, 'shipcode:pipeline:queued', false);
+    });
+    expect(setIssueLabelPresenceMock).not.toHaveBeenCalledWith(
+      61,
+      'shipcode:pipeline:queued',
+      false,
     );
   });
 

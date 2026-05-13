@@ -280,18 +280,14 @@ function ThreadAnalyticsPanel({
 
   return (
     <div className="mt-4 space-y-2">
-      <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
-        <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
-          <span>Timeline</span>
-          <span className="text-[10px] font-normal normal-case text-muted-foreground">
-            {phaseTimeline.length}
-          </span>
-        </summary>
-        {phaseTimeline.length === 0 ? (
-          <p className="mt-3 rounded-md border border-dashed border-border p-3 text-[11px] text-muted-foreground">
-            No phase timing data yet.
-          </p>
-        ) : (
+      {phaseTimeline.length > 0 && (
+        <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
+          <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
+            <span>Timeline</span>
+            <span className="text-[10px] font-normal normal-case text-muted-foreground">
+              {phaseTimeline.length}
+            </span>
+          </summary>
           <div className="mt-3 overflow-hidden rounded-md border border-border">
             <div className="divide-y divide-border">
               {phaseTimeline.slice(0, 8).map((phase) => (
@@ -315,57 +311,55 @@ function ThreadAnalyticsPanel({
               ))}
             </div>
           </div>
-        )}
-      </details>
+        </details>
+      )}
 
-      <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
-        <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
-          <span>Prompt / Context</span>
-          <span className="text-[10px] font-normal normal-case text-muted-foreground">
-            {promptTelemetry.length}
-          </span>
-        </summary>
-        {promptTelemetry.length > 0 ? (
+      {promptTelemetry.length > 0 && (
+        <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
+          <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
+            <span>Prompt / Context</span>
+            <span className="text-[10px] font-normal normal-case text-muted-foreground">
+              {promptTelemetry.length}
+            </span>
+          </summary>
           <div className="mt-3 flex flex-col gap-2">
             {promptTelemetry.map((record) => (
               <PromptTelemetryCard key={record.id} record={record} />
             ))}
           </div>
-        ) : (
-          <p className="mt-3 rounded-md border border-dashed border-border p-3 text-[11px] text-muted-foreground">
-            No prompt telemetry yet.
-          </p>
-        )}
-      </details>
+        </details>
+      )}
 
-      <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
-        <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
-          <span>Skill Resolution</span>
-          <span className="text-[10px] font-normal normal-case text-muted-foreground">
-            {skillResolutions.length}
-          </span>
-        </summary>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <div className="rounded-md border border-border bg-secondary p-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Score</div>
-            <div className="text-[14px] font-semibold text-primary">{skillFallback.score}</div>
-          </div>
-          <div className="rounded-md border border-border bg-secondary p-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Fallbacks
+      {skillResolutions.length > 0 && (
+        <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
+          <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
+            <span>Skill Resolution</span>
+            <span className="text-[10px] font-normal normal-case text-muted-foreground">
+              {skillResolutions.length}
+            </span>
+          </summary>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="rounded-md border border-border bg-secondary p-2">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Score</div>
+              <div className="text-[14px] font-semibold text-primary">{skillFallback.score}</div>
             </div>
-            <div className="text-[14px] font-semibold text-primary">
-              {formatPercent(skillFallback.fallbackRate)}
+            <div className="rounded-md border border-border bg-secondary p-2">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Fallbacks
+              </div>
+              <div className="text-[14px] font-semibold text-primary">
+                {formatPercent(skillFallback.fallbackRate)}
+              </div>
+            </div>
+            <div className="rounded-md border border-border bg-secondary p-2">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Retries
+              </div>
+              <div className="text-[14px] font-semibold text-primary">
+                {formatPercent(skillFallback.retryRate)}
+              </div>
             </div>
           </div>
-          <div className="rounded-md border border-border bg-secondary p-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Retries</div>
-            <div className="text-[14px] font-semibold text-primary">
-              {formatPercent(skillFallback.retryRate)}
-            </div>
-          </div>
-        </div>
-        {skillResolutions.length > 0 ? (
           <div className="mt-2 overflow-hidden rounded-md border border-border bg-tertiary/30">
             {skillResolutions.slice(0, 6).map((skill) => (
               <div
@@ -380,8 +374,8 @@ function ThreadAnalyticsPanel({
               </div>
             ))}
           </div>
-        ) : null}
-      </details>
+        </details>
+      )}
     </div>
   );
 }
@@ -421,11 +415,7 @@ export function CostsTab({
     });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-2 flex items-center justify-between">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">Costs</h4>
-      </div>
-
+    <div className="space-y-2">
       {isLoading ? (
         <div className="space-y-3 py-2">
           <div className="grid grid-cols-2 gap-2">
@@ -437,14 +427,10 @@ export function CostsTab({
           ))}
         </div>
       ) : tasks.length === 0 ? (
-        <>
-          <p className="text-[11px] text-muted-foreground">No cost data yet.</p>
-          <ThreadAnalyticsPanel analytics={threadAnalytics} isLoading={threadAnalyticsLoading} />
-        </>
+        <ThreadAnalyticsPanel analytics={threadAnalytics} isLoading={threadAnalyticsLoading} />
       ) : (
         <>
-          {/* Summary */}
-          <div className="mb-4 grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
               <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Total Cost

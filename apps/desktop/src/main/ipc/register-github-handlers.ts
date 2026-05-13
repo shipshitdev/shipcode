@@ -104,18 +104,28 @@ function updateIssuePipelineStatus(
 function syncOpenIssueState(
   queries: IpcHandlerDeps['queries'],
   issue: GitHubIssueCacheRecord,
+  projectPath?: string,
 ): GitHubIssueCacheRecord | null {
   const thread = resolveCanonicalIssueThread(queries, issue);
   if (thread && issue.threadId !== thread.id) {
     queries.githubIssues.linkThread(issue.id, thread.id);
   }
 
+  const pipelineStatus = resolveOpenIssuePipelineStatus(issue, thread);
+
   queries.githubIssues.updateState(issue.id, 'open');
-  queries.githubIssues.updatePipelineStatus(
-    issue.id,
-    resolveOpenIssuePipelineStatus(issue, thread),
-  );
+  queries.githubIssues.updatePipelineStatus(issue.id, pipelineStatus);
   queries.githubIssues.clearArchivedAt(issue.id);
+
+  const labelStatus = pipelineStatusFromLabels(issue.labels);
+  if (projectPath && labelStatus !== null && labelStatus !== pipelineStatus) {
+    syncIssuePipelineLabelSoon({
+      projectPath,
+      issueNumber: issue.issueNumber,
+      status: pipelineStatus,
+      source: 'github:refresh-issues',
+    });
+  }
 
   return queries.githubIssues.getByNumber(issue.projectId, issue.issueNumber);
 }
@@ -250,7 +260,7 @@ export function registerGitHubHandlers({
             if (record.state === 'closed') {
               queries.githubIssues.markClosedOnClose(record.id);
             } else if (record.state === 'open') {
-              syncOpenIssueState(queries, record);
+              syncOpenIssueState(queries, record, project.path);
             }
 
             if (!existingIssue && record.state === 'open' && !record.rulesAppliedAt) {
@@ -750,8 +760,72 @@ export function registerGitHubHandlers({
         await ghCli.reopenIssue(issueNumber);
       }
 
-      syncOpenIssueState(queries, issue);
+      syncOpenIssueState(queries, issue, project.path);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
+    },
+  );
+
+  ipcMain.handle(
+    'github:update-issue-metadata',
+    async (
+      _event,
+      {
+        projectId,
+        issueNumber,
+        issueType,
+        priority,
+      }: {
+        projectId: string;
+        issueNumber: number;
+        issueType?: string | null;
+        priority?: string | null;
+      },
+    ) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+      assertRealGithubIssue(issue, 'update metadata');
+
+      const ghCli = new GhCli(project.path);
+      const metadata: Record<string, string> = {};
+      if (issueType !== undefined) metadata.issueType = issueType ?? '';
+      if (priority !== undefined) metadata.priority = priority ?? '';
+
+      if (Object.keys(metadata).length > 0) {
+        await ghCli.setIssueProjectMetadata({
+          issueNumber,
+          projectUrl: project.githubProjectUrl,
+          metadata,
+        });
+      }
+
+      if (issueType !== undefined) {
+        queries.githubIssues.setIssueType({ id: issue.id, issueType: issueType ?? null });
+      }
+
+      if (priority !== undefined) {
+        const rank =
+          priority === 'P0'
+            ? 'p0'
+            : priority === 'P1'
+              ? 'p1'
+              : priority === 'P2'
+                ? 'p2'
+                : priority === 'P3'
+                  ? 'p3'
+                  : null;
+        queries.githubIssues.setPriority({
+          id: issue.id,
+          rank,
+          raw: priority,
+          fetchedAt: new Date().toISOString(),
+        });
+      }
+
+      sendGithubIssuesUpdated(mainWindow, queries, projectId);
+      return queries.githubIssues.getByNumber(projectId, issueNumber);
     },
   );
 

@@ -201,9 +201,12 @@ describe('CostsTab', () => {
 
     renderWithClient();
 
-    expect(await screen.findByText('No cost data yet.')).toBeInTheDocument();
-    expect(screen.getByText('No phase timing data yet.')).toBeInTheDocument();
-    expect(screen.getByText('No prompt telemetry yet.')).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('costs:list-for-issue', expect.anything());
+    });
+    expect(screen.queryByText('Pipeline Runs')).not.toBeInTheDocument();
+    expect(screen.queryByText('Timeline')).not.toBeInTheDocument();
+    expect(screen.queryByText('Prompt / Context')).not.toBeInTheDocument();
   });
 
   it('handles non-array cost responses and missing thread analytics', async () => {
@@ -214,7 +217,10 @@ describe('CostsTab', () => {
 
     renderWithClient(null);
 
-    expect(await screen.findByText('No cost data yet.')).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('costs:list-for-issue', expect.anything());
+    });
+    expect(screen.queryByText('Pipeline Runs')).not.toBeInTheDocument();
     expect(screen.queryByText('Timeline')).not.toBeInTheDocument();
   });
 
@@ -227,7 +233,9 @@ describe('CostsTab', () => {
 
     const { container } = renderWithClient();
 
-    expect(await screen.findByText('No cost data yet.')).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('costs:list-for-issue', expect.anything());
+    });
     expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
   });
 
@@ -253,8 +261,11 @@ describe('CostsTab', () => {
 
     renderWithClient();
 
-    expect(await screen.findByText('No phase timing data yet.')).toBeInTheDocument();
-    expect(screen.getByText('No prompt telemetry yet.')).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('pipeline-analytics:get-thread', expect.anything());
+    });
+    expect(screen.queryByText('Timeline')).not.toBeInTheDocument();
+    expect(screen.queryByText('Prompt / Context')).not.toBeInTheDocument();
   });
 
   it('renders task totals, heatmap, attempts, current models, and analytics details', async () => {
