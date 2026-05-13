@@ -7,10 +7,16 @@ import type {
   PromptTelemetryRecord,
   Thread,
 } from '@shipcode/shared';
-import { formatCost, MODEL_DISPLAY, PIPELINE_PHASE } from '@shipcode/shared';
+import {
+  formatCost,
+  isSyntheticResolvedModel,
+  MODEL_DISPLAY,
+  PIPELINE_PHASE,
+} from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
 import { Badge, Button, Skeleton } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
+import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { ActivityHeatmap } from '../heatmap/ActivityHeatmap';
 import { timeAgo } from './helpers';
@@ -281,9 +287,13 @@ function ThreadAnalyticsPanel({
   return (
     <div className="mt-4 space-y-2">
       {phaseTimeline.length > 0 && (
-        <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
-          <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
-            <span>Timeline</span>
+        <details className="group rounded-md border border-border bg-secondary/20 px-3 py-2">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
+            <ChevronRight
+              size={12}
+              className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+            />
+            <span className="flex-1">Timeline</span>
             <span className="text-[10px] font-normal normal-case text-muted-foreground">
               {phaseTimeline.length}
             </span>
@@ -315,9 +325,13 @@ function ThreadAnalyticsPanel({
       )}
 
       {promptTelemetry.length > 0 && (
-        <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
-          <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
-            <span>Prompt / Context</span>
+        <details className="group rounded-md border border-border bg-secondary/20 px-3 py-2">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
+            <ChevronRight
+              size={12}
+              className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+            />
+            <span className="flex-1">Prompt / Context</span>
             <span className="text-[10px] font-normal normal-case text-muted-foreground">
               {promptTelemetry.length}
             </span>
@@ -331,9 +345,13 @@ function ThreadAnalyticsPanel({
       )}
 
       {skillResolutions.length > 0 && (
-        <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
-          <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
-            <span>Skill Resolution</span>
+        <details className="group rounded-md border border-border bg-secondary/20 px-3 py-2">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
+            <ChevronRight
+              size={12}
+              className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+            />
+            <span className="flex-1">Skill Resolution</span>
             <span className="text-[10px] font-normal normal-case text-muted-foreground">
               {skillResolutions.length}
             </span>
@@ -401,8 +419,17 @@ export function CostsTab({
     enabled: !!projectId,
   });
 
-  const totalCost = tasks.reduce((sum, t) => sum + t.costUsd, 0);
-  const totalTokens = tasks.reduce((sum, t) => sum + t.tokensPrompt + t.tokensCompletion, 0);
+  const substantiveTasks = tasks.filter(
+    (t) =>
+      !isSyntheticResolvedModel(t.model) ||
+      t.costUsd > 0 ||
+      t.tokensPrompt + t.tokensCompletion > 0,
+  );
+  const totalCost = substantiveTasks.reduce((sum, t) => sum + t.costUsd, 0);
+  const totalTokens = substantiveTasks.reduce(
+    (sum, t) => sum + t.tokensPrompt + t.tokensCompletion,
+    0,
+  );
   const [expandedThreadId, setExpandedThreadId] = useState<string | null>(null);
   const { data: threadAnalytics, isLoading: threadAnalyticsLoading } =
     useQuery<PipelineThreadAnalytics>({
@@ -426,7 +453,7 @@ export function CostsTab({
             <Skeleton key={key} className="h-10 w-full rounded-md" />
           ))}
         </div>
-      ) : tasks.length === 0 ? (
+      ) : substantiveTasks.length === 0 ? (
         <ThreadAnalyticsPanel analytics={threadAnalytics} isLoading={threadAnalyticsLoading} />
       ) : (
         <>
@@ -452,11 +479,11 @@ export function CostsTab({
           <div className="space-y-2">
             {/* Per-thread mini-heatmap */}
             {thread?.id && (
-              <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
-                <summary className="cursor-pointer text-[11px] font-medium uppercase tracking-wide text-secondary">
+              <div className="rounded-md border border-border bg-secondary/20 px-3 py-2">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-secondary">
                   Activity (last 90 days)
-                </summary>
-                <div className="mt-3">
+                </div>
+                <div className="mt-3 overflow-x-auto">
                   <ActivityHeatmap
                     scope="thread"
                     surface="issue"
@@ -468,20 +495,24 @@ export function CostsTab({
                     showRangePicker={false}
                   />
                 </div>
-              </details>
+              </div>
             )}
 
             {/* Per-run breakdown */}
-            <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
-              <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
-                <span>Pipeline Runs</span>
+            <details className="group rounded-md border border-border bg-secondary/20 px-3 py-2">
+              <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
+                <ChevronRight
+                  size={12}
+                  className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+                />
+                <span className="flex-1">Pipeline Runs</span>
                 <span className="text-[10px] font-normal normal-case text-muted-foreground">
-                  {tasks.length}
+                  {substantiveTasks.length}
                 </span>
               </summary>
               <div className="mt-3 overflow-hidden rounded-md border border-border">
                 <div className="divide-y divide-border">
-                  {tasks.map((task, index) => {
+                  {substantiveTasks.map((task, index) => {
                     const isExpanded = expandedThreadId === task.threadId;
                     return (
                       <div key={task.threadId}>
@@ -493,7 +524,7 @@ export function CostsTab({
                           className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary/40"
                         >
                           <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-tertiary text-[11px] font-medium text-muted-foreground">
-                            {tasks.length - index}
+                            {substantiveTasks.length - index}
                           </span>
                           <span
                             aria-hidden="true"
@@ -540,36 +571,37 @@ export function CostsTab({
               </div>
             </details>
 
-            {/* Current thread details */}
-            {thread && (
-              <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
-                <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
-                  <span>Current Run Models</span>
-                  <span className="text-[10px] font-normal normal-case text-muted-foreground">
-                    {
-                      [
-                        thread.plannerResolvedModel,
-                        thread.reviewerResolvedModel,
-                        thread.executorResolvedModel,
-                        thread.verifierResolvedModel,
-                      ].filter(Boolean).length
-                    }
-                  </span>
-                </summary>
-                <div className="mt-3 flex flex-col gap-1.5">
-                  {(
-                    [
-                      { label: 'Planner', model: thread.plannerResolvedModel },
-                      { label: 'Reviewer', model: thread.reviewerResolvedModel },
-                      { label: 'Executor', model: thread.executorResolvedModel },
-                      { label: 'Verifier', model: thread.verifierResolvedModel },
-                    ] as const
-                  )
-                    .reduce<Array<{ label: string; model: string }>>((entries, entry) => {
-                      if (entry.model) entries.push({ label: entry.label, model: entry.model });
-                      return entries;
-                    }, [])
-                    .map((entry) => (
+            {/* Current thread details — hide synthetic-only entries */}
+            {(() => {
+              if (!thread) return null;
+              const resolvedModels = (
+                [
+                  { label: 'Planner', model: thread.plannerResolvedModel },
+                  { label: 'Reviewer', model: thread.reviewerResolvedModel },
+                  { label: 'Executor', model: thread.executorResolvedModel },
+                  { label: 'Verifier', model: thread.verifierResolvedModel },
+                ] as const
+              ).reduce<Array<{ label: string; model: string }>>((entries, entry) => {
+                if (entry.model && !isSyntheticResolvedModel(entry.model)) {
+                  entries.push({ label: entry.label, model: entry.model });
+                }
+                return entries;
+              }, []);
+              if (resolvedModels.length === 0) return null;
+              return (
+                <details className="group rounded-md border border-border bg-secondary/20 px-3 py-2">
+                  <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
+                    <ChevronRight
+                      size={12}
+                      className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+                    />
+                    <span className="flex-1">Current Run Models</span>
+                    <span className="text-[10px] font-normal normal-case text-muted-foreground">
+                      {resolvedModels.length}
+                    </span>
+                  </summary>
+                  <div className="mt-3 flex flex-col gap-1.5">
+                    {resolvedModels.map((entry) => (
                       <div key={entry.label} className="flex flex-col gap-0.5">
                         <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                           {entry.label}
@@ -579,9 +611,10 @@ export function CostsTab({
                         </span>
                       </div>
                     ))}
-                </div>
-              </details>
-            )}
+                  </div>
+                </details>
+              );
+            })()}
           </div>
           <ThreadAnalyticsPanel analytics={threadAnalytics} isLoading={threadAnalyticsLoading} />
         </>

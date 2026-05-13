@@ -3,6 +3,7 @@ import {
   type GhStatusMapping,
   ISSUE_PIPELINE_STATUS,
   type IssuePipelineStatus,
+  isRealGithubIssueNumber,
   PIPELINE_PHASE,
   type PipelinePhase,
   type Project,
@@ -58,6 +59,8 @@ export function syncThreadAndIssuePhase(
 
   const pipelineStatus = mapPhaseToIssuePipelineStatus(phase);
   githubIssues.updatePipelineStatus(issue.id, pipelineStatus);
+
+  if (!isRealGithubIssueNumber(thread.githubIssueNumber)) return;
 
   // Fire-and-forget GH Projects v2 Status + pipeline label sync
   if (ghSync && thread.projectId) {

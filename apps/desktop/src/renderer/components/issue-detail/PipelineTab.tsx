@@ -32,7 +32,7 @@ import {
   SelectValue,
 } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
-import { ExternalLink } from 'lucide-react';
+import { ChevronRight, ExternalLink } from 'lucide-react';
 import { useEffect, useReducer } from 'react';
 import { formatTimestamp } from '../format-timestamp';
 import {
@@ -476,9 +476,13 @@ function usePipelineTabView({
       </div>
 
       {taskGraph ? (
-        <details className="mb-5 rounded-md border border-border bg-secondary/20 px-3 py-2">
-          <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
-            <span>Task Graph</span>
+        <details className="group mb-5 rounded-md border border-border bg-secondary/20 px-3 py-2">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
+            <ChevronRight
+              size={12}
+              className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+            />
+            <span className="flex-1">Task Graph</span>
             <span className="text-[10px] font-normal normal-case text-muted-foreground">
               {taskGraph.nodes.length}
             </span>
@@ -600,9 +604,13 @@ function usePipelineTabView({
       ) : null}
 
       {thread && checkpoints.length > 0 ? (
-        <details className="mb-5 rounded-md border border-border bg-secondary/20 px-3 py-2">
-          <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
-            <span>Checkpoints</span>
+        <details className="group mb-5 rounded-md border border-border bg-secondary/20 px-3 py-2">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
+            <ChevronRight
+              size={12}
+              className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+            />
+            <span className="flex-1">Checkpoints</span>
             <span className="text-[10px] font-normal normal-case text-muted-foreground">
               {checkpoints.length}
             </span>

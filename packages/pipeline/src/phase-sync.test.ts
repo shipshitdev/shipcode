@@ -91,7 +91,7 @@ describe('syncThreadAndIssuePhase', () => {
     );
   });
 
-  it('does not call ghSync.syncToGithub when project has no status mapping', () => {
+  it('still calls ghSync.syncToGithub when project has no status mapping', () => {
     const threads = makeThreads();
     const githubIssues = makeGithubIssues();
     const syncToGithub = vi.fn().mockResolvedValue(undefined);
@@ -115,6 +115,52 @@ describe('syncThreadAndIssuePhase', () => {
       ghSync,
     );
 
+    expect(syncToGithub).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectPath: '/tmp/repo',
+        issueNumber: 42,
+        pipelineStatus: ISSUE_PIPELINE_STATUS.planning,
+        statusMapping: null,
+      }),
+    );
+  });
+
+  it('updates local issue status but skips GitHub sync for synthetic issue numbers', () => {
+    const threads = makeThreads({ githubIssueNumber: -1 });
+    const githubIssues = makeGithubIssues();
+    const syncToGithub = vi.fn().mockResolvedValue(undefined);
+    const project = {
+      id: 'proj-1',
+      githubProjectUrl: 'https://github.com/orgs/acme/projects/1',
+      githubStatusMapping: {
+        todo: { name: 'Todo', color: 'GREEN' },
+        inProgress: { name: 'In Progress', color: 'YELLOW' },
+        humanReview: { name: 'Human Review', color: 'ORANGE' },
+        done: { name: 'Done', color: 'PURPLE' },
+      },
+      path: '/tmp/repo',
+    };
+    const getProject = vi.fn(() => project as never);
+    const ghSync: GhSyncDeps = {
+      getProject,
+      syncToGithub,
+    };
+
+    syncThreadAndIssuePhase(
+      threads as never,
+      githubIssues as never,
+      't-1',
+      PIPELINE_PHASE.planning,
+      undefined,
+      ghSync,
+    );
+
+    expect(githubIssues.getByNumber).toHaveBeenCalledWith('proj-1', -1);
+    expect(githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      'gi-1',
+      ISSUE_PIPELINE_STATUS.planning,
+    );
+    expect(getProject).not.toHaveBeenCalled();
     expect(syncToGithub).not.toHaveBeenCalled();
   });
 
