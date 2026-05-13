@@ -183,7 +183,7 @@ export function extractTestFailureSummary(testOutput: string): string {
     .slice()
     .reverse()
     .find((l) => l.trim().length > 0);
-  return lastMeaningful!.trim().slice(0, 280);
+  return lastMeaningful?.trim().slice(0, 280) ?? '';
 }
 
 interface TestFailureFingerprint {
@@ -252,8 +252,9 @@ export function worktreeHasChanges(context: PipelineContext): boolean {
     }).trim();
     if (status.length > 0) return true;
 
-    if (context.forkPointSha) {
-      const diff = execFileSync('git', ['diff', '--name-only', `${context.forkPointSha}..HEAD`], {
+    const baseRef = resolveWorktreeDiffBase(context);
+    if (baseRef) {
+      const diff = execFileSync('git', ['diff', '--name-only', `${baseRef}..HEAD`], {
         cwd,
         encoding: 'utf-8',
         maxBuffer: 1024 * 1024,
@@ -264,6 +265,61 @@ export function worktreeHasChanges(context: PipelineContext): boolean {
     return false;
   } catch {
     return true;
+  }
+}
+
+/**
+ * Resolve the git ref that represents "before this pipeline changed files".
+ * Older/quick-task contexts can have an empty forkPointSha, so fall back to the
+ * branch merge-base and finally the previous commit instead of diffing `..HEAD`.
+ *
+ * @knipignore
+ */
+export function resolveWorktreeDiffBase(context: PipelineContext): string | null {
+  const cwd = context.worktreePath ?? context.projectPath;
+  const forkPointSha = context.forkPointSha?.trim();
+  if (forkPointSha) {
+    try {
+      return execFileSync('git', ['rev-parse', '--verify', `${forkPointSha}^{commit}`], {
+        cwd,
+        encoding: 'utf-8',
+        maxBuffer: 1024 * 1024,
+      }).trim();
+    } catch {
+      // Fall back below; persisted fork points can be missing in older records.
+    }
+  }
+
+  const baseBranch = context.baseBranch?.trim();
+  const baseCandidates = baseBranch
+    ? Array.from(
+        new Set([
+          baseBranch,
+          baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`,
+        ]),
+      )
+    : [];
+
+  for (const baseRef of baseCandidates) {
+    try {
+      return execFileSync('git', ['merge-base', baseRef, 'HEAD'], {
+        cwd,
+        encoding: 'utf-8',
+        maxBuffer: 1024 * 1024,
+      }).trim();
+    } catch {
+      // Try the next available base ref.
+    }
+  }
+
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD~1'], {
+      cwd,
+      encoding: 'utf-8',
+      maxBuffer: 1024 * 1024,
+    }).trim();
+  } catch {
+    return null;
   }
 }
 
@@ -1427,13 +1483,16 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     context.verifiedSha = headSha;
     deps.projectFailures?.resolveOwnedByThread(threadId, headSha);
 
+    const diffBase = resolveWorktreeDiffBase(context);
     let diff: string;
     try {
-      diff = execFileSync('git', ['diff', `${context.forkPointSha}..${headSha}`], {
-        cwd,
-        encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024,
-      }).toString();
+      diff = diffBase
+        ? execFileSync('git', ['diff', `${diffBase}..${headSha}`], {
+            cwd,
+            encoding: 'utf-8',
+            maxBuffer: 10 * 1024 * 1024,
+          }).toString()
+        : '';
     } catch {
       diff = '';
     }
@@ -1444,7 +1503,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       emitPhase(
         threadId,
         'failed',
-        'Verification skipped: executor produced no file changes (empty diff vs. fork point).',
+        'Verification skipped: executor produced no file changes (empty diff vs. worktree base).',
       );
       activePipelines.delete(threadId);
       return;
@@ -1675,15 +1734,18 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         return;
       }
 
-      const ahead = execFileSync('git', ['log', `${context.forkPointSha}..HEAD`, '--oneline'], {
-        cwd,
-        encoding: 'utf-8',
-      });
+      const diffBase = resolveWorktreeDiffBase(context);
+      const ahead = diffBase
+        ? execFileSync('git', ['log', `${diffBase}..HEAD`, '--oneline'], {
+            cwd,
+            encoding: 'utf-8',
+          })
+        : '';
       if (!ahead.trim()) {
         emitPhase(
           threadId,
           'failed',
-          'Commit aborted: no commits ahead of fork point — nothing to push.',
+          'Commit aborted: no commits ahead of worktree base — nothing to push.',
         );
         activePipelines.delete(threadId);
         return;

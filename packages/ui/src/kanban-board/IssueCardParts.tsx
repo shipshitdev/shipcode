@@ -271,6 +271,13 @@ function useDraggableCardView({
   const isCompleted = presentationStatus === ISSUE_PIPELINE_STATUS.completed;
   const isClosed = presentationStatus === ISSUE_PIPELINE_STATUS.closed;
   const linkedPrLabel = issue.linkedPrNumber ? `PR #${issue.linkedPrNumber}` : null;
+  const hasMenuItems =
+    Boolean(branchName && onCopyBranchName && !isAutomation) ||
+    Boolean(isPaused && onResume) ||
+    Boolean(isActive && onCancel) ||
+    Boolean(isCompleted && onCreatePr && !issue.linkedPrNumber) ||
+    Boolean((isCompleted || isFailed) && onMarkDone) ||
+    Boolean(isClosed && onArchiveIssue && !isAutomation);
 
   return (
     <IssueHoverCard
@@ -468,7 +475,7 @@ function useDraggableCardView({
           )}
           <div className="ml-auto flex items-center gap-1">
             {!isFailed && <StalenessDot staleness={staleness} />}
-            {!isCreating && !readOnly && (
+            {!isCreating && !readOnly && hasMenuItems && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button

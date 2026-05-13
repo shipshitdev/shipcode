@@ -7,6 +7,7 @@ import {
   extractImplicatedFiles,
   extractTestFailureSummary,
   normalizeFeatureQaResults,
+  resolveWorktreeDiffBase,
   worktreeHasChanges,
 } from './execution-phases';
 
@@ -203,6 +204,7 @@ describe('execution phase helpers', () => {
 
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
       if (args[0] === 'status') return '';
+      if (args[0] === 'rev-parse' && args[2] === 'base^{commit}') return 'base\n';
       if (args[0] === 'diff') return 'src/a.ts\n';
       return '';
     });
@@ -215,11 +217,66 @@ describe('execution phase helpers', () => {
       worktreeHasChanges({ projectPath: '/project', forkPointSha: 'base' } as PipelineContext),
     ).toBe(false);
 
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'status') return '';
+      if (args[0] === 'merge-base') return 'merge-base-sha\n';
+      if (args[0] === 'diff' && args.includes('merge-base-sha..HEAD')) return 'src/a.ts\n';
+      return '';
+    });
+    expect(
+      worktreeHasChanges({
+        projectPath: '/project',
+        forkPointSha: '',
+        baseBranch: 'main',
+      } as PipelineContext),
+    ).toBe(true);
+
     mockExecFileSync.mockImplementation(() => {
       throw new Error('not a git repo');
     });
     expect(
       worktreeHasChanges({ projectPath: '/project', forkPointSha: '' } as PipelineContext),
     ).toBe(true);
+  });
+
+  it('resolves a diff base from fork point, base branch merge-base, then previous commit', () => {
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[2] === 'base^{commit}') return 'base\n';
+      return '';
+    });
+    expect(
+      resolveWorktreeDiffBase({
+        projectPath: '/project',
+        forkPointSha: 'base',
+      } as PipelineContext),
+    ).toBe('base');
+
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'merge-base' && args[1] === 'main') return 'merge-base-sha\n';
+      return '';
+    });
+    expect(
+      resolveWorktreeDiffBase({
+        projectPath: '/project',
+        forkPointSha: '',
+        baseBranch: 'main',
+      } as PipelineContext),
+    ).toBe('merge-base-sha');
+
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[2] === 'stale^{commit}') {
+        throw new Error('missing fork point');
+      }
+      if (args[0] === 'merge-base') throw new Error('missing base');
+      if (args[0] === 'rev-parse' && args[1] === 'HEAD~1') return 'parent-sha\n';
+      return '';
+    });
+    expect(
+      resolveWorktreeDiffBase({
+        projectPath: '/project',
+        forkPointSha: 'stale',
+        baseBranch: 'missing',
+      } as PipelineContext),
+    ).toBe('parent-sha');
   });
 });

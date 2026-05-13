@@ -1522,6 +1522,8 @@ describe('linked PR affordances', () => {
           })}
           onClick={vi.fn()}
           onStartPipeline={vi.fn()}
+          branchName="ship/124-evaluate-codex"
+          onCopyBranchName={vi.fn()}
         />
       </DndContext>,
     );
