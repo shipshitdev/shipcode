@@ -1662,3 +1662,101 @@ export function migrateV55(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (55)`);
   });
 }
+
+export function migrateV56(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 56) return;
+
+  transaction(db, () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS pipeline_runs (
+        id              TEXT PRIMARY KEY,
+        thread_id       TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        project_id      TEXT REFERENCES projects(id) ON DELETE CASCADE,
+        source          TEXT NOT NULL,
+        trigger_detail  TEXT,
+        status          TEXT NOT NULL DEFAULT 'queued',
+        current_phase   TEXT,
+        started_at      TEXT,
+        finished_at     TEXT,
+        error_message   TEXT,
+        error_kind      TEXT,
+        context_json    TEXT,
+        retry_of_run_id TEXT REFERENCES pipeline_runs(id) ON DELETE SET NULL,
+        created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pipeline_runs_thread_created
+        ON pipeline_runs(thread_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_pipeline_runs_project_status
+        ON pipeline_runs(project_id, status);
+      CREATE INDEX IF NOT EXISTS idx_pipeline_runs_retry
+        ON pipeline_runs(retry_of_run_id);
+    `);
+
+    execAlterTablesIfMissing(db, [
+      'ALTER TABLE threads ADD COLUMN current_run_id TEXT',
+      'ALTER TABLE github_issue_cache ADD COLUMN execution_run_id TEXT',
+      'ALTER TABLE github_issue_cache ADD COLUMN execution_locked_at TEXT',
+      'ALTER TABLE github_issue_cache ADD COLUMN execution_lock_owner TEXT',
+    ]);
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_threads_current_run
+        ON threads(current_run_id);
+      CREATE INDEX IF NOT EXISTS idx_github_issues_execution_run
+        ON github_issue_cache(execution_run_id);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (56)`);
+  });
+}
+
+export function migrateV57(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 57) return;
+
+  transaction(db, () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS pipeline_wake_requests (
+        id                TEXT PRIMARY KEY,
+        kind              TEXT NOT NULL,
+        source            TEXT NOT NULL,
+        reason            TEXT NOT NULL,
+        target_type       TEXT NOT NULL,
+        target_id         TEXT NOT NULL,
+        project_id        TEXT REFERENCES projects(id) ON DELETE CASCADE,
+        thread_id         TEXT REFERENCES threads(id) ON DELETE CASCADE,
+        run_id            TEXT REFERENCES pipeline_runs(id) ON DELETE SET NULL,
+        idempotency_key   TEXT,
+        status            TEXT NOT NULL DEFAULT 'pending',
+        scheduled_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        claimed_at        TEXT,
+        claimed_by        TEXT,
+        completed_at      TEXT,
+        failed_at         TEXT,
+        last_error        TEXT,
+        coalesced_count   INTEGER NOT NULL DEFAULT 0,
+        payload_json      TEXT,
+        created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pipeline_wake_requests_pending
+        ON pipeline_wake_requests(status, kind, scheduled_at, created_at);
+      CREATE INDEX IF NOT EXISTS idx_pipeline_wake_requests_idempotency
+        ON pipeline_wake_requests(idempotency_key, status);
+      CREATE INDEX IF NOT EXISTS idx_pipeline_wake_requests_thread
+        ON pipeline_wake_requests(thread_id);
+      CREATE INDEX IF NOT EXISTS idx_pipeline_wake_requests_run
+        ON pipeline_wake_requests(run_id);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (57)`);
+  });
+}

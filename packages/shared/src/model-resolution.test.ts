@@ -109,6 +109,9 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     priorityFetchedAt: null,
     isQuickMode: false,
     ...overrides,
+    executionRunId: overrides.executionRunId ?? null,
+    executionLockedAt: overrides.executionLockedAt ?? null,
+    executionLockOwner: overrides.executionLockOwner ?? null,
   };
 }
 

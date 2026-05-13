@@ -1536,6 +1536,25 @@ describe('linked PR affordances', () => {
     view.cleanup();
   });
 
+  it('hides more-actions button for automation cards with no available actions', () => {
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            id: 'auto-failed',
+            issueNumber: -1_000_001,
+            title: '[Auto] clean stale branches',
+            pipelineStatus: 'failed',
+          })}
+          onClick={vi.fn()}
+        />
+      </DndContext>,
+    );
+
+    expect(view.container.querySelector('button[title="More actions"]')).toBeNull();
+    view.cleanup();
+  });
+
   it('keeps kanban columns wide enough for readable issue cards', () => {
     const todoColumn = COLUMNS.find((column) => column.key === 'todo');
     if (!todoColumn) throw new Error('Expected todo column');
