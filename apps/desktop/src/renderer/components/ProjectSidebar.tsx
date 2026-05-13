@@ -263,11 +263,13 @@ function useProjectSidebarView() {
     [sidebarWidth],
   );
 
-  // Pinned projects always float to top; within each group, apply the selected sort order.
+  // Pinned projects always float to top and remain alphabetical; unpinned
+  // projects keep the user's selected sort order.
   const sortedProjects = useMemo(
     () =>
       projects.toSorted((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        if (a.pinned && b.pinned) return a.name.localeCompare(b.name);
         if (sortOrder === 'alpha') return a.name.localeCompare(b.name);
         if (sortOrder === 'added') return a.createdAt.localeCompare(b.createdAt);
         // 'recent'

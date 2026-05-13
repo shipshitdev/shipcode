@@ -450,7 +450,12 @@ describe('IssuesPanel', () => {
     renderWithProviders();
 
     const openButton = await screen.findByRole('button', { name: 'Open ShipCode in Cursor' });
-    expect(openButton.querySelector('img')).toHaveAttribute('src', 'data:image/png;base64,cursor');
+    await waitFor(() => {
+      expect(openButton.querySelector('img')).toHaveAttribute(
+        'src',
+        'data:image/png;base64,cursor',
+      );
+    });
     fireEvent.click(openButton);
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('project:open-path', {

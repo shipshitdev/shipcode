@@ -607,7 +607,7 @@ describe('ProjectSidebar', () => {
     expect(useAppStore.getState().projectTab).toBe('git');
   });
 
-  it('sorts pinned projects first and applies alpha and added ordering', async () => {
+  it('sorts pinned projects first alphabetically and applies selected ordering to unpinned projects', async () => {
     const alphaProject = {
       ...project,
       id: 'project-alpha',
@@ -624,28 +624,40 @@ describe('ProjectSidebar', () => {
       createdAt: '2026-04-11T00:00:00.000Z',
       updatedAt: '2026-04-15T00:00:00.000Z',
     };
-    const pinnedProject = {
+    const zedPinnedProject = {
       ...project,
-      id: 'project-pinned',
-      name: 'Pinned',
+      id: 'project-pinned-zed',
+      name: 'Zed',
+      pinned: true,
+      createdAt: '2026-04-10T00:00:00.000Z',
+      updatedAt: '2026-04-17T00:00:00.000Z',
+    };
+    const acmePinnedProject = {
+      ...project,
+      id: 'project-pinned-acme',
+      name: 'Acme',
       pinned: true,
       createdAt: '2026-04-13T00:00:00.000Z',
       updatedAt: '2026-04-10T00:00:00.000Z',
     };
 
     mockSidebarData(invokeMock, {
-      projects: [betaProject, pinnedProject, alphaProject],
-      settings: { ...DEFAULT_SETTINGS, projectSortOrder: 'alpha' },
+      projects: [betaProject, zedPinnedProject, alphaProject, acmePinnedProject],
+      settings: { ...DEFAULT_SETTINGS, projectSortOrder: 'recent' },
     });
 
     const { unmount } = renderWithProviders();
 
-    const pinnedButton = await screen.findByRole('button', { name: 'Pinned' });
+    const acmePinnedButton = await screen.findByRole('button', { name: 'Acme' });
+    const zedPinnedButton = screen.getByRole('button', { name: 'Zed' });
     const alphaButton = screen.getByRole('button', { name: 'Alpha' });
     const betaButton = screen.getByRole('button', { name: 'Beta' });
 
     expect(
-      pinnedButton.compareDocumentPosition(alphaButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+      acmePinnedButton.compareDocumentPosition(zedPinnedButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      zedPinnedButton.compareDocumentPosition(alphaButton) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
       alphaButton.compareDocumentPosition(betaButton) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -655,14 +667,23 @@ describe('ProjectSidebar', () => {
     cleanup();
     invokeMock.mockReset();
     mockSidebarData(invokeMock, {
-      projects: [alphaProject, betaProject],
+      projects: [alphaProject, zedPinnedProject, betaProject, acmePinnedProject],
       settings: { ...DEFAULT_SETTINGS, projectSortOrder: 'added' },
     });
 
     renderWithProviders();
 
+    const firstPinnedButton = await screen.findByRole('button', { name: 'Acme' });
+    const secondPinnedButton = screen.getByRole('button', { name: 'Zed' });
     const olderButton = await screen.findByRole('button', { name: 'Beta' });
     const newerButton = screen.getByRole('button', { name: 'Alpha' });
+    expect(
+      firstPinnedButton.compareDocumentPosition(secondPinnedButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      secondPinnedButton.compareDocumentPosition(olderButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(
       olderButton.compareDocumentPosition(newerButton) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

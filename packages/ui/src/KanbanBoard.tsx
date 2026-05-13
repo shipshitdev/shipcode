@@ -101,7 +101,7 @@ function adjacentColumnIssueId(
   ) {
     const issues = columns[nextColumnIndex].issues;
     if (issues.length === 0) continue;
-    return issues[Math.min(issueIndex, issues.length - 1)]!.id;
+    return issues[Math.min(issueIndex, issues.length - 1)]?.id ?? null;
   }
   return null;
 }
@@ -119,11 +119,13 @@ function moveFocusedIssueId(
 
   const currentColumn = columns[position.columnIndex];
   if (key === 'j') {
-    return currentColumn.issues[Math.min(position.issueIndex + 1, currentColumn.issues.length - 1)]!
-      .id;
+    return (
+      currentColumn.issues[Math.min(position.issueIndex + 1, currentColumn.issues.length - 1)]
+        ?.id ?? firstIssueId
+    );
   }
   if (key === 'k') {
-    return currentColumn.issues[Math.max(position.issueIndex - 1, 0)]!.id;
+    return currentColumn.issues[Math.max(position.issueIndex - 1, 0)]?.id ?? firstIssueId;
   }
 
   return (
@@ -400,7 +402,7 @@ function useKanbanBoardView({
     () =>
       COLUMNS.map((column) => {
         if (!column.sections) {
-          return { key: column.key, issues: visibleIssuesByColumn.get(column.key)! };
+          return { key: column.key, issues: visibleIssuesByColumn.get(column.key) ?? [] };
         }
 
         return {
@@ -539,7 +541,8 @@ function useKanbanBoardView({
 
   const scrollIssueIntoView = useCallback((issueId: string | null) => {
     if (!issueId) return;
-    const root = boardRootRef.current!;
+    const root = boardRootRef.current;
+    if (!root) return;
     const focusedCard = Array.from(root.querySelectorAll<HTMLElement>('[data-issue-card-id]')).find(
       (card) => card.dataset.issueCardId === issueId,
     );
@@ -686,7 +689,7 @@ function useKanbanBoardView({
 
   function getColumnForIssue(issue: GitHubIssueCacheRecord): ColumnKey {
     if (approvedAwaitingExecutionIssueIds?.has(issue.id)) return 'agent';
-    return COLUMNS.find((c) => c.statuses.includes(issue.pipelineStatus))!.key;
+    return COLUMNS.find((c) => c.statuses.includes(issue.pipelineStatus))?.key ?? 'todo';
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -865,7 +868,7 @@ function useKanbanBoardView({
                     />
                   );
                 }
-                const columnIssues = visibleIssuesByColumn.get(col.key)!;
+                const columnIssues = visibleIssuesByColumn.get(col.key) ?? [];
                 return (
                   <DroppableColumn
                     key={col.key}
