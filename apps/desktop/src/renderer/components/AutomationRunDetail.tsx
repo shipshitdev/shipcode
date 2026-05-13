@@ -28,19 +28,12 @@ import {
   getAutomationRunTotalTokens,
 } from '../features/automations/run-presentation';
 import { useAppStore } from '../stores/app-store';
-import { formatTimestamp } from './format-timestamp';
+import { formatTimestamp, SHORT_TIMESTAMP_FORMAT } from './format-timestamp';
 import { ApprovalSection } from './issue-detail/ApprovalSection';
 import { DiffTab } from './issue-detail/DiffTab';
 import { ACTIVE_PHASES } from './issue-detail/helpers';
 import { PlanHistoryTab } from './issue-detail/PlanHistoryTab';
 import type { PlanRunGroup } from './issue-detail/tab-types';
-
-const SHORT_TIMESTAMP_FORMAT = {
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-} satisfies Intl.DateTimeFormatOptions;
 
 function useAutomationRunDetailView() {
   const threadId = useAppStore((s) => s.activeAutomationThreadId);
