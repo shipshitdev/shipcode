@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+
+import '@testing-library/jest-dom/vitest';
 import {
   type DashboardStats,
   DEFAULT_SETTINGS,
@@ -65,11 +68,6 @@ function mockSidebarData(
 
 async function openProjectActionsMenu() {
   fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for ShipCode' }));
-}
-
-async function openProjectActionsAndFindOpener() {
-  await openProjectActionsMenu();
-  return screen.findByText(/^Open in /);
 }
 
 const project: Project = {
@@ -226,8 +224,11 @@ describe('ProjectSidebar', () => {
   beforeEach(() => {
     cleanup();
     invokeMock.mockReset();
-    window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke;
-    window.shipcode.on = vi.fn(() => () => {}) as typeof window.shipcode.on;
+    document.body.classList.remove('cursor-col-resize', 'select-none');
+    window.shipcode = {
+      invoke: invokeMock as unknown as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
+    };
 
     useAppStore.setState({
       activeProjectId: project.id,
@@ -261,56 +262,6 @@ describe('ProjectSidebar', () => {
     renderWithProviders();
 
     expect(screen.queryByRole('button', { name: 'Open ShipCode folder' })).not.toBeInTheDocument();
-  });
-
-  it('shows a single open-in item using the default target', async () => {
-    invokeMock.mockImplementation(async (channel) => {
-      if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
-      if (channel === 'settings:get') return DEFAULT_SETTINGS;
-      if (channel === 'dashboard:get-stats')
-        return {
-          agentsRunning: 0,
-          agentsRunningByProject: {},
-        } satisfies Partial<DashboardStats>;
-      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
-      if (channel === 'integrations:check') return integrations;
-      if (channel === 'provider-usage:check') return makeUsageMap();
-      return [];
-    });
-
-    renderWithProviders();
-
-    const openInItem = await openProjectActionsAndFindOpener();
-    expect(openInItem.textContent).toBe('Open in Cursor');
-  });
-
-  it('opens in default target when clicked', async () => {
-    invokeMock.mockImplementation(async (channel) => {
-      if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
-      if (channel === 'settings:get') return DEFAULT_SETTINGS;
-      if (channel === 'dashboard:get-stats')
-        return {
-          agentsRunning: 0,
-          agentsRunningByProject: {},
-        } satisfies Partial<DashboardStats>;
-      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
-      if (channel === 'integrations:check') return integrations;
-      if (channel === 'provider-usage:check') return makeUsageMap();
-      if (channel === 'project:open-path') return undefined;
-      return [];
-    });
-
-    renderWithProviders();
-
-    const openInItem = await openProjectActionsAndFindOpener();
-    fireEvent.click(openInItem);
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('project:open-path', {
-        projectId: project.id,
-        target: 'cursor',
-      });
-    });
   });
 
   it('shows a setup shortcut in the project actions menu when setup is missing', async () => {
@@ -860,7 +811,7 @@ describe('ProjectSidebar', () => {
     });
   });
 
-  it('handles open-path failures, notification callbacks, collapsed state, and recent ordering', async () => {
+  it('handles notification callbacks, collapsed state, and recent ordering', async () => {
     const listeners: Record<string, () => void> = {};
     window.shipcode.on = vi.fn((channel: string, callback: () => void) => {
       listeners[channel] = callback;
@@ -891,7 +842,6 @@ describe('ProjectSidebar', () => {
       if (channel === 'notification:list') return [] satisfies NotificationRecord[];
       if (channel === 'integrations:check') return integrations;
       if (channel === 'provider-usage:check') return makeUsageMap();
-      if (channel === 'project:open-path') throw new Error('open failed');
       return [];
     });
     useAppStore.setState({ activeProjectId: null, viewMode: 'overview', sidebarCollapsed: true });
@@ -909,16 +859,6 @@ describe('ProjectSidebar', () => {
 
     listeners['notification:fire']?.();
     listeners['notification:dismiss']?.();
-
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions for Fresh' }));
-    fireEvent.click(await screen.findByText(/^Open in /));
-
-    await waitFor(() => {
-      expect(useToastStore.getState().toasts[0]).toMatchObject({
-        title: 'Failed to open project folder',
-        body: 'open failed',
-      });
-    });
   });
 
   it('handles active removal, relink cancellation, setup/settings shortcuts, warning inbox, and date fallbacks', async () => {

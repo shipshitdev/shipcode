@@ -24,14 +24,11 @@ import {
   Activity,
   Archive,
   ArrowUpDown,
-  Braces,
   Check,
   Clock3,
   Code2,
   DollarSign,
   Folder,
-  FolderOpen,
-  Ghost,
   GitPullRequest,
   Inbox,
   LayoutGrid,
@@ -84,17 +81,6 @@ const SORT_LABELS: Record<SortOrder, string> = {
   recent: 'Recently used',
   alpha: 'Alphabetical',
   added: 'Date added',
-};
-
-type AppIcon = ComponentType<{ size?: number; className?: string }>;
-
-const PROJECT_OPEN_TARGET_ICONS: Record<AppSettings['projectOpenTarget'], AppIcon> = {
-  cursor: Sparkles,
-  finder: FolderOpen,
-  terminal: Terminal,
-  ghostty: Ghost,
-  vscode: Code2,
-  t3code: Braces,
 };
 
 function useProjectSidebarView() {
@@ -237,24 +223,6 @@ function useProjectSidebarView() {
     },
   });
 
-  const openProjectPath = useMutation({
-    mutationFn: ({
-      projectId,
-      target,
-    }: {
-      projectId: string;
-      target: 'default' | AppSettings['projectOpenTarget'];
-    }) => window.shipcode.invoke('project:open-path', { projectId, target }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
-      queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
-    },
-    onError: (error: Error) => {
-      toast.error('Failed to open project folder', error.message);
-    },
-  });
-
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
 
@@ -276,7 +244,8 @@ function useProjectSidebarView() {
       e.preventDefault();
       dragRef.current = { startX: e.clientX, startW: sidebarWidth };
       const onMove = (ev: MouseEvent) => {
-        const drag = dragRef.current!;
+        const drag = dragRef.current;
+        if (!drag) return;
         const delta = ev.clientX - drag.startX;
         const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, drag.startW + delta));
         setSidebarWidth(next);
@@ -639,29 +608,6 @@ function useProjectSidebarView() {
                               }
                             }}
                           >
-                            {(() => {
-                              const defaultTarget = settings?.projectOpenTarget ?? 'cursor';
-                              const app = integrations?.desktopApps?.[defaultTarget];
-                              if (!app?.available) return null;
-
-                              const Icon = PROJECT_OPEN_TARGET_ICONS[defaultTarget];
-
-                              return (
-                                <DropdownMenuItem
-                                  disabled={project.pathExists === false}
-                                  onSelect={() =>
-                                    openProjectPath.mutate({
-                                      projectId: project.id,
-                                      target: defaultTarget,
-                                    })
-                                  }
-                                >
-                                  <Icon size={12} className="shrink-0 text-secondary" />
-                                  <span className="truncate">Open in {app.label}</span>
-                                </DropdownMenuItem>
-                              );
-                            })()}
-                            <DropdownMenuSeparator />
                             <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
                               <Settings size={12} /> Settings
                             </DropdownMenuItem>
