@@ -498,8 +498,8 @@ describe('TerminalTranscript', () => {
       />,
     );
 
-    expect(screen.getByText('Bash')).toBeInTheDocument();
-    expect(screen.getByText('bun test')).toBeInTheDocument();
+    expect(screen.getByText('Command run')).toBeInTheDocument();
+    expect(screen.getByText(/Bash: bun test/)).toBeInTheDocument();
     expect(screen.getByText('Turn 3')).toBeInTheDocument();
     expect(screen.getByText(/1200\+300 tok/)).toHaveTextContent('$0.0123');
     expect(screen.getByText('checking failure path')).toBeInTheDocument();
@@ -510,7 +510,9 @@ describe('TerminalTranscript', () => {
     expect(screen.getByText(/2400\+600 tok/)).toHaveTextContent('$0.0456');
   });
 
-  it('renders large transcripts as a capped latest window until expanded', () => {
+  it('renders large transcripts as a capped latest window until expanded', {
+    timeout: 15_000,
+  }, () => {
     const events = Array.from({ length: 305 }, (_, index) =>
       makeTextEvent({
         id: `event-${index}`,

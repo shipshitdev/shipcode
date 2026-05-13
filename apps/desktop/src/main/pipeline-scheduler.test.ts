@@ -389,6 +389,30 @@ describe('PipelineScheduler', () => {
       expect(queries.threads.create).not.toHaveBeenCalled();
     });
 
+    it('does not resurrect an unlinked failed thread when starting a requeued issue', async () => {
+      queries.githubIssues.getByNumber.mockReturnValue(makeIssue({ threadId: null }));
+      queries.threads.getByProjectAndGithubIssue.mockReturnValue({
+        id: 'thread-old-failed',
+        projectId: 'project-1',
+        title: 'Old failed thread',
+        prompt: 'old prompt',
+        status: 'failed',
+        worktreePath: '/tmp/old-worktree',
+        worktreeBranch: 'shipcode/thread-old-failed',
+      });
+
+      const result = await scheduler.startOrQueue('project-1', 42);
+
+      expect(result.queued).toBe(false);
+      expect(queries.threads.getByProjectAndGithubIssue).not.toHaveBeenCalled();
+      expect(queries.threads.create).toHaveBeenCalledWith(
+        'project-1',
+        'Fix the bug in the system',
+        'Fix bug',
+      );
+      expect(queries.githubIssues.linkThread).toHaveBeenCalledWith('issue-1', 'thread-new');
+    });
+
     it('uses the issue title when creating a thread for an issue with no body', async () => {
       queries.githubIssues.getByNumber.mockReturnValue(makeIssue({ body: null }));
 

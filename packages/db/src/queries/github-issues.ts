@@ -481,6 +481,10 @@ export class GitHubIssueQueries {
     this.db.prepare('UPDATE github_issue_cache SET thread_id = ? WHERE id = ?').run(threadId, id);
   }
 
+  clearThread(id: string): void {
+    this.db.prepare('UPDATE github_issue_cache SET thread_id = NULL WHERE id = ?').run(id);
+  }
+
   tryClaim(id: string, instanceId: string): boolean {
     const result = this.db
       .prepare(

@@ -1180,7 +1180,7 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    const plannerTrigger = (await screen.findAllByRole('combobox'))[0];
+    const plannerTrigger = (await screen.findAllByRole('combobox'))[2];
     fireEvent.click(plannerTrigger);
     fireEvent.click(await screen.findByText('GPT-5.4'));
 

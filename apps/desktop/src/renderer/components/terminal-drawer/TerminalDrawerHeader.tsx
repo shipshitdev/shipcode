@@ -90,72 +90,84 @@ export function TerminalDrawerHeader({
 
   return (
     <div className="flex items-center justify-between border-b border-border bg-secondary/90 px-4 py-1.5 shrink-0 gap-3 min-w-0">
-      <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-        {startedAt && (
-          <span className="text-xs font-mono text-muted-foreground shrink-0">{startedAt}</span>
-        )}
-
-        {displayTarget &&
-          (runningTargets.length > 1 ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  className="h-auto min-w-0 gap-1.5 px-1 py-0 text-xs font-normal text-secondary hover:bg-transparent hover:text-primary"
-                >
-                  <span className="font-mono text-muted-foreground">{displayTarget.label}</span>
-                  <span className="truncate max-w-[240px]">{displayTarget.title}</span>
-                  <ChevronDown size={11} className="text-muted-foreground shrink-0" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="top">
-                {runningTargets.map((target) => (
-                  <DropdownMenuItem
-                    key={target.threadId}
-                    onSelect={() => onOpenTarget(target)}
-                    className={cn(target.threadId === terminalThreadId && 'bg-hover text-primary')}
-                  >
-                    <span className="font-mono text-muted-foreground text-xs">{target.label}</span>
-                    <span className="truncate max-w-[280px]">{target.title}</span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : displayTarget.kind === 'issue' ? (
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() => onOpenTarget(displayTarget)}
-              className="h-auto min-w-0 gap-1.5 px-1 py-0 text-xs font-normal text-secondary hover:bg-transparent hover:text-primary"
-              title={`Open issue detail for ${displayTarget.label}`}
-            >
-              <span className="font-mono text-muted-foreground">{displayTarget.label}</span>
-              <span className="truncate hover:text-primary">{displayTarget.title}</span>
-            </Button>
-          ) : (
-            <div className="flex h-auto min-w-0 items-center gap-1.5 px-1 py-0 text-xs font-normal text-secondary">
-              <span className="font-mono text-muted-foreground">{displayTarget.label}</span>
-              <span className="truncate">{displayTarget.title}</span>
-            </div>
-          ))}
-
-        {pipelinePhase !== PIPELINE_PHASE.idle && (
-          <PhaseChip
-            status={pipelinePhase}
-            label={approvedAwaitingExecution ? 'Waiting for slot' : undefined}
-            className={cn(
-              'shrink-0',
-              approvedAwaitingExecution && 'border-agent/25 bg-agent/10 text-agent',
-            )}
-          />
-        )}
-
-        {currentModel && pipelinePhase !== PIPELINE_PHASE.idle && (
-          <span className="text-xs font-mono text-muted-foreground shrink-0 truncate max-w-[180px]">
-            {currentModel}
+      <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+        <div className="shrink-0">
+          <span className="rounded-md border border-sky-500/25 bg-sky-500/10 px-3 py-1 text-[11px] font-medium text-sky-400">
+            Console
           </span>
-        )}
+        </div>
+
+        <div className="flex items-center gap-2 min-w-0 overflow-hidden border-l border-border pl-3">
+          {displayTarget &&
+            (runningTargets.length > 1 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="h-auto min-w-0 gap-1.5 px-1 py-0 text-xs font-normal text-secondary hover:bg-transparent hover:text-primary"
+                  >
+                    <span className="font-mono text-muted-foreground">{displayTarget.label}</span>
+                    <span className="truncate max-w-[240px]">{displayTarget.title}</span>
+                    <ChevronDown size={11} className="text-muted-foreground shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" side="top">
+                  {runningTargets.map((target) => (
+                    <DropdownMenuItem
+                      key={target.threadId}
+                      onSelect={() => onOpenTarget(target)}
+                      className={cn(
+                        target.threadId === terminalThreadId && 'bg-hover text-primary',
+                      )}
+                    >
+                      <span className="font-mono text-muted-foreground text-xs">
+                        {target.label}
+                      </span>
+                      <span className="truncate max-w-[280px]">{target.title}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : displayTarget.kind === 'issue' ? (
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => onOpenTarget(displayTarget)}
+                className="h-auto min-w-0 gap-1.5 px-1 py-0 text-xs font-normal text-secondary hover:bg-transparent hover:text-primary"
+                title={`Open issue detail for ${displayTarget.label}`}
+              >
+                <span className="font-mono text-muted-foreground">{displayTarget.label}</span>
+                <span className="truncate hover:text-primary">{displayTarget.title}</span>
+              </Button>
+            ) : (
+              <div className="flex h-auto min-w-0 items-center gap-1.5 px-1 py-0 text-xs font-normal text-secondary">
+                <span className="font-mono text-muted-foreground">{displayTarget.label}</span>
+                <span className="truncate">{displayTarget.title}</span>
+              </div>
+            ))}
+
+          {pipelinePhase !== PIPELINE_PHASE.idle && (
+            <PhaseChip
+              status={pipelinePhase}
+              label={approvedAwaitingExecution ? 'Waiting for slot' : undefined}
+              className={cn(
+                'shrink-0',
+                approvedAwaitingExecution && 'border-agent/25 bg-agent/10 text-agent',
+              )}
+            />
+          )}
+
+          {currentModel && pipelinePhase !== PIPELINE_PHASE.idle && (
+            <span className="text-xs font-mono text-muted-foreground shrink-0 truncate max-w-[180px]">
+              {currentModel}
+            </span>
+          )}
+
+          {startedAt && (
+            <span className="text-xs font-mono text-muted-foreground shrink-0">{startedAt}</span>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-0.5 shrink-0">

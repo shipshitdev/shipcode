@@ -481,6 +481,17 @@ describe('GitHubIssueQueries', () => {
     expect(issues.getByNumber(projectId, 1)?.threadId).toBe(thread.id);
   });
 
+  it('clearThread() clears the thread_id', () => {
+    const record = issues.upsert(makeIssue());
+    const threads = new ThreadQueries(db);
+    const thread = threads.create(projectId, 'prompt', 'title');
+
+    issues.linkThread(record.id, thread.id);
+    issues.clearThread(record.id);
+
+    expect(issues.getByNumber(projectId, 1)?.threadId).toBeNull();
+  });
+
   it('getRequeued() returns unclaimed queued records', () => {
     const r1 = issues.upsert(makeIssue({ issueNumber: 1 }));
     issues.upsert(makeIssue({ issueNumber: 2 }));

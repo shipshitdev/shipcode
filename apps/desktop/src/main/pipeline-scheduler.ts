@@ -382,9 +382,7 @@ export class PipelineScheduler {
     const { queries, pipeline, emitter, getMainWindow } = this.deps;
     const settings = queries.settings.get();
 
-    const reusableThread = issue.threadId
-      ? queries.threads.getById(issue.threadId)
-      : queries.threads.getByProjectAndGithubIssue(issue.projectId, issue.issueNumber);
+    const reusableThread = issue.threadId ? queries.threads.getById(issue.threadId) : null;
 
     if (reusableThread && !REUSABLE_THREAD_STATUSES.has(reusableThread.status)) {
       throw new Error(`Issue #${issue.issueNumber} already has active thread`);
