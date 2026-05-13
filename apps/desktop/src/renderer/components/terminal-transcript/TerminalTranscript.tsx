@@ -232,7 +232,7 @@ function transcriptRow({
       const lifecycleSeverity = classifyConsoleLine(lifecycleText);
       if (lifecycleSeverity === 'info') {
         return (
-          <div className="flex items-start gap-2 px-1">
+          <div className="flex items-start gap-2 rounded-md border border-border/30 bg-secondary/20 px-3 py-1.5">
             <TranscriptMeta createdAt={record.createdAt} compact={compact} />
             <pre
               className={cn(
@@ -282,12 +282,12 @@ function transcriptRow({
     }
     case 'turn_start':
       return (
-        <div className="flex items-center gap-3 py-1">
-          <div className="h-px flex-1 bg-border/70" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+        <div className="flex items-center gap-3 py-2">
+          <div className="h-px flex-1 bg-border/50" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/70">
             Turn {event.turn}
           </span>
-          <div className="h-px flex-1 bg-border/70" />
+          <div className="h-px flex-1 bg-border/50" />
         </div>
       );
     case 'turn_end': {

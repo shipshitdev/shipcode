@@ -121,8 +121,8 @@ function DraggableListRow({
             : 'border-agent/60 bg-agent/[0.03] text-primary hover:bg-agent/[0.06]'),
         tone === 'danger' &&
           (isSelected
-            ? 'border-danger text-primary'
-            : 'border-danger/55 text-primary hover:bg-secondary'),
+            ? 'border-danger bg-[color-mix(in_srgb,var(--danger)_10%,var(--bg-tertiary))] text-primary'
+            : 'border-danger/55 bg-[color-mix(in_srgb,var(--danger)_6%,var(--bg-tertiary))] text-primary hover:bg-[color-mix(in_srgb,var(--danger)_10%,var(--bg-tertiary))]'),
         tone === 'warning' &&
           (isSelected
             ? 'border-warning bg-warning/[0.08] text-primary'

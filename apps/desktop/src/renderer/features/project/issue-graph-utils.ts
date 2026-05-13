@@ -86,7 +86,7 @@ function layoutGraph(nodes: Array<Node<IssueGraphNodeData>>, edges: Edge[]) {
     return layoutComponents(nodes, edges, components);
   }
 
-  return layoutComponent(nodes, edges);
+  return layoutReadableComponent(nodes, edges);
 }
 
 function connectedComponents(nodes: Array<Node<IssueGraphNodeData>>, edges: Edge[]) {
@@ -110,7 +110,8 @@ function connectedComponents(nodes: Array<Node<IssueGraphNodeData>>, edges: Edge
     visited.add(node.id);
 
     while (stack.length > 0) {
-      const current = stack.pop()!;
+      const current = stack.pop();
+      if (!current) continue;
       component.push(current);
       for (const next of adjacency.get(current) ?? []) {
         if (visited.has(next)) continue;
@@ -133,11 +134,14 @@ function layoutComponents(
   const nodeById = new Map(nodes.map((node) => [node.id, node] as const));
   const componentLayouts = components.map((component) => {
     const componentIds = new Set(component);
-    const componentNodes = component.map((id) => nodeById.get(id)!);
+    const componentNodes = component.flatMap((id) => {
+      const node = nodeById.get(id);
+      return node ? [node] : [];
+    });
     const componentEdges = edges.filter(
       (edge) => componentIds.has(edge.source) && componentIds.has(edge.target),
     );
-    const laidOutNodes = layoutComponent(componentNodes, componentEdges);
+    const laidOutNodes = layoutReadableComponent(componentNodes, componentEdges);
     const bounds = layoutBounds(laidOutNodes);
     return { nodes: laidOutNodes, bounds };
   });
@@ -170,7 +174,17 @@ function layoutComponents(
     rowHeight = Math.max(rowHeight, height);
   }
 
-  return nodes.map((node) => positioned.get(node.id)!);
+  return nodes.map((node) => positioned.get(node.id) ?? node);
+}
+
+function layoutReadableComponent(nodes: Array<Node<IssueGraphNodeData>>, edges: Edge[]) {
+  const laidOutNodes = layoutComponent(nodes, edges);
+  const bounds = layoutBounds(laidOutNodes);
+  if (bounds.width <= MAX_LAYOUT_ROW_WIDTH || nodes.length <= 4) {
+    return laidOutNodes;
+  }
+
+  return layoutGrid(nodes);
 }
 
 function layoutComponent(nodes: Array<Node<IssueGraphNodeData>>, edges: Edge[]) {
@@ -203,6 +217,19 @@ function layoutComponent(nodes: Array<Node<IssueGraphNodeData>>, edges: Edge[]) 
       },
     };
   });
+}
+
+function layoutGrid(nodes: Array<Node<IssueGraphNodeData>>) {
+  const columns = Math.max(1, Math.floor(MAX_LAYOUT_ROW_WIDTH / (NODE_WIDTH + COMPONENT_GAP_X)));
+  return nodes
+    .toSorted((a, b) => a.data.issueNumber - b.data.issueNumber)
+    .map((node, index) => ({
+      ...node,
+      position: {
+        x: (index % columns) * (NODE_WIDTH + COMPONENT_GAP_X),
+        y: Math.floor(index / columns) * (NODE_HEIGHT + COMPONENT_GAP_Y),
+      },
+    }));
 }
 
 function layoutBounds(nodes: Array<Node<IssueGraphNodeData>>) {

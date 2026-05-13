@@ -526,15 +526,23 @@ function usePipelineTabView({
       ) : null}
 
       {taskGraph ? (
-        <div className="mb-5">
-          <TaskGraphViewer
-            graph={taskGraph}
-            getIssueUrl={getTaskIssueUrl}
-            onOpenIssue={(url) => {
-              void window.shipcode.invoke('shell:open-external', { url });
-            }}
-          />
-        </div>
+        <details className="mb-5 rounded-md border border-border bg-secondary/20 px-3 py-2">
+          <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
+            <span>Task Graph</span>
+            <span className="text-[10px] font-normal normal-case text-muted-foreground">
+              {taskGraph.nodes.length}
+            </span>
+          </summary>
+          <div className="mt-3">
+            <TaskGraphViewer
+              graph={taskGraph}
+              getIssueUrl={getTaskIssueUrl}
+              onOpenIssue={(url) => {
+                void window.shipcode.invoke('shell:open-external', { url });
+              }}
+            />
+          </div>
+        </details>
       ) : null}
 
       {activeIssue.linkedPrNumber ? (
@@ -642,14 +650,14 @@ function usePipelineTabView({
       ) : null}
 
       {thread && checkpoints.length > 0 ? (
-        <div className="mb-5">
-          <div className="mb-2 flex items-center justify-between">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
-              Checkpoints
-            </h4>
-            <span className="text-[11px] text-muted-foreground">{checkpoints.length}</span>
-          </div>
-          <div className="mb-2 text-[11px] text-muted-foreground">
+        <details className="mb-5 rounded-md border border-border bg-secondary/20 px-3 py-2">
+          <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
+            <span>Checkpoints</span>
+            <span className="text-[10px] font-normal normal-case text-muted-foreground">
+              {checkpoints.length}
+            </span>
+          </summary>
+          <div className="mt-3 mb-2 text-[11px] text-muted-foreground">
             Restoring a checkpoint rewinds code state only. It does not resume the same planner
             session.
           </div>
@@ -677,7 +685,7 @@ function usePipelineTabView({
               </div>
             ))}
           </div>
-        </div>
+        </details>
       ) : null}
 
       {featureQaState ? (

@@ -481,6 +481,132 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
+  it('refresh resolves open issue status from local thread state instead of stale pipeline labels', async () => {
+    const failedThreadIssue = {
+      ...baseIssue,
+      id: 'issue-failed-thread',
+      issueNumber: 50,
+      labels: ['shipcode:pipeline:queued', 'shipcode:pipeline:executing'],
+      pipelineStatus: 'executing',
+      threadId: 'thread-failed',
+    };
+    const staleQueuedLabelIssue = {
+      ...baseIssue,
+      id: 'issue-stale-queued-label',
+      issueNumber: 60,
+      labels: ['shipcode:pipeline:queued'],
+      pipelineStatus: 'todo',
+      threadId: null,
+    };
+    const liveQueuedIssue = {
+      ...baseIssue,
+      id: 'issue-live-queued',
+      issueNumber: 61,
+      labels: ['shipcode:pipeline:queued'],
+      pipelineStatus: 'queued',
+      threadId: null,
+    };
+    const cachedAfterSync = [failedThreadIssue, staleQueuedLabelIssue, liveQueuedIssue];
+
+    listAllIssuesMock.mockResolvedValue([
+      {
+        number: 50,
+        title: failedThreadIssue.title,
+        body: failedThreadIssue.body,
+        labels: failedThreadIssue.labels,
+        assignee: null,
+        state: 'open',
+        updatedAt: null,
+        url: 'https://github.com/acme/repo/issues/50',
+      },
+      {
+        number: 60,
+        title: staleQueuedLabelIssue.title,
+        body: staleQueuedLabelIssue.body,
+        labels: staleQueuedLabelIssue.labels,
+        assignee: null,
+        state: 'open',
+        updatedAt: null,
+        url: 'https://github.com/acme/repo/issues/60',
+      },
+      {
+        number: 61,
+        title: liveQueuedIssue.title,
+        body: liveQueuedIssue.body,
+        labels: liveQueuedIssue.labels,
+        assignee: null,
+        state: 'open',
+        updatedAt: null,
+        url: 'https://github.com/acme/repo/issues/61',
+      },
+    ]);
+
+    const queries = {
+      projects: {
+        getById: vi.fn(() => ({ ...baseProject, path: '/tmp', githubRepoFullName: 'acme/repo' })),
+        updateGithubRepoIdentity: vi.fn(),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          list: vi.fn().mockReturnValueOnce([]).mockReturnValue(cachedAfterSync),
+          getByNumber: vi.fn(
+            (_projectId: string, issueNumber: number) =>
+              cachedAfterSync.find((issue) => issue.issueNumber === issueNumber) ?? null,
+          ),
+          upsert: vi.fn((input: { issueNumber: number }) =>
+            cachedAfterSync.find((issue) => issue.issueNumber === input.issueNumber),
+          ),
+          markClosedOnClose: vi.fn(),
+          updateState: vi.fn(),
+          clearArchivedAt: vi.fn(),
+          resetStaleApproval: vi.fn(() => 0),
+          updatePipelineStatus: vi.fn(),
+        },
+        cachedAfterSync,
+      ),
+      issueEdges: {
+        replaceBodyEdges: vi.fn(),
+      },
+      threads: {
+        getById: vi.fn((threadId: string) =>
+          threadId === 'thread-failed'
+            ? { ...baseIssue, id: 'thread-failed', projectId: 'project-1', status: 'failed' }
+            : null,
+        ),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const refresh = handlers.get('github:refresh-issues');
+    if (!refresh) throw new Error('github:refresh-issues handler not registered');
+
+    await refresh(undefined, { projectId: 'project-1', force: true });
+
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      'issue-failed-thread',
+      'failed',
+    );
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      'issue-stale-queued-label',
+      'todo',
+    );
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      'issue-live-queued',
+      'queued',
+    );
+  });
+
   it('serializes new issue project board attachments during refresh', async () => {
     const projectWithBoard = {
       ...baseProject,

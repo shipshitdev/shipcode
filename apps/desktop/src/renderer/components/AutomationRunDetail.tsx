@@ -25,12 +25,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   CheckCircle2,
-  ChevronDown,
   Copy,
   ExternalLink,
   GitBranch,
   GitPullRequest,
-  Pencil,
   Play,
   RefreshCw,
   Square,
@@ -53,7 +51,6 @@ function useAutomationRunDetailView() {
   const threadId = useAppStore((s) => s.activeAutomationThreadId);
   const selectAutomationThread = useAppStore((s) => s.selectAutomationThread);
   const navigateToGitWorktree = useAppStore((s) => s.navigateToGitWorktree);
-  const openCreateAutomationModal = useAppStore((s) => s.openCreateAutomationModal);
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<'run' | 'plans' | 'diff' | 'history'>('run');
@@ -62,6 +59,7 @@ function useAutomationRunDetailView() {
   const [copiedBranch, setCopiedBranch] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
+  const [doneStatusError, setDoneStatusError] = useState<string | null>(null);
 
   const { data: thread } = useQuery<Thread | null>({
     queryKey: ['thread', threadId],
@@ -235,8 +233,13 @@ function useAutomationRunDetailView() {
     async (status: 'completed' | 'closed') => {
       if (!threadId) return;
       setIsSubmitting(true);
+      setDoneStatusError(null);
       try {
-        await window.shipcode.invoke('thread:set-done-status', { threadId, status });
+        if (status === 'closed') {
+          await window.shipcode.invoke('thread:mark-done', { threadId });
+        } else {
+          await window.shipcode.invoke('thread:set-done-status', { threadId, status });
+        }
         queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
         if (thread?.projectId) {
           queryClient.invalidateQueries({ queryKey: ['thread-panel-data', thread.projectId] });
@@ -246,6 +249,8 @@ function useAutomationRunDetailView() {
             queryKey: ['automation-run-history', thread.automationId],
           });
         }
+      } catch (err) {
+        setDoneStatusError(clampError(err));
       } finally {
         setIsSubmitting(false);
       }
@@ -320,11 +325,10 @@ function useAutomationRunDetailView() {
                   type="button"
                   variant="ghost"
                   size="xs"
-                  className="h-auto gap-1 px-0 py-0 hover:bg-transparent"
+                  className="h-auto p-0 hover:bg-transparent"
                   disabled={isSubmitting}
                 >
                   <PhaseChip status={presentationStatus} />
-                  <ChevronDown className="size-3 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -407,6 +411,11 @@ function useAutomationRunDetailView() {
             </span>
           )}
           <p className="mt-0.5 text-xs text-destructive">{thread.lastError}</p>
+        </div>
+      )}
+      {doneStatusError && (
+        <div className="shrink-0 border-b border-border bg-destructive/10 px-4 py-2.5">
+          <p className="text-xs text-destructive">{doneStatusError}</p>
         </div>
       )}
 
@@ -584,17 +593,6 @@ function useAutomationRunDetailView() {
                       <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                         Executor
                       </span>
-                      {automationId && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-4 text-muted-foreground/60 hover:text-primary"
-                          title="Edit automation model"
-                          onClick={() => openCreateAutomationModal(automationId)}
-                        >
-                          <Pencil className="size-3" />
-                        </Button>
-                      )}
                     </div>
                     <p className="mt-0.5 truncate text-sm text-primary">
                       {thread.executorResolvedModel}

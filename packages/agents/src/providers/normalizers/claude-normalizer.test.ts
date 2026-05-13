@@ -62,15 +62,22 @@ describe('ClaudeNormalizer', () => {
 
     expect(events).toEqual([
       { kind: 'thinking', content: 'checking repository state' },
-      { kind: 'tool_start', name: 'Read', summary: 'Read src/index.ts' },
-      { kind: 'tool_start', name: 'Write', summary: 'Write src/out.ts' },
-      { kind: 'tool_start', name: 'Edit', summary: 'Edit src/out.ts' },
-      { kind: 'tool_start', name: 'Glob', summary: 'Glob **/*.ts' },
-      { kind: 'tool_start', name: 'Grep', summary: 'Grep "needle" in src' },
+      { kind: 'tool_start', name: 'Read', summary: 'Read src/index.ts', filePath: 'src/index.ts' },
+      { kind: 'tool_start', name: 'Write', summary: 'Write src/out.ts', filePath: 'src/out.ts' },
+      { kind: 'tool_start', name: 'Edit', summary: 'Edit src/out.ts', filePath: 'src/out.ts' },
+      { kind: 'tool_start', name: 'Glob', summary: 'Glob **/*.ts', pattern: '**/*.ts' },
+      {
+        kind: 'tool_start',
+        name: 'Grep',
+        summary: 'Grep "needle" in src',
+        pattern: 'needle',
+        filePath: 'src',
+      },
       {
         kind: 'tool_start',
         name: 'Bash',
         summary: `$ ${longCommand.slice(0, 60)}...`,
+        command: longCommand,
       },
       { kind: 'tool_start', name: 'TodoWrite', summary: 'TodoWrite: 3' },
       { kind: 'tool_start', name: 'EmptyTool', summary: 'EmptyTool' },

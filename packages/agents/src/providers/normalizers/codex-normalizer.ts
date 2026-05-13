@@ -70,7 +70,7 @@ export class CodexNormalizer {
         kind: 'tool_start',
         name: 'Bash',
         summary: `$ ${cmd.length > 60 ? `${cmd.slice(0, 60)}...` : cmd}`,
-        command: cmd,
+        ...(cmd ? { command: cmd } : {}),
       });
       return;
     }

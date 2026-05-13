@@ -193,6 +193,30 @@ describe('AutomationRunDetail', () => {
     );
   });
 
+  it('closes completed automation runs through the existing mark-done handler', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'thread:get') return makeThread({ status: 'completed', doneAt: null });
+      if (channel === 'plan:list') return [];
+      if (channel === 'diff:list') return [];
+      if (channel === 'automations:run-history') return [];
+      if (channel === 'thread:mark-done') return undefined;
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.pointerDown(await screen.findByRole('button', { name: /completed/i }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /closed/i }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('thread:mark-done', { threadId: 'thread-1' }),
+    );
+    expect(invokeMock).not.toHaveBeenCalledWith('thread:set-done-status', {
+      threadId: 'thread-1',
+      status: 'closed',
+    });
+  });
+
   it('clamps approval errors with the shared renderer error helper', async () => {
     const rawError = `${'Approval is already confirmed. '.repeat(20)}\nWaiting for an execution slot.`;
     const expectedError = `${rawError.split('\n')[0].slice(0, 279)}…`;

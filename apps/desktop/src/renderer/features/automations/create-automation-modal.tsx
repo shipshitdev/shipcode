@@ -571,7 +571,7 @@ function useCreateAutomationModalView() {
         <Button onClick={handleSubmit} disabled={submitDisabled}>
           <LoadingButtonContent loading={createOrUpdate.isPending}>
             <span>{isEdit ? 'Save' : 'Create'}</span>
-            <Keycap>⌘↩</Keycap>
+            <Keycap className="border-transparent bg-black/10 text-current shadow-none">⌘⏎</Keycap>
           </LoadingButtonContent>
         </Button>
       </ModalFooter>

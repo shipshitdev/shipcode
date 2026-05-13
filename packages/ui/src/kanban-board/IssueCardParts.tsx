@@ -99,8 +99,8 @@ function issueCardToneClass({
   }
   if (isFailed) {
     return isSelected
-      ? 'ring-1 ring-danger/40 border-danger/30'
-      : 'border-danger/25 hover:border-danger/40';
+      ? 'ring-1 ring-danger/40 border-danger/30 bg-[color-mix(in_srgb,var(--danger)_10%,var(--bg-tertiary))]'
+      : 'border-danger/25 bg-[color-mix(in_srgb,var(--danger)_8%,var(--bg-tertiary))] hover:bg-[color-mix(in_srgb,var(--danger)_12%,var(--bg-tertiary))]';
   }
   if (isSelected) return 'ring-1 ring-border-strong';
   return 'hover:border-white/[0.08]';

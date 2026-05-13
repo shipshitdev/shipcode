@@ -74,13 +74,12 @@ function resolveOpenIssuePipelineStatus(
   issue: GitHubIssueCacheRecord,
   thread: ReturnType<IpcHandlerDeps['queries']['threads']['getById']>,
 ): IssuePipelineStatus {
-  const labelStatus = pipelineStatusFromLabels(issue.labels);
-  if (labelStatus) return labelStatus;
   if (thread) {
     return thread.status === PIPELINE_PHASE.idle
       ? ISSUE_PIPELINE_STATUS.todo
       : (thread.status as IssuePipelineStatus);
   }
+  if (issue.pipelineStatus === ISSUE_PIPELINE_STATUS.queued) return ISSUE_PIPELINE_STATUS.queued;
   return issue.linkedPrNumber != null
     ? ISSUE_PIPELINE_STATUS.completed
     : ISSUE_PIPELINE_STATUS.todo;

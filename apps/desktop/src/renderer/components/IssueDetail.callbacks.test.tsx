@@ -677,7 +677,7 @@ describe('IssueDetail callback harness', () => {
     fireEvent.click(screen.getByRole('button', { name: 'dialog approve' }));
     fireEvent.click(screen.getByRole('button', { name: 'action mark done' }));
     fireEvent.click(await screen.findByRole('button', { name: 'close done' }));
-    fireEvent.click(screen.getByText('Archive issue'));
+    fireEvent.click(screen.getByText('Archive'));
     fireEvent.click(await screen.findByRole('button', { name: 'close archive' }));
 
     expect(invokeMock).not.toHaveBeenCalledWith('issue:mark-done', expect.anything());
@@ -988,7 +988,7 @@ describe('IssueDetail callback harness', () => {
 
     expect(await screen.findByText('Issue title')).toBeInTheDocument();
 
-    fireEvent.click(await screen.findByText('Close issue'));
+    fireEvent.click(await screen.findByText('Close'));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('github:close-issue', {
@@ -1005,7 +1005,7 @@ describe('IssueDetail callback harness', () => {
 
     renderWithProviders();
 
-    fireEvent.click(await screen.findByText('Reopen issue'));
+    fireEvent.click(await screen.findByText('Open'));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('github:reopen-issue', {
@@ -1135,7 +1135,7 @@ describe('IssueDetail callback harness', () => {
 
     renderWithProviders();
 
-    fireEvent.click(await screen.findByText('Archive issue'));
+    fireEvent.click(await screen.findByText('Archive'));
     fireEvent.click(await screen.findByRole('button', { name: 'confirm archive' }));
 
     await waitFor(() => {
@@ -1176,7 +1176,7 @@ describe('IssueDetail callback harness', () => {
 
     renderWithProviders();
 
-    fireEvent.click(await screen.findByText('Archive issue'));
+    fireEvent.click(await screen.findByText('Archive'));
     fireEvent.click(await screen.findByRole('button', { name: 'confirm archive' }));
 
     await waitFor(() => {

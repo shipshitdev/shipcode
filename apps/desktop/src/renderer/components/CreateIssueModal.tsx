@@ -906,7 +906,9 @@ function useCreateIssueModalView() {
         >
           <LoadingButtonContent loading={submitting}>
             <span>{submitLabel}</span>
-            <Keycap>{isQuickMode ? '↩' : '⌘↩'}</Keycap>
+            <Keycap className="border-transparent bg-black/10 text-current shadow-none">
+              {isQuickMode ? '⏎' : '⌘⏎'}
+            </Keycap>
           </LoadingButtonContent>
         </Button>
       </ModalFooter>

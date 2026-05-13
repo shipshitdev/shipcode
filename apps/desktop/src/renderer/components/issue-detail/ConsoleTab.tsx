@@ -21,7 +21,7 @@ export function ConsoleTab({
   }
 
   return (
-    <div className="flex min-h-[520px] overflow-hidden rounded-lg border border-border bg-secondary">
+    <div className="flex h-[calc(100vh-220px)] min-h-[360px] overflow-hidden rounded-lg border border-border bg-secondary">
       <ThreadConsoleTranscript
         threadId={activeThreadId}
         phase={threadPhase}

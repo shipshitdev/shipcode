@@ -42,7 +42,7 @@ describe('CodexNormalizer', () => {
     ]);
 
     expect(events).toEqual([
-      { kind: 'tool_start', name: 'Bash', summary: '$ echo ok' },
+      { kind: 'tool_start', name: 'Bash', summary: '$ echo ok', command: 'echo ok' },
       { kind: 'tool_end', name: 'Bash', exitCode: 0 },
     ]);
   });
@@ -62,7 +62,12 @@ describe('CodexNormalizer', () => {
 
     expect(events).toEqual([
       { kind: 'tool_start', name: 'Bash', summary: '$ ' },
-      { kind: 'tool_start', name: 'Bash', summary: `$ ${longCommand.slice(0, 60)}...` },
+      {
+        kind: 'tool_start',
+        name: 'Bash',
+        summary: `$ ${longCommand.slice(0, 60)}...`,
+        command: longCommand,
+      },
     ]);
   });
 
@@ -88,6 +93,7 @@ describe('CodexNormalizer', () => {
         kind: 'tool_start',
         name: 'Bash',
         summary: '$ bun test apps/api/src/reference-portals',
+        command: 'bun test apps/api/src/reference-portals',
       },
       {
         kind: 'tool_end',

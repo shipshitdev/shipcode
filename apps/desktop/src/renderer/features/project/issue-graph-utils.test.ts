@@ -148,6 +148,39 @@ describe('buildIssueFlowGraph', () => {
     expect(uniqueYPositions.size).toBeGreaterThan(1);
     expect(Math.max(...flowGraph.nodes.map((node) => node.position.x))).toBeLessThan(1180);
   });
+
+  it('wraps oversized connected reference graphs instead of shrinking every node', () => {
+    const nodes = Array.from({ length: 8 }, (_, index) => ({
+      issueId: `issue-${index + 1}`,
+      projectId: 'project-1',
+      issueNumber: index + 1,
+      title: `Issue ${index + 1}`,
+      state: 'open',
+      pipelineStatus: 'todo',
+      threadId: null,
+    }));
+    const flowGraph = buildIssueFlowGraph({
+      ...graph,
+      nodes,
+      edges: nodes.slice(0, -1).map((node, index) => ({
+        id: `edge-${index + 1}`,
+        projectId: 'project-1',
+        sourceIssueId: node.issueId,
+        targetIssueId: nodes[index + 1]?.issueId ?? '',
+        sourceIssueNumber: node.issueNumber,
+        targetIssueNumber: nodes[index + 1]?.issueNumber ?? 0,
+        edgeType: 'reference',
+        origin: 'manual',
+        createdAt: '',
+        updatedAt: '',
+      })),
+    });
+
+    const uniqueYPositions = new Set(flowGraph.nodes.map((node) => node.position.y));
+
+    expect(uniqueYPositions.size).toBeGreaterThan(1);
+    expect(Math.max(...flowGraph.nodes.map((node) => node.position.x))).toBeLessThan(1180);
+  });
 });
 
 describe('formatPreviewGroups', () => {

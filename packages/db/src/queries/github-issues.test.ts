@@ -182,6 +182,23 @@ describe('GitHubIssueQueries', () => {
     expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('planning');
   });
 
+  it('updatePipelineStatus() preserves lastPhaseUpdate when the status is unchanged', () => {
+    const record = issues.upsert(makeIssue());
+    issues.updatePipelineStatus(record.id, 'planning');
+    db.prepare('UPDATE github_issue_cache SET last_phase_update = ? WHERE id = ?').run(
+      '2026-05-01T10:00:00.000Z',
+      record.id,
+    );
+
+    issues.updatePipelineStatus(record.id, 'planning');
+    expect(issues.getByNumber(projectId, 1)?.lastPhaseUpdate).toBe('2026-05-01T10:00:00.000Z');
+
+    issues.updatePipelineStatus(record.id, 'executing');
+    const updated = issues.getByNumber(projectId, 1);
+    expect(updated?.pipelineStatus).toBe('executing');
+    expect(updated?.lastPhaseUpdate).not.toBe('2026-05-01T10:00:00.000Z');
+  });
+
   it('runInTransaction() commits grouped issue writes', () => {
     const result = issues.runInTransaction(() => {
       issues.upsert(makeIssue({ issueNumber: 10, title: 'Ten' }));

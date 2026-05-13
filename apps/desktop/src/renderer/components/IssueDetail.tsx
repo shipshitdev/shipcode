@@ -1142,6 +1142,11 @@ function useIssueDetailView() {
     />
   );
 
+  const canUseStatusActions = !isAutomationIssue(activeIssue) && (canRerun || !canStartPipeline);
+  const canArchiveFromStatus =
+    activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
+    activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.closed;
+
   const issueStatusBadge = canStartPipeline ? (
     <span className="group relative inline-flex items-center">
       <span className="pointer-events-none transition-opacity group-hover:opacity-0">
@@ -1198,24 +1203,52 @@ function useIssueDetailView() {
         </LoadingButtonContent>
       </Button>
     </span>
-  ) : canRerun ? (
-    <span className="group relative inline-flex items-center">
-      <span className="pointer-events-none transition-opacity group-hover:opacity-0">
-        {issueStatusChip}
-      </span>
-      <Button
-        variant="ghost"
-        size="xs"
-        className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-danger/70 opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
-        title="Retry pipeline"
-        onClick={handleRerun}
-        disabled={isSubmitting}
-      >
-        <LoadingButtonContent loading={isSubmitting} className="gap-1" spinnerSize={10}>
-          RETRY
-        </LoadingButtonContent>
-      </Button>
-    </span>
+  ) : canUseStatusActions ? (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="h-auto p-0 hover:bg-transparent"
+          disabled={isSubmitting || isTogglingState}
+        >
+          {issueStatusChip}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {canRerun && (
+          <DropdownMenuItem onClick={() => void handleRerun()}>
+            <Play className="mr-2 size-3.5 text-danger" />
+            {retryButtonLabel}
+          </DropdownMenuItem>
+        )}
+        {canRerun && <DropdownMenuSeparator />}
+        <DropdownMenuItem
+          disabled={activeIssue.state === 'open'}
+          onClick={() => void handleToggleIssueState('open')}
+        >
+          <CircleDot className="mr-2 size-3.5 text-success" />
+          Open
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={activeIssue.state === 'closed'}
+          onClick={() => void handleToggleIssueState('closed')}
+        >
+          <CircleCheck className="mr-2 size-3.5 text-done" />
+          Close
+        </DropdownMenuItem>
+        {canArchiveFromStatus && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setShowArchiveConfirm(true)}>
+              <Archive className="mr-2 size-3.5 text-muted-foreground" />
+              Archive
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   ) : (
     issueStatusChip
   );
@@ -1246,7 +1279,7 @@ function useIssueDetailView() {
       )}
 
       {/* State — open/closed dropdown */}
-      {!isAutomationIssue(activeIssue) && (
+      {!isAutomationIssue(activeIssue) && !canUseStatusActions && (
         <>
           {ISSUE_META_DOT}
           <DropdownMenu>

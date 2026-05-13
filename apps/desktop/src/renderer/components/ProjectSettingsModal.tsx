@@ -1138,7 +1138,7 @@ function useProjectSettingsModalView() {
         >
           <LoadingButtonContent loading={saveMutation.isPending || setupSaveMutation.isPending}>
             <span>Save</span>
-            <Keycap className="border-transparent bg-black/10 text-current shadow-none">⌘↩</Keycap>
+            <Keycap className="border-transparent bg-black/10 text-current shadow-none">⌘⏎</Keycap>
           </LoadingButtonContent>
         </Button>
       </ModalFooter>

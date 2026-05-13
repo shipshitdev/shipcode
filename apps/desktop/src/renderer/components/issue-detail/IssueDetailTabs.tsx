@@ -138,12 +138,16 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
     <Tabs
       value={activeTab}
       onValueChange={(value) => onActiveTabChange(value as IssueDetailTab)}
-      className="flex min-h-0 flex-col"
+      className="flex min-h-0 flex-1 flex-col"
     >
       <div className="shrink-0 overflow-x-auto mb-5">
         <TabsList className="w-full">
           {orderedTabs.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value}>
+            <TabsTrigger
+              key={tab.value}
+              value={tab.value}
+              className="rounded-t-md data-[state=active]:bg-elevated data-[state=active]:text-primary data-[state=active]:shadow-[inset_0_-2px_0_hsl(var(--accent))]"
+            >
               {tab.label}
             </TabsTrigger>
           ))}
@@ -159,7 +163,7 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
         />
       </TabsContent>
 
-      <TabsContent value="console" className={'mt-0'}>
+      <TabsContent value="console" className="mt-0 overflow-hidden">
         <ConsoleTab
           activeThreadId={activeThreadId}
           approvedAwaitingExecution={approvedAwaitingExecution}

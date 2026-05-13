@@ -292,9 +292,15 @@ export class GitHubIssueQueries {
   updatePipelineStatus(id: string, status: IssuePipelineStatus): void {
     this.db
       .prepare(
-        `UPDATE github_issue_cache SET pipeline_status = ?, last_phase_update = ${ISO_NOW_SQL} WHERE id = ?`,
+        `UPDATE github_issue_cache
+            SET pipeline_status = ?,
+                last_phase_update = CASE
+                  WHEN pipeline_status != ? THEN ${ISO_NOW_SQL}
+                  ELSE last_phase_update
+                END
+          WHERE id = ?`,
       )
-      .run(status, id);
+      .run(status, status, id);
   }
 
   markTriageRulesApplied(id: string): void {

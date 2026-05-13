@@ -43,6 +43,17 @@ function formatDuration(ms: number | null): string {
   return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
+function formatStartTime(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 function StepAttempts({ threadId }: { threadId: string }) {
   const { data: steps = [], isLoading } = useQuery<PipelineStepRecord[]>({
     queryKey: ['pipeline-steps', threadId],
@@ -268,17 +279,20 @@ function ThreadAnalyticsPanel({
   };
 
   return (
-    <div className="mt-4 space-y-4">
-      <div>
-        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
-          Timeline
-        </h4>
+    <div className="mt-4 space-y-2">
+      <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
+        <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
+          <span>Timeline</span>
+          <span className="text-[10px] font-normal normal-case text-muted-foreground">
+            {phaseTimeline.length}
+          </span>
+        </summary>
         {phaseTimeline.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border p-3 text-[11px] text-muted-foreground">
+          <p className="mt-3 rounded-md border border-dashed border-border p-3 text-[11px] text-muted-foreground">
             No phase timing data yet.
           </p>
         ) : (
-          <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
+          <div className="mt-3 overflow-hidden rounded-md border border-border">
             <div className="divide-y divide-border">
               {phaseTimeline.slice(0, 8).map((phase) => (
                 <div key={phase.id} className="flex items-center gap-3 px-3 py-2">
@@ -290,6 +304,9 @@ function ThreadAnalyticsPanel({
                     {phase.errorMessage ? (
                       <div className="truncate text-[10px] text-danger">{phase.errorMessage}</div>
                     ) : null}
+                    <div className="text-[10px] text-muted-foreground">
+                      {formatStartTime(phase.startedAt)}
+                    </div>
                   </div>
                   <span className="shrink-0 text-[10px] text-muted-foreground">
                     {formatDuration(phase.durationMs)}
@@ -299,30 +316,36 @@ function ThreadAnalyticsPanel({
             </div>
           </div>
         )}
-      </div>
+      </details>
 
-      <div>
-        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
-          Prompt / Context
-        </h4>
+      <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
+        <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
+          <span>Prompt / Context</span>
+          <span className="text-[10px] font-normal normal-case text-muted-foreground">
+            {promptTelemetry.length}
+          </span>
+        </summary>
         {promptTelemetry.length > 0 ? (
-          <div className="flex flex-col gap-2">
+          <div className="mt-3 flex flex-col gap-2">
             {promptTelemetry.map((record) => (
               <PromptTelemetryCard key={record.id} record={record} />
             ))}
           </div>
         ) : (
-          <p className="rounded-md border border-dashed border-border p-3 text-[11px] text-muted-foreground">
+          <p className="mt-3 rounded-md border border-dashed border-border p-3 text-[11px] text-muted-foreground">
             No prompt telemetry yet.
           </p>
         )}
-      </div>
+      </details>
 
-      <div>
-        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
-          Skill Resolution
-        </h4>
-        <div className="grid grid-cols-3 gap-2">
+      <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
+        <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
+          <span>Skill Resolution</span>
+          <span className="text-[10px] font-normal normal-case text-muted-foreground">
+            {skillResolutions.length}
+          </span>
+        </summary>
+        <div className="mt-3 grid grid-cols-3 gap-2">
           <div className="rounded-md border border-border bg-secondary p-2">
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Score</div>
             <div className="text-[14px] font-semibold text-primary">{skillFallback.score}</div>
@@ -358,7 +381,7 @@ function ThreadAnalyticsPanel({
             ))}
           </div>
         ) : null}
-      </div>
+      </details>
     </div>
   );
 }
@@ -440,124 +463,140 @@ export function CostsTab({
             </div>
           </div>
 
-          {/* Per-thread mini-heatmap — collapsed by default to keep the rest
-              of the CostsTab visible without scrolling. */}
-          {thread?.id && (
-            <details className="mb-4 rounded-md border border-border bg-secondary/20 px-3 py-2">
-              <summary className="cursor-pointer text-[11px] font-medium uppercase tracking-wide text-secondary">
-                Activity (last 90 days)
+          <div className="space-y-2">
+            {/* Per-thread mini-heatmap */}
+            {thread?.id && (
+              <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
+                <summary className="cursor-pointer text-[11px] font-medium uppercase tracking-wide text-secondary">
+                  Activity (last 90 days)
+                </summary>
+                <div className="mt-3">
+                  <ActivityHeatmap
+                    scope="thread"
+                    surface="issue"
+                    threadId={thread.id}
+                    defaultRange={90}
+                    defaultMetric="costUsd"
+                    allowedMetrics={['costUsd']}
+                    showMetricToggle={false}
+                    showRangePicker={false}
+                  />
+                </div>
+              </details>
+            )}
+
+            {/* Per-run breakdown */}
+            <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
+              <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
+                <span>Pipeline Runs</span>
+                <span className="text-[10px] font-normal normal-case text-muted-foreground">
+                  {tasks.length}
+                </span>
               </summary>
-              <div className="mt-3">
-                <ActivityHeatmap
-                  scope="thread"
-                  surface="issue"
-                  threadId={thread.id}
-                  defaultRange={90}
-                  defaultMetric="costUsd"
-                  allowedMetrics={['costUsd']}
-                  showMetricToggle={false}
-                  showRangePicker={false}
-                />
+              <div className="mt-3 overflow-hidden rounded-md border border-border">
+                <div className="divide-y divide-border">
+                  {tasks.map((task, index) => {
+                    const isExpanded = expandedThreadId === task.threadId;
+                    return (
+                      <div key={task.threadId}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setExpandedThreadId(isExpanded ? null : task.threadId)}
+                          aria-expanded={isExpanded}
+                          className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary/40"
+                        >
+                          <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-tertiary text-[11px] font-medium text-muted-foreground">
+                            {tasks.length - index}
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            className="shrink-0 select-none text-xs text-muted-foreground"
+                          >
+                            {isExpanded ? '▾' : '▸'}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge
+                                variant={
+                                  task.phase === PIPELINE_PHASE.completed
+                                    ? 'success'
+                                    : task.phase === PIPELINE_PHASE.failed
+                                      ? 'danger'
+                                      : 'default'
+                                }
+                                className="text-[11px]"
+                              >
+                                {task.phase}
+                              </Badge>
+                              <span className="text-[13px] font-medium text-primary">
+                                {formatCost(task.costUsd)}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">
+                                {formatTokens(task.tokensPrompt, task.tokensCompletion)}
+                              </span>
+                            </div>
+                            {task.model && (
+                              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                {MODEL_DISPLAY[task.model] ?? task.model}
+                              </p>
+                            )}
+                          </div>
+                          <span className="shrink-0 text-[11px] text-muted-foreground">
+                            {timeAgo(task.updatedAt)}
+                          </span>
+                        </Button>
+                        {isExpanded && <StepAttempts threadId={task.threadId} />}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </details>
-          )}
 
-          {/* Per-run breakdown */}
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
-            Pipeline Runs
-          </h4>
-          <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
-            <div className="divide-y divide-border">
-              {tasks.map((task, index) => {
-                const isExpanded = expandedThreadId === task.threadId;
-                return (
-                  <div key={task.threadId}>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setExpandedThreadId(isExpanded ? null : task.threadId)}
-                      aria-expanded={isExpanded}
-                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-secondary/40"
-                    >
-                      <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-border bg-tertiary text-[10px] font-medium text-muted-foreground">
-                        {tasks.length - index}
-                      </span>
-                      <span
-                        aria-hidden="true"
-                        className="shrink-0 select-none text-[10px] text-muted-foreground"
-                      >
-                        {isExpanded ? '▾' : '▸'}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge
-                            variant={
-                              task.phase === PIPELINE_PHASE.completed
-                                ? 'success'
-                                : task.phase === PIPELINE_PHASE.failed
-                                  ? 'danger'
-                                  : 'default'
-                            }
-                            className="text-[10px]"
-                          >
-                            {task.phase}
-                          </Badge>
-                          <span className="text-[12px] font-medium text-primary">
-                            {formatCost(task.costUsd)}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {formatTokens(task.tokensPrompt, task.tokensCompletion)}
-                          </span>
-                        </div>
-                        {task.model && (
-                          <p className="mt-0.5 text-[10px] text-muted-foreground">
-                            {MODEL_DISPLAY[task.model] ?? task.model}
-                          </p>
-                        )}
+            {/* Current thread details */}
+            {thread && (
+              <details className="rounded-md border border-border bg-secondary/20 px-3 py-2">
+                <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium uppercase tracking-wide text-secondary">
+                  <span>Current Run Models</span>
+                  <span className="text-[10px] font-normal normal-case text-muted-foreground">
+                    {
+                      [
+                        thread.plannerResolvedModel,
+                        thread.reviewerResolvedModel,
+                        thread.executorResolvedModel,
+                        thread.verifierResolvedModel,
+                      ].filter(Boolean).length
+                    }
+                  </span>
+                </summary>
+                <div className="mt-3 flex flex-col gap-1.5">
+                  {(
+                    [
+                      { label: 'Planner', model: thread.plannerResolvedModel },
+                      { label: 'Reviewer', model: thread.reviewerResolvedModel },
+                      { label: 'Executor', model: thread.executorResolvedModel },
+                      { label: 'Verifier', model: thread.verifierResolvedModel },
+                    ] as const
+                  )
+                    .reduce<Array<{ label: string; model: string }>>((entries, entry) => {
+                      if (entry.model) entries.push({ label: entry.label, model: entry.model });
+                      return entries;
+                    }, [])
+                    .map((entry) => (
+                      <div key={entry.label} className="flex flex-col gap-0.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          {entry.label}
+                        </span>
+                        <span className="truncate text-[11px] text-primary">
+                          {MODEL_DISPLAY[entry.model] ?? entry.model}
+                        </span>
                       </div>
-                      <span className="shrink-0 text-[10px] text-muted-foreground">
-                        {timeAgo(task.updatedAt)}
-                      </span>
-                    </Button>
-                    {isExpanded && <StepAttempts threadId={task.threadId} />}
-                  </div>
-                );
-              })}
-            </div>
+                    ))}
+                </div>
+              </details>
+            )}
           </div>
-
-          {/* Current thread details */}
-          {thread && (
-            <div className="mt-4">
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
-                Current Run Models
-              </h4>
-              <div className="flex flex-col gap-1.5">
-                {(
-                  [
-                    { label: 'Planner', model: thread.plannerResolvedModel },
-                    { label: 'Reviewer', model: thread.reviewerResolvedModel },
-                    { label: 'Executor', model: thread.executorResolvedModel },
-                    { label: 'Verifier', model: thread.verifierResolvedModel },
-                  ] as const
-                )
-                  .reduce<Array<{ label: string; model: string }>>((entries, entry) => {
-                    if (entry.model) entries.push({ label: entry.label, model: entry.model });
-                    return entries;
-                  }, [])
-                  .map((entry) => (
-                    <div key={entry.label} className="flex flex-col gap-0.5">
-                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        {entry.label}
-                      </span>
-                      <span className="truncate text-[11px] text-primary">
-                        {MODEL_DISPLAY[entry.model] ?? entry.model}
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
           <ThreadAnalyticsPanel analytics={threadAnalytics} isLoading={threadAnalyticsLoading} />
         </>
       )}

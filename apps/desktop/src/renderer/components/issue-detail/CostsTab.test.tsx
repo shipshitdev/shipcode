@@ -319,7 +319,9 @@ describe('CostsTab', () => {
     expect(screen.getByText('Repo File Context')).toBeInTheDocument();
     expect(screen.getByText('testing context')).toBeInTheDocument();
     expect(
-      within(screen.getByText('Skill Resolution').parentElement as HTMLElement).getByText('88'),
+      within(screen.getByText('Skill Resolution').closest('details') as HTMLElement).getByText(
+        '88',
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText('explicit · fallback')).toBeInTheDocument();
   });

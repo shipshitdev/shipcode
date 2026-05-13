@@ -398,7 +398,8 @@ describe('IssueDetail', () => {
     });
 
     renderWithProviders();
-    fireEvent.click(await screen.findByRole('button', { name: 'Re-plan' }));
+    fireEvent.pointerDown(await screen.findByRole('button', { name: /failed/i }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Re-plan' }));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('pipeline:retry', { threadId: thread.id });
@@ -490,8 +491,10 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    expect(await screen.findByRole('button', { name: 'Resume execution' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Resume verification' })).not.toBeInTheDocument();
+    fireEvent.pointerDown(await screen.findByRole('button', { name: /failed/i }));
+
+    expect(await screen.findByRole('menuitem', { name: 'Resume execution' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Resume verification' })).not.toBeInTheDocument();
   });
 
   it('renders clarification questions and resumes planning with submitted answers', async () => {
