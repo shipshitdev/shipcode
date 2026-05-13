@@ -1,7 +1,9 @@
+import { stripIssueTitlePriorityPrefix } from './github-issue-utils';
+
 export const DEFAULT_BRANCH_FORMAT = 'ship/{id}-{slug}';
 
 export function slugifyIssueTitle(title: string): string {
-  return title
+  return stripIssueTitlePriorityPrefix(title)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')

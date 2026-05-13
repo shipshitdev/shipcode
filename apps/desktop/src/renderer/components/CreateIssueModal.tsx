@@ -10,6 +10,7 @@ import {
   type Project,
   readPrdIssueMetadata,
   type StagedPrdAttachment,
+  stripIssueTitlePriorityPrefix,
 } from '@shipcode/shared';
 import {
   Button,
@@ -48,7 +49,7 @@ function deriveTitleFromBody(body: string): string {
   });
   const heading = lines.find((l) => l.startsWith('# '));
   const raw = heading ? heading.replace(/^#\s+/, '').replace(/^PRD:\s*/i, '') : (lines[0] ?? '');
-  return raw.slice(0, 80).trim();
+  return stripIssueTitlePriorityPrefix(raw).slice(0, 80).trim();
 }
 
 function upsertIssueRecord(
@@ -116,6 +117,7 @@ function createPendingIssueRecord({
     priorityRank: null,
     priorityRaw: null,
     priorityFetchedAt: null,
+    issueType: null,
     isQuickMode: false,
     syncState: 'creating',
   };

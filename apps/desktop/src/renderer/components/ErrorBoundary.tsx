@@ -102,53 +102,55 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           </div>
 
           {trace && (
-            <div className="relative w-full">
-              <pre className="max-h-64 w-full overflow-auto rounded-lg border border-red-500/20 bg-red-500/5 p-4 text-left font-mono text-xs leading-relaxed text-red-300 select-text">
+            <div className="w-full overflow-hidden rounded-lg border border-red-500/20 bg-red-500/5 text-left">
+              <div className="flex items-center justify-end border-b border-red-500/15 px-3 py-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={this.handleCopy}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-400 transition-colors hover:bg-red-500/20"
+                >
+                  {this.state.isCopied ? (
+                    <>
+                      <svg
+                        aria-hidden="true"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        aria-hidden="true"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+              <pre className="max-h-64 w-full overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-red-300 select-text">
                 {trace}
               </pre>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={this.handleCopy}
-                className="absolute top-2.5 right-2.5 inline-flex items-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-400 transition-colors hover:bg-red-500/20"
-              >
-                {this.state.isCopied ? (
-                  <>
-                    <svg
-                      aria-hidden="true"
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      aria-hidden="true"
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                    </svg>
-                    Copy
-                  </>
-                )}
-              </Button>
             </div>
           )}
 

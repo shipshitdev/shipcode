@@ -61,6 +61,7 @@ interface GitHubIssueCacheRow {
   priority_rank: string | null;
   priority_raw: string | null;
   priority_fetched_at: string | null;
+  issue_type: string | null;
   rules_applied_at: string | null;
   triage_failure_reason: string | null;
   is_quick_mode: number | null;
@@ -274,6 +275,12 @@ export class GitHubIssueQueries {
          WHERE id = ?`,
       )
       .run(opts.rank, opts.raw, opts.fetchedAt, opts.id);
+  }
+
+  setIssueType(opts: { id: string; issueType: string | null }): void {
+    this.db
+      .prepare('UPDATE github_issue_cache SET issue_type = ? WHERE id = ?')
+      .run(opts.issueType, opts.id);
   }
 
   updatePipelineStatus(id: string, status: IssuePipelineStatus): void {
@@ -756,7 +763,7 @@ export class GitHubIssueQueries {
   }
 
   private toRecord(row: GitHubIssueCacheRow): GitHubIssueCacheRecord {
-    return {
+    const record = {
       id: row.id,
       projectId: row.project_id,
       issueNumber: row.issue_number,
@@ -837,5 +844,9 @@ export class GitHubIssueQueries {
       triageFailureReason: row.triage_failure_reason ?? null,
       isQuickMode: !!row.is_quick_mode,
     };
+    return {
+      ...record,
+      issueType: row.issue_type ?? null,
+    } as GitHubIssueCacheRecord;
   }
 }

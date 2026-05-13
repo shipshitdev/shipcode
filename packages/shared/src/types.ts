@@ -1407,6 +1407,7 @@ export interface GitHubIssueCacheRecord {
   priorityRank: 'p0' | 'p1' | 'p2' | 'p3' | null;
   priorityRaw: string | null;
   priorityFetchedAt: string | null;
+  issueType?: string | null;
   rulesAppliedAt?: string | null;
   triageFailureReason?: string | null;
   // Quick mode: synthetic local-only task with negative sentinel `issueNumber`

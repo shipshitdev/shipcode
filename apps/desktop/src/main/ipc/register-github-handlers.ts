@@ -319,6 +319,10 @@ export function registerGitHubHandlers({
                 raw: p.raw,
                 fetchedAt: now,
               });
+              queries.githubIssues.setIssueType({
+                id: cachedIssue.id,
+                issueType: priorityResult.issueTypes.get(cachedIssue.issueNumber) ?? null,
+              });
             }
           } catch (err) {
             log.warn('[github:refresh-issues] priority sync failed', err);
@@ -811,6 +815,16 @@ export function registerGitHubHandlers({
             if (warnings.length > 0) {
               projectAttachWarning = [projectAttachWarning, ...warnings].filter(Boolean).join('; ');
             }
+            const createdRecord = queries.githubIssues.getByNumber(projectId, issue.number);
+            if (createdRecord) {
+              queries.githubIssues.setIssueType({ id: createdRecord.id, issueType: 'Feature' });
+              queries.githubIssues.setPriority({
+                id: createdRecord.id,
+                rank: 'p3',
+                raw: 'P3',
+                fetchedAt: new Date().toISOString(),
+              });
+            }
           } catch (err) {
             log.warn(`[github:create-issue] project metadata failed for #${issue.number}:`, err);
             projectAttachWarning = [projectAttachWarning, clampError(err)]
@@ -992,6 +1006,10 @@ export function registerGitHubHandlers({
             rank: p.rank,
             raw: p.raw,
             fetchedAt: now,
+          });
+          queries.githubIssues.setIssueType({
+            id: issue.id,
+            issueType: priorityResult.issueTypes.get(issue.issueNumber) ?? null,
           });
         }
         const refreshedIssues = queries.githubIssues.list(projectId);

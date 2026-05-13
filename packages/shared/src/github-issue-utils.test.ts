@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isRealGithubIssueNumber } from './github-issue-utils';
+import { isRealGithubIssueNumber, stripIssueTitlePriorityPrefix } from './github-issue-utils';
 
 describe('isRealGithubIssueNumber', () => {
   it('returns true for positive integers', () => {
@@ -17,5 +17,16 @@ describe('isRealGithubIssueNumber', () => {
     expect(isRealGithubIssueNumber(Number.NaN)).toBe(false);
     expect(isRealGithubIssueNumber(Number.POSITIVE_INFINITY)).toBe(false);
     expect(isRealGithubIssueNumber(Number.NEGATIVE_INFINITY)).toBe(false);
+  });
+});
+
+describe('stripIssueTitlePriorityPrefix', () => {
+  it('removes leading priority tokens without touching normal titles', () => {
+    expect(stripIssueTitlePriorityPrefix('P3: ShipCode cloud test runner')).toBe(
+      'ShipCode cloud test runner',
+    );
+    expect(stripIssueTitlePriorityPrefix('[P1] Fix approval routing')).toBe('Fix approval routing');
+    expect(stripIssueTitlePriorityPrefix('P2 - Add board sync')).toBe('Add board sync');
+    expect(stripIssueTitlePriorityPrefix('Ship P3 metadata')).toBe('Ship P3 metadata');
   });
 });

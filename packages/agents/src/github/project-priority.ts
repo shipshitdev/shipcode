@@ -42,6 +42,7 @@ interface ProjectItemNode {
   content?: {
     __typename?: string;
     number?: number;
+    issueType?: { name?: string | null } | null;
     repository?: { nameWithOwner?: string };
   };
   fieldValues?: { nodes?: FieldValueNode[] };
@@ -95,6 +96,7 @@ const ORG_QUERY = `
               __typename
               ... on Issue {
                 number
+                issueType { name }
                 repository { nameWithOwner }
               }
             }
@@ -126,6 +128,7 @@ const USER_QUERY = `
               __typename
               ... on Issue {
                 number
+                issueType { name }
                 repository { nameWithOwner }
               }
             }
@@ -157,6 +160,7 @@ function isMissingScopeError(message: string): boolean {
  */
 export interface FetchProjectPrioritiesResult {
   priorities: Map<number, IssuePriority>;
+  issueTypes: Map<number, string | null>;
   /** Issue numbers that are archived on the GitHub Project board. */
   archivedIssueNumbers: Set<number>;
 }
@@ -165,11 +169,12 @@ export async function fetchProjectPriorities(
   opts: FetchProjectPrioritiesOptions,
 ): Promise<FetchProjectPrioritiesResult> {
   const result = new Map<number, IssuePriority>();
+  const issueTypes = new Map<number, string | null>();
   const archivedIssueNumbers = new Set<number>();
   const parsed = parseGithubProjectUrl(opts.projectUrl);
   if (!parsed) {
     opts.onWarn?.(`[project-priority] unparseable project URL: ${opts.projectUrl}`);
-    return { priorities: result, archivedIssueNumbers };
+    return { priorities: result, issueTypes, archivedIssueNumbers };
   }
   const { ownerType, owner, number } = parsed;
   const isOrg = ownerType === 'orgs';
@@ -214,7 +219,7 @@ export async function fetchProjectPriorities(
       } else {
         opts.onWarn?.('[project-priority] gh api graphql failed', err);
       }
-      return { priorities: result, archivedIssueNumbers };
+      return { priorities: result, issueTypes, archivedIssueNumbers };
     }
 
     let parsedJson: ProjectV2Response;
@@ -222,13 +227,13 @@ export async function fetchProjectPriorities(
       parsedJson = JSON.parse(stdout) as ProjectV2Response;
     } catch (err) {
       opts.onWarn?.('[project-priority] failed to parse GraphQL response', err);
-      return { priorities: result, archivedIssueNumbers };
+      return { priorities: result, issueTypes, archivedIssueNumbers };
     }
 
     if (parsedJson.errors && parsedJson.errors.length > 0) {
       const messages = parsedJson.errors.map((e) => e.message ?? '<unknown>').join('; ');
       opts.onWarn?.(`[project-priority] GraphQL errors: ${messages}`);
-      return { priorities: result, archivedIssueNumbers };
+      return { priorities: result, issueTypes, archivedIssueNumbers };
     }
 
     const project = isOrg
@@ -236,7 +241,7 @@ export async function fetchProjectPriorities(
       : parsedJson.data?.user?.projectV2;
     if (!project) {
       // Project itself missing or inaccessible — bail with whatever we collected.
-      return { priorities: result, archivedIssueNumbers };
+      return { priorities: result, issueTypes, archivedIssueNumbers };
     }
 
     const items = project.items?.nodes ?? [];
@@ -252,6 +257,7 @@ export async function fetchProjectPriorities(
         archivedIssueNumbers.add(issueNumber);
         continue;
       }
+      issueTypes.set(issueNumber, item.content?.issueType?.name ?? null);
 
       let priorityName: string | null = null;
       const values = item.fieldValues?.nodes ?? [];
@@ -269,11 +275,11 @@ export async function fetchProjectPriorities(
     }
 
     const pageInfo = project.items?.pageInfo;
-    if (!pageInfo?.hasNextPage) return { priorities: result, archivedIssueNumbers };
+    if (!pageInfo?.hasNextPage) return { priorities: result, issueTypes, archivedIssueNumbers };
     cursor = pageInfo.endCursor ?? null;
-    if (!cursor) return { priorities: result, archivedIssueNumbers };
+    if (!cursor) return { priorities: result, issueTypes, archivedIssueNumbers };
   }
 
   opts.onWarn?.(`[project-priority] hit page cap of ${maxPages}; truncating priority sync`);
-  return { priorities: result, archivedIssueNumbers };
+  return { priorities: result, issueTypes, archivedIssueNumbers };
 }

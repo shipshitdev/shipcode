@@ -54,6 +54,8 @@ import {
   migrateV51,
   migrateV52,
   migrateV53,
+  migrateV54,
+  migrateV55,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -145,6 +147,8 @@ const migrations = [
   migrateV51,
   migrateV52,
   migrateV53,
+  migrateV54,
+  migrateV55,
 ] as const;
 
 function migrateThrough(db: DatabaseSync, target: (db: DatabaseSync) => void): void {

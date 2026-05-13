@@ -35,6 +35,7 @@ import {
   resolveRequireApprovalForIssue,
   resolveRevisionCount,
   resolveRevisionCountForIssue,
+  stripIssueTitlePriorityPrefix,
 } from '@shipcode/shared';
 import { isAutomationIssue, PhaseChip, resolveIssuePriorityBadge } from '@shipcode/ui';
 import {
@@ -1361,17 +1362,10 @@ function useIssueDetailView() {
     </div>
   );
   const issuePriorityBadge = resolveIssuePriorityBadge(activeIssue);
+  const displayIssueTitle = stripIssueTitlePriorityPrefix(activeIssue.title);
+  const issueType = activeIssue.issueType?.trim() || null;
   const issueBadges = (
     <div className="flex flex-wrap gap-1.5">
-      {issuePriorityBadge ? (
-        <Badge
-          variant={issuePriorityBadge.variant}
-          className="text-[11px] font-semibold uppercase tracking-wide"
-          title={issuePriorityBadge.title}
-        >
-          {issuePriorityBadge.label}
-        </Badge>
-      ) : null}
       {activeIssue.assignee && (
         <Badge variant="default" className="text-[11px]">
           {activeIssue.assignee}
@@ -1406,6 +1400,44 @@ function useIssueDetailView() {
   );
   const hasPrFeedbackBlockers =
     activeIssue.ciBlocked || activeIssue.unresolvedReviewCommentCount > 0;
+  const issueMetadataRows = [
+    {
+      label: 'Type',
+      value: issueType,
+      missing: 'No type',
+    },
+    {
+      label: 'Priority',
+      value: issuePriorityBadge?.label ?? activeIssue.priorityRaw ?? null,
+      missing: 'No priority',
+    },
+  ];
+  const issueMetadataSection = !activeIssue.isQuickMode ? (
+    <section className="space-y-2 border-b border-border pb-4">
+      <h2 className="text-xs font-semibold text-secondary">Issue</h2>
+      <dl className="space-y-2">
+        {issueMetadataRows.map((row) => (
+          <div key={row.label} className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-3">
+            <dt className="text-xs text-muted-foreground">{row.label}</dt>
+            <dd className="min-w-0">
+              {row.value ? (
+                <Badge
+                  variant={
+                    row.label === 'Priority' ? (issuePriorityBadge?.variant ?? 'info') : 'default'
+                  }
+                  className="text-[11px]"
+                >
+                  {row.value}
+                </Badge>
+              ) : (
+                <span className="text-xs text-muted-foreground">{row.missing}</span>
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  ) : null;
   const fullScreenPlan = resolvedPlanHistory.find((plan) => plan.id === fullScreenPlanId) ?? null;
   const fullScreenReview = fullScreenPlan
     ? normalizedReviewsByPlanId[fullScreenPlan.id]
@@ -1588,7 +1620,7 @@ function useIssueDetailView() {
         {headerButtons}
         {/* Title + status badge */}
         <div className="flex flex-wrap items-baseline gap-2 pl-10">
-          <h1 className="text-xl font-semibold leading-snug">{activeIssue.title}</h1>
+          <h1 className="text-xl font-semibold leading-snug">{displayIssueTitle}</h1>
           {issueStatusBadge}
         </div>
         {/* Metadata: #num · state · branch · PR */}
@@ -1622,6 +1654,7 @@ function useIssueDetailView() {
           />
           <div className="space-y-6 px-4 pt-2 pb-4">
             {/* Details */}
+            {issueMetadataSection}
             {issueBadges && <div>{issueBadges}</div>}
             {/* Pipeline */}
             <PipelineTab
