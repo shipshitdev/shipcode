@@ -31,6 +31,9 @@ interface GitHubIssueCacheRow {
   thread_id: string | null;
   claimed_at: string | null;
   claimed_by: string | null;
+  execution_run_id: string | null;
+  execution_locked_at: string | null;
+  execution_lock_owner: string | null;
   last_phase_update: string | null;
   last_status_label: string | null;
   planner_model_override: ExecutorModel | null;
@@ -113,6 +116,9 @@ export class GitHubIssueQueries {
       | 'threadId'
       | 'claimedAt'
       | 'claimedBy'
+      | 'executionRunId'
+      | 'executionLockedAt'
+      | 'executionLockOwner'
       | 'lastPhaseUpdate'
       | 'lastStatusLabel'
       | 'plannerModelOverride'
@@ -776,6 +782,9 @@ export class GitHubIssueQueries {
       threadId: row.thread_id,
       claimedAt: toIsoUtc(row.claimed_at),
       claimedBy: row.claimed_by,
+      executionRunId: row.execution_run_id,
+      executionLockedAt: toIsoUtc(row.execution_locked_at),
+      executionLockOwner: row.execution_lock_owner,
       lastPhaseUpdate: toIsoUtc(row.last_phase_update),
       lastStatusLabel: row.last_status_label ?? null,
       plannerModelOverride:
