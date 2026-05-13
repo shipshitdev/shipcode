@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { RuntimeQaServerConfig } from '@shipcode/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineContext } from '../types';
 import {
@@ -169,6 +170,16 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
   } as PipelineContext;
 }
 
+function runtimeQaServer(overrides: Partial<RuntimeQaServerConfig> = {}): RuntimeQaServerConfig {
+  return {
+    command: 'bun dev',
+    readinessUrl: 'http://localhost:3000',
+    startupTimeoutMs: 60_000,
+    portEnvVar: 'PORT',
+    ...overrides,
+  };
+}
+
 function makeExecutionHarness(context = makeContext()) {
   const activePipelines = new Map([[context.threadId, context]]);
   const emit = vi.fn();
@@ -257,13 +268,6 @@ function tempDir(name: string) {
   tempDirs.push(dir);
   return dir;
 }
-
-const runtimeQaServer = {
-  command: 'bun dev',
-  readinessUrl: 'http://localhost:3000',
-  portEnvVar: 'PORT',
-  startupTimeoutMs: 100,
-};
 
 const verificationPassed = [
   '```shipcode-verify',
@@ -1518,7 +1522,7 @@ describe('execution phase handlers', () => {
           setupBeforeVerify: false,
           testingContext: null,
           runtimeQa: {
-            server: runtimeQaServer,
+            server: runtimeQaServer(),
             testCommands: ['runtime-pass'],
             discoverAgentTests: false,
           },
@@ -1565,7 +1569,7 @@ describe('execution phase handlers', () => {
           setupBeforeVerify: false,
           testingContext: null,
           runtimeQa: {
-            server: runtimeQaServer,
+            server: runtimeQaServer(),
             testCommands: ['runtime-pass'],
             discoverAgentTests: false,
           },
@@ -1607,7 +1611,7 @@ describe('execution phase handlers', () => {
           setupBeforeVerify: false,
           testingContext: null,
           runtimeQa: {
-            server: runtimeQaServer,
+            server: runtimeQaServer(),
             testCommands: ['runtime-pass'],
             discoverAgentTests: false,
           },
@@ -1646,7 +1650,7 @@ describe('execution phase handlers', () => {
           setupBeforeVerify: false,
           testingContext: null,
           runtimeQa: {
-            server: runtimeQaServer,
+            server: runtimeQaServer(),
             testCommands: ['runtime-pass'],
             discoverAgentTests: false,
           },
@@ -1688,7 +1692,7 @@ describe('execution phase handlers', () => {
           setupBeforeVerify: false,
           testingContext: null,
           runtimeQa: {
-            server: runtimeQaServer,
+            server: runtimeQaServer(),
             testCommands: ['runtime-pass'],
             discoverAgentTests: false,
           },
@@ -1796,7 +1800,7 @@ describe('execution phase handlers', () => {
     const oldTimerCallback = vi.fn();
     const context = makeContext({
       verificationRetries: 0,
-      retryTimer: setTimeout(oldTimerCallback, 1) as unknown as ReturnType<typeof setTimeout>,
+      retryTimer: setTimeout(oldTimerCallback, 1) as unknown as PipelineContext['retryTimer'],
     });
     const harness = makeExecutionHarness(context);
     vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({

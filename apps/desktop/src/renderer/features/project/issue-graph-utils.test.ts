@@ -1,4 +1,5 @@
 import type { ProjectIssueGraph } from '@shipcode/shared';
+import { ISSUE_PIPELINE_STATUS } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
 import { buildIssueFlowGraph, formatPreviewGroups } from './issue-graph-utils';
 
@@ -150,13 +151,13 @@ describe('buildIssueFlowGraph', () => {
   });
 
   it('wraps oversized connected reference graphs instead of shrinking every node', () => {
-    const nodes = Array.from({ length: 8 }, (_, index) => ({
+    const nodes: ProjectIssueGraph['nodes'] = Array.from({ length: 8 }, (_, index) => ({
       issueId: `issue-${index + 1}`,
       projectId: 'project-1',
       issueNumber: index + 1,
       title: `Issue ${index + 1}`,
       state: 'open',
-      pipelineStatus: 'todo',
+      pipelineStatus: ISSUE_PIPELINE_STATUS.todo,
       threadId: null,
     }));
     const flowGraph = buildIssueFlowGraph({

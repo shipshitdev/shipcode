@@ -376,7 +376,7 @@ describe('PipelineScheduler', () => {
       queries.githubIssues.getByNumber.mockReturnValue(
         makeIssue({ body: null, threadId: 'thread-reusable' }),
       );
-      queries.threads.getById.mockReturnValue(reusableThread);
+      queries.threads.getById.mockReturnValue(reusableThread as never);
 
       const result = await scheduler.startOrQueue('project-1', 42);
 
@@ -399,7 +399,7 @@ describe('PipelineScheduler', () => {
         status: 'failed',
         worktreePath: '/tmp/old-worktree',
         worktreeBranch: 'shipcode/thread-old-failed',
-      });
+      } as never);
 
       const result = await scheduler.startOrQueue('project-1', 42);
 

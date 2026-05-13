@@ -242,6 +242,7 @@ describe('registerGitHubHandlers', () => {
     fetchProjectPrioritiesMock.mockReset();
     fetchProjectPrioritiesMock.mockResolvedValue({
       priorities: new Map(),
+      issueTypes: new Map(),
       archivedIssueNumbers: new Set(),
     });
     fetchProjectStatusesMock.mockReset();
@@ -298,6 +299,7 @@ describe('registerGitHubHandlers', () => {
       linkThread: vi.fn(),
       clearThread: vi.fn(),
       list: vi.fn(() => listResult),
+      setIssueType: vi.fn(),
       reconcileCompletedFromEvidence: vi.fn(),
       resetStaleApproval: vi.fn(() => 0),
       markTriageRulesApplied: vi.fn(),
@@ -403,6 +405,7 @@ describe('registerGitHubHandlers', () => {
     ]);
     fetchProjectPrioritiesMock.mockResolvedValue({
       priorities: new Map([[42, { rank: 'p1', raw: 'P1' }]]),
+      issueTypes: new Map(),
       archivedIssueNumbers: new Set([43]),
     });
     fetchProjectStatusesMock.mockResolvedValue(new Map([[42, { raw: 'In Progress' }]]));
@@ -424,6 +427,7 @@ describe('registerGitHubHandlers', () => {
           updateState: vi.fn(),
           clearArchivedAt: vi.fn(),
           setPriority: vi.fn(),
+          setIssueType: vi.fn(),
           archiveIssues: vi.fn(),
           resetStaleApproval: vi.fn(() => 1),
         },
@@ -839,6 +843,7 @@ describe('registerGitHubHandlers', () => {
           updateState: vi.fn(),
           clearArchivedAt: vi.fn(),
           setPriority: vi.fn(),
+          setIssueType: vi.fn(),
           archiveIssues: vi.fn(),
           resetStaleApproval: vi.fn(() => 0),
           updatePipelineStatus: vi.fn(),
@@ -1036,6 +1041,7 @@ describe('registerGitHubHandlers', () => {
       onWarn?.('priority warning', new Error('priority warning'));
       return {
         priorities: new Map(),
+        issueTypes: new Map(),
         archivedIssueNumbers: new Set(),
       };
     });
@@ -1069,6 +1075,7 @@ describe('registerGitHubHandlers', () => {
           updateState: vi.fn(),
           clearArchivedAt: vi.fn(),
           setPriority: vi.fn(),
+          setIssueType: vi.fn(),
           resetStaleApproval: vi.fn(() => 0),
         },
         [issue],
@@ -3119,6 +3126,7 @@ describe('registerGitHubHandlers', () => {
       .mockResolvedValueOnce({ alreadyPresent: true });
     fetchProjectPrioritiesMock.mockResolvedValue({
       priorities: new Map([[43, { rank: 'p2', raw: 'P2' }]]),
+      issueTypes: new Map(),
       archivedIssueNumbers: new Set(),
     });
     const queries = {
@@ -3191,6 +3199,7 @@ describe('registerGitHubHandlers', () => {
       githubIssues: {
         list: vi.fn(() => [issue]),
         setPriority: vi.fn(),
+        setIssueType: vi.fn(),
       },
     };
 
@@ -3232,6 +3241,7 @@ describe('registerGitHubHandlers', () => {
       githubIssues: {
         list: vi.fn(() => []),
         setPriority: vi.fn(),
+        setIssueType: vi.fn(),
       },
     };
 
@@ -3272,6 +3282,7 @@ describe('registerGitHubHandlers', () => {
       onWarn?.('priority warning', new Error('priority warning'));
       return {
         priorities: new Map([[42, { rank: 'p1', raw: 'P1' }]]),
+        issueTypes: new Map(),
         archivedIssueNumbers: new Set(),
       };
     });
@@ -3283,6 +3294,7 @@ describe('registerGitHubHandlers', () => {
       githubIssues: {
         list: vi.fn(() => [issue]),
         setPriority: vi.fn(),
+        setIssueType: vi.fn(),
       },
     };
 
@@ -3330,6 +3342,7 @@ describe('registerGitHubHandlers', () => {
       githubIssues: {
         list: vi.fn(() => [issue]),
         setPriority: vi.fn(),
+        setIssueType: vi.fn(),
       },
     };
 
@@ -4865,6 +4878,7 @@ describe('registerGitHubHandlers', () => {
           updateState: vi.fn(),
           clearArchivedAt: vi.fn(),
           setPriority: vi.fn(),
+          setIssueType: vi.fn(),
         }),
         issueEdges: {
           replaceBodyEdges: vi.fn(),
@@ -4880,6 +4894,7 @@ describe('registerGitHubHandlers', () => {
       const queries = buildQueries(projectWithBoard);
       fetchProjectPrioritiesMock.mockResolvedValue({
         priorities: new Map([[42, { rank: 'p0' as const, raw: 'P0' }]]),
+        issueTypes: new Map(),
         archivedIssueNumbers: new Set(),
       });
       listAllIssuesMock.mockResolvedValue([]);
@@ -4968,6 +4983,7 @@ describe('registerGitHubHandlers', () => {
       // Empty priority map — the issue is on the project but has no Priority field set.
       fetchProjectPrioritiesMock.mockResolvedValue({
         priorities: new Map(),
+        issueTypes: new Map(),
         archivedIssueNumbers: new Set(),
       });
       listAllIssuesMock.mockResolvedValue([]);
