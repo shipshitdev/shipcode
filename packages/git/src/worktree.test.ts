@@ -1,3 +1,5 @@
+import os from 'node:os';
+import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const gitMock = {
@@ -16,6 +18,11 @@ vi.mock('simple-git', () => ({
 import { WorktreeManager } from './worktree';
 
 describe('WorktreeManager', () => {
+  const defaultUntitledIssueWorktreePath = path.join(
+    os.homedir(),
+    '.shipcode/worktrees/project-9a1fd1/42',
+  );
+
   beforeEach(() => {
     Object.values(gitMock).forEach((mock) => {
       mock.mockReset();
@@ -59,9 +66,7 @@ describe('WorktreeManager', () => {
     const manager = new WorktreeManager('/repo/project');
 
     expect(manager.getBranchName(42, undefined as never)).toBe('ship/42');
-    expect(manager.getWorktreePath(42, undefined as never)).toBe(
-      '/Users/decod3rs/.shipcode/worktrees/project-9a1fd1/42',
-    );
+    expect(manager.getWorktreePath(42, undefined as never)).toBe(defaultUntitledIssueWorktreePath);
   });
 
   it('parses git worktree list output and keeps only ShipCode-managed branches', async () => {
@@ -133,7 +138,7 @@ branch refs/heads/feature/not-ours
     const manager = new WorktreeManager('/repo/project');
 
     await expect(manager.create(42, undefined as never, 'main')).resolves.toEqual({
-      worktreePath: '/Users/decod3rs/.shipcode/worktrees/project-9a1fd1/42',
+      worktreePath: defaultUntitledIssueWorktreePath,
       branch: 'ship/42',
     });
   });
