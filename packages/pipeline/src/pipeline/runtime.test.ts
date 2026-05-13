@@ -1220,6 +1220,36 @@ describe('createPipelineRuntime', () => {
     );
   });
 
+  it('records non-Error prompt telemetry failures as nonfatal diagnostics', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan']),
+      generate: vi.fn(async () => ({
+        rawOutput: 'done',
+        exitCode: 0,
+      })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    deps.promptTelemetry = {
+      create: vi.fn(() => {
+        throw 'telemetry string failure';
+      }),
+    } as never;
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+
+    await expect(runtime.runProviderPhase(context, 'plan', 'prompt', [], {})).resolves.toEqual(
+      expect.objectContaining({ rawOutput: 'done', exitCode: 0 }),
+    );
+
+    expect(context.promptTelemetryDiagnostics).toContainEqual({
+      phase: 'plan',
+      message: 'telemetry string failure',
+      nonFatal: true,
+    });
+  });
+
   it('keeps provider exception handling nonfatal when error logging fails', async () => {
     const provider: AgentProvider = {
       id: 'claude-cli',

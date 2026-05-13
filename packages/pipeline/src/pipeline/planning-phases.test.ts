@@ -1,3 +1,7 @@
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { StreamParser } from '@shipcode/agents/source';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineContext } from '../types';
 import {
@@ -48,6 +52,26 @@ const plan = {
 };
 
 const planBlock = ['```shipcode-plan', JSON.stringify(plan, null, 2), '```'].join('\n');
+
+function reviewBlock(review: unknown) {
+  return ['```shipcode-review', JSON.stringify(review), '```'].join('\n');
+}
+
+const requestChangesReview = {
+  planId: 'plan-record-1',
+  decision: 'request_changes',
+  confidence: 'high',
+  summary: 'Needs work',
+  findings: [
+    {
+      id: 'finding-1',
+      severity: 'minor',
+      category: 'correctness',
+      description: 'Missing test',
+    },
+  ],
+  suggestedChanges: ['Add the test'],
+};
 
 function makePlanningContext(overrides: Partial<PipelineContext> = {}): PipelineContext {
   return {
@@ -206,9 +230,21 @@ function makePlanningHarness(context = makePlanningContext()) {
   return { activePipelines, context, deps, handlers, runtime };
 }
 
+const tempDirs: string[] = [];
+
+function tempDir(name: string) {
+  const dir = path.join(os.tmpdir(), `shipcode-planning-${name}-${Date.now()}-${Math.random()}`);
+  mkdirSync(dir, { recursive: true });
+  tempDirs.push(dir);
+  return dir;
+}
+
 describe('planning phase helpers', () => {
   beforeEach(() => {
     vi.useRealTimers();
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('clears retry timers when present and no-ops without one', () => {
@@ -342,6 +378,43 @@ describe('planning phase helpers', () => {
     expect(harness.activePipelines.has('thread-1')).toBe(false);
   });
 
+  it('formats non-Error setup and workflow planning failures', async () => {
+    const setup = makePlanningHarness();
+    vi.mocked(setup.runtime.ensureRepoSetupContract).mockImplementation(() => {
+      throw 'bad setup string';
+    });
+
+    await setup.handlers.startPlanGeneration('thread-1', 'do stuff', process.cwd(), null);
+
+    expect(setup.runtime.emitPhase).toHaveBeenCalledWith('thread-1', 'failed', 'bad setup string');
+
+    const workflow = makePlanningHarness(
+      makePlanningContext({
+        workflowPolicy: {
+          path: '/repo/WORKFLOW.md',
+          config: {},
+          promptTemplate: { plan: '{{ missing' },
+          continuationPromptTemplate: null,
+          agent: {
+            maxConcurrentAgents: 1,
+            maxRetryBackoffMs: 1000,
+            maxConcurrentAgentsByState: {},
+            maxTurns: 5,
+          },
+          warning: null,
+        },
+      } as never),
+    );
+
+    await workflow.handlers.startPlanGeneration('thread-1', 'do stuff', process.cwd(), null);
+
+    expect(workflow.runtime.emitPhase).toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      expect.stringContaining('WORKFLOW.md template render error:'),
+    );
+  });
+
   it('formats plan CLI missing failures for OpenRouter providers', async () => {
     const context = makePlanningContext({ plannerModel: 'openrouter' });
     const harness = makePlanningHarness(context);
@@ -360,6 +433,31 @@ describe('planning phase helpers', () => {
       'Provider not found (exit 127). Is the openrouter binary installed and on PATH?',
     );
     expect(harness.activePipelines.has('thread-1')).toBe(false);
+  });
+
+  it('loads structured repo memory into planning prompts before falling back', async () => {
+    const projectPath = tempDir('repo-memory');
+    mkdirSync(path.join(projectPath, '.agents', 'memory'), { recursive: true });
+    writeFileSync(path.join(projectPath, '.agents', 'memory', 'goal.md'), 'Repo memory note');
+    const context = makePlanningContext({
+      projectPath,
+      worktreePath: projectPath,
+      repoPromptMaterials: null,
+    });
+    const harness = makePlanningHarness(context);
+
+    await harness.handlers.startPlanGeneration('thread-1', 'do stuff', projectPath, projectPath);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(context.repoContext).toContain('Repo memory note');
+    expect(harness.runtime.runProviderPhase).toHaveBeenCalledWith(
+      context,
+      'plan',
+      expect.any(String),
+      expect.arrayContaining([expect.objectContaining({ label: '.agents/memory/goal.md' })]),
+      expect.any(Object),
+    );
   });
 
   it('accepts provider-supplied clarification requests on failed planning output', async () => {
@@ -396,5 +494,161 @@ describe('planning phase helpers', () => {
 
     expect(harness.runtime.emitPhase).toHaveBeenCalledWith('thread-1', 'failed', 'schema broke');
     expect(harness.activePipelines.has('thread-1')).toBe(false);
+  });
+
+  it('formats fallback CLI parse failures after planning retry budget is exhausted', async () => {
+    const context = makePlanningContext({ retryCount: 999 });
+    const harness = makePlanningHarness(context);
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: '{"type":"event"}\nplain failure',
+      exitCode: 1,
+    });
+
+    await harness.handlers.startPlanGeneration('thread-1', 'do stuff', process.cwd(), null);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(harness.runtime.emitPhase).toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      'Plan generation failed — no structured plan was produced.',
+    );
+  });
+
+  it('routes review CLI missing failures and request-changes revisions', async () => {
+    const context = makePlanningContext({ reviewerModel: 'openrouter' });
+    const missing = makePlanningHarness(context);
+    vi.mocked(missing.runtime.resolveAgentForPhase).mockReturnValue('openrouter');
+    vi.mocked(missing.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: '',
+      exitCode: 127,
+    });
+
+    await missing.handlers.startReview('thread-1', plan as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(missing.runtime.emitPhase).toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      'Provider not found (exit 127). Is the openrouter binary installed and on PATH?',
+    );
+
+    const revision = makePlanningHarness(makePlanningContext({ reviewRound: 0 }));
+    vi.mocked(revision.deps.settings.get).mockReturnValue({ revisionCount: 1 });
+    vi.mocked(revision.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: reviewBlock(requestChangesReview),
+      exitCode: 0,
+    });
+
+    await revision.handlers.startReview('thread-1', plan as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(revision.deps.threads.incrementReviewRound).toHaveBeenCalledWith('thread-1');
+    expect(revision.runtime.emitPhase).toHaveBeenCalledWith('thread-1', 'revising');
+    expect(revision.runtime.runProviderPhase).toHaveBeenCalledWith(
+      revision.context,
+      'revision',
+      expect.stringContaining('[minor] Missing test'),
+      expect.any(Array),
+      expect.any(Object),
+    );
+  });
+
+  it('fails review on parser-impossible decisions and ignores cancelled review errors', async () => {
+    const unexpected = makePlanningHarness();
+    const extractReview = vi.spyOn(StreamParser.prototype, 'extractReview').mockReturnValueOnce({
+      success: true,
+      raw: 'raw',
+      data: { ...requestChangesReview, decision: 'defer' } as never,
+    });
+    vi.mocked(unexpected.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: reviewBlock(requestChangesReview),
+      exitCode: 0,
+    });
+
+    await unexpected.handlers.startReview('thread-1', plan as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(unexpected.runtime.emitPhase).toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      'Review failed: reviewer returned an unexpected decision (defer).',
+    );
+    extractReview.mockRestore();
+
+    const reviewError = makePlanningHarness();
+    vi.mocked(reviewError.runtime.runProviderPhase).mockRejectedValue('review string failure');
+
+    await reviewError.handlers.startReview('thread-1', plan as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(reviewError.runtime.emitPhase).toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      'Review error: review string failure',
+    );
+
+    const cancelled = makePlanningHarness(makePlanningContext({ cancelled: true }));
+    vi.mocked(cancelled.runtime.runProviderPhase).mockRejectedValue(new Error('review crashed'));
+
+    await cancelled.handlers.startReview('thread-1', plan as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(cancelled.runtime.emitPhase).not.toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      expect.stringContaining('Review error'),
+    );
+  });
+
+  it('handles revision parse failures and cancelled revision exceptions', async () => {
+    const parseFailure = makePlanningHarness();
+    vi.mocked(parseFailure.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: 'no plan',
+      exitCode: 0,
+    });
+
+    await parseFailure.handlers.startRevision('thread-1', plan as never, 'fix it');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(parseFailure.deps.plans.supersedeAll).toHaveBeenCalledWith('thread-1');
+    expect(parseFailure.runtime.emitPhase).toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      'Revision output could not be parsed — revisor did not emit a shipcode-plan block.',
+    );
+
+    const revisionError = makePlanningHarness();
+    vi.mocked(revisionError.runtime.runProviderPhase).mockRejectedValue('revision string failure');
+
+    await revisionError.handlers.startRevision('thread-1', plan as never, 'fix it');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(revisionError.runtime.emitPhase).toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      'Revision error: revision string failure',
+    );
+
+    const cancelled = makePlanningHarness(makePlanningContext({ cancelled: true }));
+    vi.mocked(cancelled.runtime.runProviderPhase).mockRejectedValue('revision crashed');
+
+    await cancelled.handlers.startRevision('thread-1', plan as never, 'fix it');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(cancelled.deps.plans.supersedeAll).not.toHaveBeenCalled();
+    expect(cancelled.runtime.emitPhase).not.toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      expect.stringContaining('Revision error'),
+    );
   });
 });

@@ -1,5 +1,9 @@
+import { mkdirSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import type { RuntimeQaServerConfig } from '@shipcode/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PipelineContext } from '../types';
+import type { PipelineContext, PipelineDeps } from '../types';
 import {
   buildContinuationPrompt,
   buildTestFailureFingerprint,
@@ -13,13 +17,37 @@ import {
 } from './execution-phases';
 import type { PipelineContextHelpers, PipelinePhaseHandlers, PipelineRuntime } from './shared';
 
-const { mockExecFileSync } = vi.hoisted(() => ({ mockExecFileSync: vi.fn() }));
+const { mockExecFileSync, mockServerLifecycleStart, mockServerLifecycleStop, mockShellExecEnv } =
+  vi.hoisted(() => ({
+    mockExecFileSync: vi.fn(),
+    mockServerLifecycleStart: vi.fn(),
+    mockServerLifecycleStop: vi.fn(),
+    mockShellExecEnv: vi.fn(),
+  }));
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   return {
     ...actual,
     execFileSync: mockExecFileSync,
+  };
+});
+
+vi.mock('@shipcode/agents/source', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/agents/source')>();
+  return {
+    ...actual,
+    shellExecEnv: mockShellExecEnv,
+    ServerLifecycleManager: vi.fn(function ServerLifecycleManager(
+      _processManager: unknown,
+      onOutput: (message: string) => void,
+    ) {
+      onOutput('server boot\n');
+      return {
+        start: mockServerLifecycleStart,
+        stop: mockServerLifecycleStop,
+      };
+    }),
   };
 });
 
@@ -127,6 +155,28 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
   } as PipelineContext;
 }
 
+type ExecutionHarnessDeps = {
+  plans: { getLatest: ReturnType<typeof vi.fn> };
+  settings: { get: ReturnType<typeof vi.fn> };
+  emitter: { emit: ReturnType<typeof vi.fn> };
+  featureQaResults: {
+    insert: ReturnType<typeof vi.fn>;
+    listByThread: ReturnType<typeof vi.fn>;
+  };
+  projectFailures: unknown;
+  cpuTaskGate: PipelineDeps['cpuTaskGate'];
+};
+
+function runtimeQaServer(overrides: Partial<RuntimeQaServerConfig> = {}): RuntimeQaServerConfig {
+  return {
+    command: 'bun dev',
+    readinessUrl: 'http://localhost:3000',
+    startupTimeoutMs: 60_000,
+    portEnvVar: 'PORT',
+    ...overrides,
+  };
+}
+
 function makeExecutionHarness(context = makeContext()) {
   const activePipelines = new Map([[context.threadId, context]]);
   const emit = vi.fn();
@@ -162,12 +212,7 @@ function makeExecutionHarness(context = makeContext()) {
     },
     projectFailures: null,
     cpuTaskGate: undefined,
-  } as unknown as {
-    plans: { getLatest: ReturnType<typeof vi.fn> };
-    settings: { get: ReturnType<typeof vi.fn> };
-    emitter: { emit: ReturnType<typeof vi.fn> };
-    projectFailures: unknown;
-  };
+  } as unknown as ExecutionHarnessDeps;
   const contextHelpers = {
     activePipelines,
     listActive: vi.fn(() => []),
@@ -182,6 +227,7 @@ function makeExecutionHarness(context = makeContext()) {
       emit({ type: 'pipeline:phase', threadId, phase, error });
     }),
     emitTerminalLifecycle: vi.fn(),
+    emitTerminalRaw: vi.fn(),
     ensureRepoSetupContract: vi.fn(() => null),
     prepareWorktree: vi.fn(async () => ({ ok: true })),
     getVerifyCommands: vi.fn(() => []),
@@ -209,6 +255,15 @@ function makeExecutionHarness(context = makeContext()) {
   });
   Object.assign(handlers, phaseHandlers);
   return { activePipelines, context, contextHelpers, deps, handlers, runtime };
+}
+
+const tempDirs: string[] = [];
+
+function tempDir(name: string) {
+  const dir = path.join(os.tmpdir(), `shipcode-execution-${name}-${Date.now()}-${Math.random()}`);
+  mkdirSync(dir, { recursive: true });
+  tempDirs.push(dir);
+  return dir;
 }
 
 const verificationPassed = [
@@ -501,12 +556,19 @@ describe('execution phase handlers', () => {
   beforeEach(() => {
     vi.useRealTimers();
     mockExecFileSync.mockReset();
+    mockServerLifecycleStart.mockReset();
+    mockServerLifecycleStop.mockReset();
+    mockShellExecEnv.mockReset();
+    mockShellExecEnv.mockImplementation(() => ({ ...process.env, PATH: process.env.PATH ?? '' }));
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
       if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'rev-parse') return 'head-sha\n';
       if (args[0] === 'status') return ' M src/a.ts\n';
       return '';
     });
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('queues testing when CPU slots are busy and cancellation suppresses the retry callback', async () => {
@@ -535,6 +597,36 @@ describe('execution phase handlers', () => {
     await vi.runOnlyPendingTimersAsync();
 
     expect(harness.runtime.emitPhase).not.toHaveBeenCalledWith('thread-1', 'testing');
+  });
+
+  it('queues testing on CPU gate pressure without repeating recent queue notices', async () => {
+    vi.useFakeTimers();
+    const context = makeContext({
+      cpuQueueLastNotifiedAt: Date.now(),
+    });
+    const harness = makeExecutionHarness(context);
+    const gateCheck = vi
+      .fn()
+      .mockReturnValueOnce({ allowed: false })
+      .mockReturnValue({ allowed: true });
+    harness.deps.cpuTaskGate = {
+      canStartCpuTask: gateCheck,
+      retryDelayMs: 123,
+    } as never;
+    vi.mocked(harness.runtime.getVerifyCommands).mockReturnValue(['bun test']);
+
+    await harness.handlers.startTesting('thread-1');
+
+    expect(context.retryTimer).not.toBeNull();
+    expect(harness.runtime.emitTerminalLifecycle).not.toHaveBeenCalledWith(
+      'thread-1',
+      expect.stringContaining('[cpu-queue]'),
+    );
+
+    await vi.advanceTimersByTimeAsync(123);
+
+    expect(gateCheck).toHaveBeenCalledTimes(2);
+    expect(harness.runtime.emitPhase).toHaveBeenCalledWith('thread-1', 'testing');
   });
 
   it('routes selector-readiness feature QA failures through coordinated test-fix retry', async () => {
@@ -582,6 +674,56 @@ describe('execution phase handlers', () => {
     expect(context.retryTimer).not.toBeNull();
   });
 
+  it('drops a scheduled test-fix retry when the context disappears before callback entry', async () => {
+    vi.useFakeTimers();
+    const context = makeContext({
+      featureQaState: {
+        featureId: 'feature-1',
+        routes: ['/dashboard'],
+        criticalFlows: [],
+        expectedStates: [],
+        testDataAssumptions: [],
+        selectorReadiness: 'missing',
+        visualAssertions: [
+          {
+            name: 'Create button',
+            route: '/dashboard',
+            targetSelector: 'data-testid=create-button',
+            assertion: 'visible',
+          },
+        ],
+      },
+    });
+    const harness = makeExecutionHarness(context);
+    vi.mocked(harness.runtime.ensureRepoSetupContract).mockImplementation(() => {
+      context.repoSetupContract = {
+        path: '/repo/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: { testCommands: [], discoverAgentTests: false },
+        },
+      };
+      return context.repoSetupContract;
+    });
+
+    await harness.handlers.startTesting('thread-1');
+    harness.activePipelines.get = vi.fn(() => undefined) as never;
+    harness.activePipelines.has = vi.fn(() => true) as never;
+
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(harness.runtime.emitPhase).not.toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      'Test fix cannot start: structured plan missing for this thread.',
+    );
+  });
+
   it('fails execution when the latest plan record is missing or stale', async () => {
     const missing = makeExecutionHarness();
     missing.deps.plans.getLatest.mockReturnValue(null);
@@ -610,6 +752,24 @@ describe('execution phase handlers', () => {
       'Refusing to execute: latest plan is rejected.',
     );
     expect(rejected.activePipelines.has('thread-1')).toBe(false);
+  });
+
+  it('fails execution when the latest plan has no structured output', async () => {
+    const harness = makeExecutionHarness();
+    harness.deps.plans.getLatest.mockReturnValue({
+      id: 'plan-record-1',
+      status: 'draft',
+      structured: null,
+    });
+
+    await harness.handlers.startExecution('thread-1', plan as never);
+
+    expect(harness.runtime.emitPhase).toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      'Refusing to execute: latest plan has no parsed structured output.',
+    );
+    expect(harness.activePipelines.has('thread-1')).toBe(false);
   });
 
   it('fails non-autonomous execution when the executor succeeds without git changes', async () => {
@@ -707,6 +867,28 @@ describe('execution phase handlers', () => {
     expect(prompt).toContain('- [major] src/a.ts: Bad file');
   });
 
+  it('loads repo prompt material content when execution context is initialized lazily', async () => {
+    const projectPath = tempDir('repo-memory');
+    mkdirSync(path.join(projectPath, '.agents', 'memory'), { recursive: true });
+    const memoryPath = path.join(projectPath, '.agents', 'memory', 'goal.md');
+    await import('node:fs').then(({ writeFileSync }) =>
+      writeFileSync(memoryPath, 'Execution note'),
+    );
+    const context = makeContext({
+      repoPromptMaterials: null,
+      projectPath,
+      worktreePath: projectPath,
+      autonomous: false,
+    });
+    const harness = makeExecutionHarness(context);
+
+    await harness.handlers.startExecution('thread-1', plan as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(context.repoContext).toContain('Execution note');
+  });
+
   it('retries a task graph node when scoped node verification cannot parse output', async () => {
     vi.useFakeTimers();
     const context = makeContext({ worktreePath: process.cwd() });
@@ -760,6 +942,313 @@ describe('execution phase handlers', () => {
       (harness.deps as never as { taskGraphs: { updateNodeStatus: ReturnType<typeof vi.fn> } })
         .taskGraphs.updateNodeStatus,
     ).toHaveBeenCalledWith('node-1', 'ready');
+  });
+
+  it('retries a task graph node when anchor capture or diff computation fails', async () => {
+    vi.useFakeTimers();
+    const context = makeContext({ worktreePath: process.cwd() });
+    const harness = makeExecutionHarness(context);
+    const node = {
+      id: 'node-1',
+      stableKey: 'step-1',
+      title: 'Node',
+      description: 'Do node',
+      status: 'ready',
+      githubIssueNumber: null,
+      order: 1,
+      files: [],
+      acceptanceCriteria: ['done'],
+      surfaces: [],
+      agentRole: 'backend',
+      suggestedReasoningEffort: 'medium',
+    };
+    const graph = {
+      id: 'graph-1',
+      mode: 'github-subissues',
+      status: 'active',
+      nodes: [node],
+      edges: [],
+    };
+    (harness.deps as never as { taskGraphs: unknown }).taskGraphs = {
+      getByPlanId: vi.fn(() => graph),
+      getNextReadyNode: vi.fn(() => node),
+      updateNodeStatus: vi.fn(),
+      markNodeCompletedAndPromote: vi.fn(() => graph),
+      markNodeFailed: vi.fn(() => graph),
+    } as never;
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: 'done',
+      exitCode: 0,
+    });
+    let headCalls = 0;
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
+      if (args[0] === 'rev-parse') {
+        headCalls++;
+        if (headCalls === 1) return 'head-sha\n';
+        throw new Error('no head');
+      }
+      return '';
+    });
+
+    await harness.handlers.startExecution('thread-1', plan as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(context.nodeVerificationRetries).toBe(1);
+    expect(harness.runtime.runProviderPhase).toHaveBeenCalledTimes(1);
+    expect(
+      (harness.deps as never as { taskGraphs: { updateNodeStatus: ReturnType<typeof vi.fn> } })
+        .taskGraphs.updateNodeStatus,
+    ).toHaveBeenCalledWith('node-1', 'ready');
+  });
+
+  it('retries a task graph node when diff computation throws after anchor capture', async () => {
+    vi.useFakeTimers();
+    const context = makeContext({ worktreePath: process.cwd() });
+    const harness = makeExecutionHarness(context);
+    const node = {
+      id: 'node-1',
+      stableKey: 'step-1',
+      title: 'Node',
+      description: 'Do node',
+      status: 'ready',
+      githubIssueNumber: null,
+      order: 1,
+      files: [],
+      acceptanceCriteria: ['done'],
+      surfaces: [],
+      agentRole: 'backend',
+      suggestedReasoningEffort: 'medium',
+    };
+    const graph = {
+      id: 'graph-1',
+      mode: 'github-subissues',
+      status: 'active',
+      nodes: [node],
+      edges: [],
+    };
+    (harness.deps as never as { taskGraphs: unknown }).taskGraphs = {
+      getByPlanId: vi.fn(() => graph),
+      getNextReadyNode: vi.fn(() => node),
+      updateNodeStatus: vi.fn(),
+      markNodeCompletedAndPromote: vi.fn(() => graph),
+      markNodeFailed: vi.fn(() => graph),
+    } as never;
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: 'done',
+      exitCode: 0,
+    });
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
+      if (args[0] === 'rev-parse') return 'head-sha\n';
+      if (args[0] === 'status') return '';
+      if (args[0] === 'diff') throw new Error('diff failed');
+      return '';
+    });
+
+    await harness.handlers.startExecution('thread-1', plan as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(context.nodeVerificationRetries).toBe(1);
+  });
+
+  it('fails scoped node verification when the active context disappears', async () => {
+    const context = makeContext({ worktreePath: process.cwd() });
+    const harness = makeExecutionHarness(context);
+    const node = {
+      id: 'node-1',
+      stableKey: 'step-1',
+      title: 'Node',
+      description: 'Do node',
+      status: 'ready',
+      githubIssueNumber: null,
+      order: 1,
+      files: [],
+      acceptanceCriteria: ['done'],
+      surfaces: [],
+      agentRole: 'backend',
+      suggestedReasoningEffort: 'medium',
+    };
+    const graph = {
+      id: 'graph-1',
+      mode: 'github-subissues',
+      status: 'active',
+      nodes: [node],
+      edges: [],
+    };
+    (harness.deps as never as { taskGraphs: unknown }).taskGraphs = {
+      getByPlanId: vi.fn(() => graph),
+      getNextReadyNode: vi.fn(() => node),
+      updateNodeStatus: vi.fn(),
+      markNodeCompletedAndPromote: vi.fn(() => graph),
+      markNodeFailed: vi.fn(() => graph),
+    } as never;
+    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async () => {
+      harness.activePipelines.delete('thread-1');
+      return { rawOutput: 'done', exitCode: 0 };
+    });
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
+      if (args[0] === 'rev-parse') return 'head-sha\n';
+      if (args[0] === 'status') return '';
+      if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
+      return '';
+    });
+
+    await harness.handlers.startExecution('thread-1', plan as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      (harness.deps as never as { taskGraphs: { markNodeFailed: ReturnType<typeof vi.fn> } })
+        .taskGraphs.markNodeFailed,
+    ).toHaveBeenCalledWith('node-1');
+  });
+
+  it('retries scoped node verification when the verifier throws', async () => {
+    const context = makeContext({ worktreePath: process.cwd() });
+    const harness = makeExecutionHarness(context);
+    const node = {
+      id: 'node-1',
+      stableKey: 'step-1',
+      title: 'Node',
+      description: 'Do node',
+      status: 'ready',
+      githubIssueNumber: null,
+      order: 1,
+      files: [],
+      acceptanceCriteria: ['done'],
+      surfaces: [],
+      agentRole: 'backend',
+      suggestedReasoningEffort: 'medium',
+    };
+    const graph = {
+      id: 'graph-1',
+      mode: 'github-subissues',
+      status: 'active',
+      nodes: [node],
+      edges: [],
+    };
+    (harness.deps as never as { taskGraphs: unknown }).taskGraphs = {
+      getByPlanId: vi.fn(() => graph),
+      getNextReadyNode: vi.fn(() => node),
+      updateNodeStatus: vi.fn(),
+      markNodeCompletedAndPromote: vi.fn(() => graph),
+      markNodeFailed: vi.fn(() => graph),
+    } as never;
+    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, phase) => {
+      if (phase === 'verify') throw new Error('verifier offline');
+      return { rawOutput: 'done', exitCode: 0 };
+    });
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
+      if (args[0] === 'rev-parse') return 'head-sha\n';
+      if (args[0] === 'status') return '';
+      if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
+      return '';
+    });
+
+    await harness.handlers.startExecution('thread-1', plan as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(context.nodeVerificationRetries).toBe(1);
+    expect(context.stabilizationFeedback).toContain('failed verification on attempt 1');
+  });
+
+  it('fails cancelled scoped node verification without scheduling another retry', async () => {
+    const context = makeContext({ worktreePath: process.cwd() });
+    const harness = makeExecutionHarness(context);
+    const node = {
+      id: 'node-1',
+      stableKey: 'step-1',
+      title: 'Node',
+      description: 'Do node',
+      status: 'ready',
+      githubIssueNumber: null,
+      order: 1,
+      files: [],
+      acceptanceCriteria: ['done'],
+      surfaces: [],
+      agentRole: 'backend',
+      suggestedReasoningEffort: 'medium',
+    };
+    const graph = {
+      id: 'graph-1',
+      mode: 'github-subissues',
+      status: 'active',
+      nodes: [node],
+      edges: [],
+    };
+    (harness.deps as never as { taskGraphs: unknown }).taskGraphs = {
+      getByPlanId: vi.fn(() => graph),
+      getNextReadyNode: vi.fn(() => node),
+      updateNodeStatus: vi.fn(),
+      markNodeCompletedAndPromote: vi.fn(() => graph),
+      markNodeFailed: vi.fn(() => graph),
+    } as never;
+    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, phase) => {
+      if (phase === 'verify') context.cancelled = true;
+      return { rawOutput: verificationFailed, exitCode: 0 };
+    });
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
+      if (args[0] === 'rev-parse') return 'anchor-sha\n';
+      if (args[0] === 'status') return '';
+      if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
+      return '';
+    });
+
+    await harness.handlers.startExecution('thread-1', plan as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      (harness.deps as never as { taskGraphs: { markNodeFailed: ReturnType<typeof vi.fn> } })
+        .taskGraphs.markNodeFailed,
+    ).toHaveBeenCalledWith('node-1');
+    expect(context.retryTimer).toBeNull();
+  });
+
+  it('continues from a completed task graph in autonomous mode', async () => {
+    const context = makeContext({ autonomous: true, worktreePath: process.cwd() });
+    const harness = makeExecutionHarness(context);
+    const graph = {
+      id: 'graph-1',
+      mode: 'github-subissues',
+      status: 'active',
+      nodes: [
+        {
+          id: 'node-1',
+          stableKey: 'step-1',
+          title: 'Done',
+          description: 'Done',
+          status: 'completed',
+          githubIssueNumber: null,
+          order: 1,
+          files: [],
+          acceptanceCriteria: [],
+          surfaces: [],
+          agentRole: 'backend',
+          suggestedReasoningEffort: 'medium',
+        },
+      ],
+      edges: [],
+    };
+    (harness.deps as never as { taskGraphs: unknown }).taskGraphs = {
+      getByPlanId: vi.fn(() => graph),
+      getNextReadyNode: vi.fn(() => null),
+      updateGraphStatus: vi.fn(() => ({ ...graph, status: 'completed' })),
+    } as never;
+
+    await harness.handlers.startExecution('thread-1', plan as never);
+
+    expect(harness.runtime.postTaskGraphComment).toHaveBeenCalledWith(
+      context,
+      expect.objectContaining({ status: 'completed' }),
+    );
   });
 
   it('completes a task graph node after scoped node verification passes', async () => {
@@ -920,7 +1409,7 @@ describe('execution phase handlers', () => {
     expect(unavailable.runtime.emitPhase).toHaveBeenCalledWith(
       'thread-1',
       'failed',
-      expect.stringContaining('Visual QA generation failed:'),
+      expect.stringContaining('Visual QA requires Playwright tooling.'),
     );
 
     process.env.PATH = originalPath;
@@ -970,6 +1459,301 @@ describe('execution phase handlers', () => {
     );
   });
 
+  it('fails visual QA with relative routes when no runtime server is configured', async () => {
+    const harness = makeExecutionHarness(
+      makeContext({
+        featureQaState: {
+          featureId: 'feature-1',
+          routes: ['/dashboard'],
+          criticalFlows: [],
+          expectedStates: [],
+          testDataAssumptions: [],
+          selectorReadiness: 'ready',
+          visualAssertions: [
+            {
+              name: 'Button',
+              route: '/dashboard',
+              targetSelector: '[data-testid="button"]',
+              assertion: 'visible',
+            },
+          ],
+        },
+      }),
+    );
+    vi.mocked(harness.runtime.ensureRepoSetupContract).mockImplementation(() => {
+      harness.context.repoSetupContract = {
+        path: '/repo/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+        },
+      };
+      return harness.context.repoSetupContract;
+    });
+
+    await harness.handlers.startTesting('thread-1');
+
+    expect(harness.runtime.emitPhase).toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      expect.stringContaining('runtimeQa.server'),
+    );
+  });
+
+  it('retries and then exhausts runtime QA server startup failures', async () => {
+    const context = makeContext({ testRetries: 0 });
+    const harness = makeExecutionHarness(context);
+    mockServerLifecycleStart.mockRejectedValueOnce(new Error('readiness timeout'));
+    vi.mocked(harness.runtime.ensureRepoSetupContract).mockImplementation(() => {
+      context.repoSetupContract = {
+        path: '/repo/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: {
+            server: runtimeQaServer(),
+            testCommands: ['runtime-pass'],
+            discoverAgentTests: false,
+          },
+        },
+      };
+      return context.repoSetupContract;
+    });
+
+    await harness.handlers.startTesting('thread-1');
+
+    expect(context.testRetries).toBe(1);
+    expect(context.testOutput).toContain('Server startup failed: readiness timeout');
+
+    context.testRetries = 3;
+    context.testOutput = null;
+    mockServerLifecycleStart.mockRejectedValueOnce('offline');
+
+    await harness.handlers.startTesting('thread-1');
+
+    expect(harness.runtime.emitPhase).toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      'Runtime QA server startup failed: offline',
+    );
+  });
+
+  it('passes runtime QA server env to commands and handles server crashes', async () => {
+    const context = makeContext({ worktreePath: tempDir('runtime-qa'), testRetries: 3 });
+    const harness = makeExecutionHarness(context);
+    mockServerLifecycleStart.mockResolvedValueOnce({
+      processId: 'proc-1',
+      baseUrl: 'http://127.0.0.1:4321',
+      port: 4321,
+      crashed: false,
+    });
+    vi.mocked(harness.runtime.ensureRepoSetupContract).mockImplementation(() => {
+      context.repoSetupContract = {
+        path: '/repo/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: {
+            server: runtimeQaServer(),
+            testCommands: ['runtime-pass'],
+            discoverAgentTests: false,
+          },
+        },
+      };
+      return context.repoSetupContract;
+    });
+    vi.mocked(harness.runtime.runShellCommand).mockResolvedValue({ exitCode: 0, output: 'ok' });
+
+    await harness.handlers.startTesting('thread-1');
+
+    expect(harness.runtime.runShellCommand).toHaveBeenCalledWith(
+      'thread-1',
+      context.worktreePath,
+      'runtime-pass',
+      context.abort.signal,
+      { extraEnv: { BASE_URL: 'http://127.0.0.1:4321', PORT: '4321' } },
+    );
+    expect(mockServerLifecycleStop).toHaveBeenCalledWith(
+      expect.objectContaining({ processId: 'proc-1' }),
+    );
+
+    mockServerLifecycleStart.mockResolvedValueOnce({
+      processId: 'proc-abort',
+      baseUrl: 'http://127.0.0.1:4323',
+      port: 4323,
+      crashed: false,
+    });
+    const abortContext = makeContext({ worktreePath: tempDir('runtime-abort'), testRetries: 3 });
+    const abortHarness = makeExecutionHarness(abortContext);
+    vi.mocked(abortHarness.runtime.ensureRepoSetupContract).mockImplementation(() => {
+      abortContext.repoSetupContract = {
+        path: '/repo/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: {
+            server: runtimeQaServer(),
+            testCommands: ['runtime-pass'],
+            discoverAgentTests: false,
+          },
+        },
+      };
+      return abortContext.repoSetupContract;
+    });
+    vi.mocked(abortHarness.runtime.runShellCommand).mockImplementation(async () => {
+      abortContext.abort.abort();
+      return { exitCode: 0, output: 'ok' };
+    });
+
+    await abortHarness.handlers.startTesting('thread-1');
+
+    expect(mockServerLifecycleStop).toHaveBeenCalledWith(
+      expect.objectContaining({ processId: 'proc-abort' }),
+    );
+
+    mockServerLifecycleStop.mockClear();
+    const crashedContext = makeContext({ worktreePath: tempDir('runtime-crash'), testRetries: 3 });
+    const crashed = makeExecutionHarness(crashedContext);
+    mockServerLifecycleStart.mockResolvedValueOnce({
+      processId: 'proc-2',
+      baseUrl: 'http://127.0.0.1:4322',
+      port: 4322,
+      crashed: true,
+    });
+    vi.mocked(crashed.runtime.ensureRepoSetupContract).mockImplementation(() => {
+      crashedContext.repoSetupContract = {
+        path: '/repo/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: {
+            server: runtimeQaServer(),
+            testCommands: ['runtime-pass'],
+            discoverAgentTests: false,
+          },
+        },
+      };
+      return crashedContext.repoSetupContract;
+    });
+
+    await crashed.handlers.startTesting('thread-1');
+
+    expect(crashed.runtime.emitPhase).toHaveBeenCalledWith(
+      'thread-1',
+      'failed',
+      '[runtime-qa] Server crashed during testing',
+    );
+    expect(mockServerLifecycleStop).toHaveBeenCalledWith(
+      expect.objectContaining({ processId: 'proc-2' }),
+    );
+
+    mockServerLifecycleStart.mockResolvedValueOnce({
+      processId: 'proc-3',
+      baseUrl: 'http://127.0.0.1:4324',
+      port: 4324,
+      crashed: true,
+    });
+    const retryCrashContext = makeContext({
+      worktreePath: tempDir('runtime-crash-retry'),
+      testRetries: 0,
+    });
+    const retryCrash = makeExecutionHarness(retryCrashContext);
+    vi.mocked(retryCrash.runtime.ensureRepoSetupContract).mockImplementation(() => {
+      retryCrashContext.repoSetupContract = {
+        path: '/repo/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: {
+            server: runtimeQaServer(),
+            testCommands: ['runtime-pass'],
+            discoverAgentTests: false,
+          },
+        },
+      };
+      return retryCrashContext.repoSetupContract;
+    });
+
+    await retryCrash.handlers.startTesting('thread-1');
+
+    expect(retryCrashContext.testRetries).toBe(1);
+  });
+
+  it('continues runtime QA when feature QA result persistence fails', async () => {
+    const context = makeContext({
+      worktreePath: tempDir('runtime-qa-results'),
+      featureQaState: {
+        featureId: 'feature-1',
+        routes: ['http://localhost:3000/dashboard'],
+        criticalFlows: [],
+        expectedStates: [],
+        testDataAssumptions: [],
+        selectorReadiness: 'ready',
+        visualAssertions: [],
+      },
+    });
+    const harness = makeExecutionHarness(context);
+    harness.deps.featureQaResults.insert = vi.fn(() => {
+      throw new Error('qa db offline');
+    });
+    vi.mocked(harness.runtime.ensureRepoSetupContract).mockImplementation(() => {
+      context.repoSetupContract = {
+        path: '/repo/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: {
+            testCommands: ['runtime-pass'],
+            discoverAgentTests: false,
+          },
+        },
+      };
+      return context.repoSetupContract;
+    });
+    vi.mocked(harness.runtime.runShellCommand).mockResolvedValue({
+      exitCode: 0,
+      output: `<qa_results>${JSON.stringify([
+        { flowName: 'Smoke', passed: true, evidencePaths: ['shot.png'] },
+      ])}</qa_results>`,
+    });
+
+    await harness.handlers.startTesting('thread-1');
+
+    expect(harness.deps.featureQaResults.insert).toHaveBeenCalled();
+    expect(harness.runtime.emitTerminalLifecycle).toHaveBeenCalledWith(
+      'thread-1',
+      '[runtime-qa] All runtime tests passed\r\n',
+    );
+  });
+
   it('schedules execution retry after failed verification and honors cancelled timers', async () => {
     vi.useFakeTimers();
     const context = makeContext({ verificationRetries: 0 });
@@ -1006,5 +1790,33 @@ describe('execution phase handlers', () => {
     await vi.runOnlyPendingTimersAsync();
 
     expect(harness.runtime.runProviderPhase).toHaveBeenCalledTimes(1);
+  });
+
+  it('replaces existing verification retry timers before scheduling continuation', async () => {
+    vi.useFakeTimers();
+    const oldTimerCallback = vi.fn();
+    const context = makeContext({
+      verificationRetries: 0,
+      retryTimer: setTimeout(oldTimerCallback, 1) as unknown as PipelineContext['retryTimer'],
+    });
+    const harness = makeExecutionHarness(context);
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: verificationFailed,
+      exitCode: 0,
+    });
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'status') return '';
+      if (args[0] === 'rev-parse') return 'head-sha\n';
+      if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
+      return '';
+    });
+
+    await harness.handlers.startVerification('thread-1');
+    await Promise.resolve();
+    await Promise.resolve();
+    context.cancelled = true;
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(oldTimerCallback).not.toHaveBeenCalled();
   });
 });
