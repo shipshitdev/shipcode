@@ -1231,7 +1231,6 @@ describe('TerminalDrawer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Minimize terminal to one line' }));
 
-    expect(screen.getByText('Console')).toBeInTheDocument();
     expect(screen.getByLabelText('Resize terminal drawer')).toBeInTheDocument();
     expect(screen.getByText(/Thinking/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Restore terminal drawer' })).toBeInTheDocument();

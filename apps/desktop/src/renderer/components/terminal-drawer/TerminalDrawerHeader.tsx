@@ -91,13 +91,7 @@ export function TerminalDrawerHeader({
   return (
     <div className="flex items-center justify-between border-b border-border bg-secondary/90 px-4 py-1.5 shrink-0 gap-3 min-w-0">
       <div className="flex items-center gap-3 min-w-0 overflow-hidden">
-        <div className="shrink-0">
-          <span className="rounded-md border border-sky-500/25 bg-sky-500/10 px-3 py-1 text-[11px] font-medium text-sky-400">
-            Console
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 min-w-0 overflow-hidden border-l border-border pl-3">
+        <div className="flex items-center gap-2 min-w-0 overflow-hidden">
           {displayTarget &&
             (runningTargets.length > 1 ? (
               <DropdownMenu>

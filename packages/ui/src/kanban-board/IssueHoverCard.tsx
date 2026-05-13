@@ -251,7 +251,11 @@ export function IssueHoverCard({
           {/* Badges row */}
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
             {priorityBadge && (
-              <Badge variant="default" className="text-[10px] px-1.5 py-0">
+              <Badge
+                variant={priorityBadge.variant}
+                className="text-[10px] px-1.5 py-0"
+                title={priorityBadge.title}
+              >
                 {priorityBadge.label}
               </Badge>
             )}

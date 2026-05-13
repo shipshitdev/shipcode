@@ -583,6 +583,9 @@ function useIssueDetailView() {
         queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
       }
     },
+    onError: (err) => {
+      toast.error('Failed to update issue metadata', clampError(err));
+    },
   });
 
   if (!activeIssue) return null;
@@ -1472,7 +1475,6 @@ function useIssueDetailView() {
                 <SelectItem value="Bug">Bug</SelectItem>
                 <SelectItem value="Feature">Feature</SelectItem>
                 <SelectItem value="Task">Task</SelectItem>
-                <SelectItem value="Enhancement">Enhancement</SelectItem>
               </SelectContent>
             </Select>
           </dd>

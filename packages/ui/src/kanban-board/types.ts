@@ -100,7 +100,7 @@ export type IssueRevisionBadge = {
 export type IssuePriorityBadge = {
   label: string;
   title: string;
-  variant: 'default' | 'warning' | 'info' | 'accent';
+  variant: 'default' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
   rank: 'p0' | 'p1' | 'p2' | 'p3' | null;
 };
 

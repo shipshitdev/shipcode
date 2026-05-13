@@ -830,11 +830,14 @@ export function registerGitHubHandlers({
       if (priority !== undefined) metadata.priority = priority ?? '';
 
       if (Object.keys(metadata).length > 0) {
-        await ghCli.setIssueProjectMetadata({
+        const warnings = await ghCli.setIssueProjectMetadata({
           issueNumber,
           projectUrl: project.githubProjectUrl,
           metadata,
         });
+        if (warnings.length > 0) {
+          throw new Error(warnings.join('; '));
+        }
       }
 
       if (issueType !== undefined) {

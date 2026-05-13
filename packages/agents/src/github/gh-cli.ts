@@ -65,6 +65,13 @@ function getGraphqlErrors(response: { errors?: Array<{ message?: string }> }): s
   return response.errors.map((err) => err.message ?? '<unknown>').join('; ');
 }
 
+function hasMetadataField(
+  metadata: IssueProjectMetadata,
+  key: keyof IssueProjectMetadata,
+): boolean {
+  return Object.hasOwn(metadata, key);
+}
+
 export interface PullRequestFeedback {
   number: number;
   url: string;
@@ -590,12 +597,13 @@ export class GhCli {
       return warnings;
     }
 
-    if (opts.metadata.issueType) {
+    if (hasMetadataField(opts.metadata, 'issueType')) {
+      const issueTypeName = opts.metadata.issueType ?? '';
       const issueType = response.data?.repository?.issueType;
-      if (issueType?.id && issueType.isEnabled !== false) {
+      if (!issueTypeName || (issueType?.id && issueType.isEnabled !== false)) {
         await this.graphqlMutation(
           `
-          mutation($issueId: ID!, $issueTypeId: ID!) {
+          mutation($issueId: ID!, $issueTypeId: ID) {
             updateIssueIssueType(input: { issueId: $issueId, issueTypeId: $issueTypeId }) {
               issue { id }
             }
@@ -603,11 +611,11 @@ export class GhCli {
         `,
           [
             ['issueId', issueId],
-            ['issueTypeId', issueType.id],
+            ['issueTypeId', issueTypeName ? (issueType?.id ?? '') : null],
           ],
         );
       } else {
-        warnings.push(`#${opts.issueNumber}: issue type "${opts.metadata.issueType}" not found`);
+        warnings.push(`#${opts.issueNumber}: issue type "${issueTypeName}" not found`);
       }
     }
 
@@ -620,7 +628,7 @@ export class GhCli {
     const fields = project.fields?.nodes ?? [];
 
     for (const [fieldName, optionName] of fieldValues) {
-      if (!optionName) continue;
+      if (optionName === undefined) continue;
       const field = fields.find(
         (candidate) =>
           candidate.__typename === 'ProjectV2SingleSelectField' &&
@@ -629,6 +637,30 @@ export class GhCli {
       );
       if (!field?.id) {
         warnings.push(`#${opts.issueNumber}: project field "${fieldName}" not found`);
+        continue;
+      }
+
+      if (!optionName) {
+        await this.graphqlMutation(
+          `
+          mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!) {
+            clearProjectV2ItemFieldValue(
+              input: {
+                projectId: $projectId
+                itemId: $itemId
+                fieldId: $fieldId
+              }
+            ) {
+              projectV2Item { id }
+            }
+          }
+        `,
+          [
+            ['projectId', projectId],
+            ['itemId', itemId],
+            ['fieldId', field.id],
+          ],
+        );
         continue;
       }
 
@@ -730,10 +762,13 @@ export class GhCli {
     });
   }
 
-  private async graphqlMutation(query: string, variables: Array<[string, string]>): Promise<void> {
+  private async graphqlMutation(
+    query: string,
+    variables: Array<[string, string | null]>,
+  ): Promise<void> {
     const args = ['api', 'graphql', '-f', `query=${query}`];
     for (const [key, value] of variables) {
-      args.push('-F', `${key}=${value}`);
+      args.push('-F', value === null ? `${key}=null` : `${key}=${value}`);
     }
     const { stdout } = await execFileAsync('gh', args, { cwd: this.cwd, env: this.env });
     const parsed = JSON.parse(stdout) as { errors?: Array<{ message?: string }> };

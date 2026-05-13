@@ -351,6 +351,117 @@ describe('registerGitHubHandlers', () => {
     expect(queries.githubIssues.list).toHaveBeenCalledWith('project-1');
   });
 
+  it('updates issue metadata only after GitHub accepts the change', async () => {
+    const issue = { ...baseIssue, id: 'issue-42', issueNumber: 42, isQuickMode: false };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => ({
+          ...baseProject,
+          path: '/tmp/project',
+          githubProjectUrl: 'https://github.com/orgs/acme/projects/1',
+        })),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          getByNumber: vi.fn(() => issue),
+          setIssueType: vi.fn(),
+          setPriority: vi.fn(),
+        },
+        [issue],
+      ),
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const updateMetadata = handlers.get('github:update-issue-metadata');
+    if (!updateMetadata) throw new Error('github:update-issue-metadata handler not registered');
+
+    await expect(
+      updateMetadata(undefined, {
+        projectId: 'project-1',
+        issueNumber: 42,
+        issueType: 'Feature',
+        priority: 'P1',
+      }),
+    ).resolves.toBe(issue);
+
+    expect(setIssueProjectMetadataMock).toHaveBeenCalledWith({
+      issueNumber: 42,
+      projectUrl: 'https://github.com/orgs/acme/projects/1',
+      metadata: {
+        issueType: 'Feature',
+        priority: 'P1',
+      },
+    });
+    expect(queries.githubIssues.setIssueType).toHaveBeenCalledWith({
+      id: 'issue-42',
+      issueType: 'Feature',
+    });
+    expect(queries.githubIssues.setPriority).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'issue-42', rank: 'p1', raw: 'P1' }),
+    );
+  });
+
+  it('rejects issue metadata updates when GitHub reports metadata warnings', async () => {
+    const issue = { ...baseIssue, id: 'issue-42', issueNumber: 42, isQuickMode: false };
+    setIssueProjectMetadataMock.mockResolvedValueOnce(['#42: issue type "Enhancement" not found']);
+    const queries = {
+      projects: {
+        getById: vi.fn(() => ({
+          ...baseProject,
+          path: '/tmp/project',
+          githubProjectUrl: 'https://github.com/orgs/acme/projects/1',
+        })),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          getByNumber: vi.fn(() => issue),
+          setIssueType: vi.fn(),
+          setPriority: vi.fn(),
+        },
+        [issue],
+      ),
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const updateMetadata = handlers.get('github:update-issue-metadata');
+    if (!updateMetadata) throw new Error('github:update-issue-metadata handler not registered');
+
+    await expect(
+      updateMetadata(undefined, {
+        projectId: 'project-1',
+        issueNumber: 42,
+        issueType: 'Enhancement',
+      }),
+    ).rejects.toThrow('#42: issue type "Enhancement" not found');
+
+    expect(queries.githubIssues.setIssueType).not.toHaveBeenCalled();
+    expect(queries.githubIssues.setPriority).not.toHaveBeenCalled();
+    expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+      'github:issues-updated',
+      expect.objectContaining({ projectId: 'project-1' }),
+    );
+  });
+
   it('refreshes issues from GitHub, syncs board metadata, archives board-archived issues, and broadcasts', async () => {
     const projectWithBoard = {
       ...baseProject,

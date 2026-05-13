@@ -666,29 +666,31 @@ describe('resolveIssuePriorityBadge', () => {
     expect(resolveIssuePriorityBadge(makeIssue(1, 'Issue'))).toBeNull();
   });
 
-  it('renders P0 with warning variant', () => {
+  it('renders P0 with danger variant', () => {
     const badge = resolveIssuePriorityBadge(withPriority('p0', 'P0'));
     expect(badge).not.toBeNull();
     expect(badge?.label).toBe('P0');
-    expect(badge?.variant).toBe('warning');
+    expect(badge?.variant).toBe('danger');
     expect(badge?.rank).toBe('p0');
     expect(resolveIssuePriorityBadge(withPriority('p0', null))?.title).toBe(
       'Priority P0 — critical',
     );
   });
 
-  it('renders P1 with info variant', () => {
+  it('renders P1 with warning variant', () => {
     const badge = resolveIssuePriorityBadge(withPriority('p1', 'High'));
     expect(badge?.label).toBe('P1');
-    expect(badge?.variant).toBe('info');
+    expect(badge?.variant).toBe('warning');
     expect(resolveIssuePriorityBadge(withPriority('p1', null))?.title).toBe('Priority P1 — high');
   });
 
-  it('renders P2 and P3 with default variant', () => {
+  it('renders P2 and P3 with distinct variants', () => {
+    expect(resolveIssuePriorityBadge(withPriority('p2', 'Medium'))?.variant).toBe('info');
     expect(resolveIssuePriorityBadge(withPriority('p2', 'Medium'))?.title).toBe(
       'Priority P2 — Medium',
     );
     expect(resolveIssuePriorityBadge(withPriority('p2', null))?.title).toBe('Priority P2 — medium');
+    expect(resolveIssuePriorityBadge(withPriority('p3', 'Low'))?.variant).toBe('success');
     expect(resolveIssuePriorityBadge(withPriority('p3', 'Low'))?.title).toBe('Priority P3 — Low');
     expect(resolveIssuePriorityBadge(withPriority('p3', null))?.title).toBe('Priority P3 — low');
   });

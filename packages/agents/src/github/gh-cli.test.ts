@@ -1397,6 +1397,68 @@ describe('GhCli', () => {
       expect(graphqlCalls).toHaveLength(1);
     });
 
+    it('clears native issue type and project single-select fields when empty values are provided', async () => {
+      success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
+      success(
+        JSON.stringify({
+          data: {
+            repository: {
+              issue: {
+                id: 'ISSUE_id',
+                projectItems: {
+                  nodes: [{ id: 'ITEM_id', project: { id: 'PROJECT_id', number: 1 } }],
+                },
+              },
+              issueType: null,
+            },
+            organization: {
+              projectV2: {
+                id: 'PROJECT_id',
+                fields: {
+                  nodes: [
+                    {
+                      __typename: 'ProjectV2SingleSelectField',
+                      id: 'FIELD_priority',
+                      name: 'Priority',
+                      options: [{ id: 'OPT_p1', name: 'P1' }],
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        }),
+      );
+      success(JSON.stringify({ data: { updateIssueIssueType: { issue: { id: 'ISSUE_id' } } } }));
+      success(
+        JSON.stringify({
+          data: { clearProjectV2ItemFieldValue: { projectV2Item: { id: 'ITEM_id' } } },
+        }),
+      );
+
+      await expect(
+        gh.setIssueProjectMetadata({
+          issueNumber: 42,
+          projectUrl: 'https://github.com/orgs/shipshitdev/projects/1',
+          metadata: {
+            issueType: '',
+            priority: '',
+          },
+        }),
+      ).resolves.toEqual([]);
+
+      const mutationCalls = mockExecFileAsync.mock.calls
+        .map((call) => call[1] as string[])
+        .filter((args) => args[0] === 'api' && args[1] === 'graphql');
+      expect(mutationCalls.some((args) => args.join(' ').includes('updateIssueIssueType'))).toBe(
+        true,
+      );
+      expect(mutationCalls.some((args) => args.includes('issueTypeId=null'))).toBe(true);
+      expect(
+        mutationCalls.some((args) => args.join(' ').includes('clearProjectV2ItemFieldValue')),
+      ).toBe(true);
+    });
+
     it('warns for missing issue type, fields, and options', async () => {
       success(JSON.stringify({ owner: { login: 'decod3rs' }, name: 'shipcode' }));
       success(

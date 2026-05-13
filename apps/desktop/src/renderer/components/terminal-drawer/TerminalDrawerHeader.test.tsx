@@ -106,7 +106,7 @@ describe('TerminalDrawerHeader', () => {
       />,
     );
 
-    expect(screen.getByText('Console')).toBeInTheDocument();
+    expect(screen.queryByText('Console')).not.toBeInTheDocument();
     expect(screen.getByText('#19')).toBeInTheDocument();
     expect(screen.getByText('Fix the board')).toBeInTheDocument();
     expect(screen.getByText('gpt-5.4')).toBeInTheDocument();
