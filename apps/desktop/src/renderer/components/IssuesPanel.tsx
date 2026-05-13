@@ -30,11 +30,9 @@ import {
   Braces,
   Check,
   ChevronDown,
-  Code2,
   FolderOpen,
   Ghost,
   RefreshCw,
-  Sparkles,
   Terminal,
   X,
 } from 'lucide-react';
@@ -66,15 +64,14 @@ const ARCHIVABLE_PIPELINE_STATUSES: IssuePipelineStatus[] = [ISSUE_PIPELINE_STAT
 const KANBAN_FLASH_MS = 1600;
 const PROJECT_OPEN_TARGETS: ProjectOpenTarget[] = [
   'cursor',
+  'vscode',
   'finder',
   'terminal',
   'ghostty',
-  'vscode',
   't3code',
 ];
 
 type AppIcon = ComponentType<{ size?: number; className?: string }>;
-type DesktopAppIconMap = Partial<Record<ProjectOpenTarget, string | null>>;
 
 const PROJECT_OPEN_TARGET_LABELS: Record<ProjectOpenTarget, string> = {
   cursor: 'Cursor',
@@ -85,12 +82,54 @@ const PROJECT_OPEN_TARGET_LABELS: Record<ProjectOpenTarget, string> = {
   t3code: 'T3 Code',
 };
 
+function CursorLogoIcon({ size = 14, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path d="M12 2.25 21 7.2v9.6l-9 4.95-9-4.95V7.2l9-4.95Z" fill="#F4F4F5" />
+      <path d="m12 2.25 9 4.95-9 4.95-9-4.95 9-4.95Z" fill="#D4D4D8" />
+      <path d="M12 12.15 21 7.2v9.6l-9 4.95v-9.6Z" fill="#A1A1AA" />
+      <path d="M12 12.15 3 7.2v9.6l9 4.95v-9.6Z" fill="#E4E4E7" />
+      <path d="m12 2.25 9 4.95-9 4.95-9-4.95 9-4.95Z" stroke="#27272A" strokeWidth="1.2" />
+      <path d="M3 7.2v9.6l9 4.95 9-4.95V7.2" stroke="#27272A" strokeWidth="1.2" />
+      <path d="M12 12.15v9.6" stroke="#27272A" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function VSCodeLogoIcon({ size = 14, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="M20.7 4.2 15.9 2 7.2 10.4 3.2 7.4 1.6 8.2v7.6l1.6.8 4-3 8.7 8.4 4.8-2.2V4.2Z"
+        fill="#007ACC"
+      />
+      <path d="M15.9 7.45 9.35 12l6.55 4.55V7.45Z" fill="#1F9CF0" />
+      <path d="M3.2 7.4 7.2 10.4 3.2 13.4V7.4Z" fill="#40B6FF" />
+      <path d="M3.2 10.6 7.2 12 3.2 13.4v-2.8Z" fill="#007ACC" opacity=".75" />
+    </svg>
+  );
+}
+
 const PROJECT_OPEN_TARGET_ICONS: Record<ProjectOpenTarget, AppIcon> = {
-  cursor: Sparkles,
+  cursor: CursorLogoIcon,
   finder: FolderOpen,
   terminal: Terminal,
   ghostty: Ghost,
-  vscode: Code2,
+  vscode: VSCodeLogoIcon,
   t3code: Braces,
 };
 
@@ -170,28 +209,9 @@ function automationThreadToIssue(thread: Thread, projectId: string): GitHubIssue
   };
 }
 
-function DesktopAppIcon({
-  target,
-  icons,
-  className,
-}: {
-  target: ProjectOpenTarget;
-  icons: DesktopAppIconMap | undefined;
-  className?: string;
-}) {
-  const iconUrl = icons?.[target];
-  if (iconUrl) {
-    return (
-      <img
-        src={iconUrl}
-        alt=""
-        aria-hidden="true"
-        className={cn('size-4 shrink-0 rounded-[3px]', className)}
-      />
-    );
-  }
+function DesktopAppIcon({ target, className }: { target: ProjectOpenTarget; className?: string }) {
   const Icon = PROJECT_OPEN_TARGET_ICONS[target];
-  return <Icon size={14} className={cn('shrink-0 text-secondary', className)} />;
+  return <Icon size={14} className={cn('size-4 shrink-0 text-secondary', className)} />;
 }
 
 function ProjectOpenControl({
@@ -211,15 +231,6 @@ function ProjectOpenControl({
   const hasAvailableTarget = integrationStatus
     ? PROJECT_OPEN_TARGETS.some((target) => integrationStatus.desktopApps[target]?.available)
     : true;
-
-  const { data: appIcons } = useQuery<DesktopAppIconMap>({
-    queryKey: ['desktop-app-icons'],
-    queryFn: () =>
-      window.shipcode.invoke<DesktopAppIconMap>('desktop-app-icons:get', {
-        targets: PROJECT_OPEN_TARGETS,
-      }),
-    staleTime: Number.POSITIVE_INFINITY,
-  });
 
   const openProjectPath = useMutation({
     mutationFn: (target: ProjectOpenTarget) =>
@@ -257,7 +268,7 @@ function ProjectOpenControl({
         }
         aria-label={`Open ${project.name} in ${defaultLabel}`}
       >
-        <DesktopAppIcon target={defaultTarget} icons={appIcons} />
+        <DesktopAppIcon target={defaultTarget} />
         <span>open</span>
       </Button>
       <DropdownMenu>
@@ -288,9 +299,9 @@ function ProjectOpenControl({
                 <span className="flex size-3.5 items-center justify-center">
                   {target === defaultTarget ? <Check size={12} /> : null}
                 </span>
-                <DesktopAppIcon target={target} icons={appIcons} className="size-3.5" />
+                <DesktopAppIcon target={target} className="size-3.5" />
                 <span className="truncate">
-                  Open in {label}
+                  {label}
                   {!available ? ' (Unavailable)' : ''}
                 </span>
               </DropdownMenuItem>

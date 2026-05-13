@@ -44,7 +44,7 @@ import {
   validateGithubProjectUrl,
 } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
-import { dialog, app as electronApp, shell } from 'electron';
+import { dialog, shell } from 'electron';
 import { runAutoCommitWorkflow, runCleanupAnalyze, runCleanupApply } from '../git-workflows';
 import log from '../logger.service';
 import { isSafeExternalUrl } from '../security';
@@ -1083,31 +1083,6 @@ export function registerProjectHandlers({
       }
 
       await openProjectPath(project.path, resolvedTarget);
-    },
-  );
-
-  ipcMain.handle(
-    'desktop-app-icons:get',
-    async (
-      _event,
-      { targets = PROJECT_OPEN_TARGET_ORDER }: { targets?: ProjectOpenTarget[] } = {},
-    ) => {
-      const desktopApps = await checkDesktopApps();
-      const entries = await Promise.all(
-        targets.map(async (target) => {
-          const appInfo = desktopApps[target];
-          if (!appInfo?.path) return [target, null] as const;
-          try {
-            const icon = await electronApp.getFileIcon(appInfo.path, { size: 'normal' });
-            const resized = icon.isEmpty() ? icon : icon.resize({ width: 32, height: 32 });
-            return [target, resized.isEmpty() ? null : resized.toDataURL()] as const;
-          } catch (err) {
-            log.warn('[desktop-app-icons:get] failed:', { target, err });
-            return [target, null] as const;
-          }
-        }),
-      );
-      return Object.fromEntries(entries);
     },
   );
 

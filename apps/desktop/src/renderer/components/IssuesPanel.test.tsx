@@ -432,17 +432,11 @@ describe('IssuesPanel', () => {
     expect(screen.queryByRole('link', { name: 'board' })).not.toBeInTheDocument();
   });
 
-  it('opens the project from the board toolbar with official app icons when available', async () => {
+  it('opens the project from the board toolbar with branded app icons', async () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'thread-panel:get-data') return panelData;
       if (channel === 'github:list-issues') return [makeIssue()];
       if (channel === 'integrations:check') return integrationStatus;
-      if (channel === 'desktop-app-icons:get') {
-        return {
-          cursor: 'data:image/png;base64,cursor',
-          vscode: 'data:image/png;base64,vscode',
-        };
-      }
       if (channel === 'project:open-path') return undefined;
       return null;
     });
@@ -450,12 +444,7 @@ describe('IssuesPanel', () => {
     renderWithProviders();
 
     const openButton = await screen.findByRole('button', { name: 'Open ShipCode in Cursor' });
-    await waitFor(() => {
-      expect(openButton.querySelector('img')).toHaveAttribute(
-        'src',
-        'data:image/png;base64,cursor',
-      );
-    });
+    expect(openButton.querySelector('svg')).toBeInTheDocument();
     fireEvent.click(openButton);
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('project:open-path', {
@@ -465,7 +454,7 @@ describe('IssuesPanel', () => {
     });
 
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Choose app to open ShipCode' }));
-    fireEvent.click(await screen.findByText('Open in Visual Studio Code'));
+    fireEvent.click(await screen.findByText('Visual Studio Code'));
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('project:open-path', {
         projectId: project.id,

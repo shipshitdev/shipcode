@@ -114,15 +114,7 @@ vi.mock('../logger.service', () => ({
 }));
 
 vi.mock('electron', () => ({
-  app: {
-    getFileIcon: vi.fn(async () => ({
-      isEmpty: () => false,
-      resize: () => ({
-        isEmpty: () => false,
-        toDataURL: () => 'data:image/png;base64,icon',
-      }),
-    })),
-  },
+  app: undefined,
   dialog: {
     showOpenDialog: vi.fn(),
   },
