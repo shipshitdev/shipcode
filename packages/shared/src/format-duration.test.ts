@@ -10,8 +10,8 @@ describe('formatDurationSeconds', () => {
     expect(formatDurationSeconds(95)).toBe('1m 35s');
   });
 
-  it('keeps hour-scale durations in minutes for compact UI labels', () => {
-    expect(formatDurationSeconds(3_601)).toBe('60m 1s');
+  it('formats hour-scale durations as hours and minutes', () => {
+    expect(formatDurationSeconds(3_661)).toBe('1h 1m');
   });
 });
 
