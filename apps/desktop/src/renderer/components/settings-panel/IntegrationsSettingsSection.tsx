@@ -183,7 +183,7 @@ function useIntegrationsSettingsSectionView({
   const projectOpenerSection = (
     <SettingsSection
       title="Project opener"
-      description="Choose the default app ShipCode uses when you open a project folder from the topbar."
+      description="Choose the default app ShipCode uses when you open a project folder from the board toolbar."
       className="mb-6"
     >
       <div className="mb-4 flex max-w-[260px] flex-col gap-1.5">

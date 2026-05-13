@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest';
-import type { IntegrationStatus, Project, SystemHealth } from '@shipcode/shared';
+import type { Project, SystemHealth } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -90,86 +90,6 @@ describe('Titlebar', () => {
       authenticated: false,
     },
   };
-  const integrations: IntegrationStatus = {
-    system: readyHealth,
-    ghAuth: {
-      installed: true,
-      authenticated: true,
-      username: 'decod3r',
-      version: '2.40.1',
-      error: null,
-      hasProjectScope: true,
-    },
-    openrouter: {
-      enabled: false,
-      keyPresent: false,
-      authStatus: 'missing_key',
-      message: 'OPENROUTER_API_KEY is not set',
-      label: null,
-      modelChecks: [],
-    },
-    discord: {
-      enabled: false,
-      configured: false,
-      destinationConfigured: false,
-      validationStatus: 'missing',
-      message: 'Discord webhook URL is not configured',
-      lastDeliveryStatus: null,
-    },
-    telegram: {
-      enabled: false,
-      configured: false,
-      destinationConfigured: false,
-      validationStatus: 'missing',
-      message: 'Telegram bot token is not configured',
-      lastDeliveryStatus: null,
-    },
-    desktopApps: {
-      cursor: {
-        key: 'cursor',
-        label: 'Cursor',
-        available: true,
-        path: '/Applications/Cursor.app',
-        error: null,
-      },
-      finder: {
-        key: 'finder',
-        label: 'Finder',
-        available: true,
-        path: '/System/Library/CoreServices/Finder.app',
-        error: null,
-      },
-      terminal: {
-        key: 'terminal',
-        label: 'Terminal',
-        available: true,
-        path: '/System/Applications/Utilities/Terminal.app',
-        error: null,
-      },
-      ghostty: {
-        key: 'ghostty',
-        label: 'Ghostty',
-        available: false,
-        path: null,
-        error: 'Ghostty is not installed',
-      },
-      vscode: {
-        key: 'vscode',
-        label: 'Visual Studio Code',
-        available: true,
-        path: '/Applications/Visual Studio Code.app',
-        error: null,
-      },
-      t3code: {
-        key: 't3code',
-        label: 'T3 Code',
-        available: true,
-        path: '/Applications/T3 Code.app',
-        error: null,
-      },
-    },
-  };
-
   beforeEach(() => {
     cleanup();
     invokeMock.mockReset();
@@ -503,7 +423,6 @@ describe('Titlebar', () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'project:get') return project;
       if (channel === 'settings:get') return DEFAULT_SETTINGS;
-      if (channel === 'integrations:check') return integrations;
       if (channel === 'health:check') return readyHealth;
       if (channel === 'provider-usage:check') {
         return makeUsageMap({
@@ -544,39 +463,5 @@ describe('Titlebar', () => {
     expect(await screen.findByText('Selected models vs CLI status')).toBeInTheDocument();
     expect(screen.getByText('Codex CLI session exhausted')).toBeInTheDocument();
     expect(screen.getByText('CLI')).toBeInTheDocument();
-  });
-
-  it('opens the active project from the topbar default target and target menu', async () => {
-    const project = makeProject();
-
-    invokeMock.mockImplementation(async (channel) => {
-      if (channel === 'project:get') return project;
-      if (channel === 'settings:get') return DEFAULT_SETTINGS;
-      if (channel === 'integrations:check') return integrations;
-      if (channel === 'health:check') return readyHealth;
-      if (channel === 'provider-usage:check') return makeUsageMap();
-      if (channel === 'project:open-path') return undefined;
-      return null;
-    });
-    useAppStore.setState({ activeProjectId: project.id });
-
-    renderWithProviders();
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Open ShipCode in Cursor' }));
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('project:open-path', {
-        projectId: project.id,
-        target: 'cursor',
-      });
-    });
-
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Choose app to open ShipCode' }));
-    fireEvent.click(await screen.findByText('Open in Visual Studio Code'));
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('project:open-path', {
-        projectId: project.id,
-        target: 'vscode',
-      });
-    });
   });
 });

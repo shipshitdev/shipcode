@@ -42,6 +42,7 @@ export interface KanbanBoardProps {
   refreshingBranches?: boolean;
   selectedIssueNumber?: number;
   projectName?: string;
+  projectActions?: ReactNode;
   repoUrl?: string | null;
   projectsUrl?: string | null;
   onOpenExternal?: (url: string) => void;

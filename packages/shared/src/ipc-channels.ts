@@ -131,6 +131,10 @@ export interface IpcInvokeChannels {
     args: { projectId: string; target: ProjectOpenTarget | 'default' | 'default-terminal' };
     result: undefined;
   };
+  'desktop-app-icons:get': {
+    args: { targets?: ProjectOpenTarget[] } | undefined;
+    result: Partial<Record<ProjectOpenTarget, string | null>>;
+  };
   'project:set-model-overrides': {
     args: {
       projectId: string;

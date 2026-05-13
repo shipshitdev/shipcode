@@ -168,6 +168,7 @@ function useKanbanBoardView({
   refreshingBranches = false,
   selectedIssueNumber,
   projectName,
+  projectActions,
   repoUrl,
   projectsUrl,
   onOpenExternal,
@@ -775,6 +776,7 @@ function useKanbanBoardView({
         triageCandidateCount={triageCandidateCount}
         onTriageIssues={onTriageIssues}
         projectName={projectName}
+        projectActions={projectActions}
         repoUrl={repoUrl}
         projectsUrl={projectsUrl}
         onRepoClick={repoUrl ? handleExternalClick(repoUrl) : undefined}

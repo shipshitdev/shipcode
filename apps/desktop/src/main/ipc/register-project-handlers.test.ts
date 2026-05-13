@@ -114,7 +114,15 @@ vi.mock('../logger.service', () => ({
 }));
 
 vi.mock('electron', () => ({
-  app: undefined,
+  app: {
+    getFileIcon: vi.fn(async () => ({
+      isEmpty: () => false,
+      resize: () => ({
+        isEmpty: () => false,
+        toDataURL: () => 'data:image/png;base64,icon',
+      }),
+    })),
+  },
   dialog: {
     showOpenDialog: vi.fn(),
   },
@@ -1620,7 +1628,102 @@ describe('registerProjectHandlers', () => {
     );
   });
 
-  it('skips starter seeding when the project row has disappeared and tolerates label failures', async () => {
+  it('tolerates label failures while seeding the starter issue in the background', async () => {
+    let project: Project | null = { ...baseProject };
+    const queries = {
+      projects: {
+        add: vi.fn(
+          (
+            projectPath: string,
+            options?: { githubRepoId?: string | null; githubRepoFullName?: string | null },
+          ) => {
+            project = {
+              ...baseProject,
+              path: projectPath,
+              githubRepoId: options?.githubRepoId ?? null,
+              githubRepoFullName: options?.githubRepoFullName ?? null,
+            };
+            return project;
+          },
+        ),
+        getById: vi.fn(() => project),
+        updateGitInfo: vi.fn(),
+        updateGithubRepoIdentity: vi.fn(
+          (
+            _id: string,
+            identity: { githubRepoId: string | null; githubRepoFullName: string | null },
+          ) => {
+            project = project ? { ...project, ...identity } : project;
+          },
+        ),
+        getByGithubRepoIdentity: vi.fn(() => null),
+        markStarterIssueSeeded: vi.fn(
+          (
+            _id: string,
+            fields: { starterIssueNumber: number | null; starterIssueCreatedAt?: string | null },
+          ) => {
+            project = project
+              ? {
+                  ...project,
+                  starterIssueNumber: fields.starterIssueNumber,
+                  starterIssueCreatedAt: fields.starterIssueCreatedAt ?? null,
+                }
+              : project;
+          },
+        ),
+      },
+      githubIssues: {
+        upsert: vi.fn(),
+        list: vi.fn(() => []),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor' })),
+      },
+      threads: {
+        listByProject: vi.fn(() => []),
+      },
+    };
+    ensureLabelsMock.mockRejectedValueOnce(new Error('labels failed'));
+    createIssueMock.mockResolvedValueOnce({
+      number: 101,
+      title: 'Ship your first change with ShipCode',
+      body: 'starter',
+      labels: [],
+      assignee: null,
+      state: 'open',
+    });
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const addProject = handlers.get('project:add');
+    if (!addProject) throw new Error('project:add handler not registered');
+
+    await expect(
+      addProject(undefined, {
+        path: '/tmp/shipcode',
+        repo: { id: 'R_repo', name: 'shipshitdev/shipcode' },
+      }),
+    ).resolves.toMatchObject({ id: baseProject.id });
+    await flushBackgroundTasks();
+
+    expect(ensureLabelsMock).toHaveBeenCalledWith(expect.any(Array));
+    expect(createIssueMock).toHaveBeenCalledTimes(1);
+    expect(queries.projects.markStarterIssueSeeded).toHaveBeenCalledWith(
+      'project-1',
+      expect.objectContaining({ starterIssueNumber: 101 }),
+    );
+  });
+
+  it('skips background GitHub onboarding when the project row has disappeared', async () => {
     let project: Project | null = { ...baseProject };
     const queries = {
       projects: {
@@ -1657,7 +1760,6 @@ describe('registerProjectHandlers', () => {
         listByProject: vi.fn(() => []),
       },
     };
-    ensureLabelsMock.mockRejectedValueOnce(new Error('labels failed'));
 
     registerProjectHandlers({
       ipcMain,
@@ -1679,7 +1781,9 @@ describe('registerProjectHandlers', () => {
         repo: { id: 'R_repo', name: 'shipshitdev/shipcode' },
       }),
     ).resolves.toBeNull();
-    expect(ensureLabelsMock).toHaveBeenCalledWith(expect.any(Array));
+    await flushBackgroundTasks();
+
+    expect(ensureLabelsMock).not.toHaveBeenCalled();
     expect(createIssueMock).not.toHaveBeenCalled();
     expect(queries.projects.markStarterIssueSeeded).not.toHaveBeenCalled();
   });

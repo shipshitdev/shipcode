@@ -3,21 +3,42 @@ import {
   type GitHubIssueCacheRecord,
   type GitHubIssueTriageResult,
   githubRepoUrl,
+  type IntegrationStatus,
   ISSUE_PIPELINE_STATUS,
   type IssuePipelineStatus,
   type ThreadPanelData as IssuesPanelData,
   isRealGithubIssueNumber,
   PIPELINE_PHASE,
   type Project,
+  type ProjectOpenTarget,
   type TaskGraphWithNodes,
   THREAD_KIND,
   type Thread,
 } from '@shipcode/shared';
 import { AUTOMATION_ISSUE_NUMBER_BASE, isAutomationIssue, KanbanBoard } from '@shipcode/ui';
-import { Button } from '@shipshitdev/ui';
+import {
+  Button,
+  cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
-import { RefreshCw, X } from 'lucide-react';
+import {
+  Braces,
+  Check,
+  ChevronDown,
+  Code2,
+  FolderOpen,
+  Ghost,
+  RefreshCw,
+  Sparkles,
+  Terminal,
+  X,
+} from 'lucide-react';
+import type { ComponentType } from 'react';
 import {
   lazy,
   Suspense,
@@ -43,6 +64,35 @@ import { ThreadPanelBoardReviewDialog } from './ThreadPanelBoardReviewDialog';
 const EMPTY_ISSUES: GitHubIssueCacheRecord[] = [];
 const ARCHIVABLE_PIPELINE_STATUSES: IssuePipelineStatus[] = [ISSUE_PIPELINE_STATUS.closed];
 const KANBAN_FLASH_MS = 1600;
+const PROJECT_OPEN_TARGETS: ProjectOpenTarget[] = [
+  'cursor',
+  'finder',
+  'terminal',
+  'ghostty',
+  'vscode',
+  't3code',
+];
+
+type AppIcon = ComponentType<{ size?: number; className?: string }>;
+type DesktopAppIconMap = Partial<Record<ProjectOpenTarget, string | null>>;
+
+const PROJECT_OPEN_TARGET_LABELS: Record<ProjectOpenTarget, string> = {
+  cursor: 'Cursor',
+  finder: 'Finder',
+  terminal: 'Terminal',
+  ghostty: 'Ghostty',
+  vscode: 'Visual Studio Code',
+  t3code: 'T3 Code',
+};
+
+const PROJECT_OPEN_TARGET_ICONS: Record<ProjectOpenTarget, AppIcon> = {
+  cursor: Sparkles,
+  finder: FolderOpen,
+  terminal: Terminal,
+  ghostty: Ghost,
+  vscode: Code2,
+  t3code: Braces,
+};
 
 type FlashingIssueIdsAction = { type: 'add'; ids: string[] } | { type: 'remove'; id: string };
 
@@ -118,6 +168,138 @@ function automationThreadToIssue(thread: Thread, projectId: string): GitHubIssue
     priorityFetchedAt: null,
     isQuickMode: false,
   };
+}
+
+function DesktopAppIcon({
+  target,
+  icons,
+  className,
+}: {
+  target: ProjectOpenTarget;
+  icons: DesktopAppIconMap | undefined;
+  className?: string;
+}) {
+  const iconUrl = icons?.[target];
+  if (iconUrl) {
+    return (
+      <img
+        src={iconUrl}
+        alt=""
+        aria-hidden="true"
+        className={cn('size-4 shrink-0 rounded-[3px]', className)}
+      />
+    );
+  }
+  const Icon = PROJECT_OPEN_TARGET_ICONS[target];
+  return <Icon size={14} className={cn('shrink-0 text-secondary', className)} />;
+}
+
+function ProjectOpenControl({
+  project,
+  settings,
+  integrationStatus,
+}: {
+  project: Project;
+  settings: AppSettings | undefined;
+  integrationStatus: IntegrationStatus | undefined;
+}) {
+  const queryClient = useQueryClient();
+  const defaultTarget = settings?.projectOpenTarget ?? 'cursor';
+  const defaultApp = integrationStatus?.desktopApps?.[defaultTarget];
+  const defaultLabel = defaultApp?.label ?? PROJECT_OPEN_TARGET_LABELS[defaultTarget];
+  const canOpenProject = project.pathExists !== false;
+  const hasAvailableTarget = integrationStatus
+    ? PROJECT_OPEN_TARGETS.some((target) => integrationStatus.desktopApps[target]?.available)
+    : true;
+
+  const { data: appIcons } = useQuery<DesktopAppIconMap>({
+    queryKey: ['desktop-app-icons'],
+    queryFn: () =>
+      window.shipcode.invoke<DesktopAppIconMap>('desktop-app-icons:get', {
+        targets: PROJECT_OPEN_TARGETS,
+      }),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
+  const openProjectPath = useMutation({
+    mutationFn: (target: ProjectOpenTarget) =>
+      window.shipcode.invoke('project:open-path', { projectId: project.id, target }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
+      queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to open project folder', error.message);
+    },
+  });
+
+  const openTarget = (target: ProjectOpenTarget) => {
+    openProjectPath.mutate(target);
+  };
+
+  const mainDisabled =
+    !canOpenProject || openProjectPath.isPending || (defaultApp ? !defaultApp.available : false);
+  const menuDisabled = !canOpenProject || openProjectPath.isPending || !hasAvailableTarget;
+
+  return (
+    <div className="flex h-8 shrink-0 overflow-hidden rounded-md border border-border bg-primary">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 rounded-none border-0 px-3 text-sm font-medium text-primary hover:bg-elevated disabled:opacity-50"
+        onClick={() => openTarget(defaultTarget)}
+        disabled={mainDisabled}
+        title={
+          canOpenProject
+            ? `Open ${project.name} in ${defaultLabel}`
+            : `Project folder missing: ${project.path}`
+        }
+        aria-label={`Open ${project.name} in ${defaultLabel}`}
+      >
+        <DesktopAppIcon target={defaultTarget} icons={appIcons} />
+        <span>open</span>
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-none border-l border-border text-secondary hover:bg-elevated disabled:opacity-50"
+            disabled={menuDisabled}
+            aria-label={`Choose app to open ${project.name}`}
+            title="Choose opener"
+          >
+            <ChevronDown size={14} />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" collisionPadding={8} className="min-w-[220px]">
+          {PROJECT_OPEN_TARGETS.map((target) => {
+            const app = integrationStatus?.desktopApps?.[target];
+            const label = app?.label ?? PROJECT_OPEN_TARGET_LABELS[target];
+            const available = app?.available ?? true;
+            return (
+              <DropdownMenuItem
+                key={target}
+                disabled={!available}
+                onSelect={() => openTarget(target)}
+                title={app?.error ?? undefined}
+              >
+                <span className="flex size-3.5 items-center justify-center">
+                  {target === defaultTarget ? <Check size={12} /> : null}
+                </span>
+                <DesktopAppIcon target={target} icons={appIcons} className="size-3.5" />
+                <span className="truncate">
+                  Open in {label}
+                  {!available ? ' (Unavailable)' : ''}
+                </span>
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
 }
 
 function useIssuesPanelView() {
@@ -236,6 +418,13 @@ function useIssuesPanelView() {
       }),
     enabled: !!activeProjectId,
     staleTime: 30_000, // IPC push events handle freshness; avoid frequent git branch calls
+  });
+
+  const { data: integrationStatus } = useQuery<IntegrationStatus>({
+    queryKey: ['integrations'],
+    queryFn: () => window.shipcode.invoke<IntegrationStatus>('integrations:check'),
+    enabled: !!activeProjectId,
+    staleTime: 30_000,
   });
 
   // Branches fetched separately — git I/O is slow, don't block board render.
@@ -599,6 +788,15 @@ function useIssuesPanelView() {
             .finally(() => setIsRefreshingBranches(false));
         }}
         projectName={project?.name}
+        projectActions={
+          project ? (
+            <ProjectOpenControl
+              project={project}
+              settings={settings}
+              integrationStatus={integrationStatus}
+            />
+          ) : null
+        }
         project={project}
         settings={settings}
         threads={threads}

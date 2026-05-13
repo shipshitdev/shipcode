@@ -44,7 +44,7 @@ import {
   validateGithubProjectUrl,
 } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
-import { dialog, shell } from 'electron';
+import { dialog, app as electronApp, shell } from 'electron';
 import { runAutoCommitWorkflow, runCleanupAnalyze, runCleanupApply } from '../git-workflows';
 import log from '../logger.service';
 import { isSafeExternalUrl } from '../security';
@@ -412,6 +412,50 @@ function enqueueProjectGithubOnboarding({
   );
 }
 
+async function resolveProjectGithubIdentityAndOnboard({
+  mainWindow,
+  queries,
+  projectId,
+  projectPath,
+  remote,
+}: {
+  mainWindow: import('electron').BrowserWindow;
+  queries: IpcHandlerDeps['queries'];
+  projectId: string;
+  projectPath: string;
+  remote: string | null;
+}): Promise<void> {
+  const repoIdentity = await resolveGithubRepoIdentity(projectPath, remote, null);
+  if (!repoIdentity) return;
+
+  queries.projects.updateGithubRepoIdentity(projectId, repoIdentity);
+  await runProjectGithubOnboarding({ mainWindow, queries, projectId, projectPath });
+}
+
+function enqueueProjectGithubIdentityAndOnboarding({
+  mainWindow,
+  queries,
+  projectId,
+  projectPath,
+  remote,
+}: {
+  mainWindow: import('electron').BrowserWindow;
+  queries: IpcHandlerDeps['queries'];
+  projectId: string;
+  projectPath: string;
+  remote: string | null;
+}): void {
+  void resolveProjectGithubIdentityAndOnboard({
+    mainWindow,
+    queries,
+    projectId,
+    projectPath,
+    remote,
+  }).catch((error) => {
+    log.warn('[project:add] failed to resolve GitHub identity:', error);
+  });
+}
+
 function resolveProjectOpenTarget(
   settings: AppSettings,
   desktopApps: DesktopAppHealthMap,
@@ -514,14 +558,22 @@ export function registerProjectHandlers({
         const branch = await git.getDefaultBranch();
         queries.projects.updateGitInfo(project.id, remote, branch);
 
-        const repoIdentity = await resolveGithubRepoIdentity(projectPath, remote, repo);
-        if (repoIdentity) {
+        if (repo?.id && repo.name) {
+          const repoIdentity = { githubRepoId: repo.id, githubRepoFullName: repo.name };
           queries.projects.updateGithubRepoIdentity(project.id, repoIdentity);
           enqueueProjectGithubOnboarding({
             mainWindow,
             queries,
             projectId: project.id,
             projectPath,
+          });
+        } else if (parseGithubRemote(remote)) {
+          enqueueProjectGithubIdentityAndOnboarding({
+            mainWindow,
+            queries,
+            projectId: project.id,
+            projectPath,
+            remote,
           });
         }
 
@@ -1031,6 +1083,31 @@ export function registerProjectHandlers({
       }
 
       await openProjectPath(project.path, resolvedTarget);
+    },
+  );
+
+  ipcMain.handle(
+    'desktop-app-icons:get',
+    async (
+      _event,
+      { targets = PROJECT_OPEN_TARGET_ORDER }: { targets?: ProjectOpenTarget[] } = {},
+    ) => {
+      const desktopApps = await checkDesktopApps();
+      const entries = await Promise.all(
+        targets.map(async (target) => {
+          const appInfo = desktopApps[target];
+          if (!appInfo?.path) return [target, null] as const;
+          try {
+            const icon = await electronApp.getFileIcon(appInfo.path, { size: 'normal' });
+            const resized = icon.isEmpty() ? icon : icon.resize({ width: 32, height: 32 });
+            return [target, resized.isEmpty() ? null : resized.toDataURL()] as const;
+          } catch (err) {
+            log.warn('[desktop-app-icons:get] failed:', { target, err });
+            return [target, null] as const;
+          }
+        }),
+      );
+      return Object.fromEntries(entries);
     },
   );
 

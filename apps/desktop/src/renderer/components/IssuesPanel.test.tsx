@@ -3,6 +3,7 @@
 import {
   DEFAULT_SETTINGS,
   type GitHubIssueCacheRecord,
+  type IntegrationStatus,
   type Project,
   type Thread,
   type ThreadPanelData,
@@ -98,6 +99,53 @@ const panelData: ThreadPanelData = {
   latestPlanStatusByThreadId: {},
   branches: [],
 };
+
+const integrationStatus = {
+  desktopApps: {
+    cursor: {
+      key: 'cursor',
+      label: 'Cursor',
+      available: true,
+      path: '/Applications/Cursor.app',
+      error: null,
+    },
+    finder: {
+      key: 'finder',
+      label: 'Finder',
+      available: true,
+      path: '/System/Library/CoreServices/Finder.app',
+      error: null,
+    },
+    terminal: {
+      key: 'terminal',
+      label: 'Terminal',
+      available: true,
+      path: '/System/Applications/Utilities/Terminal.app',
+      error: null,
+    },
+    ghostty: {
+      key: 'ghostty',
+      label: 'Ghostty',
+      available: false,
+      path: null,
+      error: 'Ghostty is not installed',
+    },
+    vscode: {
+      key: 'vscode',
+      label: 'Visual Studio Code',
+      available: true,
+      path: '/Applications/Visual Studio Code.app',
+      error: null,
+    },
+    t3code: {
+      key: 't3code',
+      label: 'T3 Code',
+      available: true,
+      path: '/Applications/T3 Code.app',
+      error: null,
+    },
+  },
+} as IntegrationStatus;
 
 function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord {
   return {
@@ -382,6 +430,43 @@ describe('IssuesPanel', () => {
     expect(await screen.findByText('Ship your first change with ShipCode')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'repo' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'board' })).not.toBeInTheDocument();
+  });
+
+  it('opens the project from the board toolbar with official app icons when available', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread-panel:get-data') return panelData;
+      if (channel === 'github:list-issues') return [makeIssue()];
+      if (channel === 'integrations:check') return integrationStatus;
+      if (channel === 'desktop-app-icons:get') {
+        return {
+          cursor: 'data:image/png;base64,cursor',
+          vscode: 'data:image/png;base64,vscode',
+        };
+      }
+      if (channel === 'project:open-path') return undefined;
+      return null;
+    });
+
+    renderWithProviders();
+
+    const openButton = await screen.findByRole('button', { name: 'Open ShipCode in Cursor' });
+    expect(openButton.querySelector('img')).toHaveAttribute('src', 'data:image/png;base64,cursor');
+    fireEvent.click(openButton);
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('project:open-path', {
+        projectId: project.id,
+        target: 'cursor',
+      });
+    });
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Choose app to open ShipCode' }));
+    fireEvent.click(await screen.findByText('Open in Visual Studio Code'));
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('project:open-path', {
+        projectId: project.id,
+        target: 'vscode',
+      });
+    });
   });
 
   it('shows the board quick-link when a GitHub Projects URL is configured', async () => {

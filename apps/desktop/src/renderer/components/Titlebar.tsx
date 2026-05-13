@@ -3,79 +3,30 @@ import type {
   CliProviderUsageMap,
   CliProviderUsageStatus,
   CliProviderUsageWindow,
-  IntegrationStatus,
   Project,
-  ProjectOpenTarget,
   SystemHealth,
   SystemResourceSnapshot,
 } from '@shipcode/shared';
 import { formatBytes, getProjectProviderWarnings } from '@shipcode/shared';
 import { ShipCodeLogoMark } from '@shipcode/ui';
-import {
-  Button,
-  cn,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@shipshitdev/ui';
+import { Button, cn, Popover, PopoverContent, PopoverTrigger } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Braces,
-  Check,
-  ChevronDown,
-  Code2,
   Cpu,
-  FolderOpen,
-  Ghost,
   Loader2,
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
   Settings,
-  Sparkles,
   Terminal,
   X,
 } from 'lucide-react';
-import type { ComponentType } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
-import { toast } from '../stores/toast-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
 
 type ProviderTone = 'claude' | 'codex';
-type AppIcon = ComponentType<{ size?: number; className?: string }>;
-
-const PROJECT_OPEN_TARGETS: ProjectOpenTarget[] = [
-  'cursor',
-  'finder',
-  'terminal',
-  'ghostty',
-  'vscode',
-  't3code',
-];
-
-const PROJECT_OPEN_TARGET_LABELS: Record<ProjectOpenTarget, string> = {
-  cursor: 'Cursor',
-  finder: 'Finder',
-  terminal: 'Terminal',
-  ghostty: 'Ghostty',
-  vscode: 'Visual Studio Code',
-  t3code: 'T3 Code',
-};
-
-const PROJECT_OPEN_TARGET_ICONS: Record<ProjectOpenTarget, AppIcon> = {
-  cursor: Sparkles,
-  finder: FolderOpen,
-  terminal: Terminal,
-  ghostty: Ghost,
-  vscode: Code2,
-  t3code: Braces,
-};
 
 function dotClass(_tone: ProviderTone, state: CliProviderUsageStatus['state']): string {
   if (state === 'blocked') return 'bg-danger';
@@ -315,107 +266,6 @@ function ProviderStatusBadge({
   );
 }
 
-function ProjectOpenControl({
-  project,
-  settings,
-  integrationStatus,
-}: {
-  project: Project;
-  settings: AppSettings | undefined;
-  integrationStatus: IntegrationStatus | undefined;
-}) {
-  const queryClient = useQueryClient();
-  const defaultTarget = settings?.projectOpenTarget ?? 'cursor';
-  const defaultApp = integrationStatus?.desktopApps?.[defaultTarget];
-  const DefaultIcon = PROJECT_OPEN_TARGET_ICONS[defaultTarget];
-  const defaultLabel = defaultApp?.label ?? PROJECT_OPEN_TARGET_LABELS[defaultTarget];
-  const canOpenProject = project.pathExists !== false;
-  const hasAvailableTarget = integrationStatus
-    ? PROJECT_OPEN_TARGETS.some((target) => integrationStatus.desktopApps[target]?.available)
-    : true;
-
-  const openProjectPath = useMutation({
-    mutationFn: (target: ProjectOpenTarget) =>
-      window.shipcode.invoke('project:open-path', { projectId: project.id, target }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
-      queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
-    },
-    onError: (error: Error) => {
-      toast.error('Failed to open project folder', error.message);
-    },
-  });
-
-  const openTarget = (target: ProjectOpenTarget) => {
-    openProjectPath.mutate(target);
-  };
-
-  const mainDisabled =
-    !canOpenProject || openProjectPath.isPending || (defaultApp ? !defaultApp.available : false);
-  const menuDisabled = !canOpenProject || openProjectPath.isPending || !hasAvailableTarget;
-
-  return (
-    <div className="ml-1 flex h-7 shrink-0 overflow-hidden rounded-md border border-border/80 bg-secondary/40 app-region-no-drag">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-7 rounded-none border-0 px-2.5 text-[12px] font-medium text-primary hover:bg-elevated disabled:opacity-50"
-        onClick={() => openTarget(defaultTarget)}
-        disabled={mainDisabled}
-        title={
-          canOpenProject
-            ? `Open ${project.name} in ${defaultLabel}`
-            : `Project folder missing: ${project.path}`
-        }
-        aria-label={`Open ${project.name} in ${defaultLabel}`}
-      >
-        <DefaultIcon size={14} className="shrink-0 text-secondary" />
-        <span>Open</span>
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 rounded-none border-l border-border/80 text-secondary hover:bg-elevated disabled:opacity-50"
-            disabled={menuDisabled}
-            aria-label={`Choose app to open ${project.name}`}
-            title="Choose opener"
-          >
-            <ChevronDown size={13} />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" collisionPadding={8} className="min-w-[220px]">
-          {PROJECT_OPEN_TARGETS.map((target) => {
-            const app = integrationStatus?.desktopApps?.[target];
-            const Icon = PROJECT_OPEN_TARGET_ICONS[target];
-            const label = app?.label ?? PROJECT_OPEN_TARGET_LABELS[target];
-            const available = app?.available ?? true;
-            return (
-              <DropdownMenuItem
-                key={target}
-                disabled={!available}
-                onSelect={() => openTarget(target)}
-                title={app?.error ?? undefined}
-              >
-                <span className="flex size-3.5 items-center justify-center">
-                  {target === defaultTarget ? <Check size={12} /> : null}
-                </span>
-                <Icon size={12} className="shrink-0 text-secondary" />
-                <span className="truncate">
-                  Open in {label}
-                  {!available ? ' (Unavailable)' : ''}
-                </span>
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-}
-
 function formatPhaseLabel(phase: string | null): string {
   return phase ? phase.replace(/_/g, ' ') : 'process';
 }
@@ -634,13 +484,6 @@ export function Titlebar() {
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
-  const { data: integrationStatus } = useQuery<IntegrationStatus>({
-    queryKey: ['integrations'],
-    queryFn: () => window.shipcode.invoke<IntegrationStatus>('integrations:check'),
-    enabled: !!activeProjectId,
-    staleTime: 30_000,
-  });
-
   // Polling owned by HealthBanner (health) and ProjectSidebar (provider-usage).
   // Titlebar piggybacks via shared query keys — no duplicate refetchInterval.
   const { data: systemHealth } = useQuery<SystemHealth>({
@@ -705,11 +548,6 @@ export function Titlebar() {
                 className="shrink-0 app-region-no-drag"
               />
             ) : null}
-            <ProjectOpenControl
-              project={activeProject}
-              settings={settings}
-              integrationStatus={integrationStatus}
-            />
           </>
         ) : (
           <span className="font-semibold tracking-tight text-primary">ShipCode</span>

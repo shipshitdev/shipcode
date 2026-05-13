@@ -10,6 +10,7 @@ import {
   SlidersHorizontal,
   Workflow,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/primitives/button';
 import {
@@ -62,6 +63,7 @@ interface BoardToolbarProps {
   triageCandidateCount?: number;
   onTriageIssues?: () => void;
   projectName?: string;
+  projectActions?: ReactNode;
   repoUrl?: string | null;
   projectsUrl?: string | null;
   onRepoClick?: (event: React.MouseEvent<HTMLAnchorElement>) => void;
@@ -95,6 +97,7 @@ export function BoardToolbar({
   triageCandidateCount = 0,
   onTriageIssues,
   projectName,
+  projectActions,
   repoUrl,
   projectsUrl,
   onRepoClick,
@@ -111,8 +114,9 @@ export function BoardToolbar({
   return (
     <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
       <h3 className="shrink-0 truncate text-sm font-semibold">{projectName ?? 'GitHub Issues'}</h3>
-      {(repoUrl || projectsUrl) && (
+      {(projectActions || repoUrl || projectsUrl) && (
         <ProjectLinks
+          projectActions={projectActions}
           repoUrl={repoUrl}
           projectsUrl={projectsUrl}
           onRepoClick={onRepoClick}
@@ -162,9 +166,14 @@ function ProjectLinks({
   projectsUrl,
   onRepoClick,
   onProjectsClick,
-}: Pick<BoardToolbarProps, 'repoUrl' | 'projectsUrl' | 'onRepoClick' | 'onProjectsClick'>) {
+  projectActions,
+}: Pick<
+  BoardToolbarProps,
+  'projectActions' | 'repoUrl' | 'projectsUrl' | 'onRepoClick' | 'onProjectsClick'
+>) {
   return (
     <div className="flex shrink-0 items-center gap-1">
+      {projectActions}
       {repoUrl && (
         <Button asChild variant="outline" size="sm" title="Open repository on github.com">
           <a href={repoUrl} target="_blank" rel="noreferrer noopener" onClick={onRepoClick}>
