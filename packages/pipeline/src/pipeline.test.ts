@@ -2073,6 +2073,7 @@ Custom prompt`,
     it('exit 0 + autonomous → starts verification (emits verifying)', async () => {
       // Need to set up execSync for verification phase
       mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse --verify')) return 'abc123';
         if (cmd.startsWith('git diff')) return 'some diff output';
         if (cmd.startsWith('git status')) return '';
         return '';
@@ -2110,6 +2111,7 @@ Custom prompt`,
 
     it('direct task graph runs one execute pass and skips node verification', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse --verify')) return 'abc123';
         if (cmd.startsWith('git diff')) return 'some diff output';
         if (cmd.startsWith('git status')) return '';
         return '';
@@ -2159,6 +2161,7 @@ Custom prompt`,
 
     it('continues autonomous direct execution when graph completion status update fails', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse --verify')) return 'abc123';
         if (cmd.startsWith('git diff')) return 'some diff output';
         if (cmd.startsWith('git status')) return '';
         return '';
@@ -3472,6 +3475,7 @@ Custom prompt`,
       });
 
       mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse --verify')) return 'abc123';
         if (cmd.startsWith('git diff')) return 'some diff';
         if (cmd.startsWith('git status')) return '';
         return '';
@@ -3498,6 +3502,7 @@ Custom prompt`,
       };
 
       mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse --verify')) return 'abc123';
         if (cmd.startsWith('git diff')) return 'some diff';
         if (cmd.startsWith('git status')) return '';
         return '';
@@ -3593,6 +3598,7 @@ Custom prompt`,
       context.verificationRetries = 0;
 
       mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse --verify')) return 'abc123';
         if (cmd.startsWith('git diff')) return 'some diff';
         if (cmd.startsWith('git status')) return '';
         return '';
@@ -3622,6 +3628,7 @@ Custom prompt`,
       context.forkPointSha = 'abc123';
 
       mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse --verify')) return 'abc123';
         if (cmd.startsWith('git diff')) return 'some diff';
         if (cmd.startsWith('git status')) return '';
         return '';
@@ -3645,6 +3652,7 @@ Custom prompt`,
       context.workflowPolicy.agent.maxTurns = 1;
 
       mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse --verify')) return 'abc123';
         if (cmd.startsWith('git diff')) return 'some diff';
         if (cmd.startsWith('git status')) return '';
         return '';
@@ -3684,6 +3692,7 @@ Custom prompt`,
       context.verificationRetries = 0;
 
       mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse --verify')) return 'abc123';
         if (cmd.startsWith('git diff')) return 'some diff';
         if (cmd.startsWith('git status')) return '';
         return '';
@@ -4713,6 +4722,7 @@ Custom prompt`,
       context.workflowPolicy.agent.maxTurns = 3;
 
       mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse --verify')) return 'abc123';
         if (cmd.startsWith('git diff')) return 'some diff';
         if (cmd.startsWith('git status')) return '';
         return '';
@@ -4756,6 +4766,7 @@ Custom prompt`,
       context.workflowPolicy.agent.maxTurns = 3;
 
       mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse --verify')) return 'abc123';
         if (cmd.startsWith('git diff')) return 'some diff';
         if (cmd.startsWith('git status')) return '';
         return '';
@@ -4908,6 +4919,7 @@ Custom prompt`,
       let pushAttempts = 0;
 
       mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse --verify')) return 'abc123';
         if (cmd.startsWith('git rev-parse HEAD')) return 'headsha';
         if (cmd.startsWith('git log')) return 'abc123 some commit';
         if (cmd.startsWith('git rev-parse --abbrev-ref')) return 'feat/branch';
