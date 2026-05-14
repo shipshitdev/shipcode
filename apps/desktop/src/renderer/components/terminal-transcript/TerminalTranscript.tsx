@@ -177,7 +177,7 @@ function WorkLogCard({ records, compact }: { records: TerminalEventRecord[]; com
   const visibleRecords =
     isExpanded || records.length <= DEFAULT_WORKLOG_VISIBLE
       ? records
-      : records.slice(0, DEFAULT_WORKLOG_VISIBLE);
+      : records.slice(-DEFAULT_WORKLOG_VISIBLE);
 
   return (
     <div className="mb-3 rounded-xl border border-border/45 bg-secondary/20 px-2 py-1.5">
@@ -868,7 +868,8 @@ export function TerminalTranscript({
   }, []);
 
   const scrollToBottom = useCallback(() => {
-    const node = scrollRef.current!;
+    const node = scrollRef.current;
+    if (!node) return;
     node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' });
     stickToBottomRef.current = true;
     setIsAtBottom(true);

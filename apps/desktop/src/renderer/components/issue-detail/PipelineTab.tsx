@@ -227,7 +227,7 @@ function usePipelineTabView({
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
           Agents
         </h4>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {(
             [
               {

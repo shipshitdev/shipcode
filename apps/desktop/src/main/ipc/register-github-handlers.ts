@@ -52,17 +52,6 @@ const issueCommentsCache = new Map<
   { comments: GitHubIssueComment[]; cachedAtMs: number }
 >();
 const issueCommentsInFlight = new Map<string, Promise<GitHubIssueComment[]>>();
-const LABEL_OWNED_PIPELINE_STATUSES = new Set<IssuePipelineStatus>([
-  ISSUE_PIPELINE_STATUS.queued,
-  ISSUE_PIPELINE_STATUS.planning,
-  ISSUE_PIPELINE_STATUS.clarifying,
-  ISSUE_PIPELINE_STATUS.reviewing,
-  ISSUE_PIPELINE_STATUS.revising,
-  ISSUE_PIPELINE_STATUS.executing,
-  ISSUE_PIPELINE_STATUS.testing,
-  ISSUE_PIPELINE_STATUS.verifying,
-  ISSUE_PIPELINE_STATUS.shipping,
-]);
 const STALE_LINK_THREAD_STATUSES = new Set<string>([
   PIPELINE_PHASE.failed,
   PIPELINE_PHASE.completed,
@@ -91,12 +80,18 @@ function resolveOpenIssuePipelineStatus(
   thread: ReturnType<IpcHandlerDeps['queries']['threads']['getById']>,
 ): IssuePipelineStatus {
   const labelStatus = pipelineStatusFromLabels(issue.labels);
-  if (labelStatus !== null) return labelStatus;
   if (thread) {
+    if (STALE_LINK_THREAD_STATUSES.has(thread.status)) {
+      return thread.status === PIPELINE_PHASE.idle
+        ? ISSUE_PIPELINE_STATUS.todo
+        : (thread.status as IssuePipelineStatus);
+    }
+    if (labelStatus !== null) return labelStatus;
     return thread.status === PIPELINE_PHASE.idle
       ? ISSUE_PIPELINE_STATUS.todo
       : (thread.status as IssuePipelineStatus);
   }
+  if (labelStatus !== null) return labelStatus;
   if (issue.pipelineStatus === ISSUE_PIPELINE_STATUS.queued) return ISSUE_PIPELINE_STATUS.queued;
   return issue.linkedPrNumber != null
     ? ISSUE_PIPELINE_STATUS.completed
@@ -119,18 +114,6 @@ function updateIssuePipelineStatus(
   });
 }
 
-function shouldClearStaleThreadLink(
-  labelStatus: IssuePipelineStatus | null,
-  thread: ReturnType<IpcHandlerDeps['queries']['threads']['getById']>,
-): boolean {
-  return (
-    labelStatus !== null &&
-    LABEL_OWNED_PIPELINE_STATUSES.has(labelStatus) &&
-    thread != null &&
-    STALE_LINK_THREAD_STATUSES.has(thread.status)
-  );
-}
-
 function syncOpenIssueState(
   queries: IpcHandlerDeps['queries'],
   issue: GitHubIssueCacheRecord,
@@ -138,17 +121,11 @@ function syncOpenIssueState(
 ): GitHubIssueCacheRecord | null {
   const labelStatus = pipelineStatusFromLabels(issue.labels);
   const thread = resolveCanonicalIssueThread(queries, issue);
-  const clearStaleThreadLink = shouldClearStaleThreadLink(labelStatus, thread);
-  if (clearStaleThreadLink && issue.threadId) {
-    queries.githubIssues.clearThread(issue.id);
-  } else if (thread && issue.threadId !== thread.id) {
+  if (thread && issue.threadId !== thread.id) {
     queries.githubIssues.linkThread(issue.id, thread.id);
   }
 
-  const pipelineStatus = resolveOpenIssuePipelineStatus(
-    issue,
-    clearStaleThreadLink ? null : thread,
-  );
+  const pipelineStatus = resolveOpenIssuePipelineStatus(issue, thread);
 
   queries.githubIssues.updateState(issue.id, 'open');
   queries.githubIssues.updatePipelineStatus(issue.id, pipelineStatus);

@@ -602,13 +602,13 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
-  it('refresh treats ShipCode pipeline labels as issue state and clears stale terminal thread links', async () => {
+  it('refresh keeps terminal local thread state ahead of stale active pipeline labels', async () => {
     const failedThreadIssue = {
       ...baseIssue,
       id: 'issue-failed-thread',
       issueNumber: 50,
-      labels: ['shipcode:pipeline:queued', 'shipcode:pipeline:executing'],
-      pipelineStatus: 'executing',
+      labels: ['shipcode:pipeline:planning'],
+      pipelineStatus: 'planning',
       threadId: 'thread-failed',
     };
     const staleQueuedLabelIssue = {
@@ -751,7 +751,7 @@ describe('registerGitHubHandlers', () => {
 
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
       'issue-failed-thread',
-      'executing',
+      'failed',
     );
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
       'issue-stale-queued-label',
@@ -765,20 +765,20 @@ describe('registerGitHubHandlers', () => {
       'issue-live-queued',
       'queued',
     );
-    expect(queries.githubIssues.clearThread).toHaveBeenCalledWith('issue-failed-thread');
+    expect(queries.githubIssues.clearThread).not.toHaveBeenCalledWith('issue-failed-thread');
     expect(queries.githubIssues.linkThread).not.toHaveBeenCalledWith(
       'issue-failed-thread',
       'thread-failed',
     );
     await vi.waitFor(() => {
-      expect(setIssueLabelPresenceMock).toHaveBeenCalledWith(50, 'shipcode:pipeline:queued', false);
+      expect(setIssueLabelPresenceMock).toHaveBeenCalledWith(
+        50,
+        'shipcode:pipeline:planning',
+        false,
+      );
+      expect(setIssueLabelPresenceMock).toHaveBeenCalledWith(50, 'shipcode:pipeline:failed', true);
       expect(setIssueLabelPresenceMock).toHaveBeenCalledWith(62, 'shipcode:pipeline:queued', false);
     });
-    expect(setIssueLabelPresenceMock).not.toHaveBeenCalledWith(
-      50,
-      'shipcode:pipeline:failed',
-      true,
-    );
     expect(setIssueLabelPresenceMock).not.toHaveBeenCalledWith(
       60,
       'shipcode:pipeline:queued',

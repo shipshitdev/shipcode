@@ -296,6 +296,34 @@ describe('TerminalTranscript', () => {
     expect(screen.queryByRole('button', { name: /copy failure output/i })).not.toBeInTheDocument();
   });
 
+  it('shows the latest work log rows when collapsed', () => {
+    const events = Array.from({ length: 8 }, (_, index) =>
+      makeTextEvent({
+        id: `event-work-${index}`,
+        createdAt: `2026-04-22T11:06:${String(index).padStart(2, '0')}.000Z`,
+        event: { kind: 'raw', content: `work item ${index}` },
+      }),
+    );
+
+    renderTranscript(<TerminalTranscript events={events} />);
+
+    expect(screen.getByText('Work log (8)')).toBeInTheDocument();
+    expect(screen.queryByText('work item 0')).not.toBeInTheDocument();
+    expect(screen.queryByText('work item 1')).not.toBeInTheDocument();
+    expect(screen.getByText('work item 2')).toBeInTheDocument();
+    expect(screen.getByText('work item 7')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /show 2 more/i }));
+
+    expect(screen.getByText('work item 0')).toBeInTheDocument();
+    expect(screen.getByText('work item 7')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /show less/i }));
+
+    expect(screen.queryByText('work item 0')).not.toBeInTheDocument();
+    expect(screen.getByText('work item 7')).toBeInTheDocument();
+  });
+
   it('renders informational lifecycle output as plain console text', () => {
     renderTranscript(
       <TerminalTranscript
