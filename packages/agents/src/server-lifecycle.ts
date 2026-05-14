@@ -5,6 +5,7 @@ import type { ProcessManager } from './process-manager';
 export interface RunningServer {
   processId: string;
   baseUrl: string;
+  previewUrl?: string;
   port: number;
   crashed: boolean;
 }
@@ -56,6 +57,7 @@ export class ServerLifecycleManager {
     cwd: string,
     signal: AbortSignal,
     threadId: string,
+    options: { previewUrl?: string } = {},
   ): Promise<RunningServer> {
     const port = await findFreePort();
     const readinessUrl = substitutePort(config.readinessUrl, port);
@@ -79,6 +81,7 @@ export class ServerLifecycleManager {
     const server: RunningServer = {
       processId: managed.id,
       baseUrl: `http://localhost:${port}`,
+      previewUrl: options.previewUrl,
       port,
       crashed: false,
     };

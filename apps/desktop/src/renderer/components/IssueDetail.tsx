@@ -142,6 +142,9 @@ function useIssueDetailView() {
   const pipelinePhase = useAppStore((state) => state.pipelinePhase);
   const commentComposerRequest = useAppStore((state) => state.commentComposerRequest);
   const openEditPrdModal = useAppStore((state) => state.openEditPrdModal);
+  const addTerminalPane = useAppStore((state) => state.addTerminalPane);
+  const openTerminalTab = useAppStore((state) => state.openTerminalTab);
+  const terminalPaneCount = useAppStore((state) => state.terminalPaneThreadIds.length);
   const [issueDetailUi, dispatchIssueDetailUi] = useReducer(issueDetailUiReducer, {
     activeTab: 'prd',
     expandedPlanId: null,
@@ -153,6 +156,9 @@ function useIssueDetailView() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false);
   const [isTogglingState, setIsTogglingState] = useState(false);
+  const [openingIssueTerminalProvider, setOpeningIssueTerminalProvider] = useState<
+    'claude' | 'codex' | null
+  >(null);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
   const showRawOutputThreadRef = useRef<string | null>(null);
@@ -861,6 +867,36 @@ function useIssueDetailView() {
     openEditPrdModal(activeIssue.issueNumber, activeIssue.body ?? '', activeIssue.labels);
   };
 
+  const handleOpenIssueTerminal = async (provider: 'claude' | 'codex') => {
+    if (!activeProjectId || !activeIssue) return;
+    if (terminalPaneCount >= 4) {
+      toast.error('Close a terminal pane before opening another one');
+      return;
+    }
+    setOpeningIssueTerminalProvider(provider);
+    try {
+      const result = await window.shipcode.invoke('issue-terminal:start', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
+        provider,
+      });
+      addTerminalPane(result.threadId, {
+        mode: 'live',
+        title: `${provider === 'claude' ? 'Claude' : 'Codex'} #${activeIssue.issueNumber}`,
+        cli: provider,
+      });
+      openTerminalTab();
+      toast.success(`Opened ${provider === 'claude' ? 'Claude' : 'Codex'} issue terminal`);
+    } catch (error) {
+      toast.error(
+        'Failed to open issue terminal',
+        error instanceof Error ? error.message : undefined,
+      );
+    } finally {
+      setOpeningIssueTerminalProvider(null);
+    }
+  };
+
   const githubIssueUrl =
     !activeIssue.isQuickMode && !isAutomationIssue(activeIssue)
       ? deriveGithubIssueUrl(activeProject?.gitRemote ?? null, activeIssue.issueNumber)
@@ -1456,7 +1492,8 @@ function useIssueDetailView() {
     activeIssue.ciBlocked || activeIssue.unresolvedReviewCommentCount > 0;
   const isRealIssue = !activeIssue.isQuickMode;
   const issueMetadataSection = isRealIssue ? (
-    <section className="space-y-2 border-b border-border pb-4">
+    <section className="space-y-2 pb-2">
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">Details</h4>
       <dl className="space-y-2">
         <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-3">
           <dt className="text-xs text-muted-foreground">Type</dt>
@@ -1553,6 +1590,9 @@ function useIssueDetailView() {
     onShowRawOutputChange: setShowRawOutput,
     onStartPipeline: () => void handleStartPipeline(),
     onSubmitClarification: handleSubmitClarification,
+    canOpenIssueTerminal: !!activeProjectId && !isAutomationIssue(activeIssue),
+    openingIssueTerminalProvider,
+    onOpenIssueTerminal: (provider) => void handleOpenIssueTerminal(provider),
     canCreatePr,
     isCreatingPr: createPr.isPending,
     createPrError: createPr.isError
@@ -1728,7 +1768,7 @@ function useIssueDetailView() {
             className="absolute top-0 left-0 bottom-0 h-auto w-1 cursor-col-resize rounded-none p-0 hover:bg-accent/20 active:bg-accent/30 transition-colors"
             onMouseDown={handleDetailResizeMouseDown}
           />
-          <div className="space-y-6 px-4 pt-2 pb-4">
+          <div className="space-y-8 px-4 pt-4 pb-4">
             {/* Details */}
             {issueMetadataSection}
             {issueBadges && <div>{issueBadges}</div>}

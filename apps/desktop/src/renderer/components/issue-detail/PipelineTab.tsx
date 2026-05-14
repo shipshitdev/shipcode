@@ -221,7 +221,7 @@ function usePipelineTabView({
   const manualQaError = manualQa.error;
   const qaEvidenceError = manualQa.evidenceError;
   const runtimeServerSection = (
-    <div className="mb-5">
+    <div className="mb-8">
       <div className="mb-2 flex items-center justify-between">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">Run app</h4>
         {thread?.worktreeBranch ? (
@@ -291,7 +291,7 @@ function usePipelineTabView({
 
   return (
     <>
-      <div className="mb-5">
+      <div className="mb-8">
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
           Agents
         </h4>
@@ -495,10 +495,10 @@ function usePipelineTabView({
         </div>
       </div>
 
-      <div className="mb-5 flex flex-col gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="mb-8 flex flex-col gap-1">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
           Human Approval
-        </span>
+        </h4>
         <Select value={requireApprovalSelectValue} onValueChange={onRequireApprovalChange}>
           <SelectTrigger className="h-6 w-full text-[11px]">
             <SelectValue />
@@ -518,10 +518,8 @@ function usePipelineTabView({
         </span>
       </div>
 
-      <div className="mb-5 flex flex-col gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Revisions
-        </span>
+      <div className="mb-8 flex flex-col gap-1">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">Revisions</h4>
         <Select value={revisionCountSelectValue} onValueChange={onRevisionCountChange}>
           <SelectTrigger className="h-6 w-full text-[11px]">
             <SelectValue />
@@ -544,7 +542,7 @@ function usePipelineTabView({
       </div>
 
       {taskGraph ? (
-        <details className="group mb-5 rounded-md border border-border bg-secondary/20 px-3 py-2">
+        <details className="group mb-8 rounded-md border border-border bg-secondary/20 px-3 py-2">
           <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
             <ChevronRight
               size={12}
@@ -568,7 +566,7 @@ function usePipelineTabView({
       ) : null}
 
       {activeIssue.linkedPrNumber ? (
-        <div className="mb-5">
+        <div className="mb-8">
           <div className="mb-2 flex items-center justify-between">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
               PR Feedback
@@ -672,7 +670,7 @@ function usePipelineTabView({
       ) : null}
 
       {thread && checkpoints.length > 0 ? (
-        <details className="group mb-5 rounded-md border border-border bg-secondary/20 px-3 py-2">
+        <details className="group mb-8 rounded-md border border-border bg-secondary/20 px-3 py-2">
           <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
             <ChevronRight
               size={12}
@@ -717,7 +715,7 @@ function usePipelineTabView({
       {runtimeServerSection}
 
       {featureQaState ? (
-        <div className="mb-5">
+        <div className="mb-8">
           <div className="mb-2 flex items-center justify-between">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
               Human QA
@@ -793,7 +791,7 @@ function usePipelineTabView({
       ) : null}
 
       {qaResults.length > 0 ? (
-        <div className="mb-5">
+        <div className="mb-8">
           <div className="mb-2 flex items-center justify-between">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
               QA Results

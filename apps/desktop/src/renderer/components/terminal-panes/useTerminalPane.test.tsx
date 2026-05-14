@@ -107,6 +107,7 @@ describe('useTerminalPane', () => {
     vi.clearAllMocks();
     terminalInstances.length = 0;
     fitInstances.length = 0;
+    window.shipcode ??= {} as typeof window.shipcode;
     window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke;
     invokeMock.mockResolvedValue(undefined);
     window.requestAnimationFrame = ((callback: FrameRequestCallback) => {

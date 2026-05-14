@@ -8,6 +8,10 @@ import {
   stripAnsi,
 } from '@shipcode/shared';
 import log from '../logger.service';
+import {
+  getInteractiveTerminalSession,
+  unregisterInteractiveTerminalSession,
+} from '../terminal-session-registry';
 import { assertPrdRewriteModelSupported } from './helpers';
 import { getPrdAttachmentSessionSummary } from './prd-attachments';
 import type { IpcHandlerDeps } from './types';
@@ -639,7 +643,12 @@ export function registerInstantHandlers({
     'instant:shell-input',
     (_event, { threadId, data }: { threadId: string; data: string }) => {
       const session = runningInstants.get(threadId);
-      if (!session || session.mode !== 'shell') return;
+      if (!session) {
+        const interactiveSession = getInteractiveTerminalSession(threadId);
+        if (interactiveSession) processManager.write(interactiveSession.processId, data);
+        return;
+      }
+      if (session.mode !== 'shell') return;
 
       // Bare shell sessions still use PTY stdin
       if (session.cli === 'shell') {
@@ -713,9 +722,15 @@ export function registerInstantHandlers({
     'instant:shell-resize',
     (_event, { threadId, cols, rows }: { threadId: string; cols: number; rows: number }) => {
       const session = runningInstants.get(threadId);
-      if (!session || session.mode !== 'shell') return;
       const safeCols = Number.isFinite(cols) ? Math.max(1, Math.floor(cols)) : 1;
       const safeRows = Number.isFinite(rows) ? Math.max(1, Math.floor(rows)) : 1;
+      if (!session) {
+        const interactiveSession = getInteractiveTerminalSession(threadId);
+        if (interactiveSession)
+          processManager.resize(interactiveSession.processId, safeCols, safeRows);
+        return;
+      }
+      if (session.mode !== 'shell') return;
       processManager.resize(session.processId, safeCols, safeRows);
     },
   );
@@ -728,6 +743,14 @@ export function registerInstantHandlers({
       runningInstants.delete(threadId);
       queries.threads.updateStatus(threadId, 'failed', 'Cancelled by user');
       log.info(`[instant] cancelled ${session.mode} thread ${threadId}`);
+      return;
+    }
+    const interactiveSession = getInteractiveTerminalSession(threadId);
+    if (interactiveSession) {
+      processManager.kill(interactiveSession.processId);
+      unregisterInteractiveTerminalSession(threadId);
+      queries.threads.updateStatus(threadId, 'failed', 'Cancelled by user');
+      log.info(`[instant] cancelled interactive terminal thread ${threadId}`);
     }
   });
 

@@ -31,6 +31,25 @@ export const DEFAULT_SETTINGS: AppSettings = {
   telemetryEnabled: null,
   defaultWorktreeEnabled: true,
   terminalScrollback: 10_000,
+  agentRunModes: {
+    claude: {
+      issueTerminal: 'interactive',
+      execute: 'afk',
+      terminalFix: 'afk',
+      instant: 'afk',
+    },
+    codex: {
+      issueTerminal: 'interactive',
+      execute: 'afk',
+      terminalFix: 'afk',
+      instant: 'afk',
+    },
+  },
+  localPreview: {
+    enabled: true,
+    hostMode: 'localhost-subdomain',
+    httpPort: 3750,
+  },
   projectOpenTarget: 'cursor',
   terminalOpenTarget: 'terminal',
   plannerModel: 'claude',

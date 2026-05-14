@@ -18,6 +18,11 @@ import { reviewCommand } from './commands/review';
 import { runCommand } from './commands/run';
 import { startCommand } from './commands/start';
 import { statusCommand } from './commands/status';
+import {
+  terminalCommand,
+  terminalCommentCommand,
+  terminalSummaryCommand,
+} from './commands/terminal';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
@@ -66,6 +71,24 @@ program
   .command('logs <issue>')
   .description('Show terminal events for an issue')
   .action(logsCommand);
+
+program
+  .command('terminal <issue>')
+  .description('Open an official Claude/Codex interactive CLI for a GitHub issue')
+  .option('--provider <provider>', 'claude|codex', 'claude')
+  .option('--model <model>', 'CLI model id')
+  .action(terminalCommand);
+
+program
+  .command('terminal-summary <issue>')
+  .description('Show the latest interactive terminal summary for an issue')
+  .action(terminalSummaryCommand);
+
+program
+  .command('terminal-comment <issue>')
+  .description('Preview or post a GitHub comment from the latest terminal summary')
+  .option('--post', 'post the generated comment')
+  .action(terminalCommentCommand);
 
 program
   .command('prd <keywords...>')

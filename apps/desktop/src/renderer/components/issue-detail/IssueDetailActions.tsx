@@ -53,6 +53,10 @@ interface IssueDetailActionsProps {
   isCreatingPr?: boolean;
   createPrError?: string | null;
   onCreatePr?: () => void;
+  // Issue-linked terminal sessions
+  canOpenIssueTerminal?: boolean;
+  openingIssueTerminalProvider?: 'claude' | 'codex' | null;
+  onOpenIssueTerminal?: (provider: 'claude' | 'codex') => void;
 }
 
 function buildClarificationDraft(
@@ -288,6 +292,9 @@ export function buildIssueDetailActions({
   isCreatingPr,
   createPrError,
   onCreatePr,
+  canOpenIssueTerminal,
+  openingIssueTerminalProvider,
+  onOpenIssueTerminal,
 }: IssueDetailActionsProps) {
   const failurePresentation = getFailurePresentation(
     thread?.lastError ?? failingPhaseOutput,
@@ -298,60 +305,106 @@ export function buildIssueDetailActions({
     effectiveRevisionCount > 0
       ? PIPELINE_PREVIEW_PHASES
       : PIPELINE_PREVIEW_PHASES.filter((phase) => phase.id !== 'review');
-  const pipelineStartCard = canStartPipeline ? (
-    <div className="rounded-lg border border-border bg-tertiary p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.3)]">
-      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        Ready
-      </div>
-      <h4 className="mb-1.5 text-[14px] font-semibold leading-snug text-primary">
-        Run the agent pipeline
-      </h4>
-      <p className="mb-5 text-[12px] leading-relaxed text-secondary">
-        {effectiveRevisionCount > 0
-          ? `ShipCode will plan, run ${effectiveRevisionCount} revision${effectiveRevisionCount === 1 ? '' : 's'}, and then ${
-              requireApproval ? 'pause for approval' : 'execute automatically'
-            } in an isolated worktree.`
-          : `ShipCode will plan and then ${
-              requireApproval ? 'pause for approval' : 'execute automatically'
-            } in an isolated worktree. Review is skipped for this issue.`}
-      </p>
-
-      <ol className="mb-5 flex items-center gap-2 overflow-x-auto whitespace-nowrap [&::-webkit-scrollbar]:hidden">
-        {previewPhases.map((phase, index) => (
-          <li
-            key={phase.id}
-            className="inline-flex shrink-0 items-center gap-2 text-muted-foreground"
+  const terminalControls =
+    canOpenIssueTerminal && onOpenIssueTerminal ? (
+      <div className="mt-4 border-t border-border/70 pt-4">
+        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Manual run
+        </div>
+        <p className="mb-3 text-[12px] leading-relaxed text-secondary">
+          Open a CLI in this issue worktree. ShipCode keeps this pipeline thread active and saves
+          the transcript here.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={openingIssueTerminalProvider != null}
+            onClick={() => onOpenIssueTerminal('claude')}
           >
-            <span className="flex size-4 items-center justify-center rounded-full border border-border bg-tertiary font-mono text-[8px] font-medium">
-              {index + 1}
-            </span>
-            <span className="text-[9px] font-semibold uppercase tracking-[0.08em]">
-              {phase.label}
-            </span>
-            {index < previewPhases.length - 1 ? (
-              <span aria-hidden="true" className="text-border">
-                /
-              </span>
-            ) : null}
-          </li>
-        ))}
-      </ol>
-
-      <div className="flex items-center gap-3">
-        <Button size="sm" onClick={onStartPipeline} disabled={isSubmitting}>
-          <LoadingButtonContent loading={isSubmitting}>Start pipeline</LoadingButtonContent>
-        </Button>
-        <Button
-          variant="link"
-          size="xs"
-          onClick={onEditPrd}
-          className="px-0 text-muted-foreground hover:text-primary"
-        >
-          Edit
-        </Button>
+            <LoadingButtonContent loading={openingIssueTerminalProvider === 'claude'}>
+              Claude CLI
+            </LoadingButtonContent>
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={openingIssueTerminalProvider != null}
+            onClick={() => onOpenIssueTerminal('codex')}
+          >
+            <LoadingButtonContent loading={openingIssueTerminalProvider === 'codex'}>
+              Codex CLI
+            </LoadingButtonContent>
+          </Button>
+        </div>
       </div>
-    </div>
-  ) : null;
+    ) : null;
+  const pipelineStartCard =
+    canStartPipeline || terminalControls ? (
+      <div className="rounded-lg border border-border bg-tertiary p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.3)]">
+        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Pipeline
+        </div>
+        <h4 className="mb-1.5 text-[14px] font-semibold leading-snug text-primary">
+          Run this issue
+        </h4>
+        {canStartPipeline ? (
+          <p className="mb-5 text-[12px] leading-relaxed text-secondary">
+            {effectiveRevisionCount > 0
+              ? `ShipCode will plan, run ${effectiveRevisionCount} revision${effectiveRevisionCount === 1 ? '' : 's'}, and then ${
+                  requireApproval ? 'pause for approval' : 'execute automatically'
+                } in an isolated worktree.`
+              : `ShipCode will plan and then ${
+                  requireApproval ? 'pause for approval' : 'execute automatically'
+                } in an isolated worktree. Review is skipped for this issue.`}
+          </p>
+        ) : terminalControls ? (
+          <p className="mb-4 text-[12px] leading-relaxed text-secondary">
+            Continue the same issue pipeline from a terminal.
+          </p>
+        ) : null}
+
+        {canStartPipeline ? (
+          <ol className="mb-5 flex items-center gap-2 overflow-x-auto whitespace-nowrap [&::-webkit-scrollbar]:hidden">
+            {previewPhases.map((phase, index) => (
+              <li
+                key={phase.id}
+                className="inline-flex shrink-0 items-center gap-2 text-muted-foreground"
+              >
+                <span className="flex size-4 items-center justify-center rounded-full border border-border bg-tertiary font-mono text-[8px] font-medium">
+                  {index + 1}
+                </span>
+                <span className="text-[9px] font-semibold uppercase tracking-[0.08em]">
+                  {phase.label}
+                </span>
+                {index < previewPhases.length - 1 ? (
+                  <span aria-hidden="true" className="text-border">
+                    /
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        ) : null}
+
+        {canStartPipeline ? (
+          <div className="flex items-center gap-3">
+            <Button size="sm" onClick={onStartPipeline} disabled={isSubmitting}>
+              <LoadingButtonContent loading={isSubmitting}>Start pipeline</LoadingButtonContent>
+            </Button>
+            <Button
+              variant="link"
+              size="xs"
+              onClick={onEditPrd}
+              className="px-0 text-muted-foreground hover:text-primary"
+            >
+              Edit
+            </Button>
+          </div>
+        ) : null}
+        {terminalControls}
+      </div>
+    ) : null;
 
   const clarificationSection =
     clarificationRequest && thread?.status === PIPELINE_PHASE.clarifying ? (

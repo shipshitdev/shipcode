@@ -284,6 +284,30 @@ describe('IssueDetail', () => {
     expect(screen.getByText('Start pipeline')).toBeInTheDocument();
   });
 
+  it('opens issue terminal sessions from the pipeline action card', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'issue-terminal:start') return { threadId: 'thread-1' };
+      return [];
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('Run this issue')).toBeInTheDocument();
+    expect(screen.queryByText('Interactive CLI')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Claude CLI' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('issue-terminal:start', {
+        projectId: 'project-1',
+        issueNumber: 42,
+        provider: 'claude',
+      });
+    });
+    expect(useAppStore.getState().projectTab).toBe('terminal');
+    expect(useAppStore.getState().terminalPaneThreadIds).toContain('thread-1');
+  });
+
   it('resizes the right detail sidebar from its drag handle', async () => {
     invokeMock.mockResolvedValue([]);
 

@@ -78,6 +78,11 @@ export {
   shellExecEnv,
   validateOpenRouterModel,
 } from './health-check';
+export {
+  buildLocalPreviewHost,
+  LocalPreviewProxy,
+  type LocalPreviewRoute,
+} from './local-preview-proxy';
 export type { MemoryGenerateResult } from './memory-generator';
 export {
   generateMemoryFiles,

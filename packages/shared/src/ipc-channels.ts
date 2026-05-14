@@ -712,6 +712,35 @@ export interface IpcInvokeChannels {
   'instant:list': { args: undefined; result: Thread[] };
   'instant:cleanup': { args: undefined; result: { deleted: number } };
 
+  // Issue-linked interactive terminal sessions
+  'issue-terminal:start': {
+    args: {
+      projectId: string;
+      issueNumber: number;
+      provider: 'claude' | 'codex';
+      modelId?: string | null;
+      reasoningEffort?: ReasoningEffort;
+    };
+    result: {
+      threadId: string;
+      processId: string;
+      worktreePath: string;
+      promptArtifactPath: string;
+    };
+  };
+  'issue-terminal:summarize': {
+    args: { threadId: string };
+    result: { summary: string; conversationId: string };
+  };
+  'issue-terminal:github-comment-preview': {
+    args: { threadId: string };
+    result: { body: string };
+  };
+  'issue-terminal:github-comment-post': {
+    args: { threadId: string; body: string };
+    result: { url?: string | null };
+  };
+
   // Pull request browsing
   'github:list-prs': {
     args: { projectId: string; filter?: PullRequestListFilter; limit?: number };

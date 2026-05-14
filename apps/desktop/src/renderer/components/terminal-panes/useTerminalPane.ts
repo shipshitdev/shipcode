@@ -1,12 +1,10 @@
 import type { TerminalEventRecord } from '@shipcode/shared';
-import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
-import { Terminal } from '@xterm/xterm';
-import '@xterm/xterm/css/xterm.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TerminalPaneMode } from '../../stores/app-store';
 import { useAppStore } from '../../stores/app-store';
 import { renderTerminalEvent } from '../terminal-drawer/render-terminal-event';
+import type { TerminalSurface } from './terminal-surface';
+import { XtermSurface } from './xterm-surface';
 
 const EMPTY_STREAM: TerminalEventRecord[] = [];
 
@@ -44,22 +42,25 @@ function buildTerminalTheme() {
   };
 }
 
-function writeTerminalRecord(term: Terminal, mode: TerminalPaneMode, record: TerminalEventRecord) {
+function writeTerminalRecord(
+  surface: TerminalSurface,
+  mode: TerminalPaneMode,
+  record: TerminalEventRecord,
+) {
   if (mode === 'live' && record.event.kind === 'raw') {
-    term.write(record.event.content);
+    surface.write(record.event.content);
     return;
   }
 
   const rendered = renderTerminalEvent(record.event);
   if (!rendered) return;
   const normalized = rendered.replace(/\n/g, '\r\n');
-  term.write(normalized);
+  surface.write(normalized);
 }
 
 export function useTerminalPane(threadId: string, mode: TerminalPaneMode, isRunning: boolean) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<Terminal | null>(null);
-  const fitRef = useRef<FitAddon | null>(null);
+  const surfaceRef = useRef<TerminalSurface | null>(null);
   const writtenCountRef = useRef(0);
   const lastWrittenEventIdRef = useRef<string | null>(null);
   const streamRef = useRef<TerminalEventRecord[]>(EMPTY_STREAM);
@@ -67,13 +68,14 @@ export function useTerminalPane(threadId: string, mode: TerminalPaneMode, isRunn
 
   const syncPtySize = useCallback(() => {
     if (mode !== 'live') return;
-    const term = termRef.current;
-    if (!term) return;
+    const surface = surfaceRef.current;
+    if (!surface) return;
+    const size = surface.getSize();
     void window.shipcode
       .invoke('instant:shell-resize', {
         threadId,
-        cols: term.cols,
-        rows: term.rows,
+        cols: size.cols,
+        rows: size.rows,
       })
       .catch(() => {
         // Best-effort resize sync only.
@@ -84,25 +86,15 @@ export function useTerminalPane(threadId: string, mode: TerminalPaneMode, isRunn
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const term = new Terminal({
-      disableStdin: mode !== 'live',
-      convertEol: true,
-      scrollback: 5000,
-      fontSize: 13,
-      fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+    const surface = new XtermSurface({
+      interactive: mode === 'live',
       theme: buildTerminalTheme(),
-      cursorBlink: mode === 'live',
-      cursorStyle: mode === 'live' ? 'block' : 'underline',
     });
-
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.loadAddon(new WebLinksAddon());
-    term.open(containerRef.current);
+    surface.mount(containerRef.current);
 
     const dataDisposable =
       mode === 'live'
-        ? term.onData((data) => {
+        ? surface.onData((data) => {
             void window.shipcode.invoke('instant:shell-input', { threadId, data }).catch(() => {
               // Session may have exited before the keystroke is delivered.
             });
@@ -111,12 +103,11 @@ export function useTerminalPane(threadId: string, mode: TerminalPaneMode, isRunn
 
     // Initial fit after DOM layout
     requestAnimationFrame(() => {
-      fit.fit();
+      surface.fit();
       syncPtySize();
     });
 
-    termRef.current = term;
-    fitRef.current = fit;
+    surfaceRef.current = surface;
     writtenCountRef.current = 0;
     lastWrittenEventIdRef.current = null;
     streamRef.current = EMPTY_STREAM;
@@ -125,26 +116,23 @@ export function useTerminalPane(threadId: string, mode: TerminalPaneMode, isRunn
     return () => {
       setIsReady(false);
       dataDisposable?.dispose();
-      term.dispose();
-      termRef.current = null;
-      fitRef.current = null;
+      surface.dispose();
+      surfaceRef.current = null;
     };
   }, [mode, syncPtySize, threadId]);
 
   useEffect(() => {
-    if (!termRef.current) return;
-    termRef.current.options.disableStdin = mode !== 'live' || !isRunning;
-    termRef.current.options.cursorBlink = mode === 'live' && isRunning;
-    termRef.current.options.cursorStyle = mode === 'live' ? 'block' : 'underline';
+    if (!surfaceRef.current) return;
+    surfaceRef.current.setInteractive(mode === 'live' && isRunning);
   }, [isRunning, mode]);
 
   // ResizeObserver for CSS grid resizing — re-attaches after terminal initialises
   useEffect(() => {
-    if (!containerRef.current || !fitRef.current) return;
-    const fit = fitRef.current;
+    if (!containerRef.current || !surfaceRef.current) return;
+    const surface = surfaceRef.current;
     const observer = new ResizeObserver(() => {
       try {
-        fit.fit();
+        surface.fit();
         syncPtySize();
       } catch {
         // ignore fit errors during teardown
@@ -159,8 +147,8 @@ export function useTerminalPane(threadId: string, mode: TerminalPaneMode, isRunn
     if (!isReady) return;
 
     const writeStream = (stream: TerminalEventRecord[]) => {
-      const term = termRef.current;
-      if (!term) return;
+      const surface = surfaceRef.current;
+      if (!surface) return;
 
       const lastWrittenEventId = lastWrittenEventIdRef.current;
       const startIndex =
@@ -169,7 +157,7 @@ export function useTerminalPane(threadId: string, mode: TerminalPaneMode, isRunn
           : stream.findIndex((record) => record.id === lastWrittenEventId) + 1;
       const newEvents = stream.slice(Math.max(0, startIndex));
       for (const record of newEvents) {
-        writeTerminalRecord(term, mode, record);
+        writeTerminalRecord(surface, mode, record);
       }
       writtenCountRef.current = stream.length;
       lastWrittenEventIdRef.current = stream.at(-1)?.id ?? lastWrittenEventIdRef.current;
@@ -190,8 +178,8 @@ export function useTerminalPane(threadId: string, mode: TerminalPaneMode, isRunn
   // Theme sync on data-theme changes
   useEffect(() => {
     const observer = new MutationObserver(() => {
-      if (termRef.current) {
-        termRef.current.options.theme = buildTerminalTheme();
+      if (surfaceRef.current) {
+        surfaceRef.current.setTheme(buildTerminalTheme());
       }
     });
     observer.observe(document.documentElement, {

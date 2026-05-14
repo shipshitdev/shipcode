@@ -12,6 +12,7 @@ import { registerFeatureQaHandlers } from './ipc/register-feature-qa-handlers';
 import { registerGitHubHandlers } from './ipc/register-github-handlers';
 import { registerInstantHandlers } from './ipc/register-instant-handlers';
 import { registerIssueGraphHandlers } from './ipc/register-issue-graph-handlers';
+import { registerIssueTerminalHandlers } from './ipc/register-issue-terminal-handlers';
 import { registerPipelineHandlers } from './ipc/register-pipeline-handlers';
 import { registerPullRequestHandlers } from './ipc/register-pr-handlers';
 import { registerProjectHandlers } from './ipc/register-project-handlers';
@@ -103,6 +104,7 @@ export function registerIpcHandlers(
   registerSkillsHandlers(deps);
   registerSupportHandlers(deps);
   registerInstantHandlers(deps);
+  registerIssueTerminalHandlers(deps);
   registerPullRequestHandlers(deps);
   registerAgentConversationHandlers(deps);
   registerFeatureQaHandlers(deps);

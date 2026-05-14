@@ -26,6 +26,7 @@
       "!**/build",
       "!**/out",
       "!**/coverage",
+      "!**/.deepsec",
       "!**/*.snap",
       "!**/bun.lock",
       "!**/.env",

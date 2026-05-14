@@ -46,6 +46,7 @@ export interface CliContext {
   skills: SkillsQueries;
   checkpoints: CheckpointQueries;
   terminalEvents: TerminalEventQueries;
+  agentConversations: AgentConversationQueries;
   taskGraphs: TaskGraphQueries;
   ghCli: GhCli;
   processManager: ProcessManager;
@@ -133,6 +134,7 @@ export function createCliContext(cwd: string): CliContext {
     skills,
     checkpoints,
     terminalEvents,
+    agentConversations,
     taskGraphs,
     ghCli,
     processManager,

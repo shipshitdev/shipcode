@@ -47,6 +47,17 @@ function parseChatNotificationEvents(raw: string | undefined): NotificationEvent
   return parseEventToggles(raw, DEFAULT_CHAT_NOTIFICATION_EVENTS);
 }
 
+function parseJsonSetting<T>(raw: string | undefined, defaults: T): T {
+  if (!raw) return structuredClone(defaults);
+  try {
+    const parsed = JSON.parse(raw) as Partial<T>;
+    if (!parsed || typeof parsed !== 'object') return structuredClone(defaults);
+    return { ...structuredClone(defaults), ...parsed };
+  } catch {
+    return structuredClone(defaults);
+  }
+}
+
 function parseDeliveryStatus(raw: string | undefined): IntegrationDeliveryStatus | null {
   if (!raw) return null;
   try {
@@ -160,6 +171,8 @@ export class SettingsQueries {
       terminalScrollback: stored.terminalScrollback
         ? parseInt(stored.terminalScrollback, 10)
         : DEFAULT_SETTINGS.terminalScrollback,
+      agentRunModes: parseJsonSetting(stored.agentRunModes, DEFAULT_SETTINGS.agentRunModes),
+      localPreview: parseJsonSetting(stored.localPreview, DEFAULT_SETTINGS.localPreview),
       projectOpenTarget: isProjectOpenTarget(stored.projectOpenTarget)
         ? stored.projectOpenTarget
         : DEFAULT_SETTINGS.projectOpenTarget,

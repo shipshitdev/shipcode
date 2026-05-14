@@ -195,6 +195,22 @@ export const THREAD_KIND = {
 
 export type ThreadKind = (typeof THREAD_KIND)[keyof typeof THREAD_KIND];
 export type InstantFixScope = 'user' | 'project' | 'custom';
+export type ProviderRunMode = 'afk' | 'interactive';
+
+export interface AgentRunModeSettings {
+  claude: {
+    issueTerminal: 'interactive';
+    execute: ProviderRunMode;
+    terminalFix: ProviderRunMode;
+    instant: ProviderRunMode;
+  };
+  codex: {
+    issueTerminal: 'interactive';
+    execute: ProviderRunMode;
+    terminalFix: ProviderRunMode;
+    instant: ProviderRunMode;
+  };
+}
 
 export interface Thread {
   id: string;
@@ -754,6 +770,8 @@ export interface AppSettings {
   telemetryEnabled: boolean | null;
   defaultWorktreeEnabled: boolean;
   terminalScrollback: number;
+  agentRunModes: AgentRunModeSettings;
+  localPreview: LocalPreviewSettings;
   projectOpenTarget: ProjectOpenTarget;
   terminalOpenTarget: TerminalOpenTarget;
   plannerModel: AgentType;
@@ -850,6 +868,12 @@ export interface AppSettings {
   autoCommitMode: 'split' | 'single';
   // Branch / worktree cleanup criteria (Git tab "Cleanup" button)
   cleanupCriteria: CleanupCriteria;
+}
+
+export interface LocalPreviewSettings {
+  enabled: boolean;
+  hostMode: 'localhost-subdomain';
+  httpPort: number;
 }
 
 export type TelemetryDisabledReason =

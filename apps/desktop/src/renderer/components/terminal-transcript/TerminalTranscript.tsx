@@ -543,7 +543,7 @@ function transcriptRow({
           </TranscriptMeta>
           <pre
             className={cn(
-              'mt-1.5 whitespace-pre-wrap break-words font-sans italic text-secondary/80',
+              'mt-1.5 whitespace-pre-wrap break-words font-mono italic text-secondary/80',
               compact ? 'text-[11px] leading-5' : 'text-[12px] leading-[1.6]',
             )}
           >
@@ -589,7 +589,7 @@ function transcriptRow({
           </div>
           <pre
             className={cn(
-              'mt-2 whitespace-pre-wrap break-words font-sans text-primary',
+              'mt-2 whitespace-pre-wrap break-words font-mono text-primary',
               compact ? 'text-[12px] leading-[1.6]' : 'text-[13px] leading-[1.65]',
             )}
           >
@@ -685,7 +685,7 @@ function transcriptRow({
           </div>
           <pre
             className={cn(
-              'mt-2 whitespace-pre-wrap break-words font-sans text-danger',
+              'mt-2 whitespace-pre-wrap break-words font-mono text-danger',
               compact ? 'text-[12px] leading-5' : 'text-[13px] leading-6',
             )}
           >

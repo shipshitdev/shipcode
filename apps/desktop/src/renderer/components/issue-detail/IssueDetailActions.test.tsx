@@ -177,6 +177,28 @@ describe('IssueDetailActions', () => {
     expect(props.onEditPrd).toHaveBeenCalledTimes(1);
   });
 
+  it('renders manual CLI controls inside the pipeline card', () => {
+    const props = baseProps({
+      canStartPipeline: true,
+      canOpenIssueTerminal: true,
+      openingIssueTerminalProvider: null,
+      onOpenIssueTerminal: vi.fn(),
+    });
+
+    renderActions(props);
+
+    expect(screen.getByText('Pipeline')).toBeInTheDocument();
+    expect(screen.getByText('Run this issue')).toBeInTheDocument();
+    expect(screen.getByText('Manual run')).toBeInTheDocument();
+    expect(screen.queryByText('Interactive CLI')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Claude CLI' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Codex CLI' }));
+
+    expect(props.onOpenIssueTerminal).toHaveBeenCalledWith('claude');
+    expect(props.onOpenIssueTerminal).toHaveBeenCalledWith('codex');
+  });
+
   it('renders revision start copy for automatic execution', () => {
     const props = baseProps({
       canStartPipeline: true,
