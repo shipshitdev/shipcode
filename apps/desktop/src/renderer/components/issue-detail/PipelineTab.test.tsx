@@ -262,6 +262,36 @@ describe('PipelineTab', () => {
     expect(screen.getByText('1 revision before approval/execution.')).toBeInTheDocument();
   });
 
+  it('renders an issue worktree app runner without feature QA metadata', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'feature-qa:get-server') return null;
+      if (channel === 'feature-qa:start-server') {
+        return { baseUrl: 'http://localhost:5173', port: 5173 };
+      }
+      return null;
+    });
+    window.shipcode.invoke = invoke as unknown as typeof window.shipcode.invoke;
+
+    renderPipelineTab({
+      issueOverrides: { body: 'plain issue body' },
+    });
+
+    expect(screen.getByText('Run app')).toBeInTheDocument();
+    expect(screen.getByText('/tmp/worktree')).toBeInTheDocument();
+    expect(
+      screen.getByText(/starts the configured runtime qa command in this issue worktree/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Human QA')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    expect(await screen.findByText('http://localhost:5173')).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith('feature-qa:start-server', {
+      projectId: 'project-1',
+      threadId: 'thread-1',
+    });
+  });
+
   it('renders Gemini in editable thread-level phase selectors with degraded readiness', () => {
     renderPipelineTab({
       executorEditable: true,

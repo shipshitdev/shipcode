@@ -220,6 +220,74 @@ function usePipelineTabView({
   const manualQaPending = manualQa.pending;
   const manualQaError = manualQa.error;
   const qaEvidenceError = manualQa.evidenceError;
+  const runtimeServerSection = (
+    <div className="mb-5">
+      <div className="mb-2 flex items-center justify-between">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">Run app</h4>
+        {thread?.worktreeBranch ? (
+          <span className="max-w-[12rem] truncate font-mono text-[10px] text-muted-foreground">
+            {thread.worktreeBranch}
+          </span>
+        ) : null}
+      </div>
+      <div className="rounded-md border border-border bg-secondary p-3">
+        <div className="space-y-3">
+          {thread?.worktreePath ? (
+            <div>
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-secondary">
+                Worktree
+              </div>
+              <div className="break-all font-mono text-[10px] text-muted-foreground">
+                {thread.worktreePath}
+              </div>
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-secondary">
+                Test server
+              </div>
+              {manualQaServer ? (
+                <button
+                  type="button"
+                  className="mt-1 inline-flex max-w-full items-center gap-1 break-all font-mono text-[10px] text-accent hover:underline"
+                  onClick={() =>
+                    window.shipcode.invoke('shell:open-external', {
+                      url: manualQaServer.baseUrl,
+                    })
+                  }
+                >
+                  {manualQaServer.baseUrl}
+                  <ExternalLink size={10} className="shrink-0" />
+                </button>
+              ) : (
+                <div className="mt-1 text-[11px] text-muted-foreground">
+                  {thread?.worktreePath
+                    ? 'Starts the configured Runtime QA command in this issue worktree.'
+                    : 'Run the pipeline first to create an issue worktree.'}
+                </div>
+              )}
+            </div>
+            <Button
+              variant={manualQaServer ? 'outline' : 'secondary'}
+              size="xs"
+              onClick={manualQaServer ? stopManualQa : startManualQa}
+              disabled={!activeThreadId || !thread?.worktreePath || manualQaPending}
+            >
+              <LoadingButtonContent loading={manualQaPending}>
+                {manualQaServer ? 'Stop' : 'Start'}
+              </LoadingButtonContent>
+            </Button>
+          </div>
+          {manualQaError ? (
+            <div className="rounded-sm border border-danger/30 bg-danger/10 px-2 py-1 text-[11px] text-danger">
+              {manualQaError}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -646,6 +714,8 @@ function usePipelineTabView({
         </details>
       ) : null}
 
+      {runtimeServerSection}
+
       {featureQaState ? (
         <div className="mb-5">
           <div className="mb-2 flex items-center justify-between">
@@ -656,58 +726,6 @@ function usePipelineTabView({
           </div>
           <div className="rounded-md border border-border bg-secondary p-3">
             <div className="space-y-3">
-              {thread?.worktreePath ? (
-                <div>
-                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-secondary">
-                    Worktree
-                  </div>
-                  <div className="break-all font-mono text-[10px] text-muted-foreground">
-                    {thread.worktreePath}
-                  </div>
-                </div>
-              ) : null}
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-secondary">
-                      Test server
-                    </div>
-                    {manualQaServer ? (
-                      <button
-                        type="button"
-                        className="mt-1 inline-flex items-center gap-1 break-all font-mono text-[10px] text-accent hover:underline"
-                        onClick={() =>
-                          window.shipcode.invoke('shell:open-external', {
-                            url: manualQaServer.baseUrl,
-                          })
-                        }
-                      >
-                        {manualQaServer.baseUrl}
-                        <ExternalLink size={10} />
-                      </button>
-                    ) : (
-                      <div className="mt-1 text-[11px] text-muted-foreground">
-                        Starts the configured Runtime QA command in this worktree.
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    variant={manualQaServer ? 'outline' : 'secondary'}
-                    size="xs"
-                    onClick={manualQaServer ? stopManualQa : startManualQa}
-                    disabled={!activeThreadId || !thread?.worktreePath || manualQaPending}
-                  >
-                    <LoadingButtonContent loading={manualQaPending}>
-                      {manualQaServer ? 'Stop' : 'Start'}
-                    </LoadingButtonContent>
-                  </Button>
-                </div>
-                {manualQaError ? (
-                  <div className="rounded-sm border border-danger/30 bg-danger/10 px-2 py-1 text-[11px] text-danger">
-                    {manualQaError}
-                  </div>
-                ) : null}
-              </div>
               {featureQaState.routes.length > 0 ? (
                 <div>
                   <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-secondary">
