@@ -660,10 +660,19 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     const context = activePipelines.get(threadId);
     if (!context) return 'failed';
 
-    const diff = computeNodeDiff(context, context.nodeAnchorSha ?? '');
+    let diff = computeNodeDiff(context, context.nodeAnchorSha ?? '');
     if (!diff.trim()) {
-      // No changes produced — treat as needing retry
-      return 'retry';
+      const cumulativeBase = resolveWorktreeDiffBase(context);
+      const cumulativeDiff = cumulativeBase ? computeNodeDiff(context, cumulativeBase) : '';
+      if (!cumulativeDiff.trim()) {
+        // No scoped or cumulative changes produced — treat as needing retry.
+        return 'retry';
+      }
+      emitTerminalLifecycle(
+        threadId,
+        `[node-verifier] No new diff since node start; verifying cumulative worktree diff from ${cumulativeBase}.\r\n`,
+      );
+      diff = cumulativeDiff;
     }
 
     const latestPlanRecord = deps.plans.getLatest(threadId);

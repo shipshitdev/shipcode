@@ -174,29 +174,33 @@ export function TerminalDrawerHeader({
           <Plus size={14} />
         </TerminalHeaderIconButton>
 
-        <TerminalHeaderIconButton
-          onClick={onToggleMaximize}
-          tooltip={maximizeLabel}
-          ariaLabel={maximizeLabel}
-        >
-          {isMaximized ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-        </TerminalHeaderIconButton>
+        {!isMinimized && (
+          <TerminalHeaderIconButton
+            onClick={onToggleMaximize}
+            tooltip={maximizeLabel}
+            ariaLabel={maximizeLabel}
+          >
+            {isMaximized ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+          </TerminalHeaderIconButton>
+        )}
 
         <TerminalHeaderIconButton
-          onClick={onToggleMinimized}
-          tooltip={oneLineLabel}
-          ariaLabel={oneLineLabel}
-        >
-          {isMinimized ? <ChevronUp size={14} /> : <Minus size={14} />}
-        </TerminalHeaderIconButton>
-
-        <TerminalHeaderIconButton
-          onClick={onResetHeight}
-          tooltip="Reset terminal size"
-          ariaLabel="Reset terminal size"
+          onClick={isMinimized ? onToggleMinimized : onResetHeight}
+          tooltip={isMinimized ? oneLineLabel : 'Reset terminal size'}
+          ariaLabel={isMinimized ? oneLineLabel : 'Reset terminal size'}
         >
           <RotateCcw size={13} />
         </TerminalHeaderIconButton>
+
+        {!isMinimized && (
+          <TerminalHeaderIconButton
+            onClick={onToggleMinimized}
+            tooltip={oneLineLabel}
+            ariaLabel={oneLineLabel}
+          >
+            <Minus size={14} />
+          </TerminalHeaderIconButton>
+        )}
 
         <TerminalHeaderIconButton
           onClick={onToggleTerminal}

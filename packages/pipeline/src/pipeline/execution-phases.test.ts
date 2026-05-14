@@ -1310,6 +1310,75 @@ describe('execution phase handlers', () => {
     expect(harness.runtime.runProviderPhase).toHaveBeenCalledTimes(2);
   });
 
+  it('completes a task graph node from cumulative diff when a retry finds it already committed', async () => {
+    const context = makeContext({
+      forkPointSha: 'base-sha',
+      nodeVerificationRetries: 1,
+      worktreePath: process.cwd(),
+    });
+    const harness = makeExecutionHarness(context);
+    const node = {
+      id: 'node-1',
+      stableKey: 'step-1',
+      title: 'Node',
+      description: 'Do node',
+      status: 'ready',
+      githubIssueNumber: null,
+      order: 1,
+      files: [],
+      acceptanceCriteria: ['done'],
+      surfaces: [],
+      agentRole: 'backend',
+      suggestedReasoningEffort: 'medium',
+    };
+    const graph = {
+      id: 'graph-1',
+      mode: 'github-subissues',
+      status: 'active',
+      nodes: [node],
+      edges: [],
+    };
+    (harness.deps as never as { taskGraphs: unknown }).taskGraphs = {
+      getByPlanId: vi.fn(() => graph),
+      getNextReadyNode: vi.fn(() => node),
+      updateNodeStatus: vi.fn(),
+      markNodeCompletedAndPromote: vi.fn(() => graph),
+      markNodeFailed: vi.fn(() => graph),
+    } as never;
+    vi.mocked(harness.runtime.runProviderPhase)
+      .mockResolvedValueOnce({ rawOutput: 'already done', exitCode: 0 })
+      .mockResolvedValueOnce({ rawOutput: verificationPassed, exitCode: 0 });
+
+    let diffCalls = 0;
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
+      if (args[0] === 'rev-parse' && args[1] === 'HEAD') return 'head-sha\n';
+      if (args[0] === 'rev-parse' && args[1] === '--verify') return 'base-sha\n';
+      if (args[0] === 'status') return '';
+      if (args[0] === 'diff') {
+        diffCalls++;
+        return diffCalls === 1 ? '' : 'diff --git a/src/a.ts b/src/a.ts\n';
+      }
+      return '';
+    });
+
+    await harness.handlers.startExecution('thread-1', plan as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      (
+        harness.deps as never as {
+          taskGraphs: { markNodeCompletedAndPromote: ReturnType<typeof vi.fn> };
+        }
+      ).taskGraphs.markNodeCompletedAndPromote,
+    ).toHaveBeenCalledWith('node-1');
+    expect(harness.runtime.emitTerminalLifecycle).toHaveBeenCalledWith(
+      'thread-1',
+      expect.stringContaining('verifying cumulative worktree diff'),
+    );
+  });
+
   it('fails a task graph node when scoped node verification exhausts retries', async () => {
     const context = makeContext({ nodeVerificationRetries: 2, worktreePath: process.cwd() });
     const harness = makeExecutionHarness(context);
