@@ -19,7 +19,7 @@ export async function reviewCommand(issueNumber: string) {
   const issue = await ctx.ghCli.getIssue(num);
 
   const route = routeFromLabels(issue.labels);
-  const executorModel = 'error' in route ? 'claude' : route.executorModel;
+  const executorModel = 'error' in route ? 'codex' : route.executorModel;
   const executorModelOverride = 'error' in route ? null : (route.modelOverride ?? null);
 
   console.log(`Issue: ${issue.title}`);

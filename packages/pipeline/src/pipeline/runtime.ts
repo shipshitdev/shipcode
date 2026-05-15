@@ -484,9 +484,13 @@ export function createPipelineRuntime(
     })();
 
     const plannerPhases: ProviderPhase[] = ['plan', 'revision', 'verify'];
+    const configuredRunMode =
+      phase === 'execute' && (agent === 'claude' || agent === 'codex')
+        ? deps.settings.get().agentRunModes[agent].execute
+        : undefined;
     const mergedHints: ProviderRequest['phaseHints'] = plannerPhases.includes(phase)
       ? { maxTurns: 1, ...phaseHints }
-      : phaseHints;
+      : { ...phaseHints, ...(configuredRunMode ? { runMode: configuredRunMode } : {}) };
 
     // Lifecycle envelope: start a pipeline_step_log row before generation so
     // a crashed run still leaves a 'started' breadcrumb. The completion path

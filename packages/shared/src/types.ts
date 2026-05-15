@@ -195,7 +195,7 @@ export const THREAD_KIND = {
 
 export type ThreadKind = (typeof THREAD_KIND)[keyof typeof THREAD_KIND];
 export type InstantFixScope = 'user' | 'project' | 'custom';
-export type ProviderRunMode = 'afk' | 'interactive';
+export type ProviderRunMode = 'programmatic' | 'interactive';
 
 export interface AgentRunModeSettings {
   claude: {

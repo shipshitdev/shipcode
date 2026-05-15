@@ -33,10 +33,10 @@ describe('routeFromLabels', () => {
     });
   });
 
-  it('falls back to namespaced Claude route when no route label exists', () => {
+  it('falls back to namespaced Codex route when no route label exists', () => {
     expect(routeFromLabels(['enhancement'])).toEqual({
-      executorModel: 'claude',
-      command: 'claude',
+      executorModel: 'codex',
+      command: 'codex',
     });
   });
 

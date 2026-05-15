@@ -14,8 +14,8 @@ describe('model config presets', () => {
     expect(patch).toMatchObject({
       plannerModel: 'claude',
       reviewerModel: 'codex',
-      executorModel: 'claude',
-      verifierModel: 'claude',
+      executorModel: 'codex',
+      verifierModel: 'codex',
       plannerReasoningEffort: 'high',
       reviewerReasoningEffort: 'high',
       executorReasoningEffort: 'medium',

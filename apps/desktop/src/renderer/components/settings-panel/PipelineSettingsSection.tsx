@@ -10,7 +10,13 @@ import {
   type ModelConfigPresetKey,
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
-import { SettingsSection } from '@shipcode/ui';
+import {
+  SettingsSection,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@shipcode/ui';
 import {
   Button,
   DropdownMenu,
@@ -90,6 +96,31 @@ function pipelineSettingsSection({
   const applyPreset = (preset: ModelConfigPresetKey) => {
     onUpdate(buildAppSettingsModelPresetPatch(preset));
   };
+  const renderRunModeSelect = (value: AppSettings['agentRunModes']['claude']['execute']) => (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex cursor-not-allowed">
+            <Select value={value} disabled>
+              <SelectTrigger className="w-[190px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="interactive">Interactive CLI</SelectItem>
+                <SelectItem value="programmatic" disabled>
+                  Programmatic
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[300px]">
+          Programmatic mode is disabled while Claude non-interactive billing is unsettled. ShipCode
+          will not route Claude through claude -p or SDK wrappers by default.
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 
   return (
     <>
@@ -103,6 +134,48 @@ function pipelineSettingsSection({
         </TabsList>
 
         <TabsContent value="runtime" className="mt-0">
+          <SettingsSection
+            title="Agent Output Mode"
+            description="Interactive CLI output is the active path. Programmatic mode stays visible for future structured automation, but is disabled while Claude non-interactive billing is unsettled."
+          >
+            <SettingsRow
+              label="Claude execute output"
+              description="Uses the official Claude CLI session surface. Does not route through claude -p."
+            >
+              {renderRunModeSelect(settings.agentRunModes.claude.execute)}
+            </SettingsRow>
+            <SettingsRow
+              label="Claude terminal fix output"
+              description="Terminal fixes open as supervised interactive CLI sessions."
+            >
+              {renderRunModeSelect(settings.agentRunModes.claude.terminalFix)}
+            </SettingsRow>
+            <SettingsRow
+              label="Claude instant output"
+              description="Instant assistant output stays attached to an interactive terminal pane."
+            >
+              {renderRunModeSelect(settings.agentRunModes.claude.instant)}
+            </SettingsRow>
+            <SettingsRow
+              label="Codex execute output"
+              description="Uses official Codex CLI output instead of a synthetic console stream."
+            >
+              {renderRunModeSelect(settings.agentRunModes.codex.execute)}
+            </SettingsRow>
+            <SettingsRow
+              label="Codex terminal fix output"
+              description="Terminal fixes open as supervised interactive CLI sessions."
+            >
+              {renderRunModeSelect(settings.agentRunModes.codex.terminalFix)}
+            </SettingsRow>
+            <SettingsRow
+              label="Codex instant output"
+              description="Instant assistant output stays attached to an interactive terminal pane."
+            >
+              {renderRunModeSelect(settings.agentRunModes.codex.instant)}
+            </SettingsRow>
+          </SettingsSection>
+
           <SettingsSection>
             <SettingsRow
               label="Require approval before execution"

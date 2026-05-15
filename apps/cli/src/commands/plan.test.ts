@@ -145,7 +145,7 @@ describe('planCommand', () => {
     );
   });
 
-  it('falls back to Claude routing when label routing returns an error', async () => {
+  it('falls back to Codex routing when label routing returns an error', async () => {
     routeFromLabelsMock.mockReturnValueOnce({ error: 'bad label' });
 
     await planCommand('42');
@@ -154,7 +154,7 @@ describe('planCommand', () => {
       'project-1',
       '/repo',
       expect.any(Object),
-      'claude',
+      'codex',
       { baseBranch: 'main', executorModelOverride: null },
     );
   });

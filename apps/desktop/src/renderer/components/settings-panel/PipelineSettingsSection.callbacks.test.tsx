@@ -173,7 +173,7 @@ describe('PipelineSettingsSection callback coverage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Verifier model clear router model' }));
     fireEvent.click(screen.getByRole('button', { name: 'Verifier model effort' }));
 
-    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ executorModel: 'claude' }));
+    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ executorModel: 'codex' }));
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ prdRewriteCli: 'codex' }));
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ prdRewriteClaudeModel: null }));
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ prdRewriteCli: 'openrouter' }));

@@ -42,7 +42,7 @@ export function routeFromLabels(labels: string[]): ModelRoute | { error: string 
 
   const normalizedLabel = uniqueAgentLabels[0] ?? null;
   if (!normalizedLabel || !ROUTES[normalizedLabel]) {
-    return ROUTES['shipcode:agent:claude'];
+    return ROUTES['shipcode:agent:codex'];
   }
 
   return ROUTES[normalizedLabel];

@@ -5,3 +5,10 @@ ROOT_DIR=$(git rev-parse --show-toplevel)
 cd "$ROOT_DIR"
 
 sh scripts/lint-staged-biome.sh
+
+# Block raw HTML elements in staged .tsx files
+STAGED_TSX=$(git diff --cached --name-only --diff-filter=ACM -- '*.tsx' || true)
+if [ -n "$STAGED_TSX" ]; then
+  # shellcheck disable=SC2086
+  bash scripts/lint-no-raw-html.sh $STAGED_TSX
+fi

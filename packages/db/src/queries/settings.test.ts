@@ -25,8 +25,12 @@ describe('SettingsQueries', () => {
     expect(s.telemetryEnabled).toBeNull();
     expect(s.defaultWorktreeEnabled).toBe(true);
     expect(s.terminalScrollback).toBe(10000);
-    expect(s.plannerModel).toBe('claude');
+    expect(s.agentRunModes.claude.execute).toBe('interactive');
+    expect(s.agentRunModes.codex.execute).toBe('interactive');
+    expect(s.plannerModel).toBe('codex');
     expect(s.reviewerModel).toBe('codex');
+    expect(s.executorModel).toBe('codex');
+    expect(s.verifierModel).toBe('codex');
     expect(s.prdRewriteCli).toBe('claude');
     expect(s.prdRewriteClaudeModel).toBe('claude-sonnet-4-6');
     expect(s.prdRewriteCodexModel).toBe('gpt-5.4-mini');
@@ -42,6 +46,40 @@ describe('SettingsQueries', () => {
     expect(s.projectOpenTarget).toBe('cursor');
     expect(s.terminalOpenTarget).toBe('terminal');
     expect(s.updateTrack).toBe('master');
+  });
+
+  it('normalizes legacy afk run modes to programmatic', () => {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('agentRunModes', ?)").run(
+      JSON.stringify({
+        claude: {
+          issueTerminal: 'interactive',
+          execute: 'afk',
+          terminalFix: 'afk',
+          instant: 'afk',
+        },
+        codex: {
+          issueTerminal: 'interactive',
+          execute: 'afk',
+          terminalFix: 'afk',
+          instant: 'afk',
+        },
+      }),
+    );
+
+    expect(settings.get().agentRunModes).toMatchObject({
+      claude: {
+        issueTerminal: 'interactive',
+        execute: 'programmatic',
+        terminalFix: 'programmatic',
+        instant: 'programmatic',
+      },
+      codex: {
+        issueTerminal: 'interactive',
+        execute: 'programmatic',
+        terminalFix: 'programmatic',
+        instant: 'programmatic',
+      },
+    });
   });
 
   describe('worktreeRoot', () => {

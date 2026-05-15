@@ -10,6 +10,8 @@
  * pipeline's phase-specific completion logic.
  */
 
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import type { ProcessManager } from '../process-manager';
 import { measurePromptPayload } from '../prompt-scope';
 import { StreamParser } from '../stream-parser';
@@ -31,6 +33,7 @@ interface CliRunResult {
 interface CliCommand {
   args: string[];
   stdin?: string;
+  options?: Parameters<ProcessManager['spawn']>[5];
 }
 
 type ProcessManagerWithStdin = ProcessManager & {
@@ -74,6 +77,7 @@ async function runCli(
   signal: AbortSignal,
   threadId?: string,
   workspaceRoot?: string | null,
+  options?: Parameters<ProcessManager['spawn']>[5],
 ): Promise<CliRunResult> {
   if (signal.aborted) {
     return { rawOutput: '', exitCode: 130 };
@@ -81,7 +85,10 @@ async function runCli(
 
   let process: ReturnType<ProcessManager['spawn']>;
   try {
-    const spawnOptions = workspaceRoot !== undefined ? { workspaceRoot } : {};
+    const spawnOptions = {
+      ...(options ?? {}),
+      ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
+    };
     const processManagerWithStdin = processManager as ProcessManagerWithStdin;
     if (stdin !== undefined && processManagerWithStdin.spawnWithStdin) {
       process = processManagerWithStdin.spawnWithStdin(
@@ -253,6 +260,41 @@ function buildClaudeStdin(req: ProviderRequest): string {
   return buildClaudeCommand(req).stdin ?? '';
 }
 
+function sanitizeProcessName(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+}
+
+async function writeExecutePromptArtifact(req: ProviderRequest): Promise<string> {
+  const runDir = path.join(req.cwd, '.shipcode', 'runs', req.threadId);
+  await fs.mkdir(runDir, { recursive: true });
+  const promptPath = path.join(runDir, `${req.phase}-prompt.md`);
+  await fs.writeFile(promptPath, req.prompt, 'utf8');
+  return promptPath;
+}
+
+async function buildClaudeInteractiveExecuteCommand(req: ProviderRequest): Promise<CliCommand> {
+  const promptArtifactPath = await writeExecutePromptArtifact(req);
+  const modelArgs = req.modelHint ? ['--model', req.modelHint] : [];
+  const { allowedTools } = resolveToolPolicy(req);
+  return {
+    args: [
+      '--permission-mode',
+      'acceptEdits',
+      '--tools',
+      (allowedTools ?? PHASE_TOOL_POLICIES.execute.allowedTools ?? []).join(','),
+      '--name',
+      sanitizeProcessName(`shipcode-${req.threadId}`),
+      ...modelArgs,
+      `Read ${promptArtifactPath} and execute the ShipCode task.`,
+    ],
+    options: { outputMode: 'raw' },
+  };
+}
+
 /**
  * Build codex CLI args for a given phase.
  *
@@ -287,6 +329,18 @@ function buildCodexArgs(req: ProviderRequest): string[] {
 function buildCodexStdin(req: ProviderRequest): string {
   /* v8 ignore next -- all Codex phase commands carry stdin */
   return buildCodexCommand(req).stdin ?? '';
+}
+
+async function buildCodexInteractiveExecuteCommand(req: ProviderRequest): Promise<CliCommand> {
+  const promptArtifactPath = await writeExecutePromptArtifact(req);
+  const defaultPolicy = PHASE_TOOL_POLICIES.execute;
+  const sandbox = req.phaseHints?.sandbox ?? defaultPolicy.sandbox ?? 'workspace-write';
+  const args = ['-s', sandbox, '-a', 'on-request', '--no-alt-screen'];
+  if (req.modelHint) args.push('-m', req.modelHint);
+  const effort = mapReasoningEffortToCodex(req.phaseHints?.reasoningEffort, req.modelHint);
+  args.push('-c', `model_reasoning_effort=${effort}`);
+  args.push(`Read ${promptArtifactPath} and execute the ShipCode task.`);
+  return { args, options: { outputMode: 'raw' } };
 }
 
 function buildCodexPrompt(req: ProviderRequest): string {
@@ -326,7 +380,10 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
         promptSize: measurePromptPayload(req.prompt),
         ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
       };
-      const command = buildClaudeCommand(req);
+      const command =
+        req.phase === 'execute' && req.phaseHints?.runMode === 'interactive'
+          ? await buildClaudeInteractiveExecuteCommand(req)
+          : buildClaudeCommand(req);
       const result = await runCli(
         processManager,
         'claude',
@@ -336,6 +393,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
         req.signal,
         req.threadId,
         req.workspaceRoot,
+        command.options,
       );
       const parser = new StreamParser();
       parser.feed(result.rawOutput);
@@ -389,7 +447,10 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
         promptSize: measurePromptPayload(req.prompt),
         selectedMaterials: req.promptMaterialSummary,
       };
-      const command = buildCodexCommand(req);
+      const command =
+        req.phase === 'execute' && req.phaseHints?.runMode === 'interactive'
+          ? await buildCodexInteractiveExecuteCommand(req)
+          : buildCodexCommand(req);
       const result = await runCli(
         processManager,
         'codex',
@@ -399,6 +460,7 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
         req.signal,
         req.threadId,
         req.workspaceRoot,
+        command.options,
       );
       const rawOutput = stripCodexProtocol(result.rawOutput, {
         includeCommandOutput: req.phase === 'execute',

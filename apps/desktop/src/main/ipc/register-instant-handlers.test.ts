@@ -67,6 +67,9 @@ describe('registerInstantHandlers', () => {
     plans: {
       getLatest: ReturnType<typeof vi.fn>;
     };
+    settings: {
+      get: ReturnType<typeof vi.fn>;
+    };
   };
   let processManager: {
     spawn: ReturnType<typeof vi.fn>;
@@ -122,6 +125,24 @@ describe('registerInstantHandlers', () => {
           },
         })),
       },
+      settings: {
+        get: vi.fn(() => ({
+          agentRunModes: {
+            claude: {
+              issueTerminal: 'interactive',
+              execute: 'interactive',
+              terminalFix: 'interactive',
+              instant: 'interactive',
+            },
+            codex: {
+              issueTerminal: 'interactive',
+              execute: 'interactive',
+              terminalFix: 'interactive',
+              instant: 'interactive',
+            },
+          },
+        })),
+      },
     };
     processManager = {
       spawn: vi.fn(() => ({ id: `proc-${createThreadCounter || 1}` })),
@@ -171,13 +192,13 @@ describe('registerInstantHandlers', () => {
       'Fix #42',
       'instant',
     );
-    expect(processManager.spawnWithStdin).toHaveBeenCalledWith(
+    expect(processManager.spawn).toHaveBeenCalledWith(
       'codex',
       'codex',
-      expect.arrayContaining(['exec', '-', '--sandbox', 'workspace-write']),
+      expect.arrayContaining(['-s', 'workspace-write', '-a', 'on-request', '--no-alt-screen']),
       '/tmp/repo/.shipcode/worktrees/thread-1',
-      expect.stringContaining('ERROR codex_core::session: failed to record rollout items'),
       'thread-created-1',
+      { outputMode: 'raw' },
     );
     expect(result).toEqual({ threadId: 'thread-created-1', cli: 'codex', title: 'Fix #42' });
   });
@@ -201,23 +222,20 @@ describe('registerInstantHandlers', () => {
       'Audit my shell setup',
       'instant',
     );
-    expect(processManager.spawnWithStdin).toHaveBeenCalledWith(
+    expect(processManager.spawn).toHaveBeenCalledWith(
       'codex',
       'codex',
       expect.arrayContaining([
         '-m',
         'gpt-5.4-mini',
+        '-s',
+        'read-only',
         '-c',
         'model_reasoning_effort=medium',
-        'exec',
-        '-',
-        '--sandbox',
-        'read-only',
-        '--json',
       ]),
       expect.any(String),
-      'Audit my shell setup',
       'thread-created-1',
+      { outputMode: 'raw' },
     );
 
     await expect(
@@ -230,25 +248,13 @@ describe('registerInstantHandlers', () => {
         reasoningEffort: 'medium',
       }),
     ).resolves.toEqual({ threadId: 'thread-created-2' });
-    expect(processManager.spawnWithStdin).toHaveBeenLastCalledWith(
+    expect(processManager.spawn).toHaveBeenLastCalledWith(
       'claude',
       'claude',
-      expect.arrayContaining([
-        '-p',
-        '--model',
-        'claude-sonnet-4-6',
-        '--output-format',
-        'stream-json',
-        '--verbose',
-        '--allowedTools',
-        'Edit,Write,Bash,Glob,Grep,Read',
-        '--dangerously-skip-permissions',
-        '--max-thinking-tokens',
-        '8000',
-      ]),
+      expect.arrayContaining(['--permission-mode', 'acceptEdits', '--model', 'claude-sonnet-4-6']),
       '/tmp/repo',
-      'Fix lint',
       'thread-created-2',
+      { outputMode: 'raw' },
     );
 
     await expect(
@@ -259,22 +265,13 @@ describe('registerInstantHandlers', () => {
         reasoningEffort: 'high',
       }),
     ).resolves.toEqual({ threadId: 'thread-created-3' });
-    expect(processManager.spawnWithStdin).toHaveBeenLastCalledWith(
+    expect(processManager.spawn).toHaveBeenLastCalledWith(
       'claude',
       'claude',
-      [
-        '-p',
-        '--output-format',
-        'stream-json',
-        '--verbose',
-        '--allowedTools',
-        'Read,Glob,Grep',
-        '--max-thinking-tokens',
-        '32000',
-      ],
+      expect.arrayContaining(['--permission-mode', 'default', '--tools', 'Read,Glob,Grep']),
       expect.any(String),
-      'Audit dotfiles',
       'thread-created-3',
+      { outputMode: 'raw' },
     );
 
     await expect(
@@ -326,21 +323,18 @@ describe('registerInstantHandlers', () => {
       }),
     ).resolves.toEqual({ threadId: 'thread-created-1' });
 
-    expect(processManager.spawnWithStdin).toHaveBeenCalledWith(
+    expect(processManager.spawn).toHaveBeenCalledWith(
       'claude',
       'claude',
-      [
-        '-p',
-        '--output-format',
-        'stream-json',
-        '--verbose',
-        '--allowedTools',
+      expect.arrayContaining([
+        '--permission-mode',
+        'acceptEdits',
+        '--tools',
         'Edit,Write,Bash,Glob,Grep,Read',
-        '--dangerously-skip-permissions',
-      ],
+      ]),
       '/tmp/repo',
-      'Small edit',
       'thread-created-1',
+      { outputMode: 'raw' },
     );
   });
 
@@ -356,23 +350,18 @@ describe('registerInstantHandlers', () => {
         cli: 'claude',
       }),
     ).resolves.toEqual({ threadId: 'thread-created-1' });
-    expect(processManager.spawnWithStdin).toHaveBeenCalledWith(
+    expect(processManager.spawn).toHaveBeenCalledWith(
       'claude',
       'claude',
-      [
-        '-p',
-        '--output-format',
-        'stream-json',
-        '--verbose',
-        '--allowedTools',
+      expect.arrayContaining([
+        '--permission-mode',
+        'acceptEdits',
+        '--tools',
         'Edit,Write,Bash,Glob,Grep,Read',
-        '--dangerously-skip-permissions',
-        '--max-thinking-tokens',
-        '32000',
-      ],
+      ]),
       '/tmp/repo',
-      'Default effort edit',
       'thread-created-1',
+      { outputMode: 'raw' },
     );
 
     await expect(
@@ -383,24 +372,20 @@ describe('registerInstantHandlers', () => {
         modelId: 'claude-sonnet-4-6',
       }),
     ).resolves.toEqual({ threadId: 'thread-created-2' });
-    expect(processManager.spawnWithStdin).toHaveBeenLastCalledWith(
+    expect(processManager.spawn).toHaveBeenLastCalledWith(
       'claude',
       'claude',
-      [
-        '-p',
+      expect.arrayContaining([
+        '--permission-mode',
+        'default',
+        '--tools',
+        'Read,Glob,Grep',
         '--model',
         'claude-sonnet-4-6',
-        '--output-format',
-        'stream-json',
-        '--verbose',
-        '--allowedTools',
-        'Read,Glob,Grep',
-        '--max-thinking-tokens',
-        '32000',
-      ],
+      ]),
       expect.any(String),
-      'Read home',
       'thread-created-2',
+      { outputMode: 'raw' },
     );
   });
 
@@ -443,13 +428,13 @@ describe('registerInstantHandlers', () => {
       'Inspect screenshot',
       'instant',
     );
-    expect(processManager.spawnWithStdin).toHaveBeenCalledWith(
+    expect(processManager.spawn).toHaveBeenCalledWith(
       'codex',
       'codex',
-      expect.arrayContaining(['exec', '-', '--sandbox', 'workspace-write', '--json']),
+      expect.arrayContaining(['-s', 'workspace-write', '-a', 'on-request', '--no-alt-screen']),
       '/tmp/repo',
-      expect.stringContaining('Screenshot files available at:'),
       'thread-created-1',
+      { outputMode: 'raw' },
     );
 
     await run(undefined, {
@@ -490,23 +475,20 @@ describe('registerInstantHandlers', () => {
       'Inspect failures',
       'instant',
     );
-    expect(processManager.spawnWithStdin).toHaveBeenCalledWith(
+    expect(processManager.spawn).toHaveBeenCalledWith(
       'claude',
       'claude',
       expect.arrayContaining([
-        '-p',
-        '--output-format',
-        'stream-json',
-        '--verbose',
-        '--session-id',
-        expect.any(String),
+        '--permission-mode',
+        'acceptEdits',
+        '--tools',
+        'Edit,Write,Bash,Glob,Grep,Read',
         '--model',
         'claude-sonnet-4-6',
-        '--dangerously-skip-permissions',
       ]),
       '/tmp/repo',
-      'Inspect failures',
       'thread-created-1',
+      { outputMode: 'raw' },
     );
 
     // Resize still works (no-ops for pipe-based processes)
@@ -547,23 +529,20 @@ describe('registerInstantHandlers', () => {
         initialPrompt: 'Investigate failing tests',
       }),
     ).resolves.toEqual({ threadId: 'thread-created-3' });
-    expect(processManager.spawnWithStdin).toHaveBeenLastCalledWith(
+    expect(processManager.spawn).toHaveBeenLastCalledWith(
       'codex',
       'codex',
       expect.arrayContaining([
         '-m',
         'gpt-5.4-mini',
+        '-s',
+        'workspace-write',
         '-c',
         'model_reasoning_effort=medium',
-        'exec',
-        '-',
-        '--sandbox',
-        'workspace-write',
-        '--json',
       ]),
       '/tmp/repo',
-      'Investigate failing tests',
       'thread-created-3',
+      { outputMode: 'raw' },
     );
 
     queries.projects.getById.mockReturnValueOnce(null);
@@ -582,13 +561,13 @@ describe('registerInstantHandlers', () => {
       }),
     ).resolves.toEqual({ threadId: expect.any(String) });
     expect(queries.projects.getOrCreateInstantProject).toHaveBeenCalledWith(expect.any(String));
-    expect(processManager.spawnWithStdin).toHaveBeenLastCalledWith(
+    expect(processManager.spawn).toHaveBeenLastCalledWith(
       'claude',
       'claude',
-      expect.arrayContaining(['-p', '--output-format', 'stream-json', '--verbose']),
+      expect.arrayContaining(['--permission-mode', 'acceptEdits']),
       expect.any(String),
-      'Cross-project task',
       expect.any(String),
+      { outputMode: 'raw' },
     );
   });
 
@@ -707,21 +686,24 @@ describe('registerInstantHandlers', () => {
       cli: 'claude',
       title: 'Fix Local failing task',
     });
-    expect(processManager.spawnWithStdin).toHaveBeenCalledWith(
+    expect(processManager.spawn).toHaveBeenCalledWith(
       'claude',
       'claude',
-      [
-        '-p',
-        '--output-format',
-        'stream-json',
-        '--verbose',
-        '--allowedTools',
+      expect.arrayContaining([
+        '--permission-mode',
+        'acceptEdits',
+        '--tools',
         'Edit,Write,Bash,Glob,Grep,Read',
-        '--dangerously-skip-permissions',
-      ],
+      ]),
       '/tmp/repo',
-      expect.stringContaining('Thread prompt:\nThread-only prompt'),
       'thread-created-1',
+      { outputMode: 'raw' },
+    );
+    expect(queries.threads.create).toHaveBeenCalledWith(
+      'project-1',
+      expect.stringContaining('Thread prompt:\nThread-only prompt'),
+      'Fix Local failing task',
+      'instant',
     );
 
     await expect(fix(undefined, { threadId: 'thread-1', failureOutput: '   ' })).rejects.toThrow(
@@ -757,7 +739,7 @@ describe('registerInstantHandlers', () => {
 
     await fix(undefined, { threadId: 'thread-1', failureOutput: 'failure' });
 
-    const prompt = (processManager.spawnWithStdin.mock.calls.at(-1)?.[4] ?? '') as string;
+    const prompt = (queries.threads.create.mock.calls.at(-1)?.[1] ?? '') as string;
     expect(prompt).toContain('- Project: Project');
     expect(prompt).toContain('Thread prompt:');
     expect(prompt).toContain('Latest plan:\nObjective: Fix without listed steps\nPlan version: 3');
@@ -795,7 +777,7 @@ describe('registerInstantHandlers', () => {
       failureOutput: `${'x'.repeat(9_000)}tail failure`,
     });
 
-    const prompt = (processManager.spawnWithStdin.mock.calls.at(-1)?.[4] ?? '') as string;
+    const prompt = (queries.threads.create.mock.calls.at(-1)?.[1] ?? '') as string;
     expect(prompt).toContain('[truncated]');
     expect(prompt).toContain('[Earlier terminal output truncated]');
     expect(prompt).toContain('tail failure');

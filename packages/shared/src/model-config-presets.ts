@@ -104,12 +104,12 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
   {
     key: 'hybrid',
     label: 'Hybrid',
-    description: 'Claude for plan/execute/verify, Codex for review.',
+    description: 'Claude plans, Codex reviews, executes, and verifies.',
     phases: {
       planner: makePhasePreset('claude', SHARED_PHASE_MODELS.claude, 'planner'),
       reviewer: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'reviewer'),
-      executor: makePhasePreset('claude', SHARED_PHASE_MODELS.claude, 'executor'),
-      verifier: makePhasePreset('claude', SHARED_PHASE_MODELS.claude, 'verifier'),
+      executor: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'executor'),
+      verifier: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'verifier'),
     },
     prdRewrite: {
       cli: 'claude',

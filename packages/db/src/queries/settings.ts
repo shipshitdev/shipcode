@@ -58,6 +58,18 @@ function parseJsonSetting<T>(raw: string | undefined, defaults: T): T {
   }
 }
 
+function normalizeAgentRunModes(raw: string | undefined): AppSettings['agentRunModes'] {
+  const parsed = parseJsonSetting(raw, DEFAULT_SETTINGS.agentRunModes);
+  for (const provider of ['claude', 'codex'] as const) {
+    for (const action of ['execute', 'terminalFix', 'instant'] as const) {
+      if ((parsed[provider][action] as string) === 'afk') {
+        parsed[provider][action] = 'programmatic';
+      }
+    }
+  }
+  return parsed;
+}
+
 function parseDeliveryStatus(raw: string | undefined): IntegrationDeliveryStatus | null {
   if (!raw) return null;
   try {
@@ -171,7 +183,7 @@ export class SettingsQueries {
       terminalScrollback: stored.terminalScrollback
         ? parseInt(stored.terminalScrollback, 10)
         : DEFAULT_SETTINGS.terminalScrollback,
-      agentRunModes: parseJsonSetting(stored.agentRunModes, DEFAULT_SETTINGS.agentRunModes),
+      agentRunModes: normalizeAgentRunModes(stored.agentRunModes),
       localPreview: parseJsonSetting(stored.localPreview, DEFAULT_SETTINGS.localPreview),
       projectOpenTarget: isProjectOpenTarget(stored.projectOpenTarget)
         ? stored.projectOpenTarget

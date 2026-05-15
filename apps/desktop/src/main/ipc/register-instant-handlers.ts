@@ -1,8 +1,11 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
 import os from 'node:os';
+import path from 'node:path';
 import { extractCodexThreadId } from '@shipcode/agents';
 import {
   type InstantFixScope,
+  type ProviderRunMode,
   type ReasoningEffort,
   resolveProviderReasoningEffort,
   stripAnsi,
@@ -26,6 +29,7 @@ type RunningInstantSession = {
   reasoningEffort?: ReasoningEffort;
   cwd?: string;
   isProcessingTurn?: boolean;
+  transport?: ProviderRunMode;
 };
 
 /** threadId → process metadata mapping for cancel/input/resize support. */
@@ -35,6 +39,131 @@ const TASK_CONTEXT_MAX = 6_000;
 
 function formatInstantCliLabel(cli: InstantCli): string {
   return cli === 'claude' ? 'Claude' : 'Codex';
+}
+
+function sanitizeProcessName(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+}
+
+function getRunMode(
+  queries: IpcHandlerDeps['queries'],
+  cli: InstantCli,
+  action: 'instant' | 'terminalFix',
+): ProviderRunMode {
+  return queries.settings.get().agentRunModes[cli][action];
+}
+
+function assertProgrammaticRunAllowed(cli: InstantCli): void {
+  if (cli !== 'claude') return;
+  throw new Error(
+    'Programmatic Claude runs are disabled while non-interactive billing is unsettled. Use Interactive CLI mode.',
+  );
+}
+
+async function writePromptArtifact(args: {
+  cwd: string;
+  threadId: string;
+  prompt: string;
+  name: string;
+}): Promise<string> {
+  const runDir = path.join(args.cwd, '.shipcode', 'runs', args.threadId);
+  await fs.mkdir(runDir, { recursive: true });
+  const promptPath = path.join(runDir, `${args.name}.md`);
+  await fs.writeFile(promptPath, args.prompt, 'utf8');
+  return promptPath;
+}
+
+function buildInteractiveCliArgs(args: {
+  cli: InstantCli;
+  scope?: InstantFixScope;
+  threadId: string;
+  promptArtifactPath: string;
+  modelId?: string | null;
+  reasoningEffort?: ReasoningEffort;
+}): string[] {
+  const sandbox = args.scope === 'user' ? 'read-only' : 'workspace-write';
+  const instruction = `Read ${args.promptArtifactPath} and continue the ShipCode terminal workflow.`;
+  if (args.cli === 'claude') {
+    const allowedTools =
+      args.scope === 'user' ? 'Read,Glob,Grep' : 'Edit,Write,Bash,Glob,Grep,Read';
+    const cliArgs = [
+      '--permission-mode',
+      args.scope === 'user' ? 'default' : 'acceptEdits',
+      '--tools',
+      allowedTools,
+      '--name',
+      sanitizeProcessName(`shipcode-${args.threadId}`),
+    ];
+    if (args.modelId) cliArgs.push('--model', args.modelId);
+    cliArgs.push(instruction);
+    return cliArgs;
+  }
+
+  const cliArgs = ['-s', sandbox, '-a', 'on-request', '--no-alt-screen'];
+  if (args.modelId) cliArgs.push('-m', args.modelId);
+  const effort = resolveProviderReasoningEffort(
+    'codex',
+    args.reasoningEffort ?? 'high',
+    args.modelId,
+  ).effective;
+  if (effort !== 'none' && effort !== 'minimal') {
+    cliArgs.push('-c', `model_reasoning_effort=${effort}`);
+  }
+  cliArgs.push(instruction);
+  return cliArgs;
+}
+
+async function startInteractiveInstantSession(args: {
+  queries: IpcHandlerDeps['queries'];
+  processManager: IpcHandlerDeps['processManager'];
+  threadId: string;
+  cli: InstantCli;
+  cwd: string;
+  prompt: string;
+  scope?: InstantFixScope;
+  mode: 'run' | 'shell';
+  modelId?: string | null;
+  reasoningEffort?: ReasoningEffort;
+}): Promise<{ processId: string; promptArtifactPath: string }> {
+  const promptArtifactPath = await writePromptArtifact({
+    cwd: args.cwd,
+    threadId: args.threadId,
+    prompt: args.prompt || 'Start an interactive ShipCode assistant session.',
+    name: args.mode === 'shell' ? 'assistant-prompt' : 'instant-prompt',
+  });
+  const cliArgs = buildInteractiveCliArgs({
+    cli: args.cli,
+    scope: args.scope,
+    threadId: args.threadId,
+    promptArtifactPath,
+    modelId: args.modelId,
+    reasoningEffort: args.reasoningEffort,
+  });
+  const proc = args.processManager.spawn(args.cli, args.cli, cliArgs, args.cwd, args.threadId, {
+    outputMode: 'raw',
+  });
+  runningInstants.set(args.threadId, {
+    processId: proc.id,
+    cli: args.cli,
+    mode: args.mode,
+    modelId: args.modelId,
+    reasoningEffort: args.reasoningEffort,
+    cwd: args.cwd,
+    transport: 'interactive',
+  });
+  registerExitTracking(
+    args.processManager,
+    args.queries,
+    args.threadId,
+    proc.id,
+    args.cli,
+    args.mode,
+  );
+  return { processId: proc.id, promptArtifactPath };
 }
 
 function buildAttachmentContext(attachmentSessionId?: string): string {
@@ -357,6 +486,28 @@ export function registerInstantHandlers({
       // 4. Create thread
       const title = args.prompt.slice(0, 60);
       const thread = queries.threads.create(projectId, fullPrompt, title, 'instant');
+      const runMode = getRunMode(queries, args.cli, 'instant');
+
+      if (runMode === 'interactive') {
+        await startInteractiveInstantSession({
+          queries,
+          processManager,
+          threadId: thread.id,
+          cli: args.cli,
+          cwd,
+          prompt: fullPrompt,
+          scope: args.scope,
+          mode: 'run',
+          modelId: args.modelId,
+          reasoningEffort: args.reasoningEffort,
+        });
+        log.info(
+          `[instant] started interactive ${args.cli} run for thread ${thread.id} (scope=${args.scope}, cwd=${cwd})`,
+        );
+        return { threadId: thread.id };
+      }
+
+      assertProgrammaticRunAllowed(args.cli);
 
       // 5. Build CLI args (prompt piped via stdin, not argv)
       let cliArgs: string[];
@@ -480,6 +631,27 @@ export function registerInstantHandlers({
         ? initialPrompt.slice(0, 60)
         : `${formatInstantCliLabel(args.cli)} assistant`;
       const thread = queries.threads.create(projectId, initialPrompt, title, 'instant');
+      const runMode = getRunMode(queries, args.cli, 'instant');
+
+      if (runMode === 'interactive') {
+        await startInteractiveInstantSession({
+          queries,
+          processManager,
+          threadId: thread.id,
+          cli: args.cli,
+          cwd,
+          prompt: initialPrompt,
+          mode: 'shell',
+          modelId: args.modelId,
+          reasoningEffort: args.reasoningEffort,
+        });
+        log.info(
+          `[instant] started interactive ${args.cli} assistant for thread ${thread.id} (cwd=${cwd})`,
+        );
+        return { threadId: thread.id };
+      }
+
+      assertProgrammaticRunAllowed(args.cli);
 
       const sessionId = args.cli === 'claude' ? crypto.randomUUID() : undefined;
       const cliArgs =
@@ -487,7 +659,7 @@ export function registerInstantHandlers({
           ? buildClaudeAssistantArgs({
               modelId: args.modelId,
               reasoningEffort: args.reasoningEffort,
-              sessionId: sessionId!,
+              sessionId: sessionId ?? crypto.randomUUID(),
             })
           : buildCodexAssistantArgs({
               modelId: args.modelId,
@@ -561,6 +733,26 @@ export function registerInstantHandlers({
           80,
         );
       const thread = queries.threads.create(project.id, prompt, title, 'instant');
+      const runMode = getRunMode(queries, cli, 'terminalFix');
+
+      if (runMode === 'interactive') {
+        await startInteractiveInstantSession({
+          queries,
+          processManager,
+          threadId: thread.id,
+          cli,
+          cwd,
+          prompt,
+          scope: 'project',
+          mode: 'run',
+        });
+        log.info(
+          `[instant] started interactive ${cli} terminal fix for source thread ${sourceThread.id} as ${thread.id} (cwd=${cwd})`,
+        );
+        return { threadId: thread.id, cli, title };
+      }
+
+      assertProgrammaticRunAllowed(cli);
 
       const proc =
         cli === 'claude'
@@ -651,7 +843,7 @@ export function registerInstantHandlers({
       if (session.mode !== 'shell') return;
 
       // Bare shell sessions still use PTY stdin
-      if (session.cli === 'shell') {
+      if (session.cli === 'shell' || session.transport === 'interactive') {
         processManager.write(session.processId, data);
         return;
       }
@@ -663,6 +855,11 @@ export function registerInstantHandlers({
 
       if (!session.sessionId) {
         log.warn(`[instant] follow-up blocked — no session ID yet for thread ${threadId}`);
+        return;
+      }
+
+      if (!session.cwd) {
+        log.warn(`[instant] follow-up blocked — no cwd for thread ${threadId}`);
         return;
       }
 
@@ -694,7 +891,7 @@ export function registerInstantHandlers({
         session.cli,
         session.cli,
         cliArgs,
-        session.cwd!,
+        session.cwd,
         followupPrompt,
         threadId,
       );

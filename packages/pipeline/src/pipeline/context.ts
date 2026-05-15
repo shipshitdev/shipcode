@@ -114,7 +114,10 @@ export function createPipelineContextHelpers(
         seed.verifierModel ??
         existing.verifierModel ??
         (settings.verifierModel as PipelineExecutorModel);
-      const executorModel = seed.executorModel ?? existing.executorModel ?? 'claude';
+      const executorModel =
+        seed.executorModel ??
+        existing.executorModel ??
+        (settings.executorModel as PipelineExecutorModel);
       const plannerModelIdOverride =
         seed.plannerModelIdOverride ?? existing.plannerModelIdOverride ?? null;
       const reviewerModelIdOverride =
@@ -232,7 +235,7 @@ export function createPipelineContextHelpers(
     const plannerModel = seed.plannerModel ?? (settings.plannerModel as PipelineExecutorModel);
     const reviewerModel = seed.reviewerModel ?? (settings.reviewerModel as PipelineExecutorModel);
     const verifierModel = seed.verifierModel ?? (settings.verifierModel as PipelineExecutorModel);
-    const executorModel = seed.executorModel ?? 'claude';
+    const executorModel = seed.executorModel ?? (settings.executorModel as PipelineExecutorModel);
     const plannerModelIdOverride = seed.plannerModelIdOverride ?? null;
     const reviewerModelIdOverride = seed.reviewerModelIdOverride ?? null;
     const executorModelIdOverride = seed.executorModelIdOverride ?? null;
@@ -392,7 +395,8 @@ export function createPipelineContextHelpers(
       plannerModel:
         issue && project
           ? resolvePhaseModelForIssue(settings, project, issue, 'planner')
-          : (thread.plannerModel as PipelineExecutorModel) || 'claude',
+          : (thread.plannerModel as PipelineExecutorModel) ||
+            (settings.plannerModel as PipelineExecutorModel),
       reviewerModel:
         issue && project
           ? resolvePhaseModelForIssue(settings, project, issue, 'reviewer')
@@ -400,11 +404,13 @@ export function createPipelineContextHelpers(
       verifierModel:
         issue && project
           ? resolvePhaseModelForIssue(settings, project, issue, 'verifier')
-          : (thread.verifierModel as PipelineExecutorModel) || 'claude',
+          : (thread.verifierModel as PipelineExecutorModel) ||
+            (settings.verifierModel as PipelineExecutorModel),
       executorModel:
         issue && project
           ? resolvePhaseModelForIssue(settings, project, issue, 'executor')
-          : (thread.executorModel as PipelineExecutorModel) || 'claude',
+          : (thread.executorModel as PipelineExecutorModel) ||
+            (settings.executorModel as PipelineExecutorModel),
       plannerModelIdOverride:
         issue && project
           ? resolvePhaseModelIdForIssue(settings, project, issue, 'planner')

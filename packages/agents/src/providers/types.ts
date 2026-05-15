@@ -23,7 +23,12 @@
  *   in-process tool-call harness.
  */
 
-import type { AgentType, ClarificationRequest, ReasoningEffort } from '@shipcode/shared';
+import type {
+  AgentType,
+  ClarificationRequest,
+  ProviderRunMode,
+  ReasoningEffort,
+} from '@shipcode/shared';
 import type { PromptMaterialSummary, PromptTelemetry } from '../prompt-scope';
 import type { TerminalEvent } from '../terminal-events';
 import type { GithubGraphqlDeps } from '../tools/types';
@@ -119,6 +124,8 @@ export interface ProviderPhaseHints {
   approval?: 'never' | 'untrusted' | 'on-failure';
   /** Shared reasoning effort. Providers map unsupported values to the nearest supported level. */
   reasoningEffort?: ReasoningEffort;
+  /** Runtime transport selected from AppSettings.agentRunModes. */
+  runMode?: ProviderRunMode;
 }
 
 export interface ProviderRequest {

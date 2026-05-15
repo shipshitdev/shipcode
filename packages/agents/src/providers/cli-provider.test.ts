@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { ProcessManager } from '../process-manager';
 import { _internals, createClaudeCliProvider, createCodexCliProvider } from './cli-provider';
@@ -24,6 +27,13 @@ function req(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
     threadId: 't1',
     ...overrides,
   };
+}
+
+async function waitForSpawn(spawnCalls: unknown[]): Promise<void> {
+  for (let i = 0; i < 20; i++) {
+    if (spawnCalls.length > 0) return;
+    await new Promise((r) => setTimeout(r, 5));
+  }
 }
 
 // ─── Arg-construction regression snapshots ────────────────────────────
@@ -683,6 +693,36 @@ describe('createClaudeCliProvider', () => {
     expect(result.providerError?.retryable).toBe(false);
   });
 
+  it('execute phase uses the interactive Claude CLI when runMode is interactive', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-claude-interactive-'));
+    try {
+      const { pm, trigger, spawnCalls } = createMockProcessManager({ withStdin: false });
+      const provider = createClaudeCliProvider(pm);
+
+      const promise = provider.generate(
+        req({ phase: 'execute', cwd, phaseHints: { runMode: 'interactive' } }),
+      );
+      await waitForSpawn(spawnCalls);
+
+      expect(spawnCalls[0].command).toBe('claude');
+      expect(spawnCalls[0].stdin).toBeUndefined();
+      expect(spawnCalls[0].args).toEqual(
+        expect.arrayContaining(['--permission-mode', 'acceptEdits', '--name', 'shipcode-t1']),
+      );
+      expect(spawnCalls[0].args).not.toContain('-p');
+      expect(spawnCalls[0].args.at(-1)).toContain(`${cwd}/.shipcode/runs/t1/execute-prompt.md`);
+      expect(spawnCalls[0].options).toEqual({ outputMode: 'raw' });
+      expect(fs.readFileSync(path.join(cwd, '.shipcode/runs/t1/execute-prompt.md'), 'utf8')).toBe(
+        'PROMPT',
+      );
+
+      await trigger('exit', 'proc-1', 0);
+      await promise;
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it('aborts running process when signal fires', async () => {
     const { pm, trigger } = createMockProcessManager();
     const provider = createClaudeCliProvider(pm);
@@ -821,6 +861,50 @@ describe('createCodexCliProvider', () => {
 
     await trigger('exit', 'proc-1', 0);
     await promise;
+  });
+
+  it('execute phase uses the interactive Codex CLI when runMode is interactive', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-codex-interactive-'));
+    try {
+      const { pm, trigger, spawnCalls } = createMockProcessManager({ withStdin: false });
+      const provider = createCodexCliProvider(pm);
+
+      const promise = provider.generate(
+        req({
+          phase: 'execute',
+          cwd,
+          modelHint: 'gpt-5.4-mini',
+          phaseHints: { runMode: 'interactive', reasoningEffort: 'medium' },
+        }),
+      );
+      await waitForSpawn(spawnCalls);
+
+      expect(spawnCalls[0].command).toBe('codex');
+      expect(spawnCalls[0].stdin).toBeUndefined();
+      expect(spawnCalls[0].args).toEqual(
+        expect.arrayContaining([
+          '-s',
+          'workspace-write',
+          '-a',
+          'on-request',
+          '--no-alt-screen',
+          '-m',
+          'gpt-5.4-mini',
+          '-c',
+          'model_reasoning_effort=medium',
+        ]),
+      );
+      expect(spawnCalls[0].args).not.toContain('exec');
+      expect(spawnCalls[0].options).toEqual({ outputMode: 'raw' });
+      expect(fs.readFileSync(path.join(cwd, '.shipcode/runs/t1/execute-prompt.md'), 'utf8')).toBe(
+        'PROMPT',
+      );
+
+      await trigger('exit', 'proc-1', 0);
+      await promise;
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
   });
 
   it('omits command execution output from non-execute rawOutput', async () => {

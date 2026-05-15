@@ -215,6 +215,27 @@ describe('PipelineSettingsSection', () => {
     expect(onUpdate).toHaveBeenCalledWith({ testingContext: null });
   });
 
+  it('shows interactive-only agent output mode controls', () => {
+    render(
+      <PipelineSettingsSection
+        settings={DEFAULT_SETTINGS}
+        integrationStatus={integrationStatus}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Agent Output Mode')).toBeInTheDocument();
+    expect(screen.getByText('Claude execute output')).toBeInTheDocument();
+    expect(screen.getByText('Codex execute output')).toBeInTheDocument();
+    const modeControls = screen.getAllByRole('combobox').filter((control) => {
+      return control.textContent?.includes('Interactive CLI');
+    });
+    expect(modeControls).toHaveLength(6);
+    for (const control of modeControls) {
+      expect(control).toBeDisabled();
+    }
+  });
+
   it('labels PRD rewrite settings as shared format settings', () => {
     render(
       <PipelineSettingsSection

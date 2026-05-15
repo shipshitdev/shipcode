@@ -182,7 +182,7 @@ describe('createPipelineContextHelpers', () => {
     expect(context.plannerModel).toBe(DEFAULT_SETTINGS.plannerModel);
     expect(context.reviewerModel).toBe(DEFAULT_SETTINGS.reviewerModel);
     expect(context.verifierModel).toBe(DEFAULT_SETTINGS.verifierModel);
-    expect(context.executorModel).toBe('claude');
+    expect(context.executorModel).toBe(DEFAULT_SETTINGS.executorModel);
     expect(context.phaseReasoningOverrides.execute).toBe('high');
     expect(context.phaseReasoningOverrides.verify).toBe('low');
     expect(context.clarificationHistory).toEqual([]);
@@ -195,10 +195,10 @@ describe('createPipelineContextHelpers', () => {
     const existing = {
       threadId: 'thread-1',
       projectPath: '/repo',
-      plannerModel: 'claude',
+      plannerModel: 'codex',
       reviewerModel: 'codex',
-      verifierModel: 'claude',
-      executorModel: 'claude',
+      verifierModel: 'codex',
+      executorModel: 'codex',
       plannerModelIdOverride: null,
       reviewerModelIdOverride: null,
       executorModelIdOverride: null,
@@ -352,10 +352,10 @@ describe('createPipelineContextHelpers', () => {
     helpers.rehydrateContext('thread-1', '/repo');
 
     expect(active.get('thread-1')).toMatchObject({
-      plannerModel: 'claude',
+      plannerModel: 'codex',
       reviewerModel: 'codex',
-      verifierModel: 'claude',
-      executorModel: 'claude',
+      verifierModel: 'codex',
+      executorModel: 'codex',
       githubIssueNumber: null,
       githubIssueTitle: null,
       githubRepo: null,

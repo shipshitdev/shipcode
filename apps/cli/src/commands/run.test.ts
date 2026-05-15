@@ -178,7 +178,7 @@ describe('runCommand', () => {
     expect(logSpy).toHaveBeenCalledWith('Model: codex');
   });
 
-  it('falls back to claude when label routing returns an error', async () => {
+  it('falls back to codex when label routing returns an error', async () => {
     routeFromLabelsMock.mockReturnValueOnce({
       error: 'unknown label',
     });
@@ -189,12 +189,12 @@ describe('runCommand', () => {
       'project-1',
       process.cwd(),
       expect.any(Object),
-      'claude',
+      'codex',
       {
         baseBranch: 'develop',
         executorModelOverride: null,
       },
     );
-    expect(logSpy).toHaveBeenCalledWith('Model: claude');
+    expect(logSpy).toHaveBeenCalledWith('Model: codex');
   });
 });

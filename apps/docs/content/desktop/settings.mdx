@@ -30,7 +30,8 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 | `maxConcurrentPipelines` | 3 | Workspace-wide active pipeline cap |
 | `maxConcurrentExecutions` | 3 | Per-project execution cap after planning/approval |
 | `pipelineSpeedProfile` | `smart_fast` | Default scheduling/execution profile |
-| `plannerReasoningEffort` | `high` | Default planner effort. Exact options depend on the selected provider |
+| `agentRunModes` | interactive | Per-provider output mode controls for Claude and Codex issue execution, terminal fixes, and instant sessions |
+| `plannerReasoningEffort` | `low` | Default planner effort. Exact options depend on the selected provider |
 | `reviewerReasoningEffort` | `high` | Default reviewer effort. Exact options depend on the selected provider |
 | `executorReasoningEffort` | `medium` | Default executor effort. Exact options depend on the selected provider |
 | `verifierReasoningEffort` | `high` | Default verifier effort. Exact options depend on the selected provider |
@@ -43,10 +44,10 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| `executorModel` | `claude` | Default executor when no `shipcode:agent:*` label is present (claude / codex / openrouter) |
-| `plannerModel` | `claude` | Global default planner model |
+| `executorModel` | `codex` | Default executor when no `shipcode:agent:*` label is present (claude / codex / openrouter) |
+| `plannerModel` | `codex` | Global default planner model |
 | `reviewerModel` | `codex` | Global default reviewer model |
-| `verifierModel` | `claude` | Global default verifier model |
+| `verifierModel` | `codex` | Global default verifier model |
 | `triageModel` | `claude` | Provider for board review / Todo triage |
 | `triageAutoApplyThreshold` | `0.85` | Confidence threshold for auto-applying triage labels |
 | `prdRewriteCli` | `claude` | Format provider for PRD editing and automation prompt formatting |
@@ -63,6 +64,10 @@ Override precedence:
 
 - Planner / Reviewer / Verifier: `global settings -> project override`
 - Executor: `global settings -> project override -> issue override`
+
+Claude-heavy work should normally enter through an interactive issue terminal session. Autonomous no-label pipeline runs default to Codex so `claude -p` / Agent SDK credit is not consumed unless a user explicitly selects Claude for a phase or applies a Claude routing label.
+
+The runtime tab shows Interactive CLI vs Programmatic output controls. Programmatic is intentionally disabled for now; the visible control reserves the setting shape without routing Claude through `claude -p` or an SDK wrapper while Anthropic's billing behavior is in flux.
 
 If an older stored value is no longer exact for the current provider, the UI shows the mapping explicitly instead of pretending it is supported. Kanban cards display the effective phase model plus the effective effort for the current phase.
 

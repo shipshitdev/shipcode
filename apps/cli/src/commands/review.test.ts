@@ -144,7 +144,7 @@ describe('reviewCommand', () => {
     );
   });
 
-  it('falls back to Claude routing when label routing returns an error', async () => {
+  it('falls back to Codex routing when label routing returns an error', async () => {
     routeFromLabelsMock.mockReturnValueOnce({ error: 'bad label' });
 
     await reviewCommand('7');
@@ -153,7 +153,7 @@ describe('reviewCommand', () => {
       'project-1',
       '/repo',
       expect.any(Object),
-      'claude',
+      'codex',
       { baseBranch: 'develop', executorModelOverride: null },
     );
   });
