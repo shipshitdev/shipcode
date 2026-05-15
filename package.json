@@ -2,9 +2,9 @@
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
     "@google/design.md": "0.1.1",
-    "@types/node": "25.7.0",
+    "@types/node": "25.8.0",
     "@vitest/coverage-v8": "4.1.6",
-    "turbo": "2.9.12",
+    "turbo": "2.9.14",
     "typescript": "6.0.3",
     "vitest": "4.1.6"
   },
