@@ -276,7 +276,7 @@ function ProjectOpenControl({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-none border-l border-border text-secondary hover:bg-elevated disabled:opacity-50"
+            className="size-8 rounded-none border-l border-border text-secondary hover:bg-elevated disabled:opacity-50"
             disabled={menuDisabled}
             aria-label={`Choose app to open ${project.name}`}
             title="Choose opener"

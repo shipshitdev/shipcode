@@ -281,15 +281,17 @@ export function registerGitHubHandlers({
             }
           }
         });
-        for (const issue of newIssues) {
-          await attachIssueToConfiguredProjectBoard(
-            project,
-            ghCli,
-            issue.number,
-            issue.url,
-            'github:refresh-issues',
-          );
-        }
+        await Promise.all(
+          newIssues.map((issue) =>
+            attachIssueToConfiguredProjectBoard(
+              project,
+              ghCli,
+              issue.number,
+              issue.url,
+              'github:refresh-issues',
+            ),
+          ),
+        );
 
         await Promise.all(
           newIssues.map(async ({ record }) => {
@@ -538,7 +540,11 @@ export function registerGitHubHandlers({
       result.recommendations.map(async (recommendation) => {
         const issue = candidatesByNumber.get(recommendation.issueNumber);
         if (!issue) return null;
-        const applied = recommendation.confidence >= threshold;
+        const applied =
+          recommendation.confidence >= threshold &&
+          recommendation.shouldStart &&
+          !recommendation.needsHuman &&
+          recommendation.suggestedLabels.length > 0;
         if (applied) {
           const nextLabels = mergeTriageLabels(issue.labels, recommendation);
           await ghCli.syncIssueLabels(issue.issueNumber, nextLabels, { removeAgentLabels: true });

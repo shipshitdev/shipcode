@@ -185,9 +185,8 @@ function runAutomationCliWithStdin(
               ? []
               : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
           })(),
-          '--dangerously-skip-permissions',
-          '--disallowedTools',
-          'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebSearch,WebFetch',
+          '--allowedTools',
+          '',
         ]
       : [
           '-a',

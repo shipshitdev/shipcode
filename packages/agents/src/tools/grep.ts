@@ -1,16 +1,12 @@
 /**
  * Grep tool — regex content search across the worktree.
  *
- * Uses ripgrep (`rg`) when available (fast, respects .gitignore),
- * falling back to a JS walker for environments without rg. Results
- * capped to avoid flooding the model's context.
+ * Uses ripgrep (`rg`) only (fast, respects .gitignore). Results capped
+ * to avoid flooding the model's context.
  */
 
 import { execFile } from 'node:child_process';
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { promisify } from 'node:util';
-import { IGNORED_DIRECTORIES } from '@shipcode/shared';
 import { z } from 'zod';
 import { assertPathInWorktree, PathGuardError } from './path-guard';
 import type { Tool, ToolContext, ToolResult } from './types';
@@ -69,7 +65,11 @@ export const grepTool: Tool<GrepInput> = {
     if (useRg) {
       return runRipgrep(input, rootAbs);
     }
-    return runJsGrep(input, rootAbs, ctx);
+    return {
+      ok: false,
+      error:
+        'ripgrep (rg) is required for grep tool execution; JavaScript regex fallback is disabled.',
+    };
   },
 };
 
@@ -126,85 +126,4 @@ async function runRipgrep(input: GrepInput, rootAbs: string): Promise<ToolResult
     }
     return { ok: false, error: `rg failed: ${e.message ?? 'unknown'}` };
   }
-}
-
-async function runJsGrep(input: GrepInput, rootAbs: string, ctx: ToolContext): Promise<ToolResult> {
-  const flags = input.ignoreCase ? 'gi' : 'g';
-  let regex: RegExp;
-  try {
-    regex = new RegExp(input.pattern, flags);
-  } catch (err) {
-    return { ok: false, error: `invalid regex: ${(err as Error).message}` };
-  }
-
-  const matches: string[] = [];
-
-  async function walk(dir: string): Promise<void> {
-    /* v8 ignore next -- recursive callers stop before invoking walk once the cap is reached */
-    if (matches.length >= MAX_MATCHES) return;
-    if (ctx.signal.aborted) return;
-
-    let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
-    try {
-      entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
-    for (const entry of entries) {
-      if (matches.length >= MAX_MATCHES) break;
-      if (ctx.signal.aborted) break;
-      if (IGNORED_DIRECTORIES.includes(entry.name)) continue;
-
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(full);
-        /* v8 ignore next -- directory and file entries are covered by recursive traversal tests */
-      } else if (entry.isFile()) {
-        if (input.include && !simpleIncludeMatch(entry.name, input.include)) continue;
-        try {
-          const content = await fs.readFile(full, 'utf-8');
-          const lines = content.split('\n');
-          for (let i = 0; i < lines.length; i++) {
-            if (matches.length >= MAX_MATCHES) break;
-            regex.lastIndex = 0;
-            if (regex.test(lines[i])) {
-              const rel = path.relative(rootAbs, full);
-              const line =
-                lines[i].length > MAX_LINE_LENGTH
-                  ? `${lines[i].slice(0, MAX_LINE_LENGTH)}…`
-                  : lines[i];
-              matches.push(`${rel}:${i + 1}:${line}`);
-            }
-          }
-        } catch {
-          // Unreadable file — skip silently
-        }
-      }
-    }
-  }
-
-  await walk(rootAbs);
-
-  const truncated = matches.length >= MAX_MATCHES;
-  return {
-    ok: true,
-    content:
-      matches.length === 0
-        ? 'No matches.'
-        : matches.join('\n') + (truncated ? `\n\n[truncated at ${MAX_MATCHES} matches]` : ''),
-    data: { matches: matches.length, truncated, backend: 'js' },
-  };
-}
-
-function simpleIncludeMatch(filename: string, include: string): boolean {
-  // Very small subset: "*.ts", "*.{ts,tsx}", exact name.
-  if (include.startsWith('*.{') && include.endsWith('}')) {
-    const exts = include.slice(3, -1).split(',');
-    return exts.some((ext) => filename.endsWith(`.${ext}`));
-  }
-  if (include.startsWith('*.')) {
-    return filename.endsWith(include.slice(1));
-  }
-  return filename === include;
 }

@@ -580,7 +580,7 @@ describe('process manager forwarding', () => {
       exitCode: null,
     });
 
-    processListener('output')('proc-1', 'raw output');
+    processListener('output')('proc-1', 'raw output\n');
 
     expect(queries.terminalEvents.create).toHaveBeenCalledWith('thread-1', {
       kind: 'raw',
@@ -588,7 +588,7 @@ describe('process manager forwarding', () => {
     });
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('agent:output', {
       processId: 'proc-1',
-      chunk: 'raw output',
+      chunk: 'raw output\n',
       threadId: 'thread-1',
     });
 
@@ -670,10 +670,6 @@ describe('process manager forwarding', () => {
     processListener('stateChange')('proc-destroyed-contents', 'claude', 'running');
 
     expect(destroyedContentsWindow.webContents.send).not.toHaveBeenCalled();
-    expect(queries.terminalEvents.create).toHaveBeenCalledWith('thread-destroyed-contents', {
-      kind: 'raw',
-      content: 'raw output',
-    });
     expect(queries.terminalEvents.create).toHaveBeenCalledWith(
       'thread-destroyed-contents',
       expect.objectContaining({
@@ -727,7 +723,7 @@ describe('process manager forwarding', () => {
       throw new Error('webContents went away');
     });
 
-    expect(() => processListener('output')('proc-send-failure', 'raw output')).not.toThrow();
+    expect(() => processListener('output')('proc-send-failure', 'raw output\n')).not.toThrow();
 
     expect(queries.terminalEvents.create).toHaveBeenCalledWith('thread-send-failure', {
       kind: 'raw',

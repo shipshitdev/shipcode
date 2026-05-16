@@ -259,8 +259,21 @@ export const repoSetupEnvFileSchema = z.object({
   required: z.boolean().default(true),
 });
 
+const runtimeQaCommandSchema = z
+  .string()
+  .min(1)
+  .refine((command) => !/[\n\r\0]/.test(command), {
+    message: 'server command must be a single line',
+  })
+  .refine((command) => !/[;&|`$<>\\]/.test(command), {
+    message: 'server command must not contain shell metacharacters',
+  })
+  .refine((command) => /^(bun|pnpm|npm|yarn|deno)\s+/.test(command.trim()), {
+    message: 'server command must start with bun, pnpm, npm, yarn, or deno',
+  });
+
 export const runtimeQaServerSchema = z.object({
-  command: z.string().min(1),
+  command: runtimeQaCommandSchema,
   readinessUrl: z
     .string()
     .min(1)
@@ -269,18 +282,35 @@ export const runtimeQaServerSchema = z.object({
         try {
           const parsed = new URL(url);
           if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+          if (!parsed.port) return false;
           const host = parsed.hostname;
           return host === 'localhost' || host === '127.0.0.1' || host === '::1';
         } catch {
           return false;
         }
       },
-      { message: 'readinessUrl must be http/https on localhost, 127.0.0.1, or ::1' },
+      {
+        message:
+          'readinessUrl must be http/https with an explicit port on localhost, 127.0.0.1, or ::1',
+      },
     ),
   startupTimeoutMs: z.number().int().min(1000).default(60_000),
   portEnvVar: z
     .string()
     .regex(/^[A-Z_][A-Z0-9_]*$/, 'portEnvVar must be a valid POSIX env identifier')
+    .refine(
+      (key) =>
+        ![
+          'PATH',
+          'NODE_OPTIONS',
+          'DYLD_INSERT_LIBRARIES',
+          'LD_PRELOAD',
+          'HOME',
+          'SHELL',
+          'USER',
+        ].includes(key),
+      { message: 'portEnvVar must not override sensitive process environment keys' },
+    )
     .default('PORT'),
 });
 

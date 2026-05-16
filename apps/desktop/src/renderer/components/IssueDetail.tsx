@@ -180,11 +180,13 @@ function useIssueDetailView() {
       e.preventDefault();
       detailDragRef.current = { startX: e.clientX, startW: detailSidebarWidth };
       const onMove = (ev: MouseEvent) => {
+        const drag = detailDragRef.current;
+        if (!drag) return;
         // Dragging left = wider sidebar (inverted delta)
-        const delta = detailDragRef.current!.startX - ev.clientX;
+        const delta = drag.startX - ev.clientX;
         const next = Math.min(
           DETAIL_SIDEBAR_MAX,
-          Math.max(DETAIL_SIDEBAR_MIN, detailDragRef.current!.startW + delta),
+          Math.max(DETAIL_SIDEBAR_MIN, drag.startW + delta),
         );
         setDetailSidebarWidth(next);
       };
@@ -211,7 +213,10 @@ function useIssueDetailView() {
   // Shared cache with ProjectSidebar / Titlebar — no extra request.
   const { data: activeProject } = useQuery<Project | null>({
     queryKey: ['project', activeProjectId],
-    queryFn: () => window.shipcode.invoke('project:get', { projectId: activeProjectId! }),
+    queryFn: () => {
+      if (!activeProjectId) throw new Error('Missing active project id');
+      return window.shipcode.invoke('project:get', { projectId: activeProjectId });
+    },
     enabled: !!activeProjectId,
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
@@ -248,11 +253,13 @@ function useIssueDetailView() {
 
   const { data: issuePlanHistory } = useQuery<PlanRecord[]>({
     queryKey: ['issue-plan-history', activeProjectId, activeIssue?.issueNumber],
-    queryFn: () =>
-      window.shipcode.invoke('plan:list-for-issue', {
-        projectId: activeProjectId!,
-        issueNumber: activeIssue!.issueNumber,
-      }),
+    queryFn: () => {
+      if (!activeProjectId || !activeIssue) throw new Error('Missing active issue context');
+      return window.shipcode.invoke('plan:list-for-issue', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
+      });
+    },
     enabled: shouldLoadIssueWidePlanHistory,
     // Push-invalidated by plan:parsed in useIpc.
   });
@@ -268,12 +275,14 @@ function useIssueDetailView() {
   const isPlanHistoryLoading = isThreadPlanHistoryLoading || isIssuePlanHistoryLoading;
   const { data: issueActivity = [] } = useQuery<ActivityEntry[]>({
     queryKey: ['issue-activity', activeProjectId, activeIssue?.issueNumber],
-    queryFn: () =>
-      window.shipcode.invoke('activity:list-for-issue', {
-        projectId: activeProjectId!,
-        issueNumber: activeIssue!.issueNumber,
+    queryFn: () => {
+      if (!activeProjectId || !activeIssue) throw new Error('Missing active issue context');
+      return window.shipcode.invoke('activity:list-for-issue', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
         limit: 200,
-      }),
+      });
+    },
     enabled: !!activeProjectId && !!activeIssue && shouldLoadActivityTab,
     refetchInterval: shouldPollLiveThread && shouldLoadActivityTab ? 60_000 : false,
   });
@@ -286,11 +295,17 @@ function useIssueDetailView() {
       existingGroup.push({ order: order++, plan });
       groupedRunsByThread.set(plan.threadId, existingGroup);
     }
-    const groupedRuns = [...groupedRunsByThread.entries()].map(([threadId, entries]) => ({
-      threadId,
-      order: entries[0]!.order,
-      plans: entries.map((entry) => entry.plan),
-    }));
+    const groupedRuns = [...groupedRunsByThread.entries()].flatMap(([threadId, entries]) => {
+      const firstEntry = entries[0];
+      if (!firstEntry) return [];
+      return [
+        {
+          threadId,
+          order: firstEntry.order,
+          plans: entries.map((entry) => entry.plan),
+        },
+      ];
+    });
     const totalRuns = groupedRuns.length;
     return groupedRuns
       .toSorted((a, b) => a.order - b.order)
@@ -355,8 +370,9 @@ function useIssueDetailView() {
   const { data: taskGraph = null } = useQuery<TaskGraphWithNodes | null>({
     queryKey: ['task-graph', activeThreadId],
     queryFn: async () => {
+      if (!activeThreadId) throw new Error('Missing active thread id');
       const graph = await window.shipcode.invoke('task-graph:get-latest', {
-        threadId: activeThreadId!,
+        threadId: activeThreadId,
       });
       return graph && Array.isArray(graph.nodes) ? graph : null;
     },
@@ -409,7 +425,10 @@ function useIssueDetailView() {
   const { data: expandedPlanDetail, isLoading: isExpandedPlanDetailLoading } =
     useQuery<PlanRecord | null>({
       queryKey: ['plan-by-id', expandedHistoryPlan?.id],
-      queryFn: () => window.shipcode.invoke('plan:get-by-id', { planId: expandedHistoryPlan!.id }),
+      queryFn: () => {
+        if (!expandedHistoryPlan) throw new Error('Missing expanded plan');
+        return window.shipcode.invoke('plan:get-by-id', { planId: expandedHistoryPlan.id });
+      },
       enabled: shouldFetchExpandedPlanDetail,
       staleTime: STABLE_APP_STATE_STALE_TIME,
     });
@@ -422,7 +441,10 @@ function useIssueDetailView() {
   const { data: fullScreenPlanDetail, isLoading: isFullScreenPlanDetailLoading } =
     useQuery<PlanRecord | null>({
       queryKey: ['plan-by-id', fullScreenPlanBase?.id],
-      queryFn: () => window.shipcode.invoke('plan:get-by-id', { planId: fullScreenPlanBase!.id }),
+      queryFn: () => {
+        if (!fullScreenPlanBase) throw new Error('Missing full-screen plan');
+        return window.shipcode.invoke('plan:get-by-id', { planId: fullScreenPlanBase.id });
+      },
       enabled: shouldFetchFullScreenPlanDetail,
       staleTime: STABLE_APP_STATE_STALE_TIME,
     });
@@ -578,12 +600,14 @@ function useIssueDetailView() {
     !!thread?.githubRepo;
 
   const updateMetadata = useMutation({
-    mutationFn: (args: { issueType?: string | null; priority?: string | null }) =>
-      window.shipcode.invoke('github:update-issue-metadata', {
-        projectId: activeProjectId!,
-        issueNumber: activeIssue!.issueNumber,
+    mutationFn: (args: { issueType?: string | null; priority?: string | null }) => {
+      if (!activeProjectId || !activeIssue) throw new Error('Missing active issue context');
+      return window.shipcode.invoke('github:update-issue-metadata', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
         ...args,
-      }),
+      });
+    },
     onSuccess: () => {
       if (activeProjectId) {
         queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
@@ -903,7 +927,8 @@ function useIssueDetailView() {
       : null;
 
   const handleOpenOnGithub = async () => {
-    await window.shipcode.invoke('shell:open-external', { url: githubIssueUrl! });
+    if (!githubIssueUrl) return;
+    await window.shipcode.invoke('shell:open-external', { url: githubIssueUrl });
   };
   const issueBranchName = !isAutomationIssue(activeIssue)
     ? formatIssueBranch(
@@ -913,9 +938,10 @@ function useIssueDetailView() {
       )
     : null;
   const handleCopyBranchName = async () => {
+    if (!issueBranchName) return;
     if (branchCopyResetRef.current) clearTimeout(branchCopyResetRef.current);
     try {
-      await navigator.clipboard.writeText(issueBranchName!);
+      await navigator.clipboard.writeText(issueBranchName);
       setBranchCopyState('copied');
     } catch {
       setBranchCopyState('error');
@@ -923,7 +949,8 @@ function useIssueDetailView() {
     branchCopyResetRef.current = setTimeout(() => setBranchCopyState('idle'), 1500);
   };
   const handleOpenPullRequest = async () => {
-    await window.shipcode.invoke('shell:open-external', { url: linkedPrUrl! });
+    if (!linkedPrUrl) return;
+    await window.shipcode.invoke('shell:open-external', { url: linkedPrUrl });
   };
 
   const handleToggleIssueState = async (newState: 'open' | 'closed') => {
@@ -1324,14 +1351,16 @@ function useIssueDetailView() {
       ) : isAutomationIssue(activeIssue) ? (
         <span className="font-mono text-muted-foreground">[Auto]</span>
       ) : githubIssueUrl ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="xs"
           onClick={handleOpenOnGithub}
-          className="font-mono text-muted-foreground transition-colors hover:text-primary"
+          className="h-auto rounded-none p-0 font-mono text-muted-foreground hover:bg-transparent hover:text-primary"
           title="Open this issue on GitHub"
         >
           #{activeIssue.issueNumber}
-        </button>
+        </Button>
       ) : (
         <span className="font-mono text-muted-foreground">#{activeIssue.issueNumber}</span>
       )}
@@ -1342,10 +1371,12 @@ function useIssueDetailView() {
           {ISSUE_META_DOT}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="xs"
                 className={cn(
-                  'flex items-center gap-1 font-medium transition-colors disabled:opacity-50',
+                  'h-auto rounded-none p-0 font-medium hover:bg-transparent disabled:opacity-50',
                   activeIssue.state === 'open' ? 'text-success' : 'text-done hover:text-done/80',
                 )}
                 disabled={isTogglingState}
@@ -1363,7 +1394,7 @@ function useIssueDetailView() {
                 >
                   {activeIssue.state === 'open' ? 'Open' : 'Closed'}
                 </LoadingButtonContent>
-              </button>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               <DropdownMenuItem
@@ -1399,11 +1430,13 @@ function useIssueDetailView() {
       {issueBranchName && (
         <>
           {ISSUE_META_DOT}
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => void handleCopyBranchName()}
             className={cn(
-              'flex items-center gap-1 font-mono transition-colors',
+              'h-auto rounded-none p-0 font-mono hover:bg-transparent',
               branchCopyState === 'copied'
                 ? 'text-success'
                 : branchCopyState === 'error'
@@ -1426,7 +1459,7 @@ function useIssueDetailView() {
               <Copy className="size-3" />
             )}
             <span>{issueBranchName}</span>
-          </button>
+          </Button>
         </>
       )}
 
@@ -1435,14 +1468,16 @@ function useIssueDetailView() {
         <>
           {ISSUE_META_DOT}
           {linkedPrUrl ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
               onClick={() => void handleOpenPullRequest()}
-              className="font-medium text-done transition-colors hover:text-done/80"
+              className="h-auto rounded-none p-0 font-medium text-done hover:bg-transparent hover:text-done/80"
               title="Open pull request on GitHub"
             >
               PR #{activeIssue.linkedPrNumber}
-            </button>
+            </Button>
           ) : (
             <Badge variant="done" className="text-[10px]">
               PR #{activeIssue.linkedPrNumber}
@@ -1530,10 +1565,10 @@ function useIssueDetailView() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">No priority</SelectItem>
-                <SelectItem value="P0">P0 — Critical</SelectItem>
-                <SelectItem value="P1">P1 — High</SelectItem>
-                <SelectItem value="P2">P2 — Medium</SelectItem>
-                <SelectItem value="P3">P3 — Low</SelectItem>
+                <SelectItem value="P0">P0: Critical</SelectItem>
+                <SelectItem value="P1">P1: High</SelectItem>
+                <SelectItem value="P2">P2: Medium</SelectItem>
+                <SelectItem value="P3">P3: Low</SelectItem>
               </SelectContent>
             </Select>
           </dd>

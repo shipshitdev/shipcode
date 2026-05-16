@@ -283,21 +283,15 @@ export const SHELL_ALLOWLIST: readonly string[] = [
   // write to the worktree, but since we confine cwd to the worktree and
   // the resulting files still land under path-guard territory, accept it.
   'tsc',
-  // Search / navigation — all pure read.
-  // NOTE: `find` is intentionally excluded — its `-exec`, `-execdir`,
+  // Navigation — pure read.
+  // NOTE: `find` and `rg` are intentionally excluded. `find` has `-exec`;
+  // `rg` has `--pre`, which can execute helper programs. Use the dedicated
+  // grep tool instead of the generic shell wrapper for content search.
+  // `find` is intentionally excluded — its `-exec`, `-execdir`,
   // `-delete`, `-fprint` primaries execute programs or write files,
-  // bypassing shell:false and path-guard. Use `ls`, `tree`, or `rg`.
-  'rg',
-  'grep',
+  // bypassing shell:false and path-guard. Use `ls`, `tree`, or the grep tool.
   'ls',
   'tree',
-  // File inspection — all pure read
-  'cat',
-  'head',
-  'tail',
-  'wc',
-  'file',
-  'stat',
 ] as const;
 
 /**

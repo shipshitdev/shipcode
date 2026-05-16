@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import type { ExecutorModel } from '@shipcode/shared';
 import { OpenRouterClient, OpenRouterError } from './providers/openrouter-http';
 
@@ -25,7 +24,6 @@ export type AutoCommitGenerateResult =
 
 const MAX_DIFF_CHARS = 120_000;
 const MAX_DIRTY_FILES_FOR_SPLIT = 50;
-const CLI_TIMEOUT_MS = 120_000;
 
 const PROMPT_INSTRUCTIONS = `You are a senior engineer producing intent-based git commits from a working tree diff.
 
@@ -224,131 +222,16 @@ async function generateText(
   }
 
   if (provider === 'claude') {
-    return runClaudeText(input, systemPrompt, userPrompt);
+    throw new Error(
+      'Claude auto-commit generation is disabled because local CLI tools cannot be fully confined',
+    );
   }
 
   if (provider === 'codex') {
-    return runCodexText(input, systemPrompt, userPrompt);
+    throw new Error(
+      'Codex auto-commit generation is disabled because local CLI tools cannot be fully confined',
+    );
   }
 
   throw new Error(`Auto-commit does not support ${provider}`);
-}
-
-function providerDefaultModel(provider: ExecutorModel): string {
-  return provider;
-}
-
-function modelArg(input: AutoCommitGenerateInput): string | null {
-  const provider = input.provider as ExecutorModel;
-  const trimmed = input.model.trim();
-  if (!trimmed || trimmed === providerDefaultModel(provider)) return null;
-  return trimmed;
-}
-
-function runClaudeText(
-  input: AutoCommitGenerateInput,
-  systemPrompt: string,
-  userPrompt: string,
-): Promise<{ content: string; modelUsed: string }> {
-  const selectedModel = modelArg(input);
-  const args = ['-p'];
-  if (selectedModel) args.push('--model', selectedModel);
-  args.push(
-    '--output-format',
-    'text',
-    '--max-turns',
-    '1',
-    '--dangerously-skip-permissions',
-    '--disallowedTools',
-    'Edit,Write,MultiEdit,Bash,NotebookEdit,Read,Glob,Grep,Task,WebSearch,WebFetch',
-  );
-  return runCliText('claude', args, `${systemPrompt}\n\n${userPrompt}`, input);
-}
-
-function runCodexText(
-  input: AutoCommitGenerateInput,
-  systemPrompt: string,
-  userPrompt: string,
-): Promise<{ content: string; modelUsed: string }> {
-  const selectedModel = modelArg(input);
-  const args = ['-a', 'never'];
-  if (selectedModel) args.push('-m', selectedModel);
-  args.push('-c', 'model_reasoning_effort=medium', 'exec', '-', '--sandbox', 'read-only');
-  return runCliText(
-    'codex',
-    args,
-    [
-      'Return only the requested content. Do not inspect or modify files.',
-      '',
-      systemPrompt,
-      '',
-      userPrompt,
-    ].join('\n'),
-    input,
-  );
-}
-
-function runCliText(
-  command: 'claude' | 'codex',
-  args: string[],
-  prompt: string,
-  input: AutoCommitGenerateInput,
-): Promise<{ content: string; modelUsed: string }> {
-  if (input.signal.aborted) {
-    return Promise.reject(new OpenRouterError('aborted', 'aborted', false));
-  }
-
-  return new Promise((resolve, reject) => {
-    const proc = spawn(command, args, {
-      cwd: input.cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    let settled = false;
-
-    const settle = () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      input.signal.removeEventListener('abort', abort);
-      return true;
-    };
-
-    const settleSuccess = (value: { content: string; modelUsed: string }) => {
-      if (settle()) resolve(value);
-    };
-
-    const settleError = (error: Error) => {
-      if (settle()) reject(error);
-    };
-
-    const timer = setTimeout(() => {
-      proc.kill('SIGTERM');
-      settleError(new Error(`${command} timed out while generating commit messages`));
-    }, CLI_TIMEOUT_MS);
-
-    const abort = () => {
-      proc.kill('SIGTERM');
-      settleError(new OpenRouterError('aborted', 'aborted', false));
-    };
-
-    input.signal.addEventListener('abort', abort, { once: true });
-    proc.stdout.on('data', (chunk) => {
-      stdout += String(chunk);
-    });
-    proc.stderr.on('data', (chunk) => {
-      stderr += String(chunk);
-    });
-    proc.on('error', settleError);
-    proc.on('close', (code) => {
-      if (code === 0) {
-        settleSuccess({ content: stdout.trim(), modelUsed: modelArg(input) ?? command });
-        return;
-      }
-      const message = stderr.trim().split('\n').filter(Boolean).slice(0, 3).join('\n');
-      settleError(new Error(message || `${command} exited ${code}`));
-    });
-    proc.stdin.end(prompt);
-  });
 }

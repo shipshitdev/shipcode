@@ -278,9 +278,7 @@ describe('IssueListView coverage states', () => {
         issues: [issue],
         selectedIssueNumber: selectedIssueNumber ?? issue.issueNumber,
       });
-      const row = Array.from(view.container.querySelectorAll('[role="button"]')).find((element) =>
-        element.textContent?.includes(issue.title),
-      );
+      const row = view.container.querySelector('[role="button"]');
       expect(row?.className).toContain(expectedClass);
       view.cleanup();
     }

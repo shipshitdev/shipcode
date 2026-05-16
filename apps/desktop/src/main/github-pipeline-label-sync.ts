@@ -7,7 +7,7 @@ import {
 } from '@shipcode/shared';
 import log from './logger.service';
 
-export async function syncIssuePipelineLabel(opts: {
+async function syncIssuePipelineLabel(opts: {
   projectPath: string;
   issueNumber: number;
   status: IssuePipelineStatus;
@@ -18,12 +18,14 @@ export async function syncIssuePipelineLabel(opts: {
   const targetLabel = pipelineLabelForStatus(opts.status);
   const issue = await ghCli.getIssue(opts.issueNumber);
   const currentPipelineLabels = issue.labels.filter(isPipelineStateLabel);
-
-  for (const label of currentPipelineLabels) {
+  const labelRemovalTasks = currentPipelineLabels.reduce<Array<Promise<void>>>((tasks, label) => {
     if (label !== targetLabel) {
-      await ghCli.setIssueLabelPresence(opts.issueNumber, label, false);
+      tasks.push(ghCli.setIssueLabelPresence(opts.issueNumber, label, false));
     }
-  }
+    return tasks;
+  }, []);
+
+  await Promise.all(labelRemovalTasks);
   if (targetLabel) {
     await ghCli.setIssueLabelPresence(opts.issueNumber, targetLabel, true);
   }

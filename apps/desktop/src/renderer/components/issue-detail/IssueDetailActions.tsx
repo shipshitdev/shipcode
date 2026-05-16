@@ -1,5 +1,5 @@
 import type { ClarificationAnswer, ClarificationRequest, Thread } from '@shipcode/shared';
-import { PIPELINE_PHASE } from '@shipcode/shared';
+import { AGENT_RUNNING_PHASES, PIPELINE_PHASE } from '@shipcode/shared';
 import { Badge, Button, cn, Textarea } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { ChevronDown, ChevronUp, Copy, GitPullRequest } from 'lucide-react';
@@ -301,12 +301,13 @@ export function buildIssueDetailActions({
     thread,
   );
   const answeredClarification = thread?.answeredClarification ?? null;
+  const isThreadRunning = thread ? AGENT_RUNNING_PHASES.includes(thread.status) : false;
   const previewPhases =
     effectiveRevisionCount > 0
       ? PIPELINE_PREVIEW_PHASES
       : PIPELINE_PREVIEW_PHASES.filter((phase) => phase.id !== 'review');
   const terminalControls =
-    canOpenIssueTerminal && onOpenIssueTerminal ? (
+    canOpenIssueTerminal && onOpenIssueTerminal && !isThreadRunning ? (
       <div className="mt-4 border-t border-border/70 pt-4">
         <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           Manual run

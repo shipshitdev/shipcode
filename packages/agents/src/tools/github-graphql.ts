@@ -86,6 +86,15 @@ export const githubGraphqlTool: Tool<GraphqlInput> = {
     if (opCount === 0) {
       return errorResult('multi_op_rejected', 'no operation definition found');
     }
+    if (input.repo) {
+      return errorResult(
+        'repo_override_rejected',
+        'GitHub tool is scoped to the active project repo',
+      );
+    }
+    if (/\b(mutation|subscription)\b/.test(stripCommentsAndStrings(input.query))) {
+      return errorResult('operation_rejected', 'Only read-only GitHub GraphQL queries are allowed');
+    }
 
     const deps = ctx.githubGraphql;
     if (!deps) {

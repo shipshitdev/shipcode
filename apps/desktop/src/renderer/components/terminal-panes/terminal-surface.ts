@@ -1,4 +1,4 @@
-export type TerminalTheme = Record<string, string>;
+type TerminalTheme = Record<string, string>;
 
 export interface TerminalSurface {
   mount(container: HTMLElement): void;

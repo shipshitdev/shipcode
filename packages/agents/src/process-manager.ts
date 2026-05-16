@@ -9,7 +9,11 @@ import * as pty from 'node-pty';
 
 export type ProcessManagerAgentCommand = Extract<AgentType, 'claude' | 'codex' | 'gemini' | 'gh'>;
 export type ProcessManagerShellCommand = (typeof TRUSTED_SHELL_COMMANDS)[number];
-export type ProcessManagerCommand = ProcessManagerAgentCommand | ProcessManagerShellCommand;
+export type ProcessManagerPackageCommand = (typeof TRUSTED_PACKAGE_COMMANDS)[number];
+export type ProcessManagerCommand =
+  | ProcessManagerAgentCommand
+  | ProcessManagerShellCommand
+  | ProcessManagerPackageCommand;
 
 const ALLOWED_AGENT_COMMANDS = new Set<ProcessManagerAgentCommand>([
   'claude',
@@ -28,7 +32,9 @@ const TRUSTED_SHELL_COMMANDS = [
   '/opt/homebrew/bin/bash',
   '/opt/homebrew/bin/zsh',
 ] as const;
+const TRUSTED_PACKAGE_COMMANDS = ['bun', 'pnpm', 'npm', 'yarn', 'deno'] as const;
 const TRUSTED_SHELLS = new Set<string>(TRUSTED_SHELL_COMMANDS);
+const TRUSTED_PACKAGES = new Set<string>(TRUSTED_PACKAGE_COMMANDS);
 
 const SAFE_ENV_KEYS = new Set([
   'PATH',
@@ -65,8 +71,17 @@ function isAllowlistedAgentCommand(command: string): command is ProcessManagerAg
   return ALLOWED_AGENT_COMMANDS.has(command as ProcessManagerAgentCommand);
 }
 
+function isTrustedPackageCommand(command: string): command is ProcessManagerPackageCommand {
+  return TRUSTED_PACKAGES.has(command as ProcessManagerPackageCommand);
+}
+
 function assertProcessManagerCommand(command: string): asserts command is ProcessManagerCommand {
-  if (isTrustedShell(command) || isAllowlistedAgentCommand(command)) return;
+  if (
+    isTrustedShell(command) ||
+    isAllowlistedAgentCommand(command) ||
+    isTrustedPackageCommand(command)
+  )
+    return;
   throw new Error(`Command is not allowlisted for ProcessManager: ${command}`);
 }
 
@@ -77,6 +92,8 @@ function mergeSafeEnv(
   const env: Record<string, string> = { ...filterEnv(baseEnv), FORCE_COLOR: '1' };
   for (const [key, val] of Object.entries(extraEnv ?? {})) {
     if (!key || key.includes('=') || key.includes('\0') || val.includes('\0')) continue;
+    if (SAFE_ENV_KEYS.has(key) || key === 'FORCE_COLOR') continue;
+    if (!/^[A-Z_][A-Z0-9_]*PORT[A-Z0-9_]*$/.test(key)) continue;
     // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — strip C0 control chars from env values to prevent header injection
     env[key] = val.replace(/[\n\r\x00-\x1f]/g, '');
   }
@@ -473,14 +490,22 @@ export class ProcessManager extends EventEmitter {
       // The close/error handlers above own the final lifecycle event.
     });
 
-    try {
-      child.stdin.write(input);
-      child.stdin.end();
-    } catch (err) {
-      emitOutput(
-        `\x1b[31mError writing prompt to ${command}: ${err instanceof Error ? err.message : String(err)}\x1b[0m\r\n`,
-      );
+    const finishStdin = () => child.stdin.end();
+    const handleStdinError = (err: Error) => {
+      child.stdin.off('drain', finishStdin);
+      emitOutput(`\x1b[31mError writing prompt to ${command}: ${err.message}\x1b[0m\r\n`);
       this.killManagedProcess(managed);
+    };
+
+    child.stdin.once('error', handleStdinError);
+    try {
+      if (child.stdin.write(input) !== false) {
+        child.stdin.end();
+      } else {
+        child.stdin.once('drain', finishStdin);
+      }
+    } catch (err) {
+      handleStdinError(err instanceof Error ? err : new Error(String(err)));
     }
 
     return managed;

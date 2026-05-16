@@ -578,6 +578,12 @@ async function ensureProbeDir(provider: CliProviderUsageProvider): Promise<strin
   return dir;
 }
 
+function assertProbeDir(cwd: string): void {
+  const root = join(homedir(), '.shipcode', 'provider-probes');
+  if (cwd !== root && cwd.startsWith(`${root}/`)) return;
+  throw new Error(`Provider usage probe cwd is outside the trusted probe directory: ${cwd}`);
+}
+
 async function ensureCodexDirTrusted(cwd: string): Promise<void> {
   const configPath = join(homedir(), '.codex', 'config.toml');
   const section = `\n[projects."${cwd}"]\ntrust_level = "trusted"\n`;
@@ -608,6 +614,8 @@ async function runPtyProbe(options: PtyProbeOptions): Promise<string> {
     sendOnSubstrings = {},
   } = options;
 
+  assertProbeDir(cwd);
+
   return new Promise((resolve, reject) => {
     let proc: pty.IPty;
     try {
@@ -616,7 +624,7 @@ async function runPtyProbe(options: PtyProbeOptions): Promise<string> {
         cols,
         rows,
         cwd,
-        env: process.env,
+        env: shellExecEnv(),
       });
     } catch (error) {
       reject(error);

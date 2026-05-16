@@ -188,14 +188,19 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
  * to exfiltrate host secrets via absolute paths.
  */
 function validateArgvPaths(args: string[], resolvedCwd: string): string | null {
+  const cwdBoundary = path.normalize(resolvedCwd) + path.sep;
   for (const arg of args) {
+    const value = arg.includes('=') ? (arg.split('=').pop() ?? arg) : arg;
+    if (path.isAbsolute(value)) {
+      return `absolute paths are not allowed in shell args (got '${arg}'). Use paths relative to the worktree.`;
+    }
     if (arg.startsWith('-')) continue;
     if (path.isAbsolute(arg)) {
       return `absolute paths are not allowed in shell args (got '${arg}'). Use paths relative to the worktree.`;
     }
     const resolved = path.resolve(resolvedCwd, arg);
     const norm = path.normalize(resolved);
-    if (!norm.startsWith(resolvedCwd)) {
+    if (norm !== path.normalize(resolvedCwd) && !norm.startsWith(cwdBoundary)) {
       return `arg '${arg}' resolves outside the worktree. Use paths relative to the worktree root.`;
     }
   }
@@ -280,6 +285,9 @@ function validateGitArgs(args: string[]): string | null {
         if (subArg.startsWith('--output=') || subArg.startsWith('--output-directory=')) {
           return `git flag '${subArg}' is blocked (writes files outside the worktree).`;
         }
+        if (subArg.startsWith('--open-files-in-pager=')) {
+          return `git flag '${subArg}' is blocked (--open-files-in-pager executes programs).`;
+        }
         if (subArg.startsWith('-O') && subArg.length > 2) {
           return `git flag '${subArg}' is blocked (--open-files-in-pager executes programs).`;
         }
@@ -335,10 +343,14 @@ function validateGitConfigValue(entry: string): string | null {
     'core.askpass',
     'core.hookspath',
     'core.fsmonitor',
-    'core.alternateRefsCommand',
+    'core.externaldiff',
+    'core.alternaterefscommand',
+    'diff.external',
     'credential.helper',
     'pager',
     'http.sslcapath',
+    'uploadpack.packobjectshook',
+    'safe.directory',
   ]);
 
   // Block diff/merge/filter driver commands and gpg program overrides.

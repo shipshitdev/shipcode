@@ -289,7 +289,6 @@ function buildClaudeAssistantArgs(args: {
     args.sessionId,
     '--allowedTools',
     'Edit,Write,Bash,Glob,Grep,Read',
-    '--dangerously-skip-permissions',
     '--max-turns',
     '50',
     ...thinkingArgs,
@@ -318,7 +317,6 @@ function buildClaudeAssistantResumeArgs(args: {
     '--verbose',
     '--allowedTools',
     'Edit,Write,Bash,Glob,Grep,Read',
-    '--dangerously-skip-permissions',
     '--max-turns',
     '50',
     ...thinkingArgs,
@@ -543,7 +541,6 @@ export function registerInstantHandlers({
             '--verbose',
             '--allowedTools',
             'Edit,Write,Bash,Glob,Grep,Read',
-            '--dangerously-skip-permissions',
             ...thinkingArgs,
           ];
         }
@@ -766,7 +763,6 @@ export function registerInstantHandlers({
                 '--verbose',
                 '--allowedTools',
                 'Edit,Write,Bash,Glob,Grep,Read',
-                '--dangerously-skip-permissions',
               ],
               cwd,
               prompt,

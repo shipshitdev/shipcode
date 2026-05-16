@@ -56,7 +56,7 @@ export function loadCodeReviewGraphContext(
 
 function readCodeReviewGraphStatus(projectPath: string, timeoutMs: number): string | null {
   try {
-    const output = execFileSync('uvx', ['code-review-graph', 'status', '--repo', projectPath], {
+    const output = execFileSync('code-review-graph', ['status', '--repo', projectPath], {
       encoding: 'utf-8',
       timeout: timeoutMs,
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -73,9 +73,9 @@ function readCodeReviewGraphChangeImpact(
   base?: string,
 ): string | null {
   try {
-    const args = ['code-review-graph', 'detect-changes', '--brief', '--repo', projectPath];
+    const args = ['detect-changes', '--brief', '--repo', projectPath];
     if (base) args.push('--base', base);
-    const output = execFileSync('uvx', args, {
+    const output = execFileSync('code-review-graph', args, {
       encoding: 'utf-8',
       timeout: timeoutMs,
       stdio: ['ignore', 'pipe', 'ignore'],

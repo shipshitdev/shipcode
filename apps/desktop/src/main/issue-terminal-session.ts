@@ -19,7 +19,7 @@ import {
   unregisterInteractiveTerminalSession,
 } from './terminal-session-registry';
 
-export type IssueTerminalProvider = 'claude' | 'codex';
+type IssueTerminalProvider = 'claude' | 'codex';
 
 export interface StartIssueTerminalArgs {
   projectId: string;
@@ -65,14 +65,10 @@ async function readIssueTerminalSkill(): Promise<string> {
     path.join(process.cwd(), 'skills', 'issue-terminal-session', 'SKILL.md'),
     path.join(process.cwd(), '..', '..', 'skills', 'issue-terminal-session', 'SKILL.md'),
   ];
-  for (const candidate of candidates) {
-    try {
-      return await fs.readFile(candidate, 'utf8');
-    } catch {
-      // Try the next dev/package layout candidate.
-    }
-  }
-  return DEFAULT_SKILL;
+  const skill = await Promise.any(
+    candidates.map((candidate) => fs.readFile(candidate, 'utf8')),
+  ).catch(() => DEFAULT_SKILL);
+  return skill;
 }
 
 function buildPromptArtifact(input: {

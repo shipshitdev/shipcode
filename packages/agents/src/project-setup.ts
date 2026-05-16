@@ -545,11 +545,15 @@ function detectDotnetContract(projectPath: string): RepoSetupContract {
   return {
     ...EMPTY_CONTRACT,
     setupCommands: ['dotnet restore'],
-    verifyCommands: hasSingleTarget && target ? [`dotnet test ${target}`] : [],
+    verifyCommands: hasSingleTarget && target ? [`dotnet test ${shellQuote(target)}`] : [],
     testingContext: hasSingleTarget
       ? 'Detected a .NET project. A single solution/project test command is suggested.'
       : 'Detected multiple .NET solution/project files. Full-root testing is intentionally not suggested; add the scoped test command manually.',
   };
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 function detectPhpContract(projectPath: string): RepoSetupContract {

@@ -22,7 +22,7 @@ import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { ArrowDown, ArrowUp, Plus, Save, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef } from 'react';
 
 type EditableTriageRuleCondition = TriageRuleCondition & { clientId: string };
 type EditableTriageRule = Omit<TriageRuleDraft, 'conditions'> & {
@@ -107,6 +107,66 @@ function toDraft(rule: EditableTriageRule): TriageRuleDraft {
 
 function replaceAt<T>(items: readonly T[], index: number, next: T): T[] {
   return items.map((item, itemIndex) => (itemIndex === index ? next : item));
+}
+
+interface TriageRulesState {
+  rules: EditableTriageRule[];
+  dirty: boolean;
+  saveError: string | null;
+}
+
+type TriageRulesAction =
+  | { type: 'hydrate'; rules: EditableTriageRule[] }
+  | { type: 'saved'; rules: EditableTriageRule[] }
+  | { type: 'save-error'; error: string }
+  | {
+      type: 'update-rule';
+      index: number;
+      updater: (rule: EditableTriageRule) => EditableTriageRule;
+    }
+  | { type: 'delete-rule'; index: number }
+  | { type: 'move-rule'; index: number; direction: -1 | 1 }
+  | { type: 'add-rule'; rule: EditableTriageRule };
+
+const TRIAGE_RULES_INITIAL_STATE: TriageRulesState = {
+  rules: [],
+  dirty: false,
+  saveError: null,
+};
+
+function triageRulesReducer(state: TriageRulesState, action: TriageRulesAction): TriageRulesState {
+  switch (action.type) {
+    case 'hydrate':
+    case 'saved':
+      return { rules: action.rules, dirty: false, saveError: null };
+    case 'save-error':
+      return { ...state, saveError: action.error };
+    case 'update-rule':
+      return {
+        rules: replaceAt(state.rules, action.index, action.updater(state.rules[action.index])),
+        dirty: true,
+        saveError: null,
+      };
+    case 'delete-rule':
+      return {
+        rules: state.rules.filter((_, index) => index !== action.index),
+        dirty: true,
+        saveError: null,
+      };
+    case 'move-rule': {
+      const nextIndex = action.index + action.direction;
+      if (nextIndex < 0 || nextIndex >= state.rules.length) return state;
+      const rules = [...state.rules];
+      [rules[action.index], rules[nextIndex]] = [rules[nextIndex], rules[action.index]];
+      return { rules, dirty: true, saveError: null };
+    }
+    case 'add-rule':
+      return {
+        rules: [...state.rules, action.rule],
+        dirty: true,
+        saveError: null,
+      };
+  }
 }
 
 function TriageRuleCard({
@@ -350,14 +410,12 @@ function TriageRuleCard({
 
 export function TriageRulesTab({ projectId, isActive }: { projectId: string; isActive: boolean }) {
   const queryClient = useQueryClient();
-  const [rules, setRules] = useState<EditableTriageRule[]>([]);
-  const [dirty, setDirtyState] = useState(false);
+  const [{ rules, dirty, saveError }, dispatch] = useReducer(
+    triageRulesReducer,
+    TRIAGE_RULES_INITIAL_STATE,
+  );
   const dirtyRef = useRef(false);
-  const setDirty = (value: boolean) => {
-    dirtyRef.current = value;
-    setDirtyState(value);
-  };
-  const [saveError, setSaveError] = useState<string | null>(null);
+  dirtyRef.current = dirty;
 
   const rulesQuery = useQuery<TriageRule[]>({
     queryKey: ['project-triage-rules', projectId],
@@ -368,10 +426,10 @@ export function TriageRulesTab({ projectId, isActive }: { projectId: string; isA
   // biome-ignore lint/correctness/useExhaustiveDependencies: projectId triggers reset when switching projects
   useEffect(() => {
     if (dirtyRef.current && rulesQuery.data) return;
-    setRules(rulesQuery.data ? rulesQuery.data.map(toEditableRule) : []);
-    dirtyRef.current = false;
-    setDirtyState(false);
-    setSaveError(null);
+    dispatch({
+      type: 'hydrate',
+      rules: rulesQuery.data ? rulesQuery.data.map(toEditableRule) : [],
+    });
   }, [projectId, rulesQuery.data]);
 
   const saveMutation = useMutation({
@@ -381,14 +439,12 @@ export function TriageRulesTab({ projectId, isActive }: { projectId: string; isA
         rules: rules.map(toDraft),
       }),
     onSuccess: (saved) => {
-      setRules(saved.map(toEditableRule));
-      setDirty(false);
-      setSaveError(null);
+      dispatch({ type: 'saved', rules: saved.map(toEditableRule) });
       queryClient.setQueryData(['project-triage-rules', projectId], saved);
     },
     onError: (err: unknown) => {
       log.error('[TriageRulesTab] save failed', err);
-      setSaveError(clampError(err));
+      dispatch({ type: 'save-error', error: clampError(err) });
     },
   });
 
@@ -396,27 +452,15 @@ export function TriageRulesTab({ projectId, isActive }: { projectId: string; isA
   const enabledCount = useMemo(() => rules.filter((rule) => rule.enabled).length, [rules]);
 
   function updateRule(index: number, updater: (rule: EditableTriageRule) => EditableTriageRule) {
-    setRules((current) => replaceAt(current, index, updater(current[index])));
-    setDirty(true);
-    setSaveError(null);
+    dispatch({ type: 'update-rule', index, updater });
   }
 
   function deleteRule(index: number) {
-    setRules((current) => current.filter((_, i) => i !== index));
-    setDirty(true);
-    setSaveError(null);
+    dispatch({ type: 'delete-rule', index });
   }
 
   function moveRule(index: number, direction: -1 | 1) {
-    const nextIndex = index + direction;
-    if (nextIndex < 0 || nextIndex >= rules.length) return;
-    setRules((current) => {
-      const next = [...current];
-      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-      return next;
-    });
-    setDirty(true);
-    setSaveError(null);
+    dispatch({ type: 'move-rule', index, direction });
   }
 
   if (rulesQuery.isLoading) {
@@ -448,9 +492,7 @@ export function TriageRulesTab({ projectId, isActive }: { projectId: string; isA
             size="sm"
             onClick={() => {
               if (!canAdd) return;
-              setRules((current) => [...current, createRule()]);
-              setDirty(true);
-              setSaveError(null);
+              dispatch({ type: 'add-rule', rule: createRule() });
             }}
             disabled={!canAdd}
           >

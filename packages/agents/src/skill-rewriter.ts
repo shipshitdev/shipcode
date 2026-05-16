@@ -183,9 +183,8 @@ function runSkillCliWithStdin(
               ? []
               : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
           })(),
-          '--dangerously-skip-permissions',
-          '--disallowedTools',
-          'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebSearch,WebFetch',
+          '--allowedTools',
+          '',
         ]
       : [
           '-a',

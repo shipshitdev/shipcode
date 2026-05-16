@@ -199,6 +199,22 @@ describe('IssueDetailActions', () => {
     expect(props.onOpenIssueTerminal).toHaveBeenCalledWith('codex');
   });
 
+  it('hides the pipeline card while the issue thread is actively running', () => {
+    renderActions(
+      baseProps({
+        canOpenIssueTerminal: true,
+        canStartPipeline: false,
+        onOpenIssueTerminal: vi.fn(),
+        thread: makeThread({ status: PIPELINE_PHASE.executing }),
+      }),
+    );
+
+    expect(screen.queryByText('Run this issue')).not.toBeInTheDocument();
+    expect(screen.queryByText('Manual run')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Claude CLI' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Codex CLI' })).not.toBeInTheDocument();
+  });
+
   it('renders revision start copy for automatic execution', () => {
     const props = baseProps({
       canStartPipeline: true,

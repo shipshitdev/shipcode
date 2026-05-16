@@ -48,6 +48,8 @@ const GROUP_CLS = [
   '[&_[cmdk-item]]:px-3',
 ].join(' ');
 
+type RunAction = (fn: () => void | Promise<void>) => void;
+
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
@@ -91,7 +93,6 @@ function CommandPaletteContent() {
   const openAssistant = useAppStore((state) => state.openAssistant);
   const openTerminalTab = useAppStore((state) => state.openTerminalTab);
   const setProjectTab = useAppStore((state) => state.setProjectTab);
-  const navigateToIssue = useAppStore((state) => state.navigateToIssue);
   const { openProjectTerminal } = useOpenProjectTerminal();
 
   // Cross-project issue search
@@ -187,346 +188,430 @@ function CommandPaletteContent() {
       />
       <CommandList className="max-h-[min(50vh,400px)]">
         <CommandEmpty>No results found.</CommandEmpty>
-
-        {visibleIssues.length > 0 && (
-          <CommandGroup heading="Issues" className={GROUP_CLS}>
-            {visibleIssues.map(({ issue, project }) => (
-              <CommandItem
-                key={`${project.id}:${issue.issueNumber}`}
-                value={`${project.name} #${issue.issueNumber} ${issue.title}`}
-                onSelect={() => runAction(() => navigateToIssue(project.id, issue))}
-              >
-                <CircleDot className="size-4 shrink-0 opacity-70" />
-                <div className="flex-1 overflow-hidden">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-medium">
-                      <span className="text-muted font-mono text-xs mr-1.5">
-                        #{issue.issueNumber}
-                      </span>
-                      {issue.title}
-                    </span>
-                    <CommandShortcut>{project.name}</CommandShortcut>
-                  </div>
-                </div>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
-
-        <CommandGroup heading="GitHub" className={GROUP_CLS}>
-          {activeProjectId && (
-            <>
-              <CommandItem onSelect={() => runAction(() => openCreateIssueModal())}>
-                <Plus className="size-4 shrink-0 opacity-70" />
-                <div className="flex-1 overflow-hidden">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-medium">New Issue…</span>
-                    <CommandShortcut>{getShortcut('new-issue').glyph}</CommandShortcut>
-                  </div>
-                  <p className="truncate text-xs opacity-50">Create a new GitHub issue or PRD</p>
-                </div>
-              </CommandItem>
-              <CommandItem
-                onSelect={() =>
-                  runAction(async () => {
-                    await window.shipcode.invoke('github:refresh-issues', {
-                      projectId: activeProjectId,
-                      force: true,
-                    });
-                    queryClient.invalidateQueries({ queryKey: ['github-issues'] });
-                  })
-                }
-              >
-                <RefreshCw className="size-4 shrink-0 opacity-70" />
-                <div className="flex-1 overflow-hidden">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-medium">Refresh Issues</span>
-                  </div>
-                  <p className="truncate text-xs opacity-50">Sync latest issues from GitHub</p>
-                </div>
-              </CommandItem>
-            </>
-          )}
-        </CommandGroup>
-
-        {activeThreadId && (
-          <CommandGroup heading="Pipeline" className={GROUP_CLS}>
-            {pipelinePhase === PIPELINE_PHASE.idle && (
-              <CommandItem
-                onSelect={() =>
-                  runAction(() =>
-                    window.shipcode.invoke('pipeline:start', { threadId: activeThreadId }),
-                  )
-                }
-              >
-                <Play className="size-4 shrink-0 opacity-70" />
-                <div className="flex-1 overflow-hidden">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-medium">Start Pipeline</span>
-                  </div>
-                  <p className="truncate text-xs opacity-50">Begin plan → execute → verify cycle</p>
-                </div>
-              </CommandItem>
-            )}
-            {pipelinePhase === PIPELINE_PHASE.approval && !approvedAwaitingExecution && (
-              <>
-                <CommandItem
-                  onSelect={() =>
-                    runAction(() =>
-                      window.shipcode.invoke('pipeline:approve', { threadId: activeThreadId }),
-                    )
-                  }
-                >
-                  <CheckCircle2 className="size-4 shrink-0 opacity-70" />
-                  <div className="flex-1 overflow-hidden">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate font-medium">Approve Plan</span>
-                    </div>
-                    <p className="truncate text-xs opacity-50">
-                      Accept plan and proceed to execution
-                    </p>
-                  </div>
-                </CommandItem>
-                <CommandItem
-                  onSelect={() =>
-                    runAction(() =>
-                      window.shipcode.invoke('pipeline:reject', {
-                        threadId: activeThreadId,
-                        feedback: '',
-                      }),
-                    )
-                  }
-                >
-                  <XCircle className="size-4 shrink-0 opacity-70" />
-                  <div className="flex-1 overflow-hidden">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate font-medium">Reject Plan</span>
-                    </div>
-                    <p className="truncate text-xs opacity-50">Send plan back for revision</p>
-                  </div>
-                </CommandItem>
-              </>
-            )}
-            {approvedAwaitingExecution && (
-              <CommandItem disabled>
-                <Play className="size-4 shrink-0 opacity-70" />
-                <div className="flex-1 overflow-hidden">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-medium">Waiting for execution slot</span>
-                  </div>
-                </div>
-              </CommandItem>
-            )}
-            <CommandItem
-              onSelect={() =>
-                runAction(() =>
-                  window.shipcode.invoke('pipeline:cancel', { threadId: activeThreadId }),
-                )
-              }
-            >
-              <Ban className="size-4 shrink-0 opacity-70" />
-              <div className="flex-1 overflow-hidden">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-medium">Cancel Pipeline</span>
-                </div>
-                <p className="truncate text-xs opacity-50">Stop current pipeline run</p>
-              </div>
-            </CommandItem>
-          </CommandGroup>
-        )}
-
-        <CommandGroup heading="Quick Actions" className={GROUP_CLS}>
-          <CommandItem disabled={!activeProjectId} onSelect={runOpenTerminalAction}>
-            <Terminal className="size-4 shrink-0 opacity-70" />
-            <div className="flex-1 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">Open Terminal</span>
-                <CommandShortcut>{getShortcut('open-project-terminal').glyph}</CommandShortcut>
-              </div>
-              <p className="truncate text-xs opacity-50">Launch terminal in project directory</p>
-            </div>
-          </CommandItem>
-        </CommandGroup>
-
-        <CommandGroup heading="Go to" className={GROUP_CLS}>
-          <CommandItem onSelect={() => runAction(() => openOverview())}>
-            <LayoutDashboard className="size-4 shrink-0 opacity-70" />
-            <div className="flex-1 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">Overview</span>
-              </div>
-              <p className="truncate text-xs opacity-50">Project dashboard and status</p>
-            </div>
-          </CommandItem>
-          <CommandItem onSelect={() => runAction(() => openInbox())}>
-            <Inbox className="size-4 shrink-0 opacity-70" />
-            <div className="flex-1 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">Inbox</span>
-              </div>
-              <p className="truncate text-xs opacity-50">Notifications and updates</p>
-            </div>
-          </CommandItem>
-          <CommandItem onSelect={() => runAction(() => openActivity())}>
-            <Activity className="size-4 shrink-0 opacity-70" />
-            <div className="flex-1 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">Activity</span>
-              </div>
-              <p className="truncate text-xs opacity-50">Recent pipeline and project events</p>
-            </div>
-          </CommandItem>
-          <CommandItem onSelect={() => runAction(() => openCosts())}>
-            <Wallet className="size-4 shrink-0 opacity-70" />
-            <div className="flex-1 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">Costs</span>
-              </div>
-              <p className="truncate text-xs opacity-50">AI model usage and spend</p>
-            </div>
-          </CommandItem>
-          <CommandItem onSelect={() => runAction(() => openSkills())}>
-            <Sparkles className="size-4 shrink-0 opacity-70" />
-            <div className="flex-1 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">Skills</span>
-              </div>
-              <p className="truncate text-xs opacity-50">Manage pipeline prompt skills</p>
-            </div>
-          </CommandItem>
-          <CommandItem onSelect={() => runAction(() => openAssistant())}>
-            <MessageSquare className="size-4 shrink-0 opacity-70" />
-            <div className="flex-1 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">Copilot</span>
-              </div>
-              <p className="truncate text-xs opacity-50">AI assistant chat</p>
-            </div>
-          </CommandItem>
-          <CommandItem onSelect={() => runAction(() => openTerminalTab())}>
-            <SquareTerminal className="size-4 shrink-0 opacity-70" />
-            <div className="flex-1 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">Terminal</span>
-              </div>
-              <p className="truncate text-xs opacity-50">Built-in terminal view</p>
-            </div>
-          </CommandItem>
-          <CommandItem onSelect={() => runAction(() => setProjectTab('pull-requests'))}>
-            <GitPullRequest className="size-4 shrink-0 opacity-70" />
-            <div className="flex-1 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">Pull Requests</span>
-              </div>
-              <p className="truncate text-xs opacity-50">View and manage open PRs</p>
-            </div>
-          </CommandItem>
-          <CommandItem onSelect={() => runAction(() => toggleSettings())}>
-            <Cog className="size-4 shrink-0 opacity-70" />
-            <div className="flex-1 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">Settings</span>
-              </div>
-              <p className="truncate text-xs opacity-50">App and project configuration</p>
-            </div>
-          </CommandItem>
-        </CommandGroup>
-
-        <CommandGroup heading="Workspace" className={GROUP_CLS}>
-          <CommandItem
-            onSelect={() => {
-              close();
-              openAddProjectExplorer();
-            }}
-          >
-            <FolderPlus className="size-4 shrink-0 opacity-70" />
-            <div className="flex-1 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">Add Repository…</span>
-              </div>
-              <p className="truncate text-xs opacity-50">Connect a new GitHub repository</p>
-            </div>
-          </CommandItem>
-          {!hasDetailView && (
-            <CommandItem onSelect={() => runAction(() => toggleSidebar())}>
-              <PanelLeft className="size-4 shrink-0 opacity-70" />
-              <div className="flex-1 overflow-hidden">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-medium">
-                    {getShortcut('toggle-sidebar').label}
-                  </span>
-                  <CommandShortcut>{getShortcut('toggle-sidebar').glyph}</CommandShortcut>
-                </div>
-                <p className="truncate text-xs opacity-50">Show or hide project sidebar</p>
-              </div>
-            </CommandItem>
-          )}
-          {activeIssue && (
-            <CommandItem onSelect={() => runAction(() => selectIssue(null))}>
-              <Columns3 className="size-4 shrink-0 opacity-70" />
-              <div className="flex-1 overflow-hidden">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-medium">
-                    {getShortcut('toggle-issue-detail').label}
-                  </span>
-                  <CommandShortcut>{getShortcut('toggle-issue-detail').glyph}</CommandShortcut>
-                </div>
-                <p className="truncate text-xs opacity-50">Return to board view</p>
-              </div>
-            </CommandItem>
-          )}
-          <CommandItem onSelect={() => runAction(() => toggleTerminal())}>
-            <SquareTerminal className="size-4 shrink-0 opacity-70" />
-            <div className="flex-1 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">{getShortcut('toggle-terminal').label}</span>
-                <CommandShortcut>{getShortcut('toggle-terminal').glyph}</CommandShortcut>
-              </div>
-              <p className="truncate text-xs opacity-50">Show or hide terminal drawer</p>
-            </div>
-          </CommandItem>
-        </CommandGroup>
-
-        {activeProjectId && (
-          <CommandGroup heading="Git" className={GROUP_CLS}>
-            <CommandItem
-              onSelect={() =>
-                runAction(
-                  () =>
-                    void window.shipcode.invoke('git:commit', {
-                      projectId: activeProjectId,
-                      message: '',
-                    }),
-                )
-              }
-            >
-              <GitBranch className="size-4 shrink-0 opacity-70" />
-              <div className="flex-1 overflow-hidden">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-medium">Commit Changes</span>
-                </div>
-                <p className="truncate text-xs opacity-50">Stage and commit current changes</p>
-              </div>
-            </CommandItem>
-            <CommandItem
-              onSelect={() =>
-                runAction(
-                  () => void window.shipcode.invoke('git:push', { projectId: activeProjectId }),
-                )
-              }
-            >
-              <Upload className="size-4 shrink-0 opacity-70" />
-              <div className="flex-1 overflow-hidden">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-medium">Push to Remote</span>
-                </div>
-                <p className="truncate text-xs opacity-50">Push commits to remote repository</p>
-              </div>
-            </CommandItem>
-          </CommandGroup>
-        )}
+        <IssuesCommandGroup visibleIssues={visibleIssues} runAction={runAction} />
+        <GithubCommandGroup
+          activeProjectId={activeProjectId}
+          runAction={runAction}
+          openCreateIssueModal={openCreateIssueModal}
+          invalidateIssues={() => queryClient.invalidateQueries({ queryKey: ['github-issues'] })}
+        />
+        <PipelineCommandGroup
+          activeThreadId={activeThreadId}
+          pipelinePhase={pipelinePhase}
+          approvedAwaitingExecution={approvedAwaitingExecution}
+          runAction={runAction}
+        />
+        <QuickActionsCommandGroup
+          activeProjectId={activeProjectId}
+          onOpenTerminal={runOpenTerminalAction}
+        />
+        <GotoCommandGroup
+          runAction={runAction}
+          openOverview={openOverview}
+          openInbox={openInbox}
+          openActivity={openActivity}
+          openCosts={openCosts}
+          openSkills={openSkills}
+          openAssistant={openAssistant}
+          openTerminalTab={openTerminalTab}
+          openPullRequests={() => setProjectTab('pull-requests')}
+          toggleSettings={toggleSettings}
+        />
+        <WorkspaceCommandGroup
+          activeIssue={activeIssue}
+          hasDetailView={hasDetailView}
+          runAction={runAction}
+          close={close}
+          openAddProjectExplorer={openAddProjectExplorer}
+          selectIssue={selectIssue}
+          toggleSidebar={toggleSidebar}
+          toggleTerminal={toggleTerminal}
+        />
+        <GitCommandGroup activeProjectId={activeProjectId} runAction={runAction} />
       </CommandList>
+      <CommandPaletteFooter commandCount={commandCount} />
+    </>
+  );
+}
 
+function CommandItemBody({
+  title,
+  description,
+  shortcut,
+}: {
+  title: string;
+  description?: string;
+  shortcut?: string;
+}) {
+  return (
+    <div className="flex-1 overflow-hidden">
+      <div className="flex items-center gap-2">
+        <span className="truncate font-medium">{title}</span>
+        {shortcut ? <CommandShortcut>{shortcut}</CommandShortcut> : null}
+      </div>
+      {description ? <p className="truncate text-xs opacity-50">{description}</p> : null}
+    </div>
+  );
+}
+
+function IssuesCommandGroup({
+  visibleIssues,
+  runAction,
+}: {
+  visibleIssues: Array<{ issue: GitHubIssueCacheRecord; project: Project }>;
+  runAction: RunAction;
+}) {
+  const navigateToIssue = useAppStore((state) => state.navigateToIssue);
+  if (visibleIssues.length === 0) return null;
+
+  return (
+    <CommandGroup heading="Issues" className={GROUP_CLS}>
+      {visibleIssues.map(({ issue, project }) => (
+        <CommandItem
+          key={`${project.id}:${issue.issueNumber}`}
+          value={`${project.name} #${issue.issueNumber} ${issue.title}`}
+          onSelect={() => runAction(() => navigateToIssue(project.id, issue))}
+        >
+          <CircleDot className="size-4 shrink-0 opacity-70" />
+          <div className="flex-1 overflow-hidden">
+            <div className="flex items-center gap-2">
+              <span className="truncate font-medium">
+                <span className="text-muted font-mono text-xs mr-1.5">#{issue.issueNumber}</span>
+                {issue.title}
+              </span>
+              <CommandShortcut>{project.name}</CommandShortcut>
+            </div>
+          </div>
+        </CommandItem>
+      ))}
+    </CommandGroup>
+  );
+}
+
+function GithubCommandGroup({
+  activeProjectId,
+  runAction,
+  openCreateIssueModal,
+  invalidateIssues,
+}: {
+  activeProjectId: string | null;
+  runAction: RunAction;
+  openCreateIssueModal: () => void;
+  invalidateIssues: () => Promise<unknown>;
+}) {
+  return (
+    <CommandGroup heading="GitHub" className={GROUP_CLS}>
+      {activeProjectId && (
+        <>
+          <CommandItem onSelect={() => runAction(() => openCreateIssueModal())}>
+            <Plus className="size-4 shrink-0 opacity-70" />
+            <CommandItemBody
+              title="New Issue..."
+              description="Create a new GitHub issue or PRD"
+              shortcut={getShortcut('new-issue').glyph}
+            />
+          </CommandItem>
+          <CommandItem
+            onSelect={() =>
+              runAction(async () => {
+                await window.shipcode.invoke('github:refresh-issues', {
+                  projectId: activeProjectId,
+                  force: true,
+                });
+                await invalidateIssues();
+              })
+            }
+          >
+            <RefreshCw className="size-4 shrink-0 opacity-70" />
+            <CommandItemBody title="Refresh Issues" description="Sync latest issues from GitHub" />
+          </CommandItem>
+        </>
+      )}
+    </CommandGroup>
+  );
+}
+
+function PipelineCommandGroup({
+  activeThreadId,
+  pipelinePhase,
+  approvedAwaitingExecution,
+  runAction,
+}: {
+  activeThreadId: string | null;
+  pipelinePhase: string;
+  approvedAwaitingExecution: boolean;
+  runAction: RunAction;
+}) {
+  if (!activeThreadId) return null;
+
+  return (
+    <CommandGroup heading="Pipeline" className={GROUP_CLS}>
+      {pipelinePhase === PIPELINE_PHASE.idle && (
+        <CommandItem
+          onSelect={() =>
+            runAction(() => window.shipcode.invoke('pipeline:start', { threadId: activeThreadId }))
+          }
+        >
+          <Play className="size-4 shrink-0 opacity-70" />
+          <CommandItemBody
+            title="Start Pipeline"
+            description="Begin plan to execute to verify cycle"
+          />
+        </CommandItem>
+      )}
+      {pipelinePhase === PIPELINE_PHASE.approval && !approvedAwaitingExecution && (
+        <>
+          <CommandItem
+            onSelect={() =>
+              runAction(() =>
+                window.shipcode.invoke('pipeline:approve', { threadId: activeThreadId }),
+              )
+            }
+          >
+            <CheckCircle2 className="size-4 shrink-0 opacity-70" />
+            <CommandItemBody
+              title="Approve Plan"
+              description="Accept plan and proceed to execution"
+            />
+          </CommandItem>
+          <CommandItem
+            onSelect={() =>
+              runAction(() =>
+                window.shipcode.invoke('pipeline:reject', {
+                  threadId: activeThreadId,
+                  feedback: '',
+                }),
+              )
+            }
+          >
+            <XCircle className="size-4 shrink-0 opacity-70" />
+            <CommandItemBody title="Reject Plan" description="Send plan back for revision" />
+          </CommandItem>
+        </>
+      )}
+      {approvedAwaitingExecution && (
+        <CommandItem disabled>
+          <Play className="size-4 shrink-0 opacity-70" />
+          <CommandItemBody title="Waiting for execution slot" />
+        </CommandItem>
+      )}
+      <CommandItem
+        onSelect={() =>
+          runAction(() => window.shipcode.invoke('pipeline:cancel', { threadId: activeThreadId }))
+        }
+      >
+        <Ban className="size-4 shrink-0 opacity-70" />
+        <CommandItemBody title="Cancel Pipeline" description="Stop current pipeline run" />
+      </CommandItem>
+    </CommandGroup>
+  );
+}
+
+function QuickActionsCommandGroup({
+  activeProjectId,
+  onOpenTerminal,
+}: {
+  activeProjectId: string | null;
+  onOpenTerminal: () => void;
+}) {
+  return (
+    <CommandGroup heading="Quick Actions" className={GROUP_CLS}>
+      <CommandItem disabled={!activeProjectId} onSelect={onOpenTerminal}>
+        <Terminal className="size-4 shrink-0 opacity-70" />
+        <CommandItemBody
+          title="Open Terminal"
+          description="Launch terminal in project directory"
+          shortcut={getShortcut('open-project-terminal').glyph}
+        />
+      </CommandItem>
+    </CommandGroup>
+  );
+}
+
+function GotoCommandGroup({
+  runAction,
+  openOverview,
+  openInbox,
+  openActivity,
+  openCosts,
+  openSkills,
+  openAssistant,
+  openTerminalTab,
+  openPullRequests,
+  toggleSettings,
+}: {
+  runAction: RunAction;
+  openOverview: () => void;
+  openInbox: () => void;
+  openActivity: () => void;
+  openCosts: () => void;
+  openSkills: () => void;
+  openAssistant: () => void;
+  openTerminalTab: () => void;
+  openPullRequests: () => void;
+  toggleSettings: () => void;
+}) {
+  const items = [
+    {
+      title: 'Overview',
+      description: 'Project dashboard and status',
+      icon: LayoutDashboard,
+      action: openOverview,
+    },
+    { title: 'Inbox', description: 'Notifications and updates', icon: Inbox, action: openInbox },
+    {
+      title: 'Activity',
+      description: 'Recent pipeline and project events',
+      icon: Activity,
+      action: openActivity,
+    },
+    { title: 'Costs', description: 'AI model usage and spend', icon: Wallet, action: openCosts },
+    {
+      title: 'Skills',
+      description: 'Manage pipeline prompt skills',
+      icon: Sparkles,
+      action: openSkills,
+    },
+    {
+      title: 'Copilot',
+      description: 'AI assistant chat',
+      icon: MessageSquare,
+      action: openAssistant,
+    },
+    {
+      title: 'Terminal',
+      description: 'Built-in terminal view',
+      icon: SquareTerminal,
+      action: openTerminalTab,
+    },
+    {
+      title: 'Pull Requests',
+      description: 'View and manage open PRs',
+      icon: GitPullRequest,
+      action: openPullRequests,
+    },
+    {
+      title: 'Settings',
+      description: 'App and project configuration',
+      icon: Cog,
+      action: toggleSettings,
+    },
+  ];
+
+  return (
+    <CommandGroup heading="Go to" className={GROUP_CLS}>
+      {items.map(({ title, description, icon: Icon, action }) => (
+        <CommandItem key={title} onSelect={() => runAction(action)}>
+          <Icon className="size-4 shrink-0 opacity-70" />
+          <CommandItemBody title={title} description={description} />
+        </CommandItem>
+      ))}
+    </CommandGroup>
+  );
+}
+
+function WorkspaceCommandGroup({
+  activeIssue,
+  hasDetailView,
+  runAction,
+  close,
+  openAddProjectExplorer,
+  selectIssue,
+  toggleSidebar,
+  toggleTerminal,
+}: {
+  activeIssue: GitHubIssueCacheRecord | null;
+  hasDetailView: boolean;
+  runAction: RunAction;
+  close: () => void;
+  openAddProjectExplorer: () => void;
+  selectIssue: (issue: GitHubIssueCacheRecord | null) => void;
+  toggleSidebar: () => void;
+  toggleTerminal: () => void;
+}) {
+  return (
+    <CommandGroup heading="Workspace" className={GROUP_CLS}>
+      <CommandItem
+        onSelect={() => {
+          close();
+          openAddProjectExplorer();
+        }}
+      >
+        <FolderPlus className="size-4 shrink-0 opacity-70" />
+        <CommandItemBody title="Add Repository..." description="Connect a new GitHub repository" />
+      </CommandItem>
+      {!hasDetailView && (
+        <CommandItem onSelect={() => runAction(() => toggleSidebar())}>
+          <PanelLeft className="size-4 shrink-0 opacity-70" />
+          <CommandItemBody
+            title={getShortcut('toggle-sidebar').label}
+            description="Show or hide project sidebar"
+            shortcut={getShortcut('toggle-sidebar').glyph}
+          />
+        </CommandItem>
+      )}
+      {activeIssue && (
+        <CommandItem onSelect={() => runAction(() => selectIssue(null))}>
+          <Columns3 className="size-4 shrink-0 opacity-70" />
+          <CommandItemBody
+            title={getShortcut('toggle-issue-detail').label}
+            description="Return to board view"
+            shortcut={getShortcut('toggle-issue-detail').glyph}
+          />
+        </CommandItem>
+      )}
+      <CommandItem onSelect={() => runAction(() => toggleTerminal())}>
+        <SquareTerminal className="size-4 shrink-0 opacity-70" />
+        <CommandItemBody
+          title={getShortcut('toggle-terminal').label}
+          description="Show or hide terminal drawer"
+          shortcut={getShortcut('toggle-terminal').glyph}
+        />
+      </CommandItem>
+    </CommandGroup>
+  );
+}
+
+function GitCommandGroup({
+  activeProjectId,
+  runAction,
+}: {
+  activeProjectId: string | null;
+  runAction: RunAction;
+}) {
+  if (!activeProjectId) return null;
+
+  return (
+    <CommandGroup heading="Git" className={GROUP_CLS}>
+      <CommandItem
+        onSelect={() =>
+          runAction(
+            () =>
+              void window.shipcode.invoke('git:commit', {
+                projectId: activeProjectId,
+                message: '',
+              }),
+          )
+        }
+      >
+        <GitBranch className="size-4 shrink-0 opacity-70" />
+        <CommandItemBody title="Commit Changes" description="Stage and commit current changes" />
+      </CommandItem>
+      <CommandItem
+        onSelect={() =>
+          runAction(() => void window.shipcode.invoke('git:push', { projectId: activeProjectId }))
+        }
+      >
+        <Upload className="size-4 shrink-0 opacity-70" />
+        <CommandItemBody title="Push to Remote" description="Push commits to remote repository" />
+      </CommandItem>
+    </CommandGroup>
+  );
+}
+
+function CommandPaletteFooter({ commandCount }: { commandCount: number }) {
+  return (
+    <>
       <CommandSeparator alwaysRender />
       <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs text-muted">
         <div className="flex gap-4">

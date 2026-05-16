@@ -41,6 +41,34 @@ import { ChevronDown } from 'lucide-react';
 import { getModelOptions } from '../model-provider-options';
 import { PhaseModelRow } from './PhaseModelRow';
 
+function RunModeSelect({ value }: { value: AppSettings['agentRunModes']['claude']['execute'] }) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex cursor-not-allowed">
+            <Select value={value} disabled>
+              <SelectTrigger className="w-[190px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="interactive">Interactive CLI</SelectItem>
+                <SelectItem value="programmatic" disabled>
+                  Programmatic
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[300px]">
+          Programmatic mode is disabled while Claude non-interactive billing is unsettled. ShipCode
+          will not route Claude through claude -p or SDK wrappers by default.
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 function pipelineSettingsSection({
   settings,
   integrationStatus,
@@ -96,31 +124,6 @@ function pipelineSettingsSection({
   const applyPreset = (preset: ModelConfigPresetKey) => {
     onUpdate(buildAppSettingsModelPresetPatch(preset));
   };
-  const renderRunModeSelect = (value: AppSettings['agentRunModes']['claude']['execute']) => (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="inline-flex cursor-not-allowed">
-            <Select value={value} disabled>
-              <SelectTrigger className="w-[190px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="interactive">Interactive CLI</SelectItem>
-                <SelectItem value="programmatic" disabled>
-                  Programmatic
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-[300px]">
-          Programmatic mode is disabled while Claude non-interactive billing is unsettled. ShipCode
-          will not route Claude through claude -p or SDK wrappers by default.
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
 
   return (
     <>
@@ -142,37 +145,37 @@ function pipelineSettingsSection({
               label="Claude execute output"
               description="Uses the official Claude CLI session surface. Does not route through claude -p."
             >
-              {renderRunModeSelect(settings.agentRunModes.claude.execute)}
+              <RunModeSelect value={settings.agentRunModes.claude.execute} />
             </SettingsRow>
             <SettingsRow
               label="Claude terminal fix output"
               description="Terminal fixes open as supervised interactive CLI sessions."
             >
-              {renderRunModeSelect(settings.agentRunModes.claude.terminalFix)}
+              <RunModeSelect value={settings.agentRunModes.claude.terminalFix} />
             </SettingsRow>
             <SettingsRow
               label="Claude instant output"
               description="Instant assistant output stays attached to an interactive terminal pane."
             >
-              {renderRunModeSelect(settings.agentRunModes.claude.instant)}
+              <RunModeSelect value={settings.agentRunModes.claude.instant} />
             </SettingsRow>
             <SettingsRow
               label="Codex execute output"
               description="Uses official Codex CLI output instead of a synthetic console stream."
             >
-              {renderRunModeSelect(settings.agentRunModes.codex.execute)}
+              <RunModeSelect value={settings.agentRunModes.codex.execute} />
             </SettingsRow>
             <SettingsRow
               label="Codex terminal fix output"
               description="Terminal fixes open as supervised interactive CLI sessions."
             >
-              {renderRunModeSelect(settings.agentRunModes.codex.terminalFix)}
+              <RunModeSelect value={settings.agentRunModes.codex.terminalFix} />
             </SettingsRow>
             <SettingsRow
               label="Codex instant output"
               description="Instant assistant output stays attached to an interactive terminal pane."
             >
-              {renderRunModeSelect(settings.agentRunModes.codex.instant)}
+              <RunModeSelect value={settings.agentRunModes.codex.instant} />
             </SettingsRow>
           </SettingsSection>
 

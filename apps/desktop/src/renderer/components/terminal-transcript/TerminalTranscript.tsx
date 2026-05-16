@@ -109,14 +109,19 @@ function groupTranscriptEvents(events: TerminalEventRecord[]): TranscriptSegment
 
 const DEFAULT_WORKLOG_VISIBLE = 6;
 
-function workLogRowIcon(record: TerminalEventRecord) {
+function toolStartIcon(name: string) {
+  const cat = toolCategory(name);
+  if (cat === 'bash') return <Terminal size={14} className="text-sky-400/70" />;
+  if (cat === 'file') return <SquarePen size={14} className="text-emerald-400/70" />;
+  if (cat === 'search') return <Search size={14} className="text-violet-400/70" />;
+  return <Wrench size={14} className="text-muted-foreground/60" />;
+}
+
+function workLogRowIcon(record: TerminalEventRecord, completed = false) {
   const e = record.event;
   if (e.kind === 'tool_start') {
-    const cat = toolCategory(e.name);
-    if (cat === 'bash') return <Terminal size={14} className="text-sky-400/70" />;
-    if (cat === 'file') return <SquarePen size={14} className="text-emerald-400/70" />;
-    if (cat === 'search') return <Search size={14} className="text-violet-400/70" />;
-    return <Wrench size={14} className="text-muted-foreground/60" />;
+    if (completed) return <Check size={14} className="text-emerald-400/70" />;
+    return toolStartIcon(e.name);
   }
   if (e.kind === 'tool_end') return <Check size={14} className="text-emerald-400/70" />;
   if (e.kind === 'lifecycle') return <Info size={14} className="text-muted-foreground/50" />;
@@ -151,12 +156,45 @@ function workLogRowDetail(record: TerminalEventRecord): string {
   return '';
 }
 
-function WorkLogRow({ record, compact }: { record: TerminalEventRecord; compact: boolean }) {
+type WorkLogItem =
+  | { type: 'single'; record: TerminalEventRecord }
+  | { type: 'pair'; start: TerminalEventRecord; end: TerminalEventRecord };
+
+function consolidateToolPairs(records: TerminalEventRecord[]): WorkLogItem[] {
+  const items: WorkLogItem[] = [];
+  let i = 0;
+  while (i < records.length) {
+    const cur = records[i];
+    const next = records[i + 1];
+    if (
+      cur.event.kind === 'tool_start' &&
+      next?.event.kind === 'tool_end' &&
+      next.event.name === cur.event.name
+    ) {
+      items.push({ type: 'pair', start: cur, end: next });
+      i += 2;
+    } else {
+      items.push({ type: 'single', record: cur });
+      i += 1;
+    }
+  }
+  return items;
+}
+
+function WorkLogRow({
+  record,
+  compact,
+  completed = false,
+}: {
+  record: TerminalEventRecord;
+  compact: boolean;
+  completed?: boolean;
+}) {
   const detail = workLogRowDetail(record);
   return (
     <div className="flex items-center gap-2 px-1 py-0.5">
       <span className="flex size-5 shrink-0 items-center justify-center">
-        {workLogRowIcon(record)}
+        {workLogRowIcon(record, completed)}
       </span>
       <span
         className={cn('min-w-0 flex-1 truncate font-mono', compact ? 'text-[11px]' : 'text-[12px]')}
@@ -170,46 +208,55 @@ function WorkLogRow({ record, compact }: { record: TerminalEventRecord; compact:
 
 function WorkLogCard({ records, compact }: { records: TerminalEventRecord[]; compact: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const items = useMemo(() => consolidateToolPairs(records), [records]);
   const hiddenCount =
-    !isExpanded && records.length > DEFAULT_WORKLOG_VISIBLE
-      ? records.length - DEFAULT_WORKLOG_VISIBLE
+    !isExpanded && items.length > DEFAULT_WORKLOG_VISIBLE
+      ? items.length - DEFAULT_WORKLOG_VISIBLE
       : 0;
-  const visibleRecords =
-    isExpanded || records.length <= DEFAULT_WORKLOG_VISIBLE
-      ? records
-      : records.slice(-DEFAULT_WORKLOG_VISIBLE);
+  const visibleItems =
+    isExpanded || items.length <= DEFAULT_WORKLOG_VISIBLE
+      ? items
+      : items.slice(-DEFAULT_WORKLOG_VISIBLE);
 
   return (
     <div className="mb-3 rounded-xl border border-border/45 bg-secondary/20 px-2 py-1.5">
       <div className="flex items-center justify-between px-1 pb-1">
         <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60">
-          Work log ({records.length})
+          Work log ({items.length})
         </span>
         {hiddenCount > 0 && (
-          <button
+          <Button
             type="button"
-            className="flex items-center gap-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/50 hover:text-muted-foreground/80"
+            variant="ghost"
+            size="xs"
+            className="h-auto rounded-none p-0 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/50 hover:bg-transparent hover:text-muted-foreground/80"
             onClick={() => setIsExpanded(true)}
           >
             Show {hiddenCount} more
             <ChevronDown size={10} />
-          </button>
+          </Button>
         )}
-        {isExpanded && records.length > DEFAULT_WORKLOG_VISIBLE && (
-          <button
+        {isExpanded && items.length > DEFAULT_WORKLOG_VISIBLE && (
+          <Button
             type="button"
-            className="flex items-center gap-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/50 hover:text-muted-foreground/80"
+            variant="ghost"
+            size="xs"
+            className="h-auto rounded-none p-0 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/50 hover:bg-transparent hover:text-muted-foreground/80"
             onClick={() => setIsExpanded(false)}
           >
             Show less
             <ChevronUp size={10} />
-          </button>
+          </Button>
         )}
       </div>
       <div className="space-y-0.5">
-        {visibleRecords.map((record) => (
-          <WorkLogRow key={record.id} record={record} compact={compact} />
-        ))}
+        {visibleItems.map((item) =>
+          item.type === 'pair' ? (
+            <WorkLogRow key={item.start.id} record={item.start} compact={compact} completed />
+          ) : (
+            <WorkLogRow key={item.record.id} record={item.record} compact={compact} />
+          ),
+        )}
       </div>
     </div>
   );

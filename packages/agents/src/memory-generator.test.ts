@@ -102,7 +102,9 @@ describe('generateMemoryFiles', () => {
       expect.arrayContaining(['exec', '-', '--sandbox', 'read-only']),
       expect.objectContaining({ cwd: projectPath }),
     );
-    expect(fake.stdinWrites.join('')).toContain('### README.md\n(not found)');
+    expect(fake.stdinWrites.join('')).toContain(
+      '### README.md\n<source-file path="README.md">\n(not found)\n</source-file>',
+    );
 
     fake.close(0, {
       stdout:

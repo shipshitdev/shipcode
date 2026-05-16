@@ -300,10 +300,11 @@ export function registerSupportHandlers({
 
     if (proc?.threadId) {
       if (proc.outputMode === 'raw') {
-        emitTerminalEvent(proc.threadId, { kind: 'raw', content: data });
         if (proc.type === 'claude' || proc.type === 'codex') {
           ensureNormalizer(processId, proc.type, proc.threadId);
           normalizers.get(processId)?.feed(data);
+        } else {
+          emitTerminalEvent(proc.threadId, { kind: 'raw', content: data });
         }
       } else {
         ensureNormalizer(processId, proc.type, proc.threadId);
