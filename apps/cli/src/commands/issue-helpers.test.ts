@@ -13,11 +13,24 @@ describe('issue helpers', () => {
 
   it('parses numeric issue arguments', () => {
     expect(parseIssueNumber('42')).toBe(42);
+    expect(parseIssueNumber(' 42 ')).toBe(42);
   });
 
   it('exits on invalid issue arguments', () => {
-    expect(() => parseIssueNumber('issue-42')).toThrow('process.exit:1');
-    expect(errorSpy).toHaveBeenCalledWith('Invalid issue number:', 'issue-42');
+    for (const value of [
+      'issue-42',
+      '42abc',
+      '42.5',
+      '42 --flag',
+      '',
+      '   ',
+      '0',
+      '-1',
+      '9007199254740992',
+    ]) {
+      expect(() => parseIssueNumber(value)).toThrow('process.exit:1');
+      expect(errorSpy).toHaveBeenLastCalledWith('Invalid issue number:', value);
+    }
   });
 
   it('returns the thread for a project issue', () => {

@@ -88,12 +88,19 @@ function assertProcessManagerCommand(command: string): asserts command is Proces
 function mergeSafeEnv(
   baseEnv: Record<string, string>,
   extraEnv?: Record<string, string>,
+  envKeyAllowlist?: ReadonlySet<string>,
 ): Record<string, string> {
-  const env: Record<string, string> = { ...filterEnv(baseEnv), FORCE_COLOR: '1' };
+  const base = filterEnv(baseEnv);
+  const env: Record<string, string> = {};
+  for (const [key, val] of Object.entries(base)) {
+    if (!envKeyAllowlist || envKeyAllowlist.has(key)) env[key] = val;
+  }
+  env.FORCE_COLOR = '1';
   for (const [key, val] of Object.entries(extraEnv ?? {})) {
     if (!key || key.includes('=') || key.includes('\0') || val.includes('\0')) continue;
+    if (envKeyAllowlist && !envKeyAllowlist.has(key) && key !== 'FORCE_COLOR') continue;
     if (SAFE_ENV_KEYS.has(key) || key === 'FORCE_COLOR') continue;
-    if (!/^[A-Z_][A-Z0-9_]*PORT[A-Z0-9_]*$/.test(key)) continue;
+    if (!/^(PORT|[A-Z_][A-Z0-9_]*_PORT)$/.test(key)) continue;
     // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — strip C0 control chars from env values to prevent header injection
     env[key] = val.replace(/[\n\r\x00-\x1f]/g, '');
   }
@@ -165,6 +172,8 @@ export interface ManagedProcessSpawnOptions {
   detached?: boolean;
   /** Extra env vars merged on top of the filtered shell env. */
   extraEnv?: Record<string, string>;
+  /** Optional least-privilege env allowlist for tool-capable agent processes. */
+  envKeyAllowlist?: readonly string[];
 }
 
 export interface ManagedProcess {
@@ -295,7 +304,11 @@ export class ProcessManager extends EventEmitter {
         cols: 120,
         rows: 30,
         cwd,
-        env: mergeSafeEnv(cachedEnv, options.extraEnv),
+        env: mergeSafeEnv(
+          cachedEnv,
+          options.extraEnv,
+          options.envKeyAllowlist ? new Set(options.envKeyAllowlist) : undefined,
+        ),
       });
     } catch (err) {
       // Spawn failed (e.g. binary not found, alias instead of real path).
@@ -400,7 +413,11 @@ export class ProcessManager extends EventEmitter {
     let child: ChildProcessWithoutNullStreams;
 
     const detached = options.detached ?? false;
-    const env = mergeSafeEnv(cachedEnv, options.extraEnv);
+    const env = mergeSafeEnv(
+      cachedEnv,
+      options.extraEnv,
+      options.envKeyAllowlist ? new Set(options.envKeyAllowlist) : undefined,
+    );
 
     try {
       child = spawnChild(resolvedCommand, args, {

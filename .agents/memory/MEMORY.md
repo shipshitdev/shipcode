@@ -16,6 +16,7 @@ Loaded after `~/.agents/memory/MEMORY.md` (global). Project-scoped facts only. D
 - **Phases:** plan → review → execute → verify. Each runs in an isolated git worktree.
 - **Executor models:** `claude | codex | openrouter`. State machine lives in `packages/pipeline/src/pipeline.ts`.
 - **Planner input:** GitHub issue body = PRD = plan prompt (all the same text). Grep `GitHub Issue #` in `pipeline.ts` for the template.
+- **Interactive CLI mode:** terminal-like Claude/Codex actions stream raw PTY output as ShipCode terminal events and complete on process exit. Claude `stream-json` is only available through `claude -p`, which is the billing-sensitive programmatic path. See: `interactive-cli-run-modes.md`.
 - See: `pipeline.md`.
 
 ## Worktrees
@@ -49,6 +50,7 @@ Where things live:
 ## Hard rules (from past incidents)
 
 - **Pipe `claude -p` prompts via stdin, never argv.** Argparser breaks on `---` YAML. Reuse `runClaudeWithStdin` in `packages/agents/src/prd-generator.ts`. See: `claude-cli.md`.
+- **Do not use `claude -p` for interactive terminal mode.** Interactive mode launches the real terminal CLI, wraps raw output in our own terminal events, and uses process exit as completion. See: `interactive-cli-run-modes.md`.
 - **`WorktreeManager.remove(path, branch)` takes concrete values** — never recompute from `threadId`. See: `worktrees.md`.
 - **Clamp IPC errors** to first-line + ~280 chars; log full trace to main-process console only. See: `ipc-errors.md`.
 
@@ -70,6 +72,7 @@ Where things live:
 - `worktree-defaults.md` — default paths, settings, validation
 - `worktrees.md` — path-as-truth rule, cleanup pattern
 - `claude-cli.md` — stdin-not-argv rule for claude CLI
+- `interactive-cli-run-modes.md` — interactive-vs-programmatic terminal routing and event model
 - `ipc-errors.md` — clamp IPC errors at main-process boundary
 - `skills.md` — skills/memory folder layout, symlink rules
 - `agents.md` — custom sub-agent roster, routing rules, parallel patterns

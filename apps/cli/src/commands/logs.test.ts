@@ -82,6 +82,36 @@ describe('logsCommand', () => {
     expect(logSpy).toHaveBeenCalledWith('No terminal events recorded.');
   });
 
+  it('strips terminal control sequences from thread metadata and stored events', async () => {
+    getThreadByIssueMock.mockReturnValueOnce({
+      id: 'thread-1',
+      title: '\u001b[2JAdd terminal log output',
+      status: 'running\u0007',
+    });
+    listByThreadMock.mockReturnValueOnce([
+      {
+        createdAt: '2026-05-08T12:00:01.000Z',
+        event: { kind: 'text', content: 'plain\u001b[2J stdout\n' },
+      },
+      {
+        createdAt: '2026-05-08T12:00:02.000Z',
+        event: { kind: 'tool_start', name: 'bun\u0007 test', summary: '\u001b]8;;x\u0007running' },
+      },
+      {
+        createdAt: '2026-05-08T12:00:03.000Z',
+        event: { kind: 'error', message: 'command\rfailed' },
+      },
+    ]);
+
+    await logsCommand('42');
+
+    expect(logSpy).toHaveBeenCalledWith('Logs for issue #42: Add terminal log output');
+    expect(logSpy).toHaveBeenCalledWith('Status: running\n');
+    expect(writeSpy).toHaveBeenCalledWith('plain stdout\n');
+    expect(logSpy).toHaveBeenCalledWith('[12:00:02] Tool: bun test — running');
+    expect(logSpy).toHaveBeenCalledWith('[12:00:03] Error: commandfailed');
+  });
+
   it('renders terminal event variants for CLI output', async () => {
     listByThreadMock.mockReturnValueOnce([
       {

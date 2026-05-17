@@ -28,18 +28,26 @@ function filteredCliEnv(): Record<string, string> {
   return env;
 }
 
+function filteredCliEnvFor(allowlist?: readonly string[]): Record<string, string> {
+  const base = filteredCliEnv();
+  if (!allowlist) return base;
+  const allowed = new Set(allowlist);
+  return Object.fromEntries(Object.entries(base).filter(([key]) => allowed.has(key)));
+}
+
 export function runCliWithStdin(options: {
   cli: GeneratorCli;
   args: string[];
   input: string;
   cwd: string;
   timeoutMs: number;
+  envKeyAllowlist?: readonly string[];
 }): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn(options.cli, options.args, {
       cwd: options.cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: filteredCliEnv(),
+      env: filteredCliEnvFor(options.envKeyAllowlist),
     });
 
     let stdout = '';

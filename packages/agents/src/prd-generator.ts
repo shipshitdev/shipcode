@@ -1,12 +1,21 @@
 import type { GeneratorCli, ReasoningEffort } from '@shipcode/shared';
 import { unwrapCliResultEnvelope } from './cli-result';
 import { runCliWithStdin } from './cli-stdin-runner';
-import {
-  mapReasoningEffortToClaudeThinkingTokens,
-  mapReasoningEffortToCodex,
-} from './providers/reasoning';
+import { mapReasoningEffortToClaudeThinkingTokens } from './providers/reasoning';
 
 const PRD_FENCE_TAG = 'shipcode-prd';
+const CLAUDE_TEXT_ENV_KEYS = [
+  'PATH',
+  'HOME',
+  'USER',
+  'SHELL',
+  'TERM',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TMPDIR',
+  'ANTHROPIC_API_KEY',
+] as const;
 
 export interface GeneratedPrd {
   body: string;
@@ -119,44 +128,38 @@ function runPrdCliWithStdin(
   modelId?: string | null,
   reasoningEffort?: ReasoningEffort,
 ): Promise<string> {
+  if (cli === 'codex') {
+    throw new Error('Codex PRD rewriting is disabled because it cannot run in no-tools mode');
+  }
   if (modelId && (modelId.startsWith('-') || !/^[a-zA-Z0-9._:/@-]+$/.test(modelId))) {
     throw new Error(`Invalid model ID: ${modelId}`);
   }
 
-  const args =
-    cli === 'claude'
-      ? [
-          '-p',
-          ...(modelId ? ['--model', modelId] : []),
-          '--output-format',
-          'json',
-          '--max-turns',
-          '3',
-          ...(() => {
-            const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(
-              reasoningEffort,
-              modelId,
-            );
-            return thinkingTokens === null
-              ? []
-              : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
-          })(),
-          '--allowedTools',
-          '',
-        ]
-      : [
-          '-a',
-          'never',
-          ...(modelId ? ['-m', modelId] : []),
-          '-c',
-          `model_reasoning_effort=${mapReasoningEffortToCodex(reasoningEffort, modelId)}`,
-          'exec',
-          '-',
-          '--sandbox',
-          'read-only',
-        ];
+  const args = [
+    '-p',
+    ...(modelId ? ['--model', modelId] : []),
+    '--output-format',
+    'json',
+    '--max-turns',
+    '3',
+    ...(() => {
+      const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(reasoningEffort, modelId);
+      return thinkingTokens === null
+        ? []
+        : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
+    })(),
+    '--allowedTools',
+    '',
+  ];
 
-  return runCliWithStdin({ cli, args, input: prompt, cwd, timeoutMs });
+  return runCliWithStdin({
+    cli,
+    args,
+    input: prompt,
+    cwd,
+    timeoutMs,
+    envKeyAllowlist: CLAUDE_TEXT_ENV_KEYS,
+  });
 }
 
 /**

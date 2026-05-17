@@ -3,12 +3,18 @@
  * prevent concurrent destructive git operations on the same worktree path.
  * Lives only for the lifetime of the main process — never persisted.
  */
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 
 const inflight = new Map<string, Promise<unknown>>();
 
 function lockKey(worktreePath: string): string {
-  return path.resolve(worktreePath);
+  const resolved = path.resolve(worktreePath);
+  try {
+    return realpathSync.native(resolved);
+  } catch {
+    return resolved;
+  }
 }
 
 /**

@@ -31,8 +31,14 @@ export function loadRepoSetupContract(projectPath: string): LoadedRepoSetupContr
     throw new Error(`Invalid repo setup contract at ${REPO_SETUP_CONTRACT_FILE}: ${reason}`);
   }
 
+  const contract = parsed.data;
+  if (contract.runtimeQa?.server) {
+    const { server: _server, ...runtimeQa } = contract.runtimeQa;
+    contract.runtimeQa = runtimeQa;
+  }
+
   return {
     path: contractPath,
-    contract: parsed.data,
+    contract,
   };
 }

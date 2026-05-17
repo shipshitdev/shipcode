@@ -1,3 +1,4 @@
+import { sanitizeCliText } from '../adapters/cli-emitter';
 import { createCliContext } from '../context';
 import { requireOnboarding } from './guard';
 import { getThreadForIssueOrExit, parseIssueNumber } from './issue-helpers';
@@ -15,8 +16,8 @@ export async function logsCommand(issueNumber: string) {
   const ctx = createCliContext(process.cwd());
   const thread = getThreadForIssueOrExit(ctx, num);
 
-  console.log(`Logs for issue #${num}: ${thread.title}`);
-  console.log(`Status: ${thread.status}\n`);
+  console.log(`Logs for issue #${num}: ${sanitizeCliText(thread.title)}`);
+  console.log(`Status: ${sanitizeCliText(thread.status)}\n`);
 
   const events = ctx.terminalEvents.listByThread(thread.id);
   if (events.length === 0) {
@@ -30,30 +31,32 @@ export async function logsCommand(issueNumber: string) {
 
     switch (data.kind) {
       case 'text':
-        process.stdout.write(data.content);
+        process.stdout.write(sanitizeCliText(data.content));
         break;
       case 'thinking':
-        console.log(`[${time}] Thinking: ${data.content.slice(0, 120)}...`);
+        console.log(`[${time}] Thinking: ${sanitizeCliText(data.content).slice(0, 120)}...`);
         break;
       case 'tool_start':
-        console.log(`[${time}] Tool: ${data.name} — ${data.summary}`);
+        console.log(
+          `[${time}] Tool: ${sanitizeCliText(data.name)} — ${sanitizeCliText(data.summary)}`,
+        );
         break;
       case 'tool_end':
         if (data.exitCode != null && data.exitCode !== 0) {
-          console.log(`[${time}] Tool done: ${data.name} (exit ${data.exitCode})`);
+          console.log(`[${time}] Tool done: ${sanitizeCliText(data.name)} (exit ${data.exitCode})`);
         }
         break;
       case 'lifecycle':
-        process.stdout.write(`[${time}] ${data.message}`);
+        process.stdout.write(`[${time}] ${sanitizeCliText(data.message)}`);
         break;
       case 'raw':
-        process.stdout.write(data.content);
+        process.stdout.write(sanitizeCliText(data.content));
         break;
       case 'error':
-        console.log(`[${time}] Error: ${data.message}`);
+        console.log(`[${time}] Error: ${sanitizeCliText(data.message)}`);
         break;
       case 'clarification_requested':
-        console.log(`[${time}] Clarification requested: ${data.summary}`);
+        console.log(`[${time}] Clarification requested: ${sanitizeCliText(data.summary)}`);
         break;
       case 'clarification_answered':
         console.log(`[${time}] Clarification answered (${data.questionCount} questions)`);

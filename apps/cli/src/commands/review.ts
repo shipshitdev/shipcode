@@ -1,5 +1,6 @@
 import { routeFromLabels } from '@shipcode/agents';
 import { createPipeline } from '@shipcode/pipeline';
+import { sanitizeCliText } from '../adapters/cli-emitter';
 import { createCliContext } from '../context';
 import { requireOnboarding } from './guard';
 import { parseIssueNumber } from './issue-helpers';
@@ -22,7 +23,7 @@ export async function reviewCommand(issueNumber: string) {
   const executorModel = 'error' in route ? 'codex' : route.executorModel;
   const executorModelOverride = 'error' in route ? null : (route.modelOverride ?? null);
 
-  console.log(`Issue: ${issue.title}`);
+  console.log(`Issue: ${sanitizeCliText(issue.title)}`);
   console.log('Running plan + review...\n');
 
   const pipeline = createPipeline(ctx.pipelineDeps);
@@ -55,5 +56,5 @@ export async function reviewCommand(issueNumber: string) {
     console.log('\nNo plan generated (pipeline may have failed before plan phase).');
   }
 
-  console.log(`\nThread status: ${thread.status}`);
+  console.log(`\nThread status: ${sanitizeCliText(thread.status)}`);
 }

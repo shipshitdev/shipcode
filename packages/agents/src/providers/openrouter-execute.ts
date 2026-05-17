@@ -56,6 +56,8 @@ Rules:
 - When done, emit a final short assistant message confirming what you changed. Do not call any more tools after that.
 - If the plan cannot be completed with the available tools, explain why and stop.`.trim();
 
+const OPENROUTER_EXECUTE_TOOLS = new Set(['edit', 'write', 'read', 'glob', 'grep', 'shell']);
+
 export interface ExecuteDeps {
   client: OpenRouterClient;
   /**
@@ -107,10 +109,9 @@ export async function executeViaOpenRouter(
     worktreePath: req.cwd,
     signal: req.signal,
     threadId: req.threadId,
-    ...(req.githubGraphql ? { githubGraphql: req.githubGraphql } : {}),
   };
 
-  const tools = getToolSchemas();
+  const tools = getToolSchemas(OPENROUTER_EXECUTE_TOOLS);
   const messages: OpenRouterChatMessage[] = [
     { role: 'system', content: EXECUTE_SYSTEM_PROMPT },
     { role: 'user', content: req.prompt },
@@ -273,7 +274,12 @@ export async function executeViaOpenRouter(
         });
 
         const toolStart = Date.now();
-        const result = await executeToolCall(call.function.name, call.function.arguments, toolCtx);
+        const result = await executeToolCall(
+          call.function.name,
+          call.function.arguments,
+          toolCtx,
+          OPENROUTER_EXECUTE_TOOLS,
+        );
         toolCallsExecuted++;
 
         emit?.({

@@ -1,5 +1,6 @@
 import { routeFromLabels } from '@shipcode/agents';
 import { createPipeline } from '@shipcode/pipeline';
+import { sanitizeCliText } from '../adapters/cli-emitter';
 import { createCliContext } from '../context';
 import { requireOnboarding } from './guard';
 import { parseIssueNumber } from './issue-helpers';
@@ -17,7 +18,7 @@ export async function runCommand(issueNumber: string) {
   const executorModel = 'error' in route ? 'codex' : route.executorModel;
   const executorModelOverride = 'error' in route ? null : (route.modelOverride ?? null);
 
-  console.log(`Issue: ${issue.title}`);
+  console.log(`Issue: ${sanitizeCliText(issue.title)}`);
   console.log(
     `Model: ${executorModel}${executorModelOverride ? ` (${executorModelOverride})` : ''}`,
   );

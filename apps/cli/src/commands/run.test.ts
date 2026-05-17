@@ -81,9 +81,13 @@ vi.mock('@shipcode/pipeline', () => ({
   })),
 }));
 
-vi.mock('../adapters/cli-emitter', () => ({
-  createCliEmitter: createCliEmitterMock,
-}));
+vi.mock('../adapters/cli-emitter', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../adapters/cli-emitter')>();
+  return {
+    ...actual,
+    createCliEmitter: createCliEmitterMock,
+  };
+});
 
 vi.mock('./guard', () => ({
   requireOnboarding: requireOnboardingMock,
@@ -158,6 +162,19 @@ describe('runCommand', () => {
       },
     );
     expect(logSpy).toHaveBeenCalledWith('Model: openrouter (openrouter/auto)');
+  });
+
+  it('strips terminal control sequences from issue titles before logging', async () => {
+    getIssueMock.mockResolvedValueOnce({
+      number: 42,
+      title: '\u001b[2JAdd routing\u0007',
+      body: 'Implement it',
+      labels: ['shipcode:agent:openrouter/auto'],
+    });
+
+    await runCommand('42');
+
+    expect(logSpy).toHaveBeenCalledWith('Issue: Add routing');
   });
 
   it('omits the model override label when successful routing has no override', async () => {

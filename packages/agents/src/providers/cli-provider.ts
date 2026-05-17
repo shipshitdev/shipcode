@@ -268,6 +268,34 @@ function sanitizeProcessName(input: string): string {
     .slice(0, 48);
 }
 
+const CLAUDE_ENV_KEYS = [
+  'PATH',
+  'HOME',
+  'USER',
+  'SHELL',
+  'TERM',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TMPDIR',
+  'XDG_RUNTIME_DIR',
+  'ANTHROPIC_API_KEY',
+] as const;
+
+const CODEX_ENV_KEYS = [
+  'PATH',
+  'HOME',
+  'USER',
+  'SHELL',
+  'TERM',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TMPDIR',
+  'XDG_RUNTIME_DIR',
+  'OPENAI_API_KEY',
+] as const;
+
 async function writeExecutePromptArtifact(req: ProviderRequest): Promise<string> {
   const runDir = path.join(req.cwd, '.shipcode', 'runs', req.threadId);
   await fs.mkdir(runDir, { recursive: true });
@@ -380,6 +408,20 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
         promptSize: measurePromptPayload(req.prompt),
         ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
       };
+      if (req.phase === 'execute' && req.phaseHints?.runMode !== 'interactive') {
+        return {
+          rawOutput:
+            'Programmatic Claude execute is disabled because it exposes host shell/file tools without an OS sandbox. Use interactive Claude execute or a sandboxed provider.',
+          exitCode: 1,
+          resolvedModel: req.modelHint ?? 'claude',
+          promptTelemetry,
+          providerError: {
+            kind: 'unexpected_stop',
+            message: 'programmatic Claude execute is disabled',
+            retryable: false,
+          },
+        };
+      }
       const command =
         req.phase === 'execute' && req.phaseHints?.runMode === 'interactive'
           ? await buildClaudeInteractiveExecuteCommand(req)
@@ -393,7 +435,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
         req.signal,
         req.threadId,
         req.workspaceRoot,
-        command.options,
+        { ...(command.options ?? {}), envKeyAllowlist: [...CLAUDE_ENV_KEYS] },
       );
       const parser = new StreamParser();
       parser.feed(result.rawOutput);
@@ -460,7 +502,7 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
         req.signal,
         req.threadId,
         req.workspaceRoot,
-        command.options,
+        { ...(command.options ?? {}), envKeyAllowlist: [...CODEX_ENV_KEYS] },
       );
       const rawOutput = stripCodexProtocol(result.rawOutput, {
         includeCommandOutput: req.phase === 'execute',

@@ -267,10 +267,9 @@ export const SHELL_EXEC_TIMEOUT_MS = 30_000;
  * and so broke the "read-only" contract. Those are gone.
  *
  * What's left is binaries that inspect filesystem/process state and
- * return it, without side effects on the worktree. `tsc` is in because
- * `--noEmit` is read-only; `git` is ALSO in but is handled specially
- * below (GIT_ALLOWED_SUBCOMMANDS is an allowlist, not blocklist, so
- * only non-mutating subcommands pass).
+ * return it, without side effects on the worktree. `git` is handled
+ * specially below (GIT_ALLOWED_SUBCOMMANDS is an allowlist, not
+ * blocklist, so only non-mutating subcommands pass).
  *
  * The harness always invokes execFile with `shell: false`, so
  * metacharacters in args are literal (no chaining, no redirection,
@@ -279,10 +278,6 @@ export const SHELL_EXEC_TIMEOUT_MS = 30_000;
 export const SHELL_ALLOWLIST: readonly string[] = [
   // Source control (subcommand-restricted via GIT_ALLOWED_SUBCOMMANDS)
   'git',
-  // TypeScript typecheck — tsc --noEmit is read-only. `tsc --emit` will
-  // write to the worktree, but since we confine cwd to the worktree and
-  // the resulting files still land under path-guard territory, accept it.
-  'tsc',
   // Navigation — pure read.
   // NOTE: `find` and `rg` are intentionally excluded. `find` has `-exec`;
   // `rg` has `--pre`, which can execute helper programs. Use the dedicated

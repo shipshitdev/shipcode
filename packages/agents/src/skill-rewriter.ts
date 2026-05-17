@@ -2,13 +2,22 @@ import { createHash } from 'node:crypto';
 import type { GeneratorCli, PhaseSkillKey, ReasoningEffort } from '@shipcode/shared';
 import { unwrapCliResultEnvelope } from './cli-result';
 import { runCliWithStdin } from './cli-stdin-runner';
-import {
-  mapReasoningEffortToClaudeThinkingTokens,
-  mapReasoningEffortToCodex,
-} from './providers/reasoning';
+import { mapReasoningEffortToClaudeThinkingTokens } from './providers/reasoning';
 import { validateSkill } from './skills';
 
 const SKILL_FENCE_TAG = 'shipcode-skill';
+const CLAUDE_TEXT_ENV_KEYS = [
+  'PATH',
+  'HOME',
+  'USER',
+  'SHELL',
+  'TERM',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TMPDIR',
+  'ANTHROPIC_API_KEY',
+] as const;
 
 export interface RewrittenSkill {
   content: string;
@@ -165,40 +174,34 @@ function runSkillCliWithStdin(
   modelId?: string | null,
   reasoningEffort?: ReasoningEffort,
 ): Promise<string> {
-  const args =
-    cli === 'claude'
-      ? [
-          '-p',
-          ...(modelId ? ['--model', modelId] : []),
-          '--output-format',
-          'json',
-          '--max-turns',
-          '3',
-          ...(() => {
-            const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(
-              reasoningEffort,
-              modelId,
-            );
-            return thinkingTokens === null
-              ? []
-              : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
-          })(),
-          '--allowedTools',
-          '',
-        ]
-      : [
-          '-a',
-          'never',
-          ...(modelId ? ['-m', modelId] : []),
-          '-c',
-          `model_reasoning_effort=${mapReasoningEffortToCodex(reasoningEffort, modelId)}`,
-          'exec',
-          '-',
-          '--sandbox',
-          'read-only',
-        ];
+  if (cli === 'codex') {
+    throw new Error('Codex skill rewriting is disabled because it cannot run in no-tools mode');
+  }
+  const args = [
+    '-p',
+    ...(modelId ? ['--model', modelId] : []),
+    '--output-format',
+    'json',
+    '--max-turns',
+    '3',
+    ...(() => {
+      const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(reasoningEffort, modelId);
+      return thinkingTokens === null
+        ? []
+        : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
+    })(),
+    '--allowedTools',
+    '',
+  ];
 
-  return runCliWithStdin({ cli, args, input: prompt, cwd, timeoutMs });
+  return runCliWithStdin({
+    cli,
+    args,
+    input: prompt,
+    cwd,
+    timeoutMs,
+    envKeyAllowlist: CLAUDE_TEXT_ENV_KEYS,
+  });
 }
 
 export function extractRewrittenSkill(text: string): RewrittenSkill {

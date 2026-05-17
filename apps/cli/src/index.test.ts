@@ -9,6 +9,9 @@ const approveCommandMock = vi.fn();
 const reviewCommandMock = vi.fn();
 const retryCommandMock = vi.fn();
 const logsCommandMock = vi.fn();
+const terminalCommandMock = vi.fn();
+const terminalSummaryCommandMock = vi.fn();
+const terminalCommentCommandMock = vi.fn();
 const prdCommandMock = vi.fn();
 const parseMock = vi.fn();
 
@@ -16,6 +19,7 @@ const { commandCalls, resetCommanderMock } = vi.hoisted(() => {
   const commandCalls: Array<{
     name: string;
     description?: string;
+    options: Array<{ flags: string; description: string; defaultValue?: string }>;
     action?: unknown;
   }> = [];
 
@@ -64,6 +68,12 @@ vi.mock('./commands/logs', () => ({
   logsCommand: logsCommandMock,
 }));
 
+vi.mock('./commands/terminal', () => ({
+  terminalCommand: terminalCommandMock,
+  terminalSummaryCommand: terminalSummaryCommandMock,
+  terminalCommentCommand: terminalCommentCommandMock,
+}));
+
 vi.mock('./commands/prd', () => ({
   prdCommand: prdCommandMock,
 }));
@@ -81,6 +91,11 @@ vi.mock('commander', () => {
       if (command) command.action = handler;
       return this;
     });
+    public option = vi.fn((flags: string, description: string, defaultValue?: string) => {
+      const command = commandCalls.find((entry) => entry.name === this.name);
+      command?.options.push({ flags, description, defaultValue });
+      return this;
+    });
 
     constructor(name: string) {
       this.name = name;
@@ -92,7 +107,7 @@ vi.mock('commander', () => {
     description = vi.fn(() => this);
     version = vi.fn(() => this);
     command = vi.fn((name: string) => {
-      commandCalls.push({ name });
+      commandCalls.push({ name, options: [] });
       return new MockSubCommand(name);
     });
     parse = parseMock;
@@ -115,57 +130,93 @@ describe('CLI entrypoint', () => {
   });
 
   it('registers all commands and parses argv on supported Node versions', async () => {
-    await import('./index');
+    const { runCli } = await import('./program');
+    runCli();
 
     expect(parseMock).toHaveBeenCalledTimes(1);
     expect(commandCalls).toEqual([
       {
         name: 'onboard',
+        options: [],
         description: 'Initialize ShipCode in the current project',
         action: onboardCommandMock,
       },
       {
         name: 'status',
+        options: [],
         description: 'Show active pipelines and recent threads',
         action: statusCommandMock,
       },
       {
         name: 'run <issue>',
+        options: [],
         description: 'Process a single GitHub issue',
         action: runCommandMock,
       },
       {
         name: 'start',
+        options: [],
         description: 'Interactive mode — prompt for issue number',
         action: startCommandMock,
       },
       {
         name: 'plan <issue>',
+        options: [],
         description: 'Generate and review a plan (stops at approval)',
         action: planCommandMock,
       },
       {
         name: 'approve <issue>',
+        options: [],
         description: 'Approve a plan and start execution',
         action: approveCommandMock,
       },
       {
         name: 'review <issue>',
+        options: [],
         description: 'Run plan + adversarial review, output findings',
         action: reviewCommandMock,
       },
       {
         name: 'retry <issue>',
+        options: [],
         description: 'Resume pipeline from last checkpoint',
         action: retryCommandMock,
       },
       {
         name: 'logs <issue>',
+        options: [],
         description: 'Show terminal events for an issue',
         action: logsCommandMock,
       },
       {
+        name: 'terminal <issue>',
+        options: [
+          {
+            flags: '--provider <provider>',
+            description: 'claude|codex',
+            defaultValue: 'claude',
+          },
+          { flags: '--model <model>', description: 'CLI model id', defaultValue: undefined },
+        ],
+        description: 'Open an official Claude/Codex interactive CLI for a GitHub issue',
+        action: terminalCommandMock,
+      },
+      {
+        name: 'terminal-summary <issue>',
+        options: [],
+        description: 'Show the latest interactive terminal summary for an issue',
+        action: terminalSummaryCommandMock,
+      },
+      {
+        name: 'terminal-comment <issue>',
+        options: [{ flags: '--post', description: 'post the generated comment' }],
+        description: 'Preview or post a GitHub comment from the latest terminal summary',
+        action: terminalCommentCommandMock,
+      },
+      {
         name: 'prd <keywords...>',
+        options: [],
         description: 'Generate or enhance a PRD from keywords',
         action: expect.any(Function),
       },

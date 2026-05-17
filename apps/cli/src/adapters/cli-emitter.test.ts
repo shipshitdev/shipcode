@@ -144,4 +144,29 @@ describe('createCliEmitter', () => {
 
     expect(logSpy).not.toHaveBeenCalled();
   });
+
+  it('strips terminal control sequences from untrusted event text', () => {
+    const emitter = createCliEmitter();
+
+    emitter.emit({
+      type: 'plan:parsed',
+      plan: { objective: '\u001b[2Jhide\rtext\u0007' },
+    } as never);
+    emitter.emit({
+      type: 'review:parsed',
+      review: {
+        decision: 'changes_requested',
+        confidence: 'high',
+        findings: [{ severity: 'major', description: 'bad\u001b]8;;https://evil.test\u0007link' }],
+      },
+    } as never);
+    emitter.emit({
+      type: 'workflow:warning',
+      warning: { message: 'stale\u009b2Jscreen' },
+    } as never);
+
+    expect(logSpy).toHaveBeenCalledWith('[12:34:56] Plan generated: hidetext');
+    expect(logSpy).toHaveBeenCalledWith('  [major] badlink');
+    expect(logSpy).toHaveBeenCalledWith('[12:34:56] WORKFLOW.md warning: stalescreen');
+  });
 });

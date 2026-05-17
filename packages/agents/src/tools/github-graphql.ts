@@ -2,9 +2,9 @@
  * github_graphql tool — orchestrator-mediated GitHub access.
  *
  * Symphony §10.5: the orchestrator owns the credential and exposes a
- * single `github_graphql({query, variables})` tool to the agent. The
- * agent never sees the token, can't rebind to another repo, and can't
- * smuggle multi-op documents past us.
+ * single repository-scoped `github_graphql({query, variables})` tool.
+ * The agent never sees the token, can't rebind to another repo, and
+ * can't smuggle multi-op documents past us.
  *
  * Failure shapes (visible to the model in `content` as JSON):
  *   - `{error: {code: 'multi_op_rejected', message}}` — document has
@@ -44,7 +44,7 @@ export const githubGraphqlTool: Tool<GraphqlInput> = {
   name: 'github_graphql',
   description:
     'Run a single GraphQL operation against the GitHub API on behalf of the active project. ' +
-    'Multi-operation documents are rejected. Auth is supplied by the orchestrator; do not ' +
+    'Only read-only active repository queries are allowed; multi-operation documents are rejected. Auth is supplied by the orchestrator; do not ' +
     'attempt to read tokens from the worktree. Returns `{data, errors?}` on success or ' +
     '`{error: {code, message}}` on failure.',
   schema: GraphqlInput,
@@ -55,7 +55,7 @@ export const githubGraphqlTool: Tool<GraphqlInput> = {
       query: {
         type: 'string',
         description:
-          'GraphQL document with exactly one operation (query / mutation / subscription).',
+          'GraphQL document with exactly one read-only repository query using $owner and $repo variables.',
       },
       variables: {
         type: 'object',
@@ -96,10 +96,24 @@ export const githubGraphqlTool: Tool<GraphqlInput> = {
       return errorResult('operation_rejected', 'Only read-only GitHub GraphQL queries are allowed');
     }
 
+    let defaultRepo: GithubRepoCoords | null = null;
     const deps = ctx.githubGraphql;
     if (!deps) {
       return errorResult('auth_missing', 'Configure GitHub auth in Project Settings');
     }
+    if (deps.getDefaultRepo) {
+      try {
+        defaultRepo = (await deps.getDefaultRepo()) ?? null;
+      } catch {
+        defaultRepo = null;
+      }
+    }
+    if (!defaultRepo) {
+      return errorResult('repo_scope_missing', 'Active project repository is unavailable');
+    }
+
+    const scopeError = validateRepoScopedQuery(input.query);
+    if (scopeError) return errorResult('query_scope_rejected', scopeError);
 
     let token: string | null;
     try {
@@ -114,21 +128,17 @@ export const githubGraphqlTool: Tool<GraphqlInput> = {
       return errorResult('auth_missing', 'Configure GitHub auth in Project Settings');
     }
 
-    // Resolve repo scope for telemetry. Query body is not rewritten.
-    let defaultRepo: GithubRepoCoords | null = null;
-    if (!input.repo && deps.getDefaultRepo) {
-      try {
-        defaultRepo = (await deps.getDefaultRepo()) ?? null;
-      } catch {
-        defaultRepo = null;
-      }
-    }
-    void (input.repo ?? defaultRepo);
+    const variables = {
+      ...(input.variables ?? {}),
+      owner: defaultRepo.owner,
+      repo: defaultRepo.repo,
+      name: defaultRepo.repo,
+    };
 
     const fetchImpl = deps.fetch ?? fetch;
     const body = JSON.stringify({
       query: input.query,
-      ...(input.variables ? { variables: input.variables } : {}),
+      variables,
     });
 
     let response: Response;
@@ -191,6 +201,24 @@ function errorResult(
     ok: false,
     error: JSON.stringify(envelope),
   };
+}
+
+function validateRepoScopedQuery(source: string): string | null {
+  const cleaned = stripCommentsAndStrings(source);
+  if (/\b(viewer|organization|enterprise|search|nodes?|rateLimit)\s*\(/.test(cleaned)) {
+    return 'Only active repository-scoped GitHub queries are allowed';
+  }
+  if (!/\brepository\s*\(/.test(cleaned)) {
+    return 'Query must target the active repository via repository(owner:$owner, name:$repo)';
+  }
+  if (
+    !/\brepository\s*\([^)]*\bowner\s*:\s*\$owner\b[^)]*\b(?:name|repo)\s*:\s*\$(?:repo|name)\b/.test(
+      cleaned,
+    )
+  ) {
+    return 'repository query must use orchestrator-owned $owner and $repo variables';
+  }
+  return null;
 }
 
 /**

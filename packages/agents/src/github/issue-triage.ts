@@ -14,7 +14,6 @@ import { unwrapCliResultEnvelope } from '../cli-result';
 import { OpenRouterClient, OpenRouterError } from '../providers/openrouter-http';
 import {
   mapReasoningEffortToClaudeThinkingTokens,
-  mapReasoningEffortToCodex,
   normalizeOpenRouterReasoningEffort,
 } from '../providers/reasoning';
 
@@ -31,8 +30,6 @@ const SAFE_TRIAGE_ENV_KEYS = new Set([
   'LC_CTYPE',
   'TMPDIR',
   'ANTHROPIC_API_KEY',
-  'OPENAI_API_KEY',
-  'OPENROUTER_API_KEY',
 ]);
 const TRIAGE_LABELS = [
   ...SHIPCODE_AGENT_LABELS.map((label) => label.name),
@@ -182,43 +179,32 @@ function runCliTriage(opts: {
   modelId: string | null;
   reasoningEffort: ReasoningEffort;
 }): Promise<string> {
+  if (opts.provider === 'codex') {
+    return Promise.reject(
+      new Error('Codex issue triage is disabled because it cannot run in no-tools mode'),
+    );
+  }
   return new Promise((resolve, reject) => {
     const label = opts.provider === 'claude' ? 'Claude CLI' : 'Codex CLI';
-    const args =
-      opts.provider === 'claude'
-        ? [
-            '-p',
-            ...(opts.modelId ? ['--model', opts.modelId] : []),
-            '--output-format',
-            'json',
-            '--max-turns',
-            '1',
-            ...(() => {
-              const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(
-                opts.reasoningEffort,
-                opts.modelId,
-              );
-              return thinkingTokens === null
-                ? []
-                : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
-            })(),
-            '--allowedTools',
-            '',
-          ]
-        : [
-            '-a',
-            'never',
-            ...(opts.modelId ? ['-m', opts.modelId] : []),
-            '-c',
-            `model_reasoning_effort=${mapReasoningEffortToCodex(
-              opts.reasoningEffort,
-              opts.modelId,
-            )}`,
-            'exec',
-            '-',
-            '--sandbox',
-            'read-only',
-          ];
+    const args = [
+      '-p',
+      ...(opts.modelId ? ['--model', opts.modelId] : []),
+      '--output-format',
+      'json',
+      '--max-turns',
+      '1',
+      ...(() => {
+        const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(
+          opts.reasoningEffort,
+          opts.modelId,
+        );
+        return thinkingTokens === null
+          ? []
+          : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
+      })(),
+      '--allowedTools',
+      '',
+    ];
 
     const proc = spawn(opts.provider, args, {
       cwd: mkdtempSync(join(tmpdir(), 'shipcode-triage-')),

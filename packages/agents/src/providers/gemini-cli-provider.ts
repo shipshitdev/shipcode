@@ -12,6 +12,19 @@ interface GeminiRunResult {
   exitCode: number;
 }
 
+const GEMINI_ENV_KEYS = [
+  'PATH',
+  'HOME',
+  'USER',
+  'SHELL',
+  'TERM',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TMPDIR',
+  'XDG_RUNTIME_DIR',
+] as const;
+
 type ProcessManagerWithStdin = ProcessManager & {
   spawnWithStdin?: (
     type: 'gemini',
@@ -48,7 +61,10 @@ async function runGeminiCli(
 
   let process: ReturnType<ProcessManager['spawn']>;
   try {
-    const options = req.workspaceRoot !== undefined ? { workspaceRoot: req.workspaceRoot } : {};
+    const options = {
+      ...(req.workspaceRoot !== undefined ? { workspaceRoot: req.workspaceRoot } : {}),
+      envKeyAllowlist: [...GEMINI_ENV_KEYS],
+    };
     const processManagerWithStdin = processManager as ProcessManagerWithStdin;
     if (processManagerWithStdin.spawnWithStdin) {
       process = processManagerWithStdin.spawnWithStdin(
