@@ -77,18 +77,19 @@ function formatTokenTotal(promptTokens: number, completionTokens: number): strin
 
 function RunTimelineCard({
   attemptNumber,
-  defaultOpen,
   entry,
+  isOpen,
+  onToggle,
   retryParentNumber,
   terminalTail,
 }: {
   attemptNumber: number;
-  defaultOpen: boolean;
   entry: PipelineRunTimelineEntry;
+  isOpen: boolean;
+  onToggle: () => void;
   retryParentNumber: number | null;
   terminalTail: string[];
 }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
   const totals = runTotals(entry);
 
   return (
@@ -98,7 +99,7 @@ function RunTimelineCard({
         variant="ghost"
         className="h-auto w-full justify-start rounded-none p-3 text-left hover:bg-secondary/40"
         aria-expanded={isOpen}
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={onToggle}
       >
         <div className="flex w-full items-start gap-3">
           <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-tertiary text-[10px] font-semibold text-muted-foreground">
@@ -205,6 +206,7 @@ function RunTimelineCard({
 }
 
 export function RunsTab({ threadId }: { threadId: string }) {
+  const [runOpenOverrides, setRunOpenOverrides] = useState<Record<string, boolean>>({});
   const { data: entries = [], isLoading } = useQuery<PipelineRunTimelineEntry[]>({
     queryKey: ['pipeline-runs', threadId],
     queryFn: async () =>
@@ -273,8 +275,14 @@ export function RunsTab({ threadId }: { threadId: string }) {
             <RunTimelineCard
               key={entry.run.id}
               attemptNumber={attemptNumber}
-              defaultOpen={index === 0}
               entry={entry}
+              isOpen={runOpenOverrides[entry.run.id] ?? index === 0}
+              onToggle={() =>
+                setRunOpenOverrides((current) => ({
+                  ...current,
+                  [entry.run.id]: !(current[entry.run.id] ?? index === 0),
+                }))
+              }
               retryParentNumber={retryParentNumber ?? null}
               terminalTail={terminalTail}
             />
