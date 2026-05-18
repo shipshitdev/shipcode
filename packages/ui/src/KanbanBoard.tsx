@@ -20,7 +20,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { DroppableColumn, StackedColumn } from '@/kanban-board/BoardColumns';
+import { DroppableColumn, HiddenColumnsPanel, StackedColumn } from '@/kanban-board/BoardColumns';
 import { BoardToolbar } from '@/kanban-board/BoardToolbar';
 import { COLUMNS } from '@/kanban-board/constants';
 import { DragOverlayCard } from '@/kanban-board/IssueCardParts';
@@ -251,6 +251,7 @@ function useKanbanBoardView({
   const [sortOrder, setSortOrder] = useState<BoardSortOrder>('priority');
   const [approvalFilter, setApprovalFilter] = useState<'all' | 'needs-approval'>('all');
   const [stalenessFilter, setStalenessFilter] = useState<'all' | 'stale'>('all');
+  const [hiddenColumns, setHiddenColumns] = useState<Set<ColumnKey>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [showRefreshToast, setShowRefreshToast] = useState(false);
   const [branchCopyToast, setBranchCopyToast] = useState<{
@@ -398,6 +399,36 @@ function useKanbanBoardView({
     }
     return next;
   }, [approvedAwaitingExecutionIssueIds, visibleIssues]);
+
+  const handleHideColumn = useCallback((key: ColumnKey) => {
+    setHiddenColumns((prev) => new Set([...prev, key]));
+  }, []);
+
+  const handleShowColumn = useCallback((key: ColumnKey) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const hiddenColumnIssueCounts = useMemo(() => {
+    const counts = new Map<ColumnKey, number>();
+    for (const column of COLUMNS) {
+      if (!hiddenColumns.has(column.key)) continue;
+      if (column.sections) {
+        counts.set(
+          column.key,
+          visibleIssues.filter((issue) =>
+            issueMatchesColumn(issue, column, approvedAwaitingExecutionIssueIds),
+          ).length,
+        );
+      } else {
+        counts.set(column.key, visibleIssuesByColumn.get(column.key)?.length ?? 0);
+      }
+    }
+    return counts;
+  }, [hiddenColumns, visibleIssues, visibleIssuesByColumn, approvedAwaitingExecutionIssueIds]);
   const keyboardFocusColumns = useMemo<KeyboardFocusColumn[]>(
     () =>
       COLUMNS.map((column) => {
@@ -824,7 +855,14 @@ function useKanbanBoardView({
                 compact ? 'overflow-x-hidden' : 'overflow-x-auto',
               )}
             >
-              {COLUMNS.map((col) => {
+              {hiddenColumns.size > 0 && (
+                <HiddenColumnsPanel
+                  hiddenColumnKeys={[...hiddenColumns]}
+                  issueCounts={hiddenColumnIssueCounts}
+                  onShowColumn={handleShowColumn}
+                />
+              )}
+              {COLUMNS.filter((col) => !hiddenColumns.has(col.key)).map((col) => {
                 if (col.sections) {
                   return (
                     <StackedColumn
@@ -865,6 +903,7 @@ function useKanbanBoardView({
                       compact={compact}
                       issueHoverCards={issueHoverCards}
                       onFetchPlanSteps={onFetchPlanSteps}
+                      onHideColumn={readOnly ? undefined : () => handleHideColumn(col.key)}
                     />
                   );
                 }
@@ -901,6 +940,7 @@ function useKanbanBoardView({
                     compact={compact}
                     issueHoverCards={issueHoverCards}
                     onFetchPlanSteps={onFetchPlanSteps}
+                    onHideColumn={readOnly ? undefined : () => handleHideColumn(col.key)}
                   />
                 );
               })}

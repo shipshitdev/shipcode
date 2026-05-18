@@ -1,13 +1,20 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
-import { Archive, ChevronDown, ChevronRight } from 'lucide-react';
+import { Archive, ChevronDown, ChevronRight, Eye, EyeOff, MoreHorizontal } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { DraggableCard } from '@/kanban-board/IssueCardParts';
 import type { GitHubIssueCacheRecord, IssueStalenessResult } from '@/lib/shipcode';
 import { cn } from '@/lib/utils';
 import { Button } from '@/primitives/button';
-import { COLUMN_FILL, COLUMN_SCROLLBAR_COLOR, COLUMN_TEXT_CLASS } from './constants';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/primitives/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/primitives/tooltip';
+import { COLUMN_FILL, COLUMN_SCROLLBAR_COLOR, COLUMN_TEXT_CLASS, COLUMNS } from './constants';
 import { StatusCircleIcon } from './StatusCircleIcon';
 import type {
   BoardColumn,
@@ -84,6 +91,7 @@ interface DroppableColumnProps {
   compact?: boolean;
   issueHoverCards?: boolean;
   onFetchPlanSteps?: (threadId: string) => Promise<PlanStepSummary[] | null>;
+  onHideColumn?: () => void;
 }
 
 export function DroppableColumn({
@@ -118,6 +126,7 @@ export function DroppableColumn({
   compact = false,
   issueHoverCards = true,
   onFetchPlanSteps,
+  onHideColumn,
 }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable || readOnly });
 
@@ -154,6 +163,27 @@ export function DroppableColumn({
           >
             {issues.length}
           </span>
+          {!readOnly && onHideColumn && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="h-5 w-5 text-muted-foreground/60 hover:bg-muted/10 hover:text-primary"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreHorizontal size={12} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onHideColumn}>
+                  <EyeOff size={14} />
+                  Hide column
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
       <div
@@ -444,6 +474,7 @@ interface StackedColumnProps {
   compact?: boolean;
   issueHoverCards?: boolean;
   onFetchPlanSteps?: (threadId: string) => Promise<PlanStepSummary[] | null>;
+  onHideColumn?: () => void;
 }
 
 export function StackedColumn({
@@ -483,6 +514,7 @@ export function StackedColumn({
   compact = false,
   issueHoverCards = true,
   onFetchPlanSteps,
+  onHideColumn,
 }: StackedColumnProps) {
   const columnIssues = useMemo(
     () =>
@@ -540,6 +572,27 @@ export function StackedColumn({
           >
             {columnIssues.length}
           </span>
+          {!readOnly && onHideColumn && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="h-5 w-5 text-muted-foreground/60 hover:bg-muted/10 hover:text-primary"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreHorizontal size={12} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onHideColumn}>
+                  <EyeOff size={14} />
+                  Hide column
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
       <div
@@ -551,7 +604,7 @@ export function StackedColumn({
             key={section.key}
             columnKey={column.key}
             section={section}
-            issues={sectionIssuesByKey.get(section.key)!}
+            issues={sectionIssuesByKey.get(section.key) ?? []}
             collapsed={collapsedSections[section.key] ?? false}
             onToggle={() => toggleSection(section.key)}
             readOnly={readOnly}
@@ -591,5 +644,65 @@ export function StackedColumn({
         ))}
       </div>
     </div>
+  );
+}
+
+interface HiddenColumnsPanelProps {
+  hiddenColumnKeys: ColumnKey[];
+  issueCounts: Map<ColumnKey, number>;
+  onShowColumn: (key: ColumnKey) => void;
+}
+
+export function HiddenColumnsPanel({
+  hiddenColumnKeys,
+  issueCounts,
+  onShowColumn,
+}: HiddenColumnsPanelProps) {
+  if (hiddenColumnKeys.length === 0) return null;
+
+  return (
+    <TooltipProvider>
+      <div className="flex min-h-0 flex-col gap-1 rounded-md border border-border/40 bg-secondary px-1.5 py-2">
+        <div className="flex justify-center py-0.5">
+          <EyeOff size={10} className="text-muted-foreground/40" />
+        </div>
+        {hiddenColumnKeys.map((key) => {
+          const col = COLUMNS.find((c) => c.key === key);
+          if (!col) return null;
+          const count = issueCounts.get(key) ?? 0;
+          return (
+            <Tooltip key={key}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="flex h-auto flex-col items-center gap-0.5 px-1.5 py-1.5"
+                  onClick={() => onShowColumn(key)}
+                >
+                  <StatusCircleIcon
+                    fill={COLUMN_FILL[key]}
+                    className={COLUMN_TEXT_CLASS[key]}
+                    size={12}
+                  />
+                  <span
+                    className={cn(
+                      'min-w-[16px] rounded-full border border-transparent bg-tertiary px-1 py-px text-center text-[9px] font-medium',
+                      COLUMN_TEXT_CLASS[key],
+                    )}
+                  >
+                    {count}
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <div className="flex items-center gap-1.5">
+                  <Eye size={11} />
+                  Show {col.label}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </div>
+    </TooltipProvider>
   );
 }

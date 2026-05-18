@@ -58,6 +58,21 @@ function issueReferenceLabel(issue: GitHubIssueCacheRecord, isCreating: boolean)
   return `#${issue.issueNumber}`;
 }
 
+function labelDotClass(label: string): string {
+  const l = label.toLowerCase();
+  if (l.includes('bug')) return 'bg-red-500';
+  if (l.includes('feature') || l.includes('enhancement')) return 'bg-violet-500';
+  if (l.includes('doc')) return 'bg-blue-400';
+  if (l.includes('question')) return 'bg-pink-400';
+  if (l.includes('help wanted')) return 'bg-green-500';
+  if (l.includes('good first')) return 'bg-teal-400';
+  if (l.includes('priority') || l.includes('urgent')) return 'bg-orange-400';
+  if (l.includes('security')) return 'bg-red-600';
+  if (l.includes('design')) return 'bg-purple-400';
+  if (l.includes('chore') || l.includes('refactor')) return 'bg-yellow-500';
+  return 'bg-muted-foreground/40';
+}
+
 export function IssueExternalBlockers({ issue }: { issue: GitHubIssueCacheRecord }) {
   if (!issue.ciBlocked && issue.unresolvedReviewCommentCount === 0) return null;
 
@@ -417,6 +432,24 @@ function useDraggableCardView({
             {issue.title}
           </span>
         </div>
+        {issue.labels.length > 0 && (
+          <div className="relative z-10 mt-1.5 flex flex-wrap items-center gap-1">
+            {issue.labels.slice(0, 3).map((label) => (
+              <span
+                key={label}
+                className="flex items-center gap-1 rounded-sm bg-muted/20 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+              >
+                <span className={cn('size-1.5 shrink-0 rounded-full', labelDotClass(label))} />
+                {label}
+              </span>
+            ))}
+            {issue.labels.length > 3 && (
+              <span className="text-[10px] text-muted-foreground/50">
+                +{issue.labels.length - 3}
+              </span>
+            )}
+          </div>
+        )}
         <div className="relative z-10 mt-1.5 flex items-center gap-1.5">
           {isTodo && onStartPipeline && !isAutomation && !readOnly && (
             <Button
@@ -485,6 +518,14 @@ function useDraggableCardView({
             </Button>
           )}
           <div className="ml-auto flex items-center gap-1">
+            {issue.assignee && (
+              <span
+                className="flex size-4 shrink-0 items-center justify-center rounded-full bg-muted/30 text-[8px] font-semibold uppercase text-muted-foreground"
+                title={`@${issue.assignee}`}
+              >
+                {issue.assignee[0].toUpperCase()}
+              </span>
+            )}
             {!isFailed && <StalenessDot staleness={staleness} />}
             {!isCreating && !readOnly && hasMenuItems && (
               <DropdownMenu>
