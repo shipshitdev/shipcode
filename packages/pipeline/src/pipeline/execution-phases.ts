@@ -1328,30 +1328,17 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
     try {
       if (config.server) {
-        try {
-          server = await lifecycle.start(config.server, cwd, context.abort.signal, threadId);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          if (
-            scheduleCoordinatedTestFixRetry(
-              threadId,
-              context,
-              config.server.command,
-              `[runtime-qa] Server startup failed: ${message}`,
-            )
-          ) {
-            return { ok: false, fatal: false, error: message };
-          }
-          return { ok: false, fatal: true, error: `Runtime QA server startup failed: ${message}` };
-        }
+        return {
+          ok: false,
+          fatal: true,
+          error:
+            'Runtime QA server startup is disabled until server commands have an explicit trust gate',
+        };
       }
 
       const extraEnv: Record<string, string> = {};
       if (server) {
         extraEnv.BASE_URL = server.baseUrl;
-        if (config.server?.portEnvVar) {
-          extraEnv[config.server.portEnvVar] = String(server.port);
-        }
       }
 
       const allCommands = [...(config.testCommands ?? [])];

@@ -48,7 +48,7 @@ export async function reviewCommand(issueNumber: string) {
     const review = ctx.reviews.getByPlanId(latestPlan.id);
     if (review) {
       console.log('\n--- Review Output ---');
-      console.log(JSON.stringify(review, null, 2));
+      console.log(sanitizeCliText(JSON.stringify(review, null, 2)));
     } else {
       console.log('\nNo review generated (pipeline may have stopped before review phase).');
     }

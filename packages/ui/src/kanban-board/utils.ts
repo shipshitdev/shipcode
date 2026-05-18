@@ -98,6 +98,51 @@ export function statusDotColorClass(
   return 'bg-muted-foreground/40';
 }
 
+export function statusDotTextColorClass(
+  status: IssuePipelineStatus,
+  approvedAwaitingExecution = false,
+): string {
+  if (approvedAwaitingExecution) return 'text-agent';
+  if (status === ISSUE_PIPELINE_STATUS.failed) return 'text-danger';
+  if (
+    status === ISSUE_PIPELINE_STATUS.approval ||
+    status === ISSUE_PIPELINE_STATUS.clarifying ||
+    status === ISSUE_PIPELINE_STATUS.paused
+  )
+    return 'text-warning';
+  if (status === ISSUE_PIPELINE_STATUS.completed) return 'text-success';
+  if (status === ISSUE_PIPELINE_STATUS.closed) return 'text-done';
+  if (ACTIVE_STATUSES.includes(status)) return 'text-agent';
+  return 'text-muted-foreground/40';
+}
+
+export function statusDotFill(
+  status: IssuePipelineStatus,
+  approvedAwaitingExecution = false,
+): number {
+  if (status === ISSUE_PIPELINE_STATUS.completed || status === ISSUE_PIPELINE_STATUS.closed)
+    return 1;
+  if (
+    status === ISSUE_PIPELINE_STATUS.executing ||
+    status === ISSUE_PIPELINE_STATUS.testing ||
+    status === ISSUE_PIPELINE_STATUS.verifying ||
+    status === ISSUE_PIPELINE_STATUS.shipping ||
+    approvedAwaitingExecution
+  )
+    return 0.75;
+  if (
+    status === ISSUE_PIPELINE_STATUS.reviewing ||
+    status === ISSUE_PIPELINE_STATUS.revising ||
+    status === ISSUE_PIPELINE_STATUS.approval ||
+    status === ISSUE_PIPELINE_STATUS.paused ||
+    status === ISSUE_PIPELINE_STATUS.failed
+  )
+    return 0.5;
+  if (status === ISSUE_PIPELINE_STATUS.planning || status === ISSUE_PIPELINE_STATUS.clarifying)
+    return 0.25;
+  return 0;
+}
+
 export function dragOverlayBorderClass(
   _status: IssuePipelineStatus,
   _approvedAwaitingExecution = false,

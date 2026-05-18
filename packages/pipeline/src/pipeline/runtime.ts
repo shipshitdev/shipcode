@@ -10,7 +10,6 @@ import {
   type PromptMaterial,
   type ProviderPhase,
   type ProviderRequest,
-  shellExecEnv,
   toPersistedPromptTelemetryMaterials,
 } from '@shipcode/agents/source';
 import {
@@ -135,7 +134,7 @@ export function createPipelineRuntime(
         threadId,
         {
           detached: true,
-          extraEnv: { ...shellExecEnv(), ...options?.extraEnv },
+          extraEnv: options?.extraEnv,
         },
       );
 

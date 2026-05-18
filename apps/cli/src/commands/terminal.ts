@@ -7,6 +7,7 @@ import {
   THREAD_KIND,
   type Thread,
 } from '@shipcode/shared';
+import { sanitizeCliText } from '../adapters/cli-emitter';
 import { createCliContext } from '../context';
 import { parseIssueNumber } from './issue-helpers';
 
@@ -138,7 +139,7 @@ Before exiting, write files changed, commands run, blockers, and a suggested Git
   await new Promise<void>((resolve) => {
     const onOutput = (processId: string, chunk: string) => {
       if (processId !== managed.id) return;
-      process.stdout.write(chunk);
+      process.stdout.write(sanitizeCliText(chunk));
       ctx.terminalEvents.create(thread.id, { kind: 'raw', content: chunk });
     };
     const onExit = (processId: string, exitCode: number) => {
@@ -189,7 +190,9 @@ export async function terminalSummaryCommand(issueRaw: string): Promise<void> {
     phase: 'interactive_terminal',
     role: 'response',
   });
-  console.log(rows.at(-1)?.content ?? 'No interactive terminal summary saved yet.');
+  console.log(
+    sanitizeCliText(rows.at(-1)?.content ?? 'No interactive terminal summary saved yet.'),
+  );
 }
 
 export async function terminalCommentCommand(
@@ -211,7 +214,7 @@ export async function terminalCommentCommand(
 
 ${rows.at(-1)?.content ?? 'Interactive terminal session completed.'}`;
   if (!options.post) {
-    console.log(body);
+    console.log(sanitizeCliText(body));
     return;
   }
   await ctx.ghCli.addIssueComment(issueNumber, body);

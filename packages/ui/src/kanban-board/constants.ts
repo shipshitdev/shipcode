@@ -138,6 +138,14 @@ export const COLUMN_DOT_CLASS: Record<ColumnKey, string> = {
   deferred: 'bg-text-muted-foreground',
 };
 
+export const COLUMN_FILL: Record<ColumnKey, number> = {
+  todo: 0,
+  agent: 0.5,
+  human: 0.75,
+  done: 1,
+  deferred: 0,
+};
+
 export const COLUMN_TEXT_CLASS: Record<ColumnKey, string> = {
   todo: 'text-success',
   agent: 'text-agent',

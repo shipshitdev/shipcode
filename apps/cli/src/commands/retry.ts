@@ -1,4 +1,5 @@
 import { createPipeline } from '@shipcode/pipeline';
+import { sanitizeCliText } from '../adapters/cli-emitter';
 import { createCliContext } from '../context';
 import { requireOnboarding } from './guard';
 import { getThreadForIssueOrExit, parseIssueNumber } from './issue-helpers';
@@ -22,9 +23,11 @@ export async function retryCommand(issueNumber: string) {
     process.exit(1);
   }
 
-  console.log(`Retrying issue #${num}: ${thread.title}`);
-  console.log(`Last checkpoint: ${checkpoint.phase} (${checkpoint.reason})`);
-  console.log(`Resuming from ${checkpoint.phase}...\n`);
+  console.log(`Retrying issue #${num}: ${sanitizeCliText(thread.title)}`);
+  console.log(
+    `Last checkpoint: ${sanitizeCliText(checkpoint.phase)} (${sanitizeCliText(checkpoint.reason)})`,
+  );
+  console.log(`Resuming from ${sanitizeCliText(checkpoint.phase)}...\n`);
 
   const pipeline = createPipeline(ctx.pipelineDeps);
   pipeline.rehydrateContext(thread.id, ctx.project.path, thread.title);

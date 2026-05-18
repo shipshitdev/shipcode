@@ -1,5 +1,6 @@
 import { createPipeline } from '@shipcode/pipeline';
 import { PIPELINE_PHASE } from '@shipcode/shared';
+import { sanitizeCliText } from '../adapters/cli-emitter';
 import { createCliContext } from '../context';
 import { requireOnboarding } from './guard';
 import { getThreadForIssueOrExit, parseIssueNumber } from './issue-helpers';
@@ -18,7 +19,9 @@ export async function approveCommand(issueNumber: string) {
   const thread = getThreadForIssueOrExit(ctx, num);
 
   if (thread.status !== PIPELINE_PHASE.approval) {
-    console.error(`Thread is in "${thread.status}" state, not "approval". Cannot approve.`);
+    console.error(
+      `Thread is in "${sanitizeCliText(thread.status)}" state, not "approval". Cannot approve.`,
+    );
     process.exit(1);
   }
 
@@ -28,8 +31,8 @@ export async function approveCommand(issueNumber: string) {
     process.exit(1);
   }
 
-  console.log(`Approving plan for issue #${num}: ${thread.title}`);
-  console.log(`Plan objective: ${latestPlan.structured.objective}`);
+  console.log(`Approving plan for issue #${num}: ${sanitizeCliText(thread.title)}`);
+  console.log(`Plan objective: ${sanitizeCliText(latestPlan.structured.objective)}`);
   console.log('Starting execution...\n');
 
   const pipeline = createPipeline(ctx.pipelineDeps);

@@ -34,13 +34,19 @@ import {
 } from '@/primitives/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/primitives/tooltip';
 import { ACTIVE_STATUSES, DRAGGABLE_STATUSES } from './constants';
+import { StatusCircleIcon } from './StatusCircleIcon';
 import type {
   IssueApprovalBadge,
   IssuePhaseChip,
   IssuePriorityBadge,
   IssueRevisionBadge,
 } from './types';
-import { isAutomationIssue, isIssueCreating, statusDotColorClass } from './utils';
+import {
+  isAutomationIssue,
+  isIssueCreating,
+  statusDotFill,
+  statusDotTextColorClass,
+} from './utils';
 
 const ISSUE_CARD_BASE_CLASS =
   'group relative flex shrink-0 flex-col overflow-hidden rounded-md border border-white/[0.04] bg-tertiary p-3 text-left transition-colors outline-none';
@@ -399,12 +405,11 @@ function useDraggableCardView({
                 </Badge>
               ))}
           </div>
-          <span
-            className={cn(
-              'size-2 shrink-0 rounded-full',
-              statusDotColorClass(presentationStatus, approvedAwaitingExecution),
-            )}
-            aria-hidden="true"
+          <StatusCircleIcon
+            fill={statusDotFill(presentationStatus, approvedAwaitingExecution)}
+            className={statusDotTextColorClass(presentationStatus, approvedAwaitingExecution)}
+            size={8}
+            aria-hidden={true}
           />
         </div>
         <div className="relative z-10 mt-1 w-full min-w-0">
@@ -583,12 +588,10 @@ export function DragOverlayCard({
     <div className="cursor-grabbing rounded-md border border-white/[0.04] bg-secondary p-3 opacity-80 shadow-lg">
       <div className="flex items-center justify-between gap-2">
         <span className="font-mono text-[11px] text-muted-foreground">{referenceLabel}</span>
-        <span
-          className={cn(
-            'size-2 shrink-0 rounded-full',
-            statusDotColorClass(presentationStatus, approvedAwaitingExecution),
-          )}
-          aria-hidden="true"
+        <StatusCircleIcon
+          fill={statusDotFill(presentationStatus, approvedAwaitingExecution)}
+          className={statusDotTextColorClass(presentationStatus, approvedAwaitingExecution)}
+          size={8}
         />
       </div>
       <div className="mt-1 w-full min-w-0">

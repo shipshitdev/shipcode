@@ -14,12 +14,14 @@ import { Badge } from '@/primitives/badge';
 import { Button } from '@/primitives/button';
 import {
   ACTIVE_STATUSES,
-  COLUMN_DOT_CLASS,
+  COLUMN_FILL,
+  COLUMN_TEXT_CLASS,
   COLUMNS,
   DRAGGABLE_STATUSES,
   LIST_COLUMN_DROP_ID,
   LIST_COLUMN_LABEL,
 } from './constants';
+import { StatusCircleIcon } from './StatusCircleIcon';
 import type {
   ColumnKey,
   IssueApprovalBadge,
@@ -36,6 +38,7 @@ import {
   issueMatchesSection,
   rowToneFor,
   sectionToneFor,
+  statusDotFill,
 } from './utils';
 
 const EMPTY_REVISION_BADGE_MAP = new Map<string, IssueRevisionBadge | null>();
@@ -150,19 +153,20 @@ function DraggableListRow({
       {isActive ? (
         <span className="relative flex size-2 shrink-0 items-center justify-center">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
-          <span className="relative inline-flex size-2 rounded-full bg-agent" />
+          <StatusCircleIcon fill={0.5} className="relative text-agent" size={8} />
         </span>
       ) : (
-        <span
+        <StatusCircleIcon
+          fill={statusDotFill(presentationStatus)}
           className={cn(
-            'size-2 shrink-0 rounded-full',
-            tone === 'success' && 'bg-success',
-            tone === 'done' && 'bg-done',
-            tone === 'danger' && 'bg-danger',
-            tone === 'warning' && 'bg-warning',
-            tone === 'agent' && 'bg-agent',
-            tone === 'default' && 'bg-text-muted-foreground',
+            tone === 'success' && 'text-success',
+            tone === 'done' && 'text-done',
+            tone === 'danger' && 'text-danger',
+            tone === 'warning' && 'text-warning',
+            tone === 'agent' && 'text-agent',
+            tone === 'default' && 'text-muted-foreground/40',
           )}
+          size={8}
         />
       )}
       <StalenessDot staleness={staleness} className="size-2" />
@@ -463,12 +467,11 @@ export function IssueListView({
                 onClick={() => toggle(column.key)}
               >
                 {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                <span
-                  className={cn(
-                    'size-2 shrink-0 rounded-full',
-                    !columnDotColor && COLUMN_DOT_CLASS[column.key],
-                  )}
-                  style={columnDotColor ? { backgroundColor: columnDotColor } : undefined}
+                <StatusCircleIcon
+                  fill={COLUMN_FILL[column.key]}
+                  className={cn(!columnDotColor && COLUMN_TEXT_CLASS[column.key])}
+                  style={columnDotColor ? { color: columnDotColor } : undefined}
+                  size={10}
                 />
                 {label}
                 <span className="ml-0.5 font-normal normal-case tracking-normal text-muted-foreground">

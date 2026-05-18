@@ -47,7 +47,7 @@ export async function planCommand(issueNumber: string) {
   const latestPlan = ctx.plans.getLatest(thread.id);
   if (latestPlan?.structured) {
     console.log('\n--- Plan Output ---');
-    console.log(JSON.stringify(latestPlan.structured, null, 2));
+    console.log(sanitizeCliText(JSON.stringify(latestPlan.structured, null, 2)));
   } else {
     console.log('\nNo plan generated (pipeline may have failed or entered clarification).');
   }

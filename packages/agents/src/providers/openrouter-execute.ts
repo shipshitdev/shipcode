@@ -56,7 +56,7 @@ Rules:
 - When done, emit a final short assistant message confirming what you changed. Do not call any more tools after that.
 - If the plan cannot be completed with the available tools, explain why and stop.`.trim();
 
-const OPENROUTER_EXECUTE_TOOLS = new Set(['edit', 'write', 'read', 'glob', 'grep', 'shell']);
+const OPENROUTER_EXECUTE_TOOLS = new Set(['edit', 'write', 'read', 'glob', 'grep']);
 
 export interface ExecuteDeps {
   client: OpenRouterClient;

@@ -16,8 +16,9 @@ import { PhaseChip } from '@/PhaseChip';
 import { Badge } from '@/primitives/badge';
 import { ACTIVE_STATUSES, PHASE_ELAPSED_STATUSES } from './constants';
 import { issueBodySnippet } from './issue-body-snippet';
+import { StatusCircleIcon } from './StatusCircleIcon';
 import type { IssuePhaseChip, PlanStepSummary } from './types';
-import { resolveIssuePriorityBadge, statusDotColorClass } from './utils';
+import { resolveIssuePriorityBadge, statusDotFill, statusDotTextColorClass } from './utils';
 
 const HOVER_DELAY_MS = 350;
 const MAX_VISIBLE_STEPS = 8;
@@ -205,11 +206,10 @@ export function IssueHoverCard({
           {/* Issue number + status */}
           <div className="flex items-center justify-between gap-2 mb-2">
             <span className="flex items-center gap-1.5 text-[11px] font-mono text-muted-foreground">
-              <span
-                className={cn(
-                  'inline-block size-2 rounded-full',
-                  statusDotColorClass(issue.pipelineStatus),
-                )}
+              <StatusCircleIcon
+                fill={statusDotFill(issue.pipelineStatus)}
+                className={statusDotTextColorClass(issue.pipelineStatus)}
+                size={8}
               />
               #{issue.issueNumber}
             </span>

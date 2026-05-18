@@ -301,7 +301,6 @@ export const GIT_ALLOWED_SUBCOMMANDS: readonly string[] = [
   'log',
   'diff',
   'show',
-  'blame',
   'rev-parse',
   'rev-list',
   'ls-files',

@@ -1,4 +1,4 @@
-import { SHIPCODE_DEFAULT_LABELS } from '@shipcode/shared';
+import { CURRENT_ONBOARDING_VERSION, SHIPCODE_DEFAULT_LABELS } from '@shipcode/shared';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type ExecCallback = (error: Error | null, result?: { stdout: string; stderr: string }) => void;
@@ -16,6 +16,7 @@ const {
   listProjectsMock,
   addProjectMock,
   updateGitInfoMock,
+  settingsSetMock,
   getRemoteUrlMock,
   getDefaultBranchMock,
 } = vi.hoisted(() => ({
@@ -31,6 +32,7 @@ const {
   listProjectsMock: vi.fn(),
   addProjectMock: vi.fn(),
   updateGitInfoMock: vi.fn(),
+  settingsSetMock: vi.fn(),
   getRemoteUrlMock: vi.fn(),
   getDefaultBranchMock: vi.fn(),
 }));
@@ -60,6 +62,9 @@ vi.mock('@shipcode/db', () => ({
     list = listProjectsMock;
     add = addProjectMock;
     updateGitInfo = updateGitInfoMock;
+  },
+  SettingsQueries: class {
+    set = settingsSetMock;
   },
 }));
 
@@ -170,6 +175,9 @@ describe('onboardCommand', () => {
       'git@github.com:shipshitdev/shipcode.git',
       'main',
     );
+    expect(settingsSetMock).toHaveBeenCalledWith({
+      onboardingVersion: CURRENT_ONBOARDING_VERSION,
+    });
     expect(logSpy).toHaveBeenCalledWith('  ✓ gh — authenticated (project scope ok)');
     expect(logSpy).toHaveBeenCalledWith('  ✓ codex — authenticated');
     expect(logSpy).toHaveBeenCalledWith('  ⚠ openrouter — OPENROUTER_API_KEY not set (optional)');

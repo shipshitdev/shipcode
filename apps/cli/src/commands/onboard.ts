@@ -9,9 +9,14 @@ import {
   checkSystemHealth,
   parseGhProjectScope,
 } from '@shipcode/agents';
-import { getDatabase, ProjectQueries } from '@shipcode/db';
+import { getDatabase, ProjectQueries, SettingsQueries } from '@shipcode/db';
 import { GitService } from '@shipcode/git';
-import { type GitHubLabelDefinition, SHIPCODE_DEFAULT_LABELS } from '@shipcode/shared';
+import {
+  CURRENT_ONBOARDING_VERSION,
+  type GitHubLabelDefinition,
+  SHIPCODE_DEFAULT_LABELS,
+} from '@shipcode/shared';
+import { sanitizeCliText } from '../adapters/cli-emitter';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -106,13 +111,15 @@ export async function onboardCommand() {
   if (openrouterKey) {
     const orAuth = await checkOpenRouterAuth(openrouterKey);
     if (orAuth.ok) {
-      console.log(`  ✓ openrouter — authenticated${orAuth.label ? ` (${orAuth.label})` : ''}`);
+      console.log(
+        `  ✓ openrouter — authenticated${orAuth.label ? ` (${sanitizeCliText(orAuth.label)})` : ''}`,
+      );
     } else if (orAuth.reason === 'invalid_key') {
-      console.log(`  ⚠ openrouter — ${orAuth.message}`);
+      console.log(`  ⚠ openrouter — ${sanitizeCliText(orAuth.message)}`);
     } else if (orAuth.reason === 'unreachable') {
-      console.log(`  ⚠ openrouter — ${orAuth.message}`);
+      console.log(`  ⚠ openrouter — ${sanitizeCliText(orAuth.message)}`);
     } else if (orAuth.reason === 'model_deprecated') {
-      console.log(`  ⚠ openrouter — ${orAuth.message}`);
+      console.log(`  ⚠ openrouter — ${sanitizeCliText(orAuth.message)}`);
     }
   } else {
     console.log('  ⚠ openrouter — OPENROUTER_API_KEY not set (optional)');
@@ -134,7 +141,7 @@ export async function onboardCommand() {
       timeout: 10_000,
     });
     repoSlug = stdout.trim();
-    console.log(`  ✓ GitHub repo: ${repoSlug}`);
+    console.log(`  ✓ GitHub repo: ${sanitizeCliText(repoSlug)}`);
   } catch {
     console.error('✗ Not a GitHub repository or gh cannot resolve repo context');
     process.exit(1);
@@ -145,13 +152,14 @@ export async function onboardCommand() {
   fs.mkdirSync(dataDir, { recursive: true });
   const db = getDatabase(dataDir);
   const projects = new ProjectQueries(db);
+  const settings = new SettingsQueries(db);
 
   // 4. Git info detection
   const gitService = new GitService(cwd);
   const gitRemote = await gitService.getRemoteUrl();
   const defaultBranch = await gitService.getDefaultBranch();
-  console.log(`  ✓ Remote: ${gitRemote ?? 'none'}`);
-  console.log(`  ✓ Default branch: ${defaultBranch}`);
+  console.log(`  ✓ Remote: ${sanitizeCliText(gitRemote ?? 'none')}`);
+  console.log(`  ✓ Default branch: ${sanitizeCliText(defaultBranch)}`);
 
   // 5. Project registration
   let project = projects.list().find((p) => p.path === cwd);
@@ -179,16 +187,17 @@ export async function onboardCommand() {
           await createGithubLabel(cwd, label);
           created.push(label.name);
         } catch (err) {
-          const message = err instanceof Error ? err.message.split('\n')[0] : 'unknown error';
+          const message =
+            err instanceof Error ? sanitizeCliText(err.message.split('\n')[0]) : 'unknown error';
           failed.push(`${label.name} (${message})`);
         }
       }
 
       if (created.length > 0) {
-        console.log(`  ✓ Created labels: ${created.join(', ')}`);
+        console.log(`  ✓ Created labels: ${created.map(sanitizeCliText).join(', ')}`);
       }
       if (failed.length > 0) {
-        console.log(`  ⚠ Failed to create labels: ${failed.join(', ')}`);
+        console.log(`  ⚠ Failed to create labels: ${failed.map(sanitizeCliText).join(', ')}`);
       }
       if (existingLabels.length > 0) {
         console.log(`  ✓ Existing labels kept: ${existingLabels.length}`);
@@ -206,13 +215,15 @@ export async function onboardCommand() {
     '  ⚠ Configure a GitHub Projects board URL in desktop Project Settings to validate Feature issue type, Status, Priority, Complexity, and Blast radius',
   );
 
+  settings.set({ onboardingVersion: CURRENT_ONBOARDING_VERSION });
+
   // 7. Summary
   console.log('\n─────────────────────────────');
   console.log('ShipCode is ready!');
-  console.log(`  Repo:     ${repoSlug}`);
-  console.log(`  Remote:   ${gitRemote ?? 'none'}`);
-  console.log(`  Branch:   ${defaultBranch}`);
-  console.log(`  Data:     ${dataDir}`);
+  console.log(`  Repo:     ${sanitizeCliText(repoSlug)}`);
+  console.log(`  Remote:   ${sanitizeCliText(gitRemote ?? 'none')}`);
+  console.log(`  Branch:   ${sanitizeCliText(defaultBranch)}`);
+  console.log(`  Data:     ${sanitizeCliText(dataDir)}`);
   console.log('\nNext step:');
   console.log('  shipcode run <issue-number>');
   console.log('─────────────────────────────\n');

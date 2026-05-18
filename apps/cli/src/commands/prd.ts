@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { enhancePrdDraft } from '@shipcode/agents';
+import { sanitizeCliText } from '../adapters/cli-emitter';
 import { createCliContext } from '../context';
 import { requireOnboarding } from './guard';
 
@@ -45,7 +46,7 @@ export async function prdCommand(keywords: string) {
     const results = JSON.parse(stdout) as Array<{ number: number; title: string; body: string }>;
     if (results.length > 0) {
       const match = results[0];
-      console.log(`Found existing issue #${match.number}: ${match.title}`);
+      console.log(`Found existing issue #${match.number}: ${sanitizeCliText(match.title)}`);
       console.log('Enhancing existing PRD...\n');
       existingBody = match.body ?? '';
       existingNumber = match.number;
@@ -55,7 +56,9 @@ export async function prdCommand(keywords: string) {
   }
 
   if (!existingNumber) {
-    console.log(`No existing issue found for "${keywords}". Generating new PRD...\n`);
+    console.log(
+      `No existing issue found for "${sanitizeCliText(keywords)}". Generating new PRD...\n`,
+    );
     existingBody = `# ${keywords}\n\nTODO: Fill in PRD sections.`;
   }
 
@@ -70,13 +73,13 @@ export async function prdCommand(keywords: string) {
   });
 
   console.log('--- Enhanced PRD ---\n');
-  console.log(result.body);
+  console.log(sanitizeCliText(result.body));
 
   if (existingNumber) {
     console.log(`\nTo update issue #${existingNumber}:`);
     console.log(`  gh issue edit ${existingNumber} --body-file <file>`);
   } else {
     console.log(`\nTo create a new issue:`);
-    console.log(`  gh issue create --title "${keywords}" --body-file <file>`);
+    console.log(`  gh issue create --title "${sanitizeCliText(keywords)}" --body-file <file>`);
   }
 }

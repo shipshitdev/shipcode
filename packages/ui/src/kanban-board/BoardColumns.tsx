@@ -7,7 +7,8 @@ import { DraggableCard } from '@/kanban-board/IssueCardParts';
 import type { GitHubIssueCacheRecord, IssueStalenessResult } from '@/lib/shipcode';
 import { cn } from '@/lib/utils';
 import { Button } from '@/primitives/button';
-import { COLUMN_DOT_CLASS, COLUMN_SCROLLBAR_COLOR, COLUMN_TEXT_CLASS } from './constants';
+import { COLUMN_FILL, COLUMN_SCROLLBAR_COLOR, COLUMN_TEXT_CLASS } from './constants';
+import { StatusCircleIcon } from './StatusCircleIcon';
 import type {
   BoardColumn,
   ColumnKey,
@@ -136,12 +137,11 @@ export function DroppableColumn({
         )}
       >
         <span className="flex items-center gap-1.5">
-          <span
-            className={cn(
-              'size-2 shrink-0 rounded-full',
-              !columnDotColor && COLUMN_DOT_CLASS[columnKey],
-            )}
-            style={columnDotColor ? { backgroundColor: columnDotColor } : undefined}
+          <StatusCircleIcon
+            fill={COLUMN_FILL[columnKey]}
+            className={cn(!columnDotColor && COLUMN_TEXT_CLASS[columnKey])}
+            style={columnDotColor ? { color: columnDotColor } : undefined}
+            size={10}
           />
           {label}
         </span>
@@ -523,12 +523,11 @@ export function StackedColumn({
         )}
       >
         <span className="flex items-center gap-1.5">
-          <span
-            className={cn(
-              'size-2 shrink-0 rounded-full',
-              !columnDotColor && COLUMN_DOT_CLASS[column.key],
-            )}
-            style={columnDotColor ? { backgroundColor: columnDotColor } : undefined}
+          <StatusCircleIcon
+            fill={COLUMN_FILL[column.key]}
+            className={cn(!columnDotColor && COLUMN_TEXT_CLASS[column.key])}
+            style={columnDotColor ? { color: columnDotColor } : undefined}
+            size={10}
           />
           {column.label}
         </span>

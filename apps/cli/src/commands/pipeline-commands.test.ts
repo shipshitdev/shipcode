@@ -214,7 +214,7 @@ describe('pipeline CLI commands', () => {
     expect(logSpy).toHaveBeenCalledWith('\nThread status: approval');
   });
 
-  it('falls back to claude routing and exits if plan command cannot find the thread', async () => {
+  it('falls back to codex routing and exits if plan command cannot find the thread', async () => {
     routeFromLabelsMock.mockReturnValueOnce({ error: 'bad label' });
     getThreadByIssueMock.mockReturnValueOnce(null);
 
@@ -224,7 +224,7 @@ describe('pipeline CLI commands', () => {
       'project-1',
       '/repo',
       expect.any(Object),
-      'claude',
+      'codex',
       { baseBranch: 'main', executorModelOverride: null },
     );
     expect(errorSpy).toHaveBeenCalledWith('Thread not found after pipeline run.');
