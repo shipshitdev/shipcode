@@ -138,9 +138,9 @@ describe('RunsTab', () => {
     expect(screen.getByText('agent output')).toBeInTheDocument();
     expect(screen.getByTestId('phase-chip')).toHaveTextContent('executing');
 
-    const summary = screen.getAllByText('Pipeline Resume · issue:42')[0].closest('summary');
-    expect(summary).not.toBeNull();
-    expect(within(summary as HTMLElement).getByText('running')).toBeInTheDocument();
+    const runHeader = screen.getAllByText('Pipeline Resume · issue:42')[0].closest('button');
+    expect(runHeader).not.toBeNull();
+    expect(within(runHeader as HTMLElement).getByText('running')).toBeInTheDocument();
   });
 
   it('renders an empty state when no run records exist', async () => {

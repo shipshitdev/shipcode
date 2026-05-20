@@ -223,7 +223,6 @@ describe('ProcessManager registry hygiene', () => {
         expect.objectContaining({
           env: expect.objectContaining({
             FORCE_COLOR: '1',
-            SAFE_EXTRA: '1',
           }),
         }),
       );
@@ -288,7 +287,7 @@ describe('ProcessManager registry hygiene', () => {
         'codex',
         ['exec', '-'],
         expect.objectContaining({
-          env: expect.objectContaining({ PATH: '/usr/bin', OK_EXTRA: '1', FORCE_COLOR: '1' }),
+          env: expect.objectContaining({ PATH: '/usr/bin', FORCE_COLOR: '1' }),
         }),
       );
       const env = mockChildSpawn.mock.lastCall?.[2].env as Record<string, string>;

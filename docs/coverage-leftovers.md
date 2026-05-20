@@ -4,30 +4,34 @@ Last updated: 2026-05-10
 
 Goal: 100% lines, statements, functions, and branches for every covered package surface.
 
-Current gate: `scripts/coverage-summary.mjs` defaults to `COVERAGE_MIN=85`.
+Current gate: `scripts/coverage-summary.mjs` defaults to `COVERAGE_MIN=95`.
 
 Verification snapshot:
 
 ```text
-node scripts/coverage-summary.mjs
+bun run coverage:summary
 
-apps/desktop: lines 99.00%, statements 98.21%, functions 98.16%, branches 92.05%
-apps/docs: 100%
-apps/web: 100%
-packages/agents: 100%
-packages/db: 100%
-packages/pipeline: lines 98.95%, statements 98.51%, functions 99.15%, branches 93.49%
-packages/ui: 100%
-overall: lines 99.37%, statements 98.91%, functions 98.85%, branches 95.12%
+apps/cli: lines 83.88%, statements 82.97%, functions 69.04%, branches 73.83%
+apps/desktop: lines 95.43%, statements 94.32%, functions 94.59%, branches 88.15%
+apps/docs: lines 100.00%, statements 100.00%, functions 100.00%, branches 100.00%
+apps/web: lines 97.77%, statements 95.91%, functions 92.30%, branches 100.00%
+packages/agents: lines 96.00%, statements 95.81%, functions 95.16%, branches 95.27%
+packages/db: lines 97.04%, statements 96.87%, functions 96.30%, branches 95.48%
+packages/git: lines 100.00%, statements 100.00%, functions 100.00%, branches 100.00%
+packages/pipeline: lines 99.23%, statements 99.08%, functions 99.58%, branches 95.17%
+packages/shared: lines 96.10%, statements 96.10%, functions 93.99%, branches 96.87%
+packages/ui: lines 95.40%, statements 94.37%, functions 94.36%, branches 96.28%
+
+overall: lines 95.83%, statements 95.14%, functions 94.90%, branches 91.73%
 ```
+
+At the 95 gate, the current aggregate gaps are functions and branches.
 
 ## Already Clean
 
 - `apps/docs`
-- `apps/web`
-- `packages/agents`
 - `packages/db`
-- `packages/ui`
+- `packages/git`
 
 ## Packages Pipeline
 
@@ -142,8 +146,5 @@ Notes:
 Before updating this doc, refresh artifacts with:
 
 ```bash
-bun --filter @shipcode/ui test --coverage --coverage.reporter=json-summary --coverage.reporter=json --coverage.reporter=text-summary --test-timeout=30000 --pool=threads
-bun --filter @shipcode/pipeline test --coverage --coverage.reporter=json-summary --coverage.reporter=json --coverage.reporter=text-summary --test-timeout=30000 --pool=threads
-bun --filter @shipcode/desktop test --coverage --coverage.reporter=json-summary --coverage.reporter=json --coverage.reporter=text-summary --test-timeout=30000 --pool=threads
-node scripts/coverage-summary.mjs
+bun run coverage
 ```

@@ -253,11 +253,11 @@ describe('pipeline prompt telemetry', () => {
       expect.objectContaining({
         plan: 'high',
         review: 'low',
-        revision: 'none',
+        revision: 'low',
       }),
     );
     expect(providerCalls[2]?.phaseHints).toEqual(
-      expect.objectContaining({ reasoningEffort: 'none' }),
+      expect.objectContaining({ reasoningEffort: 'low' }),
     );
   });
 });

@@ -12,6 +12,9 @@ function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
 }
 
 const TOKEN = 'ghp_supersecrettoken_DO_NOT_LEAK';
+const REPO = { owner: 'acme', repo: 'shipcode' };
+const REPO_QUERY =
+  'query Q($owner:String!,$repo:String!){ repository(owner:$owner,name:$repo){ id }}';
 
 describe('countTopLevelOperations', () => {
   it('counts a single named query', () => {
@@ -73,6 +76,7 @@ describe('github_graphql tool', () => {
       makeCtx({
         githubGraphql: {
           getToken: () => TOKEN,
+          getDefaultRepo: () => REPO,
           fetch: fetchMock as unknown as typeof fetch,
         },
       }),
@@ -98,7 +102,7 @@ describe('github_graphql tool', () => {
   });
 
   it('returns auth_missing when ctx has no githubGraphql deps wired', async () => {
-    const result = await githubGraphqlTool.execute({ query: '{ viewer { login } }' }, makeCtx());
+    const result = await githubGraphqlTool.execute({ query: REPO_QUERY }, makeCtx());
     expect(result.ok).toBe(false);
     if (result.ok) return;
     const env = JSON.parse(result.error) as { error: { code: string; message: string } };
@@ -107,9 +111,9 @@ describe('github_graphql tool', () => {
 
   it('returns auth_missing when getToken resolves null', async () => {
     const result = await githubGraphqlTool.execute(
-      { query: '{ viewer { login } }' },
+      { query: REPO_QUERY },
       makeCtx({
-        githubGraphql: { getToken: () => null },
+        githubGraphql: { getToken: () => null, getDefaultRepo: () => REPO },
       }),
     );
     expect(result.ok).toBe(false);
@@ -120,12 +124,13 @@ describe('github_graphql tool', () => {
 
   it('returns auth_missing when getToken throws', async () => {
     const result = await githubGraphqlTool.execute(
-      { query: '{ viewer { login } }' },
+      { query: REPO_QUERY },
       makeCtx({
         githubGraphql: {
           getToken: () => {
             throw new Error('keychain locked');
           },
+          getDefaultRepo: () => REPO,
         },
       }),
     );
@@ -147,12 +152,14 @@ describe('github_graphql tool', () => {
     );
     const result = await githubGraphqlTool.execute(
       {
-        query: 'query Q($n:Int!){ repository(owner:"o",name:"r"){ issue(number:$n){ title }}}',
+        query:
+          'query Q($owner:String!,$repo:String!,$n:Int!){ repository(owner:$owner,name:$repo){ issue(number:$n){ title }}}',
         variables: { n: 42 },
       },
       makeCtx({
         githubGraphql: {
           getToken: () => TOKEN,
+          getDefaultRepo: () => REPO,
           fetch: fetchMock as unknown as typeof fetch,
         },
       }),
@@ -171,11 +178,11 @@ describe('github_graphql tool', () => {
     expect(headers.authorization).toBe(`bearer ${TOKEN}`);
     expect(JSON.parse(init.body as string)).toEqual({
       query: expect.any(String),
-      variables: { n: 42 },
+      variables: { n: 42, owner: REPO.owner, repo: REPO.repo, name: REPO.repo },
     });
   });
 
-  it('uses the ambient fetch and tolerates default repo lookup failures', async () => {
+  it('uses the ambient fetch with the default repo scope', async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response(JSON.stringify({ data: { ok: true } }), {
@@ -186,13 +193,11 @@ describe('github_graphql tool', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await githubGraphqlTool.execute(
-      { query: '{ viewer { login } }' },
+      { query: REPO_QUERY },
       makeCtx({
         githubGraphql: {
           getToken: () => TOKEN,
-          getDefaultRepo: () => {
-            throw new Error('repo unavailable');
-          },
+          getDefaultRepo: () => REPO,
         },
       }),
     );
@@ -202,7 +207,7 @@ describe('github_graphql tool', () => {
     vi.unstubAllGlobals();
   });
 
-  it('treats an undefined default repo as absent', async () => {
+  it('treats an undefined default repo as unavailable', async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response(JSON.stringify({ data: { ok: true } }), {
@@ -212,7 +217,7 @@ describe('github_graphql tool', () => {
     );
 
     const result = await githubGraphqlTool.execute(
-      { query: '{ viewer { login } }' },
+      { query: REPO_QUERY },
       makeCtx({
         githubGraphql: {
           getToken: () => TOKEN,
@@ -222,10 +227,14 @@ describe('github_graphql tool', () => {
       }),
     );
 
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const env = JSON.parse(result.error) as { error: { code: string } };
+      expect(env.error.code).toBe('repo_scope_missing');
+    }
   });
 
-  it('skips default repo lookup when an explicit repo is provided', async () => {
+  it('rejects explicit repo overrides before default repo lookup', async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response(JSON.stringify({ data: { ok: true } }), {
@@ -246,8 +255,12 @@ describe('github_graphql tool', () => {
       }),
     );
 
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
     expect(getDefaultRepo).not.toHaveBeenCalled();
+    if (!result.ok) {
+      const env = JSON.parse(result.error) as { error: { code: string } };
+      expect(env.error.code).toBe('repo_override_rejected');
+    }
   });
 
   it('does not echo the bearer token into the success envelope', async () => {
@@ -259,10 +272,11 @@ describe('github_graphql tool', () => {
         }),
     );
     const result = await githubGraphqlTool.execute(
-      { query: '{ viewer { login } }' },
+      { query: REPO_QUERY },
       makeCtx({
         githubGraphql: {
           getToken: () => TOKEN,
+          getDefaultRepo: () => REPO,
           fetch: fetchMock as unknown as typeof fetch,
         },
       }),
@@ -281,10 +295,11 @@ describe('github_graphql tool', () => {
         }),
     );
     const result = await githubGraphqlTool.execute(
-      { query: '{ viewer { login } }' },
+      { query: REPO_QUERY },
       makeCtx({
         githubGraphql: {
           getToken: () => TOKEN,
+          getDefaultRepo: () => REPO,
           fetch: fetchMock as unknown as typeof fetch,
         },
       }),
@@ -310,10 +325,11 @@ describe('github_graphql tool', () => {
         }),
     );
     const result = await githubGraphqlTool.execute(
-      { query: '{ viewer { login } }' },
+      { query: REPO_QUERY },
       makeCtx({
         githubGraphql: {
           getToken: () => TOKEN,
+          getDefaultRepo: () => REPO,
           fetch: fetchMock as unknown as typeof fetch,
         },
       }),
@@ -331,10 +347,11 @@ describe('github_graphql tool', () => {
     const fetchMock = vi.fn(async () => response);
 
     const result = await githubGraphqlTool.execute(
-      { query: '{ viewer { login } }' },
+      { query: REPO_QUERY },
       makeCtx({
         githubGraphql: {
           getToken: () => TOKEN,
+          getDefaultRepo: () => REPO,
           fetch: fetchMock as unknown as typeof fetch,
         },
       }),
@@ -352,10 +369,11 @@ describe('github_graphql tool', () => {
       throw new Error('ECONNRESET');
     });
     const result = await githubGraphqlTool.execute(
-      { query: '{ viewer { login } }' },
+      { query: REPO_QUERY },
       makeCtx({
         githubGraphql: {
           getToken: () => TOKEN,
+          getDefaultRepo: () => REPO,
           fetch: fetchMock as unknown as typeof fetch,
         },
       }),
@@ -377,10 +395,11 @@ describe('github_graphql tool', () => {
     );
 
     const result = await githubGraphqlTool.execute(
-      { query: '{ viewer { login } }' },
+      { query: REPO_QUERY },
       makeCtx({
         githubGraphql: {
           getToken: () => TOKEN,
+          getDefaultRepo: () => REPO,
           fetch: fetchMock as unknown as typeof fetch,
         },
       }),
@@ -404,16 +423,17 @@ describe('github_graphql tool', () => {
     });
     const deps = {
       getToken: () => nextToken,
+      getDefaultRepo: () => REPO,
       fetch: fetchMock as unknown as typeof fetch,
     };
 
     const r1 = await githubGraphqlTool.execute(
-      { query: '{ viewer { login } }' },
+      { query: REPO_QUERY },
       makeCtx({ githubGraphql: deps }),
     );
     nextToken = 'second';
     const r2 = await githubGraphqlTool.execute(
-      { query: '{ viewer { login } }' },
+      { query: REPO_QUERY },
       makeCtx({ githubGraphql: deps }),
     );
     expect(r1.ok).toBe(true);

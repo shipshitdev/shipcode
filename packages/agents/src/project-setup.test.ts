@@ -197,7 +197,7 @@ describe('project setup detection', () => {
     const dotnetDir = makeProject();
     writeFileSync(path.join(dotnetDir, 'Demo.csproj'), '<Project />');
     expect(detectProjectSetup(dotnetDir).suggestedContract.verifyCommands).toEqual([
-      'dotnet test Demo.csproj',
+      "dotnet test 'Demo.csproj'",
     ]);
   });
 

@@ -306,7 +306,7 @@ function GithubCommandGroup({
           <CommandItem onSelect={() => runAction(() => openCreateIssueModal())}>
             <Plus className="size-4 shrink-0 opacity-70" />
             <CommandItemBody
-              title="New Issue..."
+              title="New Issue…"
               description="Create a new GitHub issue or PRD"
               shortcut={getShortcut('new-issue').glyph}
             />
@@ -538,7 +538,7 @@ function WorkspaceCommandGroup({
         }}
       >
         <FolderPlus className="size-4 shrink-0 opacity-70" />
-        <CommandItemBody title="Add Repository..." description="Connect a new GitHub repository" />
+        <CommandItemBody title="Add Repository…" description="Connect a new GitHub repository" />
       </CommandItem>
       {!hasDetailView && (
         <CommandItem onSelect={() => runAction(() => toggleSidebar())}>

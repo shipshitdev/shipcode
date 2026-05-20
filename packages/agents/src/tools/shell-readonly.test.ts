@@ -175,18 +175,15 @@ describe('shellReadOnlyTool', () => {
     if (res.ok) expect(res.content).toContain('hello.txt');
   });
 
-  it('returns no-output content for successful commands with empty stdout and stderr', async () => {
+  it('returns an error for commands that exit non-zero with empty stdout and stderr', async () => {
     await fs.writeFile(path.join(wt, 'empty.txt'), '', 'utf-8');
     const res = await shellReadOnlyTool.execute(
       { command: 'grep', args: ['needle', 'empty.txt'] },
       ctx,
     );
 
-    expect(res.ok).toBe(true);
-    if (res.ok) {
-      expect(res.content).toContain('exit 1');
-      expect((res.data as { exitCode: number }).exitCode).toBe(1);
-    }
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toBeTruthy();
   });
 
   it('rejects pre-aborted executions before spawning', async () => {
@@ -247,7 +244,7 @@ describe('shellReadOnlyTool', () => {
       expect(res.ok).toBe(true);
     });
 
-    it('accepts harmless git -c config values before an allowed subcommand', async () => {
+    it('rejects git -c config values before an allowed subcommand', async () => {
       const { execFile } = await import('node:child_process');
       const { promisify } = await import('node:util');
       const run = promisify(execFile);
@@ -262,8 +259,10 @@ describe('shellReadOnlyTool', () => {
         ctx,
       );
 
-      expect(spaced.ok).toBe(true);
-      expect(stuck.ok).toBe(true);
+      expect(spaced.ok).toBe(false);
+      expect(stuck.ok).toBe(false);
+      if (!spaced.ok) expect(spaced.error).toContain("git '-c' is blocked");
+      if (!stuck.ok) expect(stuck.error).toContain("git '-cuser.email");
     });
 
     it('rejects git subcommands NOT in the allowlist (new/unknown)', async () => {
@@ -414,7 +413,7 @@ describe('shellReadOnlyTool', () => {
 
       expect(missingEquals.ok).toBe(false);
       expect(unknownOption.ok).toBe(false);
-      if (!missingEquals.ok) expect(missingEquals.error).toMatch(/missing value/);
+      if (!missingEquals.ok) expect(missingEquals.error).toContain("git '-c' is blocked");
       if (!unknownOption.ok) expect(unknownOption.error).toMatch(/not recognized/);
     });
   });

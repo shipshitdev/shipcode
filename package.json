@@ -23,7 +23,9 @@
     "clawpatch:review": "clawpatch review",
     "clawpatch:review:quick": "clawpatch review --limit 3 --jobs 3",
     "clawpatch:status": "clawpatch status",
-    "coverage": "turbo run coverage && node scripts/coverage-summary.mjs",
+    "coverage": "turbo run build --filter='./packages/*' && bun run coverage:sharded && bun run coverage:summary",
+    "coverage:legacy": "turbo run coverage && node scripts/coverage-summary.mjs",
+    "coverage:sharded": "node scripts/run-coverage-shards.mjs",
     "coverage:summary": "node scripts/coverage-summary.mjs",
     "deploy:web": "bun run sync:docs && vercel deploy --cwd apps/web --prod --yes",
     "deps:update": "bunx npm-check-updates -u --deep --cooldown 3h && bun install",
@@ -43,6 +45,7 @@
     "postinstall": "sh scripts/fix-node-pty-permissions.sh && sh scripts/setup-git-hooks.sh",
     "sync:docs": "sh scripts/sync-docs-to-web.sh",
     "test": "turbo run test",
+    "test:ci": "turbo run test -- --maxWorkers=2",
     "typecheck": "turbo run typecheck",
     "verify:affected": "bun scripts/verify-affected-workspaces.ts"
   },

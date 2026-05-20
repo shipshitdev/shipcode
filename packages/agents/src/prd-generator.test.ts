@@ -74,9 +74,8 @@ describe('enhancePrdDraft', () => {
         'json',
         '--max-turns',
         '3',
-        '--dangerously-skip-permissions',
-        '--disallowedTools',
-        'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebSearch,WebFetch',
+        '--allowedTools',
+        '',
       ],
       expect.objectContaining({ cwd: '/repo', stdio: ['pipe', 'pipe', 'pipe'] }),
     );
@@ -90,76 +89,31 @@ describe('enhancePrdDraft', () => {
     });
   });
 
-  it('uses Codex CLI when selected', async () => {
-    const fake = createFakeProc({ captureStdin: true });
-    mockSpawn.mockReturnValueOnce(fake.proc);
-
-    const promise = enhancePrdDraft({
-      draftBody: '',
-      skillContent: 'skill contents',
-      cwd: '/repo',
-      cli: 'codex',
-      modelId: 'gpt-5.4-mini',
-      reasoningEffort: 'low',
-    });
-
-    await Promise.resolve();
-
-    expect(mockSpawn).toHaveBeenCalledWith(
-      'codex',
-      [
-        '-a',
-        'never',
-        '-m',
-        'gpt-5.4-mini',
-        '-c',
-        'model_reasoning_effort=low',
-        'exec',
-        '-',
-        '--sandbox',
-        'read-only',
-      ],
-      expect.objectContaining({ cwd: '/repo', stdio: ['pipe', 'pipe', 'pipe'] }),
-    );
-    expect(fake.stdinWrites).toHaveLength(1);
-    expect(fake.isStdinEnded()).toBe(true);
-
-    fake.close(0, {
-      stdout: '```shipcode-prd\n{"body":"# PRD: test\\n\\n## Executive Summary\\nOk"}\n```',
-    });
-
-    await expect(promise).resolves.toEqual({
-      body: '# PRD: test\n\n## Executive Summary\nOk',
-    });
+  it('rejects Codex CLI because it cannot run in no-tools mode', async () => {
+    await expect(
+      enhancePrdDraft({
+        draftBody: '',
+        skillContent: 'skill contents',
+        cwd: '/repo',
+        cli: 'codex',
+        modelId: 'gpt-5.4-mini',
+        reasoningEffort: 'low',
+      }),
+    ).rejects.toThrow('Codex PRD rewriting is disabled because it cannot run in no-tools mode');
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 
-  it('uses Codex CLI without model args when no model is configured', async () => {
-    const fake = createFakeProc();
-    mockSpawn.mockReturnValueOnce(fake.proc);
-
-    const promise = enhancePrdDraft({
-      draftBody: '',
-      skillContent: 'skill contents',
-      cwd: '/repo',
-      cli: 'codex',
-      reasoningEffort: 'low',
-    });
-
-    await Promise.resolve();
-
-    expect(mockSpawn).toHaveBeenCalledWith(
-      'codex',
-      ['-a', 'never', '-c', 'model_reasoning_effort=low', 'exec', '-', '--sandbox', 'read-only'],
-      expect.objectContaining({ cwd: '/repo', stdio: ['pipe', 'pipe', 'pipe'] }),
-    );
-
-    fake.close(0, {
-      stdout: '```shipcode-prd\n{"body":"# PRD: test\\n\\n## Executive Summary\\nOk"}\n```',
-    });
-
-    await expect(promise).resolves.toEqual({
-      body: '# PRD: test\n\n## Executive Summary\nOk',
-    });
+  it('rejects Codex CLI without model args before spawning', async () => {
+    await expect(
+      enhancePrdDraft({
+        draftBody: '',
+        skillContent: 'skill contents',
+        cwd: '/repo',
+        cli: 'codex',
+        reasoningEffort: 'low',
+      }),
+    ).rejects.toThrow('Codex PRD rewriting is disabled because it cannot run in no-tools mode');
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 
   it('defaults to Claude without model args and preserves prompt frontmatter in stdin', async () => {
@@ -182,9 +136,8 @@ describe('enhancePrdDraft', () => {
         'json',
         '--max-turns',
         '3',
-        '--dangerously-skip-permissions',
-        '--disallowedTools',
-        'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebSearch,WebFetch',
+        '--allowedTools',
+        '',
       ]),
       expect.objectContaining({ cwd: '/repo', stdio: ['pipe', 'pipe', 'pipe'] }),
     );

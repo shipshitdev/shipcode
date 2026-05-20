@@ -234,7 +234,7 @@ describe('readTool', () => {
     expect(statFailure.ok).toBe(false);
     if (!statFailure.ok) expect(statFailure.error).toMatch(/failed to stat f\.txt/i);
 
-    const readSpy = vi.spyOn(fs, 'readFile').mockRejectedValueOnce(new Error('read failed'));
+    const readSpy = vi.spyOn(fs, 'open').mockRejectedValueOnce(new Error('read failed'));
     const readFailure = await readTool.execute({ path: 'f.txt' }, ctx);
     readSpy.mockRestore();
     expect(readFailure.ok).toBe(false);

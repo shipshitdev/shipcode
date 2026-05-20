@@ -257,7 +257,45 @@ describe('registerGitHubHandlers', () => {
     enhancePrdDraftMock.mockReset();
     enhancePrdDraftMock.mockResolvedValue({ body: 'Enhanced PRD' });
     checkCliModelCapabilitiesMock.mockReset();
-    checkCliModelCapabilitiesMock.mockResolvedValue(null);
+    checkCliModelCapabilitiesMock.mockResolvedValue({
+      claude: {
+        provider: 'claude',
+        source: 'catalog',
+        checkedAt: new Date().toISOString(),
+        error: null,
+        models: [
+          {
+            value: 'claude-sonnet-4-5',
+            label: 'Claude Sonnet 4.5',
+            description: null,
+            defaultReasoningEffort: 'medium',
+            supportedReasoningEfforts: ['low', 'medium', 'high'],
+          },
+        ],
+      },
+      codex: {
+        provider: 'codex',
+        source: 'catalog',
+        checkedAt: new Date().toISOString(),
+        error: null,
+        models: [
+          {
+            value: 'gpt-5.2',
+            label: 'GPT-5.2',
+            description: null,
+            defaultReasoningEffort: 'high',
+            supportedReasoningEfforts: ['low', 'medium', 'high'],
+          },
+        ],
+      },
+      gemini: {
+        provider: 'gemini',
+        source: 'catalog',
+        checkedAt: new Date().toISOString(),
+        error: null,
+        models: [],
+      },
+    });
     archiveProjectItemsMock.mockReset();
     archiveProjectItemsMock.mockResolvedValue(undefined);
     addIssueCommentMock.mockReset();
@@ -874,10 +912,8 @@ describe('registerGitHubHandlers', () => {
 
     const result = refresh(undefined, { projectId: 'project-1', force: true }) as Promise<unknown>;
 
-    await vi.waitFor(() => expect(addIssueToProjectMock).toHaveBeenCalledTimes(1));
-    firstAttach.resolve({ alreadyPresent: false });
-
     await vi.waitFor(() => expect(addIssueToProjectMock).toHaveBeenCalledTimes(2));
+    firstAttach.resolve({ alreadyPresent: false });
     secondAttach.resolve({ alreadyPresent: false });
     await expect(result).resolves.toEqual(cachedAfterSync);
   });

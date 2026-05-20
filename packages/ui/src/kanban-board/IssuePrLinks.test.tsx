@@ -1626,9 +1626,7 @@ describe('linked PR affordances', () => {
       </DndContext>,
     );
 
-    expect(
-      view.container.querySelector('[style*="background-color: rgb(101, 67, 33)"]'),
-    ).not.toBeNull();
+    expect(view.container.querySelector('[style*="color: rgb(101, 67, 33)"]')).not.toBeNull();
     expect(view.container.textContent).toContain('Quick');
     expect(view.container.querySelector('[data-flashing="true"]')).not.toBeNull();
     expect(view.container.querySelector('[data-keyboard-focused="true"]')).not.toBeNull();
@@ -1746,9 +1744,7 @@ describe('linked PR affordances', () => {
       </DndContext>,
     );
 
-    expect(
-      view.container.querySelector('[style*="background-color: rgb(171, 205, 239)"]'),
-    ).not.toBeNull();
+    expect(view.container.querySelector('[style*="color: rgb(171, 205, 239)"]')).not.toBeNull();
     expect(view.container.textContent).toContain('Stacked metadata issue');
     expect(view.container.textContent).toContain('No Sections');
     expect(view.container.textContent).not.toContain('ignored-no-section');

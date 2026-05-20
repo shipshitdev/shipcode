@@ -47,7 +47,7 @@ describe('generateContextFiles', () => {
     const fake = createFakeProc();
     mockSpawn.mockReturnValueOnce(fake.proc);
 
-    const promise = generateContextFiles(repoDir, 'codex');
+    const promise = generateContextFiles(repoDir, 'claude');
 
     await Promise.resolve();
 

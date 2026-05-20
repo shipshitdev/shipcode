@@ -733,7 +733,7 @@ describe('getProjectProviderWarnings', () => {
         provider: 'codex',
         severity: 'blocked',
         message: 'Codex CLI session exhausted',
-        phases: ['planner', 'reviewer', 'executor'],
+        phases: ['planner', 'reviewer', 'executor', 'verifier'],
       }),
     ]);
   });
@@ -757,7 +757,7 @@ describe('getProjectProviderWarnings', () => {
     expect(warnings).toEqual([
       expect.objectContaining({
         phase: 'planner',
-        phases: ['planner', 'reviewer', 'executor', 'verifier'],
+        phases: ['planner', 'reviewer', 'executor'],
         provider: 'claude',
         severity: 'blocked',
         message: 'Claude CLI not authenticated',

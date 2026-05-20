@@ -89,32 +89,15 @@ describe('generateMemoryFiles', () => {
     rmSync(projectPath, { recursive: true, force: true });
   });
 
-  it('passes missing source markers to Codex and parses a raw fenced response', async () => {
-    const fake = createFakeProc({ captureStdin: true, kill: true });
-    mockSpawn.mockReturnValueOnce(fake.proc);
+  it('rejects Codex memory generation because it cannot run in no-tools mode', async () => {
     const projectPath = mkdtempSync(join(tmpdir(), 'shipcode-memory-codex-'));
 
-    const promise = generateMemoryFiles(projectPath, 'codex');
-    await Promise.resolve();
-
-    expect(mockSpawn).toHaveBeenCalledWith(
-      'codex',
-      expect.arrayContaining(['exec', '-', '--sandbox', 'read-only']),
-      expect.objectContaining({ cwd: projectPath }),
-    );
-    expect(fake.stdinWrites.join('')).toContain(
-      '### README.md\n<source-file path="README.md">\n(not found)\n</source-file>',
-    );
-
-    fake.close(0, {
-      stdout:
-        '```shipcode-memory\n{"goal":"Goal","architecture":"Architecture","constraints":"Constraints","doDont":"Do"}\n```',
+    await expect(generateMemoryFiles(projectPath, 'codex')).resolves.toMatchObject({
+      success: false,
+      written: [],
+      error: 'Codex memory generation is disabled because it cannot run in no-tools mode',
     });
-
-    await expect(promise).resolves.toMatchObject({
-      success: true,
-      written: ['goal.md', 'architecture.md', 'constraints.md', 'do-dont.md'],
-    });
+    expect(mockSpawn).not.toHaveBeenCalled();
 
     rmSync(projectPath, { recursive: true, force: true });
   });

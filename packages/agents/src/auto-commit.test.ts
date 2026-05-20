@@ -151,57 +151,23 @@ describe('generateCommitGroups', () => {
     ).resolves.toEqual({ ok: false, error: 'no dirty files' });
   });
 
-  it('generates split groups with Claude through stdin and selected model args', async () => {
-    const fake = createFakeProc();
-    spawnMock.mockReturnValueOnce(fake.proc);
-
-    const promise = generateCommitGroups({
-      provider: 'claude',
-      model: 'claude-opus-4-6',
-      cwd: '/repo',
-      dirtyFiles: ['a.ts', 'b.ts'],
-      diff: 'diff',
-      signal: new AbortController().signal,
-    });
-
-    await waitForSpawnCount(1);
-    fake.close(0, {
-      stdout: JSON.stringify({
-        groups: [
-          { files: ['a.ts'], message: 'feat: add a' },
-          { files: ['b.ts'], message: 'fix: update b' },
-        ],
+  it('falls back offline when Claude auto-commit generation is disabled', async () => {
+    await expect(
+      generateCommitGroups({
+        provider: 'claude',
+        model: 'claude-opus-4-6',
+        cwd: '/repo',
+        dirtyFiles: ['a.ts', 'b.ts'],
+        diff: 'diff',
+        signal: new AbortController().signal,
       }),
-    });
-    fake.proc.emit('close', 0);
-    fake.proc.emit('close', 1);
-
-    await expect(promise).resolves.toEqual({
+    ).resolves.toEqual({
       ok: true,
-      groups: [
-        { files: ['a.ts'], message: 'feat: add a' },
-        { files: ['b.ts'], message: 'fix: update b' },
-      ],
-      fallbackUsed: false,
+      groups: [{ files: ['a.ts', 'b.ts'], message: 'chore: update 2 files' }],
+      fallbackUsed: true,
       modelUsed: 'claude-opus-4-6',
     });
-    expect(spawnMock).toHaveBeenCalledWith(
-      'claude',
-      [
-        '-p',
-        '--model',
-        'claude-opus-4-6',
-        '--output-format',
-        'text',
-        '--max-turns',
-        '1',
-        '--dangerously-skip-permissions',
-        '--disallowedTools',
-        'Edit,Write,MultiEdit,Bash,NotebookEdit,Read,Glob,Grep,Task,WebSearch,WebFetch',
-      ],
-      expect.objectContaining({ cwd: '/repo', stdio: ['pipe', 'pipe', 'pipe'] }),
-    );
-    expect(fake.proc.stdin.end.mock.calls[0][0]).toContain('Dirty files (2):');
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it('generates split groups with OpenRouter when an API key is provided', async () => {
@@ -316,188 +282,116 @@ describe('generateCommitGroups', () => {
     expect(body.messages[1].content).toContain('[...truncated 10 chars...]');
   });
 
-  it('falls back to a single generated Codex message after invalid split output', async () => {
-    const firstSplitAttempt = createFakeProc();
-    const secondSplitAttempt = createFakeProc();
-    const singleAttempt = createFakeProc();
-    spawnMock
-      .mockReturnValueOnce(firstSplitAttempt.proc)
-      .mockReturnValueOnce(secondSplitAttempt.proc)
-      .mockReturnValueOnce(singleAttempt.proc);
-
-    const promise = generateCommitGroups({
-      provider: 'codex',
-      model: 'codex',
-      dirtyFiles: ['a.ts', 'b.ts'],
-      diff: 'diff',
-      signal: new AbortController().signal,
-    });
-
-    await waitForSpawnCount(1);
-    firstSplitAttempt.close(0, {
-      stdout: JSON.stringify({ groups: [{ files: ['a.ts'], message: 'feat: partial' }] }),
-    });
-    await waitForSpawnCount(2);
-    secondSplitAttempt.close(0, {
-      stdout: JSON.stringify({ groups: [{ files: ['a.ts'], message: 'feat: still partial' }] }),
-    });
-    await waitForSpawnCount(3);
-    singleAttempt.close(0, { stdout: 'chore: update working tree\n' });
-
-    await expect(promise).resolves.toEqual({
+  it('falls back offline when Codex auto-commit generation is disabled', async () => {
+    await expect(
+      generateCommitGroups({
+        provider: 'codex',
+        model: 'codex',
+        dirtyFiles: ['a.ts', 'b.ts'],
+        diff: 'diff',
+        signal: new AbortController().signal,
+      }),
+    ).resolves.toEqual({
       ok: true,
-      groups: [{ files: ['a.ts', 'b.ts'], message: 'chore: update working tree' }],
+      groups: [{ files: ['a.ts', 'b.ts'], message: 'chore: update 2 files' }],
       fallbackUsed: true,
       modelUsed: 'codex',
     });
-    expect(spawnMock.mock.calls[0][1]).toEqual([
-      '-a',
-      'never',
-      '-c',
-      'model_reasoning_effort=medium',
-      'exec',
-      '-',
-      '--sandbox',
-      'read-only',
-    ]);
-    expect(singleAttempt.proc.stdin.end.mock.calls[0][0]).toContain('Produce ONE Conventional');
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it('uses single mode directly and falls back to an offline message on CLI failure', async () => {
-    const fake = createFakeProc();
-    spawnMock.mockReturnValueOnce(fake.proc);
-
-    const promise = generateCommitGroups({
-      provider: 'claude',
-      model: 'claude',
-      mode: 'single',
-      dirtyFiles: ['a.ts', 'b.ts'],
-      diff: 'diff',
-      signal: new AbortController().signal,
-    });
-
-    await waitForSpawnCount(1);
-    fake.close(1, { stderr: 'permission denied\nfull details\nmore details\nextra' });
-
-    await expect(promise).resolves.toEqual({
+    await expect(
+      generateCommitGroups({
+        provider: 'claude',
+        model: 'claude',
+        mode: 'single',
+        dirtyFiles: ['a.ts', 'b.ts'],
+        diff: 'diff',
+        signal: new AbortController().signal,
+      }),
+    ).resolves.toEqual({
       ok: true,
       groups: [{ files: ['a.ts', 'b.ts'], message: 'chore: update 2 files' }],
       fallbackUsed: false,
       modelUsed: 'claude',
     });
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it('uses a generic fallback message when single mode returns empty content', async () => {
-    const fake = createFakeProc();
-    spawnMock.mockReturnValueOnce(fake.proc);
-
-    const promise = generateCommitGroups({
-      provider: 'claude',
-      model: 'claude',
-      mode: 'single',
-      dirtyFiles: ['a.ts', 'b.ts'],
-      diff: 'diff',
-      signal: new AbortController().signal,
-    });
-
-    await waitForSpawnCount(1);
-    fake.close(0, { stdout: '   \n' });
-
-    await expect(promise).resolves.toEqual({
+    await expect(
+      generateCommitGroups({
+        provider: 'claude',
+        model: 'claude',
+        mode: 'single',
+        dirtyFiles: ['a.ts', 'b.ts'],
+        diff: 'diff',
+        signal: new AbortController().signal,
+      }),
+    ).resolves.toEqual({
       ok: true,
       groups: [{ files: ['a.ts', 'b.ts'], message: 'chore: update 2 files' }],
       fallbackUsed: false,
       modelUsed: 'claude',
     });
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it('falls back after split generation throws on both attempts', async () => {
-    const firstSplitAttempt = createFakeProc();
-    const secondSplitAttempt = createFakeProc();
-    const singleAttempt = createFakeProc();
-    spawnMock
-      .mockReturnValueOnce(firstSplitAttempt.proc)
-      .mockReturnValueOnce(secondSplitAttempt.proc)
-      .mockReturnValueOnce(singleAttempt.proc);
-
-    const promise = generateCommitGroups({
-      provider: 'codex',
-      model: 'gpt-5.4',
-      dirtyFiles: ['a.ts'],
-      diff: 'diff',
-      signal: new AbortController().signal,
-    });
-
-    await waitForSpawnCount(1);
-    firstSplitAttempt.close(1, { stderr: 'first failed' });
-    await waitForSpawnCount(2);
-    secondSplitAttempt.close(1, { stderr: 'second failed' });
-    await waitForSpawnCount(3);
-    singleAttempt.close(0, { stdout: 'fix: update a' });
-
-    await expect(promise).resolves.toEqual({
+    await expect(
+      generateCommitGroups({
+        provider: 'codex',
+        model: 'gpt-5.4',
+        dirtyFiles: ['a.ts'],
+        diff: 'diff',
+        signal: new AbortController().signal,
+      }),
+    ).resolves.toEqual({
       ok: true,
-      groups: [{ files: ['a.ts'], message: 'fix: update a' }],
+      groups: [{ files: ['a.ts'], message: 'chore: update 1 files' }],
       fallbackUsed: true,
       modelUsed: 'gpt-5.4',
     });
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
-  it('returns cancelled when fallback single generation is aborted', async () => {
-    const firstSplitAttempt = createFakeProc();
-    const secondSplitAttempt = createFakeProc();
-    const singleAttempt = createFakeProc();
+  it('uses offline fallback when fallback single generation cannot spawn local CLIs', async () => {
     const controller = new AbortController();
-    spawnMock
-      .mockReturnValueOnce(firstSplitAttempt.proc)
-      .mockReturnValueOnce(secondSplitAttempt.proc)
-      .mockReturnValueOnce(singleAttempt.proc);
-
-    const promise = generateCommitGroups({
-      provider: 'codex',
-      model: 'codex',
-      dirtyFiles: ['a.ts'],
-      diff: 'diff',
-      signal: controller.signal,
+    await expect(
+      generateCommitGroups({
+        provider: 'codex',
+        model: 'codex',
+        dirtyFiles: ['a.ts'],
+        diff: 'diff',
+        signal: controller.signal,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      groups: [{ files: ['a.ts'], message: 'chore: update 1 files' }],
+      fallbackUsed: true,
+      modelUsed: 'codex',
     });
-
-    await waitForSpawnCount(1);
-    firstSplitAttempt.close(0, {
-      stdout: JSON.stringify({ groups: [{ files: ['b.ts'], message: 'fix: wrong' }] }),
-    });
-    await waitForSpawnCount(2);
-    secondSplitAttempt.close(0, {
-      stdout: JSON.stringify({ groups: [{ files: ['b.ts'], message: 'fix: wrong again' }] }),
-    });
-    await waitForSpawnCount(3);
-    controller.abort();
-
-    await expect(promise).resolves.toEqual({ ok: false, error: 'cancelled' });
-    expect(singleAttempt.proc.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it('uses offline fallback when a nonzero CLI exit has no stderr', async () => {
-    const fake = createFakeProc();
-    spawnMock.mockReturnValueOnce(fake.proc);
-
-    const promise = generateCommitGroups({
-      provider: 'claude',
-      model: 'claude',
-      mode: 'single',
-      dirtyFiles: ['a.ts'],
-      diff: 'diff',
-      signal: new AbortController().signal,
-    });
-
-    await waitForSpawnCount(1);
-    fake.close(1);
-
-    await expect(promise).resolves.toEqual({
+    await expect(
+      generateCommitGroups({
+        provider: 'claude',
+        model: 'claude',
+        mode: 'single',
+        dirtyFiles: ['a.ts'],
+        diff: 'diff',
+        signal: new AbortController().signal,
+      }),
+    ).resolves.toEqual({
       ok: true,
       groups: [{ files: ['a.ts'], message: 'chore: update 1 files' }],
       fallbackUsed: false,
       modelUsed: 'claude',
     });
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it('uses offline fallback when OpenRouter is selected without an API key', async () => {
@@ -533,7 +427,7 @@ describe('generateCommitGroups', () => {
     });
   });
 
-  it('returns cancelled when the signal is already aborted before CLI generation', async () => {
+  it('uses offline fallback when the signal is already aborted before disabled CLI generation', async () => {
     const controller = new AbortController();
     controller.abort();
 
@@ -545,14 +439,16 @@ describe('generateCommitGroups', () => {
         diff: 'diff',
         signal: controller.signal,
       }),
-    ).resolves.toEqual({ ok: false, error: 'cancelled' });
+    ).resolves.toEqual({
+      ok: true,
+      groups: [{ files: ['a.ts'], message: 'chore: update 1 files' }],
+      fallbackUsed: true,
+      modelUsed: 'codex',
+    });
   });
 
-  it('returns cancelled when the signal aborts a running CLI generation', async () => {
-    const fake = createFakeProc();
+  it('uses offline fallback when aborting disabled CLI generation', async () => {
     const controller = new AbortController();
-    spawnMock.mockReturnValueOnce(fake.proc);
-
     const promise = generateCommitGroups({
       provider: 'claude',
       model: 'claude',
@@ -562,19 +458,20 @@ describe('generateCommitGroups', () => {
       signal: controller.signal,
     });
 
-    await waitForSpawnCount(1);
     controller.abort();
 
-    await expect(promise).resolves.toEqual({ ok: false, error: 'cancelled' });
-    expect(fake.proc.kill).toHaveBeenCalledWith('SIGTERM');
+    await expect(promise).resolves.toEqual({
+      ok: true,
+      groups: [{ files: ['a.ts'], message: 'chore: update 1 files' }],
+      fallbackUsed: false,
+      modelUsed: 'claude',
+    });
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it('falls back when CLI generation times out', async () => {
     vi.useFakeTimers();
     try {
-      const fake = createFakeProc();
-      spawnMock.mockReturnValueOnce(fake.proc);
-
       const promise = generateCommitGroups({
         provider: 'claude',
         model: 'claude',
@@ -592,7 +489,7 @@ describe('generateCommitGroups', () => {
         fallbackUsed: false,
         modelUsed: 'claude',
       });
-      expect(fake.proc.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(spawnMock).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }

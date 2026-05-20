@@ -147,7 +147,7 @@ describe('rewriteSkillDraft', () => {
       userInstruction: 'shorten it',
       projectContext: '',
       cwd: '/repo',
-      cli: 'codex',
+      cli: 'claude',
       modelId: 'gpt-5.4-mini',
       reasoningEffort: 'low',
     });
@@ -212,63 +212,37 @@ describe('rewriteSkillDraft', () => {
     await expect(promise).rejects.toThrow('unsupported slots');
   });
 
-  it('passes explicit Codex model flags when rewriting with Codex', async () => {
-    const fake = createFakeProc();
-    mockSpawn.mockReturnValueOnce(fake.proc);
-
-    const promise = rewriteSkillDraft({
-      phase: 'plan-generation',
-      currentContent: VALID_PLAN_SKILL,
-      bundledContent: VALID_PLAN_SKILL,
-      requiredSlots: ['USER_PROMPT', 'THREAD_ID', 'OUTPUT_SCHEMA'],
-      userInstruction: 'keep the contract',
-      projectContext: '',
-      cwd: '/repo',
-      cli: 'codex',
-      modelId: 'gpt-5.4-mini',
-    });
-
-    await Promise.resolve();
-
-    expect(mockSpawn).toHaveBeenCalledWith(
-      'codex',
-      expect.arrayContaining(['-m', 'gpt-5.4-mini']),
-      expect.any(Object),
-    );
-
-    fake.close(0, {
-      stdout: `\`\`\`shipcode-skill\n${JSON.stringify({ content: VALID_PLAN_SKILL })}\n\`\`\``,
-    });
-    await expect(promise).resolves.toEqual({ content: VALID_PLAN_SKILL });
+  it('rejects Codex rewriting because it cannot run in no-tools mode', async () => {
+    await expect(
+      rewriteSkillDraft({
+        phase: 'plan-generation',
+        currentContent: VALID_PLAN_SKILL,
+        bundledContent: VALID_PLAN_SKILL,
+        requiredSlots: ['USER_PROMPT', 'THREAD_ID', 'OUTPUT_SCHEMA'],
+        userInstruction: 'keep the contract',
+        projectContext: '',
+        cwd: '/repo',
+        cli: 'codex',
+        modelId: 'gpt-5.4-mini',
+      }),
+    ).rejects.toThrow('Codex skill rewriting is disabled because it cannot run in no-tools mode');
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 
-  it('omits Codex model flags when no model is selected', async () => {
-    const fake = createFakeProc();
-    mockSpawn.mockReturnValueOnce(fake.proc);
-
-    const promise = rewriteSkillDraft({
-      phase: 'plan-generation',
-      currentContent: VALID_PLAN_SKILL,
-      bundledContent: VALID_PLAN_SKILL,
-      requiredSlots: ['USER_PROMPT', 'THREAD_ID', 'OUTPUT_SCHEMA'],
-      userInstruction: 'keep the contract',
-      projectContext: '',
-      cwd: '/repo',
-      cli: 'codex',
-    });
-
-    await Promise.resolve();
-
-    expect(mockSpawn).toHaveBeenCalledWith(
-      'codex',
-      expect.not.arrayContaining(['-m']),
-      expect.any(Object),
-    );
-
-    fake.close(0, {
-      stdout: `\`\`\`shipcode-skill\n${JSON.stringify({ content: VALID_PLAN_SKILL })}\n\`\`\``,
-    });
-    await expect(promise).resolves.toEqual({ content: VALID_PLAN_SKILL });
+  it('rejects Codex rewriting when no model is selected', async () => {
+    await expect(
+      rewriteSkillDraft({
+        phase: 'plan-generation',
+        currentContent: VALID_PLAN_SKILL,
+        bundledContent: VALID_PLAN_SKILL,
+        requiredSlots: ['USER_PROMPT', 'THREAD_ID', 'OUTPUT_SCHEMA'],
+        userInstruction: 'keep the contract',
+        projectContext: '',
+        cwd: '/repo',
+        cli: 'codex',
+      }),
+    ).rejects.toThrow('Codex skill rewriting is disabled because it cannot run in no-tools mode');
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 });
 

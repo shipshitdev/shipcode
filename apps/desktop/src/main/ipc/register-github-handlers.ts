@@ -540,7 +540,7 @@ export function registerGitHubHandlers({
       result.recommendations.map(async (recommendation) => {
         const issue = candidatesByNumber.get(recommendation.issueNumber);
         if (!issue) return null;
-        const applied = false;
+        const applied = recommendation.confidence >= threshold && !recommendation.needsHuman;
         if (applied) {
           const nextLabels = mergeTriageLabels(issue.labels, recommendation);
           await ghCli.syncIssueLabels(issue.issueNumber, nextLabels, { removeAgentLabels: true });

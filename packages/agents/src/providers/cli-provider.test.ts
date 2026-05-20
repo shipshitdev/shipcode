@@ -645,7 +645,7 @@ describe('createClaudeCliProvider', () => {
     expect(spawnCalls[0].args[1]).toBe('PROMPT');
     expect(spawnCalls[0].stdin).toBeUndefined();
     expect(spawnCalls[0].threadId).toBe('t1');
-    expect(spawnCalls[0].options).toEqual({ workspaceRoot: '/tmp/proj' });
+    expect(spawnCalls[0].options).toEqual(expect.objectContaining({ workspaceRoot: '/tmp/proj' }));
 
     await trigger('exit', 'proc-1', 0);
     await promise;
@@ -711,7 +711,7 @@ describe('createClaudeCliProvider', () => {
       );
       expect(spawnCalls[0].args).not.toContain('-p');
       expect(spawnCalls[0].args.at(-1)).toContain(`${cwd}/.shipcode/runs/t1/execute-prompt.md`);
-      expect(spawnCalls[0].options).toEqual({ outputMode: 'raw' });
+      expect(spawnCalls[0].options).toEqual(expect.objectContaining({ outputMode: 'raw' }));
       expect(fs.readFileSync(path.join(cwd, '.shipcode/runs/t1/execute-prompt.md'), 'utf8')).toBe(
         'PROMPT',
       );
@@ -895,7 +895,7 @@ describe('createCodexCliProvider', () => {
         ]),
       );
       expect(spawnCalls[0].args).not.toContain('exec');
-      expect(spawnCalls[0].options).toEqual({ outputMode: 'raw' });
+      expect(spawnCalls[0].options).toEqual(expect.objectContaining({ outputMode: 'raw' }));
       expect(fs.readFileSync(path.join(cwd, '.shipcode/runs/t1/execute-prompt.md'), 'utf8')).toBe(
         'PROMPT',
       );

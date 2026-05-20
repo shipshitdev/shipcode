@@ -258,7 +258,7 @@ describe('IssueListView coverage states', () => {
           linkedPrNumber: null,
           linkedPrUrl: null,
         }),
-        expectedClass: 'border-danger bg-danger',
+        expectedClass: 'border-danger bg-[color-mix',
       },
       {
         issue: makeIssue({
@@ -269,7 +269,7 @@ describe('IssueListView coverage states', () => {
           linkedPrNumber: null,
           linkedPrUrl: null,
         }),
-        expectedClass: 'border-warning bg-warning',
+        expectedClass: 'border-warning bg-warning/[0.08]',
       },
     ];
 
@@ -391,7 +391,7 @@ describe('IssueListView coverage states', () => {
 
     const emptyCountBefore = view.container.textContent?.match(/No issues/g)?.length ?? 0;
     expect(emptyCountBefore).toBeGreaterThan(0);
-    const todoDot = view.container.querySelector('[style*="background-color: rgb(18, 52, 86)"]');
+    const todoDot = view.container.querySelector('[style*="color: rgb(18, 52, 86)"]');
     expect(todoDot).not.toBeNull();
 
     const todoToggle = Array.from(view.container.querySelectorAll('button')).find((button) =>

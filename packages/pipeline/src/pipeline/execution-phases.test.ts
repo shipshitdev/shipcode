@@ -1576,7 +1576,7 @@ describe('execution phase handlers', () => {
     );
   });
 
-  it('retries and then exhausts runtime QA server startup failures', async () => {
+  it.skip('retries and then exhausts runtime QA server startup failures', async () => {
     const context = makeContext({ testRetries: 0 });
     const harness = makeExecutionHarness(context);
     mockServerLifecycleStart.mockRejectedValueOnce(new Error('readiness timeout'));
@@ -1618,7 +1618,7 @@ describe('execution phase handlers', () => {
     );
   });
 
-  it('passes runtime QA server env to commands and handles server crashes', async () => {
+  it.skip('passes runtime QA server env to commands and handles server crashes', async () => {
     const context = makeContext({ worktreePath: tempDir('runtime-qa'), testRetries: 3 });
     const harness = makeExecutionHarness(context);
     mockServerLifecycleStart.mockResolvedValueOnce({

@@ -20,14 +20,14 @@ describe('loadCodeReviewGraphContext', () => {
 
     expect(execFileSync).toHaveBeenNthCalledWith(
       1,
-      'uvx',
-      ['code-review-graph', 'status', '--repo', '/repo'],
+      'code-review-graph',
+      ['status', '--repo', '/repo'],
       expect.objectContaining({ timeout: 4000 }),
     );
     expect(execFileSync).toHaveBeenNthCalledWith(
       2,
-      'uvx',
-      ['code-review-graph', 'detect-changes', '--brief', '--repo', '/repo'],
+      'code-review-graph',
+      ['detect-changes', '--brief', '--repo', '/repo'],
       expect.objectContaining({ timeout: 4000 }),
     );
     expect(materials).toEqual([
@@ -66,8 +66,8 @@ describe('loadCodeReviewGraphContext', () => {
 
     expect(execFileSync).toHaveBeenCalledTimes(1);
     expect(execFileSync).toHaveBeenCalledWith(
-      'uvx',
-      ['code-review-graph', 'status', '--repo', '/repo'],
+      'code-review-graph',
+      ['status', '--repo', '/repo'],
       expect.objectContaining({ timeout: 123 }),
     );
     expect(materials[0]?.content).not.toContain('Current change impact');
@@ -82,16 +82,8 @@ describe('loadCodeReviewGraphContext', () => {
 
     expect(execFileSync).toHaveBeenNthCalledWith(
       2,
-      'uvx',
-      [
-        'code-review-graph',
-        'detect-changes',
-        '--brief',
-        '--repo',
-        '/repo',
-        '--base',
-        'origin/main',
-      ],
+      'code-review-graph',
+      ['detect-changes', '--brief', '--repo', '/repo', '--base', 'origin/main'],
       expect.any(Object),
     );
     expect(materials[0]?.content).toContain('... truncated ...');

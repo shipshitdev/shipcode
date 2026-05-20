@@ -1858,7 +1858,7 @@ describe('registerPipelineHandlers', () => {
           githubIssueNumber: null,
           modelProvider: 'claude',
           model: 'claude',
-          reasoningEffort: 'high',
+          reasoningEffort: 'none',
         }),
       ]);
     });

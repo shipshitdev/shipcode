@@ -51,19 +51,12 @@ describe('grepTool JS fallback', () => {
       ctx,
     );
 
-    expect(res.ok).toBe(true);
-    if (res.ok) {
-      expect(res.data).toEqual({ matches: 1, truncated: false, backend: 'js' });
-      expect(res.content).toContain('a.ts:1:Alpha');
-      expect(res.content).not.toContain('c.js');
-      expect(res.content).not.toContain('node_modules');
-    }
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/ripgrep \(rg\) is required/);
 
     const exact = await grepTool.execute({ pattern: 'Alpha', include: 'exact.name' }, ctx);
-    expect(exact.ok).toBe(true);
-    if (exact.ok) {
-      expect(exact.content).toContain('nested/deep/exact.name:1:Alpha');
-    }
+    expect(exact.ok).toBe(false);
+    if (!exact.ok) expect(exact.error).toMatch(/ripgrep \(rg\) is required/);
   });
 
   it('handles aborted walks and missing roots', async () => {
@@ -76,9 +69,9 @@ describe('grepTool JS fallback', () => {
       { ...ctx, signal: aborted.signal },
     );
     expect(abortedRes).toEqual({
-      ok: true,
-      content: 'No matches.',
-      data: { matches: 0, truncated: false, backend: 'js' },
+      ok: false,
+      error:
+        'ripgrep (rg) is required for grep tool execution; JavaScript regex fallback is disabled.',
     });
 
     const missingRoot = await grepTool.execute({ pattern: 'Alpha', path: 'missing' }, ctx);
@@ -89,7 +82,7 @@ describe('grepTool JS fallback', () => {
     const res = await grepTool.execute({ pattern: '([unclosed' }, ctx);
 
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error).toMatch(/invalid regex/);
+    if (!res.ok) expect(res.error).toMatch(/ripgrep \(rg\) is required/);
   });
 
   it('skips unreadable directories and stops when aborted mid-walk', async () => {
@@ -100,9 +93,9 @@ describe('grepTool JS fallback', () => {
     readdirSpy.mockRestore();
 
     expect(unreadable).toEqual({
-      ok: true,
-      content: 'No matches.',
-      data: { matches: 0, truncated: false, backend: 'js' },
+      ok: false,
+      error:
+        'ripgrep (rg) is required for grep tool execution; JavaScript regex fallback is disabled.',
     });
 
     const controller = new AbortController();
@@ -123,8 +116,8 @@ describe('grepTool JS fallback', () => {
     );
     abortingReaddir.mockRestore();
 
-    expect(aborted.ok).toBe(true);
-    if (aborted.ok) expect(aborted.data).toEqual({ matches: 0, truncated: false, backend: 'js' });
+    expect(aborted.ok).toBe(false);
+    if (!aborted.ok) expect(aborted.error).toMatch(/ripgrep \(rg\) is required/);
   });
 
   it('caps long lines and match counts in fallback results', async () => {
@@ -132,11 +125,8 @@ describe('grepTool JS fallback', () => {
     await fs.writeFile(path.join(wt, 'long.txt'), `${longLine}\n`, 'utf-8');
 
     const long = await grepTool.execute({ pattern: 'needle', include: '*.txt' }, ctx);
-    expect(long.ok).toBe(true);
-    if (long.ok) {
-      expect(long.content).toContain('\u2026');
-      expect(long.content.length).toBeLessThan(longLine.length + 50);
-    }
+    expect(long.ok).toBe(false);
+    if (!long.ok) expect(long.error).toMatch(/ripgrep \(rg\) is required/);
 
     await fs.mkdir(path.join(wt, 'many'), { recursive: true });
     await Promise.all(
@@ -146,10 +136,7 @@ describe('grepTool JS fallback', () => {
     );
     const capped = await grepTool.execute({ pattern: 'needle', path: 'many' }, ctx);
 
-    expect(capped.ok).toBe(true);
-    if (capped.ok) {
-      expect(capped.data).toEqual({ matches: 200, truncated: true, backend: 'js' });
-      expect(capped.content).toContain('[truncated at 200 matches]');
-    }
+    expect(capped.ok).toBe(false);
+    if (!capped.ok) expect(capped.error).toMatch(/ripgrep \(rg\) is required/);
   });
 });

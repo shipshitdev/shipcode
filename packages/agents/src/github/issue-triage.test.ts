@@ -357,12 +357,17 @@ describe('issue triage', () => {
         'claude-opus-4-1',
         '--output-format',
         'json',
-        '--disallowedTools',
+        '--max-turns',
+        '1',
+        '--max-thinking-tokens',
+        '8000',
+        '--allowedTools',
+        '',
       ]),
       expect.objectContaining({
-        cwd: '/tmp/repo',
+        cwd: expect.stringContaining('shipcode-triage-'),
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { PATH: '/usr/bin' },
+        env: expect.objectContaining({ PATH: expect.any(String) }),
       }),
     );
     const prompt = fake.proc.stdin.write.mock.calls[0][0] as string;
@@ -422,78 +427,33 @@ describe('issue triage', () => {
     await expect(promise).resolves.toMatchObject({ resolvedModel: 'claude' });
   });
 
-  it('runs Codex triage with read-only sandbox flags', async () => {
-    const fake = createFakeProc();
-    spawnMock.mockReturnValueOnce(fake.proc);
-
-    const promise = triageGitHubIssues({
-      cwd: '/tmp/repo',
-      issues: [baseIssue],
-      settings: triageSettings({
-        triageModel: 'codex',
-        triageModelId: null,
-        triageReasoningEffort: 'xhigh',
-      }),
-    });
-
-    await Promise.resolve();
-
-    expect(spawnMock).toHaveBeenCalledWith(
-      'codex',
-      [
-        '-a',
-        'never',
-        '-c',
-        expect.stringContaining('model_reasoning_effort='),
-        'exec',
-        '-',
-        '--sandbox',
-        'read-only',
-      ],
-      expect.objectContaining({ cwd: '/tmp/repo' }),
-    );
-
-    fake.close(0, {
-      stdout:
-        '```shipcode-issue-triage\n{"issues":[{"issueNumber":12,"confidence":0.5,"suggestedAgent":"openrouter","suggestedLabels":["shipcode:agent:openrouter/auto"],"shouldStart":true,"needsHuman":false,"rationale":"Cheap route"}]}\n```',
-    });
-
-    await expect(promise).resolves.toMatchObject({
-      provider: 'codex',
-      modelId: null,
-      resolvedModel: 'codex',
-      recommendations: [
-        expect.objectContaining({
-          suggestedAgent: 'openrouter',
-          suggestedLabels: ['shipcode:agent:openrouter/auto'],
+  it('rejects Codex triage because it cannot run in no-tools mode', async () => {
+    await expect(
+      triageGitHubIssues({
+        cwd: '/tmp/repo',
+        issues: [baseIssue],
+        settings: triageSettings({
+          triageModel: 'codex',
+          triageModelId: null,
+          triageReasoningEffort: 'xhigh',
         }),
-      ],
-    });
+      }),
+    ).rejects.toThrow('Codex issue triage is disabled because it cannot run in no-tools mode');
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
-  it('passes explicit Codex triage models to the CLI', async () => {
-    const fake = createFakeProc();
-    spawnMock.mockReturnValueOnce(fake.proc);
-
-    const promise = triageGitHubIssues({
-      cwd: '/tmp/repo',
-      issues: [baseIssue],
-      settings: triageSettings({
-        triageModel: 'codex',
-        triageModelId: 'gpt-5.4-mini',
+  it('rejects explicit Codex triage models before spawning the CLI', async () => {
+    await expect(
+      triageGitHubIssues({
+        cwd: '/tmp/repo',
+        issues: [baseIssue],
+        settings: triageSettings({
+          triageModel: 'codex',
+          triageModelId: 'gpt-5.4-mini',
+        }),
       }),
-    });
-
-    await Promise.resolve();
-
-    expect(spawnMock.mock.calls[0][1]).toEqual(expect.arrayContaining(['-m', 'gpt-5.4-mini']));
-
-    fake.close(0, {
-      stdout:
-        '```shipcode-issue-triage\n{"issues":[{"issueNumber":12,"confidence":0.5,"suggestedAgent":"openrouter","suggestedLabels":["shipcode:agent:openrouter/auto"],"shouldStart":true,"needsHuman":false,"rationale":"Cheap route"}]}\n```',
-    });
-
-    await expect(promise).resolves.toMatchObject({ resolvedModel: 'gpt-5.4-mini' });
+    ).rejects.toThrow('Codex issue triage is disabled because it cannot run in no-tools mode');
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it('surfaces CLI spawn and exit failures with clamped CLI failure text', async () => {
@@ -514,12 +474,12 @@ describe('issue triage', () => {
     const exitPromise = triageGitHubIssues({
       cwd: '/tmp/repo',
       issues: [baseIssue],
-      settings: triageSettings({ triageModel: 'codex' }),
+      settings: triageSettings({ triageModel: 'claude' }),
     });
 
     await Promise.resolve();
     exitFailure.close(2, { stderr: 'permission denied\nfull trace' });
-    await expect(exitPromise).rejects.toThrow('Codex CLI exited 2: permission denied');
+    await expect(exitPromise).rejects.toThrow('Claude CLI exited 2: permission denied');
   });
 
   it('times out stalled CLI triage processes', async () => {

@@ -161,7 +161,7 @@ describe('executeViaOpenRouter', () => {
     );
   });
 
-  it('passes GitHub GraphQL clients to tools and emits per-turn token usage', async () => {
+  it('blocks GitHub GraphQL tools during execute and emits per-turn token usage', async () => {
     const client = scriptedClient([
       {
         toolCalls: [
@@ -198,15 +198,7 @@ describe('executeViaOpenRouter', () => {
     );
 
     expect(res.exitCode).toBe(0);
-    expect(fetch).toHaveBeenCalledWith(
-      'https://api.github.com/graphql',
-      expect.objectContaining({
-        body: JSON.stringify({
-          query: 'query { viewer { login } }',
-          variables: {},
-        }),
-      }),
-    );
+    expect(fetch).not.toHaveBeenCalled();
     expect(events).toContainEqual(
       expect.objectContaining({
         kind: 'turn_end',
@@ -238,7 +230,7 @@ describe('executeViaOpenRouter', () => {
         kind: 'tool_end',
         name: 'notatool',
         exitCode: 1,
-        outputSummary: "unknown tool 'notatool'",
+        outputSummary: "tool 'notatool' is not allowed in this phase",
       }),
     );
   });

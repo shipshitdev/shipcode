@@ -86,17 +86,17 @@ describe('ServerLifecycleManager', () => {
 
     const server = await manager.start(config, '/project', abortController.signal, 't1');
 
-    expect(server.port).toBe(54321);
-    expect(server.baseUrl).toBe('http://localhost:54321');
+    expect(server.port).toBe(3000);
+    expect(server.baseUrl).toBe('http://localhost:3000');
 
     expect(pm.spawnWithStdin).toHaveBeenCalledWith(
       'shell',
-      expect.any(String),
-      ['-lc', 'bun run dev'],
+      'bun',
+      ['run', 'dev'],
       '/project',
       '',
       't1',
-      { detached: true, extraEnv: { PORT: '54321' } },
+      { detached: true, extraEnv: { PORT: '3000' } },
     );
   });
 
@@ -138,12 +138,17 @@ describe('ServerLifecycleManager', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it('rejects before spawning when free port allocation cannot close its probe server', async () => {
-    mockFreePortCloseError(new Error('close failed'));
+  it('rejects before spawning when readiness URL has no explicit port', async () => {
+    mockFreePortCloseError(new Error('unused'));
 
-    await expect(manager.start(config, '/project', abortController.signal, 't1')).rejects.toThrow(
-      'close failed',
-    );
+    await expect(
+      manager.start(
+        { ...config, readinessUrl: 'http://localhost/api/health' },
+        '/project',
+        abortController.signal,
+        't1',
+      ),
+    ).rejects.toThrow('explicit port');
     expect(pm.spawnWithStdin).not.toHaveBeenCalled();
   });
 
@@ -190,7 +195,7 @@ describe('ServerLifecycleManager', () => {
     expect(server.crashed).toBe(true);
   });
 
-  it('uses zsh when SHELL is not set', async () => {
+  it('spawns package-manager commands directly when SHELL is not set', async () => {
     const previousShell = process.env.SHELL;
     delete process.env.SHELL;
     mockFreePort(7778);
@@ -203,8 +208,8 @@ describe('ServerLifecycleManager', () => {
       await manager.start(config, '/project', abortController.signal, 't1');
       expect(pm.spawnWithStdin).toHaveBeenCalledWith(
         'shell',
-        '/bin/zsh',
-        expect.any(Array),
+        'bun',
+        ['run', 'dev'],
         '/project',
         '',
         't1',
@@ -345,7 +350,7 @@ describe('ServerLifecycleManager', () => {
       '/project',
       '',
       't1',
-      expect.objectContaining({ extraEnv: { APP_PORT: '12345' } }),
+      expect.objectContaining({ extraEnv: { APP_PORT: '3000' } }),
     );
   });
 });

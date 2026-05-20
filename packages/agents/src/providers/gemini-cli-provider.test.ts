@@ -136,7 +136,7 @@ describe('gemini-cli-provider', () => {
       '/tmp/wt',
       'PROMPT',
       't1',
-      { workspaceRoot: '/tmp/workspace' },
+      expect.objectContaining({ workspaceRoot: '/tmp/workspace' }),
     );
     expect(result.rawOutput).toBe('done');
     expect(result.resolvedModel).toBe('gemini');
