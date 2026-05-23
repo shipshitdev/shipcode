@@ -1,4 +1,4 @@
-import { exec, execFileSync } from 'node:child_process';
+import { exec, execFile, execFileSync } from 'node:child_process';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -36,6 +36,28 @@ import {
 import * as pty from 'node-pty';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+const SAFE_COMMAND_NAME = /^[a-zA-Z0-9._-]+$/;
+const SAFE_ENV_VAR_NAME = /^[A-Z_][A-Z0-9_]*$/;
+
+function assertSafeCommandName(command: string): void {
+  if (!SAFE_COMMAND_NAME.test(command)) {
+    throw new Error(`Unsafe command name: ${command}`);
+  }
+}
+
+function assertSafeEnvVarName(name: string): void {
+  if (!SAFE_ENV_VAR_NAME.test(name)) {
+    throw new Error(`Unsafe environment variable name: ${name}`);
+  }
+}
+
+async function resolveCommandOnPath(command: string, env: Record<string, string>): Promise<string> {
+  assertSafeCommandName(command);
+  const { stdout } = await execFileAsync('which', [command], { env });
+  return stdout.trim();
+}
 
 const TRUSTED_SHELLS = new Set([
   '/bin/bash',
@@ -181,8 +203,7 @@ const DESKTOP_APP_LABELS: Record<ProjectOpenTarget, string> = {
 async function checkCli(command: string, versionFlag: string = '--version'): Promise<CliHealth> {
   const env = shellExecEnv();
   try {
-    const whichResult = await execAsync(`which ${command}`, { env });
-    const binaryPath = whichResult.stdout.trim();
+    const binaryPath = await resolveCommandOnPath(command, env);
 
     if (!binaryPath) {
       return {
@@ -195,7 +216,7 @@ async function checkCli(command: string, versionFlag: string = '--version'): Pro
     }
 
     try {
-      const versionResult = await execAsync(`${binaryPath} ${versionFlag}`, { env });
+      const versionResult = await execFileAsync(binaryPath, [versionFlag], { env });
       /* v8 ignore next -- CLI version probes always produce either stdout or stderr in supported paths */
       const version = versionResult.stdout.trim() || versionResult.stderr.trim();
       return { available: true, version, path: binaryPath, error: null, authenticated: false };
@@ -308,7 +329,8 @@ async function fileExists(path: string): Promise<boolean> {
 
 async function readEnvVar(name: string): Promise<string | null> {
   try {
-    const result = await execAsync(`printenv ${name}`, { timeout: 5_000 });
+    assertSafeEnvVarName(name);
+    const result = await execFileAsync('printenv', [name], { timeout: 5_000 });
     const value = result.stdout.trim();
     if (value) return value;
   } catch {
@@ -1383,7 +1405,10 @@ export async function validateOpenRouterModel(
 
 async function getGhVersion(): Promise<string | null> {
   try {
-    const { stdout } = await execAsync('gh --version', { timeout: 5_000, env: shellExecEnv() });
+    const { stdout } = await execFileAsync('gh', ['--version'], {
+      timeout: 5_000,
+      env: shellExecEnv(),
+    });
     const match = stdout.match(/gh version (\S+)/);
     return match?.[1] ?? null;
   } catch {
@@ -1408,7 +1433,7 @@ export async function checkGhAuth(): Promise<GhAuthStatus> {
   const env = shellExecEnv();
   try {
     const [result, version] = await Promise.all([
-      execAsync('gh auth status 2>&1', { timeout: 10_000, env }),
+      execFileAsync('gh', ['auth', 'status'], { timeout: 10_000, env }),
       getGhVersion(),
     ]);
     const output = result.stdout + result.stderr;
@@ -1423,7 +1448,7 @@ export async function checkGhAuth(): Promise<GhAuthStatus> {
     };
   } catch (err) {
     try {
-      const [, version] = await Promise.all([execAsync('which gh', { env }), getGhVersion()]);
+      const [, version] = await Promise.all([resolveCommandOnPath('gh', env), getGhVersion()]);
       return {
         installed: true,
         authenticated: false,

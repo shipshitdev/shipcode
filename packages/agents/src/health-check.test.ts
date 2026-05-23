@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // vi.hoisted runs before vi.mock factories, making these available inside them
 const {
   mockExec,
+  mockExecFile,
   mockExecFileSync,
   mockAccess,
   mockHomedir,
@@ -12,6 +13,20 @@ const {
   mockPtySpawn,
 } = vi.hoisted(() => ({
   mockExec: vi.fn(),
+  mockExecFile: vi.fn((file: string, args: unknown, opts: unknown, cb?: unknown) => {
+    let actualArgs: string[] = [];
+    let actualCb = cb;
+    if (Array.isArray(args)) {
+      actualArgs = args;
+    } else if (typeof args === 'function') {
+      actualCb = args;
+      opts = {};
+    } else if (typeof opts === 'function') {
+      actualCb = opts;
+      opts = args;
+    }
+    return mockExec([file, ...actualArgs].join(' '), opts, actualCb);
+  }),
   mockExecFileSync: vi.fn(),
   mockAccess: vi.fn(),
   mockHomedir: vi.fn(() => '/mock/home'),
@@ -21,7 +36,11 @@ const {
   mockPtySpawn: vi.fn(),
 }));
 
-vi.mock('node:child_process', () => ({ exec: mockExec, execFileSync: mockExecFileSync }));
+vi.mock('node:child_process', () => ({
+  exec: mockExec,
+  execFile: mockExecFile,
+  execFileSync: mockExecFileSync,
+}));
 vi.mock('node:fs/promises', () => ({
   access: mockAccess,
   mkdir: mockMkdir,
