@@ -85,6 +85,7 @@ import type { IssueDetailTab } from './issue-detail/tab-types';
 const DETAIL_SIDEBAR_MIN = 320;
 const DETAIL_SIDEBAR_MAX = 640;
 const DETAIL_SIDEBAR_DEFAULT = 416; // matches previous w-[26rem]
+const EMPTY_PLAN_HISTORY: PlanRecord[] = [];
 
 const INHERIT_EXECUTOR_VALUE = '__inherit__';
 const PLAN_MUTATING_PHASES: PipelinePhase[] = [
@@ -100,6 +101,11 @@ const EXECUTOR_EDITABLE_STATUSES = new Set<IssuePipelineStatus>([
   ISSUE_PIPELINE_STATUS.closed,
 ]);
 const ISSUE_META_DOT = <span className="mx-1.5 text-border">·</span>;
+
+function clearStoredTimeout(ref: { current: ReturnType<typeof setTimeout> | null }) {
+  const timeout = ref.current;
+  if (timeout) clearTimeout(timeout);
+}
 
 type IssueDetailUiState = {
   activeTab: IssueDetailTab;
@@ -168,7 +174,7 @@ function useIssueDetailView() {
   const branchCopyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
-      if (branchCopyResetRef.current) clearTimeout(branchCopyResetRef.current);
+      clearStoredTimeout(branchCopyResetRef);
     };
   }, []);
 
@@ -249,7 +255,7 @@ function useIssueDetailView() {
     // Push-invalidated by pipeline:phase + plan:parsed in useIpc.
   });
   const isThreadPlanHistoryLoading = !!activeThreadId && planHistory === undefined;
-  const normalizedThreadPlanHistory = Array.isArray(planHistory) ? planHistory : [];
+  const normalizedThreadPlanHistory = Array.isArray(planHistory) ? planHistory : EMPTY_PLAN_HISTORY;
 
   const { data: issuePlanHistory } = useQuery<PlanRecord[]>({
     queryKey: ['issue-plan-history', activeProjectId, activeIssue?.issueNumber],

@@ -673,7 +673,7 @@ export function HiddenColumnsPanel({
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="flex h-auto flex-col items-center gap-0.5 px-1.5 py-1.5"
+                  className="flex h-auto flex-col items-center gap-0.5 p-1.5"
                   onClick={() => onShowColumn(key)}
                 >
                   <StatusCircleIcon

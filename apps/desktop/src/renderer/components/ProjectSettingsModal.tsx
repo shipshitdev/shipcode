@@ -56,6 +56,11 @@ import {
 import { TriageRulesTab } from './project-settings-modal/TriageRulesTab';
 import { SettingsNavigation, type SettingsNavigationItem } from './SettingsNavigation';
 
+function clearStoredWindowTimeout(ref: { current: number | null }) {
+  const timeout = ref.current;
+  if (timeout !== null) window.clearTimeout(timeout);
+}
+
 const PROJECT_SETTINGS_SECTIONS = [
   {
     key: 'general',
@@ -444,9 +449,7 @@ function useProjectSettingsModalView() {
 
   useEffect(() => {
     return () => {
-      if (setupDetectTimeoutRef.current !== null) {
-        window.clearTimeout(setupDetectTimeoutRef.current);
-      }
+      clearStoredWindowTimeout(setupDetectTimeoutRef);
     };
   }, []);
 

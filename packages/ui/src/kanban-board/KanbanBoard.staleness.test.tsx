@@ -61,8 +61,8 @@ describe('KanbanBoard staleness flags', () => {
 
     const dot = view.container.querySelector('[data-staleness-dot="true"]');
     expect(dot).not.toBeNull();
-    expect(dot?.getAttribute('aria-label')).toContain('Queued');
-    expect(dot?.getAttribute('aria-label')).toContain('no updates');
+    expect(dot?.getAttribute('title')).toContain('Queued');
+    expect(dot?.getAttribute('title')).toContain('no updates');
     view.cleanup();
   });
 

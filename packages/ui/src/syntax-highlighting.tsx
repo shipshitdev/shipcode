@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useReducer } from 'react';
+import { type ReactNode, useEffect, useMemo, useReducer } from 'react';
 import {
   type BundledLanguage,
   createHighlighter,
@@ -8,6 +8,7 @@ import {
   type Highlighter,
   type ThemedToken,
 } from 'shiki';
+import { HighlightedTokens } from '@/HighlightedTokens';
 
 export type HighlightToken = ThemedToken;
 
@@ -143,24 +144,6 @@ export function useHighlightedTokens(
   return state.tokens;
 }
 
-function tokenStyle(token: HighlightToken): CSSProperties {
-  return {
-    color: token.color,
-    fontStyle: token.fontStyle && (token.fontStyle & 1) !== 0 ? 'italic' : undefined,
-    fontWeight: token.fontStyle && (token.fontStyle & 2) !== 0 ? 600 : undefined,
-    textDecoration: token.fontStyle && (token.fontStyle & 4) !== 0 ? 'underline' : undefined,
-  };
-}
-
-function keyedTokens(tokens: HighlightToken[]) {
-  let offset = 0;
-  return tokens.map((token) => {
-    const key = `${offset}:${token.content}`;
-    offset += token.content.length;
-    return { key, token };
-  });
-}
-
 export function keyedLines(lines: string[]) {
   const seen = new Map<string, number>();
   return lines.map((line) => {
@@ -168,19 +151,6 @@ export function keyedLines(lines: string[]) {
     seen.set(line, occurrence + 1);
     return { key: `${occurrence}:${line}`, line };
   });
-}
-
-export function renderTokenSpans(
-  tokens: HighlightToken[] | undefined,
-  fallback: string,
-): ReactNode {
-  if (!tokens) return fallback || '\u00A0';
-  if (tokens.length === 0) return '\u00A0';
-  return keyedTokens(tokens).map(({ key, token }) => (
-    <span key={key} style={tokenStyle(token)}>
-      {token.content}
-    </span>
-  ));
 }
 
 export function useSyntaxHighlightedLines(lines: string[], filePath?: string): ReactNode[] {
@@ -191,7 +161,9 @@ export function useSyntaxHighlightedLines(lines: string[], filePath?: string): R
   return useMemo(
     () =>
       keyedLines(lines).map(({ key, line }, index) => (
-        <span key={key}>{renderTokenSpans(tokens?.[index], line)}</span>
+        <span key={key}>
+          <HighlightedTokens tokens={tokens?.[index]} fallback={line} />
+        </span>
       )),
     [lines, tokens],
   );

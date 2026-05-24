@@ -157,31 +157,31 @@ vi.mock('./issue-detail/IssueDetailDialogs', () => ({
         dialog approve
       </button>
       {fullScreenPlanId ? (
-        <div role="dialog" aria-label="full screen plan">
+        <dialog open aria-label="full screen plan">
           <button type="button" onClick={onCloseFullScreenPlan}>
             close fullscreen
           </button>
-        </div>
+        </dialog>
       ) : null}
       {state.showArchiveConfirm ? (
-        <div role="dialog" aria-label="archive confirm">
+        <dialog open aria-label="archive confirm">
           <button type="button" onClick={onArchiveConfirmed}>
             confirm archive
           </button>
           <button type="button" onClick={onCloseArchiveConfirm}>
             close archive
           </button>
-        </div>
+        </dialog>
       ) : null}
       {state.showMarkAsDoneConfirm ? (
-        <div role="dialog" aria-label="done confirm">
+        <dialog open aria-label="done confirm">
           <button type="button" onClick={onMarkAsDoneConfirmed}>
             confirm done
           </button>
           <button type="button" onClick={onCloseMarkAsDoneConfirm}>
             close done
           </button>
-        </div>
+        </dialog>
       ) : null}
     </div>
   ),

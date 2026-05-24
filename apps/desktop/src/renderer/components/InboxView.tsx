@@ -201,27 +201,29 @@ function useInboxView() {
       selectProject(n.projectId);
       useAppStore.getState().setViewMode('inbox');
       if (!n.threadId) return;
+      if (navTokenRef.current !== token) return;
       const issues = await window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
         projectId: n.projectId,
       });
-      if (navTokenRef.current !== token) return;
-      useAppStore.getState().setGithubIssues(issues);
-      let match = issues.find((i) => i.threadId === n.threadId) ?? null;
-      if (!match) {
-        const thread = await window.shipcode.invoke<Thread | null>('thread:get', {
-          threadId: n.threadId,
-        });
-        if (navTokenRef.current !== token) return;
-        if (thread?.githubIssueNumber) {
-          match = issues.find((i) => i.issueNumber === thread.githubIssueNumber) ?? null;
+      if (navTokenRef.current === token) {
+        useAppStore.getState().setGithubIssues(issues);
+        let match = issues.find((i) => i.threadId === n.threadId) ?? null;
+        if (!match && navTokenRef.current === token) {
+          const thread = await window.shipcode.invoke<Thread | null>('thread:get', {
+            threadId: n.threadId,
+          });
+          if (navTokenRef.current === token) {
+            if (thread?.githubIssueNumber) {
+              match = issues.find((i) => i.issueNumber === thread.githubIssueNumber) ?? null;
+            }
+            if (!match && thread?.automationId) {
+              useAppStore.getState().selectAutomationThread(n.threadId);
+            }
+          }
         }
-        if (!match && thread?.automationId) {
-          useAppStore.getState().selectAutomationThread(n.threadId);
-          return;
+        if (match) {
+          selectIssue(match);
         }
-      }
-      if (match) {
-        selectIssue(match);
       }
     } catch {
       if (navTokenRef.current === token) {
@@ -241,15 +243,17 @@ function useInboxView() {
         </div>
       </TableCell>
       <TableCell className="align-top">
-        <button
+        <Button
           type="button"
-          className="text-left text-[13px] font-medium text-primary hover:underline cursor-pointer disabled:opacity-50 disabled:cursor-default"
+          variant="link"
+          size="xs"
+          className="h-auto justify-start p-0 text-left text-[13px] font-medium text-primary disabled:cursor-default"
           onClick={() => goToIssue(n)}
           disabled={navigatingId === n.id}
           aria-label={`Open issue detail: ${n.title}`}
         >
           {n.title}
-        </button>
+        </Button>
         {n.body && <div className="mt-0.5 line-clamp-2 text-[12px] text-secondary">{n.body}</div>}
       </TableCell>
       <TableCell className="w-[144px] whitespace-nowrap align-top text-right">

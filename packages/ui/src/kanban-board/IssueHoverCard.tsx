@@ -105,8 +105,11 @@ export function IssueHoverCard({
   children,
 }: IssueHoverCardProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [planSteps, setPlanSteps] = useState<PlanStepSummary[] | null>(null);
-  const [planStepsLoading, setPlanStepsLoading] = useState(false);
+  const [planStepsState, setPlanStepsState] = useState<{
+    resetKey: string;
+    steps: PlanStepSummary[] | null;
+    loading: boolean;
+  }>({ resetKey: '', steps: null, loading: false });
   const enterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
@@ -114,6 +117,8 @@ export function IssueHoverCard({
   const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus);
   const canFetchSteps = !!(onFetchPlanSteps && issue.threadId && isActive);
   const resetKey = `${issue.threadId ?? ''}:${issue.pipelineStatus}`;
+  const planSteps = planStepsState.resetKey === resetKey ? planStepsState.steps : null;
+  const planStepsLoading = planStepsState.resetKey === resetKey ? planStepsState.loading : false;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -124,32 +129,25 @@ export function IssueHoverCard({
     };
   }, []);
 
-  useEffect(() => {
-    void resetKey;
-    setPlanSteps(null);
-    setPlanStepsLoading(false);
-    abortRef.current?.abort();
-  }, [resetKey]);
-
   const fetchSteps = useCallback(() => {
+    if (!onFetchPlanSteps || !issue.threadId) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    setPlanStepsLoading(true);
+    setPlanStepsState({ resetKey, steps: null, loading: true });
 
-    onFetchPlanSteps!(issue.threadId!)
+    onFetchPlanSteps(issue.threadId)
       .then((steps) => {
         if (!controller.signal.aborted && mountedRef.current) {
-          setPlanSteps(steps);
-          setPlanStepsLoading(false);
+          setPlanStepsState({ resetKey, steps, loading: false });
         }
       })
       .catch(() => {
         if (!controller.signal.aborted && mountedRef.current) {
-          setPlanStepsLoading(false);
+          setPlanStepsState({ resetKey, steps: null, loading: false });
         }
       });
-  }, [onFetchPlanSteps, issue.threadId]);
+  }, [onFetchPlanSteps, issue.threadId, resetKey]);
 
   const handlePointerEnter = useCallback(() => {
     if (disabled) return;

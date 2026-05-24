@@ -190,8 +190,7 @@ export function StalenessDot({
       <TooltipTrigger asChild>
         <span
           data-staleness-dot="true"
-          role="img"
-          aria-label={`Stale: ${staleness.title}`}
+          title={`Stale: ${staleness.title}`}
           className={cn(
             'inline-flex size-4 shrink-0 items-center justify-center text-danger',
             className,

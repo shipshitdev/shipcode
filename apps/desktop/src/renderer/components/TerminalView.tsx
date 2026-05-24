@@ -9,6 +9,15 @@ import { TerminalPane } from './terminal-panes/TerminalPane';
 
 const MAX_PANES = 4;
 
+function cancelRunningLivePanes(ref: { current: Array<{ threadId: string; isRunning: boolean }> }) {
+  const livePanes = ref.current;
+  for (const pane of livePanes) {
+    if (pane.isRunning) {
+      void window.shipcode.invoke('instant:cancel', { threadId: pane.threadId });
+    }
+  }
+}
+
 export function TerminalView() {
   const terminalPaneThreadIds = useAppStore((state) => state.terminalPaneThreadIds);
   const terminalSplitDirection = useAppStore((state) => state.terminalSplitDirection);
@@ -35,11 +44,7 @@ export function TerminalView() {
 
   useEffect(() => {
     return () => {
-      for (const pane of livePaneRef.current) {
-        if (pane.isRunning) {
-          void window.shipcode.invoke('instant:cancel', { threadId: pane.threadId });
-        }
-      }
+      cancelRunningLivePanes(livePaneRef);
     };
   }, []);
 

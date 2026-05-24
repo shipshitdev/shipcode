@@ -23,13 +23,19 @@ function keyedDiffLines(lines: string[]) {
 
 export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps) {
   const activeDiff = diffs.find((d) => d.filePath === activeFile) ?? diffs[0];
-  const diffLines = activeDiff?.diffContent?.split('\n') ?? [];
+  const diffLines = useMemo(() => activeDiff?.diffContent?.split('\n') ?? [], [activeDiff]);
   const stableDiffLines = useMemo(() => keyedDiffLines(diffLines), [diffLines]);
-  const codeLines = diffLines.map((line) => {
-    if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')) return line;
-    if (line.startsWith('+') || line.startsWith('-') || line.startsWith(' ')) return line.slice(1);
-    return line;
-  });
+  const codeLines = useMemo(
+    () =>
+      diffLines.map((line) => {
+        if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')) return line;
+        if (line.startsWith('+') || line.startsWith('-') || line.startsWith(' ')) {
+          return line.slice(1);
+        }
+        return line;
+      }),
+    [diffLines],
+  );
   const highlightedLines = useSyntaxHighlightedLines(codeLines, activeDiff?.filePath);
 
   if (diffs.length === 0) {

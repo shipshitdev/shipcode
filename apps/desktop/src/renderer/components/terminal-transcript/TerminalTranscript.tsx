@@ -40,6 +40,11 @@ interface TerminalTranscriptProps {
 
 const DEFAULT_VISIBLE_EVENT_LIMIT = 300;
 
+function clearStoredTimeout(ref: { current: ReturnType<typeof setTimeout> | null }) {
+  const timeout = ref.current;
+  if (timeout) clearTimeout(timeout);
+}
+
 const ERROR_LINE_RE = /(^|\s)(error|fatal|panic|exception|traceback|posix_spawnp failed)\b/i;
 const EXIT_NONZERO_RE = /\bexit(?:ed)?[^\d]+(?:code\s*)?([1-9]\d*)\b/i;
 const WARNING_LINE_RE = /(^|\s)(warn(?:ing)?|deprecat(?:ed|ion))\b/i;
@@ -817,7 +822,10 @@ export function TerminalTranscript({
   const stickToBottomRef = useRef(true);
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const [showAllEvents, setShowAllEvents] = useState(false);
+  const [showAllEventsState, setShowAllEventsState] = useState({
+    sourceKey: 'empty',
+    value: false,
+  });
   const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
   const dedupedEvents = useMemo(() => dedupeTranscriptEvents(events), [events]);
 
@@ -825,6 +833,17 @@ export function TerminalTranscript({
   const sourceKey = hasEvents
     ? `${dedupedEvents[0]?.threadId ?? ''}:${dedupedEvents[0]?.id ?? ''}`
     : 'empty';
+  const showAllEvents =
+    showAllEventsState.sourceKey === sourceKey ? showAllEventsState.value : false;
+  if (showAllEventsState.sourceKey !== sourceKey) {
+    setShowAllEventsState({ sourceKey, value: false });
+  }
+  const setShowAllEvents = useCallback(
+    (value: boolean) => {
+      setShowAllEventsState({ sourceKey, value });
+    },
+    [sourceKey],
+  );
   const visibleEvents = useMemo(
     () =>
       showAllEvents || dedupedEvents.length <= DEFAULT_VISIBLE_EVENT_LIMIT
@@ -891,14 +910,9 @@ export function TerminalTranscript({
 
   useEffect(() => {
     return () => {
-      if (copyResetRef.current) clearTimeout(copyResetRef.current);
+      clearStoredTimeout(copyResetRef);
     };
   }, []);
-
-  useEffect(() => {
-    void sourceKey;
-    setShowAllEvents(false);
-  }, [sourceKey]);
 
   // Stick-to-bottom: scroll to end when new events arrive.
   useEffect(() => {

@@ -1,13 +1,12 @@
 'use client';
 
 import { useMemo } from 'react';
+import { HighlightedTokens } from '@/HighlightedTokens';
 import { cn } from '@/lib/utils';
 import {
-  type HighlightToken,
   keyedLines,
   languageFromFilePath,
   normalizeLanguage,
-  renderTokenSpans,
   useHighlightedTokens,
 } from '@/syntax-highlighting';
 
@@ -23,16 +22,6 @@ export interface SyntaxHighlightedLineProps {
   filePath?: string;
   language?: string;
   className?: string;
-}
-
-function TokenSpans({
-  tokens,
-  fallback,
-}: {
-  tokens: HighlightToken[] | undefined;
-  fallback: string;
-}) {
-  return renderTokenSpans(tokens, fallback);
 }
 
 export function SyntaxHighlightedCode({
@@ -55,7 +44,7 @@ export function SyntaxHighlightedCode({
     >
       {stableLines.map(({ key, line }, index) => (
         <div key={key}>
-          <TokenSpans tokens={tokens?.[index]} fallback={line} />
+          <HighlightedTokens tokens={tokens?.[index]} fallback={line} />
         </div>
       ))}
     </pre>
@@ -76,7 +65,7 @@ export function SyntaxHighlightedLine({
 
   return (
     <span className={className}>
-      <TokenSpans tokens={tokens?.[0]} fallback={code} />
+      <HighlightedTokens tokens={tokens?.[0]} fallback={code} />
     </span>
   );
 }

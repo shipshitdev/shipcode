@@ -67,7 +67,7 @@ vi.mock('./ThreadPanelArchiveDialog', () => ({
     onConfirm: () => void;
   }) =>
     open ? (
-      <div role="dialog" aria-label="Archive issues">
+      <dialog open aria-label="Archive issues">
         <span>{issueNumber ? `Archive #${issueNumber}` : `Archive ${count}`}</span>
         <button type="button" onClick={onClose}>
           Close archive
@@ -75,7 +75,7 @@ vi.mock('./ThreadPanelArchiveDialog', () => ({
         <button type="button" onClick={onConfirm}>
           Confirm archive
         </button>
-      </div>
+      </dialog>
     ) : null,
 }));
 
@@ -92,7 +92,7 @@ vi.mock('./ThreadPanelBoardReviewDialog', () => ({
     onConfirm: () => void;
   }) =>
     open ? (
-      <div role="dialog" aria-label="Review board">
+      <dialog open aria-label="Review board">
         <span>Reviewing {count}</span>
         <button type="button" onClick={onClose}>
           Close triage
@@ -100,7 +100,7 @@ vi.mock('./ThreadPanelBoardReviewDialog', () => ({
         <button type="button" onClick={onConfirm}>
           Confirm triage
         </button>
-      </div>
+      </dialog>
     ) : null,
 }));
 

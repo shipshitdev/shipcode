@@ -386,6 +386,10 @@ function useKanbanBoardView({
       }),
     [approvalFilter, issueApprovalBadgeById, issueStalenessById, sortedIssues, stalenessFilter],
   );
+  const visibleColumns = useMemo(
+    () => COLUMNS.filter((col) => !hiddenColumns.has(col.key)),
+    [hiddenColumns],
+  );
   const visibleIssuesByColumn = useMemo(() => {
     const next = new Map<ColumnKey, GitHubIssueCacheRecord[]>();
     for (const column of COLUMNS) {
@@ -862,7 +866,7 @@ function useKanbanBoardView({
                   onShowColumn={handleShowColumn}
                 />
               )}
-              {COLUMNS.filter((col) => !hiddenColumns.has(col.key)).map((col) => {
+              {visibleColumns.map((col) => {
                 if (col.sections) {
                   return (
                     <StackedColumn

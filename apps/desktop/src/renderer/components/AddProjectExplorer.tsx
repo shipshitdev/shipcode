@@ -15,6 +15,8 @@ interface ListResult {
   error: 'permission-denied' | 'not-found' | null;
 }
 
+const EMPTY_ENTRIES: DirEntry[] = [];
+
 interface ExplorerState {
   cwd: string;
   selectedIndex: number;
@@ -104,7 +106,7 @@ export function AddProjectExplorer() {
     staleTime: 5_000,
   });
 
-  const entries = listing?.entries ?? [];
+  const entries = listing?.entries ?? EMPTY_ENTRIES;
   const listError = listing?.error ?? null;
 
   // ── Navigation helpers ───────────────────────────────────────────────

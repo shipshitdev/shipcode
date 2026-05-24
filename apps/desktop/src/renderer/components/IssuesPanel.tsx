@@ -18,7 +18,6 @@ import {
 import { AUTOMATION_ISSUE_NUMBER_BASE, isAutomationIssue, KanbanBoard } from '@shipcode/ui';
 import {
   Button,
-  cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -26,17 +25,7 @@ import {
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
-import {
-  Braces,
-  Check,
-  ChevronDown,
-  FolderOpen,
-  Ghost,
-  RefreshCw,
-  Terminal,
-  X,
-} from 'lucide-react';
-import type { ComponentType } from 'react';
+import { Check, ChevronDown, RefreshCw, X } from 'lucide-react';
 import {
   lazy,
   Suspense,
@@ -56,10 +45,14 @@ const ProjectGraphTab = lazy(() =>
 
 import { useAppStore } from '../stores/app-store';
 import { currentIsoTimestamp } from './format-timestamp';
+import { ProjectOpenTargetIcon } from './ProjectOpenTargetIcon';
 import { ThreadPanelArchiveDialog } from './ThreadPanelArchiveDialog';
 import { ThreadPanelBoardReviewDialog } from './ThreadPanelBoardReviewDialog';
 
 const EMPTY_ISSUES: GitHubIssueCacheRecord[] = [];
+const EMPTY_THREADS: Thread[] = [];
+const EMPTY_BRANCHES: string[] = [];
+const EMPTY_LATEST_PLAN_STATUS_BY_THREAD_ID: IssuesPanelData['latestPlanStatusByThreadId'] = {};
 const ARCHIVABLE_PIPELINE_STATUSES: IssuePipelineStatus[] = [ISSUE_PIPELINE_STATUS.closed];
 const KANBAN_FLASH_MS = 1600;
 const PROJECT_OPEN_TARGETS: ProjectOpenTarget[] = [
@@ -71,8 +64,6 @@ const PROJECT_OPEN_TARGETS: ProjectOpenTarget[] = [
   't3code',
 ];
 
-type AppIcon = ComponentType<{ size?: number; className?: string }>;
-
 const PROJECT_OPEN_TARGET_LABELS: Record<ProjectOpenTarget, string> = {
   cursor: 'Cursor',
   finder: 'Finder',
@@ -82,56 +73,47 @@ const PROJECT_OPEN_TARGET_LABELS: Record<ProjectOpenTarget, string> = {
   t3code: 'T3 Code',
 };
 
-function CursorLogoIcon({ size = 14, className }: { size?: number; className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-    >
-      <path d="M12 2.25 21 7.2v9.6l-9 4.95-9-4.95V7.2l9-4.95Z" fill="#F4F4F5" />
-      <path d="m12 2.25 9 4.95-9 4.95-9-4.95 9-4.95Z" fill="#D4D4D8" />
-      <path d="M12 12.15 21 7.2v9.6l-9 4.95v-9.6Z" fill="#A1A1AA" />
-      <path d="M12 12.15 3 7.2v9.6l9 4.95v-9.6Z" fill="#E4E4E7" />
-      <path d="m12 2.25 9 4.95-9 4.95-9-4.95 9-4.95Z" stroke="#27272A" strokeWidth="1.2" />
-      <path d="M3 7.2v9.6l9 4.95 9-4.95V7.2" stroke="#27272A" strokeWidth="1.2" />
-      <path d="M12 12.15v9.6" stroke="#27272A" strokeWidth="1.2" />
-    </svg>
-  );
+function clearFlashTimeouts(ref: { current: Map<string, ReturnType<typeof setTimeout>> }) {
+  const flashTimeouts = ref.current;
+  for (const timeout of flashTimeouts.values()) {
+    clearTimeout(timeout);
+  }
+  flashTimeouts.clear();
 }
 
-function VSCodeLogoIcon({ size = 14, className }: { size?: number; className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-    >
-      <path
-        d="M20.7 4.2 15.9 2 7.2 10.4 3.2 7.4 1.6 8.2v7.6l1.6.8 4-3 8.7 8.4 4.8-2.2V4.2Z"
-        fill="#007ACC"
-      />
-      <path d="M15.9 7.45 9.35 12l6.55 4.55V7.45Z" fill="#1F9CF0" />
-      <path d="M3.2 7.4 7.2 10.4 3.2 13.4V7.4Z" fill="#40B6FF" />
-      <path d="M3.2 10.6 7.2 12 3.2 13.4v-2.8Z" fill="#007ACC" opacity=".75" />
-    </svg>
-  );
+function deleteFlashTimeout(
+  ref: { current: Map<string, ReturnType<typeof setTimeout>> },
+  issueId: string,
+) {
+  ref.current.delete(issueId);
 }
 
-const PROJECT_OPEN_TARGET_ICONS: Record<ProjectOpenTarget, AppIcon> = {
-  cursor: CursorLogoIcon,
-  finder: FolderOpen,
-  terminal: Terminal,
-  ghostty: Ghost,
-  vscode: VSCodeLogoIcon,
-  t3code: Braces,
-};
+function restartFlashTimeout(
+  ref: { current: Map<string, ReturnType<typeof setTimeout>> },
+  issueId: string,
+  dispatch: (action: FlashingIssueIdsAction) => void,
+) {
+  const flashTimeouts = ref.current;
+  const existing = flashTimeouts.get(issueId);
+  if (existing) clearTimeout(existing);
+
+  const timeout = setTimeout(() => {
+    deleteFlashTimeout(ref, issueId);
+    dispatch({ type: 'remove', id: issueId });
+  }, KANBAN_FLASH_MS);
+  flashTimeouts.set(issueId, timeout);
+}
+
+function clearFlashTimeout(
+  ref: { current: Map<string, ReturnType<typeof setTimeout>> },
+  issueId: string,
+) {
+  const flashTimeouts = ref.current;
+  const timeout = flashTimeouts.get(issueId);
+  if (!timeout) return;
+  clearTimeout(timeout);
+  flashTimeouts.delete(issueId);
+}
 
 type FlashingIssueIdsAction = { type: 'add'; ids: string[] } | { type: 'remove'; id: string };
 
@@ -209,11 +191,6 @@ function automationThreadToIssue(thread: Thread, projectId: string): GitHubIssue
   };
 }
 
-function DesktopAppIcon({ target, className }: { target: ProjectOpenTarget; className?: string }) {
-  const Icon = PROJECT_OPEN_TARGET_ICONS[target];
-  return <Icon size={14} className={cn('size-4 shrink-0 text-secondary', className)} />;
-}
-
 function ProjectOpenControl({
   project,
   settings,
@@ -268,7 +245,7 @@ function ProjectOpenControl({
         }
         aria-label={`Open ${project.name} in ${defaultLabel}`}
       >
-        <DesktopAppIcon target={defaultTarget} />
+        <ProjectOpenTargetIcon target={defaultTarget} />
         <span>open</span>
       </Button>
       <DropdownMenu>
@@ -299,7 +276,7 @@ function ProjectOpenControl({
                 <span className="flex size-3.5 items-center justify-center">
                   {target === defaultTarget ? <Check size={12} /> : null}
                 </span>
-                <DesktopAppIcon target={target} className="size-3.5" />
+                <ProjectOpenTargetIcon target={target} className="size-3.5" />
                 <span className="truncate">
                   {label}
                   {!available ? ' (Unavailable)' : ''}
@@ -451,7 +428,7 @@ function useIssuesPanelView() {
 
   const project: Project | null = panelData?.project ?? null;
   const settings: AppSettings | undefined = panelData?.settings;
-  const threads: Thread[] = panelData?.threads ?? [];
+  const threads: Thread[] = panelData?.threads ?? EMPTY_THREADS;
   const threadById = useMemo(
     () => new Map(threads.map((thread) => [thread.id, thread])),
     [threads],
@@ -481,8 +458,9 @@ function useIssuesPanelView() {
     enabled: !!activeProjectId,
     staleTime: 10_000,
   });
-  const latestPlanStatusByThreadId = panelData?.latestPlanStatusByThreadId ?? {};
-  const branches: string[] = branchData ?? panelData?.branches ?? [];
+  const latestPlanStatusByThreadId =
+    panelData?.latestPlanStatusByThreadId ?? EMPTY_LATEST_PLAN_STATUS_BY_THREAD_ID;
+  const branches: string[] = branchData ?? panelData?.branches ?? EMPTY_BRANCHES;
   const boardIssues = useMemo(() => {
     if (!activeProjectId) return issues;
     const issueThreadIds = new Set(
@@ -536,32 +514,19 @@ function useIssuesPanelView() {
     dispatchFlashingIssueIds({ type: 'add', ids: changedIds });
 
     for (const issueId of changedIds) {
-      const existing = flashTimeoutsByIssueId.current.get(issueId);
-      if (existing) clearTimeout(existing);
-
-      const timeout = setTimeout(() => {
-        flashTimeoutsByIssueId.current.delete(issueId);
-        dispatchFlashingIssueIds({ type: 'remove', id: issueId });
-      }, KANBAN_FLASH_MS);
-      flashTimeoutsByIssueId.current.set(issueId, timeout);
+      restartFlashTimeout(flashTimeoutsByIssueId, issueId, dispatchFlashingIssueIds);
     }
 
     return () => {
       for (const issueId of changedIds) {
-        const timeout = flashTimeoutsByIssueId.current.get(issueId);
-        if (!timeout) continue;
-        clearTimeout(timeout);
-        flashTimeoutsByIssueId.current.delete(issueId);
+        clearFlashTimeout(flashTimeoutsByIssueId, issueId);
       }
     };
   }, [boardIssues]);
 
   useEffect(() => {
     return () => {
-      for (const timeout of flashTimeoutsByIssueId.current.values()) {
-        clearTimeout(timeout);
-      }
-      flashTimeoutsByIssueId.current.clear();
+      clearFlashTimeouts(flashTimeoutsByIssueId);
     };
   }, []);
 
