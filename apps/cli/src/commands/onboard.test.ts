@@ -2,6 +2,24 @@ import { CURRENT_ONBOARDING_VERSION, SHIPCODE_DEFAULT_LABELS } from '@shipcode/s
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type ExecCallback = (error: Error | null, result?: { stdout: string; stderr: string }) => void;
+const execCallback = (opts: unknown, cb?: unknown) =>
+  (typeof opts === 'function' ? opts : cb) as ExecCallback;
+const mockExecCommands = (
+  commands: Record<string, Error | Partial<{ stdout: string; stderr: string }>>,
+) =>
+  execMock.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
+    const callback = execCallback(opts, cb);
+    const result = commands[cmd];
+    if (result instanceof Error) {
+      callback(result);
+      return;
+    }
+    if (result) {
+      callback(null, { stdout: result.stdout ?? '', stderr: result.stderr ?? '' });
+      return;
+    }
+    callback(new Error(`unexpected exec: ${cmd}`));
+  });
 
 const {
   execMock,
@@ -104,32 +122,19 @@ describe('onboardCommand', () => {
     addProjectMock.mockReturnValue({ id: 'project-1' });
     getRemoteUrlMock.mockResolvedValue('git@github.com:shipshitdev/shipcode.git');
     getDefaultBranchMock.mockResolvedValue('main');
-    execMock.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
-      const callback = (typeof opts === 'function' ? opts : cb) as ExecCallback;
-      if (cmd === 'gh auth status 2>&1') {
-        callback(null, { stdout: 'Token scopes: repo, project', stderr: '' });
-        return;
-      }
-      if (cmd === 'git rev-parse --is-inside-work-tree') {
-        callback(null, { stdout: 'true\n', stderr: '' });
-        return;
-      }
-      if (cmd === 'gh repo view --json nameWithOwner -q .nameWithOwner') {
-        callback(null, { stdout: 'shipshitdev/shipcode\n', stderr: '' });
-        return;
-      }
-      if (cmd === 'gh label list --json name -q ".[].name"') {
-        callback(null, {
-          stdout: 'shipcode:agent:claude\nshipcode:agent:codex\nshipcode:agent:openrouter\n',
-          stderr: '',
-        });
-        return;
-      }
-      callback(new Error(`unexpected exec: ${cmd}`));
+    mockExecCommands({
+      'gh auth status 2>&1': { stdout: 'Token scopes: repo, project' },
+      'git rev-parse --is-inside-work-tree': { stdout: 'true\n' },
+      'gh repo view --json nameWithOwner -q .nameWithOwner': {
+        stdout: 'shipshitdev/shipcode\n',
+      },
+      'gh label list --json name -q ".[].name"': {
+        stdout: 'shipcode:agent:claude\nshipcode:agent:codex\nshipcode:agent:openrouter\n',
+      },
     });
     execFileMock.mockImplementation(
       (_file: string, _args: string[], _opts: unknown, cb?: unknown) => {
-        const callback = (typeof _opts === 'function' ? _opts : cb) as ExecCallback;
+        const callback = execCallback(_opts, cb);
         callback(null, { stdout: '', stderr: '' });
       },
     );
@@ -191,25 +196,13 @@ describe('onboardCommand', () => {
 
   it('creates missing labels and warns when project scope is absent', async () => {
     parseGhProjectScopeMock.mockReturnValueOnce(false);
-    execMock.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
-      const callback = (typeof opts === 'function' ? opts : cb) as ExecCallback;
-      if (cmd === 'gh auth status 2>&1') {
-        callback(null, { stdout: 'Token scopes: repo', stderr: '' });
-        return;
-      }
-      if (cmd === 'git rev-parse --is-inside-work-tree') {
-        callback(null, { stdout: 'true\n', stderr: '' });
-        return;
-      }
-      if (cmd === 'gh repo view --json nameWithOwner -q .nameWithOwner') {
-        callback(null, { stdout: 'shipshitdev/shipcode\n', stderr: '' });
-        return;
-      }
-      if (cmd === 'gh label list --json name -q ".[].name"') {
-        callback(null, { stdout: 'shipcode:agent:claude\n', stderr: '' });
-        return;
-      }
-      callback(new Error(`unexpected exec: ${cmd}`));
+    mockExecCommands({
+      'gh auth status 2>&1': { stdout: 'Token scopes: repo' },
+      'git rev-parse --is-inside-work-tree': { stdout: 'true\n' },
+      'gh repo view --json nameWithOwner -q .nameWithOwner': {
+        stdout: 'shipshitdev/shipcode\n',
+      },
+      'gh label list --json name -q ".[].name"': { stdout: 'shipcode:agent:claude\n' },
     });
 
     await onboardCommand();
@@ -235,7 +228,7 @@ describe('onboardCommand', () => {
 
   it('fails when gh or claude authentication is missing', async () => {
     execMock.mockImplementationOnce((cmd: string, opts: unknown, cb?: unknown) => {
-      const callback = (typeof opts === 'function' ? opts : cb) as ExecCallback;
+      const callback = execCallback(opts, cb);
       if (cmd === 'gh auth status 2>&1') {
         callback(new Error('not logged in'));
         return;
@@ -256,7 +249,7 @@ describe('onboardCommand', () => {
     parseGhProjectScopeMock.mockReturnValue(null);
     checkClaudeAuthMock.mockResolvedValue(false);
     execMock.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
-      const callback = (typeof opts === 'function' ? opts : cb) as ExecCallback;
+      const callback = execCallback(opts, cb);
       if (cmd === 'gh auth status 2>&1') {
         callback(null, { stdout: 'authenticated', stderr: '' });
         return;
@@ -296,28 +289,15 @@ describe('onboardCommand', () => {
       listProjectsMock.mockReturnValue([{ id: 'project-1', path: process.cwd() }]);
       getRemoteUrlMock.mockResolvedValue(null);
       getDefaultBranchMock.mockResolvedValue('trunk');
-      execMock.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
-        const callback = (typeof opts === 'function' ? opts : cb) as ExecCallback;
-        if (cmd === 'gh auth status 2>&1') {
-          callback(null, { stdout: 'authenticated', stderr: '' });
-          return;
-        }
-        if (cmd === 'git rev-parse --is-inside-work-tree') {
-          callback(null, { stdout: 'true\n', stderr: '' });
-          return;
-        }
-        if (cmd === 'gh repo view --json nameWithOwner -q .nameWithOwner') {
-          callback(null, { stdout: 'shipshitdev/shipcode\n', stderr: '' });
-          return;
-        }
-        if (cmd === 'gh label list --json name -q ".[].name"') {
-          callback(null, {
-            stdout: SHIPCODE_DEFAULT_LABELS.map((label) => label.name).join('\n'),
-            stderr: '',
-          });
-          return;
-        }
-        callback(new Error(`unexpected exec: ${cmd}`));
+      mockExecCommands({
+        'gh auth status 2>&1': { stdout: 'authenticated' },
+        'git rev-parse --is-inside-work-tree': { stdout: 'true\n' },
+        'gh repo view --json nameWithOwner -q .nameWithOwner': {
+          stdout: 'shipshitdev/shipcode\n',
+        },
+        'gh label list --json name -q ".[].name"': {
+          stdout: SHIPCODE_DEFAULT_LABELS.map((label) => label.name).join('\n'),
+        },
       });
 
       await onboardCommand();
@@ -337,7 +317,7 @@ describe('onboardCommand', () => {
 
   it('fails outside git or unresolved GitHub repository context', async () => {
     execMock.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
-      const callback = (typeof opts === 'function' ? opts : cb) as ExecCallback;
+      const callback = execCallback(opts, cb);
       if (cmd === 'gh auth status 2>&1') {
         callback(null, { stdout: 'authenticated', stderr: '' });
         return;
@@ -363,7 +343,7 @@ describe('onboardCommand', () => {
     checkCodexAuthMock.mockResolvedValue(true);
     parseGhProjectScopeMock.mockReturnValue(true);
     execMock.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
-      const callback = (typeof opts === 'function' ? opts : cb) as ExecCallback;
+      const callback = execCallback(opts, cb);
       if (cmd === 'gh auth status 2>&1') {
         callback(null, { stdout: 'Token scopes: repo, project', stderr: '' });
         return;
@@ -386,25 +366,13 @@ describe('onboardCommand', () => {
   });
 
   it('continues when label checks or individual label creation fail', async () => {
-    execMock.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
-      const callback = (typeof opts === 'function' ? opts : cb) as ExecCallback;
-      if (cmd === 'gh auth status 2>&1') {
-        callback(null, { stdout: 'Token scopes: repo, project', stderr: '' });
-        return;
-      }
-      if (cmd === 'git rev-parse --is-inside-work-tree') {
-        callback(null, { stdout: 'true\n', stderr: '' });
-        return;
-      }
-      if (cmd === 'gh repo view --json nameWithOwner -q .nameWithOwner') {
-        callback(null, { stdout: 'shipshitdev/shipcode\n', stderr: '' });
-        return;
-      }
-      if (cmd === 'gh label list --json name -q ".[].name"') {
-        callback(new Error('labels unavailable'));
-        return;
-      }
-      callback(new Error(`unexpected exec: ${cmd}`));
+    mockExecCommands({
+      'gh auth status 2>&1': { stdout: 'Token scopes: repo, project' },
+      'git rev-parse --is-inside-work-tree': { stdout: 'true\n' },
+      'gh repo view --json nameWithOwner -q .nameWithOwner': {
+        stdout: 'shipshitdev/shipcode\n',
+      },
+      'gh label list --json name -q ".[].name"': new Error('labels unavailable'),
     });
 
     await onboardCommand();
@@ -420,29 +388,17 @@ describe('onboardCommand', () => {
     checkClaudeAuthMock.mockResolvedValue(true);
     checkCodexAuthMock.mockResolvedValue(true);
     parseGhProjectScopeMock.mockReturnValue(true);
-    execMock.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
-      const callback = (typeof opts === 'function' ? opts : cb) as ExecCallback;
-      if (cmd === 'gh auth status 2>&1') {
-        callback(null, { stdout: 'Token scopes: repo, project', stderr: '' });
-        return;
-      }
-      if (cmd === 'git rev-parse --is-inside-work-tree') {
-        callback(null, { stdout: 'true\n', stderr: '' });
-        return;
-      }
-      if (cmd === 'gh repo view --json nameWithOwner -q .nameWithOwner') {
-        callback(null, { stdout: 'shipshitdev/shipcode\n', stderr: '' });
-        return;
-      }
-      if (cmd === 'gh label list --json name -q ".[].name"') {
-        callback(null, { stdout: 'shipcode:agent:claude\n', stderr: '' });
-        return;
-      }
-      callback(new Error(`unexpected exec: ${cmd}`));
+    mockExecCommands({
+      'gh auth status 2>&1': { stdout: 'Token scopes: repo, project' },
+      'git rev-parse --is-inside-work-tree': { stdout: 'true\n' },
+      'gh repo view --json nameWithOwner -q .nameWithOwner': {
+        stdout: 'shipshitdev/shipcode\n',
+      },
+      'gh label list --json name -q ".[].name"': { stdout: 'shipcode:agent:claude\n' },
     });
     execFileMock.mockImplementationOnce(
       (_file: string, _args: string[], _opts: unknown, cb?: unknown) => {
-        const callback = (typeof _opts === 'function' ? _opts : cb) as ExecCallback;
+        const callback = execCallback(_opts, cb);
         callback('duplicate label' as unknown as Error);
       },
     );
@@ -470,7 +426,7 @@ describe('onboardCommand', () => {
     });
     parseGhProjectScopeMock.mockReturnValueOnce(null);
     execMock.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
-      const callback = (typeof opts === 'function' ? opts : cb) as ExecCallback;
+      const callback = execCallback(opts, cb);
       if (cmd === 'gh auth status 2>&1') {
         callback(null, {} as { stdout: string; stderr: string });
         return;
@@ -491,7 +447,7 @@ describe('onboardCommand', () => {
     });
     execFileMock.mockImplementation(
       (_file: string, _args: string[], _opts: unknown, cb?: unknown) => {
-        const callback = (typeof _opts === 'function' ? _opts : cb) as ExecCallback;
+        const callback = execCallback(_opts, cb);
         callback(new Error('create failed\nextra detail'));
       },
     );
