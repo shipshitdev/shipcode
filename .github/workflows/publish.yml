@@ -218,7 +218,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   update-homebrew-cask:
-    if: ${{ github.event_name == 'release' || (inputs.build_macos && inputs.update_homebrew) }}
+    if: ${{ (github.event_name == 'release' && vars.HOMEBREW_PUBLISH_ENABLED == 'true') || (inputs.build_macos && inputs.update_homebrew) }}
     needs:
       - validate-release
       - build-desktop-macos
