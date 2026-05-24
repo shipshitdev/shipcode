@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [staging, master]
   pull_request:
-    branches: [master, develop]
+    branches: [develop, staging, master]
   schedule:
     - cron: '0 6 * * 0'
   workflow_dispatch:
@@ -22,7 +22,12 @@ concurrency:
 
 jobs:
   quality:
-    if: github.event_name != 'schedule'
+    if: |
+      github.event_name != 'schedule' &&
+      (
+        github.event_name != 'pull_request' ||
+        github.base_ref != 'develop'
+      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +45,25 @@ jobs:
       - run: bun run lint
       - run: bun run typecheck
       - run: bun run test:ci
+
+  fast-qa:
+    if: github.event_name == 'pull_request' && github.base_ref == 'develop'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+      - run: bun install --frozen-lockfile
+      - run: bun run format:check
+      - run: bun run lint:repo
+      - run: bun run lint
+      - run: bun run typecheck
 
   coverage:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')

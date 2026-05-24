@@ -1,3 +1,4 @@
+import { TooltipProvider } from '@shipcode/ui';
 import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
@@ -44,7 +45,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="bg-primary text-primary antialiased">{children}</body>
+      <body className="bg-primary text-primary antialiased">
+        <TooltipProvider delayDuration={400}>{children}</TooltipProvider>
+      </body>
     </html>
   );
 }
