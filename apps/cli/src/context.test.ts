@@ -60,6 +60,7 @@ vi.mock('@shipcode/db', () => ({
   FeatureQaResultQueries: mocks.Query,
   GitHubIssueQueries: mocks.Query,
   getDatabase: mocks.getDatabase,
+  PipelineRunQueries: mocks.Query,
   PipelineStepQueries: mocks.Query,
   PlanQueries: mocks.Query,
   ProjectFailureQueries: mocks.Query,

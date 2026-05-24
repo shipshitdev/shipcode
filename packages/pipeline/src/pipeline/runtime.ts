@@ -873,6 +873,12 @@ export function createPipelineRuntime(
     try {
       const issue = deps.githubIssues.getByNumber(context.projectId, context.githubIssueNumber);
       if (!issue) return;
+      if (issue.executionRunId && issue.executionRunId !== runId) {
+        console.warn(
+          `[pipeline] issue execution lock already held for thread ${context.threadId}, run ${runId}`,
+        );
+        return;
+      }
       const claimed = deps.pipelineRuns.claimIssueExecution({
         issueId: issue.id,
         runId,

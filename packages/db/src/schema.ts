@@ -1773,3 +1773,23 @@ export function migrateV58(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (58)`);
   });
 }
+
+export function migrateV59(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 59) return;
+
+  transaction(db, () => {
+    execAlterTablesIfMissing(db, [
+      'ALTER TABLE github_issue_cache ADD COLUMN pipeline_started_at TEXT',
+      'ALTER TABLE terminal_events ADD COLUMN run_id TEXT REFERENCES pipeline_runs(id) ON DELETE SET NULL',
+      'ALTER TABLE prompt_telemetry ADD COLUMN run_id TEXT REFERENCES pipeline_runs(id) ON DELETE SET NULL',
+      'ALTER TABLE agent_conversations ADD COLUMN run_id TEXT REFERENCES pipeline_runs(id) ON DELETE SET NULL',
+      'ALTER TABLE pipeline_phase_log ADD COLUMN run_id TEXT REFERENCES pipeline_runs(id) ON DELETE SET NULL',
+      'ALTER TABLE pipeline_step_log ADD COLUMN run_id TEXT REFERENCES pipeline_runs(id) ON DELETE SET NULL',
+    ]);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (59)`);
+  });
+}

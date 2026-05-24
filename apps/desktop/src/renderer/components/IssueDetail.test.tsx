@@ -1277,6 +1277,7 @@ describe('IssueDetail', () => {
       'Comments',
       'Plans',
       'Diff',
+      'Runs',
       'Activity',
       'Conversations',
     ]);

@@ -767,6 +767,25 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       return;
     }
 
+    if (
+      deps.pipelineRuns &&
+      context.projectId &&
+      isRealGithubIssueNumber(context.githubIssueNumber)
+    ) {
+      const lockedIssue = deps.githubIssues.getByNumber(
+        context.projectId,
+        context.githubIssueNumber,
+      );
+      if (
+        lockedIssue?.executionRunId &&
+        context.runId &&
+        lockedIssue.executionRunId !== context.runId
+      ) {
+        emitPhase(threadId, 'approval');
+        return;
+      }
+    }
+
     emitPhase(threadId, 'executing');
 
     ensureRepoPromptMaterials(context);

@@ -301,6 +301,7 @@ function useDraggableCardView({
   const hasMenuItems =
     Boolean(branchName && onCopyBranchName && !isAutomation) ||
     Boolean(isPaused && onResume) ||
+    Boolean(isActive && onPause) ||
     Boolean(isActive && onCancel) ||
     Boolean(isCompleted && onCreatePr && !issue.linkedPrNumber) ||
     Boolean((isCompleted || isFailed) && onMarkDone) ||
@@ -546,19 +547,29 @@ function useDraggableCardView({
                   {branchName && onCopyBranchName && !isAutomation && (
                     <DropdownMenuItem onClick={() => onCopyBranchName(issue, branchName)}>
                       {branchCopyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
-                      {branchCopyState === 'copied' ? (
-                        'Copied!'
-                      ) : (
-                        <span className="max-w-[160px] truncate font-mono text-[11px]">
-                          {branchName}
-                        </span>
-                      )}
+                      {branchCopyState === 'copied' ? 'Copied!' : 'Copy branch'}
                     </DropdownMenuItem>
                   )}
                   {isPaused && onResume && (
                     <DropdownMenuItem onClick={() => onResume(issue)}>
                       <Play size={14} />
                       Resume
+                    </DropdownMenuItem>
+                  )}
+                  {isActive && onPause && (
+                    <DropdownMenuItem
+                      disabled={isPausing}
+                      onClick={() => {
+                        if (isPausing) return;
+                        onPause(issue);
+                      }}
+                    >
+                      {isPausing ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Square size={14} />
+                      )}
+                      {isPausing ? 'Pausing' : 'Pause'}
                     </DropdownMenuItem>
                   )}
                   {isActive && onCancel && (

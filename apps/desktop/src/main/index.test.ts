@@ -152,6 +152,9 @@ class QueryMock {
     id: 'terminal-1',
     ...(record as Record<string, unknown>),
   }));
+  markInterruptedForThread = vi.fn((_threadId: string, _errorMsg: string) => ({
+    id: 'run-interrupted',
+  }));
 }
 
 function installMocks() {
@@ -197,7 +200,9 @@ function installMocks() {
     NotificationsQueries: QueryMock,
     PhaseLogQueries: QueryMock,
     PipelineAnalyticsQueries: QueryMock,
+    PipelineRunQueries: QueryMock,
     PipelineStepQueries: QueryMock,
+    PipelineWakeRequestQueries: QueryMock,
     PlanQueries: QueryMock,
     ProjectFailureQueries: QueryMock,
     ProjectQueries: QueryMock,
