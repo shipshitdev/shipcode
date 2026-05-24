@@ -85,9 +85,41 @@ jobs:
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+  release-quality:
+    needs: validate-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install native test dependencies
+        run: sudo apt-get update && sudo apt-get install -y ripgrep build-essential python3
+      - run: bun install --frozen-lockfile
+      - run: bun run format:check
+      - run: bun run lint:repo
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run test:ci
+      - name: Build docs export
+        run: bun run sync:docs
+      - name: Build web
+        run: bun run build:web
+      - name: Build CLI package
+        run: bun run turbo run build --filter=@shipshitdev/shipcode
+      - name: Smoke-test CLI entrypoint
+        run: node apps/cli/dist/index.js --help
+      - name: Build desktop app code
+        run: cd apps/desktop && bun run build:code
+
   deploy-web:
     if: ${{ github.event_name == 'release' || inputs.deploy_web }}
-    needs: validate-release
+    needs:
+      - validate-release
+      - release-quality
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
@@ -107,15 +139,17 @@ jobs:
       - name: Sync docs into web bundle
         run: bun run sync:docs
       - name: Pull Vercel project settings
-        run: vercel pull --cwd apps/web --yes --environment=production --token "${{ secrets.VERCEL_TOKEN }}"
+        run: vercel pull --yes --environment=production --token "${{ secrets.VERCEL_TOKEN }}"
       - name: Build Vercel artifact
-        run: vercel build --cwd apps/web --prod --token "${{ secrets.VERCEL_TOKEN }}"
+        run: vercel build --prod --token "${{ secrets.VERCEL_TOKEN }}"
       - name: Deploy web to Vercel production
-        run: vercel deploy --cwd apps/web --prebuilt --prod --token "${{ secrets.VERCEL_TOKEN }}"
+        run: vercel deploy --prebuilt --prod --token "${{ secrets.VERCEL_TOKEN }}"
 
   build-desktop-linux:
     if: ${{ github.event_name == 'release' || inputs.build_linux }}
-    needs: validate-release
+    needs:
+      - validate-release
+      - release-quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -143,7 +177,9 @@ jobs:
 
   build-desktop-macos:
     if: ${{ github.event_name == 'release' || inputs.build_macos }}
-    needs: validate-release
+    needs:
+      - validate-release
+      - release-quality
     strategy:
       fail-fast: false
       matrix:
@@ -260,7 +296,9 @@ jobs:
 
   publish-cli:
     if: ${{ github.event_name == 'release' || inputs.publish_cli }}
-    needs: validate-release
+    needs:
+      - validate-release
+      - release-quality
     runs-on: ubuntu-latest
     permissions:
       id-token: write

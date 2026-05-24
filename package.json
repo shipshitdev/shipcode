@@ -27,7 +27,7 @@
     "coverage:legacy": "turbo run coverage && node scripts/coverage-summary.mjs",
     "coverage:sharded": "node scripts/run-coverage-shards.mjs",
     "coverage:summary": "node scripts/coverage-summary.mjs",
-    "deploy:web": "bun run sync:docs && vercel deploy --cwd apps/web --prod --yes",
+    "deploy:web": "bun run sync:docs && vercel deploy --prod --yes",
     "deps:update": "bunx npm-check-updates -u --deep --cooldown 3h && bun install",
     "deadcode": "bunx knip --production --include files,exports,dependencies,unlisted,unresolved --no-progress",
     "dev": "turbo run dev --filter=@shipcode/desktop",
@@ -54,6 +54,7 @@
     "packages/*"
   ],
   "patchedDependencies": {
-    "nextra@4.6.1": "patches/nextra@4.6.1.patch"
+    "nextra@4.6.1": "patches/nextra@4.6.1.patch",
+    "nextra-theme-docs@4.6.1": "patches/nextra-theme-docs@4.6.1.patch"
   }
 }
