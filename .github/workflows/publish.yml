@@ -162,6 +162,8 @@ jobs:
       - name: Install native build dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential python3
       - run: bun install
+      - name: Build desktop dependencies
+        run: bun run turbo run build --filter=@shipcode/desktop^...
       - name: Build desktop app
         run: cd apps/desktop && bun run build:code
       - name: Package Linux installers
@@ -198,6 +200,8 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: bun install
+      - name: Build desktop dependencies
+        run: bun run turbo run build --filter=@shipcode/desktop^...
       - name: Build desktop app
         run: cd apps/desktop && bun run build:code
       - name: Package macOS installers
@@ -299,7 +303,7 @@ jobs:
           git push
 
   publish-cli:
-    if: ${{ github.event_name == 'release' || inputs.publish_cli }}
+    if: ${{ (github.event_name == 'release' && vars.NPM_PUBLISH_ENABLED == 'true') || inputs.publish_cli }}
     needs:
       - validate-release
       - release-quality
