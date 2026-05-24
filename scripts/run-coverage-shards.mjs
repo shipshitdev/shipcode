@@ -10,7 +10,7 @@ const VITEST_BIN = path.join(
   process.platform === 'win32' ? 'vitest.cmd' : 'vitest',
 );
 const DEFAULT_SHARDS = 4;
-const DEFAULT_MAX_WORKERS = 2;
+const DEFAULT_MAX_WORKERS = 1;
 const shards = Number(process.env.COVERAGE_SHARDS ?? DEFAULT_SHARDS);
 const maxWorkers = Number(process.env.COVERAGE_MAX_WORKERS ?? DEFAULT_MAX_WORKERS);
 const workspaceFilter = process.env.COVERAGE_WORKSPACES?.split(',')
