@@ -7,8 +7,8 @@ WEB_DIR="$ROOT_DIR/apps/web"
 
 echo "Building docs export with /docs base path..."
 (
-  cd "$DOCS_DIR"
-  DOCS_BASE_PATH=/docs bun run build
+  cd "$ROOT_DIR"
+  DOCS_BASE_PATH=/docs bun run turbo run build --filter=@shipcode/docs
 )
 
 echo "Syncing exported docs into apps/web/public/docs..."
