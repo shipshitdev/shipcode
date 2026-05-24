@@ -4,8 +4,37 @@ import path from 'node:path';
 const ROOT = process.cwd();
 const SEARCH_ROOTS = ['apps', 'packages'];
 const METRIC_KEYS = ['lines', 'statements', 'functions', 'branches'];
-const DEFAULT_MIN_COVERAGE = 85;
-const MIN_COVERAGE = Number(process.env.COVERAGE_MIN ?? DEFAULT_MIN_COVERAGE);
+const DEFAULT_MIN_COVERAGE = 95;
+const DEFAULT_BRANCH_MIN_COVERAGE = 90;
+
+function readCoverageMin(envName, fallback) {
+  const raw = process.env[envName];
+  if (raw === undefined || raw === '') return fallback;
+
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 100) {
+    console.error(`${envName} must be a number between 0 and 100.`);
+    process.exit(1);
+  }
+
+  return value;
+}
+
+const MIN_COVERAGE = readCoverageMin('COVERAGE_MIN', DEFAULT_MIN_COVERAGE);
+const hasCoverageMin = process.env.COVERAGE_MIN !== undefined && process.env.COVERAGE_MIN !== '';
+const hasBranchMin =
+  process.env.COVERAGE_BRANCH_MIN !== undefined && process.env.COVERAGE_BRANCH_MIN !== '';
+const BRANCH_MIN_COVERAGE = hasBranchMin
+  ? readCoverageMin('COVERAGE_BRANCH_MIN', DEFAULT_BRANCH_MIN_COVERAGE)
+  : hasCoverageMin
+    ? MIN_COVERAGE
+    : DEFAULT_BRANCH_MIN_COVERAGE;
+const METRIC_THRESHOLDS = {
+  lines: MIN_COVERAGE,
+  statements: MIN_COVERAGE,
+  functions: MIN_COVERAGE,
+  branches: BRANCH_MIN_COVERAGE,
+};
 
 function findCoverageSummaries() {
   const found = [];
@@ -92,13 +121,16 @@ for (const key of METRIC_KEYS) {
   );
 }
 
-const belowThreshold = METRIC_KEYS.filter((key) => aggregate[key].pct < MIN_COVERAGE);
+const belowThreshold = METRIC_KEYS.filter((key) => aggregate[key].pct < METRIC_THRESHOLDS[key]);
 
 if (belowThreshold.length > 0) {
-  console.error(
-    `\nCoverage threshold failed. Minimum ${formatPct(MIN_COVERAGE)} required for: ${belowThreshold.join(', ')}`,
+  const failures = belowThreshold.map(
+    (key) => `${key} ${formatPct(aggregate[key].pct)} < ${formatPct(METRIC_THRESHOLDS[key])}`,
   );
+  console.error(`\nCoverage threshold failed: ${failures.join(', ')}`);
   process.exit(1);
 }
 
-console.log(`\nCoverage threshold passed at ${formatPct(MIN_COVERAGE)}.`);
+console.log(
+  `\nCoverage threshold passed at lines/statements/functions ${formatPct(MIN_COVERAGE)}, branches ${formatPct(BRANCH_MIN_COVERAGE)}.`,
+);
