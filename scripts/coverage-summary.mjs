@@ -21,10 +21,14 @@ function readCoverageMin(envName, fallback) {
 }
 
 const MIN_COVERAGE = readCoverageMin('COVERAGE_MIN', DEFAULT_MIN_COVERAGE);
-const BRANCH_MIN_COVERAGE =
-  process.env.COVERAGE_MIN !== undefined && process.env.COVERAGE_BRANCH_MIN === undefined
+const hasCoverageMin = process.env.COVERAGE_MIN !== undefined && process.env.COVERAGE_MIN !== '';
+const hasBranchMin =
+  process.env.COVERAGE_BRANCH_MIN !== undefined && process.env.COVERAGE_BRANCH_MIN !== '';
+const BRANCH_MIN_COVERAGE = hasBranchMin
+  ? readCoverageMin('COVERAGE_BRANCH_MIN', DEFAULT_BRANCH_MIN_COVERAGE)
+  : hasCoverageMin
     ? MIN_COVERAGE
-    : readCoverageMin('COVERAGE_BRANCH_MIN', DEFAULT_BRANCH_MIN_COVERAGE);
+    : DEFAULT_BRANCH_MIN_COVERAGE;
 const METRIC_THRESHOLDS = {
   lines: MIN_COVERAGE,
   statements: MIN_COVERAGE,

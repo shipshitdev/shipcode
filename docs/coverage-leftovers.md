@@ -8,8 +8,8 @@ Current gate:
 
 - Lines, statements, functions: 95%
 - Branches: 90%
-- `COVERAGE_MIN=<n>` overrides every metric for stricter one-off runs.
-- `COVERAGE_BRANCH_MIN=<n>` overrides only branch coverage when `COVERAGE_MIN` is unset.
+- `COVERAGE_MIN=<n>` overrides the base floor for every metric.
+- `COVERAGE_BRANCH_MIN=<n>` overrides branch coverage independently, including when `COVERAGE_MIN` is set.
 
 Verification snapshot:
 
