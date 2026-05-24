@@ -1,6 +1,8 @@
-import { useMutation } from '@tanstack/react-query';
 import type { CliHealth, GhAuthStatus, SystemHealth } from '@shipcode/shared';
-import { Badge, Button } from '@shipcode/ui';
+import { StartupProgress, type StartupProgressStep } from '@shipcode/ui';
+import { Badge, Button } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface AuthResult extends SystemHealth {
   ghAuth: GhAuthStatus;
@@ -26,7 +28,9 @@ function CliStatus({ label, health }: { label: string; health: CliHealth }) {
         )}
       </span>
       {health.version && (
-        <span className="ml-auto text-[11px] font-mono text-muted">{health.version}</span>
+        <span className="ml-auto text-[11px] font-mono text-muted-foreground">
+          {health.version}
+        </span>
       )}
     </div>
   );
@@ -47,7 +51,9 @@ export function StepAuthCheck({ authResult, onRecheck, isChecking }: Props) {
         proceed.
       </p>
 
-      {authResult ? (
+      {!authResult ? (
+        <AuthCheckProgress />
+      ) : (
         <div className="flex flex-col gap-2 mb-4">
           <CliStatus label="Claude CLI" health={authResult.claude} />
           <CliStatus label="Codex CLI" health={authResult.codex} />
@@ -65,12 +71,12 @@ export function StepAuthCheck({ authResult, onRecheck, isChecking }: Props) {
               )}
             </span>
             {ghAuth?.version && (
-              <span className="ml-auto text-[11px] font-mono text-muted">gh {ghAuth.version}</span>
+              <span className="ml-auto text-[11px] font-mono text-muted-foreground">
+                gh {ghAuth.version}
+              </span>
             )}
           </div>
         </div>
-      ) : (
-        <div className="py-6 text-center text-muted">Checking CLI status...</div>
       )}
 
       {authResult && aiAuthCount === 1 && (
@@ -97,15 +103,52 @@ export function StepAuthCheck({ authResult, onRecheck, isChecking }: Props) {
 
       <div className="flex gap-2 mt-2">
         <Button variant="secondary" onClick={onRecheck} disabled={isChecking}>
-          {isChecking ? 'Checking...' : 'Re-check'}
+          <LoadingButtonContent loading={isChecking}>Re-check</LoadingButtonContent>
         </Button>
       </div>
     </div>
   );
 }
 
+function AuthCheckProgress() {
+  const steps: StartupProgressStep[] = [
+    {
+      id: 'claude',
+      label: 'Check Claude CLI login',
+      detail: 'Verifying the CLI is installed and authenticated.',
+      status: 'active',
+    },
+    {
+      id: 'codex',
+      label: 'Check Codex CLI login',
+      detail: 'Verifying the CLI is installed and authenticated.',
+      status: 'active',
+    },
+    {
+      id: 'github',
+      label: 'Check GitHub CLI login',
+      detail: 'Verifying gh auth and project scope.',
+      status: 'active',
+    },
+  ];
+
+  return (
+    <StartupProgress
+      title="Checking login state"
+      subtitle="ShipCode uses your local CLI sessions."
+      steps={steps}
+      className="min-h-0 justify-start bg-transparent px-0 py-1"
+    />
+  );
+}
+
 export function useAuthCheck() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => window.shipcode.invoke<AuthResult>('onboarding:check-auth'),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['onboarding-auth'], result);
+      queryClient.invalidateQueries({ queryKey: ['system-health'] });
+    },
   });
 }

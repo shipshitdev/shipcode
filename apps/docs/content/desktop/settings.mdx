@@ -11,32 +11,65 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 | Setting | Default | Purpose |
 |---------|---------|---------|
 | `theme` | `system` | Light / dark / follow OS |
+| `fontStyle` | `dm-sans` | Renderer font family style |
+| `fontSize` | 13 | Base renderer font size |
 | `projectSortOrder` | `recent` | Sidebar project ordering — alpha / recent / added |
-| `terminalScrollback` | 5000 | Max lines retained in the Terminal drawer per thread |
+| `projectOpenTarget` | `cursor` | Default app for opening project folders |
+| `terminalOpenTarget` | `terminal` | Default app for opening terminal sessions |
+| `terminalScrollback` | 10000 | Max lines retained in the Terminal drawer per thread |
 | `worktreeRoot` | `~/.shipcode/worktrees` | Where isolated pipeline worktrees live — set to a blank string for legacy project-local behavior |
+| `worktreeBranchFormat` | `ship/{id}-{slug}` | Branch template for generated worktree branches |
+| `addProjectStartsIn` | — | Optional starting folder for the add-project file browser |
 
 ### Pipeline
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| `requireApproval` | false | Pause the pipeline at `awaiting_approval` after review for human sign-off |
-| `maxReviewRounds` | 2 | How many review → revise cycles before falling through (1–5) |
-| `plannerMaxTurns` | 12 | `--max-turns` cap on the planner and verifier Claude CLI runs (1–20). Execute and review are unaffected |
-| `reviewerReasoningEffort` | `high` | Codex reasoning effort for the review phase (low / medium / high) |
-| `autoPickupEnabled` | false | When on, ShipCode auto-pulls new `agent:*`-labeled issues from GitHub on a poll interval |
-| `githubPollingIntervalMs` | 60000 | GitHub polling interval when auto-pickup is enabled |
+| `requireApproval` | false | App default for the human approval gate. Project and issue overrides can require approval for a narrower scope, or turn it off for a specific repo / issue |
+| `revisionCount` | 0 | Default number of review → revise cycles before approval or execution. `0` skips plan review for the fastest path; per-project and per-issue overrides can raise or lower it |
+| `maxConcurrentPipelines` | 3 | Workspace-wide active pipeline cap |
+| `maxConcurrentExecutions` | 3 | Per-project execution cap after planning/approval |
+| `pipelineSpeedProfile` | `smart_fast` | Default scheduling/execution profile |
+| `agentRunModes` | interactive | Per-provider output mode controls for Claude and Codex issue execution, terminal fixes, and instant sessions |
+| `plannerReasoningEffort` | `low` | Default planner effort. Exact options depend on the selected provider |
+| `reviewerReasoningEffort` | `high` | Default reviewer effort. Exact options depend on the selected provider |
+| `executorReasoningEffort` | `medium` | Default executor effort. Exact options depend on the selected provider |
+| `verifierReasoningEffort` | `high` | Default verifier effort. Exact options depend on the selected provider |
+| `autoRunPriorities` | `[]` | Priority filter for auto-run. Empty = all priorities. Example: `["p0", "p1"]` |
+| `autoRunMaxTasks` | 0 | Maximum tasks launched by auto-run. `0` means all matching tasks |
+| `githubPollingIntervalMs` | 30000 | GitHub polling interval when auto-pickup is enabled |
 | `githubBotUsername` | — | Label filter used to skip issues already handled by the bot |
 
 ### Models
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| `executorModel` | `claude` | Default executor when no `agent:*` label is present (claude / codex / openrouter) |
-| `plannerModel` | `claude` | Planner model — **editable at onboarding only** |
-| `reviewerModel` | `codex` | Reviewer model — **editable at onboarding only** |
-| `verifierModel` | `claude` | Verifier model — **editable at onboarding only** |
+| `executorModel` | `codex` | Default executor when no `shipcode:agent:*` label is present (claude / codex / openrouter) |
+| `plannerModel` | `codex` | Global default planner model |
+| `reviewerModel` | `codex` | Global default reviewer model |
+| `verifierModel` | `codex` | Global default verifier model |
+| `triageModel` | `claude` | Provider for board review / Todo triage |
+| `triageAutoApplyThreshold` | `0.85` | Confidence threshold for auto-applying triage labels |
+| `prdRewriteCli` | `claude` | Format provider for PRD editing and automation prompt formatting |
 
-Only the executor is editable from this panel today. Planner, reviewer, and verifier are set during `shipcode onboard` (or the desktop onboarding wizard) and can be changed afterward by editing the `settings` row in the local SQLite DB. A full Models section is on the roadmap.
+All four phase models are editable here. These are the **global defaults** that new projects inherit unless they opt into a project-level override.
+
+Effort options are provider-specific:
+
+- Claude CLI: `none`, `medium`, `high`
+- Codex: `low`, `medium`, `high`, `xhigh`
+- OpenRouter: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`
+
+Override precedence:
+
+- Planner / Reviewer / Verifier: `global settings -> project override`
+- Executor: `global settings -> project override -> issue override`
+
+Claude-heavy work should normally enter through an interactive issue terminal session. Autonomous no-label pipeline runs default to Codex so `claude -p` / Agent SDK credit is not consumed unless a user explicitly selects Claude for a phase or applies a Claude routing label.
+
+The runtime tab shows Interactive CLI vs Programmatic output controls. Programmatic is intentionally disabled for now; the visible control reserves the setting shape without routing Claude through `claude -p` or an SDK wrapper while Anthropic's billing behavior is in flux.
+
+If an older stored value is no longer exact for the current provider, the UI shows the mapping explicitly instead of pretending it is supported. Kanban cards display the effective phase model plus the effective effort for the current phase.
 
 OpenRouter-specific toggles (`openrouterEnabled`, tier defaults, per-phase overrides) are documented on the [OpenRouter page](/openrouter).
 
@@ -46,16 +79,33 @@ OpenRouter-specific toggles (`openrouterEnabled`, tier defaults, per-phase overr
 |---------|---------|---------|
 | `notificationsEnabled` | true | Master switch |
 | `notificationOsEnabled` | true | Fire native OS notifications |
-| `notificationBadgeEnabled` | true | Show an unread count badge on the app icon |
+| `notificationBadgeEnabled` | true | Show an unread count badge for Inbox items on the app icon |
 | `notificationSoundEnabled` | false | Play a sound on events |
-| `notificationEvents.awaitingApproval` | on | Fire when a thread enters `awaiting_approval` |
+| `notificationEvents.approval` | on | Fire when a run needs human approval before execution |
 | `notificationEvents.failed` | on | Fire when any phase fails |
-| `notificationEvents.completed` | on | Fire when a PR is opened |
+| `notificationEvents.completed` | on | Fire when a PR is opened; the item stays in Inbox until dismissed |
 | `notificationEvents.verificationExhausted` | on | Fire when the verifier runs out of retries |
 
-### Archived Projects
+### Auto-commit
 
-Unarchive projects that have been hidden from the sidebar. Archived projects retain all their threads, plans, and cost history.
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `autoCommitEnabled` | true | Enables AI-generated commits from the Git tab |
+| `autoCommitModel` | `openrouter/auto` | OpenRouter model used to group and write commit messages |
+| `autoCommitMode` | `split` | Commit grouping behavior |
+| `cleanupCriteria` | see defaults | Controls which merged/closed branches and worktrees appear in cleanup |
+
+### Archived
+
+Unarchive projects that have been hidden from the sidebar and restore locally archived issues. Archived projects retain all their threads, plans, and cost history.
+
+### Developer
+
+Diagnostic actions for copying app/version info, opening Chrome DevTools, opening the log directory, and changing the file log level.
+
+### About
+
+Version and update-track controls.
 
 ### Shortcuts
 
@@ -63,7 +113,43 @@ Keyboard shortcut reference — not yet remappable. See the page itself for the 
 
 ## Per-project settings
 
-Some settings are per-project rather than global — most notably the [`githubProjectUrl` override](/desktop/project-settings) for the Kanban `board` quick-link.
+Some settings are per-project rather than global:
+
+- `githubProjectUrl` override for the Kanban `board` quick-link
+- Per-project `requireApprovalOverride`
+- Per-project `revisionCountOverride`
+- Per-project `pipelineSpeedProfileOverride`
+- Per-project `prdQualityGate`
+- Per-project planner / reviewer / executor / verifier model overrides
+- Per-project planner / reviewer / executor / verifier effort overrides
+- Per-project Discord/Telegram routing overrides
+- Repo memory/context generator settings
+- `.shipcode/setup.json` setup, verification, runtime QA, and env-file configuration
+
+Issue-level overrides are narrower by design: the human approval gate, revision count, and phase models can be overridden from Issue Detail, and those overrides apply to the next run of that issue only.
+
+## Human Approval Behavior
+
+Human approval resolves through inheritance:
+
+- app default in Settings
+- optional project override in Project Settings
+- optional issue override in Issue Detail
+- Mentioning "human approval" inside an issue body or PRD does **not** change runtime behavior by itself
+
+Once a run is approved, ShipCode can still delay execution if that project's execution slots are full. The UI treats that as **Waiting**, not **Needs approval**.
+
+Approval decisions are made by the pipeline runtime, not by prompt text. For GitHub issue runs, the engine starts in autonomous mode and the effective inherited approval setting decides whether planning pauses before execution.
+
+## Troubleshooting logs
+
+ShipCode writes a structured local event log at:
+
+```text
+apps/desktop/logs/events.log
+```
+
+This file records pipeline starts, phase transitions, review outcomes, and approval-gate decisions. If a run behaves unexpectedly, ask the user to send `events.log` together with the thread or issue number.
 
 ## Related
 

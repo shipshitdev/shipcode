@@ -1,24 +1,20 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  ActivePipelineSummary,
-  ActivityEntry,
-  DashboardStats,
-  GitHubIssueCacheRecord,
-  PipelinePhase,
-  RecentTask,
-} from '@shipcode/shared';
 import {
-  Bell,
-  Bot,
+  type ActivePipelineSummary,
+  type ActivityEntry,
+  type DashboardOverview,
+  type DashboardStats,
+  formatCost,
+  formatDurationMilliseconds,
+  formatRelativeTime,
+  type GitHubIssueCacheRecord,
+  type PipelineAnalyticsOverview,
+  type RecentTask,
+} from '@shipcode/shared';
+import { ActivePipelineCard, PageHeader, PhaseChip } from '@shipcode/ui';
+import {
+  Button,
   Card,
   CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-  Button,
-  ListTodo,
-  PackageCheck,
   Pagination,
   Table,
   TableBody,
@@ -26,83 +22,17 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bell, Bot, Gauge, ListTodo, PackageCheck, Timer } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
+import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 import { useAppStore } from '../stores/app-store';
-
-// Color encodes STATE, not sub-phase — the chip text already carries the phase
-// name. All 6 agent-running phases (plan/review/revise/execute/verify/ship)
-// share the dedicated `agent` violet at low opacity so they are immediately
-// distinguishable from human-action states (awaiting=amber, failed=red) and
-// terminal states (completed=green). Matches the Kanban card treatment.
-const AGENT_PHASE_CLASSES = 'bg-agent/10 text-agent border-agent/25';
-
-const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
-  planning: AGENT_PHASE_CLASSES,
-  reviewing: AGENT_PHASE_CLASSES,
-  revising: AGENT_PHASE_CLASSES,
-  executing: AGENT_PHASE_CLASSES,
-  verifying: AGENT_PHASE_CLASSES,
-  shipping: AGENT_PHASE_CLASSES,
-  awaiting_approval: 'bg-warning/15 text-warning border-warning/30',
-  completed: 'bg-success/15 text-success border-success/30',
-  failed: 'bg-danger/15 text-danger border-danger/30',
-  idle: 'bg-tertiary text-muted border-border',
-};
-
-function PhaseChip({ phase }: { phase: PipelinePhase }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-        PHASE_COLOR[phase] ?? PHASE_COLOR.idle
-      }`}
-    >
-      {phase.replace(/_/g, ' ')}
-    </span>
-  );
-}
-
-function timeAgo(input: string | number): string {
-  const t = typeof input === 'number' ? input : new Date(input).getTime();
-  const diff = Math.max(0, Date.now() - t);
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
-
-function ElapsedClock({ since }: { since: number }) {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const elapsed = Date.now() - since;
-  const s = Math.floor(elapsed / 1000);
-  if (s < 60) return <>{s}s</>;
-  const m = Math.floor(s / 60);
-  const rem = s % 60;
-  if (m < 60)
-    return (
-      <>
-        {m}m {rem}s
-      </>
-    );
-  const h = Math.floor(m / 60);
-  return (
-    <>
-      {h}h {m % 60}m
-    </>
-  );
-}
 
 interface StatCardProps {
   label: string;
   value: string | number;
-  subtitle?: string;
+  subtitle: string;
   tone?: 'default' | 'danger' | 'success' | 'agent';
   icon?: ReactNode;
   onClick?: () => void;
@@ -126,14 +56,16 @@ function StatCard({ label, value, subtitle, tone = 'default', icon, onClick }: S
           ? 'var(--color-success)'
           : 'var(--text-muted)';
   const card = (
-    <Card className={`w-full h-full${toneClass ? ` ${toneClass}` : ''}${onClick ? ' hover:ring-1 hover:ring-border' : ''}`}>
+    <Card
+      className={`w-full h-full${toneClass ? ` ${toneClass}` : ''}${onClick ? ' hover:ring-1 hover:ring-border' : ''}`}
+    >
       <CardContent className="p-5 pt-5">
         <div className="flex items-start justify-between">
           <div className="text-3xl font-semibold text-primary">{value}</div>
           {icon && <div style={{ color: iconColor }}>{icon}</div>}
         </div>
         <div className="mt-1 text-xs uppercase tracking-wide text-secondary">{label}</div>
-        {subtitle ? <div className="mt-2 text-[11px] text-muted">{subtitle}</div> : null}
+        <div className="mt-2 text-[11px] text-muted-foreground">{subtitle}</div>
       </CardContent>
     </Card>
   );
@@ -151,67 +83,57 @@ function StatCard({ label, value, subtitle, tone = 'default', icon, onClick }: S
   return card;
 }
 
-export function OverviewView() {
+function useOverviewView() {
   const queryClient = useQueryClient();
   const selectProject = useAppStore((s) => s.selectProject);
   const selectThread = useAppStore((s) => s.selectThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
   const setGithubIssues = useAppStore((s) => s.setGithubIssues);
+  const setTerminalThread = useAppStore((s) => s.setTerminalThread);
+  const openTerminal = useAppStore((s) => s.openTerminal);
   const openActivity = useAppStore((s) => s.openActivity);
   const openInbox = useAppStore((s) => s.openInbox);
 
-  const { data: stats } = useQuery<DashboardStats>({
-    queryKey: ['dashboard', 'stats'],
-    queryFn: () => window.shipcode.invoke<DashboardStats>('dashboard:get-stats'),
-    refetchInterval: 5000,
-  });
-
-  const { data: running = [] } = useQuery<ActivePipelineSummary[]>({
-    queryKey: ['dashboard', 'running'],
-    queryFn: () => window.shipcode.invoke<ActivePipelineSummary[]>('pipeline:list-active'),
-    refetchInterval: 2000,
-  });
-
+  const AGENT_CARD_LIMIT = 4;
   const PAGE_SIZE = 5;
+  const [showAllAgents, setShowAllAgents] = useState(false);
   const [activityPage, setActivityPage] = useState(1);
   const [tasksPage, setTasksPage] = useState(1);
 
-  const { data: activity = [] } = useQuery<ActivityEntry[]>({
-    queryKey: ['dashboard', 'activity', activityPage],
+  const { data: overview } = useQuery<DashboardOverview>({
+    queryKey: ['dashboard', 'overview', activityPage, tasksPage],
     queryFn: () =>
-      window.shipcode.invoke<ActivityEntry[]>('dashboard:get-activity', {
-        limit: PAGE_SIZE,
-        offset: (activityPage - 1) * PAGE_SIZE,
+      window.shipcode.invoke<DashboardOverview>('dashboard:get-overview', {
+        activityLimit: PAGE_SIZE,
+        activityOffset: (activityPage - 1) * PAGE_SIZE,
+        recentLimit: PAGE_SIZE,
+        recentOffset: (tasksPage - 1) * PAGE_SIZE,
       }),
-    refetchInterval: 5000,
   });
-
-  const { data: activityTotal = 0 } = useQuery<number>({
-    queryKey: ['dashboard', 'activity-count'],
-    queryFn: () => window.shipcode.invoke<number>('dashboard:count-activity'),
-    refetchInterval: 10_000,
-  });
-
-  const { data: recent = [] } = useQuery<RecentTask[]>({
-    queryKey: ['dashboard', 'recent', tasksPage],
+  const { data: analytics } = useQuery<PipelineAnalyticsOverview>({
+    queryKey: ['pipeline-analytics', 'overview'],
     queryFn: () =>
-      window.shipcode.invoke<RecentTask[]>('dashboard:get-recent-tasks', {
-        limit: PAGE_SIZE,
-        offset: (tasksPage - 1) * PAGE_SIZE,
-      }),
-    refetchInterval: 5000,
+      window.shipcode.invoke<PipelineAnalyticsOverview>('pipeline-analytics:get-overview'),
   });
-
-  const { data: recentTotal = 0 } = useQuery<number>({
-    queryKey: ['dashboard', 'recent-count'],
-    queryFn: () => window.shipcode.invoke<number>('dashboard:count-recent-tasks'),
-    refetchInterval: 10_000,
-  });
+  const stats: DashboardStats | undefined = overview?.stats;
+  const animatedAgents = useAnimatedNumber(stats?.agentsRunning ?? 0);
+  const animatedTasks = useAnimatedNumber(stats?.tasksInProgress ?? 0);
+  const animatedApprovals = useAnimatedNumber(stats?.pendingApprovals ?? 0);
+  const animatedShipped = useAnimatedNumber(stats?.shippedLast7d ?? 0, 800);
+  const running: ActivePipelineSummary[] = overview?.running ?? [];
+  const visibleAgents = showAllAgents ? running : running.slice(0, AGENT_CARD_LIMIT);
+  const activity: ActivityEntry[] = overview?.activity ?? [];
+  const activityTotal = overview?.activityTotal ?? 0;
+  const recent: RecentTask[] = overview?.recent ?? [];
+  const recentTotal = overview?.recentTotal ?? 0;
 
   const activityTotalPages = Math.max(1, Math.ceil(activityTotal / PAGE_SIZE));
   const tasksTotalPages = Math.max(1, Math.ceil(recentTotal / PAGE_SIZE));
   const activitySlice = activity;
   const tasksSlice = recent;
+  const bottleneck = analytics?.averagePhaseDurations[0] ?? null;
+  const analyticsCost =
+    analytics?.tokensByPhase.reduce((sum, phase) => sum + phase.costUsd, 0) ?? 0;
 
   // Click-through from Mission Control rows: switch project, fetch its issues,
   // and open the IssueDetail sidebar for the matching threadId. Falls back to
@@ -220,6 +142,8 @@ export function OverviewView() {
   const handleRowClick = async (projectId: string, threadId: string) => {
     selectProject(projectId);
     selectThread(threadId);
+    setTerminalThread(threadId);
+    openTerminal();
     try {
       const issues = await window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
         projectId,
@@ -239,23 +163,18 @@ export function OverviewView() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div>
-          <h1 className="text-base font-semibold text-primary">Overview</h1>
-          <p className="text-xs text-muted">Live view of every agent across every project.</p>
-        </div>
-      </div>
+      <PageHeader title="Overview" subtitle="Live view of every agent across every project." />
 
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto p-6">
         <div className="flex flex-col gap-6 max-w-5xl">
           {/* Stat cards */}
           <div className="flex gap-4">
             {[
               {
                 label: 'Agents Running',
-                value: stats?.agentsRunning ?? 0,
+                value: animatedAgents,
                 subtitle: stats
-                  ? Object.entries(stats.runningByPhase ?? {})
+                  ? Object.entries(stats.runningByPhase)
                       .map(([phase, n]) => `${n} ${phase.replace(/_/g, ' ')}`)
                       .join(', ') || 'idle'
                   : '—',
@@ -266,7 +185,7 @@ export function OverviewView() {
               },
               {
                 label: 'Tasks In Progress',
-                value: stats?.tasksInProgress ?? 0,
+                value: animatedTasks,
                 subtitle: stats ? `${stats.tasksOpen} open · ${stats.tasksBlocked} blocked` : '—',
                 tone: (stats && stats.tasksInProgress > 0 ? 'agent' : 'default') as
                   | 'agent'
@@ -276,7 +195,7 @@ export function OverviewView() {
               },
               {
                 label: 'Pending Approvals',
-                value: stats?.pendingApprovals ?? 0,
+                value: animatedApprovals,
                 subtitle: stats?.staleApprovals
                   ? `${stats.staleApprovals} stale > 24h`
                   : 'no stale items',
@@ -288,7 +207,7 @@ export function OverviewView() {
               },
               {
                 label: 'Shipped (7d)',
-                value: stats?.shippedLast7d ?? 0,
+                value: animatedShipped,
                 subtitle: stats ? `${stats.failedLast7d} failed` : '—',
                 tone: 'success' as const,
                 icon: <PackageCheck size={18} />,
@@ -302,194 +221,323 @@ export function OverviewView() {
           </div>
 
           {/* Running Agents — always first after stats */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Running Agents</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              {running.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
-                  No agents running. Start a pipeline to see live status here.
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-primary">Running Agents</h2>
+                {!showAllAgents && running.length > AGENT_CARD_LIMIT && (
+                  <span className="text-[11px] text-muted-foreground">
+                    +{running.length - AGENT_CARD_LIMIT} more
+                  </span>
+                )}
+              </div>
+              {running.length > AGENT_CARD_LIMIT && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => setShowAllAgents((prev) => !prev)}
+                  className="h-auto px-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent capitalize"
+                >
+                  {showAllAgents ? 'Show less' : 'View all →'}
+                </Button>
+              )}
+            </div>
+            {running.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                No agents running. Start a pipeline to see live status here.
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                {visibleAgents.map((row) => (
+                  <div key={row.threadId} className="min-w-[280px] max-w-[360px] flex-1">
+                    <ActivePipelineCard
+                      projectName={row.projectName}
+                      title={row.threadTitle}
+                      phase={row.phase}
+                      approvedAwaitingExecution={row.approvedAwaitingExecution}
+                      startedAt={row.startedAt}
+                      issueNumber={row.githubIssueNumber}
+                      modelProvider={row.modelProvider}
+                      model={row.model}
+                      reasoningEffort={row.reasoningEffort}
+                      onClick={() => handleRowClick(row.projectId, row.threadId)}
+                      onCancel={() => handleStop(row.threadId)}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h2 className="text-sm font-semibold text-primary mb-3">Iteration Analytics</h2>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <StatCard
+                label="Median Time To PR"
+                value={formatDurationMilliseconds(analytics?.timeToPr.medianMs)}
+                subtitle={`${analytics?.timeToPr.sampleSize ?? 0} shipped sample${analytics?.timeToPr.sampleSize === 1 ? '' : 's'}`}
+                icon={<Timer size={18} />}
+              />
+              <StatCard
+                label="P75 Time To PR"
+                value={formatDurationMilliseconds(analytics?.timeToPr.p75Ms)}
+                subtitle={`p95 ${formatDurationMilliseconds(analytics?.timeToPr.p95Ms)}`}
+                icon={<Timer size={18} />}
+              />
+              <StatCard
+                label="Bottleneck Phase"
+                value={bottleneck ? bottleneck.phase.replace(/_/g, ' ') : '—'}
+                subtitle={
+                  bottleneck ? `avg ${formatDurationMilliseconds(bottleneck.averageMs)}` : 'no data'
+                }
+                tone={bottleneck ? 'agent' : 'default'}
+                icon={<Gauge size={18} />}
+              />
+              <StatCard
+                label="Tokens / Cost"
+                value={formatCost(analyticsCost)}
+                subtitle={`${(analytics?.tokensByPhase.reduce((sum, phase) => sum + phase.promptTokens + phase.completionTokens, 0) ?? 0).toLocaleString()} tokens`}
+                icon={<Bot size={18} />}
+              />
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {(analytics?.averagePhaseDurations.length ?? 0) === 0 ? (
+                <div className="flex items-center justify-center rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                  No phase timing data yet. Ship a pipeline to see breakdowns here.
                 </div>
               ) : (
-                <ul className="divide-y divide-border">
-                  {running.map((row) => (
-                    <li key={row.threadId} className="flex items-center gap-3 py-2.5">
-                      <Button
-                        variant="ghost"
-                        onClick={() => handleRowClick(row.projectId, row.threadId)}
-                        className="h-auto flex-1 justify-start gap-3 px-0 py-0 text-left font-normal hover:bg-transparent"
-                      >
-                        <span className="inline-flex shrink-0 items-center rounded-md border border-border bg-tertiary px-1.5 py-0.5 text-[10px] text-secondary">
-                          {row.projectName}
-                        </span>
-                        <span className="flex-1 truncate text-[13px] text-primary">
-                          {row.threadTitle}
-                        </span>
-                        <PhaseChip phase={row.phase} />
-                        <span className="w-16 text-right text-[11px] tabular-nums text-muted">
-                          <ElapsedClock since={row.startedAt} />
-                        </span>
-                      </Button>
-                      <Button
-                        size="xs"
-                        variant="destructive"
-                        onClick={() => handleStop(row.threadId)}
-                      >
-                        Stop
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
+                <Card>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Phase</TableHead>
+                          <TableHead className="text-right">Avg</TableHead>
+                          <TableHead className="text-right">P75</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="[&_tr:last-child]:border-0">
+                        {analytics?.averagePhaseDurations.slice(0, 5).map((phase) => (
+                          <TableRow key={phase.phase}>
+                            <TableCell>
+                              <PhaseChip status={phase.phase} />
+                            </TableCell>
+                            <TableCell className="text-right text-[11px] text-primary">
+                              {formatDurationMilliseconds(phase.averageMs)}
+                            </TableCell>
+                            <TableCell className="text-right text-[11px] text-muted-foreground">
+                              {formatDurationMilliseconds(phase.p75Ms)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
               )}
-            </CardContent>
-          </Card>
+
+              {(analytics?.slowestRecentRuns.length ?? 0) === 0 ? (
+                <div className="flex items-center justify-center rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                  No completed PR runs yet. Ship a pipeline to see timing data here.
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Slow Run</TableHead>
+                          <TableHead className="text-right">Duration</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="[&_tr:last-child]:border-0">
+                        {analytics?.slowestRecentRuns.map((run) => (
+                          <TableRow
+                            key={run.threadId}
+                            className="cursor-pointer hover:bg-hover"
+                            onClick={() => selectThread(run.threadId)}
+                          >
+                            <TableCell className="max-w-0">
+                              <div className="truncate text-[12px] text-primary">
+                                {run.githubPrNumber ? `#${run.githubPrNumber} ` : ''}
+                                {run.title}
+                              </div>
+                              <div className="truncate text-[11px] text-muted-foreground">
+                                {run.projectName ?? 'Unknown project'}
+                                {run.bottleneckPhase
+                                  ? ` · ${run.bottleneckPhase.replace(/_/g, ' ')}`
+                                  : ''}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right text-[11px] text-primary">
+                              {formatDurationMilliseconds(run.durationMs)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
 
           {/* Activity + Recent tasks */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Recent Activity</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={openActivity}
-                    className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent capitalize"
-                  >
-                    View all →
-                  </Button>
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-primary">Recent Activity</h2>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={openActivity}
+                  className="h-auto px-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent capitalize"
+                >
+                  View all →
+                </Button>
+              </div>
+              {activity.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                  No activity yet.
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {activity.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
-                    No activity yet.
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader className="sr-only">
-                      <TableRow>
-                        <TableHead>Actor</TableHead>
-                        <TableHead>Activity</TableHead>
-                        <TableHead>Time</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {activitySlice.map((entry) => (
-                        <TableRow
-                          key={entry.id}
-                          className="cursor-pointer hover:bg-hover"
-                          onClick={() => {
-                            if (entry.projectId && entry.threadId) {
-                              handleRowClick(entry.projectId, entry.threadId);
-                            }
-                          }}
-                        >
-                          <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
-                            <span className="inline-flex items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-secondary">
-                              {entry.actor}
-                            </span>
-                          </TableCell>
-                          <TableCell className="max-w-0 w-full">
-                            <div className="truncate text-[12px] text-primary">{entry.title}</div>
-                            {entry.subtitle ? (
-                              <div className="truncate text-[11px] text-muted">
-                                {entry.subtitle}
-                              </div>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
-                            {timeAgo(entry.createdAt)}
-                          </TableCell>
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader className="sr-only">
+                        <TableRow>
+                          <TableHead>Actor</TableHead>
+                          <TableHead>Activity</TableHead>
+                          <TableHead>Time</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
+                      </TableHeader>
+                      <TableBody className="[&_tr:last-child]:border-0">
+                        {activitySlice.map((entry) => {
+                          const clickable = entry.projectId !== null && entry.threadId !== null;
+                          const projectId = entry.projectId;
+                          const threadId = entry.threadId;
+
+                          return (
+                            <TableRow
+                              key={entry.id}
+                              className={clickable ? 'cursor-pointer hover:bg-hover' : undefined}
+                              onClick={() => {
+                                if (projectId && threadId) {
+                                  handleRowClick(projectId, threadId);
+                                }
+                              }}
+                            >
+                              <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
+                                <span className="inline-flex items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-secondary">
+                                  {entry.actor}
+                                </span>
+                              </TableCell>
+                              <TableCell className="max-w-0 w-full">
+                                <div className="truncate text-[12px] text-primary">
+                                  {entry.title}
+                                </div>
+                                <div className="truncate text-[11px] text-muted-foreground">
+                                  {entry.subtitle || '–'}
+                                </div>
+                              </TableCell>
+                              <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted-foreground">
+                                {formatRelativeTime(entry.createdAt)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
               {activityTotalPages > 1 && (
-                <CardFooter className="pt-0 pb-4 px-5">
+                <div className="mt-3 px-1">
                   <Pagination
                     page={activityPage}
                     totalPages={activityTotalPages}
                     onPageChange={setActivityPage}
                     className="w-full"
                   />
-                </CardFooter>
-              )}
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Recent Tasks</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={openInbox}
-                    className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent capitalize"
-                  >
-                    View all →
-                  </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {recent.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
-                    No recent tasks.
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader className="sr-only">
-                      <TableRow>
-                        <TableHead>Phase</TableHead>
-                        <TableHead>Title</TableHead>
-                        <TableHead>Time</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {tasksSlice.map((task) => (
-                        <TableRow
-                          key={task.threadId}
-                          className="cursor-pointer hover:bg-hover"
-                          onClick={() => handleRowClick(task.projectId, task.threadId)}
-                        >
-                          <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
-                            <PhaseChip phase={task.phase} />
-                          </TableCell>
-                          <TableCell className="max-w-0 w-full">
-                            <div className="truncate text-[12px] text-primary">
-                              {task.githubIssueNumber ? `#${task.githubIssueNumber} ` : ''}
-                              {task.title}
-                            </div>
-                            <div className="truncate text-[11px] text-muted">
-                              {task.projectName} · {task.phase.replace(/_/g, ' ')}
-                            </div>
-                          </TableCell>
-                          <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted align-top pt-2.5">
-                            {timeAgo(task.updatedAt)}
-                          </TableCell>
+              )}
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-primary">Recent Tasks</h2>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={openInbox}
+                  className="h-auto px-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent capitalize"
+                >
+                  View all →
+                </Button>
+              </div>
+              {recent.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                  No recent tasks.
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader className="sr-only">
+                        <TableRow>
+                          <TableHead>Phase</TableHead>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Time</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
+                      </TableHeader>
+                      <TableBody className="[&_tr:last-child]:border-0">
+                        {tasksSlice.map((task) => (
+                          <TableRow
+                            key={task.threadId}
+                            className="cursor-pointer hover:bg-hover"
+                            onClick={() => handleRowClick(task.projectId, task.threadId)}
+                          >
+                            <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
+                              <PhaseChip status={task.phase} />
+                            </TableCell>
+                            <TableCell className="max-w-0 w-full">
+                              <div className="truncate text-[12px] text-primary">
+                                {task.githubIssueNumber ? `#${task.githubIssueNumber} ` : ''}
+                                {task.title}
+                              </div>
+                              <div className="truncate text-[11px] text-muted-foreground">
+                                {task.projectName} · {task.phase.replace(/_/g, ' ')}
+                              </div>
+                            </TableCell>
+                            <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted-foreground align-top pt-2.5">
+                              {formatRelativeTime(task.updatedAt)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
               {tasksTotalPages > 1 && (
-                <CardFooter className="pt-0 pb-4 px-5">
+                <div className="mt-3 px-1">
                   <Pagination
                     page={tasksPage}
                     totalPages={tasksTotalPages}
                     onPageChange={setTasksPage}
                     className="w-full"
                   />
-                </CardFooter>
+                </div>
               )}
-            </Card>
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+export function OverviewView() {
+  return useOverviewView();
 }

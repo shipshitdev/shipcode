@@ -1,6 +1,6 @@
 {
   "name": "@shipcode/shared",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -10,18 +10,23 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./source": "./src/index.ts"
+    "./source": "./src/index.ts",
+    "./worktree-path": {
+      "types": "./dist/worktree-path.d.ts",
+      "import": "./dist/worktree-path.js"
+    }
   },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "zod": "4.3.6"
+    "zod": "4.4.3"
   },
   "devDependencies": {
-    "typescript": "6.0.2"
+    "typescript": "6.0.3"
   }
 }

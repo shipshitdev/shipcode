@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { getPageMap } from 'nextra/page-map';
 import { Layout } from 'nextra-theme-docs';
 import 'nextra-theme-docs/style.css';
-import './globals.scss';
+import './globals.css';
 
 import themeConfig from '../theme.config';
 

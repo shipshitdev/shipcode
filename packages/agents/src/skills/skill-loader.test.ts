@@ -1,12 +1,13 @@
-import { describe, it, expect } from 'vitest';
-import {
-  resolveSkill,
-  validateSkill,
-  interpolateSkill,
-  stripFrontmatter,
-  type SkillsRowSource,
-} from './skill-loader';
+import { describe, expect, it } from 'vitest';
+import { PROMPT_TEMPLATE_SHELL_MARKER } from '../prompt-template';
 import { DEFAULT_SKILLS } from './defaults.generated';
+import {
+  interpolateSkill,
+  resolveSkill,
+  type SkillsRowSource,
+  stripFrontmatter,
+  validateSkill,
+} from './skill-loader';
 
 const VALID_SKILL = `---
 name: adversarial-review
@@ -25,7 +26,10 @@ requiredSlots:
 `;
 
 function makeSource(
-  rows: Map<string, { content: string; baseVersion: string; schemaVersion: number; status: 'ok' | 'quarantined' }>,
+  rows: Map<
+    string,
+    { content: string; baseVersion: string; schemaVersion: number; status: 'ok' | 'quarantined' }
+  >,
 ): SkillsRowSource & { quarantined: Array<[string, string, string]> } {
   const quarantined: Array<[string, string, string]> = [];
   return {
@@ -81,6 +85,15 @@ describe('validateSkill', () => {
       expect(err, `bundled default for ${phase} should validate`).toBeNull();
     }
   });
+
+  it('reports schema drift for unknown validation phases', () => {
+    const err = validateSkill('unknown-phase' as never, VALID_SKILL);
+
+    expect(err).toEqual({
+      code: 'schema_drift',
+      message: 'Unknown phase "unknown-phase"',
+    });
+  });
 });
 
 describe('interpolateSkill', () => {
@@ -92,7 +105,10 @@ describe('interpolateSkill', () => {
   it('throws on unknown slot in dev mode', () => {
     const orig = process.env.NODE_ENV;
     process.env.NODE_ENV = 'development';
-    expect(() => interpolateSkill('see {{MISSING}}', [])).toThrow(/MISSING/);
+    expect(() => interpolateSkill('see {{MISSING}}', [{ key: 'KNOWN', value: 'value' }])).toThrow(
+      /provided slots: KNOWN/,
+    );
+    expect(() => interpolateSkill('see {{MISSING}}', [])).toThrow(/provided slots: none/);
     process.env.NODE_ENV = orig;
   });
 
@@ -103,6 +119,13 @@ describe('interpolateSkill', () => {
     expect(out).toBe('see [unknown slot: MISSING]');
     process.env.NODE_ENV = orig;
   });
+
+  it('strips shell block markers from slot values', () => {
+    const out = interpolateSkill('payload {{VALUE}}', [
+      { key: 'VALUE', value: `!${PROMPT_TEMPLATE_SHELL_MARKER}\`echo nope\`` },
+    ]);
+    expect(out).toBe('payload !`echo nope`');
+  });
 });
 
 describe('resolveSkill', () => {
@@ -112,6 +135,14 @@ describe('resolveSkill', () => {
     expect(result.skill.source).toBe('default');
     expect(result.fallbackUsed).toBe(false);
     expect(result.skill.content.startsWith('---')).toBe(false);
+  });
+
+  it('throws for unknown phases during resolution', () => {
+    const source = makeSource(new Map());
+
+    expect(() => resolveSkill('unknown-phase' as never, null, { skills: source })).toThrow(
+      'resolveSkill: unknown phase "unknown-phase"',
+    );
   });
 
   it('prefers global override over default', () => {
@@ -163,7 +194,9 @@ describe('resolveSkill', () => {
     expect(result.skill.source).toBe('default');
     expect(result.fallbackUsed).toBe(true);
     expect(result.error?.code).toBe('missing_slot');
-    expect(source.quarantined).toEqual([['GLOBAL', 'adversarial-review', expect.stringContaining('PLAN_JSON')]]);
+    expect(source.quarantined).toEqual([
+      ['GLOBAL', 'adversarial-review', expect.stringContaining('PLAN_JSON')],
+    ]);
   });
 
   it('skips a row already marked quarantined without re-validating', () => {
@@ -179,6 +212,28 @@ describe('resolveSkill', () => {
     expect(result.skill.source).toBe('default');
     expect(result.fallbackUsed).toBe(true);
     expect(source.quarantined).toEqual([]);
+  });
+
+  it('preserves the first fallback error when a later row is quarantined', () => {
+    const rows = new Map();
+    rows.set('proj-A::adversarial-review', {
+      content: VALID_SKILL.replace('{{PLAN_JSON}}', 'broken'),
+      baseVersion: 'p',
+      schemaVersion: 1,
+      status: 'ok',
+    });
+    rows.set('GLOBAL::adversarial-review', {
+      content: VALID_SKILL,
+      baseVersion: 'g',
+      schemaVersion: 1,
+      status: 'quarantined',
+    });
+    const source = makeSource(rows);
+
+    const result = resolveSkill('adversarial-review', 'proj-A', { skills: source });
+
+    expect(result.skill.source).toBe('default');
+    expect(result.error?.code).toBe('missing_slot');
   });
 
   it('falls back from project to global when project row is invalid', () => {
@@ -200,6 +255,8 @@ describe('resolveSkill', () => {
     expect(result.skill.source).toBe('global');
     expect(result.skill.baseVersion).toBe('g');
     expect(result.fallbackUsed).toBe(true);
-    expect(source.quarantined).toEqual([['proj-A', 'adversarial-review', expect.stringContaining('OUTPUT_SCHEMA')]]);
+    expect(source.quarantined).toEqual([
+      ['proj-A', 'adversarial-review', expect.stringContaining('OUTPUT_SCHEMA')],
+    ]);
   });
 });

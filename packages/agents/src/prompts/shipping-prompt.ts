@@ -1,68 +1,112 @@
-import type { ShipCodePlan, PlanReview, VerificationResult } from '@shipcode/shared';
+import type {
+  FeatureQaResult,
+  PlanReview,
+  ShipCodePlan,
+  VerificationResult,
+} from '@shipcode/shared';
+import { interpolateSkill, resolveSkill, type SkillsRowSource } from '../skills/skill-loader';
 
+/* v8 ignore next -- fallback skill source is only used by direct runtime calls without a project skill store */
+const noopMarkQuarantined = () => {};
+
+/**
+ * Build the PR body using the `pr-generation` skill template.
+ *
+ * When a project-level or global skill override exists, that template is used
+ * instead of the bundled default — giving per-project PR body customization.
+ */
 export function buildPRBody(
   plan: ShipCodePlan,
   reviews: PlanReview[],
   verification: VerificationResult | null,
   issueNumber: number,
+  opts?: {
+    projectId?: string | null;
+    skills?: SkillsRowSource;
+    featureQaResults?: FeatureQaResult[];
+  },
 ): string {
-  const sections: string[] = [];
+  const { skill } = resolveSkill('pr-generation', opts?.projectId ?? null, {
+    skills: opts?.skills ?? { get: () => null, markQuarantined: noopMarkQuarantined },
+  });
 
-  sections.push(`## Summary`);
-  sections.push(plan.objective);
-  sections.push('');
+  const steps = plan.steps
+    .map((s) => `${s.order}. ${s.description}\n   Files: ${s.files.join(', ')}`)
+    .join('\n');
 
-  // Plan details (collapsed)
-  sections.push(`<details>`);
-  sections.push(`<summary>Implementation Plan (v${plan.version})</summary>`);
-  sections.push('');
-  sections.push(`**Steps:**`);
-  for (const step of plan.steps) {
-    sections.push(`${step.order}. ${step.description}`);
-    sections.push(`   Files: ${step.files.join(', ')}`);
-  }
-  sections.push('');
-  sections.push(`**Acceptance Criteria:**`);
-  for (const criterion of plan.acceptanceCriteria) {
-    sections.push(`- [ ] ${criterion}`);
-  }
-  sections.push(`</details>`);
-  sections.push('');
+  const criteria = plan.acceptanceCriteria.map((c) => `- [ ] ${c}`).join('\n');
 
-  // Review log (collapsed)
+  let body = interpolateSkill(skill.content, [
+    { key: 'PLAN_OBJECTIVE', value: plan.objective },
+    { key: 'PLAN_STEPS', value: steps },
+    { key: 'ACCEPTANCE_CRITERIA', value: criteria },
+    { key: 'ISSUE_NUMBER', value: String(issueNumber) },
+  ]);
+
+  // Append review log if available (not part of template — always appended)
   if (reviews.length > 0) {
-    sections.push(`<details>`);
-    sections.push(
+    const reviewLines: string[] = [
+      '',
+      '<details>',
       `<summary>Review Log (${reviews.length} round${reviews.length > 1 ? 's' : ''})</summary>`,
-    );
-    sections.push('');
+      '',
+    ];
     for (const review of reviews) {
-      sections.push(`**Decision:** ${review.decision} (${review.confidence} confidence)`);
-      sections.push(`> ${review.summary}`);
+      reviewLines.push(`**Decision:** ${review.decision} (${review.confidence} confidence)`);
+      reviewLines.push(`> ${review.summary}`);
       if (review.findings.length > 0) {
-        sections.push(`**Findings:** ${review.findings.length}`);
+        reviewLines.push(`**Findings:** ${review.findings.length}`);
         for (const f of review.findings) {
-          sections.push(`- [${f.severity}] ${f.description}`);
+          reviewLines.push(`- [${f.severity}] ${f.description}`);
         }
       }
-      sections.push('');
+      reviewLines.push('');
     }
-    sections.push(`</details>`);
-    sections.push('');
+    reviewLines.push('</details>');
+    body += `\n${reviewLines.join('\n')}`;
   }
 
-  // Verification status
+  // Append verification status if available
   if (verification) {
     const icon = verification.result === 'passed' ? 'Passed' : 'Failed';
-    sections.push(`## Verification: ${icon}`);
-    sections.push(verification.summary);
-    sections.push('');
+    body += `\n\n## Verification: ${icon}\n${verification.summary}`;
   }
 
-  sections.push(`Closes #${issueNumber}`);
-  sections.push('');
-  sections.push(`---`);
-  sections.push(`*Autonomous implementation by ShipCode*`);
+  if (opts?.featureQaResults?.length) {
+    body += `\n\n${formatFeatureQaEvidence(opts.featureQaResults)}`;
+  }
 
-  return sections.join('\n');
+  return body;
+}
+
+function formatFeatureQaEvidence(results: FeatureQaResult[]): string {
+  const lines = ['## QA Evidence'];
+  for (const result of results.slice(0, 5)) {
+    lines.push('');
+    lines.push(`- **${result.featureId}**: ${result.status} — ${result.summary}`);
+    for (const flow of result.flowResults.slice(0, 5)) {
+      lines.push(
+        `  - ${flow.passed ? 'Passed' : 'Failed'}: ${flow.flowName}${flow.failureReason ? ` — ${flow.failureReason}` : ''}`,
+      );
+      for (const assertion of flow.assertions?.slice(0, 3) ?? []) {
+        lines.push(
+          `    - ${assertion.passed ? 'Passed' : 'Failed'}: ${assertion.name}; expected ${assertion.expected}; actual ${assertion.actual}`,
+        );
+      }
+    }
+    const evidencePaths = new Set<string>(result.evidencePaths ?? []);
+    for (const flow of result.flowResults) {
+      for (const path of flow.evidencePaths ?? []) evidencePaths.add(path);
+      for (const assertion of flow.assertions ?? []) {
+        if (assertion.evidencePath) evidencePaths.add(assertion.evidencePath);
+      }
+    }
+    if (evidencePaths.size > 0) {
+      lines.push('  - Local artifacts:');
+      for (const path of [...evidencePaths].slice(0, 5)) {
+        lines.push(`    - \`${path}\``);
+      }
+    }
+  }
+  return lines.join('\n');
 }

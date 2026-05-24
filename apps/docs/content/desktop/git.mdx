@@ -1,0 +1,25 @@
+# Git
+
+The project **Git** tab shows ShipCode worktrees, branches, diffs, and cleanup state for the selected repository.
+
+The view is [`apps/desktop/src/renderer/features/project/project-git-visualizer.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/features/project/project-git-visualizer.tsx), backed by the shared [`GitVisualizer`](https://github.com/shipshitdev/shipcode/blob/master/packages/ui/src/GitVisualizer.tsx) component.
+
+## What it shows
+
+- Pipeline worktrees and their branches
+- Dirty/clean state for each worktree
+- Side-by-side diffs for the selected worktree
+- Branch divergence and cleanup candidates
+
+## Actions
+
+- **Auto-commit** groups dirty worktree changes into AI-generated commits when enabled in Settings.
+- **Cleanup** surfaces merged/closed PR worktrees and branches according to the configured cleanup criteria.
+- **Refresh** reloads branch/worktree/diff state from git.
+
+Cleanup uses persisted worktree paths as the source of truth. It does not recompute paths from the current settings value.
+
+## Related
+
+- [Settings](/desktop/settings) — Auto-commit and cleanup defaults
+- [Project Settings](/desktop/project-settings) — project default branch

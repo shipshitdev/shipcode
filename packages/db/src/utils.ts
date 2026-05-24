@@ -22,3 +22,11 @@ export function transaction<T>(db: DatabaseSync, fn: () => T): T {
     throw err;
   }
 }
+
+export function asRow<T>(value: unknown): T {
+  return value as T;
+}
+
+export function asRows<T>(value: unknown): T[] {
+  return value as T[];
+}

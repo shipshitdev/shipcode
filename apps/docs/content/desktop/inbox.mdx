@@ -1,6 +1,6 @@
 # Inbox
 
-The Inbox view is a focused triage queue for threads that need human attention. Where [Mission Control](/desktop/mission-control) is a broad dashboard, the Inbox is the "what should I look at next" list.
+The Inbox view is a focused triage queue for threads that need human attention. Where [Overview](/desktop/overview) is a broad dashboard, the Inbox is the "what should I look at next" list.
 
 The component is [`apps/desktop/src/renderer/components/InboxView.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/components/InboxView.tsx).
 
@@ -8,35 +8,37 @@ The component is [`apps/desktop/src/renderer/components/InboxView.tsx`](https://
 
 By default, the Inbox surfaces threads in these states:
 
-- `awaiting_approval` — pipeline paused after review, waiting for human sign-off (only when `requireApproval` is enabled in Settings)
+- `approval` / **Needs approval** — pipeline paused after review because the effective approval setting for that run requires a human sign-off before execution
 - `failed` — any phase errored out
-- Verification-exhausted — verifier hit `maxReviewRounds` without passing
+- `completed` — PR opened and ready for you to review/read
+- Verification-exhausted — verifier ran out of retries without passing
+- `ci_blocked` — linked PR checks are failing
 
-Completed and in-progress threads are deliberately filtered out — those live in Mission Control or the per-project Kanban.
+Items remain in the Inbox badge queue until you explicitly dismiss them.
 
 ## Row layout
 
 Each row shows:
 
-- Project name
-- Issue title + number
 - Current phase / state
+- Issue title
 - Time since last state change
-- Primary action button (Approve, Retry, Dismiss, Open Detail)
+- Primary action button (View, Dismiss)
 
 ## "Go to issue"
 
-Clicking a row navigates you into the thread's project and opens the IssueDetail overlay — same behavior as Mission Control click-through. This is the main reason the Inbox exists as a separate surface: it's optimized for "see the problem, open it, fix it, move on" without sidebar juggling.
+Clicking a row navigates you into the thread's project and opens the IssueDetail overlay. This is the main reason the Inbox exists as a separate surface: it's optimized for "see the problem, open it, fix it, move on" without sidebar juggling.
 
 ## Filtering
 
-Use the filter controls at the top to narrow by:
+Use the controls at the top to:
 
-- Project
-- State (awaiting_approval / failed / verification_exhausted)
-- Age
+- Sort newest vs oldest
+- Toggle `Needs approval` to isolate only true human-approval gates
+
+When the `Needs approval` filter is enabled, Inbox hides failures, completed runs, and CI-blocked rows so you can focus only on work that is still waiting on a human decision. Once you approve a run, it leaves this filter even if execution has to wait for capacity.
 
 ## Related
 
-- [Mission Control](/desktop/mission-control) — broader dashboard across all activity
+- [Overview](/desktop/overview) — broader dashboard across all activity
 - [Settings → Notifications](/desktop/settings) — toggle OS + badge notifications for the same events that populate the Inbox

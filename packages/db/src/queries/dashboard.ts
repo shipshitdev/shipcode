@@ -1,116 +1,147 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { toIsoUtc, type DashboardStats, type PipelinePhase, type RecentTask } from '@shipcode/shared';
+import {
+  AGENT_RUNNING_PHASES,
+  type DashboardStats,
+  PIPELINE_PHASE,
+  type PipelinePhase,
+  type RecentTask,
+  toIsoUtc,
+} from '@shipcode/shared';
+import { asRows } from '../utils';
 
 // Phases that represent active work (agent running or waiting on action).
 const ACTIVE_PHASES: PipelinePhase[] = [
-  'planning',
-  'reviewing',
-  'revising',
-  'awaiting_approval',
-  'executing',
-  'verifying',
-  'shipping',
-];
-
-// Phases where an agent CLI process is actively running (vs waiting for user).
-const AGENT_RUNNING_PHASES: PipelinePhase[] = [
-  'planning',
-  'reviewing',
-  'revising',
-  'executing',
-  'verifying',
-  'shipping',
+  PIPELINE_PHASE.planning,
+  PIPELINE_PHASE.clarifying,
+  PIPELINE_PHASE.reviewing,
+  PIPELINE_PHASE.revising,
+  PIPELINE_PHASE.approval,
+  PIPELINE_PHASE.executing,
+  PIPELINE_PHASE.testing,
+  PIPELINE_PHASE.verifying,
+  PIPELINE_PHASE.shipping,
 ];
 
 // Phases where the user is blocked waiting for input / failure recovery.
-const BLOCKED_PHASES: PipelinePhase[] = ['awaiting_approval'];
+const BLOCKED_PHASES: PipelinePhase[] = [
+  PIPELINE_PHASE.clarifying,
+  PIPELINE_PHASE.approval,
+  PIPELINE_PHASE.paused,
+];
 
-function placeholders(n: number): string {
-  return Array(n).fill('?').join(',');
+// Pre-built Sets for O(1) membership checks in getStats(). Derived from
+// constants — no reason to rebuild per call.
+const RUNNING_SET = new Set<string>(AGENT_RUNNING_PHASES);
+const ACTIVE_SET = new Set<string>(ACTIVE_PHASES);
+const BLOCKED_SET = new Set<string>(BLOCKED_PHASES);
+const CLOSED_SET = new Set<string>([
+  PIPELINE_PHASE.completed,
+  PIPELINE_PHASE.failed,
+  PIPELINE_PHASE.idle,
+]);
+
+interface RecentTaskRow {
+  thread_id: string;
+  project_id: string;
+  title: string;
+  phase: PipelinePhase;
+  github_issue_number: number | null;
+  updated_at: string;
+  project_name: string;
+}
+
+function awaitingHumanApprovalWhere(alias: string): string {
+  return `${alias}.kind = 'pipeline'
+    AND ${alias}.status = '${PIPELINE_PHASE.approval}'
+    AND COALESCE(
+      (
+        SELECT p.status
+          FROM plans p
+         WHERE p.thread_id = ${alias}.id
+         ORDER BY p.version DESC
+         LIMIT 1
+      ),
+      ''
+    ) != 'approved'`;
 }
 
 export class DashboardQueries {
   constructor(private db: DatabaseSync) {}
 
   getStats(): DashboardStats {
-    // Agents running = threads in any agent-running phase.
-    const agentsRunningRow = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads WHERE status IN (${placeholders(AGENT_RUNNING_PHASES.length)})`,
-      )
-      .get(...AGENT_RUNNING_PHASES) as { n: number };
+    // Single-pass aggregation: one scan of pipeline threads computes all scalar
+    // counters plus per-status and per-project breakdowns. Replaces 9+ separate
+    // COUNT queries that each full-scanned the threads table.
+    const rows = this.db
+      .prepare(`SELECT status, project_id, updated_at FROM threads WHERE kind = 'pipeline'`)
+      .all() as Array<{ status: string; project_id: string; updated_at: string }>;
 
-    // Per-phase breakdown for running agents (for subtitle on the card).
-    const perPhaseRows = this.db
-      .prepare(
-        `SELECT status, COUNT(*) as n FROM threads
-       WHERE status IN (${placeholders(AGENT_RUNNING_PHASES.length)})
-       GROUP BY status`,
-      )
-      .all(...AGENT_RUNNING_PHASES) as Array<{ status: string; n: number }>;
-
+    let agentsRunning = 0;
+    let tasksInProgress = 0;
+    let tasksBlocked = 0;
+    let tasksOpen = 0;
+    let shippedLast7d = 0;
+    let failedLast7d = 0;
     const runningByPhase: Partial<Record<PipelinePhase, number>> = {};
-    for (const row of perPhaseRows) {
-      runningByPhase[row.status as PipelinePhase] = row.n;
+    const agentsRunningByProject: Record<string, number> = {};
+    const pendingApprovalsByProject: Record<string, number> = {};
+
+    const nowJulian = Date.now();
+    const sevenDaysMs = 7 * 86_400_000;
+
+    for (const row of rows) {
+      const { status, project_id, updated_at } = row;
+
+      if (RUNNING_SET.has(status)) {
+        agentsRunning++;
+        runningByPhase[status as PipelinePhase] =
+          (runningByPhase[status as PipelinePhase] ?? 0) + 1;
+        agentsRunningByProject[project_id] = (agentsRunningByProject[project_id] ?? 0) + 1;
+      }
+      if (ACTIVE_SET.has(status)) tasksInProgress++;
+      if (BLOCKED_SET.has(status)) tasksBlocked++;
+      if (!CLOSED_SET.has(status)) tasksOpen++;
+
+      if ((status === PIPELINE_PHASE.completed || status === PIPELINE_PHASE.failed) && updated_at) {
+        const ageMs = nowJulian - new Date(updated_at).getTime();
+        if (ageMs <= sevenDaysMs) {
+          if (status === PIPELINE_PHASE.completed) shippedLast7d++;
+          else failedLast7d++;
+        }
+      }
     }
 
-    // Tasks in progress = any active phase (including awaiting_approval).
-    const tasksInProgressRow = this.db
+    // Pending approvals need the subquery check (plan status != 'approved'),
+    // so keep as a separate query — but only one instead of three.
+    const pendingRows = this.db
       .prepare(
-        `SELECT COUNT(*) as n FROM threads WHERE status IN (${placeholders(ACTIVE_PHASES.length)})`,
+        `SELECT project_id, updated_at FROM threads
+         WHERE ${awaitingHumanApprovalWhere('threads')}`,
       )
-      .get(...ACTIVE_PHASES) as { n: number };
+      .all() as Array<{ project_id: string; updated_at: string }>;
 
-    // Open / blocked breakdown.
-    const blockedRow = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads WHERE status IN (${placeholders(BLOCKED_PHASES.length)})`,
-      )
-      .get(...BLOCKED_PHASES) as { n: number };
-
-    const tasksOpenRow = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads WHERE status NOT IN ('completed', 'failed', 'idle')`,
-      )
-      .get() as { n: number };
-
-    // Pending approvals = awaiting_approval count. Stale = in that state for >24h.
-    const pendingApprovals = blockedRow.n;
-    const staleRow = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads
-       WHERE status = 'awaiting_approval'
-         AND julianday('now') - julianday(updated_at) > 1.0`,
-      )
-      .get() as { n: number };
-
-    // Recent shipped / failed (last 7 days).
-    const shippedRow = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads
-       WHERE status = 'completed'
-         AND julianday('now') - julianday(updated_at) <= 7.0`,
-      )
-      .get() as { n: number };
-
-    const failedRow = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads
-       WHERE status = 'failed'
-         AND julianday('now') - julianday(updated_at) <= 7.0`,
-      )
-      .get() as { n: number };
+    let pendingApprovals = 0;
+    let staleApprovals = 0;
+    for (const row of pendingRows) {
+      pendingApprovals++;
+      pendingApprovalsByProject[row.project_id] =
+        (pendingApprovalsByProject[row.project_id] ?? 0) + 1;
+      const ageMs = nowJulian - new Date(row.updated_at).getTime();
+      if (ageMs > 86_400_000) staleApprovals++;
+    }
 
     return {
-      agentsRunning: agentsRunningRow.n,
+      agentsRunning,
       runningByPhase,
-      tasksInProgress: tasksInProgressRow.n,
-      tasksOpen: tasksOpenRow.n,
-      tasksBlocked: blockedRow.n,
+      agentsRunningByProject,
+      pendingApprovalsByProject,
+      tasksInProgress,
+      tasksOpen,
+      tasksBlocked,
       pendingApprovals,
-      staleApprovals: staleRow.n,
-      shippedLast7d: shippedRow.n,
-      failedLast7d: failedRow.n,
+      staleApprovals,
+      shippedLast7d,
+      failedLast7d,
     };
   }
 
@@ -127,13 +158,13 @@ export class DashboardQueries {
          p.name as project_name
        FROM threads t
        INNER JOIN projects p ON p.id = t.project_id
-       WHERE t.status != 'idle'
+      WHERE t.kind = 'pipeline' AND t.status != ?
        ORDER BY t.updated_at DESC
        LIMIT ? OFFSET ?`,
       )
-      .all(limit, offset) as any[];
+      .all(PIPELINE_PHASE.idle, limit, offset);
 
-    return rows.map((row) => ({
+    return asRows<RecentTaskRow>(rows).map((row) => ({
       threadId: row.thread_id,
       projectId: row.project_id,
       projectName: row.project_name,
@@ -146,8 +177,8 @@ export class DashboardQueries {
 
   countRecentTasks(): number {
     const row = this.db
-      .prepare(`SELECT COUNT(*) as n FROM threads t WHERE t.status != 'idle'`)
-      .get() as { n: number };
+      .prepare(`SELECT COUNT(*) as n FROM threads t WHERE t.kind = 'pipeline' AND t.status != ?`)
+      .get(PIPELINE_PHASE.idle) as { n: number };
     return row.n;
   }
 }

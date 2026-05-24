@@ -1,62 +1,50 @@
-import { useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import type { AppSettings, NotificationKind, NotificationRecord } from '@shipcode/shared';
-import { Button, X } from '@shipcode/ui';
-import { useAppStore } from '../stores/app-store';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 import notifySoundUrl from '../assets/notify.wav?url';
+import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
+import { useAppStore } from '../stores/app-store';
+import { InAppNotification, useToastExit } from './InAppNotification';
 
-const STICKY_KINDS: NotificationKind[] = ['awaiting_approval', 'verification_exhausted'];
-const AUTO_DISMISS_MS = 8_000;
+const STICKY_KINDS: NotificationKind[] = ['approval', 'verification_exhausted', 'ci_blocked'];
 
-const KIND_TONE: Record<NotificationKind, string> = {
-  awaiting_approval: 'border-amber-500/40 bg-amber-500/10',
-  failed: 'border-danger/40 bg-danger/10',
-  verification_exhausted: 'border-danger/40 bg-danger/10',
-  completed: 'border-success/40 bg-success/10',
+const AUTO_DISMISS_MS: Partial<Record<NotificationKind, number>> = {
+  failed: 4_000,
+  completed: 3_000,
+};
+
+const KIND_TONE: Record<NotificationKind, 'warning' | 'danger' | 'success'> = {
+  approval: 'warning',
+  failed: 'danger',
+  verification_exhausted: 'danger',
+  ci_blocked: 'danger',
+  completed: 'success',
 };
 
 function ToastRow({
   notification,
   onClick,
+  onHide,
   onDismiss,
 }: {
   notification: NotificationRecord;
   onClick: () => void;
+  onHide: () => void;
   onDismiss: () => void;
 }) {
   const sticky = STICKY_KINDS.includes(notification.kind);
-
-  useEffect(() => {
-    if (sticky) return;
-    const id = setTimeout(onDismiss, AUTO_DISMISS_MS);
-    return () => clearTimeout(id);
-  }, [sticky, onDismiss]);
+  const dismissAfterMs = AUTO_DISMISS_MS[notification.kind] ?? 5_000;
+  const { isExiting, triggerExit } = useToastExit(sticky ? undefined : dismissAfterMs, onHide);
 
   return (
-    <div
-      className={`group flex items-start gap-2 rounded-xl border px-3 py-2.5 shadow-lg backdrop-blur-sm ${
-        KIND_TONE[notification.kind] ?? 'border-border bg-elevated'
-      }`}
-    >
-      <Button
-        variant="ghost"
+    <div className={isExiting ? 'animate-toast-exit' : 'animate-toast-enter'}>
+      <InAppNotification
+        title={notification.title}
+        description={notification.body}
+        tone={KIND_TONE[notification.kind] ?? 'default'}
         onClick={onClick}
-        className="h-auto flex-1 justify-start whitespace-normal px-0 py-0 text-left font-normal"
-      >
-        <div className="flex flex-col items-start gap-0.5">
-          <div className="text-[12px] font-semibold text-primary">{notification.title}</div>
-          <div className="text-[11px] text-secondary">{notification.body}</div>
-        </div>
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={onDismiss}
-        className="text-muted"
-        title="Dismiss"
-      >
-        <X size={14} />
-      </Button>
+        onDismiss={() => triggerExit(onDismiss)}
+      />
     </div>
   );
 }
@@ -71,6 +59,8 @@ export function NotificationToaster() {
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
     queryFn: () => window.shipcode.invoke<AppSettings>('settings:get'),
+    enabled: notifications.length > 0,
+    staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
   const lastSeenIdsRef = useRef<Set<string>>(new Set());
@@ -98,8 +88,11 @@ export function NotificationToaster() {
     if (notification.projectId) selectProject(notification.projectId);
     selectThread(notification.threadId);
     setViewMode('project');
-    window.shipcode.invoke('notification:dismiss', { id: notification.id }).catch(() => {});
     removeNotification(notification.id);
+  };
+
+  const handleHide = (id: string) => {
+    removeNotification(id);
   };
 
   const handleDismiss = (id: string) => {
@@ -110,12 +103,16 @@ export function NotificationToaster() {
   if (notifications.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex max-w-sm flex-col gap-2">
+    <div
+      data-testid="notification-toaster"
+      className="pointer-events-none fixed right-4 top-[calc(var(--spacing-titlebar)+0.75rem)] z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
+    >
       {notifications.slice(0, 5).map((n) => (
         <div key={n.id} className="pointer-events-auto">
           <ToastRow
             notification={n}
             onClick={() => handleClick(n)}
+            onHide={() => handleHide(n.id)}
             onDismiss={() => handleDismiss(n.id)}
           />
         </div>

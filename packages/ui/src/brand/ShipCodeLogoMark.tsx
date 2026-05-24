@@ -1,0 +1,33 @@
+import type { SVGProps } from 'react';
+
+export type ShipCodeLogoMarkProps = SVGProps<SVGSVGElement> & {
+  size?: number | string;
+};
+
+export function ShipCodeLogoMark({ size, className, ...props }: ShipCodeLogoMarkProps) {
+  return (
+    <svg
+      viewBox="0 0 1024 1024"
+      aria-hidden="true"
+      width={size}
+      height={size}
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <rect width="1024" height="1024" rx="224" ry="224" fill="#0d1117" />
+      <rect
+        width="1024"
+        height="1024"
+        rx="224"
+        ry="224"
+        fill="none"
+        stroke="#30363d"
+        strokeWidth="4"
+      />
+      <rect x="184" y="192" width="176" height="500" rx="56" ry="56" fill="#45aaf2" />
+      <rect x="424" y="192" width="176" height="560" rx="56" ry="56" fill="#20bf6b" />
+      <rect x="664" y="192" width="176" height="620" rx="56" ry="56" fill="#a55eea" />
+    </svg>
+  );
+}

@@ -1,0 +1,17 @@
+{
+  "priorityPaths": [
+    "packages/agents/src/",
+    "packages/pipeline/src/",
+    "apps/desktop/src/main/",
+    "packages/git/src/"
+  ],
+  "ignorePaths": [
+    "apps/docs/out/**",
+    "apps/web/out/**",
+    "apps/web/public/docs/**",
+    "**/node_modules/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts"
+  ]
+}

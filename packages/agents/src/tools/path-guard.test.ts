@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { assertPathInWorktree, PathGuardError } from './path-guard';
 
 let wt: string;
@@ -33,7 +33,7 @@ describe('assertPathInWorktree', () => {
     it('accepts a relative path inside the worktree', async () => {
       const resolved = await assertPathInWorktree('inside.txt', wt, { mustExist: true });
       expect(resolved).toContain('inside.txt');
-      expect(resolved).toMatch(new RegExp('^' + (await fs.realpath(wt))));
+      expect(resolved).toMatch(new RegExp(`^${await fs.realpath(wt)}`));
     });
 
     it('accepts a nested relative path', async () => {
@@ -51,6 +51,17 @@ describe('assertPathInWorktree', () => {
     it('accepts creating a file in a new subdirectory (walks up to find existing ancestor)', async () => {
       const resolved = await assertPathInWorktree('new-dir/new-file.txt', wt);
       expect(resolved).toContain(path.join('new-dir', 'new-file.txt'));
+    });
+
+    it('accepts the worktree root itself for create-capable operations', async () => {
+      const resolved = await assertPathInWorktree('.', wt);
+      expect(resolved).toBe(await fs.realpath(wt));
+    });
+
+    it('handles trailing separators on worktree and candidate directories', async () => {
+      const resolved = await assertPathInWorktree('sub', `${wt}${path.sep}`, { mustExist: true });
+
+      expect(resolved).toBe(await fs.realpath(path.join(wt, 'sub')));
     });
   });
 

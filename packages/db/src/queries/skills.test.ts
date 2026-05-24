@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { SkillsQueries } from './skills';
 
@@ -29,6 +29,13 @@ describe('SkillsQueries', () => {
     expect(row?.baseVersion).toBe('v1');
     expect(row?.schemaVersion).toBe(1);
     expect(row?.status).toBe('ok');
+  });
+
+  it('falls back to the raw timestamp when updated_at is not ISO parseable', () => {
+    skills.set(null, 'plan-generation', 'content', 'v1', 1);
+    db.prepare(`UPDATE skills SET updated_at = '' WHERE phase = ?`).run('plan-generation');
+
+    expect(skills.get(null, 'plan-generation')?.updatedAt).toBe('');
   });
 
   it('set() upserts: a second set replaces content', () => {

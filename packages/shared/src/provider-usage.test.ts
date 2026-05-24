@@ -1,0 +1,767 @@
+import { describe, expect, it } from 'vitest';
+import { DEFAULT_SETTINGS } from './constants';
+import { assessProviderSelection, getProjectProviderWarnings } from './provider-usage';
+import type { CliHealth, CliProviderUsageMap, CliProviderUsageStatus, Project } from './types';
+
+const readyCli: CliHealth = {
+  available: true,
+  version: '1.0.0',
+  path: '/usr/local/bin/tool',
+  error: null,
+  authenticated: true,
+};
+
+function makeUsage(
+  provider: 'claude' | 'codex',
+  overrides: Partial<CliProviderUsageStatus>,
+): CliProviderUsageStatus {
+  return {
+    provider,
+    available: true,
+    stale: false,
+    state: 'ready',
+    source: 'cli',
+    version: '1.0.0',
+    accountEmail: 'vincent@shipshit.dev',
+    loginMethod: 'pro',
+    updatedAt: '2026-04-16T16:00:00.000Z',
+    checkedAt: '2026-04-16T16:01:00.000Z',
+    message: null,
+    creditsRemaining: null,
+    windows: [],
+    ...overrides,
+  };
+}
+
+function makeProject(overrides: Partial<Project> = {}): Project {
+  return {
+    id: 'project-1',
+    name: 'ShipCode',
+    path: '/tmp/shipcode',
+    pathExists: true,
+    gitRemote: null,
+    githubRepoId: null,
+    githubRepoFullName: null,
+    starterIssueNumber: null,
+    starterIssueCreatedAt: null,
+    githubProjectUrl: null,
+    githubStatusMapping: null,
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    plannerReasoningEffortOverride: null,
+    reviewerReasoningEffortOverride: null,
+    executorReasoningEffortOverride: null,
+    verifierReasoningEffortOverride: null,
+    revisionCountOverride: null,
+    discordRouting: 'inherit',
+    discordWebhookUrlOverride: null,
+    telegramRouting: 'inherit',
+    telegramChatIdOverride: null,
+    defaultBranch: 'main',
+    pinned: false,
+    archived: false,
+    hidden: false,
+    notifyGithubUser: null,
+    createdAt: '2026-04-16T00:00:00.000Z',
+    updatedAt: '2026-04-16T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeUsageMap(overrides: Partial<CliProviderUsageMap> = {}): CliProviderUsageMap {
+  return {
+    claude: makeUsage('claude', {
+      windows: [
+        {
+          key: 'session',
+          label: 'Session',
+          usedPercent: 10,
+          leftPercent: 90,
+          resetsAt: null,
+          resetDescription: null,
+        },
+        {
+          key: 'weekly',
+          label: 'Weekly',
+          usedPercent: 20,
+          leftPercent: 80,
+          resetsAt: null,
+          resetDescription: null,
+        },
+        {
+          key: 'model',
+          label: 'Sonnet',
+          usedPercent: 30,
+          leftPercent: 70,
+          resetsAt: null,
+          resetDescription: null,
+        },
+      ],
+    }),
+    codex: makeUsage('codex', {
+      windows: [
+        {
+          key: 'session',
+          label: 'Session',
+          usedPercent: 10,
+          leftPercent: 90,
+          resetsAt: null,
+          resetDescription: null,
+        },
+        {
+          key: 'weekly',
+          label: 'Weekly',
+          usedPercent: 20,
+          leftPercent: 80,
+          resetsAt: null,
+          resetDescription: null,
+        },
+      ],
+      creditsRemaining: 0,
+    }),
+    ...overrides,
+  };
+}
+
+describe('assessProviderSelection', () => {
+  it('blocks missing or unauthenticated CLIs and ignores OpenRouter quota checks', () => {
+    expect(assessProviderSelection('openrouter', null, null, null)).toEqual({
+      severity: 'none',
+      message: null,
+    });
+    expect(
+      assessProviderSelection('claude', null, { ...readyCli, available: false }, null),
+    ).toEqual({
+      severity: 'blocked',
+      message: 'Claude CLI not installed',
+    });
+    expect(
+      assessProviderSelection('codex', null, { ...readyCli, authenticated: false }, null),
+    ).toEqual({
+      severity: 'blocked',
+      message: 'Codex CLI not authenticated',
+    });
+    expect(
+      assessProviderSelection('codex', null, readyCli, makeUsage('codex', { available: false })),
+    ).toEqual({ severity: 'none', message: null });
+  });
+
+  it('reports codex session and weekly quota warnings and blocks', () => {
+    expect(
+      assessProviderSelection(
+        'codex',
+        null,
+        readyCli,
+        makeUsage('codex', {
+          creditsRemaining: 0,
+          windows: [
+            {
+              key: 'session',
+              label: 'Session',
+              usedPercent: 90,
+              leftPercent: 10,
+              resetsAt: null,
+              resetDescription: null,
+            },
+            {
+              key: 'weekly',
+              label: 'Weekly',
+              usedPercent: 30,
+              leftPercent: 70,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ severity: 'warning', message: 'Codex CLI session running low' });
+
+    expect(
+      assessProviderSelection(
+        'codex',
+        null,
+        readyCli,
+        makeUsage('codex', {
+          creditsRemaining: 0,
+          windows: [
+            {
+              key: 'session',
+              label: 'Session',
+              usedPercent: 30,
+              leftPercent: 70,
+              resetsAt: null,
+              resetDescription: null,
+            },
+            {
+              key: 'weekly',
+              label: 'Weekly',
+              usedPercent: 90,
+              leftPercent: 10,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ severity: 'warning', message: 'Codex CLI weekly limit running low' });
+
+    expect(
+      assessProviderSelection(
+        'codex',
+        null,
+        readyCli,
+        makeUsage('codex', {
+          creditsRemaining: 0,
+          windows: [
+            {
+              key: 'session',
+              label: 'Session',
+              usedPercent: 30,
+              leftPercent: 70,
+              resetsAt: null,
+              resetDescription: null,
+            },
+            {
+              key: 'weekly',
+              label: 'Weekly',
+              usedPercent: 100,
+              leftPercent: 0,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ severity: 'blocked', message: 'Codex CLI weekly limit exhausted' });
+
+    expect(
+      assessProviderSelection(
+        'codex',
+        null,
+        readyCli,
+        makeUsage('codex', {
+          creditsRemaining: null,
+          windows: [
+            {
+              key: 'weekly',
+              label: 'Weekly',
+              usedPercent: 100,
+              leftPercent: 0,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ severity: 'blocked', message: 'Codex CLI weekly limit exhausted' });
+
+    expect(
+      assessProviderSelection(
+        'codex',
+        null,
+        readyCli,
+        makeUsage('codex', {
+          creditsRemaining: 20,
+          windows: [
+            {
+              key: 'session',
+              label: 'Session',
+              usedPercent: 30,
+              leftPercent: 70,
+              resetsAt: null,
+              resetDescription: null,
+            },
+            {
+              key: 'weekly',
+              label: 'Weekly',
+              usedPercent: 92,
+              leftPercent: 8,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ severity: 'none', message: null });
+
+    expect(
+      assessProviderSelection(
+        'codex',
+        null,
+        readyCli,
+        makeUsage('codex', {
+          creditsRemaining: null,
+          windows: [
+            {
+              key: 'weekly',
+              label: 'Weekly',
+              usedPercent: 90,
+              leftPercent: 10,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ severity: 'warning', message: 'Codex CLI weekly limit running low' });
+  });
+
+  it('reports claude model quota warnings and falls back to weekly/session windows', () => {
+    expect(
+      assessProviderSelection(
+        'claude',
+        'claude-haiku-4-6',
+        readyCli,
+        makeUsage('claude', {
+          windows: [
+            {
+              key: 'model',
+              label: 'Haiku',
+              usedPercent: 90,
+              leftPercent: 10,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ severity: 'warning', message: 'Claude CLI haiku quota running low' });
+
+    expect(
+      assessProviderSelection(
+        'claude',
+        null,
+        readyCli,
+        makeUsage('claude', {
+          windows: [
+            {
+              key: 'model',
+              label: '  ',
+              usedPercent: 100,
+              leftPercent: 0,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ severity: 'blocked', message: 'Claude CLI quota quota exhausted' });
+
+    expect(
+      assessProviderSelection(
+        'claude',
+        'claude-opus-4-6',
+        readyCli,
+        makeUsage('claude', {
+          windows: [
+            {
+              key: 'session',
+              label: 'Session',
+              usedPercent: 90,
+              leftPercent: 10,
+              resetsAt: null,
+              resetDescription: null,
+            },
+            {
+              key: 'weekly',
+              label: 'Weekly',
+              usedPercent: 30,
+              leftPercent: 70,
+              resetsAt: null,
+              resetDescription: null,
+            },
+            {
+              key: 'model',
+              label: 'Sonnet',
+              usedPercent: 100,
+              leftPercent: 0,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ severity: 'warning', message: 'Claude CLI session running low' });
+
+    expect(
+      assessProviderSelection(
+        'claude',
+        'claude-opus-4-6',
+        readyCli,
+        makeUsage('claude', {
+          windows: [
+            {
+              key: 'weekly',
+              label: 'Weekly',
+              usedPercent: 100,
+              leftPercent: 0,
+              resetsAt: null,
+              resetDescription: null,
+            },
+            {
+              key: 'model',
+              label: 'Sonnet',
+              usedPercent: 100,
+              leftPercent: 0,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ severity: 'blocked', message: 'Claude CLI weekly limit exhausted' });
+
+    expect(
+      assessProviderSelection(
+        'claude',
+        'claude-sonnet-4-6',
+        readyCli,
+        makeUsage('claude', {
+          windows: [
+            {
+              key: 'weekly',
+              label: 'Weekly',
+              usedPercent: 92,
+              leftPercent: 8,
+              resetsAt: null,
+              resetDescription: null,
+            },
+            {
+              key: 'model',
+              label: 'Opus',
+              usedPercent: 100,
+              leftPercent: 0,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ severity: 'warning', message: 'Claude CLI weekly limit running low' });
+
+    expect(
+      assessProviderSelection(
+        'claude',
+        'claude-sonnet-4-6',
+        readyCli,
+        makeUsage('claude', {
+          windows: [
+            {
+              key: 'model',
+              label: 'Sonnet',
+              usedPercent: 40,
+              leftPercent: 60,
+              resetsAt: null,
+              resetDescription: null,
+            },
+            {
+              key: 'weekly',
+              label: 'Weekly',
+              usedPercent: 100,
+              leftPercent: 0,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ severity: 'none', message: null });
+
+    expect(
+      assessProviderSelection(
+        'claude',
+        'claude-sonnet-4-6',
+        readyCli,
+        makeUsage('claude', {
+          windows: [
+            {
+              key: 'weekly',
+              label: 'Weekly',
+              usedPercent: 30,
+              leftPercent: 70,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ severity: 'none', message: null });
+  });
+});
+
+describe('getProjectProviderWarnings', () => {
+  it('blocks codex projects when the session window is exhausted', () => {
+    const project = makeProject({ executorModelOverride: 'codex' });
+    const usage = makeUsageMap({
+      codex: makeUsage('codex', {
+        windows: [
+          {
+            key: 'session',
+            label: 'Session',
+            usedPercent: 100,
+            leftPercent: 0,
+            resetsAt: null,
+            resetDescription: 'in 2h',
+          },
+          {
+            key: 'weekly',
+            label: 'Weekly',
+            usedPercent: 40,
+            leftPercent: 60,
+            resetsAt: null,
+            resetDescription: null,
+          },
+        ],
+      }),
+    });
+
+    const warnings = getProjectProviderWarnings(
+      DEFAULT_SETTINGS,
+      project,
+      { claude: readyCli, codex: readyCli },
+      usage,
+    );
+
+    expect(warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          provider: 'codex',
+          severity: 'blocked',
+          message: 'Codex CLI session exhausted',
+        }),
+      ]),
+    );
+  });
+
+  it('does not block codex when weekly is exhausted but paid credits remain', () => {
+    const project = makeProject({ executorModelOverride: 'codex' });
+    const usage = makeUsageMap({
+      codex: makeUsage('codex', {
+        windows: [
+          {
+            key: 'session',
+            label: 'Session',
+            usedPercent: 30,
+            leftPercent: 70,
+            resetsAt: null,
+            resetDescription: null,
+          },
+          {
+            key: 'weekly',
+            label: 'Weekly',
+            usedPercent: 100,
+            leftPercent: 0,
+            resetsAt: null,
+            resetDescription: null,
+          },
+        ],
+        creditsRemaining: 25,
+      }),
+    });
+
+    const warnings = getProjectProviderWarnings(
+      DEFAULT_SETTINGS,
+      project,
+      { claude: readyCli, codex: readyCli },
+      usage,
+    );
+
+    expect(warnings).toEqual([]);
+  });
+
+  it('skips project phases that resolve to non-CLI providers', () => {
+    const project = makeProject({
+      plannerModelOverride: 'openrouter',
+      reviewerModelOverride: 'gemini',
+      executorModelOverride: 'openrouter',
+      verifierModelOverride: 'gemini',
+    });
+
+    expect(
+      getProjectProviderWarnings(
+        DEFAULT_SETTINGS,
+        project,
+        { claude: readyCli, codex: readyCli },
+        makeUsageMap(),
+      ),
+    ).toEqual([]);
+  });
+
+  it('blocks claude opus selections when the opus window is exhausted', () => {
+    const project = makeProject({
+      executorModelOverride: 'claude',
+      executorModelIdOverride: 'claude-opus-4-6',
+    });
+    const usage = makeUsageMap({
+      claude: makeUsage('claude', {
+        windows: [
+          {
+            key: 'session',
+            label: 'Session',
+            usedPercent: 10,
+            leftPercent: 90,
+            resetsAt: null,
+            resetDescription: null,
+          },
+          {
+            key: 'weekly',
+            label: 'Weekly',
+            usedPercent: 20,
+            leftPercent: 80,
+            resetsAt: null,
+            resetDescription: null,
+          },
+          {
+            key: 'model',
+            label: 'Opus',
+            usedPercent: 100,
+            leftPercent: 0,
+            resetsAt: null,
+            resetDescription: null,
+          },
+        ],
+      }),
+    });
+
+    const warnings = getProjectProviderWarnings(
+      DEFAULT_SETTINGS,
+      project,
+      { claude: readyCli, codex: readyCli },
+      usage,
+    );
+
+    expect(warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          provider: 'claude',
+          severity: 'blocked',
+          message: 'Claude CLI opus quota exhausted',
+        }),
+      ]),
+    );
+  });
+
+  it('allows claude sonnet selections when the weekly pool is empty but the sonnet window remains', () => {
+    const project = makeProject({
+      executorModelOverride: 'claude',
+      executorModelIdOverride: 'claude-sonnet-4-6',
+    });
+    const usage = makeUsageMap({
+      claude: makeUsage('claude', {
+        windows: [
+          {
+            key: 'session',
+            label: 'Session',
+            usedPercent: 10,
+            leftPercent: 90,
+            resetsAt: null,
+            resetDescription: null,
+          },
+          {
+            key: 'weekly',
+            label: 'Weekly',
+            usedPercent: 100,
+            leftPercent: 0,
+            resetsAt: null,
+            resetDescription: null,
+          },
+          {
+            key: 'model',
+            label: 'Sonnet',
+            usedPercent: 54,
+            leftPercent: 46,
+            resetsAt: null,
+            resetDescription: null,
+          },
+        ],
+      }),
+    });
+
+    const warnings = getProjectProviderWarnings(
+      DEFAULT_SETTINGS,
+      project,
+      { claude: readyCli, codex: readyCli },
+      usage,
+    );
+
+    expect(warnings).toEqual([]);
+  });
+
+  it('keeps all affected phases when multiple selections share the same CLI warning', () => {
+    const project = makeProject({
+      plannerModelOverride: 'codex',
+      executorModelOverride: 'codex',
+    });
+    const usage = makeUsageMap({
+      codex: makeUsage('codex', {
+        windows: [
+          {
+            key: 'session',
+            label: 'Session',
+            usedPercent: 100,
+            leftPercent: 0,
+            resetsAt: null,
+            resetDescription: 'in 2h',
+          },
+          {
+            key: 'weekly',
+            label: 'Weekly',
+            usedPercent: 40,
+            leftPercent: 60,
+            resetsAt: null,
+            resetDescription: null,
+          },
+        ],
+      }),
+    });
+
+    const warnings = getProjectProviderWarnings(
+      DEFAULT_SETTINGS,
+      project,
+      { claude: readyCli, codex: readyCli },
+      usage,
+    );
+
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        provider: 'codex',
+        severity: 'blocked',
+        message: 'Codex CLI session exhausted',
+        phases: ['planner', 'reviewer', 'executor', 'verifier'],
+      }),
+    ]);
+  });
+
+  it('promotes duplicate warning groups to the highest severity', () => {
+    const project = makeProject({
+      plannerModelOverride: 'claude',
+      plannerModelIdOverride: 'claude-opus-4-6',
+      reviewerModelOverride: 'claude',
+      reviewerModelIdOverride: 'claude-opus-4-6',
+      executorModelOverride: 'claude',
+      executorModelIdOverride: 'claude-opus-4-6',
+    });
+    const warnings = getProjectProviderWarnings(
+      DEFAULT_SETTINGS,
+      project,
+      { claude: { ...readyCli, authenticated: false }, codex: readyCli },
+      makeUsageMap(),
+    );
+
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        phase: 'planner',
+        phases: ['planner', 'reviewer', 'executor'],
+        provider: 'claude',
+        severity: 'blocked',
+        message: 'Claude CLI not authenticated',
+      }),
+    ]);
+  });
+});

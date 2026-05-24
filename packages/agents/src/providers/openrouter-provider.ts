@@ -1,16 +1,16 @@
 /**
  * OpenRouter provider implementation.
  *
- * Tier 1: supports PLAN / REVIEW / REVISION / VERIFY. The existing
+ * Supports PLAN / REVIEW / REVISION / VERIFY / EXECUTE. The existing
  * prompt builders in `packages/agents/src/prompts/*` already emit
  * fenced structured blocks (```shipcode-plan, ```shipcode-review,
  * ```shipcode-verification) that the StreamParser knows how to extract.
  * We reuse them as-is and feed the assistant's concatenated text output
  * into the parser at the pipeline level.
  *
- * EXECUTE is Tier 2. For now this provider returns a `not_found`
- * ProviderError so the pipeline's phase-completion logic treats it as
- * a configuration failure rather than silently succeeding.
+ * The execute phase runs through the tool-call harness in
+ * `openrouter-execute.ts`, so OpenRouter can mutate the worktree
+ * without spawning a local CLI subprocess.
  *
  * Model resolution order:
  *   1. req.modelHint (per-call override from model-router label)
@@ -18,11 +18,14 @@
  *   3. Tier default (openrouterDefaultPaidModel = 'openrouter/auto')
  */
 
-import type { AppSettings } from '@shipcode/shared';
-import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
+import { type AppSettings, normalizeReasoningModelId } from '@shipcode/shared';
+import { measurePromptPayload } from '../prompt-scope';
+import { StreamParser } from '../stream-parser';
+import { executeViaOpenRouter } from './openrouter-execute';
 import type { OpenRouterChatMessage } from './openrouter-http';
 import { OpenRouterClient, OpenRouterError } from './openrouter-http';
-import { executeViaOpenRouter } from './openrouter-execute';
+import { normalizeOpenRouterReasoningEffort } from './reasoning';
+import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
 
 // System prompts for each phase. The existing prompt builders in
 // `packages/agents/src/prompts/` already produce fully-formed user
@@ -34,11 +37,11 @@ import { executeViaOpenRouter } from './openrouter-execute';
 // essential structure here. The execute phase has its own system
 // prompt inside openrouter-execute.ts (the tool-call harness).
 const SYSTEM_PROMPTS: Partial<Record<ProviderPhase, string>> = {
-  plan: 'You are a senior software engineer creating implementation plans. Emit a single fenced ```shipcode-plan JSON block containing the plan. Do not include any other fenced blocks.',
+  plan: 'You are a senior software engineer creating implementation plans. Emit either a single fenced ```shipcode-plan JSON block containing the plan, or a single fenced ```shipcode-clarification JSON block when user input is required before planning. Do not include any other fenced blocks.',
   review:
     'You are a senior software engineer reviewing an implementation plan. Emit a single fenced ```shipcode-review JSON block containing your review. Do not include any other fenced blocks.',
   revision:
-    'You are a senior software engineer revising an implementation plan based on review feedback. Emit a single fenced ```shipcode-plan JSON block containing the revised plan. Do not include any other fenced blocks.',
+    'You are a senior software engineer revising an implementation plan based on review feedback. Emit either a single fenced ```shipcode-plan JSON block containing the revised plan, or a single fenced ```shipcode-clarification JSON block when user input is required before revising safely. Do not include any other fenced blocks.',
   verify:
     'You are a senior software engineer verifying that an implementation matches its plan. Emit a single fenced ```shipcode-verification JSON block containing the verification result. Do not include any other fenced blocks.',
 };
@@ -56,7 +59,7 @@ export interface OpenRouterProviderDeps {
 }
 
 export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentProvider {
-  // Tier 2: all five phases. Execute goes through the tool-call harness
+  // All five phases are supported. Execute goes through the tool-call harness
   // in openrouter-execute.ts; the other four go through plain chat.
   const supports = new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute']);
 
@@ -65,11 +68,17 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
     supports,
 
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
+      const promptTelemetry = {
+        phase: req.phase,
+        promptSize: measurePromptPayload(req.prompt),
+        ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
+      };
       const apiKey = deps.getApiKey();
       if (!apiKey) {
         return {
           rawOutput: '',
           exitCode: 1,
+          promptTelemetry,
           providerError: {
             kind: 'auth',
             message: 'OPENROUTER_API_KEY is not set',
@@ -87,7 +96,12 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
 
       // Execute phase runs the tool-call agent loop.
       if (req.phase === 'execute') {
-        return executeViaOpenRouter(req, { client, model });
+        const response = await executeViaOpenRouter(req, {
+          client,
+          model,
+          onTerminalEvent: req.onTerminalEvent,
+        });
+        return { ...response, promptTelemetry };
       }
 
       // Everything else is a single streaming chat completion whose
@@ -100,7 +114,18 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
       messages.push({ role: 'user', content: req.prompt });
 
       try {
-        const result = await client.chat({ model, messages, stream: true }, req.signal);
+        const effort = normalizeOpenRouterReasoningEffort(req.phaseHints?.reasoningEffort, model);
+        const result = await client.chat(
+          {
+            model,
+            messages,
+            stream: true,
+            include_reasoning: effort !== 'none',
+            reasoning: { effort },
+          },
+          req.signal,
+          req.onTerminalEvent,
+        );
 
         // Reconstruct a rawOutput shape that the StreamParser understands:
         // the parser only needs the raw text that contains the fenced
@@ -110,9 +135,18 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
           rawOutput: result.content,
           exitCode: 0,
           resolvedModel: result.model ?? model,
+          promptTelemetry,
           tokensUsed: result.usage
             ? { prompt: result.usage.prompt_tokens, completion: result.usage.completion_tokens }
             : undefined,
+          ...(() => {
+            const parser = new StreamParser();
+            parser.feed(result.content);
+            const clarification = parser.extractClarificationRequest();
+            return clarification.success && clarification.data
+              ? { clarificationRequest: clarification.data }
+              : {};
+          })(),
         };
       } catch (err) {
         if (err instanceof OpenRouterError) {
@@ -120,11 +154,12 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
             rawOutput: '',
             exitCode: 1,
             providerError: {
-              kind: err.kind === 'aborted' ? 'network' : err.kind,
+              kind: err.kind,
               message: err.message,
               retryable: err.retryable,
             },
             resolvedModel: model,
+            promptTelemetry,
           };
         }
         return {
@@ -136,6 +171,7 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
             retryable: false,
           },
           resolvedModel: model,
+          promptTelemetry,
         };
       }
     },
@@ -153,7 +189,7 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
  * Precedence: explicit modelHint > per-phase setting override > tier default.
  */
 function resolveModel(req: ProviderRequest, settings: AppSettings): string {
-  if (req.modelHint) return req.modelHint;
+  if (req.modelHint) return normalizeReasoningModelId('openrouter', req.modelHint) ?? req.modelHint;
 
   const perPhase = (() => {
     switch (req.phase) {
@@ -169,8 +205,9 @@ function resolveModel(req: ProviderRequest, settings: AppSettings): string {
     }
   })();
 
-  if (perPhase) return perPhase;
-  return settings.openrouterDefaultPaidModel;
+  if (perPhase) return normalizeReasoningModelId('openrouter', perPhase) ?? perPhase;
+  return (
+    normalizeReasoningModelId('openrouter', settings.openrouterDefaultPaidModel) ??
+    settings.openrouterDefaultPaidModel
+  );
 }
-
-export const _internals = { resolveModel, SYSTEM_PROMPTS };

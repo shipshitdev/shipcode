@@ -10,10 +10,217 @@ Edit those files, then run: bash scripts/sync-agent-memory.sh
 -->
 
 
+## Global memory (from ~/.agents/memory/)
+
+---
+### feedback_action_over_talk.md
+
+---
+name: feedback_action_over_talk
+description: Direct, no fluff — implement when intent is clear, don't over-ask
+type: feedback
+status: active
+last_verified: 2026-04-10
+topics: [communication, workflow]
+---
+
+**Rule:** Direct, no fluff. Implement when intent is clear. Don't over-ask.
+
+**Why:** Repeated stated preference and repeated "full steam", "just do it", "keep goin" directives across sessions. Vincent's time is the bottleneck — every clarifying question he doesn't need to answer is time back.
+
+**How to apply:**
+- One clarifying question is fine when genuinely ambiguous.
+- Three clarifying questions is stalling.
+- Preambles like "Great question!" or "I'll help you with that" are noise — start with the answer or the action.
+- After completing work, don't recap what the user can read in the diff. Give a one-line status + what needs their attention.
+- When instinct says "I should check one more time" but the intent is obvious, don't check — just act.
+
+---
+### feedback_do_not_ask_to_run.md
+
+---
+name: feedback_do_not_ask_to_run
+description: Just run read-only commands — no "would you like me to…?" for reads
+type: feedback
+status: active
+last_verified: 2026-04-10
+topics: [communication, autonomy]
+---
+
+**Rule:** If read-only access exists (local filesystem, SSH, git status, curl to an API), **just run the command**. Don't ask permission for reads.
+
+**Why:** Explicit stated preference. Asking to run a read is friction without upside — the user will always say yes.
+
+**How to apply:**
+- Read-only operations (`ls`, `cat`, `grep`, `git status`, `git log`, read-only HTTP GET, `gh pr view`, `kubectl get`): execute, don't ask.
+- Side-effecting operations (`rm`, `git push`, `git reset --hard`, destructive API calls, deploys): still confirm.
+- "Let me check X" → just check, don't narrate the checking.
+- "I need to read Y to understand" → read Y, don't announce the read first.
+
+---
+### feedback_follow_codebase_patterns.md
+
+---
+name: feedback_follow_codebase_patterns
+description: Find 3+ real examples before writing new code — match the existing shape
+type: feedback
+status: active
+last_verified: 2026-04-10
+topics: [code-quality, conventions]
+---
+
+**Rule:** Find at least 3 real examples of similar code in the codebase before writing anything new. Match their shape (naming, structure, error handling, test layout, import style).
+
+**Why:** Vincent values consistency over novelty. Code that matches the existing repo patterns is easier for him to review and for future AI sessions to maintain. Quality over speed.
+
+**How to apply:**
+- Before creating a new module/endpoint/component, grep for 3 similar ones. Read them fully.
+- Match: file naming (kebab-case vs camelCase), export style (named vs default), error surface (throw vs result type), test file placement (colocated vs `__tests__`), import ordering.
+- If the codebase is inconsistent, pick the dominant pattern, not the newest one.
+- When writing a scaffold, reuse existing helpers — `spawnWithStdin`, `runClaudeWithStdin`, existing error clampers, existing query builders. Don't reinvent.
+- If you honestly can't find 3 examples, that means you're introducing a new pattern — flag it explicitly before writing.
+
+---
+### feedback_plan_agents_use_opus.md
+
+---
+name: feedback_plan_agents_use_opus
+description: Always use model="opus" when spawning Plan subagents via the Agent tool
+type: feedback
+last_verified: 2026-04-10
+topics: [model-selection, planning, subagents]
+---
+
+When dispatching an `Agent` tool call with `subagent_type="Plan"`, always pass `model="opus"`.
+
+**Why:** Plan agents do the heavy architectural thinking — they design implementations, evaluate tradeoffs, and identify edge cases. Sonnet produces shallower plans. Vincent confirmed this as the desired default on 2026-04-10. A `PreToolUse` hook in `~/.claude/settings.json` also enforces this automatically as a backstop.
+
+**How to apply:**
+- `Agent(subagent_type="Plan", model="opus", prompt="...")` — always
+- Explore agents stay on Sonnet (fast lookups, no architecture decisions needed)
+- General-purpose agents default to session model unless heavy reasoning is needed
+
+---
+### user_cost_awareness.md
+
+---
+name: user_cost_awareness
+description: Cost-constrained — Sonnet for bots, Opus for local heavy work; one account post-consolidation
+type: user
+status: active
+last_verified: 2026-04-10
+topics: [cost, model-selection]
+---
+
+Survival-mode cost awareness. Usage limits hit regularly.
+
+- **Sonnet** for automated/background bots and routine orchestration.
+- **Opus** for local heavy work, architecture, planning, hard debugging.
+- **Haiku** is fine for small lookups, formatting, cheap classification.
+
+Historically there were two Anthropic accounts (`genfeedai` + `shipshitdev`) with a `claudeswitch` helper; Vincent has **one account now**. `claudeswitch` is likely obsolete — verify before recommending.
+
+**How to apply:**
+- Don't burn Opus on trivial tasks (file lookups, string replacements, CI output paraphrasing).
+- When delegating to subagents, match model to task: research/exploration → Sonnet is usually enough; architecture/review → Opus.
+- Long-running background tasks should prefer Sonnet by default.
+
+---
+### user_profile.md
+
+---
+name: user_profile
+description: Vincent — solo founder at shipshit.dev + genfeed.ai, former startup CTO (1 exit), handle decod3rs
+type: user
+status: active
+last_verified: 2026-04-10
+topics: [identity, background]
+---
+
+Vincent is a solo founder running shipshit.dev and genfeed.ai. Former startup studio CTO with one exit. Master's in Computer Science (Project Management). Handle: `decod3rs`. Currently has one Anthropic account (legacy `.claude-genfeedai/` and `.claude-shipshitdev/` dirs are obsolete).
+
+**How to apply:** When explaining technical choices, you can go deep — he has CTO-level experience. When weighing trade-offs, frame them in terms of founder concerns (time, cost, shipping velocity) not academic best practices.
+
+---
+### user_zero_code_goal.md
+
+---
+name: user_zero_code_goal
+description: Vincent does not write code — AI writes all code, he architects and reviews
+type: user
+status: active
+last_verified: 2026-04-10
+topics: [working-style, autonomy]
+---
+
+**Zero-code goal.** Vincent does not write code himself. His job is architect, director, and reviewer. AI (you) writes all the code.
+
+Building toward fully autonomous AI dev — agents that ship without human intervention. Every interaction is implicit training data for that bigger goal.
+
+**How to apply:**
+- Propose concrete implementation; don't bounce syntax questions back.
+- When intent is clear, implement — don't stall on "would you like me to…".
+- "Add more guardrails / more tests / more validation" is always welcome — it's the path to autonomy.
+- Never suggest "you could write this yourself" — that's the opposite of the goal.
+
+
 ## Repo memory (from .agents/memory/)
 
 ---
-### feedback_claude_cli_prompts_via_stdin.md
+### agents.md
+
+---
+name: project_custom_agents
+description: Custom Claude Code sub-agents in .claude/agents/ — routing rules and when to use each
+type: project
+status: active
+last_verified: 2026-05-07
+topics: [agents, workflow, delegation]
+---
+
+Nine custom sub-agents live in `.claude/agents/`. Use `subagent_type` matching the agent filename (without `.md`).
+
+## Agent roster
+
+| Agent | Model | Mode | When to use |
+|-------|-------|------|-------------|
+| `planner` | opus | read-only | Architecture decisions, feature scoping, multi-file refactor plans, complex design tradeoffs |
+| `explorer` | haiku | read-only | Quick codebase research, grep, pattern finding, "where is X" / "how does X work" |
+| `implementer` | sonnet | full | General implementation spanning multiple packages or not fitting a specialist |
+| `pipeline-dev` | sonnet | full | Changes to `packages/pipeline`, `packages/agents`, `packages/git`, `packages/db` |
+| `ui-dev` | sonnet | full | Changes to `apps/desktop/src/renderer/` or `packages/ui/` |
+| `web-dev` | sonnet | full | Changes to `apps/web/` or `apps/docs/` |
+| `reviewer` | sonnet | read-only | Code review — runs tests/lint/typecheck, reports findings, never edits |
+| `test-writer` | sonnet | write tests only | Writes Vitest tests — never modifies source files |
+| `debugger` | sonnet | full | Root-cause investigation — systematic diagnosis, then minimal fix |
+
+## Routing rules
+
+- **Start with `planner`** for any non-trivial feature or refactor. It produces a sequenced plan with parallel tracks.
+- **Use `explorer`** for all "find/read/understand" tasks. Cheapest agent — haiku model, read-only.
+- **Pick the specialist** (`pipeline-dev`, `ui-dev`, `web-dev`) when the work is contained to one domain.
+- **Fall back to `implementer`** when work crosses domain boundaries or doesn't fit a specialist.
+- **Pair `test-writer` with any implementer** for parallel test writing during implementation.
+- **Use `reviewer`** after implementation, before committing. Or for reviewing external PRs.
+- **Use `debugger`** when something's broken and the cause isn't obvious.
+
+## Parallel patterns
+
+Common effective pairings:
+- `planner` first → then `ui-dev` + `pipeline-dev` in parallel (frontend + backend simultaneously)
+- `implementer` + `test-writer` in parallel (code + tests simultaneously)
+- `explorer` + `explorer` in parallel (researching two unrelated questions)
+- `debugger` → `test-writer` sequentially (fix then regression test)
+
+## Each agent knows
+
+- ShipCode monorepo layout and package boundaries
+- Hard rules (stdin-not-argv, path-as-truth worktrees, IPC clamping, verification retry routing)
+- Codebase conventions (Tailwind v4, strict TS, Bun, `packages/ui` first)
+- Post-work verification steps (test, typecheck, biome)
+
+---
+### claude-cli.md
 
 ---
 name: feedback_claude_cli_prompts_via_stdin
@@ -39,103 +246,51 @@ topics: [ipc, claude-cli, prd-generator, error-handling]
 - See also: `.agents/memory/feedback_clamp_ipc_error_messages.md` (when it's promoted to batch 1) — the renderer-side second layer of error clamping.
 
 ---
-### feedback_path_as_truth_worktrees.md
+### feedback_no_legacy_support_green_app.md
 
 ---
-name: feedback_path_as_truth_worktrees
-description: WorktreeManager.remove(path, branch) takes concrete values — never recompute from threadId
+name: feedback_no_legacy_support_green_app
+description: Green app rule — no legacy compatibility shims or dead-code fallbacks
 type: feedback
 status: active
-last_verified: 2026-04-10
-topics: [worktrees, git, cleanup, api-design]
+last_verified: 2026-05-08
+topics: [code-quality, workflow, state-management]
 ---
 
-**Rule:** `WorktreeManager.remove(path, branch)` accepts concrete values. **Never recompute the worktree path from `threadId`** at cleanup time.
+**Rule:** The app is green. Do not add legacy support, compatibility shims, or UI fallbacks for stale/impossible states. Cut dry.
 
-**Why:** The worktree path is derived from `worktreeRoot` + `projectSlug` + `threadId`. If the user toggles `worktreeRoot` in Settings mid-session (e.g. changes from default to a custom location), and then a pipeline finishes and tries to clean up, a `remove(threadId)` API would recompute the path using the **new** setting and delete the wrong directory — or more commonly, silently fail to find the actual worktree, leaving it orphaned on disk.
-
-The fix is **path-as-truth**: when a worktree is created, its path is persisted (to `Thread.worktreePath`). Cleanup reads the persisted path and passes it directly to `remove`, so the cleanup is insulated from any mid-flight setting changes.
-
-Same logic applies to `list()` — it parses `git worktree list --porcelain` and filters by `shipcode/*` branch prefix, not by substring match on the current `worktreeRoot` path.
+**Why:** Vincent explicitly does not want dead code or legacy support. If state is invalid, fix it at the source or via an explicit user-triggered cleanup path. Do not hide it with renderer guards.
 
 **How to apply:**
-- When calling `WorktreeManager.remove()`, always pass `thread.worktreePath` directly from the DB — do not re-derive it from `resolveWorktreeParent(projectPath, settings.worktreeRoot)`.
-- Anywhere that needs to enumerate worktrees, use `WorktreeManager.list()` — don't glob the filesystem.
-- When adding any new worktree operation, follow the same pattern: concrete values in the API, derive-once at creation, persist.
-- When deleting a project, iterate its threads via DB query, call `remove(thread.worktreePath, thread.branch)` for each, **then** delete the project row.
+- Prefer deleting stale branches and fixing producers over adding defensive presentation mapping.
+- Do not translate impossible DB/state-machine combinations into nicer UI states.
+- If cleanup is needed, make it explicit and user-triggered, not silent startup work.
+- Tests should assert the desired source-of-truth behavior, not preserve compatibility for invalid legacy states.
 
 ---
-### project_current_branch.md
+### ipc-errors.md
 
 ---
-name: project_current_branch
-description: feat/openrouter-tier1 in progress — adds openrouter to PipelineExecutorModel + providers/ dir
-type: project
-status: temporary
-last_verified: 2026-04-10
-expires_after: branch-merged-or-abandoned
-topics: [in-progress, openrouter, branch-state]
----
-
-**DELETE THIS MEMORY** once `feat/openrouter-tier1` is merged into master or abandoned. This is intentionally `status: temporary`.
-
-## Current state (as of 2026-04-10)
-
-Branch `feat/openrouter-tier1` is mid-flight. It extends `PipelineExecutorModel` from `claude | codex` to `claude | codex | openrouter` and introduces a new `packages/agents/src/providers/` directory with a provider-pattern abstraction for the CLI subprocesses.
-
-**Parallel work also on this branch** (from a different agent session):
-- Notifications (`apps/desktop/src/main/notification-service.ts`, `NotificationToaster.tsx`, `db/queries/notifications.ts`)
-- Dashboard view (`DashboardView.tsx`, `db/queries/dashboard.ts`, `db/queries/activity.ts`)
-
-## Known LSP errors (unresolved at last check)
-
-- `packages/pipeline/src/pipeline.ts` — `PipelineContext` missing `startedAt`, `executorModelOverride`, `abort` fields
-- `packages/pipeline/src/pipeline.ts` — `Pipeline` type missing `listActive` method
-- `packages/pipeline/src/pipeline.ts` — `executorModel` parameter typed as `"claude" | "codex"` but should accept full `PipelineExecutorModel` (including `"openrouter"`)
-- `packages/db/src/queries/settings.ts` — `AppSettings` missing ~14 fields (`verifierModel`, `notificationsEnabled`, etc.)
-- `apps/desktop/src/renderer/components/IssueDetail.tsx` — `X` not exported from `@shipcode/ui`
-- Several unused-variable warnings (`useWorktree`, `canReject`)
-
-## Git state
-
-- 25 modified files, 8 untracked, none committed.
-- Commit-splitting strategy (noted in session 2026-04-10): three logical groups (parallel-agent work, UI redesign, AI PRD enhance flow).
-
-**How to apply:** When working on pipeline, providers, or AppSettings code, expect these errors and don't introduce new ones. When the branch lands, **delete this file** — that's the explicit stale-memory cleanup signal.
-
----
-### project_pipeline_flow.md
-
----
-name: project_pipeline_flow
-description: GitHub issue → plan → review → execute → verify state machine in packages/pipeline
-type: project
+name: ipc-errors
+description: Clamp IPC error messages to first-line + ~280 chars; log full trace to main-process console
+type: feedback
 status: active
-last_verified: 2026-04-10
-topics: [pipeline, architecture, state-machine]
+last_verified: 2026-04-21
+topics: [ipc, errors, ux]
 ---
 
-The core ShipCode pipeline turns a GitHub issue into a shipped PR.
+**Rule:** Clamp all IPC error messages to first-line + ~280 chars before sending to renderer. Log the full stack trace to the main-process console only.
 
-**Phases:**
-1. **Plan** — LLM reads the issue body as a prompt, produces a `ShipCodePlan` with tasks.
-2. **Review** — reviewer LLM critiques the plan; plan can be revised (tracked via `reviewRound`).
-3. **Execute** — executor LLM writes code in a git worktree.
-4. **Verify** — runs tests/build/typecheck, can retry (tracked via `verificationRetries`).
-
-**State machine:** `packages/pipeline/src/pipeline.ts` owns the `Pipeline` object and `PipelineContext`. Keyed by `threadId`. Each context holds `projectPath`, `worktreePath`, retry counters, `githubIssueNumber`, `verifiedSha`, etc.
-
-**Executor models:** `PipelineExecutorModel` supports `claude | codex | openrouter` (the `openrouter` arm is in progress on `feat/openrouter-tier1`). Each maps to a provider in `packages/agents/src/providers/`.
-
-**Planner prompt from issues:** when starting from a GitHub issue, the planner prompt is built by concatenating title + body. **Grep-stable anchor:** search for `GitHub Issue #` in `packages/pipeline/src/pipeline.ts`. Because PRDs, issue bodies, and plan prompts are literally the same text, any improvement to one helps all three.
+**Why:** Unclamped stderr from agent processes produces red walls of text in the renderer (e.g. CreatePRDModal incident). The renderer has no scrollable error surface — it renders inline. A 5000-char stack trace in a modal is unusable.
 
 **How to apply:**
-- When touching pipeline state, add fields to `PipelineContext` in `packages/pipeline/src/types.ts` AND initialize them in every context-creation site, or TypeScript will flag missing properties.
-- When adding a new executor model, update: `PipelineExecutorModel` type, provider module under `packages/agents/src/providers/`, any `executorModel` switch statements, and the settings UI default options.
-- Reviewer and verifier models are configurable separately (`reviewerModel`, `verifierModel` in `AppSettings`).
+- At the main-process IPC boundary, extract `error.message.split('\n')[0]` and truncate to ~280 chars.
+- Log the full `error.stack` or raw stderr to `console.error` in the main process for debugging.
+- Apply double-clamp: clamp at the main-process handler AND at the renderer display layer as a safety net.
+- Never forward raw subprocess stderr directly to the renderer.
 
 ---
-### project_shipcode_overview.md
+### overview.md
 
 ---
 name: project_shipcode_overview
@@ -166,7 +321,142 @@ topics: [architecture, monorepo, electron]
 **How to apply:** When adding features, pick the right package — don't drop app-specific logic into `shared`, don't dump orchestration logic into `ui`. See `.agents/memory/feedback_path_as_truth_worktrees.md` and other repo-specific rules.
 
 ---
-### project_worktree_defaults.md
+### pipeline.md
+
+---
+name: project_pipeline_flow
+description: GitHub issue → plan → review → execute → verify state machine in packages/pipeline
+type: project
+status: active
+last_verified: 2026-04-10
+topics: [pipeline, architecture, state-machine]
+---
+
+The core ShipCode pipeline turns a GitHub issue into a shipped PR.
+
+**Phases:**
+1. **Plan** — LLM reads the issue body as a prompt, produces a `ShipCodePlan` with tasks.
+2. **Review** — reviewer LLM critiques the plan; plan can be revised (tracked via `reviewRound`).
+3. **Execute** — executor LLM writes code in a git worktree.
+4. **Verify** — runs tests/build/typecheck, can retry (tracked via `verificationRetries`).
+
+**State machine:** `packages/pipeline/src/pipeline.ts` owns the `Pipeline` object and `PipelineContext`. Keyed by `threadId`. Each context holds `projectPath`, `worktreePath`, retry counters, `githubIssueNumber`, `verifiedSha`, etc.
+
+**Executor models:** `PipelineExecutorModel` supports `claude | codex | openrouter` (shipped in PR #9, 2026-04-10). Each maps to a provider in `packages/agents/src/providers/`.
+
+**Planner prompt from issues:** when starting from a GitHub issue, the planner prompt is built by concatenating title + body. **Grep-stable anchor:** search for `GitHub Issue #` in `packages/pipeline/src/pipeline.ts`. Because PRDs, issue bodies, and plan prompts are literally the same text, any improvement to one helps all three.
+
+**How to apply:**
+- When touching pipeline state, add fields to `PipelineContext` in `packages/pipeline/src/types.ts` AND initialize them in every context-creation site, or TypeScript will flag missing properties.
+- When adding a new executor model, update: `PipelineExecutorModel` type, provider module under `packages/agents/src/providers/`, any `executorModel` switch statements, and the settings UI default options.
+- Reviewer and verifier models are configurable separately (`reviewerModel`, `verifierModel` in `AppSettings`).
+
+---
+### skills.md
+
+# Skills and Memory Architecture — shipcode
+
+`last_verified: 2026-04-21`
+
+## Pattern (applies to skills AND memory — never repeat this)
+
+`.agents/` is the source of truth for everything. Tool-specific dirs are always relative within-repo symlinks into `.agents/`. Works for every contributor on clone, open-source safe.
+
+| Source (committed) | Claude Code | Codex |
+|--------------------|-------------|-------|
+| `.agents/skills/` | `.claude/skills → ../.agents/skills` | `.codex/skills → ../.agents/skills` |
+| `.agents/memory/` | `.claude/memory → ../.agents/memory` | `.codex/memory → ../.agents/memory` |
+
+**Never** point outside the repo.
+
+---
+
+## Skills rule (never repeat this)
+
+**Source of truth:** `.agents/skills/<skill-name>/` — committed to repo, open-source safe.
+
+**Claude Code discovery:** `.claude/skills/<skill-name>` — relative symlink within the repo pointing to `../../.agents/skills/<skill-name>`. Contributors get working skills on clone, no external deps.
+
+**Never:** symlinks that point outside the repo (e.g. `~/www/shipshitdev/public/skills/...`). Breaks for every contributor.
+
+## Three buckets — never mix them
+
+| Dir | Who uses it | Contents |
+|-----|------------|----------|
+| `skills/` | ShipCode app at runtime | Pipeline phase prompts + `writing-prds` + `github-label-sync` |
+| `.agents/skills/` | Claude Code (devs building ShipCode) | 34 dev workflow skills (React, TS, Tailwind, etc.) |
+| `.claude/skills` | → symlink to `../.agents/skills` | Discovery shim only |
+
+`writing-prds` path: `skills/writing-prds/SKILL.md` — read by `register-github-handlers.ts` and `register-skills-handlers.ts`. Was `.agents/skills/` — moved 2026-04-21.
+
+`github-label-sync` path: `skills/github-label-sync/SKILL.md` — read by ShipCode skill loader.
+
+## Adding a new skill
+
+```bash
+# 1. Copy/create real files in .agents/skills/
+cp -r ~/source/my-skill .agents/skills/my-skill
+
+# 2. Add within-repo symlink for Claude Code discovery
+cd .claude/skills && ln -sf ../../.agents/skills/my-skill my-skill
+```
+
+## What `.claude/skills/` must never contain
+
+- Absolute symlinks (break on other machines)
+- Symlinks pointing outside the repo root
+- Real directories (defeats the single-source-of-truth in `.agents/skills/`)
+
+## GitHub / open-source
+
+`.agents/skills/` is committed. `.claude/skills/` symlinks are committed (git tracks symlinks). Any contributor who clones the repo gets all skills working immediately.
+
+---
+### ui-components-first.md
+
+---
+name: feedback_packages_ui_components_first
+description: Renderer UI should use packages/ui components first; add reusable pieces there before app-local markup
+type: feedback
+status: active
+last_verified: 2026-04-23
+topics: [ui, components, renderer, conventions]
+---
+
+**Rule:** In the renderer, **use `packages/ui` components first**. If the needed UI pattern does not exist yet, add a reusable component or primitive to `packages/ui` before hand-rolling it inside `apps/desktop`.
+
+**Why:** App-local one-offs in `apps/desktop` drift visually and structurally. The renderer should consume a shared UI layer, not invent parallel components ad hoc.
+
+**How to apply:**
+- Before adding renderer UI markup, check whether `@shipcode/ui` already exposes the primitive or pattern.
+- If the pattern is missing, create it in `packages/ui/src/` or `packages/ui/src/primitives/`, export it from `packages/ui/src/index.ts`, then consume it from the app.
+- Keep app-level files focused on composition, state, and app-specific behavior. Avoid embedding new reusable layout primitives directly in `apps/desktop`.
+- When refactoring an existing renderer one-off into a shared component, move the reusable shell into `packages/ui` and leave app-specific wiring in the renderer.
+
+---
+### verification-retries.md
+
+---
+name: feedback_verification_failures_retry_execution
+description: Structured verification failures should retry execution, not verification; preserve test output and verifier feedback
+type: feedback
+status: active
+last_verified: 2026-04-23
+topics: [pipeline, verification, retry, execution]
+---
+
+**Rule:** When the latest verification for the current plan failed **with structured findings**, resume from **execution**, not `verify`.
+
+**Why:** Re-running verification on the same worktree does not address the verifier's findings. This bug showed up in the desktop retry flow on 2026-04-23: the UI offered `Resume verification`, the IPC retry path called `startVerification(...)`, and the verifier could also complain about missing test evidence because `context.testOutput` had been cleared before prompt construction.
+
+**How to apply:**
+- Manual retry routing (`IssueDetail`, IPC retry helpers) should map failed structured verification on the latest plan to `execute`.
+- Reserve `verify` retries for failed **unstructured** verification records (malformed/unparsable verifier output).
+- The next execute prompt should include a concise verifier-feedback block derived from the latest structured failed verification.
+- Do **not** clear `context.testOutput` before building the verification prompt; the verifier needs actual test output as evidence.
+
+---
+### worktree-defaults.md
 
 ---
 name: project_worktree_defaults
@@ -192,10 +482,36 @@ Every pipeline run happens in its own git worktree to isolate AI-generated chang
 
 **Why global-by-default:** project-local worktrees bleed into iCloud/Dropbox-synced project dirs. The global default keeps project trees clean and gives one central inspection dir.
 
-**Cleanup:** `WorktreeManager.remove(path, branch)` takes concrete values — **never recompute path from threadId**. See `.agents/memory/feedback_path_as_truth_worktrees.md` for the full incident that drove this design.
+**Cleanup:** `WorktreeManager.remove(path, branch)` takes concrete values — **never recompute path from threadId**. See `.agents/memory/worktrees.md` for the full incident that drove this design.
 
 **How to apply:**
 - When passing worktree paths around, use the persisted `Thread.worktreePath` as the source of truth, not a re-derivation.
 - Don't hardcode `.shipcode/worktrees` anywhere; always go through `resolveWorktreeParent` with the user's current `worktreeRoot` setting.
 - When deleting a project, iterate its threads and clean up each worktree before removing the project row.
+
+---
+### worktrees.md
+
+---
+name: feedback_path_as_truth_worktrees
+description: WorktreeManager.remove(path, branch) takes concrete values — never recompute from threadId
+type: feedback
+status: active
+last_verified: 2026-04-10
+topics: [worktrees, git, cleanup, api-design]
+---
+
+**Rule:** `WorktreeManager.remove(path, branch)` accepts concrete values. **Never recompute the worktree path from `threadId`** at cleanup time.
+
+**Why:** The worktree path is derived from `worktreeRoot` + `projectSlug` + `threadId`. If the user toggles `worktreeRoot` in Settings mid-session (e.g. changes from default to a custom location), and then a pipeline finishes and tries to clean up, a `remove(threadId)` API would recompute the path using the **new** setting and delete the wrong directory — or more commonly, silently fail to find the actual worktree, leaving it orphaned on disk.
+
+The fix is **path-as-truth**: when a worktree is created, its path is persisted (to `Thread.worktreePath`). Cleanup reads the persisted path and passes it directly to `remove`, so the cleanup is insulated from any mid-flight setting changes.
+
+Same logic applies to `list()` — it parses `git worktree list --porcelain` and filters by `shipcode/*` branch prefix, not by substring match on the current `worktreeRoot` path.
+
+**How to apply:**
+- When calling `WorktreeManager.remove()`, always pass `thread.worktreePath` directly from the DB — do not re-derive it from `resolveWorktreeParent(projectPath, settings.worktreeRoot)`.
+- Anywhere that needs to enumerate worktrees, use `WorktreeManager.list()` — don't glob the filesystem.
+- When adding any new worktree operation, follow the same pattern: concrete values in the API, derive-once at creation, persist.
+- When deleting a project, iterate its threads via DB query, call `remove(thread.worktreePath, thread.branch)` for each, **then** delete the project row.
 

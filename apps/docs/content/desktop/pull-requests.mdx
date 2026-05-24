@@ -1,0 +1,18 @@
+# Pull Requests
+
+The project **Pull Requests** tab lists repository PRs and opens a local detail panel for review state, checks, branches, and linked ShipCode work.
+
+The view is [`apps/desktop/src/renderer/components/pull-requests/PullRequestsPanel.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/components/pull-requests/PullRequestsPanel.tsx).
+
+## Filters
+
+- **Open**
+- **Closed**
+- **All**
+
+Each row shows PR number, title, author, head/base refs, draft state, and review decision. The detail panel is the place to inspect CI blockers and decide whether to stabilize a PR from ShipCode.
+
+## Related
+
+- [Inbox](/desktop/inbox) — CI-blocked and review-blocked work that needs attention
+- [Git](/desktop/git) — branch/worktree cleanup after PRs merge or close

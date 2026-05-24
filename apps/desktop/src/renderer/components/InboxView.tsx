@@ -1,64 +1,100 @@
-import { useEffect, useRef, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type {
-  GitHubIssueCacheRecord,
-  NotificationRecord,
-  NotificationKind,
-} from '@shipcode/shared';
 import {
-  ArrowUpDown,
+  filterAttentionRequiredNotifications,
+  formatRelativeTime,
+  type GitHubIssueCacheRecord,
+  type NotificationKind,
+  type NotificationRecord,
+  type Thread,
+} from '@shipcode/shared';
+import { PageHeader, Tooltip, TooltipContent, TooltipTrigger } from '@shipcode/ui';
+import {
   Badge,
   Button,
   Card,
   CardContent,
-  Loader2,
+  cn,
+  Pagination,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
-  TableHead,
-  TableHeader,
   TableRow,
-  X,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowUpDown, Ban, Loader2, Maximize2 } from 'lucide-react';
+import type React from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
+import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
+
+const PAGE_SIZE = 25;
+const INBOX_LOADING_ROW_KEYS = [
+  'inbox-loading-1',
+  'inbox-loading-2',
+  'inbox-loading-3',
+  'inbox-loading-4',
+];
+
+const RETRY_BADGE_CLASS =
+  'inline-flex items-center justify-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide border-danger/30 bg-danger/15 text-danger hover:border-danger/40 hover:bg-danger/20 hover:text-danger';
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
 
-function timeAgo(input: string | number): string {
-  const t = typeof input === 'number' ? input : new Date(input).getTime();
-  const diff = Math.max(0, Date.now() - t);
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
+type RetryPipelineInput = {
+  threadId: string;
+  notificationId: string;
+};
 
 const KIND_BADGE_VARIANT: Record<NotificationKind, BadgeVariant> = {
-  awaiting_approval: 'warning',
+  approval: 'warning',
   failed: 'danger',
   completed: 'success',
   verification_exhausted: 'warning',
+  ci_blocked: 'danger',
 };
 
 const KIND_LABEL: Record<NotificationKind, string> = {
-  awaiting_approval: 'Awaiting approval',
+  approval: 'Needs approval',
   failed: 'Failed',
   completed: 'Completed',
   verification_exhausted: 'Retries exhausted',
+  ci_blocked: 'CI blocked',
 };
 
-export function InboxView() {
+function NotificationTable({
+  rows,
+  renderRow,
+}: {
+  rows: NotificationRecord[];
+  renderRow: (notification: NotificationRecord) => React.ReactNode;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <Table>
+          <TableBody className="[&_tr:last-child]:border-0">{rows.map(renderRow)}</TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+function useInboxView() {
   const queryClient = useQueryClient();
-  const { removeNotification, clearNotifications, selectProject, selectIssue } = useAppStore();
+  const removeNotification = useAppStore((state) => state.removeNotification);
+  const clearNotifications = useAppStore((state) => state.clearNotifications);
+  const selectProject = useAppStore((state) => state.selectProject);
+  const selectIssue = useAppStore((state) => state.selectIssue);
 
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [showOnlyApprovalRequired, setShowOnlyApprovalRequired] = useState(false);
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
-  // Stale-navigation guard: each click gets a token; async results are discarded
-  // if a newer click (or user navigation) has since taken over.
+  const pageScopeKey = `${sortOrder}:${showOnlyApprovalRequired ? 'approval' : 'all'}`;
+  const [pageState, setPageState] = useState({ key: pageScopeKey, page: 1 });
+  const page = pageState.key === pageScopeKey ? pageState.page : 1;
+  const setCurrentPage = (nextPage: number) => {
+    setPageState({ key: pageScopeKey, page: nextPage });
+  };
   const navTokenRef = useRef<string | null>(null);
 
   const {
@@ -69,17 +105,36 @@ export function InboxView() {
   } = useQuery<NotificationRecord[]>({
     queryKey: ['notifications'],
     queryFn: () => window.shipcode.invoke<NotificationRecord[]>('notification:list'),
-    refetchInterval: 5000,
+    staleTime: NOTIFICATIONS_STALE_TIME,
   });
 
-  const active = notifications.filter((n) => n.dismissedAt === null);
+  const removeNotificationFromInbox = useCallback(
+    (id: string) => {
+      removeNotification(id);
+      queryClient.setQueryData<NotificationRecord[]>(['notifications'], (current) =>
+        current ? current.filter((notification) => notification.id !== id) : current,
+      );
+    },
+    [queryClient, removeNotification],
+  );
+  const removeNotificationFromInboxEvent = useEffectEvent(removeNotificationFromInbox);
 
-  // Non-mutating sort — always derive from active, never mutate
-  const sorted = [...active].sort((a, b) =>
+  const active = filterAttentionRequiredNotifications(
+    notifications.filter((n) => n.dismissedAt === null),
+  );
+
+  const sorted = active.toSorted((a, b) =>
     sortOrder === 'newest'
       ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
   );
+  const visibleNotifications = showOnlyApprovalRequired
+    ? sorted.filter((notification) => notification.kind === 'approval')
+    : sorted;
+
+  const totalPages = Math.max(1, Math.ceil(visibleNotifications.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = visibleNotifications.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const dismiss = useMutation({
     mutationFn: (id: string) => window.shipcode.invoke('notification:dismiss', { id }),
@@ -97,23 +152,45 @@ export function InboxView() {
     },
   });
 
+  const retryPipeline = useMutation({
+    mutationFn: ({ threadId }: RetryPipelineInput) =>
+      window.shipcode.invoke('pipeline:retry', { threadId }),
+    onMutate: async ({ notificationId }) => {
+      await queryClient.cancelQueries({ queryKey: ['notifications'] });
+      const previousNotifications = queryClient.getQueryData<NotificationRecord[]>([
+        'notifications',
+      ]);
+      removeNotificationFromInbox(notificationId);
+      return { previousNotifications };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousNotifications) {
+        queryClient.setQueryData<NotificationRecord[]>(
+          ['notifications'],
+          context.previousNotifications,
+        );
+      }
+    },
+    onSuccess: (_result, { notificationId }) => {
+      removeNotificationFromInbox(notificationId);
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+
   useEffect(() => {
-    const unsub = window.shipcode.on('notification:fire', () => {
+    const unsubFire = window.shipcode.on('notification:fire', () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     });
-    return () => unsub();
+    const unsubDismiss = window.shipcode.on('notification:dismiss', ({ id }) => {
+      removeNotificationFromInboxEvent(id);
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    });
+    return () => {
+      unsubFire();
+      unsubDismiss();
+    };
   }, [queryClient]);
 
-  // Switch project, fetch its issues, locate the one linked to the notification's
-  // threadId, then open the IssueDetail sidebar via selectIssue. Without the
-  // issue lookup, selectThread alone lands the user on the Kanban view without
-  // the detail panel.
-  //
-  // Stale-result guard: rapid multi-clicks or mid-flight project switches can
-  // cause an older IPC response to overwrite the current selection. Each click
-  // mints a new token; any response whose token no longer matches navTokenRef
-  // is silently dropped. On IPC failure the prior project is restored so the
-  // user is not left stranded on a switched-but-empty project.
   const goToIssue = async (n: NotificationRecord) => {
     if (!n.projectId) return;
     const token = n.id;
@@ -122,22 +199,31 @@ export function InboxView() {
     const priorProjectId = useAppStore.getState().activeProjectId;
     try {
       selectProject(n.projectId);
-      // selectProject resets viewMode to 'project' — restore inbox so the
-      // IssueDetail sidebar opens alongside the inbox, not the Kanban board.
       useAppStore.getState().setViewMode('inbox');
       if (!n.threadId) return;
+      if (navTokenRef.current !== token) return;
       const issues = await window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
         projectId: n.projectId,
       });
-      if (navTokenRef.current !== token) return;
-      useAppStore.getState().setGithubIssues(issues);
-      const match = issues.find((i) => i.threadId === n.threadId) ?? null;
-      if (match) {
-        selectIssue(match);
-        // If the detail panel was previously collapsed, un-collapse it so the
-        // user actually sees the issue after clicking View.
-        const store = useAppStore.getState();
-        if (store.issueDetailCollapsed) store.toggleIssueDetail();
+      if (navTokenRef.current === token) {
+        useAppStore.getState().setGithubIssues(issues);
+        let match = issues.find((i) => i.threadId === n.threadId) ?? null;
+        if (!match && navTokenRef.current === token) {
+          const thread = await window.shipcode.invoke<Thread | null>('thread:get', {
+            threadId: n.threadId,
+          });
+          if (navTokenRef.current === token) {
+            if (thread?.githubIssueNumber) {
+              match = issues.find((i) => i.issueNumber === thread.githubIssueNumber) ?? null;
+            }
+            if (!match && thread?.automationId) {
+              useAppStore.getState().selectAutomationThread(n.threadId);
+            }
+          }
+        }
+        if (match) {
+          selectIssue(match);
+        }
       }
     } catch {
       if (navTokenRef.current === token) {
@@ -150,102 +236,154 @@ export function InboxView() {
   };
 
   const renderRow = (n: NotificationRecord) => (
-    <TableRow key={n.id}>
+    <TableRow key={n.id} className="group">
       <TableCell className="w-[1%] whitespace-nowrap align-top">
-        <Badge variant={KIND_BADGE_VARIANT[n.kind]}>{KIND_LABEL[n.kind]}</Badge>
-      </TableCell>
-      <TableCell className="w-[1%] whitespace-nowrap align-top text-[11px] text-muted">
-        {timeAgo(n.createdAt)}
+        <div className="flex items-center gap-1.5">
+          <Badge variant={KIND_BADGE_VARIANT[n.kind]}>{KIND_LABEL[n.kind]}</Badge>
+        </div>
       </TableCell>
       <TableCell className="align-top">
-        <div className="text-[13px] font-medium text-primary">{n.title}</div>
-        {n.body && (
-          <div className="mt-0.5 line-clamp-2 text-[12px] text-secondary">{n.body}</div>
-        )}
+        <Button
+          type="button"
+          variant="link"
+          size="xs"
+          className="h-auto justify-start p-0 text-left text-[13px] font-medium text-primary disabled:cursor-default"
+          onClick={() => goToIssue(n)}
+          disabled={navigatingId === n.id}
+          aria-label={`Open issue detail: ${n.title}`}
+        >
+          {n.title}
+        </Button>
+        {n.body && <div className="mt-0.5 line-clamp-2 text-[12px] text-secondary">{n.body}</div>}
       </TableCell>
-      <TableCell className="w-[1%] whitespace-nowrap align-top text-right">
-        <div className="flex items-center justify-end gap-1">
-          {n.projectId !== null && (
-            <Button
-              variant="ghost"
-              className="h-5 px-1.5 text-[10px] font-medium text-muted hover:text-primary hover:bg-elevated"
-              onClick={() => goToIssue(n)}
-              disabled={navigatingId === n.id}
-              title="Open issue"
-              aria-label={`Open issue: ${n.title}`}
-            >
-              View
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => dismiss.mutate(n.id)}
-            disabled={dismiss.isPending && dismiss.variables === n.id}
-            title="Dismiss"
-            aria-label={`Dismiss notification: ${n.title}`}
-          >
-            <X size={14} />
-          </Button>
+      <TableCell className="w-[144px] whitespace-nowrap align-top text-right">
+        <div className="relative flex min-h-7 items-start justify-end">
+          <span className="pt-0.5 text-[11px] text-muted-foreground transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
+            {formatRelativeTime(n.createdAt)}
+          </span>
+          <div className="absolute right-0 top-0 flex items-center justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            {n.projectId !== null && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6"
+                    onClick={() => goToIssue(n)}
+                    disabled={navigatingId === n.id}
+                    aria-label={`Open detail: ${n.title}`}
+                  >
+                    <Maximize2 size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Open detail</TooltipContent>
+              </Tooltip>
+            )}
+            {(n.kind === 'failed' || n.kind === 'verification_exhausted') && n.threadId && (
+              <Button
+                variant="ghost"
+                size="xs"
+                className={cn(RETRY_BADGE_CLASS)}
+                onClick={() => retryPipeline.mutate({ threadId: n.threadId, notificationId: n.id })}
+                disabled={
+                  retryPipeline.isPending && retryPipeline.variables?.threadId === n.threadId
+                }
+                aria-label={`Retry pipeline: ${n.title}`}
+                title="Retry pipeline"
+              >
+                {retryPipeline.isPending && retryPipeline.variables?.threadId === n.threadId ? (
+                  <>
+                    <Loader2 size={10} className="animate-spin" />
+                    RETRY
+                  </>
+                ) : (
+                  'RETRY'
+                )}
+              </Button>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6"
+                  onClick={() => dismiss.mutate(n.id)}
+                  disabled={dismiss.isPending && dismiss.variables === n.id}
+                  aria-label={`Dismiss notification: ${n.title}`}
+                >
+                  <Ban size={13} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Dismiss</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </TableCell>
     </TableRow>
   );
 
-  const renderTable = (rows: NotificationRecord[]) => (
-    <Card>
-      <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Status</TableHead>
-              <TableHead>Time</TableHead>
-              <TableHead>Notification</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>{rows.map(renderRow)}</TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  );
-
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div>
-          <h1 className="text-base font-semibold text-primary">Inbox</h1>
-          <p className="text-xs text-muted">Notifications requiring attention.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))}
-            className="h-7 gap-1.5 text-[11px] text-muted"
-            title={sortOrder === 'newest' ? 'Showing newest first' : 'Showing oldest first'}
-          >
-            <ArrowUpDown size={12} />
-            {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
-          </Button>
-          {active.length > 0 && (
+      <PageHeader
+        title="Inbox"
+        subtitle="Notifications and items that need your attention."
+        actions={
+          <>
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
-              onClick={() => dismissAll.mutate()}
-              disabled={dismissAll.isPending}
+              onClick={() => setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))}
+              className="h-7 gap-1.5 text-[11px] text-muted-foreground"
+              title={sortOrder === 'newest' ? 'Showing newest first' : 'Showing oldest first'}
             >
-              Read all
+              <ArrowUpDown size={12} />
+              {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
             </Button>
-          )}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+            <Button
+              variant={showOnlyApprovalRequired ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setShowOnlyApprovalRequired((current) => !current)}
+              className="h-7 text-[11px]"
+              title={
+                showOnlyApprovalRequired
+                  ? 'Show all notifications'
+                  : 'Show only notifications that need approval'
+              }
+            >
+              Needs approval
+            </Button>
+            {active.length > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => dismissAll.mutate()}
+                disabled={dismissAll.isPending}
+              >
+                Read all
+              </Button>
+            )}
+          </>
+        }
+      />
+      <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-5xl space-y-6">
           {isLoading && (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 size={20} className="animate-spin text-muted" />
+            <div className="space-y-3 py-4">
+              <Card>
+                <CardContent className="p-0">
+                  {INBOX_LOADING_ROW_KEYS.map((key) => (
+                    <div
+                      key={key}
+                      className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-0"
+                    >
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                      <Skeleton className="h-3 w-12" />
+                      <Skeleton className="h-3.5 flex-1" />
+                      <Skeleton className="h-6 w-16 rounded-md" />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
             </div>
           )}
 
@@ -259,14 +397,34 @@ export function InboxView() {
           )}
 
           {!isLoading && !isError && active.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-muted">
+            <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-muted-foreground">
               All caught up. No pending notifications.
             </div>
           )}
 
-          {!isLoading && !isError && active.length > 0 && renderTable(sorted)}
+          {!isLoading && !isError && active.length > 0 && visibleNotifications.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-muted-foreground">
+              No notifications match the current filter.
+            </div>
+          )}
+
+          {!isLoading && !isError && visibleNotifications.length > 0 && (
+            <>
+              <NotificationTable rows={pageItems} renderRow={renderRow} />
+              <Pagination
+                page={safePage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                className="mt-4"
+              />
+            </>
+          )}
         </div>
       </div>
     </div>
   );
+}
+
+export function InboxView() {
+  return useInboxView();
 }

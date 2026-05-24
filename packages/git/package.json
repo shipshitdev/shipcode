@@ -1,6 +1,6 @@
 {
   "name": "@shipcode/git",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -13,6 +13,8 @@
   },
   "scripts": {
     "build": "tsc",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
@@ -21,6 +23,6 @@
     "simple-git": "3.36.0"
   },
   "devDependencies": {
-    "typescript": "6.0.2"
+    "typescript": "6.0.3"
   }
 }

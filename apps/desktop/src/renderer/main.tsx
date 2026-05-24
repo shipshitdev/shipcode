@@ -1,11 +1,12 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import '@fontsource/dm-sans/400.css';
 import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/600.css';
-import './styles/app.scss';
+import './styles/app.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,11 +17,16 @@ const queryClient = new QueryClient({
   },
 });
 
-const root = document.getElementById('root')!;
+const root = document.getElementById('root');
+if (!root) {
+  throw new Error('Root element not found');
+}
 createRoot(root).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

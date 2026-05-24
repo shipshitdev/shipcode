@@ -1,13 +1,25 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { nanoid } from 'nanoid';
 import {
   ISO_NOW_SQL,
-  toIsoUtc,
-  type NotificationRecord,
   type NotificationKind,
+  type NotificationRecord,
+  toIsoUtc,
 } from '@shipcode/shared';
+import { nanoid } from 'nanoid';
+import { asRow, asRows } from '../utils';
 
-function mapRow(row: any): NotificationRecord {
+interface NotificationRow {
+  id: string;
+  thread_id: string;
+  project_id: string | null;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  created_at: string;
+  dismissed_at: string | null;
+}
+
+function mapRow(row: NotificationRow): NotificationRecord {
   return {
     id: row.id,
     threadId: row.thread_id,
@@ -40,15 +52,15 @@ export class NotificationsQueries {
       )
       .run(id, input.threadId, input.projectId, input.kind, input.title, input.body);
 
-    const row = this.db.prepare('SELECT * FROM notifications WHERE id = ?').get(id) as any;
-    return mapRow(row);
+    const row = this.db.prepare('SELECT * FROM notifications WHERE id = ?').get(id);
+    return mapRow(asRow<NotificationRow>(row));
   }
 
   listActive(): NotificationRecord[] {
     const rows = this.db
       .prepare('SELECT * FROM notifications WHERE dismissed_at IS NULL ORDER BY created_at DESC')
-      .all() as any[];
-    return rows.map(mapRow);
+      .all();
+    return asRows<NotificationRow>(rows).map(mapRow);
   }
 
   listByThread(threadId: string): NotificationRecord[] {
@@ -56,8 +68,8 @@ export class NotificationsQueries {
       .prepare(
         'SELECT * FROM notifications WHERE thread_id = ? AND dismissed_at IS NULL ORDER BY created_at DESC',
       )
-      .all(threadId) as any[];
-    return rows.map(mapRow);
+      .all(threadId);
+    return asRows<NotificationRow>(rows).map(mapRow);
   }
 
   dismiss(id: string): void {

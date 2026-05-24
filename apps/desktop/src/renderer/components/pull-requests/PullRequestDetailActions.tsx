@@ -1,0 +1,99 @@
+import type { PullRequestState } from '@shipcode/shared';
+import { Button } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
+import { useState } from 'react';
+import { useAppStore } from '../../stores/app-store';
+
+export function PullRequestDetailActions({
+  prNumber,
+  prUrl,
+  prState,
+  hasUnresolvedComments,
+}: {
+  prNumber: number;
+  prUrl: string;
+  prState: PullRequestState;
+  hasUnresolvedComments: boolean;
+}) {
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const setProjectTab = useAppStore((state) => state.setProjectTab);
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [isAddressing, setIsAddressing] = useState(false);
+  const canReview = prState === 'OPEN';
+  const canAddressComments = prState === 'OPEN' && hasUnresolvedComments;
+
+  const handleAiReview = async () => {
+    if (!activeProjectId) return;
+    setIsReviewing(true);
+    try {
+      const skillContent = await window.shipcode.invoke<string | null>('skills:load-content', {
+        name: 'review-pr',
+      });
+      const result = await window.shipcode.invoke<{ threadId: string }>('instant:run', {
+        projectId: activeProjectId,
+        prompt: `Review PR #${prNumber} at ${prUrl}. Perform a thorough code review following the checklist in your system instructions.`,
+        scope: 'project',
+        cli: 'claude',
+        customSystemPrompt: skillContent ?? undefined,
+      });
+      const { addTerminalPane } = useAppStore.getState();
+      addTerminalPane(result.threadId, {
+        mode: 'replay',
+        cli: 'claude',
+        title: `Review PR #${prNumber}`,
+        state: 'running',
+      });
+      setProjectTab('terminal');
+    } finally {
+      setIsReviewing(false);
+    }
+  };
+
+  const handleAddressComments = async () => {
+    if (!activeProjectId) return;
+    setIsAddressing(true);
+    try {
+      const skillContent = await window.shipcode.invoke<string | null>('skills:load-content', {
+        name: 'gh-address-comments',
+      });
+      const result = await window.shipcode.invoke<{ threadId: string }>('instant:run', {
+        projectId: activeProjectId,
+        prompt: `Address the review comments on PR #${prNumber} at ${prUrl}. Follow the workflow in your system instructions to fetch, fix, and respond to each comment.`,
+        scope: 'project',
+        cli: 'claude',
+        customSystemPrompt: skillContent ?? undefined,
+      });
+      const { addTerminalPane } = useAppStore.getState();
+      addTerminalPane(result.threadId, {
+        mode: 'replay',
+        cli: 'claude',
+        title: `Address PR #${prNumber}`,
+        state: 'running',
+      });
+      setProjectTab('terminal');
+    } finally {
+      setIsAddressing(false);
+    }
+  };
+
+  if (!canReview && !canAddressComments) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button onClick={() => void handleAiReview()} disabled={isReviewing}>
+        <LoadingButtonContent loading={isReviewing}>Review</LoadingButtonContent>
+      </Button>
+      {canAddressComments ? (
+        <Button
+          variant="secondary"
+          onClick={() => void handleAddressComments()}
+          disabled={isAddressing}
+        >
+          <LoadingButtonContent loading={isAddressing}>Address Comments</LoadingButtonContent>
+        </Button>
+      ) : null}
+    </div>
+  );
+}

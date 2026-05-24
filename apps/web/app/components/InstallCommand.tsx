@@ -1,29 +1,74 @@
 'use client';
 
-import { Button } from '@shipcode/ui';
 import { useState } from 'react';
 
-const INSTALL_COMMAND = 'npx @shipshitdev/shipcode';
+const COMMANDS = {
+  desktop: 'brew install --cask shipshitdev/tap/shipcode',
+  cli: 'npx @shipshitdev/shipcode run 42',
+} as const;
 
-export function InstallCommand() {
+type InstallMode = keyof typeof COMMANDS;
+
+const MODE_COPY: Record<InstallMode, { label: string; description: string }> = {
+  desktop: {
+    label: 'Desktop App',
+    description: 'Install the packaged macOS app with Homebrew Cask.',
+  },
+  cli: {
+    label: 'CLI',
+    description: 'Run the published CLI through npx — no clone needed.',
+  },
+};
+
+export function InstallCommand({ compact = false }: { compact?: boolean }) {
   const [copied, setCopied] = useState(false);
+  const [mode, setMode] = useState<InstallMode>('desktop');
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(INSTALL_COMMAND);
+    await navigator.clipboard.writeText(COMMANDS[mode]);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <section className="px-6 pb-16 flex justify-center">
-      <div className="bg-secondary border border-border rounded-lg px-6 py-4 flex items-center gap-4 font-mono text-sm">
-        <span className="text-muted select-none">$</span>
-        <span className="text-primary">{INSTALL_COMMAND}</span>
-        <span className="inline-block w-2 h-5 bg-accent animate-[blink_1s_step-end_infinite]" />
-        <Button variant="secondary" size="xs" onClick={handleCopy} className="ml-4">
-          {copied ? 'Copied!' : 'Copy'}
-        </Button>
+    <div className={`mx-auto w-full ${compact ? 'max-w-lg' : 'max-w-xl'}`}>
+      <div className="overflow-hidden rounded-xl border border-white/8 bg-white/[0.03]">
+        {/* Tab bar */}
+        <div className="flex items-center justify-between border-b border-white/8 px-5 py-3">
+          <div className="flex gap-5">
+            {(['desktop', 'cli'] as InstallMode[]).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setMode(item)}
+                className={`text-xs font-medium tracking-wide transition-colors ${
+                  mode === item ? 'text-primary' : 'text-muted hover:text-secondary'
+                }`}
+              >
+                {MODE_COPY[item].label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="text-xs text-muted transition-colors hover:text-primary"
+          >
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+
+        {/* Description */}
+        <div className="px-5 pt-3 text-left text-sm text-muted">{MODE_COPY[mode].description}</div>
+
+        {/* Command */}
+        <div className="px-5 py-4 text-left font-mono">
+          <div className="flex gap-2 text-[13px] leading-7">
+            <span className="select-none text-muted">$</span>
+            <span className="text-secondary">{COMMANDS[mode]}</span>
+          </div>
+        </div>
       </div>
-    </section>
+    </div>
   );
 }

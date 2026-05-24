@@ -1,6 +1,23 @@
 import type { DatabaseSync } from 'node:sqlite';
+import {
+  clampTextBlock,
+  MAX_PIPELINE_RAW_OUTPUT_CHARS,
+  type PlanReview,
+  type ReviewRecord,
+  toIsoUtc,
+} from '@shipcode/shared';
 import { nanoid } from 'nanoid';
-import { toIsoUtc, type ReviewRecord, type PlanReview } from '@shipcode/shared';
+import { asRow, asRows } from '../utils';
+
+interface ReviewRow {
+  id: string;
+  plan_id: string;
+  decision: ReviewRecord['decision'];
+  confidence: ReviewRecord['confidence'];
+  raw_output: string;
+  structured: string | null;
+  created_at: string;
+}
 
 export class ReviewQueries {
   constructor(private db: DatabaseSync) {}
@@ -8,16 +25,25 @@ export class ReviewQueries {
   getByPlanId(planId: string): ReviewRecord | null {
     const row = this.db
       .prepare('SELECT * FROM reviews WHERE plan_id = ? ORDER BY created_at DESC LIMIT 1')
-      .get(planId) as any;
-    return row ? mapReview(row) : null;
+      .get(planId);
+    return row ? mapReview(asRow<ReviewRow>(row)) : null;
   }
 
   listByPlanIds(planIds: string[]): Record<string, ReviewRecord> {
     if (planIds.length === 0) return {};
+    const placeholders = planIds.map(() => '?').join(', ');
+    const rows = this.db
+      .prepare(
+        `SELECT *
+           FROM reviews
+          WHERE plan_id IN (${placeholders})
+          ORDER BY plan_id ASC, created_at DESC, rowid DESC`,
+      )
+      .all(...planIds);
     const result: Record<string, ReviewRecord> = {};
-    for (const planId of planIds) {
-      const review = this.getByPlanId(planId);
-      if (review) result[planId] = review;
+    for (const row of asRows<ReviewRow>(rows)) {
+      if (result[row.plan_id]) continue;
+      result[row.plan_id] = mapReview(row);
     }
     return result;
   }
@@ -34,13 +60,29 @@ export class ReviewQueries {
         `INSERT INTO reviews (id, plan_id, decision, confidence, raw_output, structured, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, planId, decision, confidence, rawOutput, structuredJson, now);
+      .run(
+        id,
+        planId,
+        decision,
+        confidence,
+        clampTextBlock(rawOutput, MAX_PIPELINE_RAW_OUTPUT_CHARS),
+        structuredJson,
+        now,
+      );
 
-    return { id, planId, decision, confidence, rawOutput, structured, createdAt: now };
+    return {
+      id,
+      planId,
+      decision,
+      confidence,
+      rawOutput: clampTextBlock(rawOutput, MAX_PIPELINE_RAW_OUTPUT_CHARS),
+      structured,
+      createdAt: now,
+    };
   }
 }
 
-function mapReview(row: any): ReviewRecord {
+function mapReview(row: ReviewRow): ReviewRecord {
   return {
     id: row.id,
     planId: row.plan_id,
@@ -48,6 +90,6 @@ function mapReview(row: any): ReviewRecord {
     confidence: row.confidence,
     rawOutput: row.raw_output,
     structured: row.structured ? JSON.parse(row.structured) : null,
-    createdAt: toIsoUtc(row.created_at) ?? row.created_at,
+    createdAt: toIsoUtc(row.created_at) as string,
   };
 }

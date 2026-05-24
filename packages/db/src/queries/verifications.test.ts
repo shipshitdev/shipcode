@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
+import type { VerificationResult } from '@shipcode/shared';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../test-helpers';
+import { PlanQueries } from './plans';
 import { ProjectQueries } from './projects';
 import { ThreadQueries } from './threads';
-import { PlanQueries } from './plans';
 import { VerificationQueries } from './verifications';
 
 describe('VerificationQueries', () => {
@@ -36,8 +37,38 @@ describe('VerificationQueries', () => {
     expect(v.result).toBe('failed');
   });
 
+  it('falls back to the raw timestamp when created_at is not ISO parseable', () => {
+    const v = verifications.create(threadId, planId, 'output', null);
+    db.prepare(`UPDATE verifications SET created_at = '' WHERE id = ?`).run(v.id);
+
+    expect(verifications.getLatest(threadId)?.createdAt).toBe('');
+  });
+
+  it('fails loudly when a created verification cannot be reloaded', () => {
+    const getLatest = vi.spyOn(verifications, 'getLatest').mockReturnValueOnce(null);
+
+    expect(() => verifications.create(threadId, planId, 'output', null)).toThrow(
+      'Failed to load verification after insert',
+    );
+    getLatest.mockRestore();
+  });
+
+  it('create() clamps oversized raw output', () => {
+    const v = verifications.create(threadId, planId, `prefix\n${'x'.repeat(20_000)}\nsuffix`, null);
+    expect(v.rawOutput.length).toBeLessThanOrEqual(16_000);
+    expect(v.rawOutput).toContain('prefix');
+    expect(v.rawOutput).toContain('suffix');
+  });
+
   it('create() with structured uses its result', () => {
-    const structured = { result: 'passed', details: 'all tests pass' } as any;
+    const structured: VerificationResult = {
+      threadId,
+      planId,
+      result: 'passed',
+      summary: 'all tests pass',
+      criteriaResults: [],
+      issues: [],
+    };
     const v = verifications.create(threadId, planId, 'output', structured);
     expect(v.result).toBe('passed');
     expect(v.structured).toEqual(structured);
@@ -61,7 +92,9 @@ describe('VerificationQueries', () => {
       v1.id,
     );
     verifications.create(threadId, planId, 'second', null);
-    const latest = verifications.getLatest(threadId)!;
+    const latest = verifications.getLatest(threadId);
+    expect(latest).toBeTruthy();
+    if (!latest) throw new Error('Expected latest verification');
     expect(latest.rawOutput).toBe('second');
   });
 });

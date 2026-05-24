@@ -1,0 +1,44 @@
+diff --git a/dist/server/loader.js b/dist/server/loader.js
+index bd749814ff1c5b73bc26cde7bb02fb2af76530dc..b01ae2ec16f6a8b6a146e3cb4050dbd68575c49c 100644
+--- a/dist/server/loader.js
++++ b/dist/server/loader.js
+@@ -1,5 +1,4 @@
+ import path from "path";
+-import { transformerTwoslash } from "@shikijs/twoslash";
+ import { findPagesDir } from "next/dist/lib/find-pages-dir.js";
+ import { compileMetadata } from "./compile-metadata.js";
+ import { compileMdx } from "./compile.js";
+@@ -7,7 +6,6 @@ import { CWD, IS_PRODUCTION, METADATA_ONLY_RQ } from "./constants.js";
+ import { findMetaAndPageFilePaths } from "./page-map/find-meta-and-page-file-paths.js";
+ import { convertPageMapToJs } from "./page-map/to-js.js";
+ import { convertToPageMap } from "./page-map/to-page-map.js";
+-import { twoslashRenderer } from "./twoslash.js";
+ import { logger } from "./utils.js";
+ const NOW = Date.now();
+ const APP_DIR = findPagesDir(CWD).appDir;
+@@ -40,10 +38,21 @@ const repository = await (async () => {
+   }
+ })();
+ const GIT_ROOT = repository ? path.join(repository.path(), "..") : "";
+-const DEFAULT_TRANSFORMERS = transformerTwoslash({
+-  renderer: twoslashRenderer(),
+-  explicitTrigger: true
+-});
++function hasExplicitTwoslashTrigger(meta) {
++  return typeof meta === "string" && /\btwoslash\b/.test(meta) && !/\b(?:notwoslash|no-twoslash)\b/.test(meta);
++}
++const DEFAULT_TRANSFORMERS = {
++  name: "nextra-explicit-twoslash-guard",
++  preprocess(code, options) {
++    const rawMeta = this.meta?.__raw ?? options?.meta?.__raw;
++    if (hasExplicitTwoslashTrigger(rawMeta)) {
++      throw new Error(
++        "Twoslash code blocks are disabled in this build because Nextra eagerly loads @typescript/vfs on Node 25. Remove the `twoslash` meta flag or patch Nextra/Twoslash before using it."
++      );
++    }
++    return code;
++  }
++};
+ async function loader(source) {
+   const {
+     isPageImport,

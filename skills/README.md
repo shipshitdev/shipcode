@@ -1,6 +1,10 @@
-# ShipCode Pipeline Skills
+# ShipCode App Skills
 
-These five `SKILL.md` files are the **default prompts** that drive every phase of the ShipCode pipeline:
+All skills in this folder are **used by the ShipCode app itself** at runtime — during GitHub issue workflows and pipeline execution. They are not developer workflow tools.
+
+## Pipeline phase skills
+
+The five default prompts that drive every pipeline run:
 
 | Phase | Skill | Role |
 |---|---|---|
@@ -10,7 +14,16 @@ These five `SKILL.md` files are the **default prompts** that drive every phase o
 | 4. Execute | [`plan-execution/SKILL.md`](./plan-execution/SKILL.md) | Apply the approved plan inside a git worktree |
 | 5. Verify | [`plan-verification/SKILL.md`](./plan-verification/SKILL.md) | Confirm the diff matches the plan |
 
-The pipeline loops through review → revise up to `maxReviewRounds` times before either entering `awaiting_approval` (manual mode) or proceeding to execute (autonomous mode).
+## Repo-level app skills
+
+Skills that ShipCode reads directly from each target repo at runtime:
+
+| Skill | Read by | Role |
+|-------|---------|------|
+| [`writing-prds/SKILL.md`](./writing-prds/SKILL.md) | `register-github-handlers.ts` via `ai:enhance-prd` IPC | Style guide for enhancing GitHub issue bodies |
+| [`github-label-sync/SKILL.md`](./github-label-sync/SKILL.md) | ShipCode skill loader | Ensures required ShipCode labels exist on the repo |
+
+The pipeline loops through review → revise up to the configured `revisionCount` before either entering `approval` (manual mode) or proceeding to execute (autonomous mode). Approved plans must contain exactly three ordered execution phases: foundation/spec plumbing, primary feature behavior, and hardening/verification. That shape lets the task graph execute feature work one phase at a time instead of handing one large ambiguous blob to the executor.
 
 ## Format
 

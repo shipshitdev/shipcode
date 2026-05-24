@@ -28,14 +28,17 @@
 
 import path from 'node:path';
 import {
-  MAX_TOOL_CALL_ITERATIONS,
-  MAX_EXECUTE_TOTAL_TOKENS,
   MAX_DUPLICATE_TOOL_CALLS,
+  MAX_EXECUTE_TOTAL_TOKENS,
+  MAX_TOOL_CALL_ITERATIONS,
 } from '@shipcode/shared';
+import type { TerminalEvent } from '../terminal-events';
 import { executeToolCall, getToolSchemas, toolCallHash } from '../tools/registry';
 import type { ToolContext } from '../tools/types';
-import { OpenRouterClient, OpenRouterError } from './openrouter-http';
 import type { OpenRouterChatMessage } from './openrouter-http';
+import { type OpenRouterClient, OpenRouterError } from './openrouter-http';
+import { summarizeTerminalText } from './output-summary';
+import { normalizeOpenRouterReasoningEffort } from './reasoning';
 import type { ProviderRequest, ProviderResponse } from './types';
 
 /**
@@ -53,6 +56,8 @@ Rules:
 - When done, emit a final short assistant message confirming what you changed. Do not call any more tools after that.
 - If the plan cannot be completed with the available tools, explain why and stop.`.trim();
 
+const OPENROUTER_EXECUTE_TOOLS = new Set(['edit', 'write', 'read', 'glob', 'grep']);
+
 export interface ExecuteDeps {
   client: OpenRouterClient;
   /**
@@ -60,6 +65,8 @@ export interface ExecuteDeps {
    * ProviderRequest.modelHint / AppSettings before invoking.
    */
   model: string;
+  /** Optional callback for streaming canonical terminal events. */
+  onTerminalEvent?: (event: TerminalEvent) => void;
 }
 
 /**
@@ -94,7 +101,7 @@ export async function executeViaOpenRouter(
     return {
       rawOutput: '',
       exitCode: 1,
-      providerError: { kind: 'network', message: 'aborted before start', retryable: false },
+      providerError: { kind: 'aborted', message: 'aborted before start', retryable: false },
     };
   }
 
@@ -104,7 +111,7 @@ export async function executeViaOpenRouter(
     threadId: req.threadId,
   };
 
-  const tools = getToolSchemas();
+  const tools = getToolSchemas(OPENROUTER_EXECUTE_TOOLS);
   const messages: OpenRouterChatMessage[] = [
     { role: 'system', content: EXECUTE_SYSTEM_PROMPT },
     { role: 'user', content: req.prompt },
@@ -115,25 +122,39 @@ export async function executeViaOpenRouter(
   let totalCompletionTokens = 0;
   let lastResolvedModel: string | undefined;
   const recentHashes: string[] = [];
+  const reasoningEffort = normalizeOpenRouterReasoningEffort(
+    req.phaseHints?.reasoningEffort,
+    deps.model,
+  );
+
+  const emit = deps.onTerminalEvent;
 
   for (let iteration = 0; iteration < MAX_TOOL_CALL_ITERATIONS; iteration++) {
+    emit?.({ kind: 'turn_start', turn: iteration + 1 });
+
     if (req.signal.aborted) {
       return {
         rawOutput: '',
         exitCode: 1,
-        providerError: { kind: 'network', message: 'aborted', retryable: false },
+        providerError: { kind: 'aborted', message: 'aborted', retryable: false },
         resolvedModel: lastResolvedModel,
         tokensUsed: { prompt: totalPromptTokens, completion: totalCompletionTokens },
       };
     }
 
-    let response;
+    let response: Awaited<ReturnType<typeof deps.client.chat>>;
     try {
       // Non-streaming for the tool-call loop. Streaming is optional for
       // long plan/review phases but tool calls are emitted as a single
       // chunk at the end, so we gain nothing from SSE here.
       response = await deps.client.chat(
-        { model: deps.model, messages, tools, stream: false },
+        {
+          model: deps.model,
+          messages,
+          tools,
+          stream: false,
+          reasoning: { effort: reasoningEffort },
+        },
         req.signal,
       );
     } catch (err) {
@@ -142,7 +163,7 @@ export async function executeViaOpenRouter(
           rawOutput: '',
           exitCode: 1,
           providerError: {
-            kind: err.kind === 'aborted' ? 'network' : err.kind,
+            kind: err.kind,
             message: err.message,
             retryable: err.retryable,
           },
@@ -167,6 +188,14 @@ export async function executeViaOpenRouter(
       totalPromptTokens += response.usage.prompt_tokens;
       totalCompletionTokens += response.usage.completion_tokens;
     }
+
+    emit?.({
+      kind: 'turn_end',
+      turn: iteration + 1,
+      tokensUsed: response.usage
+        ? { prompt: response.usage.prompt_tokens, completion: response.usage.completion_tokens }
+        : undefined,
+    });
 
     if (totalPromptTokens + totalCompletionTokens > MAX_EXECUTE_TOTAL_TOKENS) {
       return {
@@ -223,8 +252,47 @@ export async function executeViaOpenRouter(
           };
         }
 
-        const result = await executeToolCall(call.function.name, call.function.arguments, toolCtx);
+        // Summarize tool args for terminal display
+        let argSummary = '';
+        let parsedCommand: string | undefined;
+        let parsedFilePath: string | undefined;
+        let parsedPattern: string | undefined;
+        try {
+          const parsed = JSON.parse(call.function.arguments);
+          parsedCommand = typeof parsed.command === 'string' ? parsed.command : undefined;
+          parsedFilePath = typeof parsed.file_path === 'string' ? parsed.file_path : undefined;
+          parsedPattern = typeof parsed.pattern === 'string' ? parsed.pattern : undefined;
+          argSummary = parsedFilePath ?? parsedPattern ?? parsedCommand?.slice(0, 60) ?? '';
+        } catch {}
+        emit?.({
+          kind: 'tool_start',
+          name: call.function.name,
+          summary: `${call.function.name} ${argSummary}`.trim(),
+          ...(parsedCommand ? { command: parsedCommand } : {}),
+          ...(parsedFilePath ? { filePath: parsedFilePath } : {}),
+          ...(parsedPattern ? { pattern: parsedPattern } : {}),
+        });
+
+        const toolStart = Date.now();
+        const result = await executeToolCall(
+          call.function.name,
+          call.function.arguments,
+          toolCtx,
+          OPENROUTER_EXECUTE_TOOLS,
+        );
         toolCallsExecuted++;
+
+        emit?.({
+          kind: 'tool_end',
+          name: call.function.name,
+          durationMs: Date.now() - toolStart,
+          ...(!result.ok
+            ? {
+                exitCode: 1,
+                outputSummary: summarizeTerminalText(result.error),
+              }
+            : {}),
+        });
 
         messages.push({
           role: 'tool',
@@ -233,6 +301,11 @@ export async function executeViaOpenRouter(
         });
       }
       continue;
+    }
+
+    // Emit any text content from the model
+    if (response.content) {
+      emit?.({ kind: 'text', content: response.content });
     }
 
     // No tool calls this turn. Check finish_reason.
@@ -252,6 +325,10 @@ export async function executeViaOpenRouter(
           tokensUsed: { prompt: totalPromptTokens, completion: totalCompletionTokens },
         };
       }
+      emit?.({
+        kind: 'done',
+        totalTokens: { prompt: totalPromptTokens, completion: totalCompletionTokens },
+      });
       return {
         rawOutput: response.content,
         exitCode: 0,

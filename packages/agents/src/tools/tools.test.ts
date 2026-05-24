@@ -5,17 +5,18 @@
  * (allowlist + git subcommand validation).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { MAX_READ_BYTES } from '@shipcode/shared';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { editTool } from './edit';
-import { writeTool } from './write';
-import { readTool } from './read';
 import { globTool } from './glob';
 import { grepTool } from './grep';
-import { executeToolCall, toolCallHash, getToolSchemas, listTools } from './registry';
+import { readTool } from './read';
+import { executeToolCall, getToolSchemas, toolCallHash } from './registry';
 import type { ToolContext } from './types';
+import { writeTool } from './write';
 
 let wt: string;
 let ctx: ToolContext;
@@ -75,9 +76,42 @@ describe('editTool', () => {
     if (!res.ok) expect(res.error).toMatch(/not found/);
   });
 
+  it('rejects identical replacement text', async () => {
+    await fs.writeFile(path.join(wt, 'f.txt'), 'hello\n', 'utf-8');
+    const res = await editTool.execute(
+      { path: 'f.txt', oldString: 'hello', newString: 'hello' },
+      ctx,
+    );
+
+    expect(res).toEqual({ ok: false, error: 'oldString and newString are identical' });
+  });
+
   it('returns error if file does not exist', async () => {
     const res = await editTool.execute({ path: 'nope.txt', oldString: 'x', newString: 'y' }, ctx);
     expect(res.ok).toBe(false);
+  });
+
+  it('reports read and write failures after path validation', async () => {
+    await fs.mkdir(path.join(wt, 'dir-target'));
+    const readFailure = await editTool.execute(
+      { path: 'dir-target', oldString: 'x', newString: 'y' },
+      ctx,
+    );
+    expect(readFailure.ok).toBe(false);
+    if (!readFailure.ok) expect(readFailure.error).toMatch(/failed to read dir-target/i);
+
+    await fs.writeFile(path.join(wt, 'f.txt'), 'hello\n', 'utf-8');
+    const writeSpy = vi
+      .spyOn(fs, 'writeFile')
+      .mockRejectedValueOnce(new Error('permission denied'));
+    const writeFailure = await editTool.execute(
+      { path: 'f.txt', oldString: 'hello', newString: 'there' },
+      ctx,
+    );
+    writeSpy.mockRestore();
+
+    expect(writeFailure.ok).toBe(false);
+    if (!writeFailure.ok) expect(writeFailure.error).toMatch(/failed to write f\.txt/i);
   });
 
   it('rejects absolute paths outside the worktree', async () => {
@@ -125,6 +159,15 @@ describe('writeTool', () => {
     const res = await writeTool.execute({ path: '../escape.txt', content: 'x' }, ctx);
     expect(res.ok).toBe(false);
   });
+
+  it('reports filesystem write failures', async () => {
+    await fs.mkdir(path.join(wt, 'already-dir'));
+
+    const res = await writeTool.execute({ path: 'already-dir', content: 'x' }, ctx);
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/failed to write already-dir/i);
+  });
 });
 
 // ─── read ────────────────────────────────────────────────────────────
@@ -150,11 +193,52 @@ describe('readTool', () => {
     }
   });
 
+  it('honors offset without limit and truncates oversized files', async () => {
+    await fs.writeFile(path.join(wt, 'offset.txt'), 'one\ntwo\nthree\n', 'utf-8');
+    const offsetOnly = await readTool.execute({ path: 'offset.txt', offset: 2 }, ctx);
+    expect(offsetOnly.ok).toBe(true);
+    if (offsetOnly.ok) {
+      expect(offsetOnly.content).toBe('two\nthree\n');
+    }
+
+    await fs.writeFile(path.join(wt, 'huge.txt'), 'x'.repeat(MAX_READ_BYTES + 10), 'utf-8');
+    const huge = await readTool.execute({ path: 'huge.txt' }, ctx);
+    expect(huge.ok).toBe(true);
+    if (huge.ok) {
+      expect(huge.content).toContain(`[truncated: file is ${MAX_READ_BYTES + 10} bytes`);
+    }
+  });
+
+  it('honors limit without offset from the start of the file', async () => {
+    await fs.writeFile(path.join(wt, 'limited.txt'), 'one\ntwo\nthree\n', 'utf-8');
+
+    const res = await readTool.execute({ path: 'limited.txt', limit: 2 }, ctx);
+
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.content).toBe('one\ntwo');
+  });
+
   it('rejects non-regular files', async () => {
     await fs.mkdir(path.join(wt, 'subdir'), { recursive: true });
     const res = await readTool.execute({ path: 'subdir' }, ctx);
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toMatch(/not a regular file/);
+  });
+
+  it('reports stat and read failures after path validation', async () => {
+    await fs.writeFile(path.join(wt, 'f.txt'), 'hello\n', 'utf-8');
+
+    const statSpy = vi.spyOn(fs, 'stat').mockRejectedValueOnce(new Error('stat failed'));
+    const statFailure = await readTool.execute({ path: 'f.txt' }, ctx);
+    statSpy.mockRestore();
+    expect(statFailure.ok).toBe(false);
+    if (!statFailure.ok) expect(statFailure.error).toMatch(/failed to stat f\.txt/i);
+
+    const readSpy = vi.spyOn(fs, 'open').mockRejectedValueOnce(new Error('read failed'));
+    const readFailure = await readTool.execute({ path: 'f.txt' }, ctx);
+    readSpy.mockRestore();
+    expect(readFailure.ok).toBe(false);
+    if (!readFailure.ok) expect(readFailure.error).toMatch(/failed to read f\.txt/i);
   });
 
   it('rejects path escapes', async () => {
@@ -198,6 +282,67 @@ describe('globTool', () => {
     }
   });
 
+  it('supports alternation, character classes, question marks, and scoped search roots', async () => {
+    await fs.writeFile(path.join(wt, 'src/e.tsx'), 'x', 'utf-8');
+    await fs.writeFile(path.join(wt, 'src/f.test.ts'), 'x', 'utf-8');
+
+    const alternation = await globTool.execute({ pattern: '**/*.{ts,tsx}' }, ctx);
+    expect(alternation.ok).toBe(true);
+    if (alternation.ok) {
+      const matches = (alternation.data as { matches: string[] }).matches;
+      expect(matches).toContain('src/d.ts');
+      expect(matches).toContain('src/e.tsx');
+    }
+
+    const characterClass = await globTool.execute({ pattern: '[ab].ts' }, ctx);
+    expect(characterClass.ok).toBe(true);
+    if (characterClass.ok) {
+      expect((characterClass.data as { matches: string[] }).matches).toEqual(['a.ts', 'b.ts']);
+    }
+
+    const questionMark = await globTool.execute({ pattern: '?.ts' }, ctx);
+    expect(questionMark.ok).toBe(true);
+    if (questionMark.ok) {
+      expect((questionMark.data as { matches: string[] }).matches).toEqual(['a.ts', 'b.ts']);
+    }
+
+    const scoped = await globTool.execute({ pattern: 'src/*.test.ts', path: 'src' }, ctx);
+    expect(scoped.ok).toBe(true);
+    if (scoped.ok) {
+      expect((scoped.data as { matches: string[] }).matches).toEqual(['src/f.test.ts']);
+    }
+
+    const unterminatedAlternation = await globTool.execute({ pattern: 'src/*.{ts' }, ctx);
+    expect(unterminatedAlternation.ok).toBe(true);
+    if (unterminatedAlternation.ok) {
+      expect((unterminatedAlternation.data as { matches: string[] }).matches).toEqual([]);
+    }
+
+    const unterminatedClass = await globTool.execute({ pattern: 'src/[d.ts' }, ctx);
+    expect(unterminatedClass.ok).toBe(true);
+    if (unterminatedClass.ok) {
+      expect((unterminatedClass.data as { matches: string[] }).matches).toEqual([]);
+    }
+
+    const doubleStarWithoutSlash = await globTool.execute({ pattern: '**.ts' }, ctx);
+    expect(doubleStarWithoutSlash.ok).toBe(true);
+  });
+
+  it('skips directory entries that are neither files nor directories', async () => {
+    await fs.symlink(path.join(wt, 'a.ts'), path.join(wt, 'a-link.ts'));
+
+    const res = await globTool.execute({ pattern: '*.ts' }, ctx);
+
+    expect(res.ok).toBe(true);
+    if (res.ok) expect((res.data as { matches: string[] }).matches).not.toContain('a-link.ts');
+  });
+
+  it('returns no matches when the search root is not a directory', async () => {
+    const res = await globTool.execute({ pattern: '*.txt', path: 'a.ts' }, ctx);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.content).toBe('No matches.');
+  });
+
   it('ignores node_modules', async () => {
     const res = await globTool.execute({ pattern: '**/*.ts' }, ctx);
     expect(res.ok).toBe(true);
@@ -217,6 +362,64 @@ describe('globTool', () => {
     const res = await globTool.execute({ pattern: '*.ts', path: '../other' }, ctx);
     expect(res.ok).toBe(false);
   });
+
+  it('reports aborted walks and caps large result sets', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const aborted = await globTool.execute(
+      { pattern: '**/*.ts' },
+      { ...ctx, signal: controller.signal },
+    );
+    expect(aborted).toEqual({ ok: false, error: 'aborted' });
+
+    const bigDir = path.join(wt, 'many');
+    await fs.mkdir(bigDir, { recursive: true });
+    await Promise.all(
+      Array.from({ length: 505 }, (_, index) =>
+        fs.writeFile(path.join(bigDir, `${String(index).padStart(3, '0')}.ts`), 'x', 'utf-8'),
+      ),
+    );
+
+    const capped = await globTool.execute({ pattern: 'many/*.ts' }, ctx);
+    expect(capped.ok).toBe(true);
+    if (capped.ok) {
+      const data = capped.data as { matches: string[]; truncated: boolean };
+      expect(data.matches).toHaveLength(500);
+      expect(data.truncated).toBe(true);
+      expect(capped.content).toContain('[truncated at 500 matches]');
+    }
+  });
+
+  it('treats unreadable directories as empty and stops when aborted mid-walk', async () => {
+    const readdirSpy = vi
+      .spyOn(fs, 'readdir')
+      .mockRejectedValueOnce(new Error('permission denied'));
+    const unreadable = await globTool.execute({ pattern: '**/*.ts' }, ctx);
+    readdirSpy.mockRestore();
+
+    expect(unreadable.ok).toBe(true);
+    if (unreadable.ok) expect(unreadable.content).toBe('No matches.');
+
+    const controller = new AbortController();
+    await fs.mkdir(path.join(wt, 'abort-sub'), { recursive: true });
+    await fs.writeFile(path.join(wt, 'after-abort.ts'), 'x', 'utf-8');
+
+    const realReaddir = fs.readdir.bind(fs);
+    const abortingReaddir = vi.spyOn(fs, 'readdir').mockImplementation(async (dir, options) => {
+      if (String(dir).endsWith('abort-sub')) {
+        controller.abort();
+      }
+      return realReaddir(dir, options as Parameters<typeof fs.readdir>[1]);
+    });
+
+    const aborted = await globTool.execute(
+      { pattern: '**/*.ts' },
+      { ...ctx, signal: controller.signal },
+    );
+    abortingReaddir.mockRestore();
+
+    expect(aborted).toEqual({ ok: false, error: 'aborted' });
+  });
 });
 
 // ─── grep ────────────────────────────────────────────────────────────
@@ -233,6 +436,16 @@ describe('grepTool', () => {
     if (res.ok) {
       expect(res.content).toContain('foo');
       expect(res.content).toMatch(/a\.ts|b\.ts/);
+    }
+  });
+
+  it('passes ignoreCase and include filters through the rg backend', async () => {
+    const res = await grepTool.execute({ pattern: 'FOO', include: '*.ts', ignoreCase: true }, ctx);
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.content).toContain('foo');
+      expect(res.content).not.toContain('No matches.');
     }
   });
 
@@ -263,16 +476,16 @@ describe('grepTool', () => {
 // ─── registry / dispatcher ───────────────────────────────────────────
 
 describe('tool registry', () => {
-  it('listTools returns all 6 tools', () => {
-    const names = listTools()
-      .map((t) => t.name)
+  it('getToolSchemas returns all registered tools', () => {
+    const names = getToolSchemas()
+      .map((tool) => tool.function.name)
       .sort();
-    expect(names).toEqual(['edit', 'glob', 'grep', 'read', 'shell', 'write']);
+    expect(names).toEqual(['edit', 'github_graphql', 'glob', 'grep', 'read', 'shell', 'write']);
   });
 
   it('getToolSchemas returns OpenAI function-calling schemas', () => {
     const schemas = getToolSchemas();
-    expect(schemas).toHaveLength(6);
+    expect(schemas).toHaveLength(7);
     for (const s of schemas) {
       expect(s.type).toBe('function');
       expect(s.function.name).toBeTruthy();
@@ -307,6 +520,29 @@ describe('tool registry', () => {
     if (!res.ok) expect(res.error).toMatch(/schema error/);
   });
 
+  it('executeToolCall defaults empty argument payloads and catches tool throws', async () => {
+    const missingReadPath = await executeToolCall('read', '', ctx);
+    expect(missingReadPath.ok).toBe(false);
+    if (!missingReadPath.ok) expect(missingReadPath.error).toMatch(/schema error/);
+
+    const statSpy = vi.spyOn(fs, 'stat').mockRejectedValueOnce(new Error('stat exploded'));
+    await fs.writeFile(path.join(wt, 'throw-read.txt'), 'x', 'utf-8');
+    const failed = await executeToolCall('read', JSON.stringify({ path: 'throw-read.txt' }), ctx);
+    statSpy.mockRestore();
+
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) expect(failed.error).toMatch(/failed to stat/);
+  });
+
+  it('executeToolCall catches unexpected tool throws', async () => {
+    const executeSpy = vi.spyOn(readTool, 'execute').mockRejectedValueOnce(new Error('boom'));
+
+    const failed = await executeToolCall('read', JSON.stringify({ path: 'f.txt' }), ctx);
+    executeSpy.mockRestore();
+
+    expect(failed).toEqual({ ok: false, error: "tool 'read' threw: boom" });
+  });
+
   it('toolCallHash is stable across key order', () => {
     const h1 = toolCallHash('edit', JSON.stringify({ path: 'a', oldString: 'b', newString: 'c' }));
     const h2 = toolCallHash('edit', JSON.stringify({ newString: 'c', oldString: 'b', path: 'a' }));
@@ -317,5 +553,13 @@ describe('tool registry', () => {
     const h1 = toolCallHash('edit', JSON.stringify({ path: 'a' }));
     const h2 = toolCallHash('edit', JSON.stringify({ path: 'b' }));
     expect(h1).not.toBe(h2);
+  });
+
+  it('toolCallHash falls back to the raw argument text when JSON is invalid', () => {
+    expect(toolCallHash('read', '{not-json')).toBe('read|{not-json');
+  });
+
+  it('toolCallHash canonicalizes empty argument text as an empty object', () => {
+    expect(toolCallHash('read', '')).toBe('read|{}');
   });
 });

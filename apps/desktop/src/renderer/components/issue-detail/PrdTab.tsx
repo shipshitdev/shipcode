@@ -1,0 +1,66 @@
+import type { GitHubIssueCacheRecord } from '@shipcode/shared';
+import { Button } from '@shipshitdev/ui';
+import { Pencil, RefreshCw } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { PRD_PROSE_CLASSES } from './helpers';
+
+export function PrdTab({
+  activeIssue,
+  isRefreshingFromGithub,
+  onEditPrd,
+  onRefreshFromGithub,
+}: {
+  activeIssue: GitHubIssueCacheRecord;
+  isRefreshingFromGithub: boolean;
+  onEditPrd: () => void;
+  onRefreshFromGithub: () => void;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-[13px] font-semibold text-primary">Issue brief</h3>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+            GitHub issue #{activeIssue.issueNumber} source content
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            onClick={onRefreshFromGithub}
+            disabled={isRefreshingFromGithub}
+            title="Re-fetch issue from GitHub"
+            aria-label="Refresh issue from GitHub"
+          >
+            <RefreshCw size={12} className={isRefreshingFromGithub ? 'animate-spin' : ''} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            onClick={onEditPrd}
+            title="Edit issue body"
+            aria-label="Edit issue body"
+          >
+            <Pencil size={13} />
+          </Button>
+        </div>
+      </div>
+
+      {activeIssue.body ? (
+        <div className="min-h-0 flex-1 rounded-md bg-secondary p-3 text-[13px] leading-relaxed text-primary">
+          <div className={PRD_PROSE_CLASSES}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{activeIssue.body}</ReactMarkdown>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-md bg-secondary p-3 text-[13px] text-muted-foreground">
+          This issue has no PRD body yet. Click &quot;Edit PRD&quot; to author one.
+        </div>
+      )}
+    </div>
+  );
+}

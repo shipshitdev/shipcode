@@ -18,14 +18,106 @@
  *   translates it into `ProcessManager.kill()`; the OpenRouter provider
  *   passes it to `fetch(..., { signal })` so streams abort cleanly.
  *
- * - Tier 1 supports PLAN / REVIEW / REVISION / VERIFY through the
- *   OpenRouter provider. EXECUTE is Tier 2 and currently throws
- *   `not_found` for the OpenRouter provider.
+ * - OpenRouter now supports all five phases. PLAN / REVIEW / REVISION /
+ *   VERIFY run as HTTP chat completions; EXECUTE runs through the
+ *   in-process tool-call harness.
  */
 
-import type { AgentType } from '@shipcode/shared';
+import type {
+  AgentType,
+  ClarificationRequest,
+  ProviderRunMode,
+  ReasoningEffort,
+} from '@shipcode/shared';
+import type { PromptMaterialSummary, PromptTelemetry } from '../prompt-scope';
+import type { TerminalEvent } from '../terminal-events';
+import type { GithubGraphqlDeps } from '../tools/types';
 
 export type ProviderPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute';
+
+/**
+ * Declarative per-phase tool policy. The pipeline passes these as
+ * `phaseHints` so that toolset scoping is data, not code buried in
+ * `buildClaudeCommand`. When a hint is present it takes precedence
+ * over the hardcoded defaults.
+ */
+export const PHASE_TOOL_POLICIES: Record<
+  ProviderPhase,
+  { allowedTools?: string[]; disallowedTools?: string[]; sandbox?: 'read-only' | 'workspace-write' }
+> = {
+  plan: {
+    disallowedTools: [
+      'Edit',
+      'Write',
+      'MultiEdit',
+      'Bash',
+      'NotebookEdit',
+      'NotebookRead',
+      'Read',
+      'Glob',
+      'Grep',
+      'Task',
+      'WebFetch',
+      'WebSearch',
+    ],
+    sandbox: 'read-only',
+  },
+  revision: {
+    disallowedTools: [
+      'Edit',
+      'Write',
+      'MultiEdit',
+      'Bash',
+      'NotebookEdit',
+      'NotebookRead',
+      'Read',
+      'Glob',
+      'Grep',
+      'Task',
+      'WebFetch',
+      'WebSearch',
+    ],
+    sandbox: 'read-only',
+  },
+  review: {
+    disallowedTools: [
+      'Edit',
+      'Write',
+      'MultiEdit',
+      'Bash',
+      'NotebookEdit',
+      'NotebookRead',
+      'Read',
+      'Glob',
+      'Grep',
+      'Task',
+      'WebFetch',
+      'WebSearch',
+    ],
+    sandbox: 'read-only',
+  },
+  verify: {
+    disallowedTools: [
+      'Edit',
+      'Write',
+      'MultiEdit',
+      'Bash',
+      'NotebookEdit',
+      'NotebookRead',
+      'Read',
+      'Glob',
+      'Grep',
+      'Task',
+      'WebFetch',
+      'WebSearch',
+    ],
+    sandbox: 'read-only',
+  },
+  execute: {
+    allowedTools: ['Edit', 'Write', 'Bash', 'Glob', 'Grep', 'Read'],
+    sandbox: 'workspace-write',
+  },
+};
 
 /**
  * Phase-specific hints the pipeline passes to the provider. Providers are
@@ -46,8 +138,10 @@ export interface ProviderPhaseHints {
   sandbox?: 'read-only' | 'workspace-write';
   /** codex -a (approval) value when applicable. */
   approval?: 'never' | 'untrusted' | 'on-failure';
-  /** codex reasoning effort. Passed as `-c model_reasoning_effort=<value>` in v0.120.0+. */
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  /** Shared reasoning effort. Providers map unsupported values to the nearest supported level. */
+  reasoningEffort?: ReasoningEffort;
+  /** Runtime transport selected from AppSettings.agentRunModes. */
+  runMode?: ProviderRunMode;
 }
 
 export interface ProviderRequest {
@@ -65,6 +159,16 @@ export interface ProviderRequest {
    * forgot to create a worktree. All other phases can ignore this.
    */
   projectPath: string;
+  /**
+   * The configured workspace root (matches `AppSettings.worktreeRoot`).
+   * When set, the CLI provider asserts the spawn cwd is a safe workspace
+   * before launching the agent (basename + prefix check). Omit to disable
+   * the check (e.g. instant terminals running at the project root).
+   *   - `null`/undefined  → use default ~/.shipcode/worktrees
+   *   - `''`              → project-local mode (skip prefix check)
+   *   - absolute / `~/x`  → custom worktree root
+   */
+  workspaceRoot?: string | null;
   /** Explicit model override. Takes precedence over settings defaults. */
   modelHint?: string;
   /**
@@ -74,12 +178,26 @@ export interface ProviderRequest {
   signal: AbortSignal;
   /** Phase-specific hints (see ProviderPhaseHints). */
   phaseHints?: ProviderPhaseHints;
+  promptMaterialSummary?: PromptMaterialSummary;
   /**
    * The threadId this provider call is attributed to. Used by telemetry
    * (Tier 3) to persist resolved-model + token usage against the thread.
    * Providers may log against this ID but must not read thread state.
    */
   threadId: string;
+  /**
+   * Optional callback for streaming canonical terminal events.
+   * Providers emit TerminalEvents through this so the terminal drawer
+   * can render a unified stream regardless of backend.
+   */
+  onTerminalEvent?: (event: TerminalEvent) => void;
+  /**
+   * Orchestrator-supplied deps for the `github_graphql` tool. Plumbed
+   * by `runProviderPhase` from the project's stored credential. When
+   * omitted (e.g. project has no GH auth), the tool itself returns a
+   * structured `auth_missing` error.
+   */
+  githubGraphql?: GithubGraphqlDeps;
 }
 
 export type ProviderErrorKind =
@@ -87,6 +205,7 @@ export type ProviderErrorKind =
   | 'rate_limit'
   | 'network'
   | 'not_found'
+  | 'aborted'
   | 'tool_loop_overflow'
   | 'unexpected_stop'
   | 'binary_missing'
@@ -119,10 +238,12 @@ export interface ProviderResponse {
   resolvedModel?: string;
   tokensUsed?: { prompt: number; completion: number };
   costUsd?: number;
+  promptTelemetry?: PromptTelemetry;
+  clarificationRequest?: ClarificationRequest;
 }
 
 export interface AgentProvider {
-  readonly id: 'claude-cli' | 'codex-cli' | 'openrouter';
+  readonly id: 'claude-cli' | 'codex-cli' | 'gemini-cli' | 'openrouter';
   readonly supports: ReadonlySet<ProviderPhase>;
   generate(req: ProviderRequest): Promise<ProviderResponse>;
   healthCheck(): Promise<{ ok: boolean; reason?: string }>;

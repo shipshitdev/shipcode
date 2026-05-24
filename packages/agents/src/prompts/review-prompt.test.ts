@@ -1,11 +1,21 @@
-import { describe, it, expect } from 'vitest';
-import { buildReviewPrompt } from './review-prompt';
-import type { SkillsRowSource } from '../skills';
 import type { ShipCodePlan } from '@shipcode/shared';
+import { describe, expect, it, vi } from 'vitest';
+import type { SkillsRowSource } from '../skills';
+import { buildReviewPrompt } from './review-prompt';
 
 const noOverrides: SkillsRowSource = {
   get: () => null,
   markQuarantined: () => {},
+};
+
+const invalidOverride: SkillsRowSource = {
+  get: () => ({
+    content: 'not frontmatter',
+    baseVersion: 'bad',
+    schemaVersion: 1,
+    status: 'ok',
+  }),
+  markQuarantined: vi.fn(),
 };
 
 const minimalPlan: ShipCodePlan = {
@@ -29,17 +39,32 @@ describe('buildReviewPrompt', () => {
   });
 
   it('includes autonomous flag in output', () => {
-    const autonomous = buildReviewPrompt(minimalPlan, { projectId: null }, { skills: noOverrides }, { autonomous: true });
+    const autonomous = buildReviewPrompt(
+      minimalPlan,
+      { projectId: null },
+      { skills: noOverrides },
+      { autonomous: true },
+    );
     expect(autonomous).toContain('yes');
 
-    const manual = buildReviewPrompt(minimalPlan, { projectId: null }, { skills: noOverrides }, { autonomous: false });
+    const manual = buildReviewPrompt(
+      minimalPlan,
+      { projectId: null },
+      { skills: noOverrides },
+      { autonomous: false },
+    );
     expect(manual).toContain('no');
   });
 
   it('includes context files when provided', () => {
-    const result = buildReviewPrompt(minimalPlan, { projectId: null }, { skills: noOverrides }, {
-      contextFiles: 'src/auth.ts (modified)',
-    });
+    const result = buildReviewPrompt(
+      minimalPlan,
+      { projectId: null },
+      { skills: noOverrides },
+      {
+        contextFiles: 'src/auth.ts (modified)',
+      },
+    );
     expect(result).toContain('src/auth.ts');
   });
 
@@ -51,5 +76,21 @@ describe('buildReviewPrompt', () => {
       { autonomous: false, contextFiles: 'src/shortcuts.ts (new file)' },
     );
     expect(result).toMatchSnapshot();
+  });
+
+  it('reports fallback when a review skill override is invalid', () => {
+    const onFallback = vi.fn();
+    const result = buildReviewPrompt(
+      minimalPlan,
+      { projectId: 'project-1' },
+      { skills: invalidOverride, onFallback },
+    );
+
+    expect(result).toContain(minimalPlan.id);
+    expect(onFallback).toHaveBeenCalledWith(
+      'adversarial-review',
+      expect.objectContaining({ code: 'no_frontmatter' }),
+    );
+    expect(invalidOverride.markQuarantined).toHaveBeenCalled();
   });
 });

@@ -1,5 +1,7 @@
 'use client';
 
+import { ShipCodeLogoMark } from '@shipcode/ui';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 export function Header() {
@@ -13,23 +15,27 @@ export function Header() {
 
   return (
     <header
-      className={`sticky top-0 z-50 transition-colors duration-200 ${
-        scrolled ? 'backdrop-blur-lg bg-primary/80' : 'bg-transparent'
+      className={`sticky top-0 z-50 transition-all duration-300 ${
+        scrolled ? 'bg-primary/70 backdrop-blur-xl' : 'bg-transparent'
       }`}
     >
-      <nav className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
-        <a href="/" className="text-xl font-bold text-primary">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between p-6">
+        <Link
+          href="/"
+          className="flex items-center gap-3 text-sm font-medium tracking-[0.18em] text-primary uppercase"
+        >
+          <ShipCodeLogoMark className="size-8 shrink-0" />
           ShipCode
-        </a>
-        <div className="flex items-center gap-6">
-          <a href="/docs" className="text-secondary hover:text-primary transition-colors">
+        </Link>
+        <div className="flex items-center gap-6 text-sm">
+          <Link href="/docs" className="text-secondary transition-colors hover:text-primary">
             Docs
-          </a>
+          </Link>
           <a
             href="https://github.com/shipshitdev/shipcode"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-secondary hover:text-primary transition-colors"
+            className="text-secondary transition-colors hover:text-primary"
           >
             GitHub
           </a>

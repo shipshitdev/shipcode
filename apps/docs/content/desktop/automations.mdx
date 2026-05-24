@@ -1,0 +1,29 @@
+# Automations
+
+Automations are scheduled prompts tied to a project. They run through the same pipeline scheduler as GitHub issues, so capacity limits, worktrees, model resolution, terminal output, costs, and PR creation all behave like normal pipeline work.
+
+The global view is [`apps/desktop/src/renderer/features/automations/automations-view.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/features/automations/automations-view.tsx).
+
+## What you can configure
+
+| Field | Purpose |
+|-------|---------|
+| Name | Local label for the scheduled job |
+| Project | Repository where the automation runs |
+| Prompt | The recurring work request |
+| Cron expression | UTC schedule |
+| Enabled | Allows pausing without deleting |
+| Executor provider/model/effort | Optional automation-level override; otherwise it inherits project/global defaults |
+
+## Runtime behavior
+
+- A single automation cannot have two concurrent active runs.
+- If the workspace pipeline cap is full, the run queues in memory until a slot opens.
+- Automation cards appear on the project Issues board as synthetic pipeline cards.
+- Run history opens the same detail/terminal surfaces as issue-driven runs.
+
+## Related
+
+- [Settings](/desktop/settings) — global pipeline caps and model defaults
+- [Kanban Board](/desktop/kanban) — where automation runs appear for a project
+- [Terminal](/desktop/terminal) — live output for automation runs

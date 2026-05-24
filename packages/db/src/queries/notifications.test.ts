@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
+import { NotificationsQueries } from './notifications';
 import { ProjectQueries } from './projects';
 import { ThreadQueries } from './threads';
-import { NotificationsQueries } from './notifications';
 
 describe('NotificationsQueries', () => {
   let db: DatabaseSync;
@@ -43,8 +43,27 @@ describe('NotificationsQueries', () => {
     expect(n.dismissedAt).toBeNull();
   });
 
+  it('falls back to the raw timestamp when created_at is not ISO parseable', () => {
+    const n = notifications.create({
+      threadId,
+      projectId,
+      kind: 'completed',
+      title: 'Raw timestamp',
+      body: '',
+    });
+    db.prepare(`UPDATE notifications SET created_at = '' WHERE id = ?`).run(n.id);
+
+    expect(notifications.listActive()[0].createdAt).toBe('');
+  });
+
   it('listActive() returns only undismissed notifications', () => {
-    const n1 = notifications.create({ threadId, projectId, kind: 'completed', title: 'N1', body: '' });
+    const n1 = notifications.create({
+      threadId,
+      projectId,
+      kind: 'completed',
+      title: 'N1',
+      body: '',
+    });
     const n2 = notifications.create({ threadId, projectId, kind: 'failed', title: 'N2', body: '' });
     notifications.dismiss(n1.id);
 
@@ -55,7 +74,13 @@ describe('NotificationsQueries', () => {
   it('listByThread() returns undismissed notifications for a thread', () => {
     const otherThread = threads.create(projectId, 'other', 'Other').id;
     notifications.create({ threadId, projectId, kind: 'completed', title: 'Mine', body: '' });
-    notifications.create({ threadId: otherThread, projectId, kind: 'failed', title: 'Theirs', body: '' });
+    notifications.create({
+      threadId: otherThread,
+      projectId,
+      kind: 'failed',
+      title: 'Theirs',
+      body: '',
+    });
 
     const mine = notifications.listByThread(threadId);
     expect(mine).toHaveLength(1);
@@ -63,7 +88,13 @@ describe('NotificationsQueries', () => {
   });
 
   it('dismiss() sets dismissed_at on a single notification', () => {
-    const n = notifications.create({ threadId, projectId, kind: 'completed', title: 'N', body: '' });
+    const n = notifications.create({
+      threadId,
+      projectId,
+      kind: 'completed',
+      title: 'N',
+      body: '',
+    });
     expect(notifications.listActive()).toHaveLength(1);
     notifications.dismiss(n.id);
     expect(notifications.listActive()).toHaveLength(0);
@@ -74,6 +105,24 @@ describe('NotificationsQueries', () => {
     notifications.create({ threadId, projectId, kind: 'failed', title: 'B', body: '' });
     notifications.dismissAll();
     expect(notifications.listActive()).toHaveLength(0);
+  });
+
+  it('dismissByThread() clears active notifications for one thread only', () => {
+    const otherThread = threads.create(projectId, 'other', 'Other').id;
+    notifications.create({ threadId, projectId, kind: 'completed', title: 'Mine', body: '' });
+    notifications.create({
+      threadId: otherThread,
+      projectId,
+      kind: 'failed',
+      title: 'Theirs',
+      body: '',
+    });
+
+    notifications.dismissByThread(threadId);
+
+    const active = notifications.listActive();
+    expect(active).toHaveLength(1);
+    expect(active[0].threadId).toBe(otherThread);
   });
 
   it('activeCount() returns count of undismissed notifications', () => {

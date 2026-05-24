@@ -1,5 +1,5 @@
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
 import { getDatabase, SettingsQueries } from '@shipcode/db';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
 

@@ -1,9 +1,20 @@
-import { describe, it, expect, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+import type { ProcessManager } from '../process-manager';
 import { _internals, createClaudeCliProvider, createCodexCliProvider } from './cli-provider';
 import type { ProviderRequest } from './types';
-import type { ProcessManager } from '../process-manager';
 
-const { buildClaudeArgs, buildCodexArgs } = _internals;
+const {
+  buildClaudeArgs,
+  buildClaudeStdin,
+  buildCodexArgs,
+  buildCodexStdin,
+  buildCodexPrompt,
+  materializeStdinArgsForLegacySpawn,
+  stripCodexProtocol,
+} = _internals;
 
 // Base request helper — only the phase + prompt vary per test.
 function req(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
@@ -18,46 +29,128 @@ function req(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
   };
 }
 
+async function waitForSpawn(spawnCalls: unknown[]): Promise<void> {
+  for (let i = 0; i < 20; i++) {
+    if (spawnCalls.length > 0) return;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
+
 // ─── Arg-construction regression snapshots ────────────────────────────
-// These lock the CLI provider to the exact arg lists that previously
-// lived inline in packages/pipeline/src/pipeline.ts so the refactor
-// stays behavior-preserving.
+// These lock the provider arg lists while keeping the full prompt in stdin.
 
 describe('buildClaudeArgs', () => {
-  it('plan phase mirrors pipeline.ts:78', () => {
+  it('plan phase uses stdin prompt mode', () => {
     expect(buildClaudeArgs(req({ phase: 'plan' }))).toEqual([
       '-p',
-      'PROMPT',
       '--output-format',
       'stream-json',
       '--verbose',
       '--max-turns',
       '1',
+      '--max-thinking-tokens',
+      '32000',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,Bash,NotebookEdit',
+      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebFetch,WebSearch',
     ]);
   });
 
-  it('revision phase mirrors pipeline.ts:253', () => {
+  it('revision phase uses stdin prompt mode', () => {
     expect(buildClaudeArgs(req({ phase: 'revision' }))).toEqual([
       '-p',
-      'PROMPT',
       '--output-format',
       'stream-json',
       '--verbose',
       '--max-turns',
       '1',
+      '--max-thinking-tokens',
+      '32000',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,Bash,NotebookEdit',
+      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebFetch,WebSearch',
     ]);
   });
 
-  it('verify phase mirrors pipeline.ts:385', () => {
+  it('verify phase uses stdin prompt mode', () => {
     expect(buildClaudeArgs(req({ phase: 'verify' }))).toEqual([
       '-p',
-      'PROMPT',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--max-turns',
+      '1',
+      '--max-thinking-tokens',
+      '32000',
+      '--dangerously-skip-permissions',
+      '--disallowedTools',
+      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebFetch,WebSearch',
+    ]);
+  });
+
+  it('execute phase uses stdin prompt mode', () => {
+    expect(buildClaudeArgs(req({ phase: 'execute' }))).toEqual([
+      '-p',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--allowedTools',
+      'Edit,Write,Bash,Glob,Grep,Read',
+      '--max-thinking-tokens',
+      '32000',
+      '--dangerously-skip-permissions',
+    ]);
+  });
+
+  it('execute phase honors explicit disallowed tool hints', () => {
+    expect(
+      buildClaudeArgs(
+        req({
+          phase: 'execute',
+          phaseHints: {
+            allowedTools: ['Read'],
+            disallowedTools: ['WebFetch'],
+          },
+        }),
+      ),
+    ).toEqual([
+      '-p',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--allowedTools',
+      'Read',
+      '--disallowedTools',
+      'WebFetch',
+      '--max-thinking-tokens',
+      '32000',
+      '--dangerously-skip-permissions',
+    ]);
+  });
+
+  it('maps xhigh to the highest supported Claude thinking budget', () => {
+    expect(
+      buildClaudeArgs(req({ phase: 'plan', phaseHints: { reasoningEffort: 'xhigh' } })),
+    ).toEqual([
+      '-p',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--max-turns',
+      '1',
+      '--max-thinking-tokens',
+      '32000',
+      '--dangerously-skip-permissions',
+      '--disallowedTools',
+      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebFetch,WebSearch',
+    ]);
+  });
+
+  it('maps none to omitted Claude thinking tokens', () => {
+    expect(
+      buildClaudeArgs(req({ phase: 'plan', phaseHints: { reasoningEffort: 'none' } })),
+    ).toEqual([
+      '-p',
       '--output-format',
       'stream-json',
       '--verbose',
@@ -65,17 +158,90 @@ describe('buildClaudeArgs', () => {
       '1',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,Bash,NotebookEdit',
+      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebFetch,WebSearch',
     ]);
   });
 
-  it('execute phase mirrors pipeline.ts:300', () => {
-    expect(buildClaudeArgs(req({ phase: 'execute' }))).toEqual([
-      '-p',
+  it('keeps the Claude prompt in stdin', () => {
+    expect(buildClaudeStdin(req({ phase: 'plan' }))).toBe('PROMPT');
+  });
+
+  it('materializes Claude stdin after -p only for legacy spawn managers', () => {
+    expect(materializeStdinArgsForLegacySpawn(['-p', '--output-format', 'json'], 'PROMPT')).toEqual(
+      ['-p', 'PROMPT', '--output-format', 'json'],
+    );
+  });
+
+  it('materializes placeholder stdin forms and leaves unrelated args alone', () => {
+    expect(materializeStdinArgsForLegacySpawn(['-p', '-'], 'PROMPT')).toEqual(['-p', 'PROMPT']);
+    expect(materializeStdinArgsForLegacySpawn(['exec', '-', '--json'], 'PROMPT')).toEqual([
+      'exec',
       'PROMPT',
-      '--allowedTools',
-      'Edit,Write,Bash,Glob,Grep,Read',
+      '--json',
+    ]);
+    expect(materializeStdinArgsForLegacySpawn(['--version'], 'PROMPT')).toEqual(['--version']);
+    const args = ['-p', 'existing'];
+    expect(materializeStdinArgsForLegacySpawn(args)).toBe(args);
+  });
+
+  it('review phase supports model and explicit tool hints', () => {
+    expect(
+      buildClaudeArgs(
+        req({
+          phase: 'review',
+          modelHint: 'claude-opus-4-5',
+          phaseHints: {
+            allowedTools: ['Read'],
+            disallowedTools: ['Bash'],
+          },
+        }),
+      ),
+    ).toEqual([
+      '-p',
+      '--model',
+      'claude-opus-4-5',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--max-turns',
+      '1',
       '--dangerously-skip-permissions',
+      '--disallowedTools',
+      'Bash',
+      '--allowedTools',
+      'Read',
+    ]);
+  });
+
+  it('plan phase honors model, maxTurns, and explicit allowed tools', () => {
+    expect(
+      buildClaudeArgs(
+        req({
+          phase: 'plan',
+          modelHint: 'claude-sonnet-4-6',
+          phaseHints: {
+            maxTurns: 3,
+            allowedTools: ['Read', 'Grep'],
+            disallowedTools: undefined,
+          },
+        }),
+      ),
+    ).toEqual([
+      '-p',
+      '--model',
+      'claude-sonnet-4-6',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--max-turns',
+      '3',
+      '--max-thinking-tokens',
+      '32000',
+      '--dangerously-skip-permissions',
+      '--disallowedTools',
+      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebFetch,WebSearch',
+      '--allowedTools',
+      'Read,Grep',
     ]);
   });
 });
@@ -87,8 +253,10 @@ describe('buildCodexArgs', () => {
     expect(buildCodexArgs(req({ phase: 'review' }))).toEqual([
       '-a',
       'never',
+      '-c',
+      'model_reasoning_effort=high',
       'exec',
-      'PROMPT',
+      '-',
       '--sandbox',
       'read-only',
       '--json',
@@ -103,7 +271,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      'PROMPT',
+      '-',
       '--sandbox',
       'read-only',
       '--json',
@@ -114,12 +282,209 @@ describe('buildCodexArgs', () => {
     expect(buildCodexArgs(req({ phase: 'execute' }))).toEqual([
       '-a',
       'never',
+      '-c',
+      'model_reasoning_effort=high',
       'exec',
-      'PROMPT',
+      '-',
       '--sandbox',
       'workspace-write',
       '--json',
     ]);
+  });
+
+  it('plan phase uses read-only sandbox', () => {
+    expect(buildCodexArgs(req({ phase: 'plan' }))).toEqual([
+      '-a',
+      'never',
+      '-c',
+      'model_reasoning_effort=high',
+      'exec',
+      '-',
+      '--sandbox',
+      'read-only',
+      '--json',
+    ]);
+  });
+
+  it('revision phase uses read-only sandbox', () => {
+    expect(buildCodexArgs(req({ phase: 'revision' }))).toEqual([
+      '-a',
+      'never',
+      '-c',
+      'model_reasoning_effort=high',
+      'exec',
+      '-',
+      '--sandbox',
+      'read-only',
+      '--json',
+    ]);
+  });
+
+  it('verify phase uses read-only sandbox', () => {
+    expect(buildCodexArgs(req({ phase: 'verify' }))).toEqual([
+      '-a',
+      'never',
+      '-c',
+      'model_reasoning_effort=high',
+      'exec',
+      '-',
+      '--sandbox',
+      'read-only',
+      '--json',
+    ]);
+  });
+
+  it('keeps xhigh exact for codex', () => {
+    expect(
+      buildCodexArgs(req({ phase: 'review', phaseHints: { reasoningEffort: 'xhigh' } })),
+    ).toEqual([
+      '-a',
+      'never',
+      '-c',
+      'model_reasoning_effort=xhigh',
+      'exec',
+      '-',
+      '--sandbox',
+      'read-only',
+      '--json',
+    ]);
+  });
+
+  it('maps none to low for codex', () => {
+    expect(
+      buildCodexArgs(req({ phase: 'review', phaseHints: { reasoningEffort: 'none' } })),
+    ).toEqual([
+      '-a',
+      'never',
+      '-c',
+      'model_reasoning_effort=low',
+      'exec',
+      '-',
+      '--sandbox',
+      'read-only',
+      '--json',
+    ]);
+  });
+
+  it('keeps the Codex prompt in stdin', () => {
+    expect(buildCodexStdin(req({ phase: 'review' }))).toContain('PROMPT');
+  });
+
+  it('supports model hints and explicit sandbox overrides', () => {
+    expect(
+      buildCodexArgs(
+        req({
+          phase: 'execute',
+          modelHint: 'gpt-5.4',
+          phaseHints: { sandbox: 'workspace-write', reasoningEffort: 'low' },
+        }),
+      ),
+    ).toEqual([
+      '-a',
+      'never',
+      '-m',
+      'gpt-5.4',
+      '-c',
+      'model_reasoning_effort=low',
+      'exec',
+      '-',
+      '--sandbox',
+      'workspace-write',
+      '--json',
+    ]);
+  });
+});
+
+describe('buildCodexPrompt', () => {
+  it('lets plan phase ground output in repo (read-only inspection allowed)', () => {
+    const prompt = buildCodexPrompt(req({ phase: 'plan' }));
+
+    expect(prompt).toContain('ShipCode structured-output mode');
+    expect(prompt).toContain('You may read files in the working directory');
+    expect(prompt).not.toContain('Do not run shell commands, inspect files, or use tools');
+    expect(prompt).toContain('Return only the requested fenced shipcode-* JSON block');
+    expect(prompt).toContain('PROMPT');
+  });
+
+  it('lets revision phase ground output in repo (read-only inspection allowed)', () => {
+    const prompt = buildCodexPrompt(req({ phase: 'revision' }));
+
+    expect(prompt).toContain('You may read files in the working directory');
+    expect(prompt).not.toContain('Do not run shell commands, inspect files, or use tools');
+  });
+
+  it('keeps prompt-only guardrail for review phase', () => {
+    const prompt = buildCodexPrompt(req({ phase: 'review' }));
+
+    expect(prompt).toContain('Do not run shell commands, inspect files, or use tools');
+    expect(prompt).toContain('Use only the prompt content below');
+  });
+
+  it('keeps prompt-only guardrail for verify phase', () => {
+    const prompt = buildCodexPrompt(req({ phase: 'verify' }));
+
+    expect(prompt).toContain('Do not run shell commands, inspect files, or use tools');
+  });
+
+  it('leaves execute prompts unchanged', () => {
+    expect(buildCodexPrompt(req({ phase: 'execute' }))).toBe('PROMPT');
+  });
+});
+
+describe('stripCodexProtocol', () => {
+  it('can suppress command transcripts for structured phases', () => {
+    const raw = [
+      JSON.stringify({
+        item: {
+          type: 'command_execution',
+          command: 'rg ENOENT',
+          aggregated_output: 'throw new Error("ENOENT")',
+          exit_code: 0,
+        },
+      }),
+      JSON.stringify({
+        item: {
+          type: 'agent_message',
+          text: 'no valid plan here',
+        },
+      }),
+    ].join('\n');
+
+    expect(stripCodexProtocol(raw, { includeCommandOutput: false })).toBe('no valid plan here');
+  });
+
+  it('keeps command transcripts for execute phases', () => {
+    const raw = JSON.stringify({
+      item: {
+        type: 'command_execution',
+        command: 'bun test',
+        aggregated_output: 'ok',
+        exit_code: 0,
+      },
+    });
+
+    expect(stripCodexProtocol(raw, { includeCommandOutput: true })).toBe('$ bun test\nok');
+  });
+
+  it('keeps non-protocol content and failed command exit codes', () => {
+    const raw = [
+      'plain stderr',
+      JSON.stringify({ structured: true }),
+      JSON.stringify({ type: 'thread.started' }),
+      JSON.stringify({
+        item: {
+          type: 'command_execution',
+          command: 'bun test',
+          aggregated_output: '\u001b[31mfailed\u001b[0m',
+          exit_code: 1,
+        },
+      }),
+      JSON.stringify({ item: { type: 'command_execution', exit_code: 0 } }),
+    ].join('\n');
+
+    expect(stripCodexProtocol(raw)).toBe(
+      'plain stderr\n{"structured":true}\n$ bun test\nfailed\n[exit 1]',
+    );
   });
 });
 
@@ -130,34 +495,80 @@ describe('buildCodexArgs', () => {
  * trigger output/exit events synchronously. The trigger helpers
  * return a microtask flush so generate() can resolve cleanly.
  */
-function createMockProcessManager() {
-  const listeners: Record<string, Array<(..._args: any[]) => void>> = {};
+function createMockProcessManager(options: { withStdin?: boolean; killThrows?: boolean } = {}) {
+  type MockListener = (...args: unknown[]) => void;
+  const listeners: Record<string, MockListener[]> = {};
   let spawnCount = 0;
-  const spawnCalls: Array<{ command: string; args: string[]; cwd: string }> = [];
+  const spawnCalls: Array<{
+    command: string;
+    args: string[];
+    cwd: string;
+    stdin?: string;
+    threadId?: string;
+    options?: unknown;
+  }> = [];
 
   const pm = {
-    spawn: vi.fn((_type: string, command: string, args: string[], cwd: string) => {
-      spawnCount++;
-      spawnCalls.push({ command, args, cwd });
-      return { id: `proc-${spawnCount}` };
+    spawn: vi.fn(
+      (
+        _type: string,
+        command: string,
+        args: string[],
+        cwd: string,
+        threadId?: string,
+        spawnOptions?: unknown,
+      ) => {
+        spawnCount++;
+        spawnCalls.push({ command, args, cwd, threadId, options: spawnOptions });
+        return { id: `proc-${spawnCount}` };
+      },
+    ),
+    kill: vi.fn(() => {
+      if (options.killThrows) throw new Error('already exited');
     }),
-    kill: vi.fn(),
-    on: vi.fn((event: string, handler: (..._args: any[]) => void) => {
-      (listeners[event] ??= []).push(handler);
+    on: vi.fn((event: string, handler: MockListener) => {
+      const eventListeners = listeners[event] ?? [];
+      eventListeners.push(handler);
+      listeners[event] = eventListeners;
     }),
-    removeListener: vi.fn((event: string, handler: (..._args: any[]) => void) => {
+    removeListener: vi.fn((event: string, handler: MockListener) => {
       listeners[event] = (listeners[event] ?? []).filter((h) => h !== handler);
     }),
-  } as unknown as ProcessManager;
+  } as unknown as ProcessManager & {
+    spawnWithStdin?: (
+      type: string,
+      command: string,
+      args: string[],
+      cwd: string,
+      stdin: string,
+      threadId?: string,
+      spawnOptions?: unknown,
+    ) => { id: string };
+  };
 
-  async function trigger(event: string, ...args: any[]) {
+  if (options.withStdin !== false) {
+    (pm as unknown as { spawnWithStdin: unknown }).spawnWithStdin = vi.fn(
+      (_type, command, args, cwd, stdin, threadId, spawnOptions) => {
+        spawnCount++;
+        spawnCalls.push({ command, args, cwd, stdin, threadId, options: spawnOptions });
+        return { id: `proc-${spawnCount}` };
+      },
+    );
+  }
+
+  async function trigger(event: string, ...args: unknown[]) {
     const handlers = [...(listeners[event] ?? [])];
     for (const h of handlers) h(...args);
     // Flush microtasks so generate()'s promise chain settles
     await new Promise((r) => setImmediate(r));
   }
 
-  return { pm, trigger, spawnCalls, getSpawnCount: () => spawnCount };
+  function emitSync(event: string, ...args: unknown[]) {
+    const handlers = [...(listeners[event] ?? [])];
+    for (const h of handlers) h(...args);
+  }
+
+  return { pm, trigger, emitSync, spawnCalls, getSpawnCount: () => spawnCount };
 }
 
 describe('createClaudeCliProvider', () => {
@@ -171,6 +582,9 @@ describe('createClaudeCliProvider', () => {
 
     expect(spawnCalls).toHaveLength(1);
     expect(spawnCalls[0].command).toBe('claude');
+    expect(spawnCalls[0].args[0]).toBe('-p');
+    expect(spawnCalls[0].args[1]).not.toBe('-');
+    expect(spawnCalls[0].stdin).toBe('PROMPT');
     expect(spawnCalls[0].args).toContain('--disallowedTools');
     expect(spawnCalls[0].cwd).toBe('/tmp/wt');
 
@@ -182,6 +596,87 @@ describe('createClaudeCliProvider', () => {
     expect(result.exitCode).toBe(0);
     expect(result.rawOutput).toBe('partial output');
     expect(result.resolvedModel).toBe('claude');
+  });
+
+  it('ignores output and exit events for other process IDs', async () => {
+    const { trigger, spawnCalls, pm } = createMockProcessManager();
+    const provider = createClaudeCliProvider(pm);
+
+    const promise = provider.generate(
+      req({
+        phase: 'plan',
+        promptMaterialSummary: {
+          count: 1,
+          labels: ['issue'],
+          kinds: ['issue_prompt'],
+        },
+      }),
+    );
+    await new Promise((r) => setImmediate(r));
+
+    expect(spawnCalls).toHaveLength(1);
+    await trigger('output', 'other-proc', 'ignored');
+    await trigger('exit', 'other-proc', 99);
+    await trigger('output', 'proc-1', 'kept');
+    await trigger('exit', 'proc-1', 0);
+    await trigger('exit', 'proc-1', 127);
+
+    const result = await promise;
+    expect(result.rawOutput).toBe('kept');
+    expect(result.exitCode).toBe(0);
+    expect(result.promptTelemetry).toEqual(
+      expect.objectContaining({
+        selectedMaterials: {
+          count: 1,
+          labels: ['issue'],
+          kinds: ['issue_prompt'],
+        },
+      }),
+    );
+  });
+
+  it('falls back to legacy spawn args when spawnWithStdin is unavailable', async () => {
+    const { pm, trigger, spawnCalls } = createMockProcessManager({ withStdin: false });
+    const provider = createClaudeCliProvider(pm);
+
+    const promise = provider.generate(req({ phase: 'plan', workspaceRoot: '/tmp/proj' }));
+    await new Promise((r) => setImmediate(r));
+
+    expect(spawnCalls[0].args[1]).toBe('PROMPT');
+    expect(spawnCalls[0].stdin).toBeUndefined();
+    expect(spawnCalls[0].threadId).toBe('t1');
+    expect(spawnCalls[0].options).toEqual(expect.objectContaining({ workspaceRoot: '/tmp/proj' }));
+
+    await trigger('exit', 'proc-1', 0);
+    await promise;
+  });
+
+  it('surfaces synchronous spawn failures as binary_missing output', async () => {
+    const { pm } = createMockProcessManager({ withStdin: false });
+    vi.mocked(pm.spawn).mockImplementationOnce(() => {
+      throw new Error('spawn ENOENT');
+    });
+    const provider = createClaudeCliProvider(pm);
+
+    const result = await provider.generate(req({ phase: 'plan' }));
+
+    expect(result.exitCode).toBe(127);
+    expect(result.rawOutput).toBe('spawn ENOENT');
+    expect(result.providerError?.kind).toBe('binary_missing');
+  });
+
+  it('surfaces non-Error synchronous spawn failures as binary_missing output', async () => {
+    const { pm } = createMockProcessManager({ withStdin: false });
+    vi.mocked(pm.spawn).mockImplementationOnce(() => {
+      throw 'spawn failed';
+    });
+    const provider = createClaudeCliProvider(pm);
+
+    const result = await provider.generate(req({ phase: 'plan' }));
+
+    expect(result.exitCode).toBe(127);
+    expect(result.rawOutput).toBe('spawn failed');
+    expect(result.providerError?.kind).toBe('binary_missing');
   });
 
   it('surfaces exit 127 as binary_missing providerError', async () => {
@@ -196,6 +691,36 @@ describe('createClaudeCliProvider', () => {
     expect(result.exitCode).toBe(127);
     expect(result.providerError?.kind).toBe('binary_missing');
     expect(result.providerError?.retryable).toBe(false);
+  });
+
+  it('execute phase uses the interactive Claude CLI when runMode is interactive', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-claude-interactive-'));
+    try {
+      const { pm, trigger, spawnCalls } = createMockProcessManager({ withStdin: false });
+      const provider = createClaudeCliProvider(pm);
+
+      const promise = provider.generate(
+        req({ phase: 'execute', cwd, phaseHints: { runMode: 'interactive' } }),
+      );
+      await waitForSpawn(spawnCalls);
+
+      expect(spawnCalls[0].command).toBe('claude');
+      expect(spawnCalls[0].stdin).toBeUndefined();
+      expect(spawnCalls[0].args).toEqual(
+        expect.arrayContaining(['--permission-mode', 'acceptEdits', '--name', 'shipcode-t1']),
+      );
+      expect(spawnCalls[0].args).not.toContain('-p');
+      expect(spawnCalls[0].args.at(-1)).toContain(`${cwd}/.shipcode/runs/t1/execute-prompt.md`);
+      expect(spawnCalls[0].options).toEqual(expect.objectContaining({ outputMode: 'raw' }));
+      expect(fs.readFileSync(path.join(cwd, '.shipcode/runs/t1/execute-prompt.md'), 'utf8')).toBe(
+        'PROMPT',
+      );
+
+      await trigger('exit', 'proc-1', 0);
+      await promise;
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
   });
 
   it('aborts running process when signal fires', async () => {
@@ -215,8 +740,51 @@ describe('createClaudeCliProvider', () => {
 
     const result = await promise;
     expect(result.exitCode).toBe(130);
-    expect(result.providerError?.kind).toBe('network');
+    expect(result.providerError?.kind).toBe('aborted');
     expect(result.providerError?.message).toBe('aborted');
+  });
+
+  it('force-settles aborted processes when kill throws and no exit event arrives', async () => {
+    vi.useFakeTimers();
+    try {
+      const { pm } = createMockProcessManager({ killThrows: true });
+      const provider = createClaudeCliProvider(pm);
+      const abort = new AbortController();
+
+      const promise = provider.generate(req({ phase: 'plan', signal: abort.signal }));
+
+      abort.abort();
+      await vi.advanceTimersByTimeAsync(2000);
+
+      const result = await promise;
+      expect(result.exitCode).toBe(130);
+      expect(result.providerError?.kind).toBe('aborted');
+      expect(pm.kill).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ignores abort fallback timers after the process exits normally', async () => {
+    vi.useFakeTimers();
+    try {
+      const { pm, emitSync } = createMockProcessManager();
+      const provider = createClaudeCliProvider(pm);
+      const abort = new AbortController();
+
+      const promise = provider.generate(req({ phase: 'plan', signal: abort.signal }));
+
+      abort.abort();
+      emitSync('output', 'proc-1', 'done');
+      emitSync('exit', 'proc-1', 0);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      const result = await promise;
+      expect(result.exitCode).toBe(0);
+      expect(result.rawOutput).toBe('done');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('pre-aborted signal returns immediately without spawning', async () => {
@@ -228,6 +796,12 @@ describe('createClaudeCliProvider', () => {
     const result = await provider.generate(req({ phase: 'plan', signal: abort.signal }));
     expect(result.exitCode).toBe(130);
     expect(pm.spawn).not.toHaveBeenCalled();
+    expect(pm.spawnWithStdin).not.toHaveBeenCalled();
+  });
+
+  it('reports healthy through the provider interface', async () => {
+    const { pm } = createMockProcessManager();
+    await expect(createClaudeCliProvider(pm).healthCheck()).resolves.toEqual({ ok: true });
   });
 });
 
@@ -243,17 +817,34 @@ describe('createCodexCliProvider', () => {
     expect(spawnCalls[0].args).toEqual([
       '-a',
       'never',
+      '-c',
+      'model_reasoning_effort=high',
       'exec',
-      'PROMPT',
+      '-',
       '--sandbox',
       'read-only',
       '--json',
     ]);
+    expect(spawnCalls[0].stdin).toContain('PROMPT');
 
     await trigger('exit', 'proc-1', 0);
     const result = await promise;
     expect(result.exitCode).toBe(0);
     expect(result.resolvedModel).toBe('codex');
+  });
+
+  it('uses legacy spawn materialization for Codex stdin when needed', async () => {
+    const { pm, trigger, spawnCalls } = createMockProcessManager({ withStdin: false });
+    const provider = createCodexCliProvider(pm);
+
+    const promise = provider.generate(req({ phase: 'review' }));
+    await new Promise((r) => setImmediate(r));
+
+    expect(spawnCalls[0].args[5]).toContain('ShipCode structured-output mode');
+    expect(spawnCalls[0].stdin).toBeUndefined();
+
+    await trigger('exit', 'proc-1', 0);
+    await promise;
   });
 
   it('review phase with reasoningEffort hint sets -c model_reasoning_effort=high', async () => {
@@ -272,13 +863,198 @@ describe('createCodexCliProvider', () => {
     await promise;
   });
 
-  it('codex provider does not support plan phase via registry', () => {
+  it('execute phase uses the interactive Codex CLI when runMode is interactive', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-codex-interactive-'));
+    try {
+      const { pm, trigger, spawnCalls } = createMockProcessManager({ withStdin: false });
+      const provider = createCodexCliProvider(pm);
+
+      const promise = provider.generate(
+        req({
+          phase: 'execute',
+          cwd,
+          modelHint: 'gpt-5.4-mini',
+          phaseHints: { runMode: 'interactive', reasoningEffort: 'medium' },
+        }),
+      );
+      await waitForSpawn(spawnCalls);
+
+      expect(spawnCalls[0].command).toBe('codex');
+      expect(spawnCalls[0].stdin).toBeUndefined();
+      expect(spawnCalls[0].args).toEqual(
+        expect.arrayContaining([
+          '-s',
+          'workspace-write',
+          '-a',
+          'on-request',
+          '--no-alt-screen',
+          '-m',
+          'gpt-5.4-mini',
+          '-c',
+          'model_reasoning_effort=medium',
+        ]),
+      );
+      expect(spawnCalls[0].args).not.toContain('exec');
+      expect(spawnCalls[0].options).toEqual(expect.objectContaining({ outputMode: 'raw' }));
+      expect(fs.readFileSync(path.join(cwd, '.shipcode/runs/t1/execute-prompt.md'), 'utf8')).toBe(
+        'PROMPT',
+      );
+
+      await trigger('exit', 'proc-1', 0);
+      await promise;
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('omits command execution output from non-execute rawOutput', async () => {
+    const { pm, trigger } = createMockProcessManager();
+    const provider = createCodexCliProvider(pm);
+
+    const promise = provider.generate(req({ phase: 'plan' }));
+    await new Promise((r) => setImmediate(r));
+
+    await trigger(
+      'output',
+      'proc-1',
+      [
+        JSON.stringify({
+          item: {
+            type: 'command_execution',
+            command: 'rg ENOENT',
+            aggregated_output: 'source mentions ENOENT',
+            exit_code: 0,
+          },
+        }),
+        JSON.stringify({ item: { type: 'agent_message', text: 'planner text' } }),
+      ].join('\n'),
+    );
+    await trigger('exit', 'proc-1', 0);
+
+    const result = await promise;
+    expect(result.rawOutput).toBe('planner text');
+  });
+
+  it('codex provider supports all non-gh pipeline phases', () => {
     const { pm } = createMockProcessManager();
     const provider = createCodexCliProvider(pm);
+    expect(provider.supports.has('plan')).toBe(true);
     expect(provider.supports.has('review')).toBe(true);
+    expect(provider.supports.has('revision')).toBe(true);
+    expect(provider.supports.has('verify')).toBe(true);
     expect(provider.supports.has('execute')).toBe(true);
-    expect(provider.supports.has('plan')).toBe(false);
-    expect(provider.supports.has('revision')).toBe(false);
-    expect(provider.supports.has('verify')).toBe(false);
+  });
+
+  it('extracts resolvedModel from response.completed NDJSON event', async () => {
+    const { pm, trigger } = createMockProcessManager();
+    const provider = createCodexCliProvider(pm);
+
+    const promise = provider.generate(req({ phase: 'plan' }));
+    await new Promise((r) => setImmediate(r));
+
+    await trigger(
+      'output',
+      'proc-1',
+      [
+        JSON.stringify({ type: 'thread.started', thread_id: 't1' }),
+        JSON.stringify({ item: { type: 'agent_message', text: 'planner text' } }),
+        JSON.stringify({
+          type: 'response.completed',
+          response: {
+            model: 'gpt-5.4-high',
+            usage: { input_tokens: 12, completion_tokens: 7 },
+          },
+        }),
+      ].join('\n'),
+    );
+    await trigger('exit', 'proc-1', 0);
+
+    const result = await promise;
+    expect(result.resolvedModel).toBe('gpt-5.4-high');
+  });
+
+  it('falls back to modelHint when codex output has no model field', async () => {
+    const { pm, trigger } = createMockProcessManager();
+    const provider = createCodexCliProvider(pm);
+
+    const promise = provider.generate(req({ phase: 'plan', modelHint: 'gpt-5.4-mini' }));
+    await new Promise((r) => setImmediate(r));
+
+    await trigger('output', 'proc-1', 'plain text without ndjson model events\n');
+    await trigger('exit', 'proc-1', 0);
+
+    const result = await promise;
+    expect(result.resolvedModel).toBe('gpt-5.4-mini');
+  });
+
+  it('surfaces codex binary missing, aborts, usage, clarification, and healthCheck', async () => {
+    const { pm, trigger } = createMockProcessManager();
+    const provider = createCodexCliProvider(pm);
+    const abort = new AbortController();
+
+    const missing = provider.generate(req({ phase: 'review' }));
+    await new Promise((r) => setImmediate(r));
+    await trigger('exit', 'proc-1', 127);
+    expect((await missing).providerError?.message).toBe('codex CLI not found on PATH');
+
+    const aborted = provider.generate(req({ phase: 'review', signal: abort.signal }));
+    await new Promise((r) => setImmediate(r));
+    abort.abort();
+    await trigger('exit', 'proc-2', 130);
+    expect((await aborted).providerError?.kind).toBe('aborted');
+
+    const withMetadata = provider.generate(req({ phase: 'review' }));
+    await new Promise((r) => setImmediate(r));
+    await trigger(
+      'output',
+      'proc-3',
+      [
+        JSON.stringify({
+          type: 'response.completed',
+          response: {
+            usage: {
+              input_tokens: 10,
+              output_tokens: 5,
+              input_token_details: { cached_tokens: 2 },
+            },
+          },
+        }),
+        JSON.stringify({
+          item: {
+            type: 'agent_message',
+            text: [
+              '```shipcode-clarification',
+              JSON.stringify({
+                id: 'clarify-1',
+                threadId: 'thread-1',
+                phase: 'plan',
+                summary: 'Need input',
+                questions: [
+                  {
+                    id: 'scope',
+                    title: 'Scope',
+                    prompt: 'Pick a scope.',
+                    description: null,
+                    choices: [
+                      { id: 'narrow', label: 'Narrow', description: 'Smallest useful version.' },
+                      { id: 'wide', label: 'Wide', description: 'Include adjacent cleanup.' },
+                    ],
+                    allowFreeform: false,
+                    freeformPlaceholder: null,
+                  },
+                ],
+              }),
+              '```',
+            ].join('\n'),
+          },
+        }),
+      ].join('\n'),
+    );
+    await trigger('exit', 'proc-3', 0);
+    const result = await withMetadata;
+    expect(result.tokensUsed).toEqual({ prompt: 10, completion: 5 });
+    expect(result.clarificationRequest?.summary).toBe('Need input');
+
+    await expect(provider.healthCheck()).resolves.toEqual({ ok: true });
   });
 });

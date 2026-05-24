@@ -1,6 +1,24 @@
 import type { DatabaseSync } from 'node:sqlite';
+import {
+  clampTextBlock,
+  MAX_PIPELINE_RAW_OUTPUT_CHARS,
+  type PlanRecord,
+  type PlanStatus,
+  type ShipCodePlan,
+  toIsoUtc,
+} from '@shipcode/shared';
 import { nanoid } from 'nanoid';
-import { toIsoUtc, type PlanRecord, type PlanStatus, type ShipCodePlan } from '@shipcode/shared';
+import { asRow, asRows } from '../utils';
+
+interface PlanRow {
+  id: string;
+  thread_id: string;
+  version: number;
+  raw_output: string;
+  structured: string | null;
+  status: PlanStatus;
+  created_at: string;
+}
 
 export class PlanQueries {
   constructor(private db: DatabaseSync) {}
@@ -15,20 +33,66 @@ export class PlanQueries {
   list(threadId: string): PlanRecord[] {
     const rows = this.db
       .prepare('SELECT * FROM plans WHERE thread_id = ? ORDER BY version DESC')
-      .all(threadId) as any[];
-    return rows.map(mapPlan);
+      .all(threadId);
+    return asRows<PlanRow>(rows).map(mapPlan);
+  }
+
+  listByIssue(projectId: string, issueNumber: number): PlanRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT
+             p.id,
+             p.thread_id,
+             p.version,
+             '' AS raw_output,
+             NULL AS structured,
+             p.status,
+             p.created_at
+           FROM plans p
+           INNER JOIN threads t ON t.id = p.thread_id
+          WHERE t.project_id = ?
+            AND t.github_issue_number = ?
+          ORDER BY p.created_at DESC, t.created_at DESC, p.version DESC, p.id DESC`,
+      )
+      .all(projectId, issueNumber);
+    return asRows<PlanRow>(rows).map(mapPlan);
   }
 
   getLatest(threadId: string): PlanRecord | null {
     const row = this.db
       .prepare('SELECT * FROM plans WHERE thread_id = ? ORDER BY version DESC LIMIT 1')
-      .get(threadId) as any;
-    return row ? mapPlan(row) : null;
+      .get(threadId);
+    return row ? mapPlan(asRow<PlanRow>(row)) : null;
+  }
+
+  getLatestStructured(threadId: string): PlanRecord | null {
+    const row = this.db
+      .prepare(
+        'SELECT * FROM plans WHERE thread_id = ? AND structured IS NOT NULL ORDER BY version DESC LIMIT 1',
+      )
+      .get(threadId);
+    return row ? mapPlan(asRow<PlanRow>(row)) : null;
+  }
+
+  getLatestStructuredForIssue(projectId: string, issueNumber: number): PlanRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT p.*
+           FROM plans p
+           INNER JOIN threads t ON t.id = p.thread_id
+          WHERE t.project_id = ?
+            AND t.github_issue_number = ?
+            AND p.structured IS NOT NULL
+          ORDER BY p.created_at DESC
+          LIMIT 1`,
+      )
+      .get(projectId, issueNumber);
+    return row ? mapPlan(asRow<PlanRow>(row)) : null;
   }
 
   getById(id: string): PlanRecord | null {
-    const row = this.db.prepare('SELECT * FROM plans WHERE id = ?').get(id) as any;
-    return row ? mapPlan(row) : null;
+    const row = this.db.prepare('SELECT * FROM plans WHERE id = ?').get(id);
+    return row ? mapPlan(asRow<PlanRow>(row)) : null;
   }
 
   create(
@@ -46,9 +110,20 @@ export class PlanQueries {
         `INSERT INTO plans (id, thread_id, version, raw_output, structured, created_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, threadId, version, rawOutput, structuredJson, now);
+      .run(
+        id,
+        threadId,
+        version,
+        clampTextBlock(rawOutput, MAX_PIPELINE_RAW_OUTPUT_CHARS),
+        structuredJson,
+        now,
+      );
 
-    return this.getById(id)!;
+    const plan = this.getById(id);
+    if (!plan) {
+      throw new Error(`Failed to load plan after insert: ${id}`);
+    }
+    return plan;
   }
 
   updateStatus(id: string, status: PlanStatus): void {
@@ -61,6 +136,41 @@ export class PlanQueries {
       .run(JSON.stringify(structured), id);
   }
 
+  /**
+   * Batch-fetch latest plan status for multiple threads in a single query.
+   * Replaces N separate getLatest() calls on the thread-panel hot path.
+   */
+  getLatestStatusByThreadIds(threadIds: string[]): Map<string, PlanStatus> {
+    if (threadIds.length === 0) return new Map();
+
+    // SQLite max variable limit is 999; batch in chunks if needed.
+    const CHUNK = 900;
+    const result = new Map<string, PlanStatus>();
+
+    for (let i = 0; i < threadIds.length; i += CHUNK) {
+      const chunk = threadIds.slice(i, i + CHUNK);
+      const placeholders = chunk.map(() => '?').join(',');
+      const rows = this.db
+        .prepare(
+          `SELECT p.thread_id, p.status
+             FROM plans p
+            INNER JOIN (
+              SELECT thread_id, MAX(version) AS max_ver
+                FROM plans
+               WHERE thread_id IN (${placeholders})
+               GROUP BY thread_id
+            ) latest ON p.thread_id = latest.thread_id AND p.version = latest.max_ver`,
+        )
+        .all(...chunk) as Array<{ thread_id: string; status: string }>;
+
+      for (const row of rows) {
+        result.set(row.thread_id, row.status as PlanStatus);
+      }
+    }
+
+    return result;
+  }
+
   supersedeAll(threadId: string): void {
     this.db
       .prepare(
@@ -68,9 +178,26 @@ export class PlanQueries {
       )
       .run(threadId);
   }
+
+  supersedeAllForIssue(projectId: string, issueNumber: number, excludeThreadId?: string): void {
+    this.db
+      .prepare(
+        `UPDATE plans
+            SET status = 'superseded'
+          WHERE status != 'superseded'
+            AND thread_id IN (
+              SELECT id
+                FROM threads
+               WHERE project_id = ?
+                 AND github_issue_number = ?
+                 AND (? IS NULL OR id != ?)
+            )`,
+      )
+      .run(projectId, issueNumber, excludeThreadId ?? null, excludeThreadId ?? null);
+  }
 }
 
-function mapPlan(row: any): PlanRecord {
+function mapPlan(row: PlanRow): PlanRecord {
   return {
     id: row.id,
     threadId: row.thread_id,

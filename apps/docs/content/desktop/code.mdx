@@ -1,0 +1,20 @@
+# Code
+
+The project **Code** tab is a read-only browser for the repository and ShipCode worktrees. It is useful when you need to inspect generated changes without leaving the desktop app.
+
+The view is [`apps/desktop/src/renderer/features/project/code-browser.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/features/project/code-browser.tsx).
+
+## Capabilities
+
+- Browse the source tree lazily
+- Switch between the project root and active worktrees
+- Open files with syntax highlighting
+- Toggle source and diff modes for modified files
+- Inspect generated changes while a pipeline is still running
+
+Binary and oversized files are intentionally guarded at the IPC layer, so the browser stays responsive.
+
+## Related
+
+- [Git](/desktop/git) — worktree and diff overview
+- [Kanban Board](/desktop/kanban) — issue/thread entry point

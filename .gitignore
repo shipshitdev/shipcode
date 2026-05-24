@@ -9,9 +9,21 @@ apps/web/public/docs/
 .env
 .env.local
 .env.*.local
-.shipcode/
+.shipcode/*
+!.shipcode/setup.json
 .DS_Store
 .worktrees/
 bun.lock
 pnpm-lock.yaml
 next-env.d.ts
+logs/events.log
+apps/desktop/logs/events.log
+coverage/
+coverage-summary.txt
+apps/*/.vitest-reports/
+packages/*/.vitest-reports/
+.nyc_output/
+.claude/settings.json
+.clawpatch/
+# Added by code-review-graph
+.code-review-graph/

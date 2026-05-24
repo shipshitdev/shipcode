@@ -1,8 +1,13 @@
-import { describe, it, expect } from 'vitest';
-import path from 'node:path';
 import os from 'node:os';
-import { expandWorktreeRoot, projectSlug, resolveWorktreeParent } from './worktree-path';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { DEFAULT_WORKTREE_ROOT, WORKTREE_DIR } from './constants';
+import {
+  assertWorkspaceSafe,
+  expandWorktreeRoot,
+  projectSlug,
+  resolveWorktreeParent,
+} from './worktree-path';
 
 describe('expandWorktreeRoot', () => {
   it('returns default (~/.shipcode/worktrees) for null', () => {
@@ -74,7 +79,7 @@ describe('projectSlug', () => {
     const long = 'a'.repeat(200);
     const slug = projectSlug(`/home/alice/${long}`);
     const [base] = slug.split(/-[0-9a-f]{6}$/);
-    expect(base!.length).toBeLessThanOrEqual(48);
+    expect(base?.length).toBeLessThanOrEqual(48);
   });
 });
 
@@ -96,5 +101,93 @@ describe('resolveWorktreeParent', () => {
 
   it('propagates expandWorktreeRoot validation errors', () => {
     expect(() => resolveWorktreeParent('/tmp/my-proj', 'relative/path')).toThrow();
+  });
+});
+
+describe('assertWorkspaceSafe', () => {
+  it('passes for a worktree under the configured root', () => {
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: '/tmp/wt/shipcode-abc123/t-01',
+        workspaceRoot: '/tmp/wt',
+      }),
+    ).not.toThrow();
+  });
+
+  it('throws when path escapes the root via traversal', () => {
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: '/tmp/wt/../etc/passwd',
+        workspaceRoot: '/tmp/wt',
+      }),
+    ).toThrow(/traversal|non-canonical/i);
+  });
+
+  it('throws when resolved path is outside the root', () => {
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: '/etc/shadow',
+        workspaceRoot: '/tmp/wt',
+      }),
+    ).toThrow(/under workspaceRoot/);
+  });
+
+  it('throws when the basename has shell metacharacters', () => {
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: '/tmp/wt/$(rm -rf)',
+        workspaceRoot: '/tmp/wt',
+      }),
+    ).toThrow(/basename must match/);
+  });
+
+  it('throws on relative workspacePath', () => {
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: 'relative/dir',
+        workspaceRoot: '/tmp/wt',
+      }),
+    ).toThrow(/absolute/);
+  });
+
+  it('skips prefix check in project-local mode but enforces basename', () => {
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: '/anywhere/proj/.shipcode/worktrees/t-01',
+        workspaceRoot: '',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: '/anywhere/proj/.shipcode/worktrees/$(bad)',
+        workspaceRoot: '',
+      }),
+    ).toThrow(/basename/);
+  });
+
+  it('expands ~ in workspaceRoot', () => {
+    const home = os.homedir();
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: path.join(home, 'wt/proj/t-01'),
+        workspaceRoot: '~/wt',
+      }),
+    ).not.toThrow();
+  });
+
+  it('uses default root when workspaceRoot is null', () => {
+    const home = os.homedir();
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: path.join(home, '.shipcode/worktrees/proj/t-01'),
+        workspaceRoot: null,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: '/tmp/elsewhere/t-01',
+        workspaceRoot: null,
+      }),
+    ).toThrow(/under workspaceRoot/);
   });
 });

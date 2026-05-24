@@ -1,9 +1,15 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TerminalEvent } from '../terminal-events';
 import { executeViaOpenRouter } from './openrouter-execute';
-import type { OpenRouterClient, OpenRouterChatResult, OpenRouterToolCall } from './openrouter-http';
+import {
+  type OpenRouterChatResult,
+  type OpenRouterClient,
+  OpenRouterError,
+  type OpenRouterToolCall,
+} from './openrouter-http';
 import type { ProviderRequest } from './types';
 
 /**
@@ -129,6 +135,129 @@ describe('executeViaOpenRouter', () => {
     expect(res.tokensUsed).toEqual({ prompt: 300, completion: 80 });
   });
 
+  it('emits successful tool summaries to the terminal stream', async () => {
+    const client = scriptedClient([
+      {
+        toolCalls: [toolCall('c1', 'read', { path: 'target.txt' })],
+        finishReason: 'tool_calls',
+      },
+      { content: 'ok', finishReason: 'stop' },
+    ]);
+    const events: TerminalEvent[] = [];
+
+    const res = await executeViaOpenRouter(req({ cwd: wt }), {
+      client,
+      model: 'openrouter/auto',
+      onTerminalEvent: (event) => events.push(event),
+    });
+
+    expect(res.exitCode).toBe(0);
+    expect(events).toContainEqual(
+      expect.objectContaining({ kind: 'tool_start', name: 'read', summary: 'read' }),
+    );
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'tool_end', name: 'read' }));
+    expect(events).toContainEqual(
+      expect.objectContaining({ kind: 'done', totalTokens: { prompt: 0, completion: 0 } }),
+    );
+  });
+
+  it('blocks GitHub GraphQL tools during execute and emits per-turn token usage', async () => {
+    const client = scriptedClient([
+      {
+        toolCalls: [
+          toolCall('c1', 'github_graphql', {
+            query: 'query { viewer { login } }',
+            variables: {},
+          }),
+        ],
+        finishReason: 'tool_calls',
+        model: null,
+        usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 },
+      },
+      { content: 'ok', finishReason: 'stop' },
+    ]);
+    const events: TerminalEvent[] = [];
+    const fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ data: { viewer: { login: 'octocat' } } }),
+    })) as unknown as typeof globalThis.fetch;
+
+    const res = await executeViaOpenRouter(
+      req({
+        cwd: wt,
+        githubGraphql: {
+          getToken: async () => 'ghp_test',
+          fetch,
+        },
+      }),
+      {
+        client,
+        model: 'openrouter/auto',
+        onTerminalEvent: (event) => events.push(event),
+      },
+    );
+
+    expect(res.exitCode).toBe(0);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        kind: 'turn_end',
+        turn: 1,
+        tokensUsed: { prompt: 4, completion: 2 },
+      }),
+    );
+  });
+
+  it('emits failed tool summaries to the terminal stream', async () => {
+    const client = scriptedClient([
+      {
+        toolCalls: [toolCall('c1', 'notatool', {})],
+        finishReason: 'tool_calls',
+      },
+      { content: 'Done.', finishReason: 'stop' },
+    ]);
+    const events: TerminalEvent[] = [];
+
+    const res = await executeViaOpenRouter(req({ cwd: wt }), {
+      client,
+      model: 'openrouter/auto',
+      onTerminalEvent: (event) => events.push(event),
+    });
+
+    expect(res.exitCode).toBe(0);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        kind: 'tool_end',
+        name: 'notatool',
+        exitCode: 1,
+        outputSummary: "tool 'notatool' is not allowed in this phase",
+      }),
+    );
+  });
+
+  it('forwards reasoning effort into execute chat requests', async () => {
+    const chat = vi.fn(async () => ({
+      content: 'ok',
+      toolCalls: [toolCall('c1', 'read', { path: 'target.txt' })],
+      finishReason: 'tool_calls',
+      model: 'openrouter/auto',
+      usage: null,
+    }));
+    const client = { chat } as unknown as OpenRouterClient;
+
+    await executeViaOpenRouter(req({ cwd: wt, phaseHints: { reasoningEffort: 'xhigh' } }), {
+      client,
+      model: 'openrouter/auto',
+    });
+
+    expect(chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: { effort: 'xhigh' },
+      }),
+      expect.anything(),
+    );
+  });
+
   // ─── Unexpected-stop: 0 tool calls ────────────────────────────────
 
   it('treats finish_reason=stop with ZERO tool calls as a retryable failure', async () => {
@@ -152,6 +281,15 @@ describe('executeViaOpenRouter', () => {
     expect(res.exitCode).toBe(1);
     expect(res.providerError?.kind).toBe('unexpected_stop');
     expect(res.providerError?.retryable).toBe(false);
+  });
+
+  it('treats null finish_reason as a non-retryable unexpected stop', async () => {
+    const client = scriptedClient([{ content: 'partial', finishReason: null }]);
+
+    const res = await executeViaOpenRouter(req({ cwd: wt }), { client, model: 'openrouter/auto' });
+
+    expect(res.exitCode).toBe(1);
+    expect(res.providerError?.message).toMatch(/unexpected reason: null/);
   });
 
   // ─── Iteration cap ────────────────────────────────────────────────
@@ -242,6 +380,81 @@ describe('executeViaOpenRouter', () => {
       model: 'openrouter/auto',
     });
     expect(res.exitCode).toBe(1);
-    expect(res.providerError?.kind).toBe('network');
+    expect(res.providerError?.kind).toBe('aborted');
+  });
+
+  it('returns aborted with accumulated tokens when the signal fires between turns', async () => {
+    const abort = new AbortController();
+    const chat = vi.fn(async () => {
+      abort.abort();
+      return {
+        content: '',
+        toolCalls: [toolCall('c1', 'read', { path: 'target.txt' })],
+        finishReason: 'tool_calls',
+        model: 'anthropic/claude-sonnet-4.6',
+        usage: { prompt_tokens: 7, completion_tokens: 3, total_tokens: 10 },
+      } satisfies OpenRouterChatResult;
+    });
+    const client = { chat } as unknown as OpenRouterClient;
+
+    const res = await executeViaOpenRouter(req({ cwd: wt, signal: abort.signal }), {
+      client,
+      model: 'openrouter/auto',
+    });
+
+    expect(res.providerError?.kind).toBe('aborted');
+    expect(res.resolvedModel).toBe('anthropic/claude-sonnet-4.6');
+    expect(res.tokensUsed).toEqual({ prompt: 7, completion: 3 });
+  });
+
+  it('maps OpenRouter and unknown client failures to provider errors', async () => {
+    const openRouterFailure = {
+      chat: vi.fn(async () => {
+        throw new OpenRouterError('rate_limit', 'slow down', true);
+      }),
+    } as unknown as OpenRouterClient;
+
+    const rateLimited = await executeViaOpenRouter(req({ cwd: wt }), {
+      client: openRouterFailure,
+      model: 'openrouter/auto',
+    });
+    expect(rateLimited.providerError).toEqual({
+      kind: 'rate_limit',
+      message: 'slow down',
+      retryable: true,
+    });
+    expect(rateLimited.tokensUsed).toEqual({ prompt: 0, completion: 0 });
+
+    const genericFailure = {
+      chat: vi.fn(async () => {
+        throw new Error('boom');
+      }),
+    } as unknown as OpenRouterClient;
+
+    const unknown = await executeViaOpenRouter(req({ cwd: wt }), {
+      client: genericFailure,
+      model: 'openrouter/auto',
+    });
+    expect(unknown.providerError).toEqual({
+      kind: 'unknown',
+      message: 'boom',
+      retryable: false,
+    });
+
+    const plainFailure = {
+      chat: vi.fn(async () => {
+        throw 'plain boom';
+      }),
+    } as unknown as OpenRouterClient;
+
+    const plain = await executeViaOpenRouter(req({ cwd: wt }), {
+      client: plainFailure,
+      model: 'openrouter/auto',
+    });
+    expect(plain.providerError).toEqual({
+      kind: 'unknown',
+      message: 'plain boom',
+      retryable: false,
+    });
   });
 });

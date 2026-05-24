@@ -1,31 +1,17 @@
-import type { ShipCodePlan } from '@shipcode/shared';
 import { Square } from 'lucide-react';
-import { Badge } from './primitives/badge';
+import { planFileActionVariant } from '@/lib/file-action';
+import type { ShipCodePlan } from '@/lib/shipcode';
+import { Badge } from '@/primitives/badge';
 
 interface PlanViewerProps {
   plan: ShipCodePlan | null;
 }
 
-const fileActionVariant = (action: string) => {
-  switch (action) {
-    case 'create':
-      return 'success' as const;
-    case 'modify':
-      return 'warning' as const;
-    case 'delete':
-      return 'danger' as const;
-    case 'rename':
-      return 'accent' as const;
-    default:
-      return 'default' as const;
-  }
-};
-
 export function PlanViewer({ plan }: PlanViewerProps) {
   if (!plan) {
     return (
-      <div className="flex items-center justify-center h-full p-4 text-muted">
-        <p>Waiting for plan generation...</p>
+      <div className="flex items-center justify-center h-full p-4 text-muted-foreground">
+        <p>Waiting for plan generation…</p>
       </div>
     );
   }
@@ -90,7 +76,7 @@ export function PlanViewer({ plan }: PlanViewerProps) {
             {plan.files.map((file) => (
               <tr key={file.path}>
                 <td className="px-2 py-1.5 border-b border-border">
-                  <Badge variant={fileActionVariant(file.action)} className="uppercase">
+                  <Badge variant={planFileActionVariant(file.action)} className="uppercase">
                     {file.action}
                   </Badge>
                 </td>
@@ -112,7 +98,7 @@ export function PlanViewer({ plan }: PlanViewerProps) {
           <ul className="list-none p-0">
             {plan.acceptanceCriteria.map((criteria) => (
               <li key={criteria} className="flex items-start gap-2 py-1 text-[13px]">
-                <Square size={12} className="mt-1 shrink-0 text-muted" />
+                <Square size={12} className="mt-1 shrink-0 text-muted-foreground" />
                 <span>{criteria}</span>
               </li>
             ))}
@@ -129,7 +115,7 @@ export function PlanViewer({ plan }: PlanViewerProps) {
             {plan.outOfScope.map((item) => (
               <li
                 key={item}
-                className="py-1 pl-4 text-[13px] relative before:content-['—'] before:absolute before:left-0 before:text-muted"
+                className="py-1 pl-4 text-[13px] relative before:content-['—'] before:absolute before:left-0 before:text-muted-foreground"
               >
                 {item}
               </li>

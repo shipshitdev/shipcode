@@ -1,40 +1,44 @@
-import { app, BrowserWindow, Notification } from 'electron';
-import type { NotificationKind, Thread } from '@shipcode/shared';
-import type { NotificationsQueries, SettingsQueries, ActivityQueries } from '@shipcode/db';
+import type { ActivityQueries, NotificationsQueries, SettingsQueries } from '@shipcode/db';
+import {
+  filterAttentionRequiredNotifications,
+  type NotificationKind,
+  notificationEventFlagForKind,
+  type Thread,
+} from '@shipcode/shared';
+import { app, type BrowserWindow, Notification } from 'electron';
 
 const DEDUPE_WINDOW_MS = 2_000;
 
-function kindToEventFlag(
+function buildCopy(
   kind: NotificationKind,
-): keyof import('@shipcode/shared').NotificationEventToggles {
-  switch (kind) {
-    case 'awaiting_approval':
-      return 'awaitingApproval';
-    case 'failed':
-      return 'failed';
-    case 'completed':
-      return 'completed';
-    case 'verification_exhausted':
-      return 'verificationExhausted';
-  }
-}
-
-function buildCopy(kind: NotificationKind, thread: Thread): { title: string; body: string } {
+  thread: Thread,
+  testSummary?: string,
+): { title: string; body: string } {
   const label = thread.title || `Thread ${thread.id.slice(0, 6)}`;
   switch (kind) {
-    case 'awaiting_approval':
+    case 'approval':
       return {
-        title: 'Plan ready for review',
-        body: `${label} — tap to approve or request changes`,
+        title: 'Approval needed',
+        body: `${label} is waiting for approval before execution`,
       };
     case 'failed':
-      return { title: 'Pipeline failed', body: `${label} ran into an error and stopped` };
+      return {
+        title: 'Pipeline stopped',
+        body: `${label} failed in the target project or worktree`,
+      };
     case 'completed':
       return { title: 'Ready to ship', body: `${label} completed — PR is ready` };
     case 'verification_exhausted':
       return {
-        title: 'Verification failed',
-        body: `${label} hit the retry limit and needs a human`,
+        title: 'Target verification failed',
+        body: testSummary
+          ? `${label} — ${testSummary.slice(0, 180)}`
+          : `${label} hit the retry limit while running build/test commands in the worktree`,
+      };
+    case 'ci_blocked':
+      return {
+        title: 'CI blocked',
+        body: `${label} has failing pull request checks`,
       };
   }
 }
@@ -62,12 +66,11 @@ export class NotificationService {
     this.verificationExhaustedAt.set(threadId, Date.now());
   }
 
-  fire(kind: NotificationKind, thread: Thread) {
+  fire(kind: NotificationKind, thread: Thread, testSummary?: string) {
     const settings = this.settings.get();
     if (!settings.notificationsEnabled) return;
 
-    // Per-event toggle
-    const flag = kindToEventFlag(kind);
+    const flag = notificationEventFlagForKind(kind);
     if (!settings.notificationEvents[flag]) return;
 
     // Suppress 'failed' if verification-exhausted just fired for this thread.
@@ -85,9 +88,14 @@ export class NotificationService {
     }
     this.lastFiredByThread.set(thread.id, { kind, t: Date.now() });
 
-    const { title, body } = buildCopy(kind, thread);
+    // Clear prior notifications (failed, verification_exhausted, etc.) before
+    // creating the completed notification so stale failures don't linger in the inbox.
+    if (kind === 'completed') {
+      this.dismissByThread(thread.id);
+    }
 
-    // Persist
+    const { title, body } = buildCopy(kind, thread, testSummary);
+
     const record = this.notifications.create({
       threadId: thread.id,
       projectId: thread.projectId,
@@ -96,7 +104,6 @@ export class NotificationService {
       body,
     });
 
-    // Log to activity feed
     this.activity.create({
       threadId: thread.id,
       projectId: thread.projectId,
@@ -107,12 +114,10 @@ export class NotificationService {
       metadata: { notificationId: record.id, notificationKind: kind },
     });
 
-    // In-app toast (always when master enabled)
     if (!this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send('notification:fire', record);
     }
 
-    // OS notification
     if (settings.notificationOsEnabled && Notification.isSupported()) {
       const n = new Notification({
         title,
@@ -132,16 +137,14 @@ export class NotificationService {
       n.show();
     }
 
-    // Dock badge
     if (settings.notificationBadgeEnabled) this.refreshBadge();
   }
 
   refreshBadge() {
-    const count = this.notifications.activeCount();
+    const count = filterAttentionRequiredNotifications(this.notifications.listActive()).length;
     if (process.platform === 'darwin' && app.dock) {
       app.dock.setBadge(count > 0 ? String(count) : '');
     }
-    // Windows / Linux: no-op for now
   }
 
   listActive() {

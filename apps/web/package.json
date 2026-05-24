@@ -1,27 +1,30 @@
 {
   "name": "@shipcode/web",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "lint": "biome check app/",
     "clean": "rm -rf .next out"
   },
   "dependencies": {
+    "@shipcode/shared": "workspace:*",
     "@shipcode/ui": "workspace:*",
-    "next": "16.2.3",
-    "react": "19.2.5",
-    "react-dom": "19.2.5",
-    "lucide-react": "1.8.0"
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "4.2.2",
-    "@types/node": "25.6.0",
+    "@tailwindcss/postcss": "4.3.0",
+    "@types/node": "25.8.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "tailwindcss": "4.2.2",
-    "typescript": "6.0.2"
+    "jsdom": "29.1.1",
+    "tailwindcss": "4.3.0",
+    "typescript": "6.0.3"
   }
 }

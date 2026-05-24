@@ -1,6 +1,6 @@
 {
   "name": "@shipcode/pipeline",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -14,17 +14,21 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@shipcode/shared": "workspace:*",
     "@shipcode/agents": "workspace:*",
     "@shipcode/db": "workspace:*",
-    "@shipcode/git": "workspace:*"
+    "@shipcode/git": "workspace:*",
+    "@shipcode/shared": "workspace:*",
+    "liquidjs": "10.27.0",
+    "nanoid": "5.1.11",
+    "yaml": "2.9.0"
   },
   "devDependencies": {
-    "typescript": "6.0.2",
-    "vitest": "4.1.4"
+    "typescript": "6.0.3",
+    "vitest": "4.1.6"
   }
 }

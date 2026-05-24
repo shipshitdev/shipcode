@@ -1,17 +1,28 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AgentProvider, ProcessManager, ProviderPhase } from '@shipcode/agents';
+/**
+ * Smoke test: startFromGitHubIssue
+ *
+ * Drives the default plan flow via the mock process manager,
+ * using the same helpers and mock patterns as pipeline.test.ts.
+ * Asserts the thread lands on approval with the current
+ * default workflow (0 revisions + approval required).
+ */
+
+import type { EventEmitter as NodeEventEmitter } from 'node:events';
+import type { AgentProvider, ProcessManager } from '@shipcode/agents/source';
 import {
   createClaudeCliProvider,
   createCodexCliProvider,
+  createGeminiCliProvider,
   createProviderRegistry,
-} from '@shipcode/agents';
-import type { PipelineDeps } from './types';
+} from '@shipcode/agents/source';
+import { DEFAULT_SETTINGS, type GitHubIssueCacheRecord } from '@shipcode/shared';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPipeline } from './pipeline';
-import { DEFAULT_SETTINGS } from '@shipcode/shared';
+import type { PipelineDeps, PipelineEvent } from './types';
 
 vi.mock('@shipcode/git', () => {
   class WorktreeManager {
-    create = vi.fn().mockResolvedValue({ worktreePath: '/fake/worktree', branch: 'feat/38-demo' });
+    create = vi.fn().mockResolvedValue({ worktreePath: '/fake/worktree', branch: 'feat/42-smoke' });
     remove = vi.fn().mockResolvedValue({ success: true });
   }
   class GitService {
@@ -24,89 +35,105 @@ vi.mock('@shipcode/git', () => {
 const { mockExecSync } = vi.hoisted(() => ({ mockExecSync: vi.fn() }));
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
+  const { EventEmitter } = await import('node:events');
   return {
     ...actual,
     execFileSync: vi.fn((command: string, args: string[] = [], options?: object) =>
       mockExecSync([command, ...args].join(' '), options),
     ),
+    spawn: vi.fn(() => {
+      const proc = new EventEmitter() as NodeEventEmitter & {
+        stdin: { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
+        stdout: NodeEventEmitter;
+        stderr: NodeEventEmitter;
+      };
+      proc.stdin = { write: vi.fn(), end: vi.fn() };
+      proc.stdout = new EventEmitter();
+      proc.stderr = new EventEmitter();
+      queueMicrotask(() => proc.emit('close', 0));
+      return proc;
+    }),
   };
 });
 
+// ─── Shared fixture data ────────────────────────────────────────────────────
+
 const PLAN_JSON = JSON.stringify({
   id: 'p1',
-  threadId: 't1',
+  threadId: 't-smoke',
   version: 1,
-  objective: 'Smoke test',
-  files: [{ path: 'demo.ts', action: 'modify', description: 'd' }],
-  steps: [{ order: 1, description: 'd', files: ['demo.ts'], rationale: 'r' }],
-  acceptanceCriteria: ['works'],
-  outOfScope: [],
+  objective: 'Fix the bug',
+  files: [{ path: 'src/index.ts', action: 'modify', description: 'fix it' }],
+  steps: [
+    { order: 1, description: 'Inspect the bug', files: ['src/index.ts'], rationale: 'Baseline' },
+    { order: 2, description: 'Fix the bug', files: ['src/index.ts'], rationale: 'Required change' },
+    {
+      order: 3,
+      description: 'Verify the fix',
+      files: ['src/index.ts'],
+      rationale: 'Regression coverage',
+    },
+  ],
+  acceptanceCriteria: ['bug is fixed'],
+  outOfScope: ['Unrelated refactors'],
   estimatedComplexity: 'low',
   dependencies: [],
 });
 
-const REVIEW_APPROVE_JSON = JSON.stringify({
-  planId: 'p1',
-  decision: 'approve',
-  confidence: 'high',
-  summary: 'Looks good',
-  findings: [],
-  suggestedChanges: [],
-});
-
 function planBlock(json: string = PLAN_JSON) {
-  return '```shipcode-plan\n' + json + '\n```';
+  return `\`\`\`shipcode-plan\n${json}\n\`\`\``;
 }
 
-function reviewBlock(json: string) {
-  return '```shipcode-review\n' + json + '\n```';
-}
+// ─── Mock deps factory ──────────────────────────────────────────────────────
 
 function createSmokeDeps() {
-  const emittedEvents: any[] = [];
-  const listeners: Record<string, Function[]> = {};
+  const emittedEvents: PipelineEvent[] = [];
+  const listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
   let spawnCount = 0;
-  const structuredPlan = JSON.parse(PLAN_JSON);
 
   const processManager = {
     spawn: vi.fn(() => ({ id: `proc-${++spawnCount}` })),
     kill: vi.fn(),
-    on: vi.fn((event: string, handler: Function) => {
-      (listeners[event] ??= []).push(handler);
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      const eventListeners = listeners[event] ?? [];
+      eventListeners.push(handler);
+      listeners[event] = eventListeners;
     }),
-    removeListener: vi.fn((event: string, handler: Function) => {
+    removeListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       listeners[event] = (listeners[event] ?? []).filter((h) => h !== handler);
     }),
   } as unknown as ProcessManager;
 
-  const trigger = async (event: string, ...args: any[]) => {
+  const trigger = async (event: string, ...args: unknown[]) => {
     const handlers = [...(listeners[event] ?? [])];
-    handlers.forEach((handler) => handler(...args));
+    for (const h of handlers) h(...args);
     await new Promise((r) => setImmediate(r));
     await new Promise((r) => setImmediate(r));
   };
 
   const latestPlan = {
     id: 'plan-1',
-    threadId: 't1',
+    threadId: 't-smoke',
     version: 1,
     rawOutput: '',
-    structured: structuredPlan,
+    structured: JSON.parse(PLAN_JSON),
     status: 'pending_review',
     createdAt: '',
   };
 
   const claudeProvider = createClaudeCliProvider(processManager);
   const codexProvider = createCodexCliProvider(processManager);
+  const geminiProvider = createGeminiCliProvider(processManager);
   const openrouterProvider: AgentProvider = {
     id: 'openrouter',
-    supports: new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify']),
+    supports: new Set(['plan', 'review', 'revision', 'verify']),
     generate: vi.fn(async () => ({ rawOutput: '', exitCode: 1 })),
     healthCheck: vi.fn(async () => ({ ok: false })),
   };
   const providers = createProviderRegistry({
     claude: claudeProvider,
     codex: codexProvider,
+    gemini: geminiProvider,
     openrouter: openrouterProvider,
   });
 
@@ -115,112 +142,234 @@ function createSmokeDeps() {
     set: vi.fn(),
   };
 
-  return {
-    deps: {
-      emitter: { emit: vi.fn((event: any) => emittedEvents.push(event)) },
-      processManager,
-      threads: {
-        updateStatus: vi.fn(),
-        getById: vi.fn(() => ({
-          id: 't1',
+  const deps = {
+    emitter: { emit: vi.fn((event: PipelineEvent) => emittedEvents.push(event)) },
+    processManager,
+    threads: {
+      updateStatus: vi.fn(),
+      getById: vi.fn(() => ({
+        id: 't-smoke',
+        projectId: 'project-1',
+        githubIssueNumber: 42,
+      })),
+      incrementReviewRound: vi.fn(),
+      clearClarification: vi.fn(),
+      setGithubPr: vi.fn(),
+      updateAutonomousFields: vi.fn(),
+      setResolvedModel: vi.fn(),
+      addTokenUsage: vi.fn(),
+      setWorktree: vi.fn(),
+    },
+    plans: {
+      getMaxVersion: vi.fn(() => 0),
+      create: vi.fn((_tid: string, raw: string, structured: unknown, v: number) => ({
+        id: 'plan-1',
+        threadId: _tid,
+        version: v,
+        rawOutput: raw,
+        structured,
+        status: 'draft',
+        createdAt: '',
+      })),
+      updateStatus: vi.fn(),
+      getLatest: vi.fn(() => latestPlan),
+      supersedeAll: vi.fn(),
+    },
+    reviews: {
+      create: vi.fn(),
+    },
+    diffs: {
+      replaceForThread: vi.fn(),
+    },
+    verifications: {
+      create: vi.fn(),
+    },
+    githubIssues: {
+      getByNumber: vi.fn(
+        (): GitHubIssueCacheRecord => ({
+          id: 'issue-42',
           projectId: 'project-1',
-          githubIssueNumber: 38,
-        })),
-        incrementReviewRound: vi.fn(),
-        setGithubPr: vi.fn(),
-        updateAutonomousFields: vi.fn(),
-        setResolvedModel: vi.fn(),
-        addTokenUsage: vi.fn(),
-        setWorktree: vi.fn(),
-      },
-      plans: {
-        getMaxVersion: vi.fn(() => 0),
-        create: vi.fn((_tid: string, raw: string, structured: any, version: number) => ({
-          id: 'plan-1',
-          threadId: _tid,
-          version,
-          rawOutput: raw,
-          structured,
-          status: 'draft',
-          createdAt: '',
-        })),
-        updateStatus: vi.fn(),
-        getLatest: vi.fn(() => latestPlan),
-        supersedeAll: vi.fn(),
-      },
-      reviews: {
-        create: vi.fn(),
-      },
-      verifications: {
-        create: vi.fn(),
-      },
-      githubIssues: {
-        getByNumber: vi.fn(() => ({ id: 'issue-38' })),
-        updatePipelineStatus: vi.fn(),
-      },
-      settings,
-      providers,
-      skills: {
-        get: vi.fn(() => null),
-        set: vi.fn(),
-        delete: vi.fn(),
-        markQuarantined: vi.fn(),
-        listAll: vi.fn(() => []),
-        listQuarantined: vi.fn(() => []),
-      },
-    } as unknown as PipelineDeps,
-    emittedEvents,
-    trigger,
-  };
+          issueNumber: 42,
+          title: 'Fix the bug',
+          body: null,
+          labels: [],
+          assignee: null,
+          state: 'open',
+          pipelineStatus: 'todo',
+          threadId: 't-smoke',
+          claimedAt: null,
+          claimedBy: null,
+          executionRunId: null,
+          executionLockedAt: null,
+          executionLockOwner: null,
+          lastPhaseUpdate: null,
+          lastStatusLabel: null,
+          plannerModelOverride: null,
+          reviewerModelOverride: null,
+          executorModelOverride: null,
+          verifierModelOverride: null,
+          plannerModelIdOverride: null,
+          reviewerModelIdOverride: null,
+          executorModelIdOverride: null,
+          verifierModelIdOverride: null,
+          plannerReasoningEffortOverride: null,
+          reviewerReasoningEffortOverride: null,
+          executorReasoningEffortOverride: null,
+          verifierReasoningEffortOverride: null,
+          revisionCountOverride: null,
+          linkedPrNumber: null,
+          linkedPrUrl: null,
+          linkedPrIsDraft: false,
+          ciBlocked: false,
+          failingChecks: [],
+          unresolvedReviewComments: [],
+          unresolvedReviewCommentCount: 0,
+          prLastSyncAt: null,
+          fetchedAt: '',
+          priorityRank: null,
+          priorityRaw: null,
+          priorityFetchedAt: null,
+          isQuickMode: false,
+        }),
+      ),
+      updatePipelineStatus: vi.fn(),
+      updatePullRequestFeedback: vi.fn(),
+    },
+    checkpoints: {
+      getLatest: vi.fn(() => null),
+      create: vi.fn(),
+    },
+    projects: {
+      getById: vi.fn(() => ({
+        id: 'project-1',
+        plannerModelIdOverride: null,
+        reviewerModelIdOverride: null,
+        executorModelIdOverride: null,
+        verifierModelIdOverride: null,
+        plannerReasoningEffortOverride: null,
+        reviewerReasoningEffortOverride: null,
+        executorReasoningEffortOverride: null,
+        verifierReasoningEffortOverride: null,
+      })),
+    },
+    settings,
+    providers,
+    skills: {
+      get: vi.fn(() => null),
+      set: vi.fn(),
+      delete: vi.fn(),
+      markQuarantined: vi.fn(),
+      listAll: vi.fn(() => []),
+      listQuarantined: vi.fn(() => []),
+    },
+  } as unknown as PipelineDeps;
+
+  return { deps, emittedEvents, trigger, latestPlan };
 }
 
-describe('pipeline github issue smoke', () => {
+// ─── Tests ──────────────────────────────────────────────────────────────────
+
+describe('startFromGitHubIssue — smoke', () => {
+  let smoke: ReturnType<typeof createSmokeDeps>;
+
+  beforeEach(() => {
+    smoke = createSmokeDeps();
+    mockExecSync.mockReset();
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd.includes('symbolic-ref')) return 'origin/main';
+      if (cmd.includes('rev-parse')) return 'sha-fork-123';
+      if (cmd.includes('git status')) return '';
+      return '';
+    });
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('runs plan/review from a GitHub issue and stops at awaiting_approval', async () => {
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd.includes('symbolic-ref')) return 'origin/main';
-      if (cmd.includes('rev-parse')) return 'sha123';
-      return '';
-    });
+  it('plan → approval with the default workflow', async () => {
+    const pipeline = createPipeline(smoke.deps);
+    const issue = { number: 42, title: 'Fix the bug', body: 'It crashes on startup', labels: [] };
 
-    const mock = createSmokeDeps();
-    const pipeline = createPipeline(mock.deps);
-    const issue = {
-      number: 38,
-      title: 'Demo pipeline smoke test',
-      body: 'Exercise the GitHub issue path end-to-end.',
-      labels: [],
+    await pipeline.startFromGitHubIssue('t-smoke', '/proj', issue, 'claude');
+
+    // Plan phase should have started
+    expect(smoke.deps.threads.updateStatus).toHaveBeenCalledWith('t-smoke', 'planning');
+    expect(smoke.emittedEvents).toContainEqual(
+      expect.objectContaining({ type: 'pipeline:phase', threadId: 't-smoke', phase: 'planning' }),
+    );
+
+    // Drive plan output and exit
+    await smoke.trigger('output', 'proc-1', planBlock());
+    await smoke.trigger('exit', 'proc-1', 0);
+
+    // Plan was created and, with the default 0 revisions, approval is requested immediately
+    expect(smoke.deps.plans.create).toHaveBeenCalled();
+    expect(smoke.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approved');
+    expect(smoke.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approval');
+    expect(smoke.deps.threads.updateStatus).toHaveBeenCalledWith('t-smoke', 'approval');
+  });
+
+  it('syncs GitHub issue pipeline status through planning → approval', async () => {
+    const pipeline = createPipeline(smoke.deps);
+    const issue = { number: 42, title: 'Fix the bug', body: 'It crashes', labels: [] };
+
+    await pipeline.startFromGitHubIssue('t-smoke', '/proj', issue, 'claude');
+
+    expect(smoke.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      'issue-42',
+      'planning',
+    );
+
+    await smoke.trigger('output', 'proc-1', planBlock());
+    await smoke.trigger('exit', 'proc-1', 0);
+
+    expect(smoke.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      'issue-42',
+      'approval',
+    );
+  });
+
+  it('seeds the planner prompt with the workpad protocol marker', async () => {
+    const pipeline = createPipeline(smoke.deps);
+    const issue = { number: 42, title: 'Fix the bug', body: 'It crashes', labels: [] };
+
+    await pipeline.startFromGitHubIssue('t-smoke', '/proj', issue, 'claude');
+
+    const spawnMock = smoke.deps.processManager.spawn as unknown as {
+      mock: { calls: unknown[][] };
     };
+    expect(spawnMock.mock.calls.length).toBeGreaterThan(0);
+    const allArgs = spawnMock.mock.calls
+      .flatMap((call) => (Array.isArray(call[2]) ? (call[2] as unknown[]) : []))
+      .filter((a): a is string => typeof a === 'string');
+    const combined = allArgs.join('\n');
+    expect(combined).toContain('## ShipCode Workpad');
+    expect(combined).toContain('workpad_protocol');
+    expect(combined).toContain('issue #42');
+  });
 
-    await pipeline.startFromGitHubIssue('t1', '/proj', issue, 'claude');
+  it('sets autonomous=true and seeds context fields from the issue', async () => {
+    const pipeline = createPipeline(smoke.deps);
+    const issue = { number: 42, title: 'Fix the bug', body: 'Details here', labels: [] };
 
-    expect(pipeline.getContext('t1')).toMatchObject({
-      autonomous: true,
-      githubIssueNumber: 38,
-      githubIssueTitle: 'Demo pipeline smoke test',
-    });
+    await pipeline.startFromGitHubIssue('t-smoke', '/proj', issue, 'codex');
 
-    await mock.trigger('output', 'proc-1', planBlock());
-    await mock.trigger('exit', 'proc-1', 0);
-
-    expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'reviewing');
-    expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
-      'issue-38',
-      'reviewing',
+    expect(smoke.deps.threads.updateAutonomousFields).toHaveBeenCalledWith(
+      't-smoke',
+      expect.objectContaining({
+        autonomous: true,
+        reviewRound: 0,
+        executorModel: 'codex',
+        baseBranch: 'main',
+        forkPointSha: 'sha-fork-123',
+      }),
     );
 
-    await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
-    await mock.trigger('exit', 'proc-2', 0);
-
-    expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
-    expect(mock.deps.threads.updateStatus).not.toHaveBeenCalledWith('t1', 'executing');
-    expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
-      'issue-38',
-      'awaiting_approval',
-    );
-    expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2);
+    const ctx = pipeline.getContext('t-smoke');
+    expect(ctx).toBeDefined();
+    expect(ctx?.autonomous).toBe(true);
+    expect(ctx?.githubIssueNumber).toBe(42);
+    expect(ctx?.githubIssueTitle).toBe('Fix the bug');
   });
 });

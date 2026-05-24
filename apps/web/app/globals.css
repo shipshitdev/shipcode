@@ -1,0 +1,134 @@
+/* Token source of truth: packages/shared/src/tokens.ts */
+@import "tailwindcss";
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
+
+:root {
+  --bg-primary: #09090b;
+  --bg-secondary: #111113;
+  --bg-tertiary: #18181b;
+  --bg-hover: #27272a;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+}
+
+@theme {
+  --color-border: #30363d;
+  --color-accent: #fafafa;
+  --color-accent-hover: #d4d4d8;
+  --color-success: #3fb950;
+  --color-warning: #d29922;
+  --color-danger: #f85149;
+  --color-agent: #58a6ff;
+  --color-done: #a855f7;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+  --font-size-display: 4.5rem;
+  --font-size-heading-lg: 3rem;
+}
+
+@utility bg-primary {
+  background-color: var(--bg-primary);
+}
+@utility bg-secondary {
+  background-color: var(--bg-secondary);
+}
+@utility bg-tertiary {
+  background-color: var(--bg-tertiary);
+}
+@utility bg-hover {
+  background-color: var(--bg-hover);
+}
+@utility text-primary {
+  color: var(--text-primary);
+}
+@utility text-secondary {
+  color: var(--text-secondary);
+}
+@utility text-muted {
+  color: var(--text-muted);
+}
+
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+  letter-spacing: -0.01em;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.06), transparent 35%),
+    linear-gradient(180deg, #09090b 0%, #09090b 100%);
+}
+
+body::after {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.035;
+  content: "";
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes screenshotIn {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-screenshot-in {
+  animation: screenshotIn 0.9s ease-out;
+}
+
+/* Hide all scrollbars inside the product mockup illustration */
+.product-mockup-inner,
+.product-mockup-inner * {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.product-mockup-inner::-webkit-scrollbar,
+.product-mockup-inner *::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Blink */
+}

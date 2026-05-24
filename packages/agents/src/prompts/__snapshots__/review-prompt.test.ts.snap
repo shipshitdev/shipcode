@@ -32,6 +32,14 @@ Prioritize the kinds of failures that are expensive, dangerous, or hard to detec
 - migration hazards, schema drift, and version skew between packages
 - observability gaps that would hide failure or make recovery harder
 - mismatch with existing codebase patterns (the plan invents a new pattern when 3+ examples already exist)
+- broken execution shape: not exactly three ordered phases, phase 1 is not foundation/spec plumbing, phase 2 is not primary behavior, or phase 3 is not hardening/verification
+
+OWASP-aligned security surface (check when the plan touches user input, auth, or data):
+- injection vectors: SQL, command, template injection via unsanitized input
+- broken authentication: weak session handling, insecure token storage, missing credential rotation
+- sensitive data exposure: secrets in logs, PII in error messages, credentials in API responses
+- missing access control: absent ownership checks, broken tenant isolation, privilege escalation paths
+- security misconfiguration: permissive CORS, missing security headers, debug mode in production
 </attack_surface>
 
 <review_method>
@@ -39,7 +47,9 @@ Actively try to disprove the plan.
 Look for missing files, missing steps, violated invariants, missing guards, unhandled failure paths, and assumptions that stop being true under stress.
 Trace how bad inputs, retries, concurrent actions, or partially completed operations move through the planned changes.
 Cross-check \`files\` against \`steps\` — every file must be touched by at least one step, every step must reference real files.
+Cross-check step shape — the plan must contain exactly three steps ordered 1, 2, 3, and each step must be a meaningful execution phase rather than a validation chore.
 Cross-check \`acceptanceCriteria\` — can the verifier actually check each one from a diff alone?
+Cross-check \`outOfScope\` — it must be non-empty and must contain assumptions or exclusions that prevent scope creep.
 </review_method>
 
 <finding_bar>
@@ -51,6 +61,18 @@ A finding should answer:
 3. What is the likely impact?
 4. What concrete change would reduce the risk?
 </finding_bar>
+
+<anti_rationalization>
+Common excuses an agent uses to dismiss a real finding. If you catch yourself reasoning this way, stop and re-examine.
+
+| Excuse | Rebuttal |
+|--------|----------|
+| "The plan says it reuses existing helpers" | Did you verify those helpers exist and accept these inputs? Reuse claims are frequent; helper drift is real. |
+| "This is an edge case" | Edge cases are where autonomous systems fail most visibly. Document the failure mode. |
+| "The verifier will catch it" | You are the pre-execution gate. The verifier checks the diff, not whether the plan is safe. |
+| "It works on the happy path" | The plan runs autonomously. No human catches what you miss. |
+| "The tests will cover it" | Tests verify what was written, not what was omitted. Missing steps produce passing tests with missing behavior. |
+</anti_rationalization>
 
 <calibration_rules>
 Prefer one strong finding over several weak ones.
@@ -134,7 +156,11 @@ Before finalizing, check that each finding is:
 </plan_under_review>
 
 <repo_context>
-src/shortcuts.ts (new file)
+No extra files provided.
 </repo_context>
-"
+
+
+<repo_context>
+src/shortcuts.ts (new file)
+</repo_context>"
 `;

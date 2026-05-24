@@ -6,27 +6,103 @@ The modal lives at [`apps/desktop/src/renderer/components/ProjectSettingsModal.t
 
 ## Fields
 
-### Read-only
-
-| Field | Source | Notes |
-|-------|--------|-------|
-| Project name | `projects.name` | Derived from the directory basename at add-time |
-| Git remote | `projects.git_remote` | Auto-detected from `git remote get-url origin` |
-| Default branch | `projects.default_branch` | Auto-detected from `git symbolic-ref refs/remotes/origin/HEAD` |
-
 ### Editable
 
 | Field | DB column | Purpose |
 |-------|-----------|---------|
-| GitHub Projects v2 URL | `projects.github_project_url` | Override for the Kanban header `board` button — points it at a real Projects v2 board instead of the repo's `/projects` tab |
+| Project name | `projects.name` | Seeded from the directory basename when the repo is first added, then editable as a local display name |
+| GitHub Projects v2 URL | `projects.github_project_url` | Enables readiness checks, board sync, Status mapping, and the Kanban `board` quick-link |
+| Human approval override | `projects.require_approval_override` | Optional project-local approval gate. `null` inherits the app default; issue-level overrides can still change a specific issue |
+| Revision override | `projects.revision_count_override` | Optional project-local revision count. `null` inherits the app default; issue-level overrides can still change a specific issue |
+| Speed profile override | `projects.pipeline_speed_profile_override` | Optional project-local scheduling/execution speed profile |
+| PRD quality gate | `projects.prd_quality_gate` | Blocks or warns on issue bodies that are missing required PRD sections |
+| Planner model override | `projects.planner_model_override` | Optional project-local planner override. `null` inherits the global Settings value |
+| Reviewer model override | `projects.reviewer_model_override` | Optional project-local reviewer override. `null` inherits the global Settings value |
+| Executor model override | `projects.executor_model_override` | Optional project-local executor override. `null` inherits the global Settings value unless an issue-level executor override exists |
+| Verifier model override | `projects.verifier_model_override` | Optional project-local verifier override. `null` inherits the global Settings value |
+| Planner effort override | `projects.planner_reasoning_effort_override` | Optional project-local planner effort override. Exact options depend on the selected provider |
+| Reviewer effort override | `projects.reviewer_reasoning_effort_override` | Optional project-local reviewer effort override. Exact options depend on the selected provider |
+| Executor effort override | `projects.executor_reasoning_effort_override` | Optional project-local executor effort override. Exact options depend on the selected provider |
+| Verifier effort override | `projects.verifier_reasoning_effort_override` | Optional project-local verifier effort override. Exact options depend on the selected provider |
+| Discord routing / webhook | `projects.discord_*` | Project-specific chat alert routing or webhook override |
+| Telegram routing / chat ID | `projects.telegram_*` | Project-specific chat alert routing or chat override |
+| Issue rewrite mention | `projects.notify_github_user` | GitHub handle mentioned when ShipCode asks for an issue rewrite |
 
-## Why the GitHub Projects v2 override exists
+### Read-only
+
+| Field | Source | Notes |
+|-------|--------|-------|
+| Git remote | `projects.git_remote` | Auto-detected from `git remote get-url origin` |
+| Default branch | `projects.default_branch` | Auto-detected from `git symbolic-ref refs/remotes/origin/HEAD` |
+
+## Moving a repo folder
+
+If you move the repo on disk, open **Project Settings -> General -> Change folder...** and point ShipCode at the new location. That updates `projects.path` without creating a duplicate project row.
+
+## Setup and runtime QA
+
+The **Setup** tab edits the repo setup contract at `.shipcode/setup.json`. ShipCode reads that file in fresh worktrees before execution and verification.
+
+```json
+{
+  "version": 1,
+  "setupCommands": ["<repo-specific install command>"],
+  "verifyCommands": [
+    "<repo-specific scoped verify command>"
+  ],
+  "runtimeQa": {
+    "server": {
+      "command": "<repo-specific dev server command using $PORT>",
+      "readinessUrl": "http://127.0.0.1:$PORT",
+      "startupTimeoutMs": 60000,
+      "portEnvVar": "PORT"
+    },
+    "testCommands": ["<repo-specific runtime test command>"],
+    "discoverAgentTests": true
+  },
+  "envFiles": [{ "source": ".env.local", "required": true }],
+  "setupBeforeVerify": false,
+  "testingContext": "Explain the repo's test runner, scope rules, and expensive commands to avoid."
+}
+```
+
+Project detection can prefill setup and verify commands from common repo profiles, including Node package managers, Turborepo, Xcode, SwiftPM, Rust, Go, Python, Ruby, Java, .NET, and PHP. Runtime QA starts the configured dev server inside the feature worktree, runs browser/E2E commands, and also supports generated visual QA when a PRD includes a `## QA State` contract.
+
+## GitHub readiness
+
+The **GitHub** tab checks and repairs ShipCode-owned labels, validates GitHub issue types and Projects fields, and maps ShipCode columns to your GitHub Projects v2 `Status` field. Label sync is automatic for missing ShipCode labels; domain metadata such as priority, complexity, blast radius, and product taxonomy stays in GitHub issue types and Projects fields.
+
+## Memory and context
+
+The **Context** tab shows repo memory files and the generator CLI used to keep them current. This is separate from runtime skills: repo memory guides agents building or modifying the project, while runtime skills drive pipeline prompts.
+
+## Override Hierarchy
+
+Project Settings sits between the global Settings panel and the issue-level overrides.
+
+- Planner / Reviewer / Verifier: `global settings -> project override`
+- Executor: `global settings -> project override -> issue override`
+- Human approval: `app default -> project override -> issue override`
+- Revisions: `app default -> project override -> issue override`
+- Speed profile and PRD quality gate: `app/project defaults -> project override`
+
+`Inherit` means the project stores `null` for that field and falls back to the app default.
+
+Effort options are provider-specific:
+
+- Claude CLI: `none`, `medium`, `high`
+- Codex: `low`, `medium`, `high`, `xhigh`
+- OpenRouter: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`
+
+If an older stored effort is not exact for the chosen provider, the UI surfaces the fallback mapping explicitly.
+
+Issue Detail can still override human approval, revisions, and phase models for a single issue when one task needs a different workflow than the rest of the repo.
+
+## Why the GitHub Projects v2 URL exists
 
 GitHub Projects v2 boards live under a **user or org**, not under a repo. A board can span multiple repos, so ShipCode can't derive the real board URL from the project's git remote alone.
 
-By default, the Kanban header's `board` button links to `https://github.com/<owner>/<repo>/projects` — the repo's linked-projects tab, which is a list, not a board. That's a fine fallback when no board exists, but it's the wrong link when you actually have a Projects v2 board set up.
-
-Paste your real board URL into this field and the `board` button rewires to point at it.
+Paste your real board URL into this field and ShipCode can sync cached issues to the board, detect the `Status` field, map columns, run readiness checks, and show the Kanban `board` button. Leave it blank and board sync stays disabled.
 
 ## Accepted URL formats
 
@@ -36,7 +112,7 @@ The field accepts all three canonical Projects v2 URL shapes:
 - `https://github.com/users/<user>/projects/<number>` — user-scoped
 - `https://github.com/<owner>/<repo>/projects/<number>` — repo-scoped classic
 
-Validation is inline on blur — a bad URL shows a red border with a hint. Whitespace and empty strings are a valid clear — they reset the override back to the repo's `/projects` fallback.
+Validation is inline on blur — a bad URL shows a red border with a hint. Whitespace and empty strings are a valid clear — they hide the `board` button again.
 
 The validator lives in [`packages/shared/src/github-url.ts`](https://github.com/shipshitdev/shipcode/blob/master/packages/shared/src/github-url.ts).
 

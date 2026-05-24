@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
-import './globals.scss';
+import './globals.css';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -15,9 +15,30 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'ShipCode — Make Planning Great Again',
+  title: 'ShipCode — Autonomous AI Coding Pipeline',
   description:
-    'Autonomous AI coding pipeline. ShipCode plans with Opus, reviews with Codex, and iterates until the plan is bulletproof. Then it executes.',
+    'Desktop app + CLI for turning GitHub issues into reviewed pull requests with a real plan, review, execute, verify pipeline.',
+  metadataBase: new URL('https://shipcode.shipshit.dev'),
+  openGraph: {
+    title: 'ShipCode — Autonomous AI Coding Pipeline',
+    description: 'From issue queue to reviewed PR. Install with brew install --cask shipcode.',
+    siteName: 'ShipCode',
+    type: 'website',
+    images: [
+      {
+        url: '/og.png',
+        width: 1200,
+        height: 630,
+        alt: 'ShipCode — From issue queue to reviewed PR',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ShipCode — Autonomous AI Coding Pipeline',
+    description: 'From issue queue to reviewed PR. Install with brew install --cask shipcode.',
+    images: ['/og.png'],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

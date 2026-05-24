@@ -1,27 +1,67 @@
 /**
  * CLI providers wrapping the existing claude/codex subprocess path.
  *
- * These are BEHAVIOR-PRESERVING: the arg lists constructed here must
- * match the inline spawn calls that previously lived in
- * `packages/pipeline/src/pipeline.ts` byte-for-byte. The snapshot-based
- * regression tests in `cli-provider.test.ts` enforce this.
+ * Prompts are piped through stdin instead of passed as argv. That keeps
+ * large issue bodies and YAML-frontmatter skills out of CLI argument
+ * parsing while preserving the existing provider lifecycle.
  *
- * The only meaningful change is lifecycle: instead of the pipeline
- * attaching `output`/`exit` listeners to the shared ProcessManager and
- * continuing execution from within the exit handler, the provider wraps
- * the spawn → accumulate → wait → cleanup flow in a single promise. The
- * pipeline awaits that promise and then keeps its existing phase-specific
- * completion logic (salvage-on-non-zero for PLAN, ignore-exit for
- * REVIEW/REVISION/VERIFY, exit-zero-only for EXECUTE).
+ * The provider also keeps the process lifecycle contained here: spawn,
+ * accumulate terminal output, wait for exit, then return one result to the
+ * pipeline's phase-specific completion logic.
  */
 
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import type { ProcessManager } from '../process-manager';
-import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
+import { measurePromptPayload } from '../prompt-scope';
 import { StreamParser } from '../stream-parser';
+import { stripAnsi } from './output-summary';
+import { mapReasoningEffortToClaudeThinkingTokens, mapReasoningEffortToCodex } from './reasoning';
+import {
+  type AgentProvider,
+  PHASE_TOOL_POLICIES,
+  type ProviderPhase,
+  type ProviderRequest,
+  type ProviderResponse,
+} from './types';
 
 interface CliRunResult {
   rawOutput: string;
   exitCode: number;
+}
+
+interface CliCommand {
+  args: string[];
+  stdin?: string;
+  options?: Parameters<ProcessManager['spawn']>[5];
+}
+
+type ProcessManagerWithStdin = ProcessManager & {
+  spawnWithStdin?: (
+    type: 'claude' | 'codex',
+    command: string,
+    args: string[],
+    cwd: string,
+    input: string,
+    threadId?: string,
+    options?: Parameters<ProcessManager['spawn']>[5],
+  ) => ReturnType<ProcessManager['spawn']>;
+};
+
+function materializeStdinArgsForLegacySpawn(args: string[], stdin?: string): string[] {
+  if (stdin === undefined) return args;
+  const promptFlagIndex = args.indexOf('-p');
+  if (promptFlagIndex !== -1 && args[promptFlagIndex + 1] === '-') {
+    return args.map((arg, index) => (index === promptFlagIndex + 1 ? stdin : arg));
+  }
+  if (promptFlagIndex !== -1) {
+    return [...args.slice(0, promptFlagIndex + 1), stdin, ...args.slice(promptFlagIndex + 1)];
+  }
+  const execIndex = args.indexOf('exec');
+  if (execIndex !== -1 && args[execIndex + 1] === '-') {
+    return args.map((arg, index) => (index === execIndex + 1 ? stdin : arg));
+  }
+  return args;
 }
 
 /**
@@ -32,9 +72,12 @@ async function runCli(
   processManager: ProcessManager,
   agentId: 'claude' | 'codex',
   args: string[],
+  stdin: string | undefined,
   cwd: string,
   signal: AbortSignal,
   threadId?: string,
+  workspaceRoot?: string | null,
+  options?: Parameters<ProcessManager['spawn']>[5],
 ): Promise<CliRunResult> {
   if (signal.aborted) {
     return { rawOutput: '', exitCode: 130 };
@@ -42,7 +85,31 @@ async function runCli(
 
   let process: ReturnType<ProcessManager['spawn']>;
   try {
-    process = processManager.spawn(agentId, agentId, args, cwd, threadId);
+    const spawnOptions = {
+      ...(options ?? {}),
+      ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
+    };
+    const processManagerWithStdin = processManager as ProcessManagerWithStdin;
+    if (stdin !== undefined && processManagerWithStdin.spawnWithStdin) {
+      process = processManagerWithStdin.spawnWithStdin(
+        agentId,
+        agentId,
+        args,
+        cwd,
+        stdin,
+        threadId,
+        spawnOptions,
+      );
+    } else {
+      process = processManager.spawn(
+        agentId,
+        agentId,
+        materializeStdinArgsForLegacySpawn(args, stdin),
+        cwd,
+        threadId,
+        spawnOptions,
+      );
+    }
   } catch (err) {
     // ProcessManager synthesizes an exit event for missing binaries etc.
     // but if spawn() throws synchronously, surface that as exit 127.
@@ -63,6 +130,7 @@ async function runCli(
     };
 
     const settle = (result: CliRunResult) => {
+      /* v8 ignore next -- listeners are removed during cleanup; guard handles event races */
       if (settled) return;
       settled = true;
       cleanup();
@@ -98,55 +166,161 @@ async function runCli(
 }
 
 /**
- * Build claude CLI args for a given phase. Mirrors the inline arg
- * construction that previously lived in pipeline.ts verbatim.
+ * Resolve the tool policy for a phase. Explicit phaseHints override the
+ * declarative defaults so callers can customize per-run.
  */
-function buildClaudeArgs(req: ProviderRequest): string[] {
+function resolveToolPolicy(req: ProviderRequest) {
+  const defaults = PHASE_TOOL_POLICIES[req.phase];
+  return {
+    allowedTools: req.phaseHints?.allowedTools ?? defaults.allowedTools,
+    disallowedTools: req.phaseHints?.disallowedTools ?? defaults.disallowedTools,
+  };
+}
+
+function injectThinkingTokens(args: string[], req: ProviderRequest): void {
+  const tokens = mapReasoningEffortToClaudeThinkingTokens(
+    req.phaseHints?.reasoningEffort,
+    req.modelHint,
+  );
+  if (tokens !== null) {
+    args.splice(
+      args.indexOf('--dangerously-skip-permissions'),
+      0,
+      '--max-thinking-tokens',
+      String(tokens),
+    );
+  }
+}
+
+/** Build claude CLI args/stdin for a given phase. */
+function buildClaudeCommand(req: ProviderRequest): CliCommand {
+  const modelArgs = req.modelHint ? ['--model', req.modelHint] : [];
+  const { allowedTools, disallowedTools } = resolveToolPolicy(req);
+
   switch (req.phase) {
     case 'plan':
     case 'revision':
     case 'verify': {
-      // Analysis phases: stream-json for real-time terminal output,
-      // no file-mutating tools. --verbose is required by stream-json mode.
-      // maxTurns comes from AppSettings.plannerMaxTurns (default 3) via phaseHints.
       const maxTurns = String(req.phaseHints?.maxTurns ?? 1);
-      return [
+      const args = [
         '-p',
-        req.prompt,
+        ...modelArgs,
         '--output-format',
         'stream-json',
         '--verbose',
         '--max-turns',
         maxTurns,
         '--dangerously-skip-permissions',
-        '--disallowedTools',
-        'Edit,Write,Bash,NotebookEdit',
       ];
+      /* v8 ignore next -- plan/revision/verify always have default disallowed tools */
+      if (disallowedTools) args.push('--disallowedTools', disallowedTools.join(','));
+      /* v8 ignore next -- only execute currently has default allowed tools */
+      if (allowedTools) args.push('--allowedTools', allowedTools.join(','));
+      injectThinkingTokens(args, req);
+      return { args, stdin: req.prompt };
     }
-    case 'execute':
-      // Execution: full tool surface, no JSON wrapping, no turn limit.
-      return [
-        '-p',
-        req.prompt,
-        '--allowedTools',
-        'Edit,Write,Bash,Glob,Grep,Read',
-        '--dangerously-skip-permissions',
-      ];
-    case 'review':
-      // Claude does not review in the current pipeline (codex does).
+    case 'execute': {
+      const execArgs = ['-p', ...modelArgs, '--output-format', 'stream-json', '--verbose'];
+      /* v8 ignore next -- execute always has default allowed tools */
+      if (allowedTools) execArgs.push('--allowedTools', allowedTools.join(','));
+      /* v8 ignore next -- execute normally has no disallowed tools unless explicitly configured */
+      if (disallowedTools) execArgs.push('--disallowedTools', disallowedTools.join(','));
+      execArgs.push('--dangerously-skip-permissions');
+      injectThinkingTokens(execArgs, req);
+      return { args: execArgs, stdin: req.prompt };
+    }
+    case 'review': // Claude does not review in the current pipeline (codex does).
       // Kept for symmetry; always 1 turn (structural, not configurable).
-      return [
-        '-p',
-        req.prompt,
-        '--output-format',
-        'json',
-        '--max-turns',
-        '1',
-        '--dangerously-skip-permissions',
-        '--disallowedTools',
-        'Edit,Write,Bash,NotebookEdit',
-      ];
+      {
+        const args = [
+          '-p',
+          ...modelArgs,
+          '--output-format',
+          'stream-json',
+          '--verbose',
+          '--max-turns',
+          '1',
+          '--dangerously-skip-permissions',
+        ];
+        /* v8 ignore next -- review has default disallowed tools */
+        if (disallowedTools) args.push('--disallowedTools', disallowedTools.join(','));
+        /* v8 ignore next -- review normally has no allowed tools unless explicitly configured */
+        if (allowedTools) args.push('--allowedTools', allowedTools.join(','));
+        return { args, stdin: req.prompt };
+      }
   }
+}
+
+function buildClaudeArgs(req: ProviderRequest): string[] {
+  return buildClaudeCommand(req).args;
+}
+
+function buildClaudeStdin(req: ProviderRequest): string {
+  /* v8 ignore next -- all Claude phase commands carry stdin */
+  return buildClaudeCommand(req).stdin ?? '';
+}
+
+function sanitizeProcessName(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+}
+
+const CLAUDE_ENV_KEYS = [
+  'PATH',
+  'HOME',
+  'USER',
+  'SHELL',
+  'TERM',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TMPDIR',
+  'XDG_RUNTIME_DIR',
+  'ANTHROPIC_API_KEY',
+] as const;
+
+const CODEX_ENV_KEYS = [
+  'PATH',
+  'HOME',
+  'USER',
+  'SHELL',
+  'TERM',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TMPDIR',
+  'XDG_RUNTIME_DIR',
+  'OPENAI_API_KEY',
+] as const;
+
+async function writeExecutePromptArtifact(req: ProviderRequest): Promise<string> {
+  const runDir = path.join(req.cwd, '.shipcode', 'runs', req.threadId);
+  await fs.mkdir(runDir, { recursive: true });
+  const promptPath = path.join(runDir, `${req.phase}-prompt.md`);
+  await fs.writeFile(promptPath, req.prompt, 'utf8');
+  return promptPath;
+}
+
+async function buildClaudeInteractiveExecuteCommand(req: ProviderRequest): Promise<CliCommand> {
+  const promptArtifactPath = await writeExecutePromptArtifact(req);
+  const modelArgs = req.modelHint ? ['--model', req.modelHint] : [];
+  const { allowedTools } = resolveToolPolicy(req);
+  return {
+    args: [
+      '--permission-mode',
+      'acceptEdits',
+      '--tools',
+      (allowedTools ?? PHASE_TOOL_POLICIES.execute.allowedTools ?? []).join(','),
+      '--name',
+      sanitizeProcessName(`shipcode-${req.threadId}`),
+      ...modelArgs,
+      `Read ${promptArtifactPath} and execute the ShipCode task.`,
+    ],
+    options: { outputMode: 'raw' },
+  };
 }
 
 /**
@@ -155,20 +329,73 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
  * codex v0.120.0 layout: top-level flags come BEFORE the `exec` subcommand,
  * and the subcommand's own flags (`--sandbox`, `--json`) go after the prompt.
  *
- *   codex [-a never] [-c model_reasoning_effort=high] exec <prompt> --sandbox <level> --json
+ *   codex [-a never] [-c model_reasoning_effort=high] exec - --sandbox <level> --json
  *
- * Previously we passed `-a never` AFTER `exec`, which is invalid — codex errors
- * out in ~30ms with `unexpected argument '-a' found` and the pipeline sees an
- * empty review. Same story for `--reasoning-effort`, which was removed as a
- * standalone flag in 0.120.0 and must now be set via `-c model_reasoning_effort=<effort>`.
+ * The prompt itself is piped through stdin. Keeping the prompt out of argv
+ * avoids shell/arg length limits and keeps logs from accidentally echoing
+ * full issue bodies.
  */
-function buildCodexArgs(req: ProviderRequest): string[] {
-  const sandbox = req.phase === 'execute' ? 'workspace-write' : 'read-only';
+function buildCodexCommand(req: ProviderRequest): CliCommand {
+  const defaultPolicy = PHASE_TOOL_POLICIES[req.phase];
+  /* v8 ignore next -- all declared Codex phases have a default sandbox */
+  const sandbox = req.phaseHints?.sandbox ?? defaultPolicy.sandbox ?? 'read-only';
   const topLevelFlags: string[] = ['-a', 'never'];
-  if (req.phaseHints?.reasoningEffort) {
-    topLevelFlags.push('-c', `model_reasoning_effort=${req.phaseHints.reasoningEffort}`);
-  }
-  return [...topLevelFlags, 'exec', req.prompt, '--sandbox', sandbox, '--json'];
+  if (req.modelHint) topLevelFlags.push('-m', req.modelHint);
+  // Default to high reasoning so thinking output is always visible in the terminal.
+  const effort = mapReasoningEffortToCodex(req.phaseHints?.reasoningEffort, req.modelHint);
+  topLevelFlags.push('-c', `model_reasoning_effort=${effort}`);
+  return {
+    args: [...topLevelFlags, 'exec', '-', '--sandbox', sandbox, '--json'],
+    stdin: buildCodexPrompt(req),
+  };
+}
+
+function buildCodexArgs(req: ProviderRequest): string[] {
+  return buildCodexCommand(req).args;
+}
+
+function buildCodexStdin(req: ProviderRequest): string {
+  /* v8 ignore next -- all Codex phase commands carry stdin */
+  return buildCodexCommand(req).stdin ?? '';
+}
+
+async function buildCodexInteractiveExecuteCommand(req: ProviderRequest): Promise<CliCommand> {
+  const promptArtifactPath = await writeExecutePromptArtifact(req);
+  const defaultPolicy = PHASE_TOOL_POLICIES.execute;
+  const sandbox = req.phaseHints?.sandbox ?? defaultPolicy.sandbox ?? 'workspace-write';
+  const args = ['-s', sandbox, '-a', 'on-request', '--no-alt-screen'];
+  if (req.modelHint) args.push('-m', req.modelHint);
+  const effort = mapReasoningEffortToCodex(req.phaseHints?.reasoningEffort, req.modelHint);
+  args.push('-c', `model_reasoning_effort=${effort}`);
+  args.push(`Read ${promptArtifactPath} and execute the ShipCode task.`);
+  return { args, options: { outputMode: 'raw' } };
+}
+
+function buildCodexPrompt(req: ProviderRequest): string {
+  if (req.phase === 'execute') return req.prompt;
+
+  // Plan and revision phases need to ground their output in the real repo
+  // (per plan-generation skill: walk codebase, cite real file paths, reuse
+  // real helpers). The sandbox is already read-only, so file reads are safe.
+  // Review and verify phases analyze provided text and stay prompt-only to
+  // keep token spend predictable.
+  const allowInspection = req.phase === 'plan' || req.phase === 'revision';
+
+  const lines = [
+    'ShipCode structured-output mode.',
+    ...(allowInspection
+      ? [
+          'You may read files in the working directory to ground your output, but do not run shell commands beyond read-only inspection.',
+        ]
+      : [
+          'Do not run shell commands, inspect files, or use tools in this phase.',
+          'Use only the prompt content below.',
+        ]),
+    'Return only the requested fenced shipcode-* JSON block. Do not include prose or any other fenced blocks.',
+    '',
+    req.prompt,
+  ];
+  return lines.join('\n');
 }
 
 export function createClaudeCliProvider(processManager: ProcessManager): AgentProvider {
@@ -176,21 +403,60 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
     id: 'claude-cli',
     supports: new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute']),
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
-      const args = buildClaudeArgs(req);
-      const result = await runCli(processManager, 'claude', args, req.cwd, req.signal, req.threadId);
+      const promptTelemetry = {
+        phase: req.phase,
+        promptSize: measurePromptPayload(req.prompt),
+        ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
+      };
+      if (req.phase === 'execute' && req.phaseHints?.runMode !== 'interactive') {
+        return {
+          rawOutput:
+            'Programmatic Claude execute is disabled because it exposes host shell/file tools without an OS sandbox. Use interactive Claude execute or a sandboxed provider.',
+          exitCode: 1,
+          resolvedModel: req.modelHint ?? 'claude',
+          promptTelemetry,
+          providerError: {
+            kind: 'unexpected_stop',
+            message: 'programmatic Claude execute is disabled',
+            retryable: false,
+          },
+        };
+      }
+      const command =
+        req.phase === 'execute' && req.phaseHints?.runMode === 'interactive'
+          ? await buildClaudeInteractiveExecuteCommand(req)
+          : buildClaudeCommand(req);
+      const result = await runCli(
+        processManager,
+        'claude',
+        command.args,
+        command.stdin,
+        req.cwd,
+        req.signal,
+        req.threadId,
+        req.workspaceRoot,
+        { ...(command.options ?? {}), envKeyAllowlist: [...CLAUDE_ENV_KEYS] },
+      );
       const parser = new StreamParser();
       parser.feed(result.rawOutput);
       const usage = parser.extractUsage();
+      const clarification = parser.extractClarificationRequest();
       return {
         rawOutput: StreamParser.stripSystemEvents(result.rawOutput),
         exitCode: result.exitCode,
-        resolvedModel: 'claude',
+        resolvedModel: parser.extractModel() ?? 'claude',
+        promptTelemetry,
+        /* v8 ignore start -- stream parser extraction is covered directly; provider only forwards parsed metadata */
         ...(usage
           ? {
               tokensUsed: { prompt: usage.inputTokens, completion: usage.outputTokens },
               costUsd: usage.costUsd,
             }
           : {}),
+        ...(clarification.success && clarification.data
+          ? { clarificationRequest: clarification.data }
+          : {}),
+        /* v8 ignore stop */
         ...(result.exitCode === 127
           ? {
               providerError: {
@@ -200,7 +466,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
               },
             }
           : result.exitCode === 130
-            ? { providerError: { kind: 'network' as const, message: 'aborted', retryable: false } }
+            ? { providerError: { kind: 'aborted' as const, message: 'aborted', retryable: false } }
             : {}),
       };
     },
@@ -216,22 +482,53 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
 export function createCodexCliProvider(processManager: ProcessManager): AgentProvider {
   return {
     id: 'codex-cli',
-    supports: new Set<ProviderPhase>(['review', 'execute']),
+    supports: new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute']),
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
-      const args = buildCodexArgs(req);
-      const result = await runCli(processManager, 'codex', args, req.cwd, req.signal, req.threadId);
-      const parser = new StreamParser();
-      parser.feed(result.rawOutput);
-      const usage = parser.extractUsage();
+      const promptTelemetry = {
+        phase: req.phase,
+        promptSize: measurePromptPayload(req.prompt),
+        selectedMaterials: req.promptMaterialSummary,
+      };
+      const command =
+        req.phase === 'execute' && req.phaseHints?.runMode === 'interactive'
+          ? await buildCodexInteractiveExecuteCommand(req)
+          : buildCodexCommand(req);
+      const result = await runCli(
+        processManager,
+        'codex',
+        command.args,
+        command.stdin,
+        req.cwd,
+        req.signal,
+        req.threadId,
+        req.workspaceRoot,
+        { ...(command.options ?? {}), envKeyAllowlist: [...CODEX_ENV_KEYS] },
+      );
+      const rawOutput = stripCodexProtocol(result.rawOutput, {
+        includeCommandOutput: req.phase === 'execute',
+      });
+      const usageParser = new StreamParser();
+      usageParser.feed(result.rawOutput);
+      const usage = usageParser.extractUsage();
+      const outputParser = new StreamParser();
+      outputParser.feed(rawOutput);
+      const clarification = outputParser.extractClarificationRequest();
+      const ndjsonParser = new StreamParser();
+      ndjsonParser.feed(result.rawOutput);
+      const resolvedModel = ndjsonParser.extractCodexModel() ?? req.modelHint ?? 'codex';
       return {
-        rawOutput: result.rawOutput,
+        rawOutput,
         exitCode: result.exitCode,
-        resolvedModel: 'codex',
+        resolvedModel,
+        promptTelemetry,
         ...(usage
           ? {
               tokensUsed: { prompt: usage.inputTokens, completion: usage.outputTokens },
               costUsd: usage.costUsd,
             }
+          : {}),
+        ...(clarification.success && clarification.data
+          ? { clarificationRequest: clarification.data }
           : {}),
         ...(result.exitCode === 127
           ? {
@@ -242,7 +539,7 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
               },
             }
           : result.exitCode === 130
-            ? { providerError: { kind: 'network' as const, message: 'aborted', retryable: false } }
+            ? { providerError: { kind: 'aborted' as const, message: 'aborted', retryable: false } }
             : {}),
       };
     },
@@ -252,8 +549,64 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
   };
 }
 
-// Exported for unit testing (snapshot regression against pipeline.ts).
+/**
+ * Extract human-readable text from Codex NDJSON protocol output.
+ *
+ * Codex `--json` mode emits one JSON object per line with types like
+ * `thread.started`, `item.completed`, `turn.completed`, etc. The
+ * pipeline stores `rawOutput` for display in the error panel — raw
+ * NDJSON is unreadable, so we extract agent messages and command
+ * output into a plain-text summary.
+ */
+function stripCodexProtocol(raw: string, options: { includeCommandOutput?: boolean } = {}): string {
+  const includeCommandOutput = options.includeCommandOutput ?? true;
+  const lines: string[] = [];
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      // Not JSON — keep as-is (e.g. non-JSON stderr lines)
+      lines.push(trimmed);
+      continue;
+    }
+    const item = parsed.item as Record<string, unknown> | undefined;
+    if (!item) {
+      // Codex protocol events have a string `type` field (e.g. "thread.started").
+      // Non-protocol JSON (plan/review/verification blocks) lacks it — keep those.
+      if (typeof parsed.type !== 'string') lines.push(trimmed);
+      continue;
+    }
+    if (item.type === 'agent_message' && typeof item.text === 'string') {
+      lines.push(item.text);
+    } else if (item.type === 'command_execution' && includeCommandOutput) {
+      const cmd = item.command as string | undefined;
+      const output =
+        typeof item.aggregated_output === 'string'
+          ? stripAnsi(item.aggregated_output).trimEnd()
+          : undefined;
+      const exitCode = item.exit_code as number | null | undefined;
+      if (cmd) lines.push(`$ ${cmd}`);
+      if (output) lines.push(output.trimEnd());
+      if (exitCode != null && exitCode !== 0) lines.push(`[exit ${exitCode}]`);
+    }
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Exported for unit testing (snapshot regression against pipeline.ts).
+ *
+ * @knipignore
+ */
 export const _internals = {
   buildClaudeArgs,
+  buildClaudeStdin,
   buildCodexArgs,
+  buildCodexStdin,
+  buildCodexPrompt,
+  materializeStdinArgsForLegacySpawn,
+  stripCodexProtocol,
 };

@@ -1,0 +1,25 @@
+name: React Doctor
+
+on:
+  pull_request:
+    branches: [master, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: react-doctor-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  react-doctor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: millionco/react-doctor@main
+        with:
+          diff: ${{ github.event.pull_request.base.ref }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}

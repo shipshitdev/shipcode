@@ -1,10 +1,10 @@
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
-import type * as React from 'react';
-import { cn } from '../lib/utils';
+import type { ComponentProps, Ref } from 'react';
+import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center gap-2 whitespace-nowrap text-left text-[13px] font-medium transition-colors cursor-pointer disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border-strong [&_svg]:pointer-events-none [&_svg]:shrink-0',
+  'inline-flex items-center gap-2 whitespace-nowrap text-left text-[13px] font-medium transition-colors cursor-pointer disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:shrink-0',
   {
     variants: {
       variant: {
@@ -28,10 +28,10 @@ const buttonVariants = cva(
         md: 'h-8 px-3.5 py-1.5',
         lg: 'h-9 px-4 text-[13px]',
         xl: 'h-10 px-5 text-[14px]',
-        'icon-xs': 'h-6 w-6 justify-center',
-        'icon-sm': 'h-7 w-7 justify-center',
-        icon: 'h-8 w-8 justify-center',
-        'icon-lg': 'h-9 w-9 justify-center',
+        'icon-xs': 'size-6 justify-center',
+        'icon-sm': 'size-7 justify-center',
+        icon: 'size-8 justify-center',
+        'icon-lg': 'size-9 justify-center',
       },
     },
     defaultVariants: {
@@ -41,18 +41,33 @@ const buttonVariants = cva(
   },
 );
 
+type ButtonProps = ComponentProps<'button'> &
+  VariantProps<typeof buttonVariants> & {
+    asChild?: boolean;
+    ref?: Ref<HTMLButtonElement>;
+  };
+
 function Button({
   className,
   variant,
   size,
   asChild = false,
+  title,
+  'aria-label': ariaLabel,
+  ref,
   ...props
-}: React.ComponentProps<'button'> &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean;
-  }) {
+}: ButtonProps) {
   const Comp = asChild ? Slot : 'button';
-  return <Comp className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+
+  return (
+    <Comp
+      ref={ref}
+      title={title}
+      aria-label={ariaLabel}
+      className={cn(buttonVariants({ variant, size }), className)}
+      {...props}
+    />
+  );
 }
 
-export { Button, buttonVariants };
+export { Button };

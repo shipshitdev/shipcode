@@ -1,6 +1,13 @@
-import { simpleGit, type SimpleGit } from 'simple-git';
 import path from 'node:path';
-import { resolveWorktreeParent } from '@shipcode/shared';
+import { formatIssueBranch as formatIssueBranchShared, slugifyIssueTitle } from '@shipcode/shared';
+import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
+import { type SimpleGit, simpleGit } from 'simple-git';
+import {
+  listWorktreeArtifacts,
+  pruneWorktreeArtifacts,
+  type WorktreeArtifact,
+  type WorktreeArtifactCleanupResult,
+} from './worktree-artifacts';
 
 export interface WorktreeManagerOptions {
   /**
@@ -18,18 +25,23 @@ export interface WorktreeManagerOptions {
   branchFormat?: string;
 }
 
-const DEFAULT_BRANCH_FORMAT = 'ship/{id}-{slug}';
-
-function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 48);
-}
+const slugify = slugifyIssueTitle;
 
 /** ShipCode-managed branch prefixes for list() filtering. */
-const SHIPCODE_BRANCH_RE = /^(shipcode\/|ship\/\d+-)/;
+const SHIPCODE_BRANCH_RE = /^(shipcode\/|ship\/\d+)/;
+
+/**
+ * Prevent `git worktree add -b` from writing branch tracking config while
+ * concurrent pipeline starts are also creating worktrees in the same repo.
+ * The branch itself is still created; these flags only avoid non-essential
+ * `.git/config` mutations that can contend on `config.lock`.
+ */
+const NO_CONFIG_LOCK_FLAGS = [
+  '-c',
+  'branch.autoSetupMerge=false',
+  '-c',
+  'push.autoSetupRemote=false',
+];
 
 export class WorktreeManager {
   private git: SimpleGit;
@@ -43,14 +55,7 @@ export class WorktreeManager {
 
   /** Build branch name for an issue-based worktree. */
   private formatIssueBranch(issueNumber: number, title: string): string {
-    const format = this.options.branchFormat || DEFAULT_BRANCH_FORMAT;
-    const slug = slugify(title);
-    let branch = format
-      .replace(/\{id\}/g, String(issueNumber))
-      .replace(/\{slug\}/g, slug);
-    // Clean up trailing dashes from empty slug
-    branch = branch.replace(/-$/, '');
-    return branch;
+    return formatIssueBranchShared(issueNumber, title, this.options.branchFormat ?? null);
   }
 
   /** Build directory name for an issue-based worktree. */
@@ -62,25 +67,28 @@ export class WorktreeManager {
 
   /** Branch name for an issue-based worktree. */
   getBranchName(issueNumber: number, title: string): string;
-  /** Legacy branch name for non-issue (manual thread) worktrees. */
-  getBranchName(threadId: string): string;
+  /** Branch name for non-issue worktrees. Uses the title slug when available. */
+  getBranchName(threadId: string, title?: string): string;
   getBranchName(idOrNumber: string | number, title?: string): string {
     if (typeof idOrNumber === 'number') {
       return this.formatIssueBranch(idOrNumber, title ?? '');
     }
+    const slug = title ? slugify(title) : '';
+    if (slug) return `shipcode/${slug}`;
     return `shipcode/${idOrNumber}`;
   }
 
   /** Worktree path for an issue-based worktree. */
   getWorktreePath(issueNumber: number, title: string): string;
-  /** Legacy worktree path for non-issue (manual thread) worktrees. */
-  getWorktreePath(threadId: string): string;
+  /** Worktree path for non-issue worktrees. Uses the title slug when available. */
+  getWorktreePath(threadId: string, title?: string): string;
   getWorktreePath(idOrNumber: string | number, title?: string): string {
     const parent = resolveWorktreeParent(this.projectPath, this.options.worktreeRoot ?? null);
     if (typeof idOrNumber === 'number') {
       return path.join(parent, this.formatIssueDir(idOrNumber, title ?? ''));
     }
-    return path.join(parent, idOrNumber);
+    const slug = title ? slugify(title) : '';
+    return path.join(parent, slug || idOrNumber);
   }
 
   /**
@@ -116,10 +124,15 @@ export class WorktreeManager {
     baseBranch?: string,
   ): Promise<{ worktreePath: string; branch: string }>;
   /**
-   * Create a worktree for a manual thread (legacy threadId-based name).
+   * Create a worktree for a non-issue thread. Pass a title for slug-based names.
    */
   async create(
     threadId: string,
+    baseBranch?: string,
+  ): Promise<{ worktreePath: string; branch: string }>;
+  async create(
+    threadId: string,
+    title: string,
     baseBranch?: string,
   ): Promise<{ worktreePath: string; branch: string }>;
   async create(
@@ -128,9 +141,14 @@ export class WorktreeManager {
     baseBranch?: string,
   ): Promise<{ worktreePath: string; branch: string }> {
     const parent = resolveWorktreeParent(this.projectPath, this.options.worktreeRoot ?? null);
-    const base = typeof idOrNumber === 'number'
-      ? (baseBranch ?? await this.getDefaultBranch())
-      : (titleOrBase ?? await this.getDefaultBranch());
+    const hasExplicitThreadTitle = typeof idOrNumber === 'string' && arguments.length >= 3;
+    const threadTitle = hasExplicitThreadTitle ? titleOrBase : undefined;
+    const base =
+      typeof idOrNumber === 'number'
+        ? (baseBranch ?? (await this.getDefaultBranch()))
+        : ((hasExplicitThreadTitle ? baseBranch : titleOrBase) ?? (await this.getDefaultBranch()));
+
+    await this.prune();
 
     let branch: string;
     let dirName: string;
@@ -146,8 +164,8 @@ export class WorktreeManager {
         dirName = dirName + suffix;
       }
     } else {
-      branch = this.getBranchName(idOrNumber);
-      dirName = idOrNumber;
+      branch = this.getBranchName(idOrNumber, threadTitle);
+      dirName = threadTitle ? slugify(threadTitle) || idOrNumber : idOrNumber;
     }
 
     // Retry loop: if a concurrent start grabs the branch between our check
@@ -156,21 +174,33 @@ export class WorktreeManager {
     for (let attempt = 0; ; attempt++) {
       const worktreePath = path.join(parent, dirName);
       try {
-        await this.git.raw(['worktree', 'add', '-b', branch, worktreePath, base]);
+        await this.git.raw([
+          ...NO_CONFIG_LOCK_FLAGS,
+          'worktree',
+          'add',
+          '-b',
+          branch,
+          worktreePath,
+          base,
+        ]);
         return { worktreePath, branch };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const isCollision = /already exists|is already checked out/i.test(msg);
         if (!isCollision || attempt >= MAX_RETRIES) throw err;
         // Bump suffix and retry
-        const nextN = (branch.match(/-(\d+)$/) ? Number(branch.match(/-(\d+)$/)![1]) + 1 : 2);
-        const rawBranch = typeof idOrNumber === 'number'
-          ? this.formatIssueBranch(idOrNumber, titleOrBase ?? '')
-          : this.getBranchName(idOrNumber);
+        const nextN = branch.match(/-(\d+)$/) ? Number(branch.match(/-(\d+)$/)?.[1]) + 1 : 2;
+        const rawBranch =
+          typeof idOrNumber === 'number'
+            ? this.formatIssueBranch(idOrNumber, titleOrBase ?? '')
+            : this.getBranchName(idOrNumber, threadTitle);
         branch = `${rawBranch}-${nextN}`;
-        const rawDir = typeof idOrNumber === 'number'
-          ? this.formatIssueDir(idOrNumber, titleOrBase ?? '')
-          : String(idOrNumber);
+        const rawDir =
+          typeof idOrNumber === 'number'
+            ? this.formatIssueDir(idOrNumber, titleOrBase ?? '')
+            : threadTitle
+              ? slugify(threadTitle) || idOrNumber
+              : idOrNumber;
         dirName = `${rawDir}-${nextN}`;
       }
     }
@@ -215,6 +245,27 @@ export class WorktreeManager {
     }
 
     return { worktreeRemoved, branchDeleted };
+  }
+
+  async repair(worktreePaths: string[]): Promise<void> {
+    if (worktreePaths.length === 0) return;
+    await this.git.raw(['worktree', 'repair', ...worktreePaths]);
+  }
+
+  async prune(): Promise<void> {
+    await this.git.raw(['worktree', 'prune']);
+  }
+
+  async listArtifacts(worktreePath: string): Promise<WorktreeArtifact[]> {
+    return listWorktreeArtifacts(worktreePath);
+  }
+
+  async pruneArtifacts(worktreePath: string): Promise<WorktreeArtifactCleanupResult> {
+    return pruneWorktreeArtifacts(worktreePath);
+  }
+
+  async move(fromPath: string, toPath: string): Promise<void> {
+    await this.git.raw(['worktree', 'move', fromPath, toPath]);
   }
 
   /**

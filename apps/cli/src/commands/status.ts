@@ -1,6 +1,14 @@
-import path from 'node:path';
 import fs from 'node:fs';
-import { getDatabase, ThreadQueries, ProjectQueries } from '@shipcode/db';
+import path from 'node:path';
+import { getDatabase, ProjectQueries, ThreadQueries } from '@shipcode/db';
+import { PIPELINE_PHASE, type PipelinePhase } from '@shipcode/shared';
+import { sanitizeCliText } from '../adapters/cli-emitter';
+
+const INACTIVE_THREAD_STATUSES = new Set<PipelinePhase>([
+  PIPELINE_PHASE.idle,
+  PIPELINE_PHASE.completed,
+  PIPELINE_PHASE.failed,
+]);
 
 export async function statusCommand() {
   const dataDir = path.join(process.env.HOME ?? '', '.shipcode', 'data');
@@ -20,24 +28,22 @@ export async function statusCommand() {
   }
 
   for (const project of allProjects) {
-    console.log(`\n${project.name} (${project.path})`);
+    console.log(`\n${sanitizeCliText(project.name)} (${sanitizeCliText(project.path)})`);
     const projectThreads = threads.list(project.id);
-    const active = projectThreads.filter(
-      (t) => !['idle', 'completed', 'failed'].includes(t.status),
-    );
+    const active = projectThreads.filter((t) => !INACTIVE_THREAD_STATUSES.has(t.status));
     const recent = projectThreads.slice(0, 5);
 
     if (active.length > 0) {
       console.log('  Active:');
       for (const t of active) {
-        console.log(`    [${t.status}] ${t.title}`);
+        console.log(`    [${sanitizeCliText(t.status)}] ${sanitizeCliText(t.title)}`);
       }
     }
 
     if (recent.length > 0 && active.length === 0) {
       console.log('  Recent:');
       for (const t of recent) {
-        console.log(`    [${t.status}] ${t.title}`);
+        console.log(`    [${sanitizeCliText(t.status)}] ${sanitizeCliText(t.title)}`);
       }
     }
   }

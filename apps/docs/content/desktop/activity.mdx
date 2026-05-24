@@ -1,0 +1,41 @@
+# Activity
+
+Activity is the global timeline for pipeline runs and agent actions across **all** projects in your workspace. It is optimized for chronological inspection: what ran, what changed phase, what finished, and what needs follow-up.
+
+The component is [`apps/desktop/src/renderer/components/ActivityView.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/components/ActivityView.tsx).
+
+## What it shows
+
+- Day-grouped timeline rows
+- Actor chips for agent, GitHub, automation, and app-generated events
+- Issue/thread title and subtitle
+- Relative timestamps
+- Click-through to the owning project and thread when an event is tied to one
+
+## Click-through
+
+Clickable rows switch the active project and select the associated thread. For deeper inspection, open the thread from the project board or Terminal drawer.
+
+## Overview Dashboard
+
+The top sidebar item is now **Overview**. It replaced the older "Mission Control" naming and shows the dashboard: running agents, task counts, pending approvals, shipped-last-7-days, recent tasks, iteration analytics, and active pipeline cards.
+
+## Notifications
+
+Activity uses the same underlying event stream that powers Inbox and notifications. Configure which events notify in [Settings → Notifications](/desktop/settings):
+
+| Event | Default | Description |
+|-------|---------|-------------|
+| `approval` | on | Run needs human approval before execution |
+| `failed` | on | Pipeline errored out |
+| `completed` | on | PR successfully opened and stays in Inbox until dismissed |
+| `verificationExhausted` | on | Verifier exhausted its retry budget without passing |
+| `ciBlocked` | on | Linked PR checks or review state require attention |
+
+Toggles for OS notifications, badge counter, and notification sound all live in the same settings section.
+
+## Related
+
+- [Inbox](/desktop/inbox) — focused triage queue for unread items that need attention (`needs approval`, `failed`, `completed`, `verification_exhausted`, `ci_blocked`)
+- [Costs](/desktop/costs) — per-thread cost aggregation you can click through to
+- [Kanban Board](/desktop/kanban) — per-project phase view

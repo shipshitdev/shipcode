@@ -15,7 +15,7 @@ npm install -g @shipshitdev/shipcode
 shipcode onboard
 ```
 
-The `bin` map in `package.json` exposes the command as `shipcode`, so after a global install you type `shipcode`, not `@shipshitdev/shipcode`. Only `npx` carries the scope.
+The package is published to npm as `@shipshitdev/shipcode`. The bin name stays `shipcode`, so `npx @shipshitdev/shipcode`, `npm install -g @shipshitdev/shipcode`, then `shipcode ...`.
 
 ## Prerequisites
 
@@ -42,9 +42,9 @@ Pass `--help` to any subcommand for its flags.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENROUTER_API_KEY` | Optional | Enables the `openrouter` executor + `agent:openrouter`, `agent:openrouter/auto`, `agent:openrouter/free` GitHub label routes |
+| `OPENROUTER_API_KEY` | Optional | Enables the `openrouter` executor + `shipcode:agent:openrouter`, `shipcode:agent:openrouter/auto`, `shipcode:agent:openrouter/free` GitHub label routes |
 
-Claude and Codex auth come from their own CLIs (`claude auth`, Codex env vars); `gh` auth comes from `gh auth login`. The CLI does not read any other env vars directly.
+Claude and Codex auth come from their own CLIs (`claude auth`, `codex login`); `gh` auth comes from `gh auth login`. The CLI does not read any other env vars directly.
 
 ## Local development
 
@@ -52,26 +52,25 @@ From the monorepo root:
 
 ```bash
 bun install                                             # install all workspace deps
-bun run --filter @shipshitdev/shipcode build            # build apps/cli -> apps/cli/dist
+bun run --filter shipcode build                         # build apps/cli -> apps/cli/dist
 node apps/cli/dist/index.js onboard                     # run the built CLI in any repo
 ```
 
 Watch mode (rebuild on change):
 
 ```bash
-bun run --filter @shipshitdev/shipcode dev
+bun run --filter shipcode dev
 ```
 
-## Executors
+## Providers
 
-The CLI supports four agent types, matching the desktop app:
+The CLI supports the same execution providers as the desktop app:
 
 - `claude` — Claude Code CLI
 - `codex` — OpenAI Codex CLI
 - `openrouter` — OpenRouter provider (any model, routed through their API)
-- `gh` — data-plane only, not an executor
 
-Executor selection happens per-issue via GitHub labels (`agent:claude`, `agent:codex`, `agent:openrouter`, `agent:openrouter/auto`, `agent:openrouter/free`). Unknown or missing labels fall back to `agent:claude`.
+Executor selection happens per-issue via GitHub labels (`shipcode:agent:claude`, `shipcode:agent:codex`, `shipcode:agent:openrouter`, `shipcode:agent:openrouter/auto`, `shipcode:agent:openrouter/free`). Unknown or missing labels fall back to `shipcode:agent:claude`.
 
 ## Architecture
 

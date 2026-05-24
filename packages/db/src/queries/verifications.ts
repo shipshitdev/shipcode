@@ -1,6 +1,24 @@
 import type { DatabaseSync } from 'node:sqlite';
+import {
+  clampTextBlock,
+  MAX_PIPELINE_RAW_OUTPUT_CHARS,
+  toIsoUtc,
+  type VerificationRecord,
+  type VerificationResult,
+} from '@shipcode/shared';
 import { nanoid } from 'nanoid';
-import { toIsoUtc, type VerificationResult, type VerificationRecord } from '@shipcode/shared';
+import { asRow, asRows } from '../utils';
+
+interface VerificationRow {
+  id: string;
+  thread_id: string;
+  plan_id: string;
+  raw_output: string;
+  structured: string | null;
+  result: VerificationRecord['result'];
+  retry_count: number;
+  created_at: string;
+}
 
 export class VerificationQueries {
   constructor(private db: DatabaseSync) {}
@@ -8,15 +26,15 @@ export class VerificationQueries {
   getByThreadId(threadId: string): VerificationRecord[] {
     const rows = this.db
       .prepare('SELECT * FROM verifications WHERE thread_id = ? ORDER BY created_at ASC')
-      .all(threadId) as any[];
-    return rows.map((r) => this.toRecord(r));
+      .all(threadId);
+    return asRows<VerificationRow>(rows).map((r) => this.toRecord(r));
   }
 
   getLatest(threadId: string): VerificationRecord | null {
     const row = this.db
       .prepare('SELECT * FROM verifications WHERE thread_id = ? ORDER BY created_at DESC LIMIT 1')
-      .get(threadId) as any | undefined;
-    return row ? this.toRecord(row) : null;
+      .get(threadId);
+    return row ? this.toRecord(asRow<VerificationRow>(row)) : null;
   }
 
   create(
@@ -28,6 +46,7 @@ export class VerificationQueries {
     const id = nanoid();
     const result = structured?.result ?? 'failed';
     const retryCount = structured ? 0 : 0;
+    const compactRawOutput = clampTextBlock(rawOutput, MAX_PIPELINE_RAW_OUTPUT_CHARS);
     this.db
       .prepare(
         'INSERT INTO verifications (id, thread_id, plan_id, raw_output, structured, result, retry_count) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -36,15 +55,19 @@ export class VerificationQueries {
         id,
         threadId,
         planId,
-        rawOutput,
+        compactRawOutput,
         structured ? JSON.stringify(structured) : null,
         result,
         retryCount,
       );
-    return this.getLatest(threadId)!;
+    const verification = this.getLatest(threadId);
+    if (!verification) {
+      throw new Error(`Failed to load verification after insert for thread ${threadId}`);
+    }
+    return verification;
   }
 
-  private toRecord(row: any): VerificationRecord {
+  private toRecord(row: VerificationRow): VerificationRecord {
     return {
       id: row.id,
       threadId: row.thread_id,

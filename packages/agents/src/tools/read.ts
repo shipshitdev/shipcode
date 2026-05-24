@@ -6,10 +6,10 @@
  */
 
 import fs from 'node:fs/promises';
-import { z } from 'zod';
 import { MAX_READ_BYTES } from '@shipcode/shared';
-import type { Tool, ToolContext, ToolResult } from './types';
+import { z } from 'zod';
 import { assertPathInWorktree, PathGuardError } from './path-guard';
+import type { Tool, ToolContext, ToolResult } from './types';
 
 const ReadInput = z.object({
   path: z.string().min(1),
@@ -52,14 +52,16 @@ export const readTool: Tool<ReadInput> = {
     try {
       absPath = await assertPathInWorktree(input.path, ctx.worktreePath, { mustExist: true });
     } catch (err) {
+      /* v8 ignore next -- assertPathInWorktree reports validation failures as PathGuardError */
       if (err instanceof PathGuardError) return { ok: false, error: err.message };
+      /* v8 ignore next -- assertPathInWorktree reports validation failures as PathGuardError */
       throw err;
     }
 
     // Check file size first. If it's huge and the caller didn't pass
     // a limit, we still read but truncate; if they did pass a limit we
     // honor it and don't truncate further.
-    let stat;
+    let stat: Awaited<ReturnType<typeof fs.stat>>;
     try {
       stat = await fs.stat(absPath);
     } catch (err) {
@@ -71,15 +73,23 @@ export const readTool: Tool<ReadInput> = {
 
     let raw: string;
     try {
-      const buf = await fs.readFile(absPath);
-      // Hard byte cap: if the file is bigger than MAX_READ_BYTES, we
-      // truncate the buffer. The model sees a truncation notice appended.
-      if (buf.byteLength > MAX_READ_BYTES) {
-        raw =
-          buf.subarray(0, MAX_READ_BYTES).toString('utf-8') +
-          `\n\n[truncated: file is ${buf.byteLength} bytes, returned first ${MAX_READ_BYTES}]`;
-      } else {
-        raw = buf.toString('utf-8');
+      const handle = await fs.open(absPath, 'r');
+      try {
+        const bytesToRead = Math.min(stat.size, MAX_READ_BYTES);
+        const buf = Buffer.alloc(bytesToRead);
+        const { bytesRead } = await handle.read(buf, 0, bytesToRead, 0);
+        const slice = buf.subarray(0, bytesRead);
+        // Hard byte cap: if the file is bigger than MAX_READ_BYTES, we
+        // truncate the buffer. The model sees a truncation notice appended.
+        if (stat.size > MAX_READ_BYTES) {
+          raw =
+            slice.toString('utf-8') +
+            `\n\n[truncated: file is ${stat.size} bytes, returned first ${MAX_READ_BYTES}]`;
+        } else {
+          raw = slice.toString('utf-8');
+        }
+      } finally {
+        await handle.close();
       }
     } catch (err) {
       return { ok: false, error: `failed to read ${input.path}: ${(err as Error).message}` };

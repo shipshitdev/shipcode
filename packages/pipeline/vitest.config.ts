@@ -1,7 +1,11 @@
 import { defineConfig } from 'vitest/config';
+import { withCoverage } from '../../vitest.coverage';
 
 export default defineConfig({
-  test: {
-    include: ['src/**/*.test.ts'],
-  },
+  test: withCoverage(
+    {
+      include: ['src/**/*.test.ts'],
+    },
+    ['src/**/*.{ts,tsx}'],
+  ),
 });

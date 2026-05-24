@@ -1,6 +1,13 @@
 import type { ShipCodePlan } from '@shipcode/shared';
 import { REVIEW_FENCE_TAG } from '@shipcode/shared';
-import { resolveSkill, interpolateSkill, type SkillsRowSource, type SkillValidationError } from '../skills';
+import { buildScopedContext, type PromptMaterial } from '../prompt-scope';
+import {
+  interpolateSkill,
+  type ResolveResult,
+  resolveSkill,
+  type SkillsRowSource,
+  type SkillValidationError,
+} from '../skills';
 
 const REVIEW_SCHEMA_DESCRIPTION = `{
   "planId": "<plan-id>",
@@ -31,11 +38,18 @@ export interface ReviewPromptDeps {
   skills: SkillsRowSource;
   /** Called when the resolver fell back from an override to a lower tier (e.g. user override quarantined). */
   onFallback?: (phase: 'adversarial-review', error: SkillValidationError | undefined) => void;
+  onResolved?: (phase: 'adversarial-review', result: ResolveResult) => void;
 }
 
 export interface ReviewPromptOptions {
   contextFiles?: string;
+  promptMaterials?: PromptMaterial[];
   autonomous?: boolean;
+}
+
+function withRepoContext(prompt: string, contextFiles: string): string {
+  if (!contextFiles || prompt.includes(contextFiles)) return prompt;
+  return `${prompt}\n\n<repo_context>\n${contextFiles}\n</repo_context>`;
 }
 
 export function buildReviewPrompt(
@@ -44,19 +58,23 @@ export function buildReviewPrompt(
   deps: ReviewPromptDeps,
   opts: ReviewPromptOptions = {},
 ): string {
-  const { skill, fallbackUsed, error } = resolveSkill(
-    'adversarial-review',
-    context.projectId,
-    deps,
-  );
+  const resolution = resolveSkill('adversarial-review', context.projectId, deps);
+  deps.onResolved?.('adversarial-review', resolution);
+  const { skill, fallbackUsed, error } = resolution;
   if (fallbackUsed) {
     deps.onFallback?.('adversarial-review', error);
   }
-  return interpolateSkill(skill.content, [
+  const semanticMaterials: PromptMaterial[] = [...(opts.promptMaterials ?? [])];
+  const scoped = buildScopedContext('review', semanticMaterials, opts.contextFiles);
+  const prompt = interpolateSkill(skill.content, [
     { key: 'PLAN_JSON', value: JSON.stringify(plan, null, 2) },
     { key: 'TARGET_LABEL', value: `plan ${plan.id}` },
     { key: 'AUTONOMOUS', value: opts.autonomous ? 'yes' : 'no' },
-    { key: 'CONTEXT_FILES', value: opts.contextFiles ?? 'No extra files provided.' },
+    { key: 'CONTEXT_FILES', value: scoped.contextFiles },
     { key: 'OUTPUT_SCHEMA', value: REVIEW_OUTPUT_SCHEMA },
   ]);
+  return withRepoContext(
+    prompt,
+    opts.contextFiles?.trim() ? opts.contextFiles : scoped.contextFiles,
+  );
 }

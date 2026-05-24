@@ -9,7 +9,8 @@
  *
  * Tier 1 rules:
  * - agent 'claude' → claude-cli provider (all phases)
- * - agent 'codex'  → codex-cli provider (review + execute)
+ * - agent 'codex'  → codex-cli provider (all phases)
+ * - agent 'gemini' → gemini-cli provider (all phases)
  * - agent 'openrouter' → openrouter provider (plan/review/revision/verify only)
  * - agent 'gh' is not an LLM agent and is not handled here
  *
@@ -24,6 +25,7 @@ import type { AgentProvider, ProviderPhase, ProviderRegistry } from './types';
 export interface RegistryProviders {
   claude: AgentProvider;
   codex: AgentProvider;
+  gemini?: AgentProvider;
   openrouter: AgentProvider;
 }
 
@@ -33,6 +35,7 @@ export function createProviderRegistry(providers: RegistryProviders): ProviderRe
     [providers.codex.id, providers.codex],
     [providers.openrouter.id, providers.openrouter],
   ]);
+  if (providers.gemini) byId.set(providers.gemini.id, providers.gemini);
 
   function forAgent(agent: AgentType): AgentProvider {
     switch (agent) {
@@ -40,10 +43,17 @@ export function createProviderRegistry(providers: RegistryProviders): ProviderRe
         return providers.claude;
       case 'codex':
         return providers.codex;
+      case 'gemini':
+        if (!providers.gemini) {
+          throw new Error("ProviderRegistry: provider for agent 'gemini' is not registered");
+        }
+        return providers.gemini;
       case 'openrouter':
         return providers.openrouter;
       case 'gh':
         throw new Error("ProviderRegistry: 'gh' is not an LLM agent and has no provider");
+      case 'shell':
+        throw new Error("ProviderRegistry: 'shell' is a bare terminal and has no provider");
     }
   }
 

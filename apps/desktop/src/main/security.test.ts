@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { isSafeExternalUrl } from './security';
 
 describe('isSafeExternalUrl', () => {
@@ -32,7 +32,7 @@ describe('isSafeExternalUrl', () => {
   });
 
   it('rejects URLs longer than 2048 characters', () => {
-    const long = 'https://github.com/foo/bar?q=' + 'a'.repeat(3000);
+    const long = `https://github.com/foo/bar?q=${'a'.repeat(3000)}`;
     const result = isSafeExternalUrl(long);
     expect(result).toEqual({ ok: false, reason: 'length-exceeded' });
   });

@@ -1,17 +1,33 @@
-import { simpleGit, type SimpleGit, type StatusResult } from 'simple-git';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { GitState } from '@shipcode/shared';
 import { normalizeBranches } from '@shipcode/shared';
+import { type SimpleGit, type StatusResult, simpleGit } from 'simple-git';
+
+function isUnavailableGitRepositoryError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /not a git repository|Cannot use simple-git on a directory that does not exist/i.test(
+    message,
+  );
+}
 
 export class GitService {
   private git: SimpleGit;
 
-  constructor(private projectPath: string) {
+  constructor(projectPath: string) {
     this.git = simpleGit(projectPath);
   }
 
-  async getStatus(): Promise<GitState> {
-    const status: StatusResult = await this.git.status();
-    const log = await this.git.log({ maxCount: 1 });
+  async getStatus(
+    worktreePath?: string,
+    compareFallbackRef?: string,
+    options: { preferFallbackRef?: boolean } = {},
+  ): Promise<GitState> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    const status: StatusResult = await git.status();
+    const log = await git.log({ maxCount: 1 });
+    const divergence = await this.getDivergence(git, compareFallbackRef, options);
+    const preCommitHookPath = await this.getPreCommitHookPath(worktreePath);
 
     return {
       branch: status.current ?? 'HEAD',
@@ -20,6 +36,10 @@ export class GitService {
       untrackedCount: status.not_added.length,
       stagedCount: status.staged.length,
       modifiedCount: status.modified.length,
+      aheadCount: divergence.aheadCount,
+      behindCount: divergence.behindCount,
+      compareRef: divergence.compareRef,
+      preCommitHookPath,
     };
   }
 
@@ -28,14 +48,14 @@ export class GitService {
     return git.diff();
   }
 
+  async getDiffAgainstHead(worktreePath?: string): Promise<string> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    return git.diff(['HEAD']);
+  }
+
   async getDiffStat(worktreePath?: string): Promise<string> {
     const git = worktreePath ? simpleGit(worktreePath) : this.git;
     return git.diff(['--stat']);
-  }
-
-  async getDiffFromSha(sha: string, head?: string): Promise<string> {
-    const ref = head ? `${sha}..${head}` : `${sha}..HEAD`;
-    return this.git.diff([ref]);
   }
 
   async commit(message: string, worktreePath?: string): Promise<string> {
@@ -61,12 +81,22 @@ export class GitService {
    * passed `defaultBranch` appears first.
    */
   async fetch(): Promise<void> {
-    await this.git.fetch(['--prune']);
+    try {
+      await this.git.fetch(['--prune']);
+    } catch (error) {
+      if (isUnavailableGitRepositoryError(error)) return;
+      throw error;
+    }
   }
 
   async listBranches(defaultBranch: string): Promise<string[]> {
-    const result = await this.git.branch(['-a']);
-    return normalizeBranches({ raw: result.all, defaultBranch });
+    try {
+      const result = await this.git.branch(['-a']);
+      return normalizeBranches({ raw: result.all, defaultBranch });
+    } catch (error) {
+      if (isUnavailableGitRepositoryError(error)) return [];
+      throw error;
+    }
   }
 
   async getDefaultBranch(): Promise<string> {
@@ -103,5 +133,256 @@ export class GitService {
       message: entry.message,
       date: entry.date,
     }));
+  }
+
+  /** Stage explicit paths only — no `add('.')`. Used by auto-commit splitter. */
+  async addPaths(paths: string[], worktreePath?: string): Promise<void> {
+    if (paths.length === 0) return;
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    await git.raw(['add', '-A', '--', ...paths]);
+  }
+
+  /** Mixed reset to clear the index without touching the working tree. */
+  async resetIndex(worktreePath?: string): Promise<void> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    await git.reset(['--mixed']);
+  }
+
+  /** Commit whatever is currently staged. Does NOT call add('.') first. */
+  async commitStaged(message: string, worktreePath?: string): Promise<string> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    const result = await git.commit(message);
+    return result.commit;
+  }
+
+  /** Names of files currently in the staging area. */
+  async getStagedFiles(worktreePath?: string): Promise<string[]> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    const raw = await git.diff(['--cached', '--name-status']);
+    return raw.split('\n').flatMap((line) => {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) return [];
+
+      const [status, ...paths] = trimmed.split('\t');
+      if (status.startsWith('R') || status.startsWith('C')) {
+        return paths.filter((candidate) => candidate.length > 0);
+      }
+      return paths[0] ? [paths[0]] : [];
+    });
+  }
+
+  /** Force-delete a local branch. */
+  async deleteLocalBranch(branch: string, worktreePath?: string): Promise<void> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    await git.branch(['-D', branch]);
+  }
+
+  /** Delete a remote branch via push --delete. */
+  async deleteRemoteBranch(branch: string, remote = 'origin'): Promise<void> {
+    await this.git.push([remote, '--delete', branch]);
+  }
+
+  async hasRef(ref: string): Promise<boolean> {
+    return this.refExists(this.git, ref);
+  }
+
+  async resolveFirstExistingRef(refs: string[]): Promise<string | null> {
+    for (const ref of refs) {
+      if (await this.hasRef(ref)) return ref;
+    }
+    return null;
+  }
+
+  async isRefMergedInto(ref: string, compareRef: string): Promise<boolean> {
+    if (!(await this.hasRef(ref)) || !(await this.hasRef(compareRef))) return false;
+    try {
+      await this.git.raw(['merge-base', '--is-ancestor', ref, compareRef]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Batch-check dirty state across many worktree paths.
+   * Returns Map<path, isDirty>.
+   */
+  async getDirtyWorktrees(paths: string[]): Promise<Map<string, boolean>> {
+    const out = new Map<string, boolean>();
+    await Promise.all(
+      paths.map(async (p) => {
+        try {
+          const status = await simpleGit(p).status();
+          out.set(p, !status.isClean());
+        } catch {
+          out.set(p, true);
+        }
+      }),
+    );
+    return out;
+  }
+
+  /** Full status for a worktree — used by auto-commit to enumerate dirty set. */
+  async getRawStatus(worktreePath?: string): Promise<StatusResult> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    return git.status();
+  }
+
+  async getPreCommitHookPath(worktreePath?: string): Promise<string | null> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    try {
+      const root = (await git.revparse(['--show-toplevel'])).trim();
+      const configuredPath = (await git.raw(['config', '--get', 'core.hooksPath']).catch(() => ''))
+        .trim()
+        .replace(/^"(.*)"$/, '$1');
+      const gitPath = configuredPath
+        ? ''
+        : (await git.raw(['rev-parse', '--git-path', 'hooks/pre-commit'])).trim();
+      const hookPath = configuredPath
+        ? path.resolve(root, configuredPath, 'pre-commit')
+        : gitPath
+          ? path.resolve(root, gitPath)
+          : '';
+      if (!hookPath || !fs.existsSync(hookPath)) return null;
+      return hookPath;
+    } catch {
+      return null;
+    }
+  }
+
+  async getBranchDivergence(
+    branch: string,
+    compareRef: string,
+  ): Promise<{ aheadCount: number; behindCount: number; compareRef: string | null }> {
+    if (
+      !(await this.refExists(this.git, branch)) ||
+      !(await this.refExists(this.git, compareRef))
+    ) {
+      return { aheadCount: 0, behindCount: 0, compareRef: null };
+    }
+    try {
+      const raw = await this.git.raw([
+        'rev-list',
+        '--left-right',
+        '--count',
+        `${compareRef}...${branch}`,
+      ]);
+      const [behindRaw, aheadRaw] = raw.trim().split(/\s+/);
+      return {
+        aheadCount: Number.parseInt(aheadRaw ?? '0', 10) || 0,
+        behindCount: Number.parseInt(behindRaw, 10) || 0,
+        compareRef,
+      };
+    } catch {
+      return { aheadCount: 0, behindCount: 0, compareRef };
+    }
+  }
+
+  private async getDivergence(
+    git: SimpleGit,
+    compareFallbackRef?: string,
+    options: { preferFallbackRef?: boolean } = {},
+  ): Promise<{ aheadCount: number; behindCount: number; compareRef: string | null }> {
+    const compareRef = await this.resolveCompareRef(git, compareFallbackRef, options);
+    if (!compareRef) return { aheadCount: 0, behindCount: 0, compareRef: null };
+
+    try {
+      const raw = await git.raw(['rev-list', '--left-right', '--count', `${compareRef}...HEAD`]);
+      const [behindRaw, aheadRaw] = raw.trim().split(/\s+/);
+      return {
+        aheadCount: Number.parseInt(aheadRaw ?? '0', 10) || 0,
+        behindCount: Number.parseInt(behindRaw, 10) || 0,
+        compareRef,
+      };
+    } catch {
+      return { aheadCount: 0, behindCount: 0, compareRef };
+    }
+  }
+
+  private async resolveCompareRef(
+    git: SimpleGit,
+    compareFallbackRef?: string,
+    options: { preferFallbackRef?: boolean } = {},
+  ): Promise<string | null> {
+    if (
+      options.preferFallbackRef &&
+      compareFallbackRef &&
+      (await this.refExists(git, compareFallbackRef))
+    ) {
+      return compareFallbackRef;
+    }
+    let upstream = '';
+    try {
+      upstream = (
+        await git.raw(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'])
+      ).trim();
+    } catch {
+      upstream = '';
+    }
+    if (upstream && (await this.refExists(git, upstream))) return upstream;
+    if (compareFallbackRef && (await this.refExists(git, compareFallbackRef))) {
+      return compareFallbackRef;
+    }
+    return null;
+  }
+
+  private async refExists(git: SimpleGit, ref: string): Promise<boolean> {
+    try {
+      await git.raw(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Local branches with metadata used by cleanup-analyzer.
+   * Detects remote-tracking via `git for-each-ref` upstream-shortname.
+   */
+  async listLocalBranchesWithMeta(): Promise<
+    Array<{ name: string; hasRemote: boolean; remoteName: string | null; lastCommitDate: string }>
+  > {
+    const raw = await this.git.raw([
+      'for-each-ref',
+      '--format=%(refname:short)\t%(upstream:short)\t%(committerdate:iso-strict)',
+      'refs/heads',
+    ]);
+    return raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        const [name, upstream, date] = line.split('\t');
+        return {
+          name,
+          hasRemote: !!upstream && upstream.length > 0,
+          remoteName: upstream && upstream.length > 0 ? upstream : null,
+          lastCommitDate: date ?? '',
+        };
+      });
+  }
+
+  async listRemoteBranchesWithMeta(
+    remote = 'origin',
+  ): Promise<Array<{ name: string; remote: string; lastCommitDate: string }>> {
+    const raw = await this.git.raw([
+      'for-each-ref',
+      '--format=%(refname:short)\t%(committerdate:iso-strict)',
+      `refs/remotes/${remote}`,
+    ]);
+    const prefix = `${remote}/`;
+    return raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        const [fullName, date] = line.split('\t');
+        return {
+          name: fullName.startsWith(prefix) ? fullName.slice(prefix.length) : fullName,
+          remote,
+          lastCommitDate: date ?? '',
+        };
+      })
+      .filter((branch) => branch.name !== 'HEAD');
   }
 }

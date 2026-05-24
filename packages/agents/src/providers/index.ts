@@ -1,31 +1,32 @@
-export type {
-  AgentProvider,
-  ProviderPhase,
-  ProviderPhaseHints,
-  ProviderRequest,
-  ProviderResponse,
-  ProviderRegistry,
-  ProviderError,
-  ProviderErrorKind,
-} from './types';
-
 export { createClaudeCliProvider, createCodexCliProvider } from './cli-provider';
-export { createOpenRouterProvider } from './openrouter-provider';
-export type { OpenRouterProviderDeps } from './openrouter-provider';
-export {
-  OpenRouterClient,
-  OpenRouterError,
-} from './openrouter-http';
+export { createGeminiCliProvider } from './gemini-cli-provider';
 export type {
   OpenRouterChatMessage,
   OpenRouterChatRequest,
   OpenRouterChatResult,
+  OpenRouterClientOptions,
+  OpenRouterErrorKind,
   OpenRouterTool,
   OpenRouterToolCall,
   OpenRouterUsage,
-  OpenRouterErrorKind,
-  OpenRouterClientOptions,
 } from './openrouter-http';
+export {
+  OpenRouterClient,
+  OpenRouterError,
+} from './openrouter-http';
+export type { OpenRouterProviderDeps } from './openrouter-provider';
+export { createOpenRouterProvider } from './openrouter-provider';
+export type { RegistryProviders } from './registry';
 
 export { createProviderRegistry } from './registry';
-export type { RegistryProviders } from './registry';
+export type {
+  AgentProvider,
+  ProviderError,
+  ProviderErrorKind,
+  ProviderPhase,
+  ProviderPhaseHints,
+  ProviderRegistry,
+  ProviderRequest,
+  ProviderResponse,
+} from './types';
+export { PHASE_TOOL_POLICIES } from './types';

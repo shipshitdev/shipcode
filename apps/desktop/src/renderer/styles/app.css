@@ -1,0 +1,561 @@
+@import url("tailwindcss");
+@import "tw-animate-css";
+@source "../../../../../node_modules/@shipshitdev/ui/dist";
+@source "../../../../../packages/ui/src/**/*.tsx";
+
+/* ---------------------------------------------------------------------------
+ * Runtime-swappable color variables.
+ * Defined under :root (default) and [data-theme="dark"] so a future
+ * ThemeProvider can flip data-theme without regenerating Tailwind utilities.
+ * ------------------------------------------------------------------------- */
+:root,
+[data-theme="dark"] {
+  --bg-primary: #050607;
+  --bg-secondary: #0c0d10;
+  --bg-tertiary: #131518;
+  --bg-elevated: #1a1c21;
+  --bg-hover: #20232a;
+
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  --text-primary: #f4f4f5;
+  --text-secondary: #b4b4bc;
+  --text-muted: #6b6b78;
+
+  --accent: #fafafa;
+  --accent-foreground: #050607;
+  --accent-hover: #e4e4e7;
+
+  --success: #10b981;
+  --warning: #eab308;
+  --danger: #ef4444;
+  --info: #3b82f6;
+
+  --heatmap-empty: #151b23;
+  --heatmap-1: #0e4429;
+  --heatmap-2: #006d32;
+  --heatmap-3: #26a641;
+  --heatmap-4: #39d353;
+
+  /* Agent activity — distinct from any human-action status. Used for
+	 * "currently being worked on by an AI agent" states (planning, reviewing,
+	 * revising, executing, verifying, shipping). Sky-400 differentiates agent
+	 * (automated) from warning/amber used for human-attention columns. */
+  --agent: #38bdf8;
+
+  /* Done / completed — purple to match the GitHub Projects "Done" column
+	 * dot. Applied to the Done column header dot and completed-card indicators. */
+  --done: #a855f7;
+
+  color-scheme: dark;
+}
+
+/* Shimmer sweep for active pipeline progress bars */
+@keyframes slide-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(500%);
+  }
+}
+
+@keyframes card-flash {
+  0% {
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--agent) 70%, transparent),
+      0 0 22px color-mix(in srgb, var(--agent) 35%, transparent);
+    background-color: color-mix(in srgb, var(--agent) 12%, var(--bg-elevated));
+  }
+  65% {
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--agent) 35%, transparent),
+      0 0 12px color-mix(in srgb, var(--agent) 18%, transparent);
+    background-color: color-mix(in srgb, var(--agent) 6%, var(--bg-elevated));
+  }
+  100% {
+    box-shadow: none;
+    background-color: inherit;
+  }
+}
+
+@keyframes assistant-thinking-letter-tone {
+  0%,
+  100% {
+    color: var(--text-muted);
+  }
+  45% {
+    color: var(--text-primary);
+  }
+  70% {
+    color: var(--text-secondary);
+  }
+}
+
+.assistant-thinking-letter {
+  animation: assistant-thinking-letter-tone 1.45s ease-in-out infinite;
+  animation-delay: calc(var(--thinking-letter-index) * 70ms);
+}
+
+[data-theme="light"] {
+  --bg-primary: #f6f4ef;
+  --bg-secondary: #efeae1;
+  --bg-tertiary: #e6dfd3;
+  --bg-elevated: #fbfaf7;
+  --bg-hover: #ddd3c2;
+
+  --border: rgba(28, 25, 23, 0.1);
+  --border-strong: rgba(28, 25, 23, 0.18);
+
+  --text-primary: #18181b;
+  --text-secondary: #57534e;
+  --text-muted: #8a8175;
+
+  --accent: #111827;
+  --accent-foreground: #fafaf9;
+  --accent-hover: #1f2937;
+
+  --success: #0f9f6e;
+  --warning: #ca8a04;
+  --danger: #dc2626;
+  --info: #2563eb;
+  --heatmap-empty: #ebedf0;
+  --heatmap-1: #9be9a8;
+  --heatmap-2: #40c463;
+  --heatmap-3: #30a14e;
+  --heatmap-4: #216e39;
+  --agent: #0284c7;
+  --done: #7c3aed;
+
+  color-scheme: light;
+}
+
+:root,
+[data-font-style="dm-sans"] {
+  --app-font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+:root,
+[data-font-size="13"] {
+  --app-font-size: 13px;
+}
+
+[data-font-size="12"] {
+  --app-font-size: 12px;
+}
+
+[data-font-size="14"] {
+  --app-font-size: 14px;
+}
+
+[data-font-size="15"] {
+  --app-font-size: 15px;
+}
+
+[data-font-style="system"] {
+  --app-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+[data-font-style="serif"] {
+  --app-font-sans: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+}
+
+/* ---------------------------------------------------------------------------
+ * Tailwind v4 theme — `inline` preserves var() references in generated
+ * utilities so runtime data-theme swaps take effect without a rebuild.
+ * ------------------------------------------------------------------------- */
+@theme inline {
+  /* Border colors — `border-border` / `border-border-strong` */
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  /* Accent / semantic */
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-hover: var(--accent-hover);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --color-agent: var(--agent);
+  --color-done: var(--done);
+
+  --font-sans: var(--app-font-sans);
+  --font-mono: "SF Mono", SFMono-Regular, Consolas, Menlo, monospace;
+
+  --radius-sm: 2px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+
+  --spacing-titlebar: 38px;
+  --spacing-titlebar-plus: 42px;
+}
+
+@utility animate-slide-progress {
+  animation: slide-progress 2s linear infinite;
+}
+
+@utility animate-slide-progress-card {
+  animation: slide-progress 3.4s linear infinite;
+}
+
+@utility animate-card-flash {
+  animation: card-flash 1.45s ease-out;
+}
+
+/* Terminal drawer enter/exit */
+@keyframes terminal-exit {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.terminal-drawer-shell {
+  height: var(--terminal-drawer-height);
+  max-height: 100%;
+  opacity: 1;
+  transition:
+    height 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.terminal-drawer-shell[data-dragging="true"] {
+  transition: none;
+}
+
+@starting-style {
+  .terminal-drawer-shell {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+.assistant-panel-slot {
+  width: 0;
+  transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.assistant-panel-slot[data-open="true"] {
+  width: 390px;
+}
+
+@utility animate-terminal-exit {
+  animation: terminal-exit 180ms ease-in forwards;
+}
+
+/* Settings section content fade-in */
+@keyframes settings-section-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility animate-settings-enter {
+  animation: settings-section-enter 150ms ease-out;
+}
+
+/* View crossfade on navigation */
+@keyframes view-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@utility animate-view-enter {
+  animation: view-fade-in 150ms ease-out;
+}
+
+/* Notification toast enter/exit — slide from right */
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toast-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+  }
+}
+
+@utility animate-toast-enter {
+  animation: toast-enter 220ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@utility animate-toast-exit {
+  animation: toast-exit 200ms ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-progress,
+  .animate-slide-progress-card,
+  .animate-card-flash,
+  .assistant-thinking-letter,
+  .animate-terminal-exit,
+  .animate-settings-enter,
+  .animate-view-enter,
+  .animate-toast-enter,
+  .animate-toast-exit {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced-motion override must beat utility classes */
+    animation: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced-motion override must beat utility transforms */
+    transform: none !important;
+  }
+
+  .terminal-drawer-shell,
+  .assistant-panel-slot {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Background utilities — bg-primary, bg-secondary, bg-tertiary, bg-elevated,
+ * bg-hover. Using @utility so variants (hover:, dark:, etc.) work correctly.
+ * ------------------------------------------------------------------------- */
+@utility bg-primary {
+  background-color: var(--bg-primary);
+}
+@utility bg-secondary {
+  background-color: var(--bg-secondary);
+}
+@utility bg-tertiary {
+  background-color: var(--bg-tertiary);
+}
+@utility bg-elevated {
+  background-color: var(--bg-elevated);
+}
+@utility bg-hover {
+  background-color: var(--bg-hover);
+}
+@utility bg-toast-success {
+  background-color: color-mix(in srgb, var(--success) 25%, var(--bg-elevated));
+}
+@utility bg-toast-warning {
+  background-color: color-mix(in srgb, var(--warning, #f59e0b) 25%, var(--bg-elevated));
+}
+@utility bg-toast-danger {
+  background-color: color-mix(in srgb, var(--danger) 25%, var(--bg-elevated));
+}
+
+/* ---------------------------------------------------------------------------
+ * Text utilities — text-primary, text-secondary, text-muted.
+ * ------------------------------------------------------------------------- */
+@utility text-primary {
+  color: var(--text-primary);
+}
+@utility text-secondary {
+  color: var(--text-secondary);
+}
+@utility text-muted {
+  color: var(--text-muted);
+}
+
+@utility shadow-border {
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+@utility shadow-border-strong {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+@utility shadow-dialog {
+  box-shadow:
+    inset 0 0 0 1px var(--border),
+    0 25px 50px -12px rgba(0, 0, 0, 0.4);
+}
+
+@utility shadow-dropdown {
+  box-shadow:
+    inset 0 0 0 1px var(--border),
+    0 10px 15px -3px rgba(0, 0, 0, 0.3),
+    0 4px 6px -4px rgba(0, 0, 0, 0.3);
+}
+
+/* Electron-specific utilities */
+@utility app-region-drag {
+  -webkit-app-region: drag;
+}
+@utility app-region-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    font-family: var(--font-sans);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: var(--app-font-size);
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--bg-hover);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+  }
+
+  .kanban-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+  .kanban-scroll::-webkit-scrollbar-thumb {
+    background: var(--border);
+  }
+  .kanban-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+  }
+
+  .kanban-board-scroll::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  button,
+  a[href],
+  [role="button"],
+  [role="link"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="option"],
+  [role="tab"],
+  [role="switch"],
+  [role="checkbox"] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  a[aria-disabled="true"],
+  [role="button"][aria-disabled="true"],
+  [role="link"][aria-disabled="true"],
+  [role="menuitem"][aria-disabled="true"],
+  [role="menuitemcheckbox"][aria-disabled="true"],
+  [role="menuitemradio"][aria-disabled="true"],
+  [role="option"][aria-disabled="true"],
+  [role="tab"][aria-disabled="true"],
+  [role="switch"][aria-disabled="true"],
+  [role="checkbox"][aria-disabled="true"],
+  [data-disabled],
+  [data-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  *:focus {
+    outline: none;
+  }
+}
+
+.shipcode-issue-graph {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.shipcode-issue-graph .react-flow__pane,
+.shipcode-issue-graph .react-flow__renderer,
+.shipcode-issue-graph .react-flow__viewport {
+  background: var(--bg-primary);
+}
+
+.shipcode-issue-graph .react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.32);
+}
+
+.shipcode-issue-graph .react-flow__controls-button {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.shipcode-issue-graph .react-flow__controls-button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.shipcode-issue-graph .react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.shipcode-issue-graph .react-flow__minimap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.32);
+}
+
+.shipcode-issue-graph .react-flow__edge {
+  opacity: 0.9;
+}
+
+.shipcode-issue-graph .react-flow__edge-path {
+  stroke-width: 1.8;
+}
+
+.shipcode-issue-graph .react-flow__minimap-mask {
+  fill: rgb(5 6 7 / 0.68);
+}
+
+.shipcode-issue-graph .react-flow__minimap-node {
+  fill: var(--bg-elevated);
+  stroke: var(--border-strong);
+}
+
+.shipcode-issue-graph .react-flow__edge-textbg {
+  fill: var(--bg-elevated);
+  stroke: var(--border);
+}
+
+.shipcode-issue-graph .react-flow__edge-text {
+  fill: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}

@@ -1,13 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  shipCodePlanSchema,
-  planFileChangeSchema,
-  planStepSchema,
-  planReviewSchema,
-  reviewFindingSchema,
-  verificationResultSchema,
   criteriaCheckSchema,
+  parseFeatureQaFlowResults,
+  planFileChangeSchema,
+  planReviewSchema,
+  planStepSchema,
+  reviewFindingSchema,
+  shipCodePlanSchema,
   verificationIssueSchema,
+  verificationResultSchema,
 } from './schemas';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
@@ -31,7 +32,21 @@ const validPlan = {
   version: 1,
   objective: 'Build the auth module',
   files: [validFileChange],
-  steps: [validStep],
+  steps: [
+    validStep,
+    {
+      ...validStep,
+      order: 2,
+      description: 'Wire the behavior into the existing flow',
+      rationale: 'The scaffolding needs to be connected before tests can prove behavior',
+    },
+    {
+      ...validStep,
+      order: 3,
+      description: 'Add verification coverage',
+      rationale: 'The feature needs automated coverage before shipping',
+    },
+  ],
   acceptanceCriteria: ['Users can log in'],
   outOfScope: ['Password reset'],
   estimatedComplexity: 'medium' as const,
@@ -131,11 +146,8 @@ describe('planStepSchema', () => {
     expect(() => planStepSchema.parse({ ...validStep, rationale: '' })).toThrow();
   });
 
-  it('accepts empty files array', () => {
-    expect(planStepSchema.parse({ ...validStep, files: [] })).toEqual({
-      ...validStep,
-      files: [],
-    });
+  it('rejects empty files array', () => {
+    expect(() => planStepSchema.parse({ ...validStep, files: [] })).toThrow();
   });
 });
 
@@ -178,14 +190,49 @@ describe('shipCodePlanSchema', () => {
     }
   });
 
-  it('accepts empty arrays for acceptanceCriteria, outOfScope, dependencies', () => {
+  it('accepts empty dependencies array', () => {
     const plan = {
       ...validPlan,
-      acceptanceCriteria: [],
-      outOfScope: [],
       dependencies: [],
     };
     expect(shipCodePlanSchema.parse(plan)).toEqual(plan);
+  });
+
+  it('rejects empty acceptanceCriteria and outOfScope arrays', () => {
+    expect(() => shipCodePlanSchema.parse({ ...validPlan, acceptanceCriteria: [] })).toThrow();
+    expect(() => shipCodePlanSchema.parse({ ...validPlan, outOfScope: [] })).toThrow();
+  });
+
+  it('requires exactly three ordered plan steps', () => {
+    expect(() =>
+      shipCodePlanSchema.parse({ ...validPlan, steps: validPlan.steps.slice(0, 2) }),
+    ).toThrow();
+    expect(() =>
+      shipCodePlanSchema.parse({
+        ...validPlan,
+        steps: [
+          validPlan.steps[0],
+          { ...validPlan.steps[1], order: 3 },
+          { ...validPlan.steps[2], order: 2 },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it('requires step files to match declared plan files', () => {
+    expect(() =>
+      shipCodePlanSchema.parse({
+        ...validPlan,
+        steps: [{ ...validPlan.steps[0], files: ['src/missing.ts'] }, ...validPlan.steps.slice(1)],
+      }),
+    ).toThrow();
+
+    expect(() =>
+      shipCodePlanSchema.parse({
+        ...validPlan,
+        files: [...validPlan.files, { ...validFileChange, path: 'src/unused.ts' }],
+      }),
+    ).toThrow();
   });
 
   it('rejects missing required fields', () => {
@@ -421,5 +468,28 @@ describe('verificationResultSchema', () => {
         issues: [{ ...validIssue, description: '' }],
       }),
     ).toThrow();
+  });
+});
+
+describe('parseFeatureQaFlowResults', () => {
+  it('returns validated flow results and falls back to an empty array on invalid input', () => {
+    const validFlow = {
+      flowName: 'Create project',
+      passed: true,
+      assertions: [
+        {
+          name: 'Project appears',
+          passed: true,
+          expected: 'Project row exists',
+          actual: 'Project row exists',
+          evidencePath: 'artifacts/project.png',
+        },
+      ],
+      evidencePaths: ['artifacts/project.png'],
+    };
+
+    expect(parseFeatureQaFlowResults([validFlow])).toEqual([validFlow]);
+    expect(parseFeatureQaFlowResults([{ ...validFlow, flowName: '' }])).toEqual([]);
+    expect(parseFeatureQaFlowResults('not-json')).toEqual([]);
   });
 });

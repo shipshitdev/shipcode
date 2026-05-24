@@ -1,19 +1,12 @@
 name: Publish
 
-# Manual-dispatch only until Apple signing / notarization is wired.
-# When CSC_LINK + APPLE_* secrets are available, re-enable the
-# `release: published` trigger below and restore the commented
-# `build-desktop-macos` + `update-homebrew-cask` jobs at the bottom.
-#
-# File renamed from `release.yml` to `publish.yml` because the previous
-# registration cached a stale state where GitHub kept recording 0-job
-# "failure" runs on every push to master even though the workflow has
-# no push trigger. Renaming forces a fresh workflow registration.
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag to publish (e.g. v0.1.0). Must match an existing GitHub release for Linux uploads."
+        description: "Release tag to publish (e.g. v0.1.0). Must match an existing GitHub release."
         required: true
         type: string
       deploy_web:
@@ -26,27 +19,111 @@ on:
         required: false
         type: boolean
         default: true
-      publish_cli:
-        description: "Publish the CLI to npm (requires NPM_TOKEN secret)"
+      build_macos:
+        description: "Build + upload desktop macOS installers (unsigned dmg + zip)"
         required: false
         type: boolean
-        default: false
+        default: true
+      update_homebrew:
+        description: "Update the shipcode cask in shipshitdev/homebrew-tap"
+        required: false
+        type: boolean
+        default: true
+      publish_cli:
+        description: "Publish the CLI to npm via Trusted Publisher"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
 
 env:
-  BUN_VERSION: "1.3.11"
+  BUN_VERSION: "1.3.13"
   NODE_VERSION: "22"
-  VERCEL_PROJECT_ID_WEB: "prj_em8zYt0Lxin5PqxObNI47qBl2fOa"
 
 jobs:
+  validate-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.version.outputs.release_tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release tag and app versions
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+        run: |
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "::error::release_tag is required"
+            exit 1
+          fi
+
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::release_tag must be a v-prefixed semver tag, got '$RELEASE_TAG'"
+            exit 1
+          fi
+
+          VERSION="${RELEASE_TAG#v}"
+          CLI_VERSION=$(node -p "require('./apps/cli/package.json').version")
+          DESKTOP_VERSION=$(node -p "require('./apps/desktop/package.json').version")
+
+          if [ "$CLI_VERSION" != "$DESKTOP_VERSION" ]; then
+            echo "::error::apps/cli ($CLI_VERSION) and apps/desktop ($DESKTOP_VERSION) versions must match"
+            exit 1
+          fi
+
+          if [ "$CLI_VERSION" != "$VERSION" ]; then
+            echo "::error::release tag $RELEASE_TAG does not match app versions $CLI_VERSION"
+            exit 1
+          fi
+
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  release-quality:
+    needs: validate-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install native test dependencies
+        run: sudo apt-get update && sudo apt-get install -y ripgrep build-essential python3
+      - run: bun install --frozen-lockfile
+      - run: bun run format:check
+      - run: bun run lint:repo
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run test:ci
+      - name: Build docs export
+        run: bun run sync:docs
+      - name: Build web
+        run: bun run build:web
+      - name: Build CLI package
+        run: bun run turbo run build --filter=@shipshitdev/shipcode
+      - name: Smoke-test CLI entrypoint
+        run: node apps/cli/dist/index.js --help
+      - name: Build desktop app code
+        run: cd apps/desktop && bun run build:code
+
   deploy-web:
-    if: ${{ inputs.deploy_web }}
+    if: ${{ github.event_name == 'release' || inputs.deploy_web }}
+    needs:
+      - validate-release
+      - release-quality
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ env.VERCEL_PROJECT_ID_WEB }}
+      VERCEL_PROJECT_ID: "prj_em8zYt0Lxin5PqxObNI47qBl2fOa"
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -62,14 +139,17 @@ jobs:
       - name: Sync docs into web bundle
         run: bun run sync:docs
       - name: Pull Vercel project settings
-        run: vercel pull --cwd apps/web --yes --environment=production --token "${{ secrets.VERCEL_TOKEN }}"
+        run: vercel pull --yes --environment=production --token "${{ secrets.VERCEL_TOKEN }}"
       - name: Build Vercel artifact
-        run: vercel build --cwd apps/web --prod --token "${{ secrets.VERCEL_TOKEN }}"
+        run: vercel build --prod --token "${{ secrets.VERCEL_TOKEN }}"
       - name: Deploy web to Vercel production
-        run: vercel deploy --cwd apps/web --prebuilt --prod --token "${{ secrets.VERCEL_TOKEN }}"
+        run: vercel deploy --prebuilt --prod --token "${{ secrets.VERCEL_TOKEN }}"
 
   build-desktop-linux:
-    if: ${{ inputs.build_linux }}
+    if: ${{ github.event_name == 'release' || inputs.build_linux }}
+    needs:
+      - validate-release
+      - release-quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,23 +165,145 @@ jobs:
       - name: Build desktop app
         run: cd apps/desktop && bun run build:code
       - name: Package Linux installers
-        run: cd apps/desktop && npx electron-builder --linux
+        run: cd apps/desktop && npx electron-builder --linux --publish never
       - name: Upload Linux binaries to release
         run: |
-          gh release upload "${{ inputs.release_tag }}" \
+          gh release upload "${{ needs.validate-release.outputs.release_tag }}" \
             apps/desktop/out/*.AppImage \
             apps/desktop/out/*.deb \
             --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  publish-cli:
-    if: ${{ inputs.publish_cli }}
+  build-desktop-macos:
+    if: ${{ github.event_name == 'release' || inputs.build_macos }}
+    needs:
+      - validate-release
+      - release-quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            arch: x64
+          - runner: macos-15
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: bun install
+      - name: Build desktop app
+        run: cd apps/desktop && bun run build:code
+      - name: Package macOS installers
+        run: cd apps/desktop && npx electron-builder --mac --${{ matrix.arch }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Upload macOS binaries to release
+        run: |
+          gh release upload "${{ needs.validate-release.outputs.release_tag }}" \
+            apps/desktop/out/*.dmg \
+            apps/desktop/out/*.zip \
+            --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew-cask:
+    if: ${{ github.event_name == 'release' || (inputs.build_macos && inputs.update_homebrew) }}
+    needs:
+      - validate-release
+      - build-desktop-macos
     runs-on: ubuntu-latest
-    # id-token: write is required for npm Trusted Publishers (OIDC).
-    # contents: read is required for actions/checkout. The job-level
-    # permissions block fully replaces the top-level, so we re-declare
-    # contents: read explicitly.
+    steps:
+      - name: Verify HOMEBREW_TAP_TOKEN secret
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN repository secret not set"
+            exit 1
+          fi
+      - name: Checkout tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: shipshitdev/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          ref: master
+      - name: Download macOS release artifacts
+        run: |
+          gh release download "${{ needs.validate-release.outputs.release_tag }}" \
+            --repo shipshitdev/shipcode \
+            --pattern "*.dmg" \
+            --dir ./artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute SHA256 hashes
+        id: sha
+        run: |
+          ARM_FILE=$(find artifacts -maxdepth 1 -type f -name "*-arm64.dmg" | head -n 1)
+          INTEL_FILE=$(find artifacts -maxdepth 1 -type f -name "*-x64.dmg" | head -n 1)
+          if [ -n "$ARM_FILE" ]; then
+            echo "arm_sha=$(shasum -a 256 "$ARM_FILE" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$INTEL_FILE" ]; then
+            echo "intel_sha=$(shasum -a 256 "$INTEL_FILE" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Verify both SHA256 outputs present
+        run: |
+          if [ -z "${{ steps.sha.outputs.arm_sha }}" ]; then
+            echo "::error::no arm64 dmg found in release artifacts"; exit 1
+          fi
+          if [ -z "${{ steps.sha.outputs.intel_sha }}" ]; then
+            echo "::error::no x64 dmg found in release artifacts"; exit 1
+          fi
+      - name: Update cask version and SHA256
+        run: |
+          cat > Casks/shipcode.rb <<'RUBY'
+          cask "shipcode" do
+            version "${{ needs.validate-release.outputs.version }}"
+            arch arm: "arm64", intel: "x64"
+
+            sha256 arm:   "${{ steps.sha.outputs.arm_sha }}",
+                   intel: "${{ steps.sha.outputs.intel_sha }}"
+
+            url "https://github.com/shipshitdev/shipcode/releases/download/v#{version}/ShipCode-#{version}-#{arch}.dmg",
+                verified: "github.com/shipshitdev/shipcode/"
+            name "ShipCode"
+            desc "AI-driven dev pipeline orchestrator for GitHub issues"
+            homepage "https://shipcode.shipshit.dev"
+
+            app "ShipCode.app"
+
+            zap trash: [
+              "~/Library/Application Support/ShipCode",
+              "~/Library/Logs/ShipCode",
+              "~/Library/Preferences/com.shipcode.app.plist",
+            ]
+          end
+          RUBY
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/shipcode.rb
+          if git diff --cached --quiet; then
+            echo "Cask already matches ${{ needs.validate-release.outputs.release_tag }}; skipping commit."
+            exit 0
+          fi
+          git commit -m "chore: bump shipcode to ${{ needs.validate-release.outputs.release_tag }}"
+          git push
+
+  publish-cli:
+    if: ${{ github.event_name == 'release' || inputs.publish_cli }}
+    needs:
+      - validate-release
+      - release-quality
+    runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
@@ -112,16 +314,13 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
       - run: bun install
       - name: Build CLI and dependencies
         run: bun run turbo run build --filter=@shipshitdev/shipcode
-      - name: Set version from release tag
-        run: |
-          VERSION="${{ inputs.release_tag }}"
-          VERSION="${VERSION#v}"
-          cd apps/cli && npm version "$VERSION" --no-git-tag-version
+      - name: Smoke-test packaged CLI entrypoint
+        run: node apps/cli/dist/index.js --help
       - name: Publish to npm (OIDC / Trusted Publisher)
         run: cd apps/cli && npm publish --access public --provenance
         # No NODE_AUTH_TOKEN. Authentication happens via OIDC — the npm
@@ -129,104 +328,3 @@ jobs:
         # Trusted Publisher config on the package. One-time setup at
         # https://www.npmjs.com/package/@shipshitdev/shipcode/access
         # (Repository: shipshitdev/shipcode, Workflow: publish.yml).
-        #
-        # IMPORTANT: npm's Trusted Publisher binding pins the workflow
-        # filename exactly (case-sensitive, with .yml extension). If you
-        # rename this file you MUST update the "Workflow filename" field
-        # in the npm package's Trusted Publishing settings or
-        # `npm publish --provenance` will fail with an auth error.
-
-# ─────────────────────────────────────────────────────────────────
-# DISABLED until Apple codesigning + notarization are wired.
-#
-# Required secrets (currently NOT set in repo Actions secrets):
-#   - CSC_LINK
-#   - CSC_KEY_PASSWORD
-#   - APPLE_ID
-#   - APPLE_APP_SPECIFIC_PASSWORD
-#   - APPLE_TEAM_ID
-#
-# When those are in place, restore the two jobs below and remove
-# this comment block. Then consider flipping the top trigger back
-# to `on: release: published` so cutting a GH release does everything
-# automatically instead of requiring manual dispatch.
-#
-#  build-desktop-macos:
-#    runs-on: macos-latest
-#    steps:
-#      - uses: actions/checkout@v4
-#      - uses: oven-sh/setup-bun@v2
-#        with:
-#          bun-version: ${{ env.BUN_VERSION }}
-#      - uses: actions/setup-node@v4
-#        with:
-#          node-version: ${{ env.NODE_VERSION }}
-#      - run: bun install
-#      - name: Build desktop app
-#        run: cd apps/desktop && bun run build:code
-#      - name: Package macOS installers
-#        run: cd apps/desktop && npx electron-builder --mac
-#        env:
-#          CSC_LINK: ${{ secrets.CSC_LINK }}
-#          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-#          APPLE_ID: ${{ secrets.APPLE_ID }}
-#          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-#          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-#      - name: Upload macOS binaries to release
-#        run: |
-#          gh release upload "${{ inputs.release_tag }}" \
-#            apps/desktop/out/*.dmg \
-#            apps/desktop/out/*.zip \
-#            --clobber
-#        env:
-#          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#
-#  update-homebrew-cask:
-#    needs: build-desktop-macos
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout tap repo
-#        uses: actions/checkout@v4
-#        with:
-#          repository: shipshitdev/homebrew-shipcode
-#          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-#          ref: master
-#      - name: Download macOS release artifacts
-#        run: |
-#          VERSION="${{ inputs.release_tag }}"
-#          VERSION="${VERSION#v}"
-#          gh release download "v${VERSION}" \
-#            --repo shipshitdev/shipcode \
-#            --pattern "*.dmg" \
-#            --dir ./artifacts
-#        env:
-#          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#      - name: Compute SHA256 hashes
-#        id: sha
-#        run: |
-#          ARM_FILE=$(ls artifacts/*arm64*.dmg 2>/dev/null | head -1)
-#          INTEL_FILE=$(ls artifacts/*.dmg 2>/dev/null | grep -v arm64 | head -1)
-#          if [ -n "$ARM_FILE" ]; then
-#            echo "arm_sha=$(shasum -a 256 "$ARM_FILE" | awk '{print $1}')" >> $GITHUB_OUTPUT
-#          fi
-#          if [ -n "$INTEL_FILE" ]; then
-#            echo "intel_sha=$(shasum -a 256 "$INTEL_FILE" | awk '{print $1}')" >> $GITHUB_OUTPUT
-#          fi
-#      - name: Update cask version and SHA256
-#        run: |
-#          VERSION="${{ inputs.release_tag }}"
-#          VERSION="${VERSION#v}"
-#          sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/shipcode.rb
-#          if [ -n "${{ steps.sha.outputs.arm_sha }}" ]; then
-#            sed -i "s|arm:   \"[a-f0-9]*\"|arm:   \"${{ steps.sha.outputs.arm_sha }}\"|" Casks/shipcode.rb
-#          fi
-#          if [ -n "${{ steps.sha.outputs.intel_sha }}" ]; then
-#            sed -i "s|intel: \"[a-f0-9]*\"|intel: \"${{ steps.sha.outputs.intel_sha }}\"|" Casks/shipcode.rb
-#          fi
-#      - name: Commit and push
-#        run: |
-#          git config user.name "github-actions[bot]"
-#          git config user.email "github-actions[bot]@users.noreply.github.com"
-#          git add Casks/shipcode.rb
-#          git commit -m "chore: bump shipcode to ${{ inputs.release_tag }}"
-#          git push

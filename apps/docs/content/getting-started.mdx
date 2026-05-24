@@ -4,7 +4,7 @@
 
 ShipCode is two separate products that share the same pipeline engine. Pick one:
 
-- **[Desktop App](/desktop/overview)** — full Electron GUI (Kanban board, Mission Control, Terminal drawer, Settings, Plan Viewer). Use this if you want to watch pipelines run, triage issues, and review plans visually.
+- **[Desktop App](/desktop/overview)** — full Electron GUI (Overview, Inbox, Automations, project tabs, Terminal drawer, Settings, Plan Viewer). Use this if you want to watch pipelines run, triage issues, schedule work, and review plans visually.
 - **[CLI](/cli)** — headless `shipcode` command. Use this for terminal-first workflows, CI automation, cron jobs, or server environments without a display.
 
 Both read the same SQLite DB and worktree layout, so you can install both and they stay consistent.
@@ -21,7 +21,7 @@ Both read the same SQLite DB and worktree layout, so you can install both and th
 ## Desktop App
 
 ```bash
-brew tap shipshitdev/shipcode
+brew tap shipshitdev/tap
 brew install --cask shipcode
 ```
 
@@ -40,21 +40,28 @@ shipcode onboard
 shipcode run <issue-number>
 ```
 
-After a global install the command name is `shipcode`, not `@shipshitdev/shipcode` — the scope only appears on the `npx` path.
+The package is published as `@shipshitdev/shipcode`. The bin name stays `shipcode`, so `npx @shipshitdev/shipcode`, `npm install -g @shipshitdev/shipcode`, then `shipcode ...`.
 
 ## Adding a Repository
 
 1. Click **+ Add Repository** in the sidebar
 2. Select your project directory
 3. ShipCode detects git remote and default branch automatically
+4. Open **Project Settings** to configure setup, verification, runtime QA, GitHub Projects sync, and any project-level model overrides
+
+## Starter issue
+
+When the repository is connected to GitHub, ShipCode seeds one starter issue named **Ship your first change with ShipCode**. The issue asks for a tiny, low-risk change so you can run the full loop without inventing a first task.
+
+ShipCode records the starter issue number on the project. If you import the same GitHub repo again, it reuses that metadata instead of creating another starter issue.
 
 ## Your First Pipeline
 
-1. Open the project — the [Kanban Board](/desktop/kanban) is the default view
-2. Click **Refresh** to load GitHub issues
-3. Drag an issue from **Todo** to **Planning**
-4. Watch the pipeline run: Plan → Review → Execute → Verify → Ship — output streams into the [Terminal drawer](/desktop/terminal) at the bottom
-5. When the pipeline finishes, ShipCode opens the PR and links it back to the issue; [Mission Control](/desktop/mission-control) shows the completion
+1. Open the project — **Issues** is the default project tab and contains the [Kanban Board](/desktop/kanban)
+2. Click **Refresh** to load GitHub issues, or create a PRD from the app
+3. Drag an issue from **Todo** to **Planning**, or use auto-run from the board header
+4. Watch the pipeline run: Plan → Review/Revisions → Execute → Test/Runtime QA → Verify → Ship — output streams into the [Terminal drawer](/desktop/terminal)
+5. When the pipeline finishes, ShipCode opens the PR and links it back to the issue; [Overview](/desktop/overview) and [Activity](/desktop/activity) show the completion
 
 ## Next steps
 

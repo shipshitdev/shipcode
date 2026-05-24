@@ -16,6 +16,8 @@ When multiple pipelines are running concurrently, the drawer title shows a dropd
 
 Before the dropdown (Session 25), the drawer used `#N` pill tabs that overflowed once you had more than 3–4 concurrent runs. The dropdown scales to as many runs as you have.
 
+If a run has already been approved but the project's execution capacity is full, the drawer shows **Waiting for execution slot** instead of pretending it still needs approval. The internal thread phase is still `approval`, but the drawer translates that into the real user-facing state.
+
 ## Stream coloring
 
 The terminal highlights output by agent and phase:
@@ -30,6 +32,25 @@ This makes it easy to scan a long run and see which agent was responsible for wh
 ## Cost estimation
 
 The drawer header shows a live cost estimate for the active thread, updated as tokens stream in. This is the same number that ends up in the [Costs view](/desktop/costs), just realtime instead of aggregated.
+
+## Structured event log
+
+The Terminal drawer is the best place to watch live subprocess output, but it is not the only debugging artifact.
+
+ShipCode also writes a structured event log at:
+
+```text
+apps/desktop/logs/events.log
+```
+
+Use `events.log` when you need to reconstruct pipeline behavior after the fact. It records:
+
+- Pipeline start source (`github:start-issue`, `pipeline:start`, retry, approve)
+- Phase transitions
+- Parsed review / verification summaries
+- Approval-gate decisions, including why the runtime chose `approval` or auto-execution
+
+For user-reported pipeline bugs, ask for `events.log` plus the thread ID or GitHub issue number.
 
 ## Keyboard
 

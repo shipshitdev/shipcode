@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "stateDir": ".clawpatch",
+  "include": ["**/*"],
+  "exclude": [
+    "node_modules/**",
+    "dist/**",
+    "out/**",
+    ".next/**",
+    ".turbo/**",
+    ".vercel/**",
+    "coverage/**",
+    ".git/**",
+    ".clawpatch/**",
+    ".code-review-graph/**",
+    ".shipcode/**",
+    ".worktrees/**",
+    "apps/web/public/docs/**",
+    "logs/**",
+    "apps/desktop/logs/**"
+  ],
+  "provider": {
+    "name": "codex",
+    "model": null,
+    "reasoningEffort": "medium"
+  },
+  "commands": {
+    "typecheck": "bun run typecheck",
+    "lint": "bun run lint:repo",
+    "format": "bun run format:check",
+    "test": "bun run test"
+  },
+  "review": {
+    "maxContextFiles": 24,
+    "maxOwnedFiles": 12,
+    "maxFindingsPerFeature": 10,
+    "minConfidenceToFix": "medium"
+  },
+  "git": {
+    "requireCleanWorktreeForFix": true,
+    "commit": false,
+    "openPr": false
+  }
+}

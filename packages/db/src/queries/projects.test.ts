@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../test-helpers';
+import { GitHubIssueQueries } from './github-issues';
 import { ProjectQueries } from './projects';
 
 describe('ProjectQueries', () => {
@@ -24,6 +25,13 @@ describe('ProjectQueries', () => {
     expect(p.defaultBranch).toBe('main');
     expect(p.createdAt).toBeTruthy();
     expect(p.updatedAt).toBeTruthy();
+  });
+
+  it('fails loudly when a newly inserted project cannot be reloaded', () => {
+    const getById = vi.spyOn(projects, 'getById').mockReturnValueOnce(null);
+
+    expect(() => projects.add('/tmp/load-failure')).toThrow('Failed to load project after insert');
+    getById.mockRestore();
   });
 
   it('getById() returns project or null', () => {
@@ -64,9 +72,27 @@ describe('ProjectQueries', () => {
   it('updateGitInfo() updates git_remote and default_branch', () => {
     const p = projects.add('/tmp/a');
     projects.updateGitInfo(p.id, 'git@github.com:foo/bar.git', 'develop');
-    const updated = projects.getById(p.id)!;
+    const updated = projects.getById(p.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected updated project');
     expect(updated.gitRemote).toBe('git@github.com:foo/bar.git');
     expect(updated.defaultBranch).toBe('develop');
+  });
+
+  it('updateName() persists a manual project name', () => {
+    const p = projects.add('/tmp/a');
+    projects.updateName(p.id, 'Acme Dashboard');
+    expect(projects.getById(p.id)?.name).toBe('Acme Dashboard');
+  });
+
+  it('updatePath() preserves a manually renamed project', () => {
+    const p = projects.add('/tmp/old-name');
+    projects.updateName(p.id, 'Customer Portal');
+    projects.updatePath(p.id, '/tmp/new-folder');
+
+    const updated = projects.getById(p.id);
+    expect(updated?.path).toBe('/tmp/new-folder');
+    expect(updated?.name).toBe('Customer Portal');
   });
 
   it('new projects default githubProjectUrl to null', () => {
@@ -77,7 +103,9 @@ describe('ProjectQueries', () => {
   it('updateGithubProjectUrl() persists a value', () => {
     const p = projects.add('/tmp/gp-set');
     projects.updateGithubProjectUrl(p.id, 'https://github.com/orgs/acme/projects/3');
-    const updated = projects.getById(p.id)!;
+    const updated = projects.getById(p.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected updated project URL');
     expect(updated.githubProjectUrl).toBe('https://github.com/orgs/acme/projects/3');
   });
 
@@ -85,14 +113,314 @@ describe('ProjectQueries', () => {
     const p = projects.add('/tmp/gp-clear');
     projects.updateGithubProjectUrl(p.id, 'https://github.com/orgs/acme/projects/3');
     projects.updateGithubProjectUrl(p.id, null);
-    expect(projects.getById(p.id)!.githubProjectUrl).toBeNull();
+    expect(projects.getById(p.id)?.githubProjectUrl).toBeNull();
   });
 
   it('updateGithubProjectUrl() round-trips through list()', () => {
     const p = projects.add('/tmp/gp-list');
     projects.updateGithubProjectUrl(p.id, 'https://github.com/users/alice/projects/7');
-    const fromList = projects.list().find((x) => x.id === p.id)!;
+    const fromList = projects.list().find((x) => x.id === p.id);
+    expect(fromList).toBeTruthy();
+    if (!fromList) throw new Error('Expected project from list');
     expect(fromList.githubProjectUrl).toBe('https://github.com/users/alice/projects/7');
+  });
+
+  it('new projects default model overrides to null', () => {
+    const p = projects.add('/tmp/project-overrides-default');
+    expect(p.plannerModelOverride).toBeNull();
+    expect(p.reviewerModelOverride).toBeNull();
+    expect(p.executorModelOverride).toBeNull();
+    expect(p.verifierModelOverride).toBeNull();
+    expect(p.plannerModelIdOverride).toBeNull();
+    expect(p.reviewerModelIdOverride).toBeNull();
+    expect(p.executorModelIdOverride).toBeNull();
+    expect(p.verifierModelIdOverride).toBeNull();
+    expect(p.plannerReasoningEffortOverride).toBeNull();
+    expect(p.reviewerReasoningEffortOverride).toBeNull();
+    expect(p.executorReasoningEffortOverride).toBeNull();
+    expect(p.verifierReasoningEffortOverride).toBeNull();
+    expect(p.revisionCountOverride).toBeNull();
+    expect(p.requireApprovalOverride).toBeNull();
+    expect(p.pipelineSpeedProfileOverride).toBeNull();
+    expect(p.discordRouting).toBe('inherit');
+    expect(p.discordWebhookUrlOverride).toBeNull();
+    expect(p.telegramRouting).toBe('inherit');
+    expect(p.telegramChatIdOverride).toBeNull();
+  });
+
+  it('updateModelOverrides() persists values and clears back to null', () => {
+    const p = projects.add('/tmp/project-overrides-set');
+    projects.updateModelOverrides(p.id, {
+      plannerModelOverride: 'openrouter',
+      reviewerModelOverride: 'claude',
+      executorModelOverride: 'codex',
+      verifierModelOverride: 'claude',
+      plannerModelIdOverride: 'openrouter/auto',
+      reviewerModelIdOverride: 'claude-opus-4-6',
+      executorModelIdOverride: 'gpt-5.4',
+      verifierModelIdOverride: 'claude-sonnet-4-6',
+      plannerReasoningEffortOverride: 'low',
+      reviewerReasoningEffortOverride: 'medium',
+      executorReasoningEffortOverride: 'high',
+      verifierReasoningEffortOverride: 'medium',
+      revisionCountOverride: 3,
+      requireApprovalOverride: true,
+      pipelineSpeedProfileOverride: 'thorough',
+      prdQualityGate: true,
+    });
+
+    let updated = projects.getById(p.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected updated project overrides');
+    expect(updated.plannerModelOverride).toBe('openrouter');
+    expect(updated.reviewerModelOverride).toBe('claude');
+    expect(updated.executorModelOverride).toBe('codex');
+    expect(updated.verifierModelOverride).toBe('claude');
+    expect(updated.plannerModelIdOverride).toBe('openrouter/auto');
+    expect(updated.reviewerModelIdOverride).toBe('claude-opus-4-6');
+    expect(updated.executorModelIdOverride).toBe('gpt-5.4');
+    expect(updated.verifierModelIdOverride).toBe('claude-sonnet-4-6');
+    expect(updated.plannerReasoningEffortOverride).toBe('low');
+    expect(updated.reviewerReasoningEffortOverride).toBe('medium');
+    expect(updated.executorReasoningEffortOverride).toBe('high');
+    expect(updated.verifierReasoningEffortOverride).toBe('medium');
+    expect(updated.revisionCountOverride).toBe(3);
+    expect(updated.requireApprovalOverride).toBe(true);
+    expect(updated.pipelineSpeedProfileOverride).toBe('thorough');
+    expect(updated.prdQualityGate).toBe(true);
+
+    projects.updateModelOverrides(p.id, {
+      plannerModelOverride: null,
+      reviewerModelOverride: null,
+      executorModelOverride: null,
+      verifierModelOverride: null,
+      plannerModelIdOverride: null,
+      reviewerModelIdOverride: null,
+      executorModelIdOverride: null,
+      verifierModelIdOverride: null,
+      plannerReasoningEffortOverride: null,
+      reviewerReasoningEffortOverride: null,
+      executorReasoningEffortOverride: null,
+      verifierReasoningEffortOverride: null,
+      revisionCountOverride: null,
+      requireApprovalOverride: null,
+      pipelineSpeedProfileOverride: null,
+      prdQualityGate: null,
+    });
+
+    updated = projects.getById(p.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected cleared project overrides');
+    expect(updated.plannerModelOverride).toBeNull();
+    expect(updated.reviewerModelOverride).toBeNull();
+    expect(updated.executorModelOverride).toBeNull();
+    expect(updated.verifierModelOverride).toBeNull();
+    expect(updated.plannerModelIdOverride).toBeNull();
+    expect(updated.reviewerModelIdOverride).toBeNull();
+    expect(updated.executorModelIdOverride).toBeNull();
+    expect(updated.verifierModelIdOverride).toBeNull();
+    expect(updated.plannerReasoningEffortOverride).toBeNull();
+    expect(updated.reviewerReasoningEffortOverride).toBeNull();
+    expect(updated.executorReasoningEffortOverride).toBeNull();
+    expect(updated.verifierReasoningEffortOverride).toBeNull();
+    expect(updated.revisionCountOverride).toBeNull();
+    expect(updated.requireApprovalOverride).toBeNull();
+    expect(updated.pipelineSpeedProfileOverride).toBeNull();
+    expect(updated.prdQualityGate).toBeNull();
+  });
+
+  it('rejects invalid project pipeline speed override', () => {
+    const p = projects.add('/tmp/project-overrides-invalid');
+
+    expect(() =>
+      projects.updateModelOverrides(p.id, {
+        plannerModelOverride: null,
+        reviewerModelOverride: null,
+        executorModelOverride: null,
+        verifierModelOverride: null,
+        plannerModelIdOverride: null,
+        reviewerModelIdOverride: null,
+        executorModelIdOverride: null,
+        verifierModelIdOverride: null,
+        plannerReasoningEffortOverride: null,
+        reviewerReasoningEffortOverride: null,
+        executorReasoningEffortOverride: null,
+        verifierReasoningEffortOverride: null,
+        revisionCountOverride: null,
+        requireApprovalOverride: null,
+        pipelineSpeedProfileOverride: 'fast' as unknown as 'smart_fast',
+        prdQualityGate: null,
+      }),
+    ).toThrow('pipelineSpeedProfileOverride');
+  });
+
+  it('persists GitHub repo identity and starter issue metadata', () => {
+    const project = projects.add('/tmp/repo-identity', {
+      githubRepoId: 'R_kgDOStarter',
+      githubRepoFullName: 'shipshitdev/shipcode',
+    });
+
+    expect(project.githubRepoId).toBe('R_kgDOStarter');
+    expect(project.githubRepoFullName).toBe('shipshitdev/shipcode');
+    expect(projects.getByGithubRepoIdentity('R_kgDOStarter', null)?.id).toBe(project.id);
+
+    projects.markStarterIssueSeeded(project.id, {
+      starterIssueNumber: 101,
+      starterIssueCreatedAt: '2026-04-21T10:00:00.000Z',
+    });
+
+    const updated = projects.getById(project.id);
+    expect(updated?.starterIssueNumber).toBe(101);
+    expect(updated?.starterIssueCreatedAt).toBe('2026-04-21T10:00:00.000Z');
+  });
+
+  it('updates existing project identity on idempotent add and can resolve by full name fallback', () => {
+    const project = projects.add('/tmp/repo-identity-update');
+
+    const restored = projects.add('/tmp/repo-identity-update', {
+      githubRepoId: null,
+      githubRepoFullName: 'shipshitdev/shipcode',
+    });
+
+    expect(restored.id).toBe(project.id);
+    expect(restored.githubRepoId).toBeNull();
+    expect(restored.githubRepoFullName).toBe('shipshitdev/shipcode');
+    expect(projects.getByGithubRepoIdentity(null, 'shipshitdev/shipcode')?.id).toBe(project.id);
+    expect(projects.getByGithubRepoIdentity('missing', 'shipshitdev/shipcode')?.id).toBe(
+      project.id,
+    );
+    expect(projects.getByGithubRepoIdentity(null, null)).toBeNull();
+  });
+
+  it('clears full name when an idempotent add only provides a repo id', () => {
+    const project = projects.add('/tmp/repo-identity-id-only', {
+      githubRepoFullName: 'shipshitdev/old',
+    });
+
+    const restored = projects.add(project.path, {
+      githubRepoId: 'R_kgDOOnlyId',
+    });
+
+    expect(restored.githubRepoId).toBe('R_kgDOOnlyId');
+    expect(restored.githubRepoFullName).toBeNull();
+    expect(projects.getByGithubRepoIdentity(null, 'missing/repo')).toBeNull();
+  });
+
+  it('fails loudly when a restored project cannot be reloaded', () => {
+    const project = projects.add('/tmp/reload-restored');
+    const getById = vi.spyOn(projects, 'getById').mockReturnValueOnce(null);
+
+    expect(() => projects.add(project.path)).toThrow(
+      `Failed to load restored project: ${project.id}`,
+    );
+    getById.mockRestore();
+  });
+
+  it('uses current time when starter issue creation time is omitted', () => {
+    const project = projects.add('/tmp/repo-starter-now');
+
+    projects.markStarterIssueSeeded(project.id, { starterIssueNumber: 202 });
+
+    const updated = projects.getById(project.id);
+    expect(updated?.starterIssueNumber).toBe(202);
+    expect(updated?.starterIssueCreatedAt).toBeTruthy();
+  });
+
+  it('updates individual git fields and notification handle', () => {
+    const project = projects.add('/tmp/repo-individual-fields');
+
+    projects.updateDefaultBranch(project.id, 'develop');
+    projects.updateGitRemote(project.id, 'git@github.com:shipshitdev/shipcode.git');
+    projects.updateNotifyGithubUser(project.id, '@decod3rs');
+
+    let updated = projects.getById(project.id);
+    expect(updated?.defaultBranch).toBe('develop');
+    expect(updated?.gitRemote).toBe('git@github.com:shipshitdev/shipcode.git');
+    expect(updated?.notifyGithubUser).toBe('@decod3rs');
+
+    projects.updateGitRemote(project.id, null);
+    projects.updateNotifyGithubUser(project.id, '');
+    updated = projects.getById(project.id);
+    expect(updated?.gitRemote).toBeNull();
+    expect(updated?.notifyGithubUser).toBeNull();
+  });
+
+  it('round-trips GitHub status mappings and migrates legacy values', () => {
+    const project = projects.add('/tmp/repo-status-mapping');
+
+    projects.setGithubStatusMapping(project.id, {
+      todo: { name: 'Todo', color: 'GREEN' },
+      inProgress: { name: 'In Progress', color: null },
+      humanReview: null,
+      done: { name: 'Done', color: 'PURPLE' },
+    });
+
+    expect(projects.getById(project.id)?.githubStatusMapping).toEqual({
+      todo: { name: 'Todo', color: 'GREEN' },
+      inProgress: { name: 'In Progress', color: null },
+      humanReview: null,
+      done: { name: 'Done', color: 'PURPLE' },
+    });
+
+    db.prepare('UPDATE projects SET github_status_mapping = ? WHERE id = ?').run(
+      JSON.stringify({
+        todo: 'Todo',
+        inProgress: { name: 'Doing', color: 3 },
+        humanReview: { name: 12, color: 'RED' },
+        done: 12,
+      }),
+      project.id,
+    );
+
+    expect(projects.getById(project.id)?.githubStatusMapping).toEqual({
+      todo: { name: 'Todo', color: null },
+      inProgress: { name: 'Doing', color: null },
+      humanReview: null,
+      done: null,
+    });
+
+    db.prepare('UPDATE projects SET github_status_mapping = ? WHERE id = ?').run(
+      JSON.stringify('legacy'),
+      project.id,
+    );
+    expect(projects.getById(project.id)?.githubStatusMapping).toEqual({
+      todo: null,
+      inProgress: null,
+      humanReview: null,
+      done: null,
+    });
+
+    projects.clearGithubStatusMapping(project.id);
+    expect(projects.getById(project.id)?.githubStatusMapping).toBeNull();
+  });
+
+  it('updateNotificationRouting() persists values and clears back to inherit/null', () => {
+    const p = projects.add('/tmp/project-routing-set');
+    projects.updateNotificationRouting(p.id, {
+      discordRouting: 'custom',
+      discordWebhookUrlOverride: 'https://discord.com/api/webhooks/123/abc',
+      telegramRouting: 'custom',
+      telegramChatIdOverride: '-1001234567890',
+    });
+
+    let updated = projects.getById(p.id);
+    expect(updated?.discordRouting).toBe('custom');
+    expect(updated?.discordWebhookUrlOverride).toBe('https://discord.com/api/webhooks/123/abc');
+    expect(updated?.telegramRouting).toBe('custom');
+    expect(updated?.telegramChatIdOverride).toBe('-1001234567890');
+
+    projects.updateNotificationRouting(p.id, {
+      discordRouting: 'inherit',
+      discordWebhookUrlOverride: null,
+      telegramRouting: 'disabled',
+      telegramChatIdOverride: null,
+    });
+
+    updated = projects.getById(p.id);
+    expect(updated?.discordRouting).toBe('inherit');
+    expect(updated?.discordWebhookUrlOverride).toBeNull();
+    expect(updated?.telegramRouting).toBe('disabled');
+    expect(updated?.telegramChatIdOverride).toBeNull();
   });
 
   it('add() is idempotent: re-adding same path returns existing row', () => {
@@ -105,11 +433,54 @@ describe('ProjectQueries', () => {
   it('add() restores an archived project when re-adding its path', () => {
     const p = projects.add('/tmp/old');
     expect(projects.archiveIfIdle(p.id)).toBe(true);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
 
     const restored = projects.add('/tmp/old');
     expect(restored.id).toBe(p.id);
     expect(restored.archived).toBe(false);
+  });
+
+  it('add() resets queued issues to todo when restoring an archived project', () => {
+    const issues = new GitHubIssueQueries(db);
+    const p = projects.add('/tmp/restore-queue');
+    const issue = issues.upsert({
+      projectId: p.id,
+      issueNumber: 1,
+      title: 'Stale issue',
+      body: '',
+      labels: [],
+      assignee: null,
+      state: 'open',
+    });
+    issues.updatePipelineStatus(issue.id, 'queued');
+    expect(projects.archiveIfIdle(p.id)).toBe(true);
+
+    projects.add('/tmp/restore-queue');
+
+    const after = issues.getByNumber(p.id, 1);
+    expect(after?.pipelineStatus).toBe('todo');
+    expect(after?.lastPhaseUpdate).toBeNull();
+  });
+
+  it('unarchive() resets queued issues to todo', () => {
+    const issues = new GitHubIssueQueries(db);
+    const p = projects.add('/tmp/unarchive-queue');
+    const issue = issues.upsert({
+      projectId: p.id,
+      issueNumber: 1,
+      title: 'Stale issue',
+      body: '',
+      labels: [],
+      assignee: null,
+      state: 'open',
+    });
+    issues.updatePipelineStatus(issue.id, 'queued');
+    expect(projects.archiveIfIdle(p.id)).toBe(true);
+
+    projects.unarchive(p.id);
+
+    const after = issues.getByNumber(p.id, 1);
+    expect(after?.pipelineStatus).toBe('todo');
   });
 
   // === listVisible / listArchived ===
@@ -129,13 +500,48 @@ describe('ProjectQueries', () => {
     expect(all.length).toBe(2);
   });
 
+  it('getOrCreateInstantProject creates a hidden reusable project', () => {
+    const first = projects.getOrCreateInstantProject('/Users/tester');
+    const second = projects.getOrCreateInstantProject('/ignored');
+
+    expect(first.id).toBe(second.id);
+    expect(first.name).toBe(ProjectQueries.INSTANT_PROJECT_NAME);
+    expect(first.path).toBe('/Users/tester');
+    expect(first.hidden).toBe(true);
+    expect(projects.listVisible().some((project) => project.id === first.id)).toBe(false);
+  });
+
+  it('fails loudly when an instant project cannot be reloaded after creation', () => {
+    const getById = vi.spyOn(projects, 'getById').mockReturnValueOnce(null);
+
+    expect(() => projects.getOrCreateInstantProject('/Users/tester')).toThrow(
+      'Failed to create instant project',
+    );
+    getById.mockRestore();
+  });
+
+  it('normalizes blank project timestamps to null', () => {
+    const project = projects.add('/tmp/raw-project-fields');
+    db.prepare(
+      `UPDATE projects
+          SET created_at = '',
+              updated_at = ''
+        WHERE id = ?`,
+    ).run(project.id);
+
+    expect(projects.getById(project.id)).toMatchObject({
+      createdAt: null,
+      updatedAt: null,
+    });
+  });
+
   // === hasLiveWork / archiveIfIdle / removeIfIdle ===
 
   it('archiveIfIdle() succeeds on a project with no live work', () => {
     const p = projects.add('/tmp/quiet');
     expect(projects.hasLiveWork(p.id)).toBe(false);
     expect(projects.archiveIfIdle(p.id)).toBe(true);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
   });
 
   it('archiveIfIdle() is blocked by a thread in an active status', () => {
@@ -145,7 +551,7 @@ describe('ProjectQueries', () => {
     ).run(p.id);
     expect(projects.hasLiveWork(p.id)).toBe(true);
     expect(projects.archiveIfIdle(p.id)).toBe(false);
-    expect(projects.getById(p.id)!.archived).toBe(false);
+    expect(projects.getById(p.id)?.archived).toBe(false);
   });
 
   it('completed threads do NOT block archive/remove', () => {
@@ -174,6 +580,19 @@ describe('ProjectQueries', () => {
     expect(projects.archiveIfIdle(p.id)).toBe(false);
   });
 
+  it('archiveIfIdle() can ignore stale notifications during missing-repo cleanup', () => {
+    const p = projects.add('/tmp/notif-missing');
+    db.prepare(
+      "INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t-notif-missing', ?, 'title', 'prompt', 'completed')",
+    ).run(p.id);
+    db.prepare(
+      "INSERT INTO notifications (id, thread_id, project_id, kind, title, body) VALUES ('n-missing', 't-notif-missing', ?, 'test', 'title', 'body')",
+    ).run(p.id);
+    expect(projects.hasLiveWork(p.id)).toBe(true);
+    expect(projects.hasLiveWork(p.id, { ignoreAttentionOnly: true })).toBe(false);
+    expect(projects.archiveIfIdle(p.id, { ignoreAttentionOnly: true })).toBe(true);
+  });
+
   it('archiveIfIdle() is blocked by a claimed github_issue_cache row (orphaned-claim case)', () => {
     const p = projects.add('/tmp/claimed');
     db.prepare(
@@ -185,6 +604,18 @@ describe('ProjectQueries', () => {
     expect(projects.removeIfIdle(p.id)).toBe(false);
   });
 
+  it('removeIfIdle() can ignore stale claimed issues during missing-repo cleanup', () => {
+    const p = projects.add('/tmp/claimed-missing');
+    db.prepare(
+      `INSERT INTO github_issue_cache (id, project_id, issue_number, title, claimed_at, claimed_by)
+       VALUES ('i-missing', ?, 1, 'title', datetime('now'), 'bot')`,
+    ).run(p.id);
+    expect(projects.hasLiveWork(p.id)).toBe(true);
+    expect(projects.hasLiveWork(p.id, { ignoreAttentionOnly: true })).toBe(false);
+    expect(projects.removeIfIdle(p.id, { ignoreAttentionOnly: true })).toBe(true);
+    expect(projects.getById(p.id)).toBeNull();
+  });
+
   it('removeIfIdle() returns false when live work appears', () => {
     const p = projects.add('/tmp/race');
     db.prepare(
@@ -194,16 +625,26 @@ describe('ProjectQueries', () => {
     expect(projects.getById(p.id)).not.toBeNull();
   });
 
+  it('ignoreAttentionOnly still blocks active thread work', () => {
+    const p = projects.add('/tmp/busy-missing');
+    db.prepare(
+      "INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t-busy', ?, 'title', 'prompt', 'executing')",
+    ).run(p.id);
+    expect(projects.hasLiveWork(p.id, { ignoreAttentionOnly: true })).toBe(true);
+    expect(projects.archiveIfIdle(p.id, { ignoreAttentionOnly: true })).toBe(false);
+    expect(projects.removeIfIdle(p.id, { ignoreAttentionOnly: true })).toBe(false);
+  });
+
   // === auto-unarchive triggers ===
 
   it('trigger: inserting a new thread on an archived project unarchives it', () => {
     const p = projects.add('/tmp/trigger-thread');
     projects.archiveIfIdle(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
     db.prepare(
       "INSERT INTO threads (id, project_id, title, prompt) VALUES ('t1', ?, 'title', 'prompt')",
     ).run(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(false);
+    expect(projects.getById(p.id)?.archived).toBe(false);
   });
 
   it('trigger: inserting a new notification on an archived project unarchives it', () => {
@@ -215,21 +656,21 @@ describe('ProjectQueries', () => {
       "INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t-notif', ?, 'title', 'prompt', 'completed')",
     ).run(p.id);
     projects.archiveIfIdle(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
     db.prepare(
       "INSERT INTO notifications (id, thread_id, project_id, kind, title, body) VALUES ('n1', 't-notif', ?, 'test', 'title', 'body')",
     ).run(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(false);
+    expect(projects.getById(p.id)?.archived).toBe(false);
   });
 
   it('trigger: inserting a new github_issue_cache row on an archived project unarchives it', () => {
     const p = projects.add('/tmp/trigger-issue');
     projects.archiveIfIdle(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
     db.prepare(
       `INSERT INTO github_issue_cache (id, project_id, issue_number, title) VALUES ('i1', ?, 1, 'title')`,
     ).run(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(false);
+    expect(projects.getById(p.id)?.archived).toBe(false);
   });
 
   it('trigger: updating claimed_at on a cached issue unarchives the project', () => {
@@ -240,10 +681,10 @@ describe('ProjectQueries', () => {
     ).run(p.id);
     // Now archive the project (the insert already fired the trigger — re-archive)
     projects.archiveIfIdle(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
     // Transition claimed_at NULL → non-NULL
     db.prepare(`UPDATE github_issue_cache SET claimed_at = datetime('now') WHERE id = 'i1'`).run();
-    expect(projects.getById(p.id)!.archived).toBe(false);
+    expect(projects.getById(p.id)?.archived).toBe(false);
   });
 
   it('trigger: metadata updates on a cached issue do NOT unarchive', () => {
@@ -252,10 +693,10 @@ describe('ProjectQueries', () => {
       `INSERT INTO github_issue_cache (id, project_id, issue_number, title) VALUES ('i1', ?, 1, 'title')`,
     ).run(p.id);
     projects.archiveIfIdle(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
     // Update only title — claimed_at stays NULL
     db.prepare(`UPDATE github_issue_cache SET title = 'new title' WHERE id = 'i1'`).run();
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
   });
 
   // === pin ===
@@ -264,17 +705,19 @@ describe('ProjectQueries', () => {
     const p = projects.add('/tmp/pin');
     expect(p.pinned).toBe(false);
     projects.pin(p.id, true);
-    expect(projects.getById(p.id)!.pinned).toBe(true);
+    expect(projects.getById(p.id)?.pinned).toBe(true);
     projects.pin(p.id, false);
-    expect(projects.getById(p.id)!.pinned).toBe(false);
+    expect(projects.getById(p.id)?.pinned).toBe(false);
   });
 
   it('archiveIfIdle() clears pinned state as a side effect', () => {
     const p = projects.add('/tmp/pin-then-archive');
     projects.pin(p.id, true);
-    expect(projects.getById(p.id)!.pinned).toBe(true);
+    expect(projects.getById(p.id)?.pinned).toBe(true);
     expect(projects.archiveIfIdle(p.id)).toBe(true);
-    const after = projects.getById(p.id)!;
+    const after = projects.getById(p.id);
+    expect(after).toBeTruthy();
+    if (!after) throw new Error('Expected archived project');
     expect(after.archived).toBe(true);
     expect(after.pinned).toBe(false);
   });

@@ -41,13 +41,13 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { z } from 'zod';
 import {
-  SHELL_ALLOWLIST,
-  SHELL_EXEC_TIMEOUT_MS,
   GIT_ALLOWED_SUBCOMMANDS,
   GIT_BLOCKED_GLOBAL_OPTION_PREFIXES,
+  SHELL_ALLOWLIST,
+  SHELL_EXEC_TIMEOUT_MS,
 } from '@shipcode/shared';
+import { z } from 'zod';
 import type { Tool, ToolContext, ToolResult } from './types';
 
 const execFileAsync = promisify(execFile);
@@ -124,6 +124,15 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
 
+    // Reject argv arguments that are absolute paths or contain `..` —
+    // they could read files outside the worktree (e.g. `cat /etc/passwd`).
+    if (input.command !== 'git') {
+      const pathViolation = validateArgvPaths(input.args, resolvedCwd);
+      if (pathViolation !== null) {
+        return { ok: false, error: pathViolation };
+      }
+    }
+
     if (ctx.signal.aborted) return { ok: false, error: 'aborted' };
 
     try {
@@ -173,6 +182,46 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
 };
 
 /**
+ * Reject argv arguments that look like absolute paths or contain `..`
+ * segments that resolve outside the worktree. This prevents the model
+ * from using allowlisted read-only binaries (cat, head, grep, etc.)
+ * to exfiltrate host secrets via absolute paths.
+ */
+function validateArgvPaths(args: string[], resolvedCwd: string): string | null {
+  const cwdBoundary = path.normalize(resolvedCwd) + path.sep;
+  for (const arg of args) {
+    const value = arg.includes('=') ? (arg.split('=').pop() ?? arg) : arg;
+    if (path.isAbsolute(value)) {
+      return `absolute paths are not allowed in shell args (got '${arg}'). Use paths relative to the worktree.`;
+    }
+    if (arg.startsWith('-')) continue;
+    if (path.isAbsolute(arg)) {
+      return `absolute paths are not allowed in shell args (got '${arg}'). Use paths relative to the worktree.`;
+    }
+    const resolved = path.resolve(resolvedCwd, arg);
+    const norm = path.normalize(resolved);
+    if (norm !== path.normalize(resolvedCwd) && !norm.startsWith(cwdBoundary)) {
+      return `arg '${arg}' resolves outside the worktree. Use paths relative to the worktree root.`;
+    }
+  }
+  return null;
+}
+
+/** Git subcommand-specific flags that execute programs or write files. */
+const GIT_DANGEROUS_SUBCOMMAND_FLAGS = new Set([
+  '--help',
+  '-h',
+  '--no-index',
+  '--exec',
+  '--ext-diff',
+  '--textconv',
+  '--open-files-in-pager',
+  '-O',
+  '--output',
+  '--output-directory',
+]);
+
+/**
  * Walk git's arg list, rejecting any global option that can:
  *   - redirect the effective cwd/worktree (`-C`, `--git-dir`, `--work-tree`)
  *   - inject shell via aliases (`-c alias.X=!...`, `--config-env`, `-c core.sshCommand=...`)
@@ -184,7 +233,7 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
  * Returns null on success, or an error message on rejection.
  */
 function validateGitArgs(args: string[]): string | null {
-  let i = 0;
+  const i = 0;
   while (i < args.length) {
     const arg = args[i];
 
@@ -200,26 +249,14 @@ function validateGitArgs(args: string[]): string | null {
       return `git arg '${arg}' is blocked (prefix '${blockedPrefix}' can escape the worktree or alter git behavior).`;
     }
 
-    // -c name=value : one-off config. Reject aliases (which can inject
-    // shell via `!`) and any ssh/gpg/pager command override that could
-    // execute arbitrary binaries.
+    // One-off config is unnecessary for read-only model tooling and has
+    // too many command-hook surfaces (`man.*.cmd`, `browser.*.cmd`,
+    // `diff.external`, aliases, pagers, etc.). Reject every form.
     if (arg === '-c') {
-      const value = args[i + 1];
-      if (typeof value !== 'string') {
-        return `git '-c' missing value`;
-      }
-      const rejection = validateGitConfigValue(value);
-      if (rejection !== null) return rejection;
-      i += 2;
-      continue;
+      return `git '-c' is blocked for read-only shell calls.`;
     }
     if (arg.startsWith('-c') && arg.length > 2) {
-      // Stuck form `-cname=value`
-      const value = arg.slice(2);
-      const rejection = validateGitConfigValue(value);
-      if (rejection !== null) return rejection;
-      i++;
-      continue;
+      return `git '${arg}' is blocked for read-only shell calls.`;
     }
 
     // Once we hit a non-option arg, that's the subcommand. Require it
@@ -228,9 +265,30 @@ function validateGitArgs(args: string[]): string | null {
       if (!GIT_ALLOWED_SET.has(arg)) {
         return `git subcommand '${arg}' is not in the read-only allowlist (${GIT_ALLOWED_SUBCOMMANDS.join(', ')}). Use the edit/write tools for file changes.`;
       }
-      // Stop scanning — anything after the subcommand is that
-      // subcommand's own args, and we trust our subcommand allowlist
-      // to mean "these are read-only and do not take shell-injection flags".
+      // Scan post-subcommand args for flags that execute programs or
+      // write files, bypassing the read-only contract.
+      for (let j = i + 1; j < args.length; j++) {
+        const subArg = args[j];
+        if (GIT_DANGEROUS_SUBCOMMAND_FLAGS.has(subArg)) {
+          return `git flag '${subArg}' is blocked (can execute programs or write files outside the worktree).`;
+        }
+        if (subArg.startsWith('--no-index=')) {
+          return `git flag '${subArg}' is blocked (can read paths outside the worktree).`;
+        }
+        // Also catch --output=<path> and -O<cmd> stuck forms
+        if (subArg.startsWith('--output=') || subArg.startsWith('--output-directory=')) {
+          return `git flag '${subArg}' is blocked (writes files outside the worktree).`;
+        }
+        if (subArg.startsWith('--open-files-in-pager=')) {
+          return `git flag '${subArg}' is blocked (--open-files-in-pager executes programs).`;
+        }
+        if (subArg.startsWith('-O') && subArg.length > 2) {
+          return `git flag '${subArg}' is blocked (--open-files-in-pager executes programs).`;
+        }
+        if (!subArg.startsWith('-') && looksLikeEscapingPath(subArg)) {
+          return `git arg '${subArg}' is blocked because it can reference a path outside the worktree.`;
+        }
+      }
       return null;
     }
 
@@ -244,52 +302,9 @@ function validateGitArgs(args: string[]): string | null {
   return `git invocation missing a subcommand (allowed: ${GIT_ALLOWED_SUBCOMMANDS.join(', ')}).`;
 }
 
-/**
- * Validate a single `-c key=value` pair. Rejects alias injection, ssh
- * command override, gpg program override, pager/editor override, and
- * anything that looks like a `!shell` leading value.
- */
-function validateGitConfigValue(entry: string): string | null {
-  // `entry` looks like `key=value` or just `key` (no value is harmless
-  // at git's level; reject anyway for parser simplicity).
-  const eq = entry.indexOf('=');
-  if (eq === -1) {
-    return `git '-c ${entry}' missing value`;
-  }
-  const key = entry.slice(0, eq).toLowerCase();
-  const value = entry.slice(eq + 1);
-
-  // Any alias.* entry with a `!` value executes as a shell command.
-  // Same logic: reject ANY alias.* even without the bang — aliases are
-  // not useful in a read-only context.
-  if (key.startsWith('alias.')) {
-    return `git '-c ${entry}' is blocked (aliases can execute shell commands).`;
-  }
-
-  // Leading `!` in any config value that ends up being executed —
-  // core.sshCommand, core.pager, core.editor, core.askPass,
-  // credential.helper, sendemail.smtpEncryption, etc. — runs as shell.
-  if (value.trimStart().startsWith('!')) {
-    return `git '-c ${entry}' is blocked (value starts with '!', which git interprets as shell).`;
-  }
-
-  // Any override of a command-style config is a shell vector. Block
-  // the well-known ones rather than chase the full list.
-  const COMMAND_CONFIG_KEYS = new Set([
-    'core.sshcommand',
-    'core.editor',
-    'core.pager',
-    'core.askpass',
-    'core.hookspath',
-    'credential.helper',
-    'pager',
-    'http.sslcapath',
-  ]);
-  if (COMMAND_CONFIG_KEYS.has(key)) {
-    return `git '-c ${entry}' is blocked (${key} is a command-style config).`;
-  }
-
-  return null;
+function looksLikeEscapingPath(value: string): boolean {
+  if (path.isAbsolute(value)) return true;
+  return value.split(/[\\/]+/).includes('..');
 }
 
 /**
@@ -322,8 +337,8 @@ async function resolveWorktreeCwd(worktreePath: string, sub: string | undefined)
     throw new Error(`cwd '${sub}' does not exist or is unreachable: ${(err as Error).message}`);
   }
 
-  const boundary = worktreeReal.endsWith(path.sep) ? worktreeReal : worktreeReal + path.sep;
-  const candidateNorm = candidateReal.endsWith(path.sep) ? candidateReal : candidateReal + path.sep;
+  const boundary = worktreeReal + path.sep;
+  const candidateNorm = candidateReal + path.sep;
   if (candidateNorm !== boundary && !candidateNorm.startsWith(boundary)) {
     throw new Error(
       `cwd '${sub}' escapes the worktree (resolves to ${candidateReal}, worktree is ${worktreeReal})`,
@@ -331,10 +346,3 @@ async function resolveWorktreeCwd(worktreePath: string, sub: string | undefined)
   }
   return candidateReal;
 }
-
-// Exported for unit tests
-export const _internals = {
-  validateGitArgs,
-  validateGitConfigValue,
-  resolveWorktreeCwd,
-};

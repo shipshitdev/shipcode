@@ -20,6 +20,7 @@
  * No new dependencies: uses native Node 22 fetch + ReadableStream.
  */
 
+import type { ReasoningEffort } from '@shipcode/shared';
 import {
   OPENROUTER_API_BASE,
   OPENROUTER_BACKOFF_BASE_MS,
@@ -27,6 +28,8 @@ import {
   OPENROUTER_MAX_HTTP_RETRIES,
   OPENROUTER_REQUEST_TIMEOUT_MS,
 } from '@shipcode/shared';
+import type { TerminalEvent } from '../terminal-events';
+import { FenceStateMachine } from './normalizers/fence-suppression';
 
 // === Public types ===
 
@@ -64,6 +67,10 @@ export interface OpenRouterChatRequest {
   stream?: boolean;
   temperature?: number;
   max_tokens?: number;
+  /** Enable reasoning/thinking tokens from supported models. */
+  include_reasoning?: boolean;
+  /** Reasoning effort configuration. */
+  reasoning?: { effort?: ReasoningEffort };
 }
 
 export interface OpenRouterUsage {
@@ -106,6 +113,7 @@ export class OpenRouterError extends Error {
     message: string,
     public readonly retryable: boolean,
     public readonly status?: number,
+    public readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = 'OpenRouterError';
@@ -142,7 +150,11 @@ export class OpenRouterClient {
    * Perform a chat completion with SSE streaming. Returns the
    * concatenated result + any tool calls emitted.
    */
-  async chat(req: OpenRouterChatRequest, signal: AbortSignal): Promise<OpenRouterChatResult> {
+  async chat(
+    req: OpenRouterChatRequest,
+    signal: AbortSignal,
+    onDelta?: (event: TerminalEvent) => void,
+  ): Promise<OpenRouterChatResult> {
     const body = { ...req, stream: req.stream !== false };
 
     let lastError: OpenRouterError | null = null;
@@ -152,7 +164,7 @@ export class OpenRouterClient {
       }
 
       try {
-        return await this.chatOnce(body, signal);
+        return await this.chatOnce(body, signal, onDelta);
       } catch (err) {
         if (!(err instanceof OpenRouterError)) {
           // Unknown error — wrap and do not retry.
@@ -178,12 +190,14 @@ export class OpenRouterClient {
 
     // Unreachable because the loop either returns or throws, but TS
     // doesn't know that.
+    /* v8 ignore next */
     throw lastError ?? new OpenRouterError('unknown', 'exhausted retries', false);
   }
 
   private async chatOnce(
     body: OpenRouterChatRequest,
     signal: AbortSignal,
+    onDelta?: (event: TerminalEvent) => void,
   ): Promise<OpenRouterChatResult> {
     // Race the fetch against an absolute request timeout while also
     // honoring the outer cancellation signal.
@@ -228,7 +242,7 @@ export class OpenRouterClient {
 
     try {
       if (body.stream) {
-        return await this.consumeSseStream(response, signal);
+        return await this.consumeSseStream(response, signal, onDelta);
       }
       return await this.consumeJsonResponse(response);
     } finally {
@@ -262,16 +276,13 @@ export class OpenRouterClient {
       );
     }
     if (status === 429) {
-      const err = new OpenRouterError(
+      throw new OpenRouterError(
         'rate_limit',
         `OpenRouter rate limit: ${bodyText}`,
         true,
         status,
+        retryAfterHeader ? parseRetryAfter(retryAfterHeader) : undefined,
       );
-      if (retryAfterHeader)
-        (err as unknown as { retryAfterMs: number }).retryAfterMs =
-          parseRetryAfter(retryAfterHeader);
-      throw err;
     }
     if (status >= 500 && status < 600) {
       throw new OpenRouterError('network', `OpenRouter ${status}: ${bodyText}`, true, status);
@@ -308,6 +319,7 @@ export class OpenRouterClient {
   private async consumeSseStream(
     response: Response,
     signal: AbortSignal,
+    onDelta?: (event: TerminalEvent) => void,
   ): Promise<OpenRouterChatResult> {
     if (!response.body) {
       throw new OpenRouterError('network', 'OpenRouter response has no body', false);
@@ -322,10 +334,13 @@ export class OpenRouterClient {
     let finishReason: string | null = null;
     let model: string | null = null;
     let usage: OpenRouterUsage | null = null;
+    const fence = new FenceStateMachine((event) => onDelta?.(event));
 
+    /* v8 ignore start -- abort cleanup is defensive around the Web Streams reader */
     const onAbort = () => {
       reader.cancel().catch(() => {});
     };
+    /* v8 ignore stop */
     signal.addEventListener('abort', onAbort, { once: true });
 
     try {
@@ -337,10 +352,11 @@ export class OpenRouterClient {
 
         // Process complete lines; SSE frames are line-delimited by \n\n
         // but we read line-by-line and use blank-line as frame terminator.
-        let newlineIdx: number;
-        while ((newlineIdx = lineBuffer.indexOf('\n')) !== -1) {
+        let newlineIdx = lineBuffer.indexOf('\n');
+        while (newlineIdx !== -1) {
           const line = lineBuffer.slice(0, newlineIdx).replace(/\r$/, '');
           lineBuffer = lineBuffer.slice(newlineIdx + 1);
+          newlineIdx = lineBuffer.indexOf('\n');
 
           // Empty line = frame terminator. We don't buffer multi-line
           // events; OpenRouter only sends single-line `data:` frames.
@@ -353,6 +369,13 @@ export class OpenRouterClient {
           if (payload === '[DONE]') {
             // Stream terminator. Drain any remaining bytes and finish.
             signal.removeEventListener('abort', onAbort);
+            fence.flush();
+            onDelta?.({
+              kind: 'done',
+              totalTokens: usage
+                ? { prompt: usage.prompt_tokens, completion: usage.completion_tokens }
+                : undefined,
+            });
             return {
               content,
               toolCalls: collectToolCalls(toolCallsById),
@@ -380,8 +403,13 @@ export class OpenRouterClient {
           const delta = choice.delta;
           if (!delta) continue;
 
+          if (typeof delta.reasoning === 'string' && delta.reasoning) {
+            onDelta?.({ kind: 'thinking', content: delta.reasoning });
+          }
+
           if (typeof delta.content === 'string') {
             content += delta.content;
+            if (delta.content) fence.feed(delta.content);
           }
 
           if (delta.tool_calls) {
@@ -408,6 +436,7 @@ export class OpenRouterClient {
       if (signal.aborted) {
         throw new OpenRouterError('aborted', 'stream aborted', false);
       }
+      fence.flush();
       // Stream ended without [DONE] sentinel. Accept what we have.
       return { content, toolCalls: collectToolCalls(toolCallsById), finishReason, model, usage };
     } catch (err) {
@@ -438,6 +467,7 @@ interface SseFrame {
     delta?: {
       role?: string;
       content?: string | null;
+      reasoning?: string | null;
       tool_calls?: Array<{
         index: number;
         id?: string;
@@ -453,11 +483,10 @@ function collectToolCalls(map: Map<number, OpenRouterToolCall>): OpenRouterToolC
 }
 
 function computeBackoffMs(attempt: number, err: OpenRouterError): number {
-  const retryAfterMs = (err as unknown as { retryAfterMs?: number }).retryAfterMs;
-  if (typeof retryAfterMs === 'number' && retryAfterMs > 0) {
-    return Math.min(retryAfterMs, OPENROUTER_BACKOFF_MAX_MS);
+  if (typeof err.retryAfterMs === 'number' && err.retryAfterMs > 0) {
+    return Math.min(err.retryAfterMs, OPENROUTER_BACKOFF_MAX_MS);
   }
-  const base = OPENROUTER_BACKOFF_BASE_MS * Math.pow(2, attempt);
+  const base = OPENROUTER_BACKOFF_BASE_MS * 2 ** attempt;
   const jitter = Math.random() * base * 0.25;
   return Math.min(base + jitter, OPENROUTER_BACKOFF_MAX_MS);
 }
@@ -509,7 +538,11 @@ function anySignal(signals: AbortSignal[]): AbortSignal {
   return controller.signal;
 }
 
-// Exported for unit testing
+/**
+ * Exported for unit testing.
+ *
+ * @knipignore
+ */
 export const _internals = {
   computeBackoffMs,
   parseRetryAfter,

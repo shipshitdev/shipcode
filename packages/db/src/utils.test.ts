@@ -1,7 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './test-helpers';
-import { transaction } from './utils';
+import { asRow, transaction } from './utils';
+
+interface SettingsRow {
+  value: string;
+}
 
 describe('transaction', () => {
   let db: DatabaseSync;
@@ -19,8 +23,8 @@ describe('transaction', () => {
       db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('foo', 'bar');
     });
 
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('foo') as any;
-    expect(row.value).toBe('bar');
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('foo');
+    expect(asRow<SettingsRow>(row).value).toBe('bar');
   });
 
   it('rolls back on error and rethrows', () => {
@@ -48,7 +52,7 @@ describe('transaction', () => {
       expect(result).toBe(42);
     });
 
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('nested') as any;
-    expect(row.value).toBe('val');
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('nested');
+    expect(asRow<SettingsRow>(row).value).toBe('val');
   });
 });

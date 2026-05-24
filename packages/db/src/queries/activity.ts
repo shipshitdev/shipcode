@@ -1,13 +1,26 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { nanoid } from 'nanoid';
 import {
-  toIsoUtc,
+  type ActivityActor,
   type ActivityEntry,
   type ActivityKind,
-  type ActivityActor,
+  toIsoUtc,
 } from '@shipcode/shared';
+import { nanoid } from 'nanoid';
+import { asRow, asRows } from '../utils';
 
-function mapRow(row: any): ActivityEntry {
+interface ActivityRow {
+  id: string;
+  thread_id: string | null;
+  project_id: string | null;
+  kind: ActivityKind;
+  actor: ActivityActor;
+  title: string;
+  subtitle: string | null;
+  metadata: string | null;
+  created_at: string;
+}
+
+function mapRow(row: ActivityRow): ActivityEntry {
   return {
     id: row.id,
     threadId: row.thread_id,
@@ -52,22 +65,24 @@ export class ActivityQueries {
         entry.metadata ? JSON.stringify(entry.metadata) : null,
       );
 
-    const row = this.db.prepare('SELECT * FROM activity_log WHERE id = ?').get(id) as any;
+    const row = asRow<ActivityRow>(
+      this.db.prepare('SELECT * FROM activity_log WHERE id = ?').get(id),
+    );
     return mapRow(row);
   }
 
   listRecent(limit = 50, projectId?: string, offset = 0): ActivityEntry[] {
     const rows = projectId
-      ? (this.db
+      ? this.db
           .prepare(
             'SELECT * FROM activity_log WHERE project_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
           )
-          .all(projectId, limit, offset) as any[])
-      : (this.db
+          .all(projectId, limit, offset)
+      : this.db
           .prepare('SELECT * FROM activity_log ORDER BY created_at DESC LIMIT ? OFFSET ?')
-          .all(limit, offset) as any[]);
+          .all(limit, offset);
 
-    return rows.map(mapRow);
+    return asRows<ActivityRow>(rows).map(mapRow);
   }
 
   countRecent(projectId?: string): number {
@@ -82,7 +97,22 @@ export class ActivityQueries {
   listByThread(threadId: string, limit = 100): ActivityEntry[] {
     const rows = this.db
       .prepare('SELECT * FROM activity_log WHERE thread_id = ? ORDER BY created_at DESC LIMIT ?')
-      .all(threadId, limit) as any[];
-    return rows.map(mapRow);
+      .all(threadId, limit);
+    return asRows<ActivityRow>(rows).map(mapRow);
+  }
+
+  listByIssue(projectId: string, issueNumber: number, limit = 200): ActivityEntry[] {
+    const rows = this.db
+      .prepare(
+        `SELECT a.*
+           FROM activity_log a
+           INNER JOIN threads t ON t.id = a.thread_id
+          WHERE t.project_id = ?
+            AND t.github_issue_number = ?
+          ORDER BY a.created_at DESC
+          LIMIT ?`,
+      )
+      .all(projectId, issueNumber, limit);
+    return asRows<ActivityRow>(rows).map(mapRow);
   }
 }

@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const planStepSchema = z.object({
   order: z.number().int().positive(),
   description: z.string().min(1),
-  files: z.array(z.string()),
+  files: z.array(z.string().min(1)).min(1),
   rationale: z.string().min(1),
 });
 
@@ -14,17 +14,90 @@ export const planFileChangeSchema = z.object({
   fromPath: z.string().optional(),
 });
 
-export const shipCodePlanSchema = z.object({
+export const shipCodePlanSchema = z
+  .object({
+    id: z.string().min(1),
+    threadId: z.string().min(1),
+    version: z.number().int().positive(),
+    objective: z.string().min(1),
+    files: z.array(planFileChangeSchema).min(1),
+    steps: z.array(planStepSchema).length(3),
+    acceptanceCriteria: z.array(z.string().min(1)).min(1),
+    outOfScope: z.array(z.string().min(1)).min(1),
+    estimatedComplexity: z.enum(['low', 'medium', 'high']),
+    dependencies: z.array(z.string().min(1)),
+  })
+  .superRefine((plan, ctx) => {
+    const declaredFiles = new Set(plan.files.map((file) => file.path));
+    const referencedFiles = new Set<string>();
+
+    for (const [index, step] of plan.steps.entries()) {
+      const expectedOrder = index + 1;
+      if (step.order !== expectedOrder) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['steps', index, 'order'],
+          message: `Plan steps must be ordered sequentially; expected ${expectedOrder}.`,
+        });
+      }
+
+      for (const file of step.files) {
+        referencedFiles.add(file);
+        if (!declaredFiles.has(file)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['steps', index, 'files'],
+            message: `Step references undeclared file: ${file}`,
+          });
+        }
+      }
+    }
+
+    for (const [index, file] of plan.files.entries()) {
+      if (!referencedFiles.has(file.path)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['files', index, 'path'],
+          message: `Declared file is not referenced by any step: ${file.path}`,
+        });
+      }
+    }
+  });
+
+export const clarificationChoiceSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().min(1),
+  recommended: z.boolean().optional(),
+});
+
+export const clarificationQuestionSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  prompt: z.string().min(1),
+  description: z.string().nullable().optional().default(null),
+  choices: z.array(clarificationChoiceSchema).min(2).max(4),
+  allowFreeform: z.boolean().default(false),
+  freeformPlaceholder: z.string().nullable().optional().default(null),
+});
+
+export const clarificationRequestSchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
-  version: z.number().int().positive(),
-  objective: z.string().min(1),
-  files: z.array(planFileChangeSchema),
-  steps: z.array(planStepSchema),
-  acceptanceCriteria: z.array(z.string()),
-  outOfScope: z.array(z.string()),
-  estimatedComplexity: z.enum(['low', 'medium', 'high']),
-  dependencies: z.array(z.string()),
+  phase: z.enum(['plan', 'revision']),
+  summary: z.string().min(1),
+  questions: z.array(clarificationQuestionSchema).min(1).max(3),
+});
+
+export const clarificationAnswerSchema = z.object({
+  questionId: z.string().min(1),
+  selectedChoiceId: z.string().nullable().optional().default(null),
+  freeformText: z.string().nullable().optional().default(null),
+});
+
+export const answeredClarificationSchema = z.object({
+  request: clarificationRequestSchema,
+  answers: z.array(clarificationAnswerSchema),
 });
 
 export const reviewFindingSchema = z.object({
@@ -65,4 +138,195 @@ export const verificationResultSchema = z.object({
   summary: z.string().min(1),
   criteriaResults: z.array(criteriaCheckSchema),
   issues: z.array(verificationIssueSchema),
+});
+
+// === Feature QA State ===
+
+export const featureQaCriticalFlowSchema = z.object({
+  name: z.string().min(1),
+  steps: z.array(z.string().min(1)).min(1),
+  successCriteria: z.string().min(1),
+});
+
+export const featureQaVisualAssertionKindSchema = z.enum([
+  'top-left-of-container',
+  'top-right-of-container',
+  'bottom-left-of-container',
+  'bottom-right-of-container',
+  'visible',
+  'not-overlapping',
+  'above',
+  'below',
+  'left-of',
+  'right-of',
+]);
+
+export const featureQaViewportSchema = z.object({
+  width: z.number().int().min(1),
+  height: z.number().int().min(1),
+});
+
+export const featureQaVisualAssertionSchema = z
+  .object({
+    name: z.string().min(1),
+    route: z.string().min(1),
+    targetSelector: z.string().min(1),
+    assertion: featureQaVisualAssertionKindSchema,
+    containerSelector: z.string().min(1).optional(),
+    referenceSelector: z.string().min(1).optional(),
+    tolerancePx: z.number().int().min(0).optional(),
+    viewport: featureQaViewportSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.assertion.endsWith('-of-container') && !value.containerSelector) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['containerSelector'],
+        message: `${value.assertion} requires containerSelector`,
+      });
+    }
+    if (
+      ['not-overlapping', 'above', 'below', 'left-of', 'right-of'].includes(value.assertion) &&
+      !value.referenceSelector
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['referenceSelector'],
+        message: `${value.assertion} requires referenceSelector`,
+      });
+    }
+  });
+
+export const featureQaEvidencePolicySchema = z.object({
+  screenshot: z.enum(['always', 'on-failure']).default('always'),
+  trace: z.enum(['always', 'on-failure', 'on-retry']).default('on-failure'),
+  video: z.enum(['always', 'on-failure', 'on-retry', 'off']).default('on-failure'),
+});
+
+export const featureQaStateSchema = z.object({
+  featureId: z.string().min(1),
+  routes: z.array(z.string().min(1)),
+  criticalFlows: z.array(featureQaCriticalFlowSchema).min(1),
+  expectedStates: z.array(z.string().min(1)),
+  testDataAssumptions: z.array(z.string()),
+  selectorReadiness: z.enum(['ready', 'partial', 'missing']),
+  visualAssertions: z.array(featureQaVisualAssertionSchema).optional(),
+  evidencePolicy: featureQaEvidencePolicySchema.optional(),
+});
+
+export const featureQaAssertionResultSchema = z.object({
+  name: z.string().min(1),
+  passed: z.boolean(),
+  expected: z.string().min(1),
+  actual: z.string().min(1),
+  evidencePath: z.string().min(1).optional(),
+});
+
+export const featureQaFlowResultSchema = z.object({
+  flowName: z.string().min(1),
+  passed: z.boolean(),
+  failureReason: z.string().optional(),
+  evidencePaths: z.array(z.string().min(1)).optional(),
+  assertions: z.array(featureQaAssertionResultSchema).optional(),
+});
+
+/**
+ * Parse raw JSON into validated FeatureQaFlowResult[].
+ * Returns empty array on any parse/validation failure.
+ */
+export function parseFeatureQaFlowResults(
+  raw: unknown,
+): z.infer<typeof featureQaFlowResultSchema>[] {
+  try {
+    return z.array(featureQaFlowResultSchema).parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+export const featureQaResultSchema = z.object({
+  featureId: z.string().min(1),
+  status: z.enum(['passed', 'failed', 'partial']),
+  flowResults: z.array(featureQaFlowResultSchema),
+  summary: z.string().min(1),
+  evidencePaths: z.array(z.string()).optional(),
+  runAt: z.string().min(1),
+});
+
+export const repoSetupEnvFileSchema = z.object({
+  source: z.string().min(1),
+  target: z.string().min(1).optional(),
+  required: z.boolean().default(true),
+});
+
+const runtimeQaCommandSchema = z
+  .string()
+  .min(1)
+  .refine((command) => !/[\n\r\0]/.test(command), {
+    message: 'server command must be a single line',
+  })
+  .refine((command) => !/[;&|`$<>\\]/.test(command), {
+    message: 'server command must not contain shell metacharacters',
+  })
+  .refine((command) => /^(bun|pnpm|npm|yarn|deno)\s+/.test(command.trim()), {
+    message: 'server command must start with bun, pnpm, npm, yarn, or deno',
+  });
+
+export const runtimeQaServerSchema = z.object({
+  command: runtimeQaCommandSchema,
+  readinessUrl: z
+    .string()
+    .min(1)
+    .refine(
+      (url) => {
+        try {
+          const parsed = new URL(url);
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+          if (!parsed.port) return false;
+          const host = parsed.hostname;
+          return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+        } catch {
+          return false;
+        }
+      },
+      {
+        message:
+          'readinessUrl must be http/https with an explicit port on localhost, 127.0.0.1, or ::1',
+      },
+    ),
+  startupTimeoutMs: z.number().int().min(1000).default(60_000),
+  portEnvVar: z
+    .string()
+    .regex(/^[A-Z_][A-Z0-9_]*$/, 'portEnvVar must be a valid POSIX env identifier')
+    .refine(
+      (key) =>
+        ![
+          'PATH',
+          'NODE_OPTIONS',
+          'DYLD_INSERT_LIBRARIES',
+          'LD_PRELOAD',
+          'HOME',
+          'SHELL',
+          'USER',
+        ].includes(key),
+      { message: 'portEnvVar must not override sensitive process environment keys' },
+    )
+    .default('PORT'),
+});
+
+export const runtimeQaConfigSchema = z.object({
+  server: runtimeQaServerSchema.optional(),
+  testCommands: z.array(z.string().min(1)).default([]),
+  discoverAgentTests: z.boolean().default(true),
+});
+
+export const repoSetupContractSchema = z.object({
+  version: z.literal(1).default(1),
+  setupCommands: z.array(z.string().min(1)).default([]),
+  verifyCommands: z.array(z.string().min(1)).default([]),
+  envFiles: z.array(repoSetupEnvFileSchema).default([]),
+  setupBeforeVerify: z.boolean().default(false),
+  testingContext: z.string().min(1).nullable().optional().default(null),
+  runtimeQa: runtimeQaConfigSchema.optional(),
+  shellCommandTimeoutMs: z.number().int().positive().nullable().optional(),
 });

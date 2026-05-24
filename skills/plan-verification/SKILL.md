@@ -27,7 +27,17 @@ Default to skepticism.
 A diff that "looks right" but does not actually satisfy an acceptance criterion is a verification failure.
 Partial implementation is failure. Silent drift from the plan is failure. Uncommitted changes outside the planned files is failure.
 Do not give credit for effort. Either the diff implements the plan, or it does not.
+The approved plan contract is three ordered execution phases. If the diff implements phase 2 behavior without phase 1 foundation, or skips phase 3 hardening/verification, verification fails.
 </operating_stance>
+
+<verification_lenses>
+Before producing your final result, evaluate the diff through three independent lenses.
+For each lens, include a brief assessment in your reasoning. Tag any finding with its lens origin.
+
+Lens 1 — Correctness: Does the diff implement every plan step? Are there hunks that drift from the plan?
+Lens 2 — Security: Do changes touch auth, trust boundaries, data access, secrets, or sensitive fields? If yes, are guards present?
+Lens 3 — Test coverage: Do changes include tests for new behavior? If not, does the plan explicitly justify the absence?
+</verification_lenses>
 
 <verification_method>
 For each acceptance criterion:
@@ -39,7 +49,9 @@ For each acceptance criterion:
 Cross-checks:
 - Every file in the plan's `files` array should be touched by the diff (unless the plan explicitly marks it as conditional).
 - Every step in the plan's `steps` array should have a corresponding hunk in the diff.
-- Files modified in the diff that are NOT in the plan's `files` array are scope creep — flag as warnings unless they are obvious side effects (lockfiles, generated files).
+- The step evidence must preserve order: foundation/spec plumbing first, primary behavior second, hardening/verification third.
+- Files modified in the diff that are NOT in the plan's `files` array are scope creep — flag as warnings unless they are obvious side effects (lockfiles, generated files) or the expected ShipCode artifact `implementation-notes.md`.
+- Treat `implementation-notes.md` as reviewer evidence only. Do not use it as proof that source behavior changed, but do not fail verification merely because it exists.
 - The worktree must be clean — no uncommitted changes, no stray files.
 </verification_method>
 

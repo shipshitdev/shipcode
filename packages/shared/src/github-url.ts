@@ -16,6 +16,35 @@ export interface GithubRepoRef {
   repo: string;
 }
 
+function parseGithubHttpsUrl(raw: string): URL | null {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' || url.hostname.toLowerCase() !== 'github.com') {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function parseGithubUrl(raw: string): URL | null {
+  try {
+    const url = new URL(raw);
+    if (url.hostname.toLowerCase() !== 'github.com') {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function githubPathParts(url: URL, options: { stripGitSuffix?: boolean } = {}): string[] {
+  const path = url.pathname.replace(/^\/+/, '').replace(/\/+$/, '');
+  return (options.stripGitSuffix ? path.replace(/\.git$/i, '') : path).split('/');
+}
+
 export function parseGithubRemote(remote: string | null | undefined): GithubRepoRef | null {
   if (!remote) return null;
   const trimmed = remote.trim();
@@ -26,19 +55,12 @@ export function parseGithubRemote(remote: string | null | undefined): GithubRepo
     return { owner: scp[2], repo: scp[3] };
   }
 
-  // URL-parseable forms (ssh://git@... or https://...)
-  try {
-    const u = new URL(trimmed);
-    if (u.hostname.toLowerCase() !== 'github.com') return null;
-    const parts = u.pathname
-      .replace(/^\/+/, '')
-      .replace(/\.git$/i, '')
-      .split('/');
-    if (parts.length < 2 || !parts[0] || !parts[1]) return null;
-    return { owner: parts[0], repo: parts[1] };
-  } catch {
-    return null;
-  }
+  const url = parseGithubUrl(trimmed);
+  if (!url) return null;
+
+  const parts = githubPathParts(url, { stripGitSuffix: true });
+  if (parts.length < 2 || !parts[0] || !parts[1]) return null;
+  return { owner: parts[0], repo: parts[1] };
 }
 
 export function githubRepoUrl(remote: string | null | undefined): string | null {
@@ -52,7 +74,7 @@ export function githubIssuesUrl(remote: string | null | undefined): string | nul
 }
 
 /**
- * GitHub Projects URL for the Kanban "board" quick-link.
+ * GitHub Projects URL helper.
  *
  * - If a non-empty `override` is provided (a per-project GitHub Projects v2
  *   URL), return it verbatim (trimmed). This is the user's hand-picked board.
@@ -65,7 +87,7 @@ export function githubProjectsUrl(
   remote: string | null | undefined,
   override?: string | null,
 ): string | null {
-  if (override && override.trim()) return override.trim();
+  if (override?.trim()) return override.trim();
   const base = githubRepoUrl(remote);
   return base ? `${base}/projects` : null;
 }
@@ -87,7 +109,9 @@ export type GithubProjectUrlValidation =
  * doesn't match one of the three shapes above. The reason string is safe
  * to surface in the modal and short enough for the IPC clamp helper.
  */
-export function validateGithubProjectUrl(raw: string | null | undefined): GithubProjectUrlValidation {
+export function validateGithubProjectUrl(
+  raw: string | null | undefined,
+): GithubProjectUrlValidation {
   if (raw == null || raw.trim() === '') return { ok: true, value: null };
   const trimmed = raw.trim();
 
@@ -105,9 +129,13 @@ export function validateGithubProjectUrl(raw: string | null | undefined): Github
     return { ok: false, reason: 'Host must be github.com' };
   }
 
-  const parts = u.pathname.replace(/^\/+/, '').replace(/\/+$/, '').split('/');
+  const parts = githubPathParts(u);
   // orgs/<org>/projects/<n>
-  if (parts.length >= 4 && (parts[0] === 'orgs' || parts[0] === 'users') && parts[2] === 'projects') {
+  if (
+    parts.length >= 4 &&
+    (parts[0] === 'orgs' || parts[0] === 'users') &&
+    parts[2] === 'projects'
+  ) {
     if (!/^\d+$/.test(parts[3])) {
       return { ok: false, reason: 'Project number must be numeric' };
     }
@@ -133,6 +161,23 @@ export function deriveGithubIssueUrl(
 ): string | null {
   const base = githubRepoUrl(remote);
   return base ? `${base}/issues/${issueNumber}` : null;
+}
+
+/**
+ * GitHub compare URL: `https://github.com/<owner>/<repo>/compare/<base>...<branch>`
+ *
+ * Returns `null` when any input is missing or the remote is not parseable.
+ */
+export function githubCompareUrl(
+  remote: string | null | undefined,
+  base: string | null | undefined,
+  branch: string | null | undefined,
+): string | null {
+  if (!base || !branch) return null;
+  const repoBase = githubRepoUrl(remote);
+  return repoBase
+    ? `${repoBase}/compare/${encodeURIComponent(base)}...${encodeURIComponent(branch)}`
+    : null;
 }
 
 export interface ParsedGithubProject {
@@ -163,24 +208,15 @@ export interface ParsedGithubProject {
  * field; the parser is the read-time counterpart that turns a stored
  * string into something the CLI can use.
  */
-export function parseGithubProjectUrl(
-  raw: string | null | undefined,
-): ParsedGithubProject | null {
+export function parseGithubProjectUrl(raw: string | null | undefined): ParsedGithubProject | null {
   if (raw == null) return null;
   const trimmed = raw.trim();
   if (trimmed === '') return null;
 
-  let u: URL;
-  try {
-    u = new URL(trimmed);
-  } catch {
-    return null;
-  }
+  const u = parseGithubHttpsUrl(trimmed);
+  if (!u) return null;
 
-  if (u.protocol !== 'https:') return null;
-  if (u.hostname.toLowerCase() !== 'github.com') return null;
-
-  const parts = u.pathname.replace(/^\/+/, '').replace(/\/+$/, '').split('/');
+  const parts = githubPathParts(u);
   // orgs/<org>/projects/<n>  or  users/<user>/projects/<n>
   if (
     parts.length >= 4 &&

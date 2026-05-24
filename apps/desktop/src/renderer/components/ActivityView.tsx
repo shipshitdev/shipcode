@@ -1,30 +1,31 @@
-import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ActivityEntry } from '@shipcode/shared';
+import { type ActivityEntry, formatRelativeTime } from '@shipcode/shared';
+import { PageHeader } from '@shipcode/ui';
 import {
+  Button,
   Card,
   CardContent,
-  Loader2,
-  Button,
+  Pagination,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
   TableRow,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { Activity } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
-function timeAgo(input: string | number): string {
-  const t = typeof input === 'number' ? input : new Date(input).getTime();
-  const diff = Math.max(0, Date.now() - t);
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
+const PAGE_SIZE = 25;
+const ACTIVITY_LOADING_ROW_KEYS = [
+  'activity-loading-1',
+  'activity-loading-2',
+  'activity-loading-3',
+  'activity-loading-4',
+  'activity-loading-5',
+  'activity-loading-6',
+];
 
 function dayLabel(isoStr: string): string {
   const date = new Date(isoStr);
@@ -60,7 +61,9 @@ function groupByDay(entries: ActivityEntry[]): { label: string; entries: Activit
 
 export function ActivityView() {
   const queryClient = useQueryClient();
-  const { selectProject, selectThread } = useAppStore();
+  const selectProject = useAppStore((state) => state.selectProject);
+  const selectThread = useAppStore((state) => state.selectThread);
+  const [page, setPage] = useState(1);
 
   const {
     data: activity = [],
@@ -68,36 +71,47 @@ export function ActivityView() {
     isError,
     refetch,
   } = useQuery<ActivityEntry[]>({
-    queryKey: ['activity', { limit: 200 }],
+    queryKey: ['activity', { limit: 500 }],
     queryFn: () =>
-      window.shipcode.invoke<ActivityEntry[]>('dashboard:get-activity', { limit: 200 }),
-    refetchInterval: 10_000,
+      window.shipcode.invoke<ActivityEntry[]>('dashboard:get-activity', { limit: 500 }),
   });
 
   useEffect(() => {
     const unsub = window.shipcode.on('dashboard:invalidate', (data: unknown) => {
       const kinds = (data as { kinds?: string[] } | null)?.kinds;
       if (kinds?.includes('activity')) {
-        queryClient.invalidateQueries({ queryKey: ['activity', { limit: 200 }] });
+        queryClient.invalidateQueries({ queryKey: ['activity', { limit: 500 }] });
       }
     });
     return () => unsub();
   }, [queryClient]);
 
-  const groups = groupByDay(activity);
+  const totalPages = Math.max(1, Math.ceil(activity.length / PAGE_SIZE));
+  const pageEntries = activity.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const groups = groupByDay(pageEntries);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="border-b border-border px-6 py-4">
-        <h1 className="text-base font-semibold text-primary">Activity</h1>
-        <p className="text-xs text-muted">All pipeline events across every project.</p>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <PageHeader title="Activity" subtitle="Timeline of all pipeline runs and agent actions." />
+      <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-5xl">
           {isLoading && (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 size={20} className="animate-spin text-muted" />
+            <div className="space-y-5 py-4">
+              <Skeleton className="h-3 w-16" />
+              <Card>
+                <CardContent className="p-0">
+                  {ACTIVITY_LOADING_ROW_KEYS.map((key) => (
+                    <div
+                      key={key}
+                      className="flex items-center gap-3 border-b border-border px-4 py-2.5 last:border-0"
+                    >
+                      <Skeleton className="h-3.5 w-10" />
+                      <Skeleton className="h-3 flex-1" />
+                      <Skeleton className="h-3 w-14" />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
             </div>
           )}
 
@@ -111,8 +125,16 @@ export function ActivityView() {
           )}
 
           {!isLoading && !isError && activity.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-muted">
-              No activity yet.
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-16 text-center">
+              <div className="flex size-10 items-center justify-center rounded-full bg-muted/10">
+                <Activity size={20} className="text-muted-foreground/50" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">No activity yet</p>
+                <p className="text-xs text-muted-foreground/50">
+                  Pipeline runs and agent actions will appear here.
+                </p>
+              </div>
             </div>
           )}
 
@@ -120,13 +142,13 @@ export function ActivityView() {
             !isError &&
             groups.map((group) => (
               <div key={group.label} className="mb-6">
-                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {group.label}
                 </div>
                 <Card>
                   <CardContent className="p-0">
                     <Table>
-                      <TableBody>
+                      <TableBody className="[&_tr:last-child]:border-0">
                         {group.entries.map((entry) => {
                           const clickable = entry.projectId !== null;
 
@@ -142,7 +164,7 @@ export function ActivityView() {
                               }}
                             >
                               <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
-                                <span className="inline-flex items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-muted">
+                                <span className="inline-flex items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-muted-foreground">
                                   {entry.actor}
                                 </span>
                               </TableCell>
@@ -151,13 +173,13 @@ export function ActivityView() {
                                   {entry.title}
                                 </div>
                                 {entry.subtitle && (
-                                  <div className="truncate text-[11px] text-muted">
+                                  <div className="truncate text-[11px] text-muted-foreground">
                                     {entry.subtitle}
                                   </div>
                                 )}
                               </TableCell>
-                              <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
-                                {timeAgo(entry.createdAt)}
+                              <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted-foreground">
+                                {formatRelativeTime(entry.createdAt)}
                               </TableCell>
                             </TableRow>
                           );
@@ -168,6 +190,17 @@ export function ActivityView() {
                 </Card>
               </div>
             ))}
+
+          {!isLoading && !isError && totalPages > 1 && (
+            <div className="mt-2">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                className="w-full"
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,17 +1,19 @@
-import type { PipelinePhase } from '@shipcode/shared';
-import { Check, X } from 'lucide-react';
-import { cn } from './lib/utils';
-import { Button } from './primitives/button';
+import { Check } from 'lucide-react';
+import type { PipelinePhase } from '@/lib/shipcode';
+import { cn } from '@/lib/utils';
+import { Button } from '@/primitives/button';
 
 const PHASES: { key: PipelinePhase; label: string }[] = [
   { key: 'planning', label: 'Plan' },
+  { key: 'clarifying', label: 'Clarify' },
   { key: 'reviewing', label: 'Review' },
   { key: 'revising', label: 'Revise' },
-  { key: 'awaiting_approval', label: 'Approve' },
+  { key: 'approval', label: 'Approval' },
   { key: 'executing', label: 'Execute' },
+  { key: 'testing', label: 'Test' },
   { key: 'verifying', label: 'Verify' },
   { key: 'shipping', label: 'Ship' },
-  { key: 'completed', label: 'Done' },
+  { key: 'completed', label: 'Complete' },
 ];
 
 const PHASE_ORDER = PHASES.map((p) => p.key);
@@ -37,38 +39,40 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
             <Button
               variant="ghost"
               size="sm"
-              className="h-auto gap-1.5 px-2.5 py-1 text-xs font-normal text-muted hover:not-disabled:text-secondary disabled:cursor-default disabled:opacity-100"
+              className="h-auto gap-1.5 px-1.5 py-1 text-xs font-normal text-muted-foreground hover:not-disabled:text-secondary disabled:cursor-default disabled:opacity-100"
               onClick={() => onPhaseClick?.(phase.key)}
               disabled={isFuture}
             >
               <span
                 className={cn(
-                  'inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold border-2 border-text-muted text-muted',
+                  'relative inline-flex items-center justify-center size-5 rounded-full text-[10px] font-bold border-2 border-text-muted-foreground text-muted-foreground',
                   isActive && !isFailed && 'bg-accent border-accent text-bg-primary',
                   isCompleted && 'bg-success border-success text-bg-primary',
-                  isFailed && isActive && 'bg-danger border-danger text-bg-primary',
                 )}
               >
-                {isCompleted ? (
-                  <Check size={12} strokeWidth={3} />
-                ) : isActive && isFailed ? (
-                  <X size={12} strokeWidth={3} />
-                ) : (
-                  index + 1
+                {isActive && !isFailed && (
+                  <span className="absolute inset-[-3px] rounded-full animate-pulse border-2 border-accent/40" />
                 )}
+                {isCompleted ? <Check size={12} strokeWidth={3} /> : index + 1}
               </span>
-              <span
-                className={cn(
-                  isActive && !isFailed && 'text-accent',
-                  isCompleted && 'text-success',
-                  isFailed && isActive && 'text-danger',
-                )}
-              >
-                {phase.label}
-              </span>
+              {(isActive || isCompleted) && (
+                <span
+                  className={cn(
+                    isActive && !isFailed && 'text-accent',
+                    isCompleted && 'text-success',
+                  )}
+                >
+                  {phase.label}
+                </span>
+              )}
             </Button>
             {index < PHASES.length - 1 && (
-              <span className={cn('w-6 h-0.5 mx-0.5 bg-text-muted', isCompleted && 'bg-success')} />
+              <span
+                className={cn(
+                  'w-4 h-0.5 shrink-0 bg-text-muted-foreground',
+                  isCompleted && 'bg-success',
+                )}
+              />
             )}
           </div>
         );

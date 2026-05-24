@@ -1,11 +1,11 @@
 # Desktop App
 
-The ShipCode desktop app is the primary way to run the pipeline. It's an Electron + Vite + React 19 app built on top of the same `packages/pipeline` state machine that powers the CLI, with a rich UI for watching pipelines, triaging issues, editing settings, and reviewing plans and costs.
+The ShipCode desktop app is the primary way to run the pipeline. It's an Electron + Vite + React 19 app built on top of the same `packages/pipeline` state machine that powers the CLI, with a rich UI for watching pipelines, triaging issues, scheduling automation, inspecting worktrees, editing settings, and reviewing plans and costs.
 
 ## Install
 
 ```bash
-brew tap shipshitdev/shipcode
+brew tap shipshitdev/tap
 brew install --cask shipcode
 ```
 
@@ -18,17 +18,21 @@ bun run dev
 
 See [Getting Started](/getting-started) for prerequisites and first-pipeline walkthrough.
 
+On first import of a GitHub-backed repository, ShipCode creates a small starter issue so the project has a safe first pipeline target immediately.
+
 ## Layout
 
 The app has a fixed left sidebar with projects, a top titlebar, a main content area, and a collapsible terminal drawer at the bottom. The sidebar contains shortcut entries to each of the global views:
 
 | Section | What it does |
 |---------|--------------|
-| [Mission Control](/desktop/mission-control) | Dashboard across all projects — active runs, recent completions, alerts |
+| Overview | Dashboard across all projects — running agents, pending approvals, recent work, time-to-PR analytics |
+| [Activity](/desktop/activity) | Timeline of phase transitions, PRs, failures, automations, and notifications |
 | [Inbox](/desktop/inbox) | Triage queue for failed, verification-exhausted, and awaiting-approval threads |
 | [Costs](/desktop/costs) | Per-thread and per-project token + USD aggregation |
+| [Automations](/desktop/automations) | Cron-like scheduled prompts that launch pipeline runs for a project |
 | [Skills Editor](/desktop/skills) | Edit the PRD / plan / review / verify prompt skills |
-| Project detail | Kanban board, list view, terminal drawer, and issue detail overlay for one project |
+| Project detail | Issues, Git, Code, Pull Requests, Insights, and Terminal tabs for one project |
 
 ## Per-project views
 
@@ -36,11 +40,15 @@ Inside a project, the main content area switches between:
 
 | View | What it does |
 |------|--------------|
-| [Kanban Board](/desktop/kanban) | Phase-column board for dragging issues through the pipeline |
+| Issues / [Kanban Board](/desktop/kanban) | Phase-column board plus dense list mode for dragging issues through the pipeline, running board review, and auto-running Todo work |
 | List view | Same data as Kanban, flattened into phase-grouped sections (toggle from the Kanban header) |
-| [Terminal](/desktop/terminal) | Bottom drawer that streams planner / reviewer / executor / verifier subprocess output |
+| [Git](/desktop/git) | Worktree/branch visualizer, diff viewer, AI split auto-commit, cleanup |
+| [Code](/desktop/code) | Read-only source and worktree browser with syntax highlighting and diff mode |
+| [Pull Requests](/desktop/pull-requests) | Open/closed PR list with review status, checks, and detail panel |
+| [Insights](/desktop/insights) | Project activity heatmap, tokens, spend, runs, and PR counts |
+| [Terminal](/desktop/terminal) | Project terminal tab plus bottom drawer for live agent output |
 | Issue detail | Overlay that shows the full issue PRD, generated plan, review round history, diff, and full-screen [Plan Viewer](/desktop/plan-viewer) |
 
 ## Settings
 
-The [Settings panel](/desktop/settings) covers General, Pipeline, Models, Notifications, Archived Projects, and Shortcuts — plus the per-project [Project Settings modal](/desktop/project-settings) for overriding the GitHub Projects v2 board URL.
+The [Settings panel](/desktop/settings) covers General, Integrations, GitHub, Notifications, Pipeline, Auto-commit, Shortcuts, Archived, Developer, and About. The per-project [Project Settings modal](/desktop/project-settings) covers repo setup, runtime QA, GitHub Projects sync, phase model overrides, pipeline behavior, memory/context generation, and chat routing.
