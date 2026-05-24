@@ -4,6 +4,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["DOCS_BASE_PATH"],
       "outputs": ["dist/**", "out/**"]
     },
     "dev": {
