@@ -10,6 +10,7 @@ import { asRow, asRows } from '../utils';
 interface PromptTelemetryRow {
   id: string;
   thread_id: string;
+  run_id: string | null;
   phase: PromptTelemetryRecord['phase'];
   invocation_id: string;
   attempt: number | null;
@@ -33,14 +34,15 @@ export class PromptTelemetryQueries {
     this.db
       .prepare(
         `INSERT INTO prompt_telemetry (
-          id, thread_id, phase, invocation_id, attempt, provider, model,
+          id, thread_id, run_id, phase, invocation_id, attempt, provider, model,
           prompt_characters, prompt_bytes, prompt_lines, selected_materials,
           prompt_tokens, completion_tokens, cost_usd
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
         input.threadId,
+        input.runId ?? null,
         input.phase,
         input.invocationId,
         input.attempt ?? null,
@@ -93,6 +95,7 @@ function mapPromptTelemetry(row: PromptTelemetryRow): PromptTelemetryRecord {
   return {
     id: row.id,
     threadId: row.thread_id,
+    runId: row.run_id ?? null,
     phase: row.phase,
     invocationId: row.invocation_id,
     attempt: row.attempt,

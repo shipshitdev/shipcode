@@ -14,7 +14,9 @@ import type {
   NotificationsQueries,
   PhaseLogQueries,
   PipelineAnalyticsQueries,
+  PipelineRunQueries,
   PipelineStepQueries,
+  PipelineWakeRequestQueries,
   PlanQueries,
   ProjectFailureQueries,
   ProjectQueries,
@@ -56,7 +58,9 @@ export interface Queries {
   terminalEvents: TerminalEventQueries;
   phaseLogs: PhaseLogQueries;
   pipelineAnalytics: PipelineAnalyticsQueries;
+  pipelineRuns: PipelineRunQueries;
   pipelineSteps: PipelineStepQueries;
+  wakeRequests: PipelineWakeRequestQueries;
   promptTelemetry: PromptTelemetryQueries;
   agentConversations: AgentConversationQueries;
   skillResolutionLogs: SkillResolutionLogQueries;

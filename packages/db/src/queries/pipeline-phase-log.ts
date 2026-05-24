@@ -11,6 +11,7 @@ import { asRow, asRows } from '../utils';
 interface PipelinePhaseLogRow {
   id: string;
   thread_id: string;
+  run_id: string | null;
   phase: PipelinePhase;
   started_at: string;
   completed_at: string | null;
@@ -31,11 +32,17 @@ const UNTIMERED_PHASES = new Set<PipelinePhase>([
 export class PhaseLogQueries {
   constructor(private db: DatabaseSync) {}
 
-  transition(threadId: string, phase: PipelinePhase, errorMessage?: string | null): void {
+  transition(
+    threadId: string,
+    phase: PipelinePhase,
+    errorMessage?: string | null,
+    runId?: string | null,
+  ): void {
     const now = new Date().toISOString();
     this.closeOpenRows(threadId, phase, errorMessage ?? null, now);
     this.create({
       threadId,
+      runId: runId ?? null,
       phase,
       startedAt: now,
       metadata: null,
@@ -53,14 +60,16 @@ export class PhaseLogQueries {
         `INSERT INTO pipeline_phase_log (
            id,
            thread_id,
+           run_id,
            phase,
            started_at,
            metadata_json
-         ) VALUES (?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
         input.threadId,
+        input.runId ?? null,
         input.phase,
         input.startedAt ?? new Date().toISOString(),
         input.metadata ? JSON.stringify(input.metadata) : null,
@@ -137,6 +146,7 @@ function mapPhaseLog(row: PipelinePhaseLogRow): PipelinePhaseLogRecord {
   return {
     id: row.id,
     threadId: row.thread_id,
+    runId: row.run_id ?? null,
     phase: row.phase,
     startedAt: row.started_at,
     completedAt: row.completed_at,

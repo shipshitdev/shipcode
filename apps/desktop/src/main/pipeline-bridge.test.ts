@@ -86,6 +86,7 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
       create: vi.fn(() => ({
         id: 'evt-1',
         threadId: 'thread-1',
+        runId: null,
         event: {},
         createdAt: new Date().toISOString(),
       })),
@@ -204,6 +205,20 @@ describe('createElectronEmitter event forwarding and terminal bookkeeping', () =
       expect.objectContaining({ id: 'evt-1', threadId: 'thread-1' }),
     );
     expect(deps.threads.getById).not.toHaveBeenCalled();
+  });
+
+  it('persists pipeline terminal events with their run id', () => {
+    const emitter = createElectronEmitter(mainWindow as never, deps as never);
+    const terminalEvent = { kind: 'text' as const, content: 'hello' };
+
+    emitter.emit({
+      type: 'terminal:event',
+      threadId: 'thread-1',
+      runId: 'run-1',
+      event: terminalEvent,
+    } as PipelineEvent);
+
+    expect(deps.terminalEvents.create).toHaveBeenCalledWith('thread-1', terminalEvent, 'run-1');
   });
 
   it('forwards raw pipeline output as agent output without writing activity or terminal records', () => {
@@ -381,7 +396,7 @@ describe('createElectronEmitter event forwarding and terminal bookkeeping', () =
   });
 
   it('skips activity and failure capture when no thread is found', () => {
-    deps.threads.getById = vi.fn(() => null as any);
+    (deps.threads.getById as any).mockReturnValue(null);
     const emitter = createElectronEmitter(mainWindow as never, deps as never);
 
     emitter.emit({

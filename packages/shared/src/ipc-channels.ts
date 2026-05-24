@@ -42,6 +42,7 @@ import type {
   PipelineCheckpoint,
   PipelineModelResolvedEvent,
   PipelinePhase,
+  PipelineRunTimelineEntry,
   PipelineStepRecord,
   PipelineThreadAnalytics,
   PlanRecord,
@@ -624,6 +625,10 @@ export interface IpcInvokeChannels {
   'pipeline-analytics:get-thread': {
     args: { threadId: string };
     result: PipelineThreadAnalytics;
+  };
+  'pipeline-runs:list-by-thread': {
+    args: { threadId: string; terminalLimit?: number };
+    result: PipelineRunTimelineEntry[];
   };
   'activity-heatmap:query': {
     args: HeatmapQueryArgs;

@@ -6,6 +6,7 @@ import { asRow, asRows } from '../utils';
 export interface AgentConversationRecord {
   id: string;
   threadId: string;
+  runId: string | null;
   phase: string;
   round: number;
   speaker: string;
@@ -22,6 +23,7 @@ export interface AgentConversationRecord {
 
 export interface InsertAgentConversation {
   threadId: string;
+  runId?: string | null;
   phase: string;
   round?: number;
   speaker: string;
@@ -38,6 +40,7 @@ export interface InsertAgentConversation {
 interface AgentConversationRow {
   id: string;
   thread_id: string;
+  run_id: string | null;
   phase: string;
   round: number;
   speaker: string;
@@ -60,12 +63,13 @@ export class AgentConversationQueries {
     this.db
       .prepare(
         `INSERT INTO agent_conversations
-          (id, thread_id, phase, round, speaker, role, parent_id, provider, model, content, tokens_in, tokens_out, cost_usd)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, thread_id, run_id, phase, round, speaker, role, parent_id, provider, model, content, tokens_in, tokens_out, cost_usd)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
         input.threadId,
+        input.runId ?? null,
         input.phase,
         input.round ?? 0,
         input.speaker,
@@ -121,6 +125,7 @@ export class AgentConversationQueries {
     return {
       id: row.id,
       threadId: row.thread_id,
+      runId: row.run_id ?? null,
       phase: row.phase,
       round: row.round,
       speaker: row.speaker,

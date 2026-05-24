@@ -14,6 +14,7 @@ import type {
   FeatureQaResultQueries,
   GitHubIssueQueries,
   PhaseLogQueries,
+  PipelineRunQueries,
   PipelineStepQueries,
   PlanQueries,
   ProjectQueries,
@@ -109,7 +110,7 @@ export interface ProjectFailureLedgerQueries {
 
 // Typed event contract -- both desktop and CLI adapters must handle these
 export type PipelineEvent =
-  | { type: 'pipeline:phase'; threadId: string; phase: PipelinePhase }
+  | { type: 'pipeline:phase'; threadId: string; phase: PipelinePhase; runId?: string | null }
   | {
       type: 'pipeline:start-context';
       threadId: string;
@@ -172,6 +173,7 @@ export type PipelineEvent =
        */
       type: 'pipeline:model-resolved';
       threadId: string;
+      runId?: string | null;
       /**
        * The provider phase name (narrower than PipelinePhase: always
        * one of plan|review|revision|execute|verify, never idle etc.)
@@ -213,6 +215,7 @@ export type PipelineEvent =
        */
       type: 'terminal:event';
       threadId: string;
+      runId?: string | null;
       event: TerminalEvent;
     };
 
@@ -223,6 +226,7 @@ export interface PipelineEmitter {
 export interface PipelineContext {
   threadId: string;
   projectPath: string;
+  runId: string | null;
   /** Project ID this thread belongs to. Used to scope per-project skill overrides. */
   projectId: string | null;
   worktreePath: string | null;
@@ -408,6 +412,8 @@ export interface PipelineDeps {
   promptTelemetry?: PromptTelemetryQueries;
   /** Closed phase durations across non-provider work such as testing and shipping. */
   phaseLogs?: PhaseLogQueries;
+  /** Durable per-attempt run ledger tying phases, provider calls, and issue locks together. */
+  pipelineRuns?: PipelineRunQueries;
   /**
    * Lifecycle envelope for individual provider invocations. When provided,
    * the runtime emits one started -> completed/failed/aborted row per phase

@@ -2151,6 +2151,35 @@ Custom prompt`,
       expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
     });
 
+    it('keeps execution in approval when the issue execution lock is held by another run', async () => {
+      const pipelineRuns = {
+        getCurrentForThread: vi.fn(() => null),
+        claimIssueExecution: vi.fn(() => false),
+        start: vi.fn(),
+        setPhase: vi.fn(),
+      };
+      mock.deps.pipelineRuns = pipelineRuns as never;
+      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue(
+        makeIssue({ executionRunId: 'run-other', executionLockOwner: 'claude' }),
+      );
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        runId: 'run-current',
+        projectId: 'project-1',
+        githubIssueNumber: 42,
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(pipelineRuns.claimIssueExecution).not.toHaveBeenCalled();
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
+      expect(pipeline.getContext('t1')).toBeDefined();
+    });
+
     it('fails execution when WORKFLOW.md execute template cannot render', async () => {
       const pipeline = createPipeline(mock.deps);
       pipeline.initializeContext('t1', { projectPath: '/proj', worktreePath: '/worktree' });

@@ -21,6 +21,7 @@ import { asRow, asRows } from '../utils';
 interface ThreadRow {
   id: string;
   project_id: string;
+  current_run_id: string | null;
   kind: ThreadKind;
   title: string;
   prompt: string;
@@ -543,6 +544,7 @@ function mapThread(row: ThreadRow): Thread {
   return {
     id: row.id,
     projectId: row.project_id,
+    currentRunId: row.current_run_id ?? null,
     kind: row.kind,
     title: row.title,
     prompt: row.prompt,

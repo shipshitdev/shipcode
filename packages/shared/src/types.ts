@@ -215,6 +215,7 @@ export interface AgentRunModeSettings {
 export interface Thread {
   id: string;
   projectId: string;
+  currentRunId?: string | null;
   kind: ThreadKind;
   title: string;
   prompt: string;
@@ -272,6 +273,7 @@ export interface PromptTelemetryMaterialSummary {
 export interface PromptTelemetryRecord {
   id: string;
   threadId: string;
+  runId?: string | null;
   phase: PromptTelemetryPhase;
   invocationId: string;
   attempt: number | null;
@@ -289,6 +291,7 @@ export interface PromptTelemetryRecord {
 
 export interface PromptTelemetryInsert {
   threadId: string;
+  runId?: string | null;
   phase: PromptTelemetryPhase;
   invocationId: string;
   attempt?: number | null;
@@ -301,6 +304,112 @@ export interface PromptTelemetryInsert {
   promptTokens?: number | null;
   completionTokens?: number | null;
   costUsd?: number | null;
+}
+
+// === Pipeline run + step log ===
+//
+// A durable pipeline run is the execution-management primitive that ties the
+// existing phase log, step log, conversations, telemetry, and issue ownership
+// together. Threads are user-facing history; runs are individual attempts.
+
+export type PipelineRunStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled'
+  | 'paused'
+  | 'interrupted';
+
+export interface PipelineRunRecord {
+  id: string;
+  threadId: string;
+  projectId: string | null;
+  source: string;
+  triggerDetail: string | null;
+  status: PipelineRunStatus;
+  currentPhase: PipelinePhase | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  errorMessage: string | null;
+  errorKind: string | null;
+  context: Record<string, unknown> | null;
+  retryOfRunId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PipelineRunInsert {
+  threadId: string;
+  projectId?: string | null;
+  source: string;
+  triggerDetail?: string | null;
+  currentPhase?: PipelinePhase | null;
+  context?: Record<string, unknown> | null;
+  retryOfRunId?: string | null;
+}
+
+export interface PipelineRunFinishUpdate {
+  status: Exclude<PipelineRunStatus, 'queued' | 'running'>;
+  currentPhase?: PipelinePhase | null;
+  errorMessage?: string | null;
+  errorKind?: string | null;
+  context?: Record<string, unknown> | null;
+}
+
+export interface PipelineRunTimelineEntry {
+  run: PipelineRunRecord;
+  isCurrent: boolean;
+  retryDepth: number;
+  phaseTimeline: PipelinePhaseLogRecord[];
+  steps: PipelineStepRecord[];
+  terminalEvents: TerminalEventRecord[];
+}
+
+export type PipelineWakeRequestStatus =
+  | 'pending'
+  | 'claimed'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+export type PipelineWakeRequestKind = 'automation' | 'pipeline' | 'execution' | 'maintenance';
+
+export interface PipelineWakeRequestRecord {
+  id: string;
+  kind: PipelineWakeRequestKind;
+  source: string;
+  reason: string;
+  targetType: string;
+  targetId: string;
+  projectId: string | null;
+  threadId: string | null;
+  runId: string | null;
+  idempotencyKey: string | null;
+  status: PipelineWakeRequestStatus;
+  scheduledAt: string;
+  claimedAt: string | null;
+  claimedBy: string | null;
+  completedAt: string | null;
+  failedAt: string | null;
+  lastError: string | null;
+  coalescedCount: number;
+  payload: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PipelineWakeRequestInsert {
+  kind: PipelineWakeRequestKind;
+  source: string;
+  reason: string;
+  targetType: string;
+  targetId: string;
+  projectId?: string | null;
+  threadId?: string | null;
+  runId?: string | null;
+  idempotencyKey?: string | null;
+  scheduledAt?: string | null;
+  payload?: Record<string, unknown> | null;
 }
 
 // === Pipeline step log ===
@@ -323,6 +432,7 @@ export type PipelineStepPhase = PromptTelemetryPhase;
 export interface PipelineStepRecord {
   id: string;
   threadId: string;
+  runId?: string | null;
   phase: PipelineStepPhase;
   attempt: number;
   provider: string | null;
@@ -341,6 +451,7 @@ export interface PipelineStepRecord {
 
 export interface PipelineStepInsert {
   threadId: string;
+  runId?: string | null;
   phase: PipelineStepPhase;
   attempt: number;
   provider?: string | null;
@@ -366,6 +477,7 @@ export type PipelinePhaseTerminalStatus = PipelinePhase | PipelineStepStatus | '
 export interface PipelinePhaseLogRecord {
   id: string;
   threadId: string;
+  runId?: string | null;
   phase: PipelinePhase;
   startedAt: string;
   completedAt: string | null;
@@ -377,6 +489,7 @@ export interface PipelinePhaseLogRecord {
 
 export interface PipelinePhaseLogInsert {
   threadId: string;
+  runId?: string | null;
   phase: PipelinePhase;
   startedAt?: string;
   metadata?: Record<string, unknown> | null;
@@ -571,6 +684,7 @@ export type CanonicalTerminalEvent =
 export interface TerminalEventRecord {
   id: string;
   threadId: string;
+  runId?: string | null;
   event: CanonicalTerminalEvent;
   createdAt: string;
 }
@@ -1406,6 +1520,7 @@ export interface GitHubIssueCacheRecord {
   executionLockedAt?: string | null;
   executionLockOwner?: string | null;
   lastPhaseUpdate: string | null;
+  pipelineStartedAt?: string | null;
   lastStatusLabel: string | null;
   // Nullable per-issue phase provider overrides. Null means "inherit from
   // project/global settings".
@@ -1912,109 +2027,4 @@ export interface NotificationRecord {
   body: string;
   createdAt: string;
   dismissedAt: string | null;
-}
-
-// === Pipeline Runs ===
-
-export type PipelineRunStatus =
-  | 'queued'
-  | 'running'
-  | 'succeeded'
-  | 'failed'
-  | 'interrupted'
-  | 'paused'
-  | 'cancelled';
-
-export interface PipelineRunInsert {
-  threadId: string;
-  projectId?: string | null;
-  source: string;
-  triggerDetail?: string | null;
-  currentPhase?: PipelinePhase | null;
-  context?: Record<string, unknown> | null;
-  retryOfRunId?: string | null;
-}
-
-export interface PipelineRunFinishUpdate {
-  status: PipelineRunStatus;
-  currentPhase?: PipelinePhase | null;
-  errorMessage?: string | null;
-  errorKind?: string | null;
-  context?: Record<string, unknown> | null;
-}
-
-export interface PipelineRunRecord {
-  id: string;
-  threadId: string;
-  projectId: string | null;
-  source: string;
-  triggerDetail: string | null;
-  status: PipelineRunStatus;
-  currentPhase: PipelinePhase | null;
-  startedAt: string | null;
-  finishedAt: string | null;
-  errorMessage: string | null;
-  errorKind: string | null;
-  context: Record<string, unknown> | null;
-  retryOfRunId: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PipelineRunTimelineEntry {
-  run: PipelineRunRecord;
-  isCurrent: boolean;
-  retryDepth: number;
-  phaseTimeline: Array<PipelinePhaseLogRecord & { runId: string | null }>;
-  steps: Array<PipelineStepRecord & { runId: string | null }>;
-  terminalEvents: Array<TerminalEventRecord & { runId: string | null }>;
-}
-
-// === Pipeline Wake Requests ===
-
-export type PipelineWakeRequestKind = 'automation' | 'scheduler' | 'retry';
-
-export type PipelineWakeRequestStatus =
-  | 'pending'
-  | 'claimed'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
-
-export interface PipelineWakeRequestInsert {
-  kind: PipelineWakeRequestKind;
-  source: string;
-  reason: string;
-  targetType: string;
-  targetId: string;
-  projectId?: string | null;
-  threadId?: string | null;
-  runId?: string | null;
-  idempotencyKey?: string | null;
-  scheduledAt?: string | null;
-  payload?: Record<string, unknown> | null;
-}
-
-export interface PipelineWakeRequestRecord {
-  id: string;
-  kind: PipelineWakeRequestKind;
-  source: string;
-  reason: string;
-  targetType: string;
-  targetId: string;
-  projectId: string | null;
-  threadId: string | null;
-  runId: string | null;
-  idempotencyKey: string | null;
-  status: PipelineWakeRequestStatus;
-  scheduledAt: string;
-  claimedAt: string | null;
-  claimedBy: string | null;
-  completedAt: string | null;
-  failedAt: string | null;
-  lastError: string | null;
-  coalescedCount: number;
-  payload: Record<string, unknown> | null;
-  createdAt: string;
-  updatedAt: string;
 }

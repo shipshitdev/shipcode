@@ -183,6 +183,15 @@ describe('PipelineScheduler', () => {
   let scheduler: PipelineScheduler;
 
   function makeQueries(settingsOverrides: Record<string, unknown> = {}) {
+    const wakeQueue: Array<{
+      id: string;
+      kind: string;
+      targetId: string;
+      projectId: string | null;
+      status: string;
+      coalescedCount: number;
+      idempotencyKey: string | null;
+    }> = [];
     return {
       projects: {
         getById: vi.fn((_id?: string) => makeProject() as ReturnType<typeof makeProject> | null),
@@ -218,6 +227,62 @@ describe('PipelineScheduler', () => {
         linkThread: vi.fn(),
         list: vi.fn(() => []),
         getNextQueued: vi.fn(() => null as ReturnType<typeof makeIssue> | null),
+      },
+      wakeRequests: {
+        enqueue: vi.fn(
+          (input: {
+            kind: string;
+            targetId: string;
+            projectId?: string | null;
+            idempotencyKey?: string | null;
+          }) => {
+            const existing = input.idempotencyKey
+              ? wakeQueue.find(
+                  (wake) =>
+                    wake.idempotencyKey === input.idempotencyKey &&
+                    (wake.status === 'pending' || wake.status === 'claimed'),
+                )
+              : null;
+            if (existing) {
+              existing.coalescedCount += 1;
+              return existing;
+            }
+            const wake = {
+              id: `wake-${wakeQueue.length + 1}`,
+              kind: input.kind,
+              targetId: input.targetId,
+              projectId: input.projectId ?? null,
+              status: 'pending',
+              coalescedCount: 0,
+              idempotencyKey: input.idempotencyKey ?? null,
+            };
+            wakeQueue.push(wake);
+            return wake;
+          },
+        ),
+        peekNextPending: vi.fn((filter?: { kind?: string }) => {
+          return (
+            wakeQueue.find(
+              (wake) => wake.status === 'pending' && (!filter?.kind || wake.kind === filter.kind),
+            ) ?? null
+          );
+        }),
+        claim: vi.fn((id: string) => {
+          const wake = wakeQueue.find((entry) => entry.id === id && entry.status === 'pending');
+          if (!wake) return null;
+          wake.status = 'claimed';
+          return wake;
+        }),
+        complete: vi.fn((id: string) => {
+          const wake = wakeQueue.find((entry) => entry.id === id);
+          if (wake) wake.status = 'completed';
+          return wake ?? null;
+        }),
+        fail: vi.fn((id: string) => {
+          const wake = wakeQueue.find((entry) => entry.id === id);
+          if (wake) wake.status = 'failed';
+          return wake ?? null;
+        }),
       },
       settings: {
         get: vi.fn(() => makeBaseSettings(settingsOverrides)),
@@ -1171,7 +1236,7 @@ describe('PipelineScheduler', () => {
       expect(queries.automations.recordRunStarted).toHaveBeenCalledWith('auto-1', 'thread-new');
     });
 
-    it('queues the automation in-memory when at capacity', async () => {
+    it('queues the automation durably when at capacity', async () => {
       pipeline.listActiveInPhases.mockReturnValue([
         { threadId: 'a', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
         { threadId: 'b', phase: 'planning', startedAt: Date.now(), activeProcessId: null },

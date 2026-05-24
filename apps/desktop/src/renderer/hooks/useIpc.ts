@@ -259,6 +259,7 @@ export function useIpc() {
         queueTerminalEvent({
           id: data.id,
           threadId: data.threadId,
+          runId: data.runId,
           event: data.event,
           createdAt: data.createdAt,
         });

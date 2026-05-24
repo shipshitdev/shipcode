@@ -314,6 +314,14 @@ export function getFailurePresentation(
     };
   }
 
+  if (/no code changes/i.test(text)) {
+    return {
+      label: `No changes produced${countSuffix}`,
+      detail:
+        'The executor completed without modifying any files. Add more detail to the issue description and replan.',
+    };
+  }
+
   if (/execution failed|execution error|setup failed|worktree creation failed/i.test(text)) {
     return {
       label: `Worktree execution failed${countSuffix}`,

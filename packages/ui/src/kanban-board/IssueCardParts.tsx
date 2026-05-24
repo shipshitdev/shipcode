@@ -267,7 +267,7 @@ function useDraggableCardView({
   isKeyboardFocused,
   isStartingPipeline,
   isRerunning,
-  isCancelling,
+  isPausing,
   isFlashing = false,
   hoverCardEnabled = true,
   onFetchPlanSteps,
@@ -495,26 +495,22 @@ function useDraggableCardView({
               {isRerunning ? 'Retrying' : 'Retry'}
             </Button>
           )}
-          {isActive && onCancel && !readOnly && (
+          {isActive && onPause && !readOnly && (
             <Button
               variant="ghost"
               size="xs"
-              className="h-6 gap-1 rounded border border-danger/30 bg-danger/10 px-2 text-[10px] font-semibold uppercase tracking-wide text-danger hover:border-danger/50 hover:bg-danger/20 hover:text-danger"
-              title={isCancelling ? 'Cancelling' : 'Cancel pipeline'}
-              disabled={isCancelling}
+              className="h-6 gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-2 text-[10px] font-semibold uppercase tracking-wide text-amber-400 hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-300"
+              title={isPausing ? 'Pausing' : 'Pause pipeline'}
+              disabled={isPausing}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation();
-                if (isCancelling) return;
-                onCancel(issue);
+                if (isPausing) return;
+                onPause(issue);
               }}
             >
-              {isCancelling ? (
-                <Loader2 size={10} className="animate-spin" />
-              ) : (
-                <XCircle size={10} />
-              )}
-              {isCancelling ? 'Cancelling' : 'Cancel'}
+              {isPausing ? <Loader2 size={10} className="animate-spin" /> : <Square size={10} />}
+              {isPausing ? 'Pausing' : 'Pause'}
             </Button>
           )}
           <div className="ml-auto flex items-center gap-1">
@@ -533,7 +529,7 @@ function useDraggableCardView({
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    className="text-muted-foreground/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
+                    className="-mr-2 text-muted-foreground/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
                     title="More actions"
                     aria-label="More actions"
                     onPointerDown={(event) => event.stopPropagation()}
@@ -550,13 +546,13 @@ function useDraggableCardView({
                   {branchName && onCopyBranchName && !isAutomation && (
                     <DropdownMenuItem onClick={() => onCopyBranchName(issue, branchName)}>
                       {branchCopyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
-                      {branchCopyState === 'copied' ? 'Copied!' : 'Copy branch'}
-                    </DropdownMenuItem>
-                  )}
-                  {isActive && onPause && (
-                    <DropdownMenuItem onClick={() => onPause(issue)}>
-                      <Square size={14} />
-                      Pause
+                      {branchCopyState === 'copied' ? (
+                        'Copied!'
+                      ) : (
+                        <span className="max-w-[160px] truncate font-mono text-[11px]">
+                          {branchName}
+                        </span>
+                      )}
                     </DropdownMenuItem>
                   )}
                   {isPaused && onResume && (

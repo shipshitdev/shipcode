@@ -204,7 +204,12 @@ export function getDatabase(dataDir: string): DatabaseSync {
   // issues without thread_id; this catches the remainder on every startup.
   db.prepare(`
     UPDATE github_issue_cache
-       SET pipeline_status = ?, last_phase_update = NULL
+       SET pipeline_status = ?,
+           last_phase_update = NULL,
+           pipeline_started_at = NULL,
+           execution_run_id = NULL,
+           execution_locked_at = NULL,
+           execution_lock_owner = NULL
      WHERE pipeline_status = ?
        AND claimed_at IS NULL
   `).run(ISSUE_PIPELINE_STATUS.todo, ISSUE_PIPELINE_STATUS.queued);

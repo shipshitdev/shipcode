@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import type {
   ActivePipelineSummary,
   HeatmapQueryArgs,
+  PipelineRunTimelineEntry,
   TerminalEventRecord,
   Thread,
 } from '@shipcode/shared';
@@ -37,6 +38,7 @@ const AUTO_FIX_FAILURE_OUTPUT_MAX = 8_000;
 const EXECUTION_RESUME_PROMPT_MAX = 24_000;
 const EXECUTION_RESUME_GIT_OUTPUT_MAX = 12_000;
 const EXECUTION_RESUME_TERMINAL_LIMIT = 120;
+const RUN_TIMELINE_TERMINAL_LIMIT = 40;
 const INTERRUPTED_EXECUTION_MARKERS = [
   'interrupted while ShipCode was closed',
   'interrupted by an app refresh',
@@ -320,6 +322,18 @@ export function registerPipelineHandlers({
     await assertCliPhaseModelsSupported(phaseModels);
     queries.threads.setPhaseModels(threadId, phaseModels);
 
+    const baseBranch = project.defaultBranch;
+    let forkPointSha = '';
+    try {
+      const { stdout } = await execFileAsync('git', ['rev-parse', baseBranch], {
+        cwd: project.path,
+        encoding: 'utf8',
+      });
+      forkPointSha = stdout.trim();
+    } catch {
+      // baseBranch may not exist locally; forkPointSha stays empty
+    }
+
     pipeline.initializeContext(threadId, {
       projectPath: project.path,
       worktreePath: null,
@@ -336,7 +350,8 @@ export function registerPipelineHandlers({
       executorReasoningEffort: phaseModels.executorReasoningEffort,
       verifierReasoningEffort: phaseModels.verifierReasoningEffort,
       clarificationHistory: [],
-      baseBranch: project.defaultBranch,
+      baseBranch,
+      forkPointSha,
     });
     logEvent('pipeline:start-context', {
       threadId,
@@ -597,7 +612,10 @@ export function registerPipelineHandlers({
     threadId: string,
     event: Parameters<typeof queries.terminalEvents.create>[1],
   ) => {
-    const record = queries.terminalEvents.create(threadId, event);
+    const runId = queries.threads.getById(threadId)?.currentRunId ?? null;
+    const record = runId
+      ? queries.terminalEvents.create(threadId, event, runId)
+      : queries.terminalEvents.create(threadId, event);
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send('terminal:event', record);
     }
@@ -1212,6 +1230,50 @@ export function registerPipelineHandlers({
   ipcMain.handle('pipeline-analytics:get-thread', (_event, { threadId }: { threadId: string }) => {
     return queries.pipelineAnalytics.getThread(threadId);
   });
+
+  ipcMain.handle(
+    'pipeline-runs:list-by-thread',
+    (
+      _event,
+      { threadId, terminalLimit }: { threadId: string; terminalLimit?: number },
+    ): PipelineRunTimelineEntry[] => {
+      const requestedLimit = Number.isFinite(terminalLimit)
+        ? (terminalLimit as number)
+        : RUN_TIMELINE_TERMINAL_LIMIT;
+      const limit = Math.max(5, Math.min(requestedLimit, 120));
+      const thread = queries.threads.getById(threadId);
+      const runs = queries.pipelineRuns.listByThread(threadId);
+      const runIds = new Set(runs.map((run) => run.id));
+      const phaseLogs = queries.phaseLogs.listByThread(threadId);
+      const steps = queries.pipelineSteps.listByThread(threadId);
+      const phasesByRun = new Map(
+        runs.map((run) => [run.id, phaseLogs.filter((phase) => phase.runId === run.id)]),
+      );
+      const stepsByRun = new Map(
+        runs.map((run) => [run.id, steps.filter((step) => step.runId === run.id)]),
+      );
+      const retryDepth = (runId: string): number => {
+        let depth = 0;
+        let cursor = runs.find((run) => run.id === runId)?.retryOfRunId ?? null;
+        const seen = new Set<string>([runId]);
+        while (cursor && runIds.has(cursor) && !seen.has(cursor)) {
+          seen.add(cursor);
+          depth += 1;
+          cursor = runs.find((run) => run.id === cursor)?.retryOfRunId ?? null;
+        }
+        return depth;
+      };
+
+      return runs.map((run) => ({
+        run,
+        isCurrent: thread?.currentRunId === run.id,
+        retryDepth: retryDepth(run.id),
+        phaseTimeline: phasesByRun.get(run.id) ?? [],
+        steps: stepsByRun.get(run.id) ?? [],
+        terminalEvents: queries.terminalEvents.listByRun(run.id, limit),
+      }));
+    },
+  );
 
   // GitHub-style contribution heatmap (cost / tokens / runs / PRs). One IPC
   // serves three surfaces: global Costs dashboard, per-project Insights tab,

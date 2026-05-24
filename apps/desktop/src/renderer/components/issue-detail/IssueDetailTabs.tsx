@@ -20,6 +20,7 @@ import { DiffTab } from './DiffTab';
 import { IssueHistoryTab } from './IssueHistoryTab';
 import { PlanHistoryTab } from './PlanHistoryTab';
 import { PrdTab } from './PrdTab';
+import { RunsTab } from './RunsTab';
 import type { IssueDetailTab, PhaseKey, PhaseSelection, PlanRunGroup } from './tab-types';
 
 interface IssueDetailTabsProps {
@@ -126,6 +127,7 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
     ...(activeThreadId
       ? [{ value: 'diff' as const, label: diffs.length > 0 ? `Diff (${diffs.length})` : 'Diff' }]
       : []),
+    ...(activeThreadId ? [{ value: 'runs' as const, label: 'Runs' }] : []),
     {
       value: 'activity',
       label: `Activity${normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}`,
@@ -202,6 +204,12 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
       <TabsContent value="diff" className={'mt-0'}>
         <DiffTab diffs={diffs} threadStatus={props.thread?.status} />
       </TabsContent>
+
+      {activeThreadId && (
+        <TabsContent value="runs" className={'mt-0'}>
+          <RunsTab threadId={activeThreadId} />
+        </TabsContent>
+      )}
 
       <TabsContent value="activity" className={'mt-0'}>
         <IssueHistoryTab

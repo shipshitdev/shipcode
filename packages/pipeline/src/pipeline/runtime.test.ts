@@ -46,6 +46,7 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
   return {
     threadId: 'thread-1',
     projectPath: '/repo',
+    runId: null,
     projectId: 'project-1',
     worktreePath: '/repo-worktree',
     retryCount: 0,
@@ -254,6 +255,23 @@ describe('createPipelineRuntime', () => {
     expect(runtime.resolveAgentForPhase(context, 'review')).toBe('codex');
     expect(runtime.resolveAgentForPhase(context, 'verify')).toBe('openrouter');
     expect(runtime.resolveAgentForPhase(context, 'execute')).toBe('claude');
+  });
+
+  it('tags terminal events with the active run id when available', () => {
+    const { deps } = makeDeps();
+    const context = makeContext({ runId: 'run-1' });
+    const runtime = createPipelineRuntime(deps, {
+      activePipelines: new Map([['thread-1', context]]),
+    } as never);
+
+    runtime.emitTerminalRaw('thread-1', 'raw');
+
+    expect(deps.emitter.emit).toHaveBeenCalledWith({
+      type: 'terminal:event',
+      threadId: 'thread-1',
+      runId: 'run-1',
+      event: { kind: 'raw', content: 'raw' },
+    });
   });
 
   it('caches repo setup contracts and exposes testing/verification context', () => {
@@ -873,6 +891,7 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext({
+      runId: 'run-1',
       promptMaterialSummaries: { plan: { totalMaterials: 0 } } as never,
     });
 
@@ -890,7 +909,15 @@ describe('createPipelineRuntime', () => {
     );
     expect(deps.threads.setResolvedModel).toHaveBeenCalledWith('thread-1', 'plan', 'claude-opus');
     expect(deps.threads.addTokenUsage).toHaveBeenCalledWith('thread-1', 10, 5, 0.01);
-    expect(deps.promptTelemetry?.create).toHaveBeenCalled();
+    expect(deps.pipelineSteps?.start).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'thread-1', runId: 'run-1', phase: 'plan' }),
+    );
+    expect(deps.agentConversations?.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'thread-1', runId: 'run-1', role: 'prompt' }),
+    );
+    expect(deps.promptTelemetry?.create).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'thread-1', runId: 'run-1', phase: 'plan' }),
+    );
   });
 
   it('passes executor model overrides and omits workspace roots outside worktrees', async () => {
@@ -1549,6 +1576,37 @@ describe('createPipelineRuntime', () => {
       type: 'pipeline:phase',
       threadId: 'thread-1',
       phase: 'executing',
+    });
+  });
+
+  it('creates resumed runs with retry lineage from the latest prior run', () => {
+    const { deps } = makeDeps();
+    const context = makeContext({ runId: null });
+    const pipelineRuns = {
+      getCurrentForThread: vi.fn(() => null),
+      listByThread: vi.fn(() => [{ id: 'run-old' }]),
+      create: vi.fn(() => ({ id: 'run-new' })),
+      start: vi.fn(),
+      setPhase: vi.fn(),
+      finish: vi.fn(),
+      claimIssueExecution: vi.fn(),
+    };
+    deps.pipelineRuns = pipelineRuns as never;
+    const runtime = createPipelineRuntime(deps, {
+      activePipelines: new Map([['thread-1', context]]),
+    } as never);
+
+    runtime.emitPhase('thread-1', 'executing');
+
+    expect(pipelineRuns.create).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'thread-1', retryOfRunId: 'run-old' }),
+    );
+    expect(context.runId).toBe('run-new');
+    expect(deps.emitter.emit).toHaveBeenCalledWith({
+      type: 'pipeline:phase',
+      threadId: 'thread-1',
+      phase: 'executing',
+      runId: 'run-new',
     });
   });
 

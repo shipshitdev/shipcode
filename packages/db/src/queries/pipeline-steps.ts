@@ -12,6 +12,7 @@ import { asRow, asRows } from '../utils';
 interface PipelineStepRow {
   id: string;
   thread_id: string;
+  run_id: string | null;
   phase: PipelineStepPhase;
   attempt: number;
   provider: string | null;
@@ -41,12 +42,13 @@ export class PipelineStepQueries {
     this.db
       .prepare(
         `INSERT INTO pipeline_step_log (
-          id, thread_id, phase, attempt, provider, requested_model, status
-        ) VALUES (?, ?, ?, ?, ?, ?, 'started')`,
+          id, thread_id, run_id, phase, attempt, provider, requested_model, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'started')`,
       )
       .run(
         id,
         input.threadId,
+        input.runId ?? null,
         input.phase,
         input.attempt,
         input.provider ?? null,
@@ -119,6 +121,7 @@ function mapRow(row: PipelineStepRow): PipelineStepRecord {
   return {
     id: row.id,
     threadId: row.thread_id,
+    runId: row.run_id ?? null,
     phase: row.phase,
     attempt: row.attempt,
     provider: row.provider,

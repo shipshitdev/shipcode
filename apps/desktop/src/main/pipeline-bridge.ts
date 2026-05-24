@@ -119,8 +119,11 @@ export function createElectronEmitter(
   function emitCanonicalTerminalEvent(
     threadId: string,
     event: import('@shipcode/shared').CanonicalTerminalEvent,
+    runId?: string | null,
   ) {
-    const record = deps.terminalEvents.create(threadId, event);
+    const record = runId
+      ? deps.terminalEvents.create(threadId, event, runId)
+      : deps.terminalEvents.create(threadId, event);
     if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
       try {
         mainWindow.webContents.send('terminal:event', record);
@@ -137,6 +140,7 @@ export function createElectronEmitter(
         logEvent('pipeline:phase', {
           threadId: event.threadId,
           phase: event.phase,
+          runId: event.runId ?? null,
         });
         return;
       case 'pipeline:start-context':
@@ -183,6 +187,7 @@ export function createElectronEmitter(
       case 'terminal:event':
         logEvent('terminal:event', {
           threadId: event.threadId,
+          runId: event.runId ?? null,
           kind: event.event.kind,
         });
         return;
@@ -353,7 +358,7 @@ export function createElectronEmitter(
           log.error('[pipeline-bridge] event log write failed:', err);
         }
         try {
-          emitCanonicalTerminalEvent(event.threadId, event.event);
+          emitCanonicalTerminalEvent(event.threadId, event.event, event.runId ?? null);
         } catch (err) {
           log.error('[pipeline-bridge] terminal event write failed:', err);
         }
@@ -386,10 +391,14 @@ export function createElectronEmitter(
 
       if (event.type === 'pipeline:phase') {
         try {
-          const record = emitCanonicalTerminalEvent(event.threadId, {
-            kind: 'lifecycle',
-            message: `${formatTimestampPrefix(new Date().toISOString())} phase: \x1b[36m${event.phase}\x1b[0m`,
-          });
+          const record = emitCanonicalTerminalEvent(
+            event.threadId,
+            {
+              kind: 'lifecycle',
+              message: `${formatTimestampPrefix(new Date().toISOString())} phase: \x1b[36m${event.phase}\x1b[0m`,
+            },
+            event.runId ?? thread?.currentRunId ?? null,
+          );
           if (event.phase === PIPELINE_PHASE.planning) {
             logEvent('terminal:phase-persisted', {
               threadId: event.threadId,
@@ -419,10 +428,14 @@ export function createElectronEmitter(
                 (event.tokensUsed.prompt * 62.5 + event.tokensUsed.completion * 375) / 1_000_000;
               costStr = ` \x1b[2m~$${estimated.toFixed(4)}\x1b[0m`;
             }
-            emitCanonicalTerminalEvent(event.threadId, {
-              kind: 'lifecycle',
-              message: `${formatTimestampPrefix(new Date().toISOString())} \x1b[35mmodel:\x1b[0m ${displayName}${tokenStr}${costStr}`,
-            });
+            emitCanonicalTerminalEvent(
+              event.threadId,
+              {
+                kind: 'lifecycle',
+                message: `${formatTimestampPrefix(new Date().toISOString())} \x1b[35mmodel:\x1b[0m ${displayName}${tokenStr}${costStr}`,
+              },
+              event.runId ?? thread?.currentRunId ?? null,
+            );
           }
         } catch (err) {
           log.error('[pipeline-bridge] model terminal write failed:', err);

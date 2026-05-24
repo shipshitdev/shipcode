@@ -524,6 +524,7 @@ function useIssueDetailView() {
     !!latestVerification?.structured;
   const retryAction = useMemo(() => {
     if (!thread) return null;
+    if (/no code changes/i.test(thread.lastError ?? '')) return 'plan' as const;
     const structuredPlan = latestPlan?.structured ?? null;
     if (!structuredPlan) return 'plan' as const;
     if (!thread.worktreePath) return 'review' as const;
@@ -558,7 +559,9 @@ function useIssueDetailView() {
           : retryAction === 'commit_and_push'
             ? 'Retry will resume from commit and push using the verified worktree.'
             : retryAction === 'plan'
-              ? 'Retry will start a fresh planning pass. This resumes the workflow, not the same live planner session.'
+              ? /no code changes/i.test(thread?.lastError ?? '')
+                ? 'The executor produced no file changes. Update the issue description with more detail before replanning.'
+                : 'Retry will start a fresh planning pass. This resumes the workflow, not the same live planner session.'
               : null;
   const threadPhase = currentPipelinePhase;
   const canStartPipeline =

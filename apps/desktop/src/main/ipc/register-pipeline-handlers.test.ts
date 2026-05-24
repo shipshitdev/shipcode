@@ -154,6 +154,7 @@ describe('registerPipelineHandlers', () => {
     };
     terminalEvents: {
       listByThread: ReturnType<typeof vi.fn>;
+      listByRun: ReturnType<typeof vi.fn>;
       create: ReturnType<typeof vi.fn>;
     };
     verifications: {
@@ -183,6 +184,12 @@ describe('registerPipelineHandlers', () => {
       getLatest: ReturnType<typeof vi.fn>;
     };
     pipelineSteps: {
+      listByThread: ReturnType<typeof vi.fn>;
+    };
+    phaseLogs: {
+      listByThread: ReturnType<typeof vi.fn>;
+    };
+    pipelineRuns: {
       listByThread: ReturnType<typeof vi.fn>;
     };
     promptTelemetry: {
@@ -290,6 +297,7 @@ describe('registerPipelineHandlers', () => {
       },
       terminalEvents: {
         listByThread: vi.fn(() => []),
+        listByRun: vi.fn(() => []),
         create: vi.fn(),
       },
       verifications: {
@@ -340,6 +348,12 @@ describe('registerPipelineHandlers', () => {
         })),
       },
       pipelineSteps: {
+        listByThread: vi.fn(() => []),
+      },
+      phaseLogs: {
+        listByThread: vi.fn(() => []),
+      },
+      pipelineRuns: {
         listByThread: vi.fn(() => []),
       },
       promptTelemetry: {
@@ -495,6 +509,88 @@ describe('registerPipelineHandlers', () => {
         'verification output',
         'review output',
       ]);
+    });
+  });
+
+  describe('pipeline-runs:list-by-thread', () => {
+    it('returns run ledger entries with scoped phases, steps, terminal output, and retry depth', () => {
+      queries.threads.getById.mockReturnValue(makeThread({ currentRunId: 'run-2' }));
+      queries.pipelineRuns.listByThread.mockReturnValue([
+        {
+          id: 'run-2',
+          threadId: 'thread-1',
+          projectId: 'project-1',
+          source: 'pipeline:resume',
+          triggerDetail: null,
+          status: 'running',
+          currentPhase: 'executing',
+          startedAt: '2026-05-12T10:00:00.000Z',
+          finishedAt: null,
+          errorMessage: null,
+          errorKind: null,
+          context: null,
+          retryOfRunId: 'run-1',
+          createdAt: '2026-05-12T10:00:00.000Z',
+          updatedAt: '2026-05-12T10:01:00.000Z',
+        },
+        {
+          id: 'run-1',
+          threadId: 'thread-1',
+          projectId: 'project-1',
+          source: 'github:start-issue',
+          triggerDetail: 'issue:42',
+          status: 'failed',
+          currentPhase: 'failed',
+          startedAt: '2026-05-12T09:00:00.000Z',
+          finishedAt: '2026-05-12T09:30:00.000Z',
+          errorMessage: 'failed',
+          errorKind: 'phase_error',
+          context: null,
+          retryOfRunId: null,
+          createdAt: '2026-05-12T09:00:00.000Z',
+          updatedAt: '2026-05-12T09:30:00.000Z',
+        },
+      ]);
+      queries.phaseLogs.listByThread.mockReturnValue([
+        { id: 'phase-1', runId: 'run-2', phase: 'executing' },
+        { id: 'phase-old', runId: 'run-1', phase: 'failed' },
+      ]);
+      queries.pipelineSteps.listByThread.mockReturnValue([
+        { id: 'step-1', runId: 'run-2', phase: 'execute' },
+        { id: 'step-old', runId: 'run-1', phase: 'plan' },
+      ]);
+      queries.terminalEvents.listByRun.mockImplementation((runId: string) => [
+        {
+          id: `terminal-${runId}`,
+          threadId: 'thread-1',
+          runId,
+          createdAt: '2026-05-12T10:00:00.000Z',
+          event: { kind: 'raw', content: runId },
+        },
+      ]);
+
+      const handler = handlers.get('pipeline-runs:list-by-thread');
+      if (!handler) throw new Error('pipeline-runs:list-by-thread handler not registered');
+
+      const result = handler(undefined, { threadId: 'thread-1', terminalLimit: 500 }) as Array<{
+        run: { id: string };
+        isCurrent: boolean;
+        retryDepth: number;
+        phaseTimeline: Array<{ id: string }>;
+        steps: Array<{ id: string }>;
+        terminalEvents: Array<{ id: string }>;
+      }>;
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({
+        run: { id: 'run-2' },
+        isCurrent: true,
+        retryDepth: 1,
+        phaseTimeline: [{ id: 'phase-1' }],
+        steps: [{ id: 'step-1' }],
+        terminalEvents: [{ id: 'terminal-run-2' }],
+      });
+      expect(queries.terminalEvents.listByRun).toHaveBeenCalledWith('run-2', 120);
     });
   });
 

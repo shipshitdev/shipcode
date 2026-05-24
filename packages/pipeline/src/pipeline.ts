@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { buildWorkpadProtocol } from '@shipcode/agents/source';
 import {
+  type PipelinePhase,
   resolvePipelineSpeedProfile,
   resolveRequireApproval,
   resolveRequireApprovalForIssue,
@@ -35,6 +36,63 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       handlers,
     }),
   );
+
+  function createRun(input: {
+    threadId: string;
+    source: string;
+    triggerDetail: string | null;
+    currentPhase: PipelinePhase;
+    context: Record<string, unknown>;
+    retryOfRunId?: string | null;
+  }): string | null {
+    if (!deps.pipelineRuns) return null;
+    try {
+      const thread = deps.threads.getById(input.threadId);
+      const previousRun =
+        input.retryOfRunId !== undefined
+          ? null
+          : (deps.pipelineRuns.getCurrentForThread(input.threadId) ??
+            deps.pipelineRuns.listByThread(input.threadId)[0] ??
+            null);
+      const retryOfRunId =
+        input.retryOfRunId !== undefined ? input.retryOfRunId : (previousRun?.id ?? null);
+      return deps.pipelineRuns.create({
+        threadId: input.threadId,
+        projectId: thread?.projectId ?? null,
+        source: input.source,
+        triggerDetail: input.triggerDetail,
+        currentPhase: input.currentPhase,
+        context: input.context,
+        retryOfRunId,
+      }).id;
+    } catch (error) {
+      console.error(`[pipeline] failed to create run for thread ${input.threadId}:`, error);
+      return null;
+    }
+  }
+
+  function finishCurrentRun(
+    threadId: string,
+    status: 'cancelled' | 'paused',
+    errorMessage: string,
+  ): void {
+    if (!deps.pipelineRuns) return;
+    try {
+      const runId =
+        activePipelines.get(threadId)?.runId ??
+        deps.pipelineRuns.getCurrentForThread(threadId)?.id ??
+        null;
+      if (!runId) return;
+      deps.pipelineRuns.finish(runId, {
+        status,
+        currentPhase: status === 'paused' ? 'paused' : 'idle',
+        errorKind: status,
+        errorMessage,
+      });
+    } catch (error) {
+      console.error(`[pipeline] failed to finish run for thread ${threadId}:`, error);
+    }
+  }
 
   async function startFromGitHubIssue(
     threadId: string,
@@ -95,8 +153,22 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     });
     deps.threads.clearClarification(threadId);
 
+    const runId = createRun({
+      threadId,
+      source: 'github:start-issue',
+      triggerDetail: `issue:${issue.number}`,
+      currentPhase: 'planning',
+      context: {
+        githubIssueNumber: issue.number,
+        githubIssueTitle: issue.title,
+        worktreePath: options?.worktreePath ?? null,
+        executorModel,
+      },
+    });
+
     contextHelpers.ensureContext(threadId, {
       projectPath,
+      runId,
       worktreePath: options?.worktreePath ?? null,
       retryCount: 0,
       autonomous: true,
@@ -223,8 +295,22 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     });
     deps.threads.clearClarification(threadId);
 
+    const runId = createRun({
+      threadId,
+      source: 'quick-task:start',
+      triggerDetail: `quick:${task.issueNumber}`,
+      currentPhase: 'executing',
+      context: {
+        quickTaskIssueNumber: task.issueNumber,
+        quickTaskTitle: task.title,
+        worktreePath: options?.worktreePath ?? null,
+        executorModel,
+      },
+    });
+
     contextHelpers.ensureContext(threadId, {
       projectPath,
+      runId,
       worktreePath: options?.worktreePath ?? null,
       retryCount: 0,
       autonomous: true,
@@ -317,6 +403,19 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     projectPath: string,
     automationName: string,
   ) {
+    const runId = createRun({
+      threadId,
+      source: 'automation:tick',
+      triggerDetail: automationName,
+      currentPhase: 'executing',
+      context: {
+        automationName,
+        projectPath,
+      },
+    });
+    const seededContext = activePipelines.get(threadId);
+    if (seededContext && runId) seededContext.runId = runId;
+
     deps.emitter.emit({
       type: 'pipeline:start-context',
       threadId,
@@ -387,6 +486,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       }
     }
 
+    finishCurrentRun(threadId, 'cancelled', 'Pipeline cancelled by user.');
     activePipelines.delete(threadId);
     runtime.emitPhase(threadId, 'idle');
   }
@@ -412,8 +512,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       }
     }
 
-    activePipelines.delete(threadId);
     runtime.emitPhase(threadId, 'paused');
+    activePipelines.delete(threadId);
   }
 
   return {

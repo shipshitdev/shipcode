@@ -61,7 +61,9 @@ import {
   NotificationsQueries,
   PhaseLogQueries,
   PipelineAnalyticsQueries,
+  PipelineRunQueries,
   PipelineStepQueries,
+  PipelineWakeRequestQueries,
   PlanQueries,
   ProjectFailureQueries,
   ProjectQueries,
@@ -210,7 +212,9 @@ function createWindow() {
     terminalEvents: new TerminalEventQueries(db),
     phaseLogs: new PhaseLogQueries(db),
     pipelineAnalytics: new PipelineAnalyticsQueries(db),
+    pipelineRuns: new PipelineRunQueries(db),
     pipelineSteps: new PipelineStepQueries(db),
+    wakeRequests: new PipelineWakeRequestQueries(db),
     promptTelemetry: new PromptTelemetryQueries(db),
     agentConversations: new AgentConversationQueries(db),
     skillResolutionLogs: new SkillResolutionLogQueries(db),
@@ -284,6 +288,7 @@ function createWindow() {
     skills: queries.skills,
     taskGraphs: queries.taskGraphs,
     phaseLogs: queries.phaseLogs,
+    pipelineRuns: queries.pipelineRuns,
     pipelineSteps: queries.pipelineSteps,
     promptTelemetry: queries.promptTelemetry,
     agentConversations: queries.agentConversations,
@@ -352,10 +357,15 @@ function createWindow() {
   for (const thread of queries.threads.getOrphaned()) {
     const errorMsg =
       'Pipeline interrupted while ShipCode was closed. Retry resumes from persisted plan, logs, checkpoint, and worktree state.';
-    const record = queries.terminalEvents.create(thread.id, {
-      kind: 'lifecycle',
-      message: errorMsg,
-    });
+    const interruptedRun = queries.pipelineRuns.markInterruptedForThread(thread.id, errorMsg);
+    const record = queries.terminalEvents.create(
+      thread.id,
+      {
+        kind: 'lifecycle',
+        message: errorMsg,
+      },
+      interruptedRun?.id ?? thread.currentRunId ?? null,
+    );
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send('terminal:event', record);
     }

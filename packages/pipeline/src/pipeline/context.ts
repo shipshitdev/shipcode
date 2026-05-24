@@ -294,13 +294,15 @@ export function createPipelineContextHelpers(
     const executorReasoningEffort = phaseReasoningEfforts.execute;
     const verifierReasoningEffort = phaseReasoningEfforts.verify;
 
-    const seededProjectId = seed.projectId ?? deps.threads.getById(threadId)?.projectId ?? null;
+    const persistedThread = deps.threads.getById(threadId);
+    const seededProjectId = seed.projectId ?? persistedThread?.projectId ?? null;
     const workflowPolicy =
       seed.workflowPolicy ?? loadWorkflowPolicy(seed.worktreePath ?? seed.projectPath);
 
     const context: PipelineContext = {
       threadId,
       projectPath: seed.projectPath,
+      runId: seed.runId ?? persistedThread?.currentRunId ?? null,
       projectId: seededProjectId,
       worktreePath: seed.worktreePath ?? null,
       retryCount: seed.retryCount ?? 0,
@@ -380,6 +382,7 @@ export function createPipelineContextHelpers(
 
     ensureContext(threadId, {
       projectPath,
+      runId: thread.currentRunId ?? null,
       worktreePath: thread.worktreePath ?? null,
       retryCount: 0,
       autonomous: thread.autonomous,

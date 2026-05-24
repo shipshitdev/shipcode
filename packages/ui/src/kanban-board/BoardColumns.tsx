@@ -339,7 +339,6 @@ function SectionBlock({
           aria-expanded={!collapsed}
           className={cn(
             'flex min-w-0 flex-1 items-center gap-1.5 bg-transparent p-0 text-left text-[10px] font-semibold uppercase tracking-wide text-current hover:bg-transparent hover:text-current',
-            empty && 'text-current/70',
           )}
           onClick={onToggle}
         >
@@ -366,7 +365,6 @@ function SectionBlock({
               compact
                 ? 'border-border/60 bg-tertiary text-muted-foreground'
                 : SECTION_COUNT_CLASS[tone],
-              empty && 'opacity-75',
             )}
           >
             {count}

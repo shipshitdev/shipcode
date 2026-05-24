@@ -16,6 +16,7 @@ import {
   FeatureQaResultQueries,
   GitHubIssueQueries,
   getDatabase,
+  PipelineRunQueries,
   PipelineStepQueries,
   PlanQueries,
   ProjectFailureQueries,
@@ -76,6 +77,7 @@ export function createCliContext(cwd: string): CliContext {
   const skills = new SkillsQueries(db);
   const checkpoints = new CheckpointQueries(db);
   const terminalEvents = new TerminalEventQueries(db);
+  const pipelineRuns = new PipelineRunQueries(db);
   const pipelineSteps = new PipelineStepQueries(db);
   const agentConversations = new AgentConversationQueries(db);
   const featureQaResults = new FeatureQaResultQueries(db);
@@ -115,6 +117,7 @@ export function createCliContext(cwd: string): CliContext {
     providers,
     skills,
     taskGraphs,
+    pipelineRuns,
     pipelineSteps,
     agentConversations,
     featureQaResults,

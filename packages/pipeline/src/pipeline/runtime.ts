@@ -83,14 +83,32 @@ export function createPipelineRuntime(
   // Late-initialized after performGhSync is defined below.
   let ghSyncQueue: GhSyncQueue;
 
-  function emitTerminalRaw(threadId: string, content: string) {
-    deps.emitter.emit({ type: 'terminal:event', threadId, event: { kind: 'raw', content } });
+  function getCurrentRunIdForThread(threadId: string): string | null {
+    const activeRunId = _contextHelpers.activePipelines?.get(threadId)?.runId ?? null;
+    if (activeRunId) return activeRunId;
+    try {
+      return deps.pipelineRuns?.getCurrentForThread(threadId)?.id ?? null;
+    } catch {
+      return null;
+    }
   }
 
-  function emitTerminalLifecycle(threadId: string, message: string) {
+  function emitTerminalRaw(threadId: string, content: string) {
+    const runId = getCurrentRunIdForThread(threadId);
     deps.emitter.emit({
       type: 'terminal:event',
       threadId,
+      ...(runId ? { runId } : {}),
+      event: { kind: 'raw', content },
+    });
+  }
+
+  function emitTerminalLifecycle(threadId: string, message: string) {
+    const runId = getCurrentRunIdForThread(threadId);
+    deps.emitter.emit({
+      type: 'terminal:event',
+      threadId,
+      ...(runId ? { runId } : {}),
       event: { kind: 'lifecycle', message },
     });
   }
@@ -499,6 +517,7 @@ export function createPipelineRuntime(
         return (
           deps.pipelineSteps?.start({
             threadId: context.threadId,
+            runId: context.runId,
             phase,
             attempt: context.promptTelemetry.length + 1,
             provider: provider.id,
@@ -518,6 +537,7 @@ export function createPipelineRuntime(
         return (
           deps.agentConversations?.insert({
             threadId: context.threadId,
+            runId: context.runId,
             phase,
             round: context.promptTelemetry.length,
             speaker: 'pipeline',
@@ -566,7 +586,12 @@ export function createPipelineRuntime(
           },
         },
         onTerminalEvent: (event) =>
-          deps.emitter.emit({ type: 'terminal:event', threadId: context.threadId, event }),
+          deps.emitter.emit({
+            type: 'terminal:event',
+            threadId: context.threadId,
+            ...(context.runId ? { runId: context.runId } : {}),
+            event,
+          }),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -576,6 +601,7 @@ export function createPipelineRuntime(
       try {
         deps.agentConversations?.insert({
           threadId: context.threadId,
+          runId: context.runId,
           phase,
           round: context.promptTelemetry.length,
           speaker: 'pipeline',
@@ -606,6 +632,7 @@ export function createPipelineRuntime(
     try {
       deps.agentConversations?.insert({
         threadId: context.threadId,
+        runId: context.runId,
         phase,
         round: context.promptTelemetry.length,
         speaker: provider.id,
@@ -661,6 +688,7 @@ export function createPipelineRuntime(
     try {
       deps.promptTelemetry?.create({
         threadId: context.threadId,
+        runId: context.runId,
         phase,
         invocationId: `${context.threadId}:${phase}:${context.promptTelemetry.length}`,
         attempt: context.promptTelemetry.length,
@@ -704,6 +732,7 @@ export function createPipelineRuntime(
       deps.emitter.emit({
         type: 'pipeline:model-resolved',
         threadId: context.threadId,
+        ...(context.runId ? { runId: context.runId } : {}),
         phase,
         requestedModel,
         resolvedModel: response.resolvedModel,
@@ -772,13 +801,149 @@ export function createPipelineRuntime(
     console.warn('[gh-status-sync] queued write failed', err);
   });
 
+  function inferRunSource(context: PipelineContext): string {
+    if (isRealGithubIssueNumber(context.githubIssueNumber)) return 'github:resume';
+    return context.autonomous ? 'automation:resume' : 'pipeline:resume';
+  }
+
+  function ensureRunForContext(
+    context: PipelineContext,
+    phase: Parameters<typeof deps.threads.updateStatus>[1],
+  ): string | null {
+    if (!deps.pipelineRuns) return context.runId;
+    if (context.runId) return context.runId;
+
+    try {
+      const current = deps.pipelineRuns.getCurrentForThread(context.threadId);
+      if (current) {
+        context.runId = current.id;
+        return current.id;
+      }
+      const retryOfRunId = deps.pipelineRuns.listByThread(context.threadId)[0]?.id ?? null;
+
+      const run = deps.pipelineRuns.create({
+        threadId: context.threadId,
+        projectId: context.projectId,
+        source: inferRunSource(context),
+        triggerDetail: isRealGithubIssueNumber(context.githubIssueNumber)
+          ? `issue:${context.githubIssueNumber}`
+          : context.githubIssueTitle,
+        currentPhase: phase,
+        context: {
+          githubIssueNumber: context.githubIssueNumber,
+          githubIssueTitle: context.githubIssueTitle,
+          worktreePath: context.worktreePath,
+          executorModel: context.executorModel,
+        },
+        retryOfRunId,
+      });
+      context.runId = run.id;
+      return run.id;
+    } catch (runError) {
+      console.error(`[pipeline] run creation failed for thread ${context.threadId}:`, runError);
+      return null;
+    }
+  }
+
+  function mapPhaseToRunStatus(
+    phase: Parameters<typeof deps.threads.updateStatus>[1],
+  ): 'succeeded' | 'failed' | 'paused' | null {
+    switch (phase) {
+      case 'completed':
+        return 'succeeded';
+      case 'failed':
+        return 'failed';
+      case 'paused':
+        return 'paused';
+      default:
+        return null;
+    }
+  }
+
+  function isExecutionOwnershipPhase(phase: Parameters<typeof deps.threads.updateStatus>[1]) {
+    return (
+      phase === 'executing' || phase === 'testing' || phase === 'verifying' || phase === 'shipping'
+    );
+  }
+
+  function claimExecutionIfNeeded(context: PipelineContext, runId: string): void {
+    if (!deps.pipelineRuns || !isRealGithubIssueNumber(context.githubIssueNumber)) return;
+    if (!context.projectId) return;
+
+    try {
+      const issue = deps.githubIssues.getByNumber(context.projectId, context.githubIssueNumber);
+      if (!issue) return;
+      const claimed = deps.pipelineRuns.claimIssueExecution({
+        issueId: issue.id,
+        runId,
+        owner: context.executorModel,
+      });
+      if (!claimed) {
+        console.warn(
+          `[pipeline] issue execution lock already held for thread ${context.threadId}, run ${runId}`,
+        );
+      }
+    } catch (lockError) {
+      console.error(
+        `[pipeline] execution lock claim failed for thread ${context.threadId}:`,
+        lockError,
+      );
+    }
+  }
+
+  function syncRunForPhase(
+    threadId: string,
+    phase: Parameters<typeof deps.threads.updateStatus>[1],
+    error?: string,
+  ): string | null {
+    if (!deps.pipelineRuns) return null;
+
+    const context = _contextHelpers.activePipelines.get(threadId);
+    let runId = context ? ensureRunForContext(context, phase) : null;
+
+    try {
+      if (!runId) {
+        runId = deps.pipelineRuns.getCurrentForThread(threadId)?.id ?? null;
+      }
+      if (!runId) return null;
+
+      const terminalStatus = mapPhaseToRunStatus(phase);
+      if (terminalStatus) {
+        deps.pipelineRuns.finish(runId, {
+          status: terminalStatus,
+          currentPhase: phase,
+          errorKind: error ? 'phase_error' : null,
+          errorMessage: error ?? null,
+        });
+        return runId;
+      }
+
+      deps.pipelineRuns.start(runId, phase);
+      deps.pipelineRuns.setPhase(runId, phase);
+
+      if (context && isExecutionOwnershipPhase(phase)) {
+        claimExecutionIfNeeded(context, runId);
+      }
+
+      return runId;
+    } catch (runError) {
+      console.error(`[pipeline] run sync failed for thread ${threadId}:`, runError);
+      return runId;
+    }
+  }
+
   function emitPhase(
     threadId: string,
     phase: Parameters<typeof deps.threads.updateStatus>[1],
     error?: string,
   ) {
+    const runId = syncRunForPhase(threadId, phase, error);
     try {
-      deps.phaseLogs?.transition(threadId, phase, error ?? null);
+      if (runId) {
+        deps.phaseLogs?.transition(threadId, phase, error ?? null, runId);
+      } else {
+        deps.phaseLogs?.transition(threadId, phase, error ?? null);
+      }
     } catch (logError) {
       console.error(`[pipeline] phase log transition failed for thread ${threadId}:`, logError);
     }
@@ -790,7 +955,7 @@ export function createPipelineRuntime(
         ghSyncQueue.enqueue(opts);
       },
     });
-    deps.emitter.emit({ type: 'pipeline:phase', threadId, phase });
+    deps.emitter.emit({ type: 'pipeline:phase', threadId, phase, ...(runId ? { runId } : {}) });
   }
 
   async function postPlanComment(

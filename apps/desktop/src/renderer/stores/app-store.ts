@@ -226,7 +226,7 @@ interface AppState {
   appendCanonicalEvent: (
     threadId: string,
     event: CanonicalTerminalEvent,
-    meta?: Pick<TerminalEventRecord, 'id' | 'createdAt'>,
+    meta?: Partial<Pick<TerminalEventRecord, 'id' | 'createdAt' | 'runId'>>,
   ) => void;
   appendCanonicalEvents: (threadId: string, events: TerminalEventRecord[]) => void;
   hydrateCanonicalEvents: (threadId: string, events: TerminalEventRecord[]) => void;
@@ -565,6 +565,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const record: TerminalEventRecord = {
         id: meta?.id ?? `${threadId}:${Date.now()}:${prev.length}`,
         threadId,
+        runId: meta?.runId ?? null,
         event,
         createdAt: meta?.createdAt ?? new Date().toISOString(),
       };

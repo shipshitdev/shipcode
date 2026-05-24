@@ -52,7 +52,8 @@ export function clearRetryTimer(context: PipelineContext): void {
  */
 export function formatPlanParseFailure(error?: string): string {
   if (!error) return NO_VALID_PLAN_REASON;
-  return `Plan output could not be parsed — ${clampTextBlock(error.split('\n')[0]!, 280)}`;
+  const firstLine = error.split('\n')[0] ?? error;
+  return `Plan output could not be parsed — ${clampTextBlock(firstLine, 280)}`;
 }
 
 function formatAnsweredClarification(
@@ -168,6 +169,7 @@ export function createPlanningPhaseHandlers({
     deps.emitter.emit({
       type: 'terminal:event',
       threadId,
+      ...(context.runId ? { runId: context.runId } : {}),
       event: {
         kind: 'clarification_requested',
         summary: context.clarificationRequest.summary,

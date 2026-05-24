@@ -546,10 +546,10 @@ export function buildIssueDetailActions({
       <div className="flex gap-2">
         <Button
           size="sm"
-          variant="outline"
+          variant="destructive"
           onClick={onRerun}
           disabled={isSubmitting}
-          className="flex-1 border-danger/40 text-danger hover:bg-danger/10 hover:border-danger"
+          className="flex-1"
         >
           <LoadingButtonContent loading={isSubmitting}>{retryButtonLabel}</LoadingButtonContent>
         </Button>
