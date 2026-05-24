@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: millionco/react-doctor/actions/inspect@main
+      - uses: millionco/react-doctor@main
         with:
           diff: ${{ github.event.pull_request.base.ref }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
