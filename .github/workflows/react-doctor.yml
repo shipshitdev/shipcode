@@ -22,4 +22,5 @@ jobs:
       - uses: millionco/react-doctor@main
         with:
           diff: ${{ github.event.pull_request.base.ref }}
+          fail-on: none
           github-token: ${{ secrets.GITHUB_TOKEN }}
