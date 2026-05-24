@@ -21,3 +21,4 @@ linux:
     - AppImage
     - deb
   category: Development
+  maintainer: shipshit.dev <hello@shipshit.dev>

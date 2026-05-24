@@ -1,5 +1,9 @@
 {
-  "author": "shipshit.dev",
+  "author": {
+    "email": "hello@shipshit.dev",
+    "name": "shipshit.dev",
+    "url": "https://shipshit.dev"
+  },
   "dependencies": {
     "@fontsource/dm-sans": "5.2.8",
     "@sentry/electron": "7.13.0",
@@ -51,6 +55,7 @@
   },
   "main": "./dist/main/index.js",
   "name": "@shipcode/desktop",
+  "homepage": "https://shipcode.shipshit.dev",
   "private": true,
   "productName": "ShipCode",
   "scripts": {
