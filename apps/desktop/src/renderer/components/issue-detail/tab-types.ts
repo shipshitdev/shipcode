@@ -7,6 +7,7 @@ export type IssueDetailTab =
   | 'comments'
   | 'history'
   | 'diff'
+  | 'runs'
   | 'activity'
   | 'conversations';
 
