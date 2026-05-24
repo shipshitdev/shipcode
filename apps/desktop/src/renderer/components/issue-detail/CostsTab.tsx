@@ -9,15 +9,16 @@ import type {
 } from '@shipcode/shared';
 import {
   formatCost,
+  formatDurationMilliseconds,
   isSyntheticResolvedModel,
   MODEL_DISPLAY,
   PIPELINE_PHASE,
 } from '@shipcode/shared';
-import { PhaseChip } from '@shipcode/ui';
+import { CollapsibleSection, PhaseChip } from '@shipcode/ui';
 import { Badge, Button, Skeleton } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
+import { formatTimestamp, SHORT_TIMESTAMP_FORMAT } from '../format-timestamp';
 import { ActivityHeatmap } from '../heatmap/ActivityHeatmap';
 import { timeAgo } from './helpers';
 
@@ -41,24 +42,6 @@ const PIPELINE_STEPS_LOADING_KEYS = [
   'pipeline-step-loading-2',
   'pipeline-step-loading-3',
 ];
-
-function formatDuration(ms: number | null): string {
-  if (ms == null) return '—';
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
-}
-
-function formatStartTime(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
 
 function StepAttempts({ threadId }: { threadId: string }) {
   const { data: steps = [], isLoading } = useQuery<PipelineStepRecord[]>({
@@ -106,7 +89,7 @@ function StepAttempts({ threadId }: { threadId: string }) {
                 )}
               </div>
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                <span>{formatDuration(step.durationMs)}</span>
+                <span>{formatDurationMilliseconds(step.durationMs)}</span>
                 {tokens > 0 && (
                   <span>{tokens >= 1000 ? `${Math.round(tokens / 1000)}k` : tokens} tok</span>
                 )}
@@ -287,18 +270,8 @@ function ThreadAnalyticsPanel({
   return (
     <div className="mt-4 space-y-2">
       {phaseTimeline.length > 0 && (
-        <details className="group rounded-md border border-border bg-secondary/20 px-3 py-2">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
-            <ChevronRight
-              size={12}
-              className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
-            />
-            <span className="flex-1">Timeline</span>
-            <span className="text-[10px] font-normal normal-case text-muted-foreground">
-              {phaseTimeline.length}
-            </span>
-          </summary>
-          <div className="mt-3 overflow-hidden rounded-md border border-border">
+        <CollapsibleSection title="Timeline" count={phaseTimeline.length}>
+          <div className="overflow-hidden rounded-md border border-border">
             <div className="divide-y divide-border">
               {phaseTimeline.slice(0, 8).map((phase) => (
                 <div key={phase.id} className="flex items-center gap-3 px-3 py-2">
@@ -311,52 +284,32 @@ function ThreadAnalyticsPanel({
                       <div className="truncate text-[10px] text-danger">{phase.errorMessage}</div>
                     ) : null}
                     <div className="text-[10px] text-muted-foreground">
-                      {formatStartTime(phase.startedAt)}
+                      {formatTimestamp(phase.startedAt, SHORT_TIMESTAMP_FORMAT)}
                     </div>
                   </div>
                   <span className="shrink-0 text-[10px] text-muted-foreground">
-                    {formatDuration(phase.durationMs)}
+                    {formatDurationMilliseconds(phase.durationMs)}
                   </span>
                 </div>
               ))}
             </div>
           </div>
-        </details>
+        </CollapsibleSection>
       )}
 
       {promptTelemetry.length > 0 && (
-        <details className="group rounded-md border border-border bg-secondary/20 px-3 py-2">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
-            <ChevronRight
-              size={12}
-              className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
-            />
-            <span className="flex-1">Prompt / Context</span>
-            <span className="text-[10px] font-normal normal-case text-muted-foreground">
-              {promptTelemetry.length}
-            </span>
-          </summary>
-          <div className="mt-3 flex flex-col gap-2">
+        <CollapsibleSection title="Prompt / Context" count={promptTelemetry.length}>
+          <div className="flex flex-col gap-2">
             {promptTelemetry.map((record) => (
               <PromptTelemetryCard key={record.id} record={record} />
             ))}
           </div>
-        </details>
+        </CollapsibleSection>
       )}
 
       {skillResolutions.length > 0 && (
-        <details className="group rounded-md border border-border bg-secondary/20 px-3 py-2">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
-            <ChevronRight
-              size={12}
-              className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
-            />
-            <span className="flex-1">Skill Resolution</span>
-            <span className="text-[10px] font-normal normal-case text-muted-foreground">
-              {skillResolutions.length}
-            </span>
-          </summary>
-          <div className="mt-3 grid grid-cols-3 gap-2">
+        <CollapsibleSection title="Skill Resolution" count={skillResolutions.length}>
+          <div className="grid grid-cols-3 gap-2">
             <div className="rounded-md border border-border bg-secondary p-2">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Score</div>
               <div className="text-[14px] font-semibold text-primary">{skillFallback.score}</div>
@@ -392,7 +345,7 @@ function ThreadAnalyticsPanel({
               </div>
             ))}
           </div>
-        </details>
+        </CollapsibleSection>
       )}
     </div>
   );
@@ -436,7 +389,7 @@ export function CostsTab({
       queryKey: ['pipeline-analytics', 'thread', thread?.id],
       queryFn: () =>
         window.shipcode.invoke<PipelineThreadAnalytics>('pipeline-analytics:get-thread', {
-          threadId: thread!.id,
+          threadId: thread?.id,
         }),
       enabled: Boolean(thread?.id),
     });
@@ -499,18 +452,8 @@ export function CostsTab({
             )}
 
             {/* Per-run breakdown */}
-            <details className="group rounded-md border border-border bg-secondary/20 px-3 py-2">
-              <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
-                <ChevronRight
-                  size={12}
-                  className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
-                />
-                <span className="flex-1">Pipeline Runs</span>
-                <span className="text-[10px] font-normal normal-case text-muted-foreground">
-                  {substantiveTasks.length}
-                </span>
-              </summary>
-              <div className="mt-3 overflow-hidden rounded-md border border-border">
+            <CollapsibleSection title="Pipeline Runs" count={substantiveTasks.length}>
+              <div className="overflow-hidden rounded-md border border-border">
                 <div className="divide-y divide-border">
                   {substantiveTasks.map((task, index) => {
                     const isExpanded = expandedThreadId === task.threadId;
@@ -569,7 +512,7 @@ export function CostsTab({
                   })}
                 </div>
               </div>
-            </details>
+            </CollapsibleSection>
 
             {/* Current thread details — hide synthetic-only entries */}
             {(() => {
@@ -589,18 +532,8 @@ export function CostsTab({
               }, []);
               if (resolvedModels.length === 0) return null;
               return (
-                <details className="group rounded-md border border-border bg-secondary/20 px-3 py-2">
-                  <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
-                    <ChevronRight
-                      size={12}
-                      className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
-                    />
-                    <span className="flex-1">Current Run Models</span>
-                    <span className="text-[10px] font-normal normal-case text-muted-foreground">
-                      {resolvedModels.length}
-                    </span>
-                  </summary>
-                  <div className="mt-3 flex flex-col gap-1.5">
+                <CollapsibleSection title="Current Run Models" count={resolvedModels.length}>
+                  <div className="flex flex-col gap-1.5">
                     {resolvedModels.map((entry) => (
                       <div key={entry.label} className="flex flex-col gap-0.5">
                         <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -612,7 +545,7 @@ export function CostsTab({
                       </div>
                     ))}
                   </div>
-                </details>
+                </CollapsibleSection>
               );
             })()}
           </div>

@@ -32,6 +32,20 @@ function renderWithClient(thread: Thread | null = makeThread(), projectId = 'pro
   );
 }
 
+function expandPipelineRuns() {
+  fireEvent.click(screen.getByRole('button', { name: /Pipeline Runs/ }));
+}
+
+function expandFirstPipelineRun() {
+  expandPipelineRuns();
+  const runButton = screen
+    .getAllByText('$1.50')
+    .map((element) => element.closest('button'))
+    .find((button): button is HTMLButtonElement => button !== null);
+  if (!runButton) throw new Error('Expected a pipeline run button');
+  fireEvent.click(runButton);
+}
+
 function makeTask(overrides: Partial<CostTaskSummary> = {}): CostTaskSummary {
   return {
     threadId: 'thread-1',
@@ -314,8 +328,7 @@ describe('CostsTab', () => {
     expect(screen.getAllByText('GPT-5.4').length).toBeGreaterThan(0);
     expect(screen.getByText('custom-model')).toBeInTheDocument();
 
-    const firstRun = screen.getAllByRole('button', { expanded: false })[0];
-    fireEvent.click(firstRun);
+    expandFirstPipelineRun();
 
     expect((await screen.findAllByText('Plan · attempt 1')).length).toBeGreaterThan(0);
     expect(await screen.findByText('runtime: Tests failed')).toBeInTheDocument();
@@ -330,9 +343,11 @@ describe('CostsTab', () => {
     expect(screen.getByText('Repo File Context')).toBeInTheDocument();
     expect(screen.getByText('testing context')).toBeInTheDocument();
     expect(
-      within(screen.getByText('Skill Resolution').closest('details') as HTMLElement).getByText(
-        '88',
-      ),
+      within(
+        screen
+          .getByText('Skill Resolution')
+          .closest('[data-slot="collapsible-section"]') as HTMLElement,
+      ).getByText('88'),
     ).toBeInTheDocument();
     expect(screen.getByText('explicit · fallback')).toBeInTheDocument();
   });
@@ -428,7 +443,7 @@ describe('CostsTab', () => {
     expect((await screen.findAllByText('$1.50')).length).toBeGreaterThan(0);
     expect(screen.getByText('15')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    expandFirstPipelineRun();
 
     expect(await screen.findByText('custom_phase · attempt 1')).toBeInTheDocument();
     expect(screen.getByText('unknown-model')).toBeInTheDocument();
@@ -445,7 +460,12 @@ describe('CostsTab', () => {
     expect(screen.getByText('2k')).toBeInTheDocument();
     expect(screen.getByText('matched')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { expanded: true }));
+    fireEvent.click(
+      screen
+        .getAllByText('$1.50')
+        .map((element) => element.closest('button'))
+        .find((button): button is HTMLButtonElement => button !== null) as HTMLButtonElement,
+    );
 
     expect(screen.queryByText('custom_phase · attempt 1')).not.toBeInTheDocument();
   });
@@ -460,7 +480,8 @@ describe('CostsTab', () => {
 
     renderWithClient();
 
-    fireEvent.click(await screen.findByRole('button', { expanded: false }));
+    await screen.findAllByText('$1.50');
+    expandFirstPipelineRun();
 
     expect(await screen.findByText('No attempts recorded.')).toBeInTheDocument();
   });
@@ -493,8 +514,8 @@ describe('CostsTab', () => {
 
     renderWithClient();
 
-    const firstRun = await screen.findByRole('button', { expanded: false });
-    fireEvent.click(firstRun);
+    await screen.findAllByText('$1.50');
+    expandFirstPipelineRun();
 
     expect(await screen.findByText('Context Materials')).toBeInTheDocument();
     expect(screen.getAllByText('Repo File Context')).toHaveLength(1);

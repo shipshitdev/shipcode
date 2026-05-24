@@ -1,5 +1,7 @@
 export type { ActivePipelineCardProps } from '@/ActivePipelineCard';
 export { ActivePipelineCard } from '@/ActivePipelineCard';
+export type { CollapsibleSectionProps } from '@/CollapsibleSection';
+export { CollapsibleSection } from '@/CollapsibleSection';
 export { DiffViewer } from '@/DiffViewer';
 export { GitVisualizer } from '@/GitVisualizer';
 export { KanbanBoard } from '@/KanbanBoard';
