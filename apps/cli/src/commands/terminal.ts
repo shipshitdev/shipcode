@@ -12,6 +12,9 @@ import { createCliContext } from '../context';
 import { parseIssueNumber } from './issue-helpers';
 
 type Provider = 'claude' | 'codex';
+type ManagedTerminalProcess = ReturnType<
+  ReturnType<typeof createCliContext>['processManager']['spawn']
+>;
 
 function parseProvider(raw: unknown): Provider {
   if (raw === 'claude' || raw === 'codex') return raw;
@@ -89,17 +92,18 @@ export async function terminalCommand(
   const ctx = createCliContext(process.cwd());
   const thread = await ensureThreadAndWorktree(ctx, issueNumber);
   if (!thread.worktreePath) throw new Error(`Thread ${thread.id} has no worktree path`);
+  const worktreePath = thread.worktreePath;
 
   const issue = ctx.githubIssues.getByNumber(ctx.project.id, issueNumber);
   if (!issue) throw new Error(`Issue #${issueNumber} is not cached`);
-  const runDir = path.join(thread.worktreePath, '.shipcode', 'runs', thread.id);
+  const runDir = path.join(worktreePath, '.shipcode', 'runs', thread.id);
   const promptArtifactPath = path.join(runDir, 'terminal-prompt.md');
   const summaryPath = path.join(runDir, 'session-summary.md');
   await fs.mkdir(runDir, { recursive: true });
   const prompt = `# ShipCode Issue Terminal Session
 
 Issue: #${issue.issueNumber} ${issue.title}
-Worktree: ${thread.worktreePath}
+Worktree: ${worktreePath}
 Branch: ${thread.worktreeBranch ?? ''}
 Summary artifact: ${summaryPath}
 
@@ -121,36 +125,35 @@ Before exiting, write files changed, commands run, blockers, and a suggested Git
   });
   ctx.threads.updateStatus(thread.id, PIPELINE_PHASE.executing);
 
-  const managed = ctx.processManager.spawn(
-    provider,
-    provider,
-    buildArgs(provider, promptArtifactPath, options.model),
-    thread.worktreePath,
-    thread.id,
-    { outputMode: 'raw' },
-  );
-
   const wasRaw = process.stdin.isTTY ? process.stdin.isRaw : false;
-  if (process.stdin.isTTY) process.stdin.setRawMode(true);
-  process.stdin.resume();
-  const onInput = (chunk: Buffer) => ctx.processManager.write(managed.id, chunk.toString());
-  process.stdin.on('data', onInput);
+  let managed: ManagedTerminalProcess | null = null;
+  let inputAttached = false;
+  let rawModeSet = false;
+  const pendingOutput: Array<{ processId: string; chunk: string }> = [];
+  let pendingExit: { processId: string; exitCode: number } | null = null;
 
-  await new Promise<void>((resolve) => {
-    const onOutput = (processId: string, chunk: string) => {
-      if (processId !== managed.id) return;
-      process.stdout.write(sanitizeCliText(chunk));
-      ctx.terminalEvents.create(thread.id, { kind: 'raw', content: chunk });
-    };
-    const onExit = (processId: string, exitCode: number) => {
-      if (processId !== managed.id) return;
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
       ctx.processManager.off('output', onOutput);
       ctx.processManager.off('exit', onExit);
-      process.stdin.off('data', onInput);
-      if (process.stdin.isTTY) process.stdin.setRawMode(wasRaw);
+      if (inputAttached) {
+        process.stdin.off('data', onInput);
+        inputAttached = false;
+      }
+      if (rawModeSet && process.stdin.isTTY) {
+        process.stdin.setRawMode(wasRaw);
+        rawModeSet = false;
+      }
+    };
+
+    const settle = (exitCode: number) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
       const fallback = `Interactive ${provider} session exited with code ${exitCode}.
 Prompt artifact: ${promptArtifactPath}
-Worktree: ${thread.worktreePath}
+Worktree: ${worktreePath}
 Terminal output is available in the session transcript.`;
       fs.readFile(summaryPath, 'utf8')
         .then((content) => content.trim() || fallback)
@@ -173,8 +176,59 @@ Terminal output is available in the session transcript.`;
           resolve();
         });
     };
+
+    const onOutput = (processId: string, chunk: string) => {
+      if (!managed) {
+        pendingOutput.push({ processId, chunk });
+        return;
+      }
+      if (processId !== managed.id) return;
+      process.stdout.write(sanitizeCliText(chunk));
+      ctx.terminalEvents.create(thread.id, { kind: 'raw', content: chunk });
+    };
+    const onExit = (processId: string, exitCode: number) => {
+      if (!managed) {
+        pendingExit = { processId, exitCode };
+        return;
+      }
+      if (processId !== managed.id) return;
+      settle(exitCode);
+    };
+    const onInput = (chunk: Buffer) => {
+      if (managed) ctx.processManager.write(managed.id, chunk.toString());
+    };
+
     ctx.processManager.on('output', onOutput);
     ctx.processManager.on('exit', onExit);
+
+    try {
+      managed = ctx.processManager.spawn(
+        provider,
+        provider,
+        buildArgs(provider, promptArtifactPath, options.model),
+        worktreePath,
+        thread.id,
+        { outputMode: 'raw' },
+      );
+    } catch (error) {
+      cleanup();
+      reject(error);
+      return;
+    }
+
+    for (const event of pendingOutput) onOutput(event.processId, event.chunk);
+    if (pendingExit) {
+      onExit(pendingExit.processId, pendingExit.exitCode);
+      return;
+    }
+
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(true);
+      rawModeSet = true;
+    }
+    process.stdin.resume();
+    process.stdin.on('data', onInput);
+    inputAttached = true;
   });
 }
 
