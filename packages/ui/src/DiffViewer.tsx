@@ -4,7 +4,7 @@ import type { DiffRecord } from '@/lib/shipcode';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/primitives/badge';
 import { Button } from '@/primitives/button';
-import { useSyntaxHighlightedLines } from '@/SyntaxHighlightedCode';
+import { useSyntaxHighlightedLines } from '@/syntax-highlighting';
 
 interface DiffViewerProps {
   diffs: DiffRecord[];

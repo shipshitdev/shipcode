@@ -1,4 +1,4 @@
-export default {
+const desktopMeta = {
   overview: 'Overview',
   activity: 'Activity',
   kanban: 'Kanban Board',
@@ -15,3 +15,5 @@ export default {
   'project-settings': 'Project Settings',
   'plan-viewer': 'Plan Viewer',
 };
+
+export default desktopMeta;

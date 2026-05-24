@@ -38,7 +38,7 @@ import {
   Textarea,
 } from '@shipshitdev/ui';
 import { ChevronDown } from 'lucide-react';
-import { getModelOptions } from '../model-provider-options';
+import { getModelOptions } from '../model-provider-options-data';
 import { PhaseModelRow } from './PhaseModelRow';
 
 function RunModeSelect({ value }: { value: AppSettings['agentRunModes']['claude']['execute'] }) {

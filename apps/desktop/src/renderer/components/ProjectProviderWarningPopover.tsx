@@ -1,7 +1,7 @@
 import type { AppSettings, Project, ProjectProviderWarning } from '@shipcode/shared';
 import { getPhaseDescriptor, resolvePhaseModel, resolvePhaseModelId } from '@shipcode/shared';
 import { Badge, Button, cn, Popover, PopoverContent, PopoverTrigger } from '@shipshitdev/ui';
-import { formatProviderSelectionLabel, PROVIDER_DISPLAY } from './model-provider-options';
+import { formatProviderSelectionLabel, PROVIDER_DISPLAY } from './model-provider-options-data';
 
 function formatResolvedSelection(
   settings: AppSettings,

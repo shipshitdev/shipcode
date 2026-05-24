@@ -17,7 +17,7 @@ import {
   SelectValue,
   SettingsRow,
 } from '@shipshitdev/ui';
-import { getModelOptions, PROVIDER_DISPLAY } from '../model-provider-options';
+import { getModelOptions, PROVIDER_DISPLAY } from '../model-provider-options-data';
 
 export function PhaseModelRow({
   label,

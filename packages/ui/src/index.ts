@@ -29,11 +29,10 @@ export type {
 } from '@/StartupProgress';
 export { StartupProgress } from '@/StartupProgress';
 export {
-  languageFromFilePath,
   SyntaxHighlightedCode,
   SyntaxHighlightedLine,
-  useSyntaxHighlightedLines,
 } from '@/SyntaxHighlightedCode';
+export { languageFromFilePath, useSyntaxHighlightedLines } from '@/syntax-highlighting';
 export type { TaskGraphViewerProps } from '@/TaskGraphViewer';
 export { TaskGraphViewer } from '@/TaskGraphViewer';
 export { VerificationViewer } from '@/VerificationViewer';

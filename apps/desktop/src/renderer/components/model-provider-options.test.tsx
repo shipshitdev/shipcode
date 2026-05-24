@@ -1,12 +1,12 @@
 import { isValidElement } from 'react';
 import { describe, expect, it } from 'vitest';
+import { InheritValueDisplay } from './model-provider-options';
 import {
   formatModelInheritanceLabel,
   formatProviderSelectionLabel,
   getModelOptions,
-  InheritValueDisplay,
   PROVIDER_DISPLAY,
-} from './model-provider-options';
+} from './model-provider-options-data';
 
 describe('model-provider-options', () => {
   it('formats provider and model labels from capability and static catalogs', () => {

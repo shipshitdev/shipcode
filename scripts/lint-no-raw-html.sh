@@ -59,6 +59,7 @@ for file in "$@"; do
   [[ "$file" == */__mocks__/* ]] && continue
 
   # Skip UI primitive wrappers
+  [[ "$file" == packages/ui/src/* ]] && continue
   [[ "$file" == */packages/ui/src/* ]] && continue
 
   # Check for raw HTML elements in TSX only

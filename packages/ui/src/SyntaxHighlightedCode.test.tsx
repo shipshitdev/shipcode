@@ -17,12 +17,8 @@ vi.mock('shiki', () => ({
   createJavaScriptRegexEngine: shikiState.createJavaScriptRegexEngine,
 }));
 
-import {
-  languageFromFilePath,
-  SyntaxHighlightedCode,
-  SyntaxHighlightedLine,
-  useSyntaxHighlightedLines,
-} from './SyntaxHighlightedCode';
+import { SyntaxHighlightedCode, SyntaxHighlightedLine } from './SyntaxHighlightedCode';
+import { languageFromFilePath, useSyntaxHighlightedLines } from './syntax-highlighting';
 
 function renderIntoDom(element: ReactNode) {
   const container = document.createElement('div');

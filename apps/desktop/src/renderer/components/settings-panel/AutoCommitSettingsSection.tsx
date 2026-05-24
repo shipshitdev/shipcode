@@ -10,7 +10,7 @@ import {
   SettingsRow,
   Switch,
 } from '@shipshitdev/ui';
-import { getModelOptions, PROVIDER_DISPLAY } from '../model-provider-options';
+import { getModelOptions, PROVIDER_DISPLAY } from '../model-provider-options-data';
 
 const AUTO_COMMIT_PROVIDERS: ExecutorModel[] = ['claude', 'codex', 'openrouter'];
 

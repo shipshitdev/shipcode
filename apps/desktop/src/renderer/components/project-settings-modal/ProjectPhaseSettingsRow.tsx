@@ -24,12 +24,12 @@ import {
   SettingsRow,
 } from '@shipshitdev/ui';
 import type { Dispatch, SetStateAction } from 'react';
+import { InheritValueDisplay } from '../model-provider-options';
 import {
   formatModelInheritanceLabel,
   getModelOptions,
-  InheritValueDisplay,
   PROVIDER_DISPLAY,
-} from '../model-provider-options';
+} from '../model-provider-options-data';
 import {
   EFFORT_OVERRIDE_KEYS,
   formatInheritedSummary,

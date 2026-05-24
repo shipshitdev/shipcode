@@ -17,7 +17,7 @@ import {
   getSupportedReasoningEfforts,
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
-import { TaskGraphViewer } from '@shipcode/ui';
+import { CollapsibleSection, TaskGraphViewer } from '@shipcode/ui';
 import {
   Badge,
   Button,
@@ -32,15 +32,15 @@ import {
   SelectValue,
 } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
-import { ChevronRight, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { useEffect, useReducer } from 'react';
 import { formatTimestamp } from '../format-timestamp';
+import { InheritValueDisplay } from '../model-provider-options';
 import {
   formatProviderSelectionLabel,
   getModelOptions,
-  InheritValueDisplay,
   PROVIDER_DISPLAY,
-} from '../model-provider-options';
+} from '../model-provider-options-data';
 import { encodePhaseOption, PHASE_PROVIDER_OPTIONS } from './helpers';
 import type { PhaseKey, PhaseSelection } from './tab-types';
 
@@ -248,8 +248,10 @@ function usePipelineTabView({
                 Test server
               </div>
               {manualQaServer ? (
-                <button
+                <Button
                   type="button"
+                  variant="link"
+                  size="xs"
                   className="mt-1 inline-flex max-w-full items-center gap-1 break-all font-mono text-[10px] text-accent hover:underline"
                   onClick={() =>
                     window.shipcode.invoke('shell:open-external', {
@@ -259,7 +261,7 @@ function usePipelineTabView({
                 >
                   {manualQaServer.baseUrl}
                   <ExternalLink size={10} className="shrink-0" />
-                </button>
+                </Button>
               ) : (
                 <div className="mt-1 text-[11px] text-muted-foreground">
                   {thread?.worktreePath
@@ -542,27 +544,20 @@ function usePipelineTabView({
       </div>
 
       {taskGraph ? (
-        <details className="group mb-8 rounded-md border border-border bg-secondary/20 px-3 py-2">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
-            <ChevronRight
-              size={12}
-              className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
-            />
-            <span className="flex-1">Task Graph</span>
-            <span className="text-[10px] font-normal normal-case text-muted-foreground">
-              {taskGraph.nodes.length}
-            </span>
-          </summary>
-          <div className="mt-3">
-            <TaskGraphViewer
-              graph={taskGraph}
-              getIssueUrl={getTaskIssueUrl}
-              onOpenIssue={(url) => {
-                void window.shipcode.invoke('shell:open-external', { url });
-              }}
-            />
-          </div>
-        </details>
+        <CollapsibleSection
+          title="Task Graph"
+          count={taskGraph.nodes.length}
+          className="mb-8"
+          contentClassName="mt-3"
+        >
+          <TaskGraphViewer
+            graph={taskGraph}
+            getIssueUrl={getTaskIssueUrl}
+            onOpenIssue={(url) => {
+              void window.shipcode.invoke('shell:open-external', { url });
+            }}
+          />
+        </CollapsibleSection>
       ) : null}
 
       {activeIssue.linkedPrNumber ? (
@@ -670,17 +665,12 @@ function usePipelineTabView({
       ) : null}
 
       {thread && checkpoints.length > 0 ? (
-        <details className="group mb-8 rounded-md border border-border bg-secondary/20 px-3 py-2">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-secondary [&::-webkit-details-marker]:hidden">
-            <ChevronRight
-              size={12}
-              className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
-            />
-            <span className="flex-1">Checkpoints</span>
-            <span className="text-[10px] font-normal normal-case text-muted-foreground">
-              {checkpoints.length}
-            </span>
-          </summary>
+        <CollapsibleSection
+          title="Checkpoints"
+          count={checkpoints.length}
+          className="mb-8"
+          contentClassName="mt-3"
+        >
           <div className="mt-3 mb-2 text-[11px] text-muted-foreground">
             Restoring a checkpoint rewinds code state only. It does not resume the same planner
             session.
@@ -709,7 +699,7 @@ function usePipelineTabView({
               </div>
             ))}
           </div>
-        </details>
+        </CollapsibleSection>
       ) : null}
 
       {runtimeServerSection}

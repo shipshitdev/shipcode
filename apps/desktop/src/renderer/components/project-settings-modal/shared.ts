@@ -13,7 +13,7 @@ import {
 
 export type { ContextGeneratorCli } from '@shipcode/shared';
 
-import { PROVIDER_DISPLAY } from '../model-provider-options';
+import { PROVIDER_DISPLAY } from '../model-provider-options-data';
 
 export const INHERIT_VALUE = '__inherit__';
 export const PROJECT_TABS = [
