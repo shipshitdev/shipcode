@@ -30,6 +30,45 @@ import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../ty
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Build a fallback install command when a frozen-lockfile install fails
+ * because of lockfile drift or a manifest/lockfile mismatch. Returns
+ * null when the failure signature doesn't match a known fallback case
+ * — the original error stands.
+ */
+export function buildFrozenInstallFallback(command: string, output: string): string | null {
+  const trimmed = command.trim();
+  // bun install --frozen-lockfile
+  if (/^bun\s+install\s+.*--frozen-lockfile/.test(trimmed)) {
+    if (/lockfile|resolution|min[- ]release[- ]age|version mismatch/i.test(output)) {
+      return trimmed.replace(/\s*--frozen-lockfile/, '');
+    }
+    return null;
+  }
+  // pnpm install --frozen-lockfile
+  if (/^pnpm\s+install\s+.*--frozen-lockfile/.test(trimmed)) {
+    if (/ERR_PNPM|lockfile|resolution|specifiers in/i.test(output)) {
+      return trimmed.replace(/\s*--frozen-lockfile/, '');
+    }
+    return null;
+  }
+  // yarn install --frozen-lockfile
+  if (/^yarn\s+install\s+.*--frozen-lockfile/.test(trimmed)) {
+    if (/lockfile|resolution|YN0028|frozen/i.test(output)) {
+      return trimmed.replace(/\s*--frozen-lockfile/, '');
+    }
+    return null;
+  }
+  // npm ci → npm install
+  if (/^npm\s+ci(\s|$)/.test(trimmed)) {
+    if (/EUSAGE|package-lock|lockfile|ELOCK/i.test(output)) {
+      return trimmed.replace(/^npm\s+ci/, 'npm install');
+    }
+    return null;
+  }
+  return null;
+}
 const TRUSTED_LOGIN_SHELLS = new Set([
   '/bin/bash',
   '/bin/zsh',
@@ -282,6 +321,43 @@ export function createPipelineRuntime(
         );
         if (result.exitCode !== 0) {
           const snippet = result.output.trim().split('\n').slice(-3).join(' ').slice(0, 300);
+          // Retry a frozen-lockfile install without the freeze flag when
+          // the failure looks like lockfile drift / resolution mismatch.
+          // Repo-owned lockfiles drift quickly and a hard-fail blocks the
+          // whole pipeline; falling back to a normal install matches what
+          // a human would do.
+          const fallback = buildFrozenInstallFallback(command, result.output);
+          if (fallback) {
+            emitTerminalLifecycle(
+              context.threadId,
+              `[setup] frozen install failed — retrying without --frozen-lockfile: $ ${fallback}\r\n`,
+            );
+            try {
+              const retry = await runShellCommand(
+                context.threadId,
+                context.worktreePath,
+                fallback,
+                context.abort.signal,
+              );
+              if (retry.exitCode === 0) continue;
+              const retrySnippet = retry.output
+                .trim()
+                .split('\n')
+                .slice(-3)
+                .join(' ')
+                .slice(0, 300);
+              return {
+                ok: false,
+                error: `command failed after fallback (${retry.exitCode}): ${fallback}${retrySnippet ? ` — ${retrySnippet}` : ''}`,
+              };
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              return {
+                ok: false,
+                error: `command error during fallback: ${fallback} — ${message}`,
+              };
+            }
+          }
           return {
             ok: false,
             error: `command failed (${result.exitCode}): ${command}${snippet ? ` — ${snippet}` : ''}`,

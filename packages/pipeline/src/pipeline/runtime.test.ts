@@ -5,7 +5,7 @@ import { type AgentProvider, GhCli } from '@shipcode/agents/source';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineContext, PipelineDeps } from '../types';
-import { createPipelineRuntime, resolveSetupShell } from './runtime';
+import { buildFrozenInstallFallback, createPipelineRuntime, resolveSetupShell } from './runtime';
 
 const { mockExecFile, mockLoadRepoSetupContract, mockGhCli } = vi.hoisted(() => ({
   mockExecFile: vi.fn(),
@@ -320,6 +320,64 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
 
     expect(runtime.getVerifyCommands(makeContext())).toEqual([]);
+  });
+
+  describe('buildFrozenInstallFallback', () => {
+    it('strips --frozen-lockfile from bun install on lockfile drift', () => {
+      expect(
+        buildFrozenInstallFallback(
+          'bun install --frozen-lockfile',
+          'error: lockfile had changes, but lockfile is frozen',
+        ),
+      ).toBe('bun install');
+    });
+
+    it('strips --frozen-lockfile from bun install on min-release-age failure', () => {
+      expect(
+        buildFrozenInstallFallback(
+          'bun install --frozen-lockfile',
+          'min release age not satisfied for foo@1.2.3',
+        ),
+      ).toBe('bun install');
+    });
+
+    it('returns null when bun output does not match a known signature', () => {
+      expect(
+        buildFrozenInstallFallback('bun install --frozen-lockfile', 'EACCES: permission denied'),
+      ).toBeNull();
+    });
+
+    it('strips --frozen-lockfile from pnpm install on ERR_PNPM', () => {
+      expect(
+        buildFrozenInstallFallback(
+          'pnpm install --frozen-lockfile',
+          'ERR_PNPM_OUTDATED_LOCKFILE specifiers in the lockfile',
+        ),
+      ).toBe('pnpm install');
+    });
+
+    it('strips --frozen-lockfile from yarn install on YN0028', () => {
+      expect(
+        buildFrozenInstallFallback(
+          'yarn install --frozen-lockfile',
+          'YN0028: The lockfile would have been modified by this install',
+        ),
+      ).toBe('yarn install');
+    });
+
+    it('rewrites npm ci → npm install on EUSAGE', () => {
+      expect(
+        buildFrozenInstallFallback(
+          'npm ci',
+          'EUSAGE The `npm ci` command can only install with an existing package-lock.json',
+        ),
+      ).toBe('npm install');
+    });
+
+    it('returns null for unrelated commands', () => {
+      expect(buildFrozenInstallFallback('bun install', 'lockfile mismatch')).toBeNull();
+      expect(buildFrozenInstallFallback('go mod download', 'lockfile mismatch')).toBeNull();
+    });
   });
 
   it('selects trusted login shells with fallback to sh', () => {
