@@ -1,9 +1,6 @@
-import { routeFromLabels } from '@shipcode/agents';
-import { createPipeline } from '@shipcode/pipeline';
 import { sanitizeCliText } from '../adapters/cli-emitter';
-import { createCliContext } from '../context';
 import { requireOnboarding } from './guard';
-import { parseIssueNumber } from './issue-helpers';
+import { loadIssuePipelineInput, startIssuePipeline } from './issue-pipeline';
 
 /**
  * `shipcode review <issue-number>`
@@ -13,28 +10,12 @@ import { parseIssueNumber } from './issue-helpers';
 export async function reviewCommand(issueNumber: string) {
   if (!requireOnboarding()) return;
 
-  const num = parseIssueNumber(issueNumber);
-  const ctx = createCliContext(process.cwd());
-
-  console.log(`Fetching issue #${num}...`);
-  const issue = await ctx.ghCli.getIssue(num);
-
-  const route = routeFromLabels(issue.labels);
-  const executorModel = 'error' in route ? 'codex' : route.executorModel;
-  const executorModelOverride = 'error' in route ? null : (route.modelOverride ?? null);
+  const { ctx, issue, num } = await loadIssuePipelineInput(issueNumber);
 
   console.log(`Issue: ${sanitizeCliText(issue.title)}`);
   console.log('Running plan + review...\n');
 
-  const pipeline = createPipeline(ctx.pipelineDeps);
-
-  await pipeline.startFromGitHubIssue(
-    ctx.project.id,
-    ctx.project.path,
-    { number: issue.number, title: issue.title, body: issue.body, labels: issue.labels },
-    executorModel,
-    { baseBranch: ctx.project.defaultBranch, executorModelOverride },
-  );
+  await startIssuePipeline(ctx, issue);
 
   // Retrieve review from DB — reviews are keyed by planId
   const thread = ctx.threads.getByProjectAndGithubIssue(ctx.project.id, num);
