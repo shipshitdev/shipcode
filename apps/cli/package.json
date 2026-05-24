@@ -1,6 +1,6 @@
 {
   "name": "@shipshitdev/shipcode",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Autonomous AI coding pipeline. GitHub issues in, pull requests out.",
   "type": "module",
   "repository": {
@@ -10,7 +10,7 @@
   },
   "main": "./dist/index.js",
   "bin": {
-    "shipcode": "./dist/index.js"
+    "shipcode": "dist/index.js"
   },
   "files": [
     "dist"
