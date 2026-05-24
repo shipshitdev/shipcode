@@ -168,7 +168,15 @@ export function createPipelineRuntime(
     return context.repoSetupContract;
   }
 
-  const SHELL_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
+  const SHELL_COMMAND_TIMEOUT_FALLBACK_MS = 10 * 60 * 1000;
+
+  function resolveShellTimeoutMs(context?: PipelineContext): number {
+    const override = context?.repoSetupContract?.contract.shellCommandTimeoutMs;
+    if (typeof override === 'number' && override > 0) return override;
+    const fromSettings = deps.settings.get().shellCommandTimeoutMs;
+    if (typeof fromSettings === 'number' && fromSettings > 0) return fromSettings;
+    return SHELL_COMMAND_TIMEOUT_FALLBACK_MS;
+  }
 
   async function runShellCommand(
     threadId: string,
@@ -177,7 +185,7 @@ export function createPipelineRuntime(
     signal: AbortSignal,
     options?: { extraEnv?: Record<string, string>; timeoutMs?: number },
   ): Promise<{ exitCode: number; output: string }> {
-    const timeoutMs = options?.timeoutMs ?? SHELL_COMMAND_TIMEOUT_MS;
+    const timeoutMs = options?.timeoutMs ?? resolveShellTimeoutMs();
     return await new Promise((resolvePromise, rejectPromise) => {
       let settled = false;
       const chunks: string[] = [];

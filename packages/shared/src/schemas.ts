@@ -328,4 +328,5 @@ export const repoSetupContractSchema = z.object({
   setupBeforeVerify: z.boolean().default(false),
   testingContext: z.string().min(1).nullable().optional().default(null),
   runtimeQa: runtimeQaConfigSchema.optional(),
+  shellCommandTimeoutMs: z.number().int().positive().nullable().optional(),
 });

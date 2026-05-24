@@ -108,6 +108,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxConcurrentExecutions: 3,
   maxConcurrentCpuTasks: 1,
   cpuThrottleThresholdPercent: 85,
+  shellCommandTimeoutMs: 10 * 60 * 1000,
   instantDefaultPanes: 1,
   devLogLevel: 'debug',
   updateTrack: 'master',

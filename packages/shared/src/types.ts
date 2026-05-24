@@ -969,6 +969,8 @@ export interface AppSettings {
   maxConcurrentCpuTasks: number;
   /** Pause new CPU-heavy local command phases when host CPU is at or above this percentage. */
   cpuThrottleThresholdPercent: number;
+  /** Default per-shell-command timeout for repo setup commands (ms). RepoSetupContract.shellCommandTimeoutMs overrides per-project. */
+  shellCommandTimeoutMs: number;
   /** Default number of terminal panes when opening the Instant view. */
   instantDefaultPanes: 1 | 2 | 4;
   /** Persisted log level for the electron-log file transport. Console stays at 'info'. */
@@ -1199,6 +1201,8 @@ export interface RepoSetupContract {
   setupBeforeVerify: boolean;
   testingContext: string | null;
   runtimeQa?: RuntimeQaConfig;
+  /** Per-project override for shell command timeout (ms). Falls back to AppSettings.shellCommandTimeoutMs when nullish. */
+  shellCommandTimeoutMs?: number | null;
 }
 
 export type ProjectSetupStatus = 'configured' | 'missing' | 'invalid';

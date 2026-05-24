@@ -40,6 +40,7 @@ describe('SettingsQueries', () => {
     expect(s.githubBotUsername).toBe('');
     expect(s.maxConcurrentCpuTasks).toBe(1);
     expect(s.cpuThrottleThresholdPercent).toBe(85);
+    expect(s.shellCommandTimeoutMs).toBe(600_000);
     expect(s.autoRunPriorities).toEqual([]);
     expect(s.onboardingVersion).toBe(0);
     expect(s.worktreeRoot).toBeNull();
@@ -209,6 +210,21 @@ describe('SettingsQueries', () => {
       autoCommitModel: 'gpt-5.4',
       autoCommitMode: 'single',
     });
+  });
+
+  it('clamps and persists shellCommandTimeoutMs', () => {
+    settings.set({ shellCommandTimeoutMs: 120_000 });
+    expect(settings.get().shellCommandTimeoutMs).toBe(120_000);
+
+    expect(() => settings.set({ shellCommandTimeoutMs: 1_000 })).toThrow(/shellCommandTimeoutMs/);
+    expect(() => settings.set({ shellCommandTimeoutMs: 9_999_999 })).toThrow(
+      /shellCommandTimeoutMs/,
+    );
+
+    db.prepare(
+      "INSERT OR REPLACE INTO settings (key, value) VALUES ('shellCommandTimeoutMs', ?)",
+    ).run('1');
+    expect(settings.get().shellCommandTimeoutMs).toBe(DEFAULT_SETTINGS.shellCommandTimeoutMs);
   });
 
   it('set() serializes booleans as string true/false', () => {
