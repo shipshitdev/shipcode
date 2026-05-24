@@ -190,7 +190,7 @@ export async function runCleanupAnalyze(args: {
           const artifacts = await wt.listArtifacts(w.path);
           return [w.path, artifacts.map((artifact) => artifact.relativePath)] as const;
         } catch {
-          return [w.path, []] as const;
+          return [w.path, [] as string[]] as const;
         }
       }),
     ),
