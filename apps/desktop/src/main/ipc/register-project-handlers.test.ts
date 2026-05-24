@@ -1788,10 +1788,14 @@ describe('registerProjectHandlers', () => {
     const queries = {
       projects: {
         getById: vi.fn(() => baseProject),
+        hasLiveWork: vi.fn().mockReturnValueOnce(true).mockReturnValueOnce(true),
         archiveIfIdle: vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(false),
       },
       settings: {
-        get: vi.fn(() => ({ projectOpenTarget: 'cursor' })),
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor', worktreeRoot: '/tmp/worktrees' })),
+      },
+      threads: {
+        list: vi.fn(() => []),
       },
     };
 
@@ -1812,14 +1816,66 @@ describe('registerProjectHandlers', () => {
     await expect(archive(undefined, { projectId: baseProject.id })).rejects.toThrow(
       'Cannot archive this missing project while a pipeline is still active. Stop running pipelines first.',
     );
-    expect(queries.projects.archiveIfIdle).toHaveBeenCalledWith(baseProject.id, {
+    expect(queries.projects.hasLiveWork).toHaveBeenCalledWith(baseProject.id, {
       ignoreAttentionOnly: true,
     });
 
     await expect(archive(undefined, { projectId: baseProject.id })).rejects.toThrow(
       'Cannot archive a project with active work. Stop running pipelines and dismiss notifications first.',
     );
-    expect(queries.projects.archiveIfIdle).toHaveBeenLastCalledWith(baseProject.id, {
+    expect(queries.projects.hasLiveWork).toHaveBeenLastCalledWith(baseProject.id, {
+      ignoreAttentionOnly: false,
+    });
+    expect(queries.projects.archiveIfIdle).not.toHaveBeenCalled();
+
+    existsSpy.mockRestore();
+  });
+
+  it('archives a project after cleaning up tracked worktrees', async () => {
+    const worktreeThread = {
+      id: 'thread-1',
+      worktreeBranch: 'ship/42-fix',
+      worktreePath: '/tmp/worktrees/project/thread-1',
+    };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+        hasLiveWork: vi.fn(() => false),
+        archiveIfIdle: vi.fn(() => true),
+      },
+      settings: {
+        get: vi.fn(() => ({ worktreeRoot: '/tmp/worktrees' })),
+      },
+      threads: {
+        list: vi.fn(() => [
+          worktreeThread,
+          { id: 'thread-2', worktreeBranch: null, worktreePath: null },
+        ]),
+      },
+    };
+    const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const archive = handlers.get('project:archive');
+    if (!archive) throw new Error('project:archive handler not registered');
+
+    await expect(archive(undefined, { projectId: baseProject.id })).resolves.toBeUndefined();
+
+    expect(worktreeRemoveMock).toHaveBeenCalledWith(
+      worktreeThread.worktreePath,
+      worktreeThread.worktreeBranch,
+    );
+    expect(queries.projects.archiveIfIdle).toHaveBeenCalledWith(baseProject.id, {
       ignoreAttentionOnly: false,
     });
 

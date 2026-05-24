@@ -775,6 +775,26 @@ describe('execution phase handlers', () => {
     expect(harness.activePipelines.has('thread-1')).toBe(false);
   });
 
+  it('appends implementation notes protocol to custom workflow execution prompts', async () => {
+    const context = makeContext({
+      projectId: null,
+      worktreePath: process.cwd(),
+      workflowPolicy: {
+        ...makeContext().workflowPolicy,
+        promptTemplate: 'Custom execution prompt for {{ issue.body }}',
+      },
+    });
+    const harness = makeExecutionHarness(context);
+
+    await harness.handlers.startExecution('thread-1', plan as never);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const prompt = vi.mocked(harness.runtime.runProviderPhase).mock.calls[0]?.[2] as string;
+    expect(prompt).toContain('Custom execution prompt for Prompt');
+    expect(prompt).toContain('<implementation_notes_protocol>');
+    expect(prompt).toContain('implementation-notes.md');
+  });
+
   it('fails non-autonomous execution when the executor succeeds without git changes', async () => {
     const context = makeContext({ autonomous: false, worktreePath: process.cwd() });
     const harness = makeExecutionHarness(context);

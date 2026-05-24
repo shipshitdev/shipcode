@@ -35,6 +35,7 @@ export interface CleanupAnalysisInput {
     aheadCount?: number;
     behindCount?: number;
     compareRef?: string | null;
+    artifactPaths?: string[];
   }>;
   branches: BranchSnapshot[];
   remoteBranches?: RemoteBranchSnapshot[];
@@ -66,6 +67,17 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
 
   for (const wt of input.worktrees) {
     if (protectedSet.has(wt.branch)) continue;
+    const artifactPaths = wt.artifactPaths ?? [];
+    if (artifactPaths.length > 0) {
+      items.push({
+        id: `wt-artifacts:${wt.path}`,
+        kind: 'worktree-artifacts',
+        worktreePath: wt.path,
+        branch: wt.branch,
+        artifactPaths,
+      });
+    }
+
     const aheadCount = wt.aheadCount ?? 0;
     const behindCount = wt.behindCount ?? 0;
     const compareRef = wt.compareRef ?? null;

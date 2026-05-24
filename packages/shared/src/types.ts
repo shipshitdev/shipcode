@@ -1052,6 +1052,13 @@ export type CleanupItem =
     }
   | {
       id: string;
+      kind: 'worktree-artifacts';
+      worktreePath: string;
+      branch: string;
+      artifactPaths: string[];
+    }
+  | {
+      id: string;
       kind: 'local-branch-merged';
       branch: string;
       lastCommitDate: string;

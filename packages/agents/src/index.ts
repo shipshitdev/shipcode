@@ -134,7 +134,12 @@ export type {
   ExecutePromptDeps,
   ExecutePromptOptions,
 } from './prompts/execute-prompt';
-export { buildExecutionPrompt } from './prompts/execute-prompt';
+export {
+  appendExecutionNotesProtocol,
+  buildExecutionPrompt,
+  EXECUTION_NOTES_FILE,
+  EXECUTION_NOTES_PROTOCOL,
+} from './prompts/execute-prompt';
 export type {
   PhasePromptContextSlice,
   PhasePromptPolicy,

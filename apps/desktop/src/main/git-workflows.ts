@@ -182,8 +182,18 @@ export async function runCleanupAnalyze(args: {
     log.warn(`[cleanup] gh listPullRequests failed: ${(err as Error).message}`);
   }
 
-  const [dirtyMap, statusEntries, branches, remoteBranches] = await Promise.all([
+  const [dirtyMap, artifactEntries, statusEntries, branches, remoteBranches] = await Promise.all([
     git.getDirtyWorktrees(worktreeList.map((w) => w.path)),
+    Promise.all(
+      worktreeList.map(async (w) => {
+        try {
+          const artifacts = await wt.listArtifacts(w.path);
+          return [w.path, artifacts.map((artifact) => artifact.relativePath)] as const;
+        } catch {
+          return [w.path, []] as const;
+        }
+      }),
+    ),
     Promise.all(
       worktreeList.map(async (w) => {
         try {
@@ -225,6 +235,7 @@ export async function runCleanupAnalyze(args: {
     ),
   ]);
   const statusMap = new Map(statusEntries);
+  const artifactMap = new Map(artifactEntries);
 
   const items = analyzeCleanup({
     worktrees: worktreeList.map((w) => {
@@ -236,6 +247,7 @@ export async function runCleanupAnalyze(args: {
         aheadCount: status?.aheadCount ?? 0,
         behindCount: status?.behindCount ?? 0,
         compareRef: status?.compareRef ?? null,
+        artifactPaths: artifactMap.get(w.path) ?? [],
       };
     }),
     branches,
@@ -260,7 +272,8 @@ export async function runCleanupAnalyze(args: {
     if (
       it.kind === 'worktree-merged-pr' ||
       it.kind === 'worktree-closed-pr' ||
-      it.kind === 'worktree-no-pr-clean'
+      it.kind === 'worktree-no-pr-clean' ||
+      it.kind === 'worktree-artifacts'
     ) {
       return !activeWorktreePaths.has(it.worktreePath);
     }
@@ -320,6 +333,17 @@ export async function runCleanupApply(args: {
                 return wt.remove(item.worktreePath, item.branch);
               });
               if (result.error) throw new Error(result.error);
+            } else if (item.kind === 'worktree-artifacts') {
+              const result = await args.lockFor(item.worktreePath, async () => {
+                return wt.pruneArtifacts(item.worktreePath);
+              });
+              if (result.failed.length > 0) {
+                throw new Error(
+                  result.failed
+                    .map((failure) => `${failure.relativePath}: ${failure.error}`)
+                    .join('\n'),
+                );
+              }
             } else if (
               item.kind === 'local-branch-no-remote' ||
               item.kind === 'local-branch-merged'

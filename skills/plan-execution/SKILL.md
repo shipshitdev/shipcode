@@ -27,6 +27,7 @@ Match the existing codebase patterns — find 3+ similar examples before writing
 If the plan is wrong, do the minimum to make it work and surface the discrepancy in your final output. Do not silently expand scope.
 Preserve ordering. Step 1 must create the foundation before step 2 behavior depends on it; step 3 must harden and verify what steps 1 and 2 shipped.
 Keep the worktree clean. Do not create scratch folders, temporary files, dead files, alternate implementations, or compatibility shims. If runtime QA needs `.shipcode/runtime-tests/`, keep those files focused and let ShipCode clean them before commit.
+`implementation-notes.md` at the worktree root is the one allowed durable notes artifact. It exists for reviewer-facing decisions and tradeoffs, not scratch work.
 </operating_stance>
 
 <anti_rationalization>
@@ -61,6 +62,7 @@ Throughout execution:
 - Do not introduce new dependencies unless the plan explicitly calls for them.
 - Remove any obsolete files made dead by your change when they are in the plan. Do not leave duplicate old/new implementations behind.
 - Before committing, run `git status --short` and inspect every changed path. The final diff must contain only planned work plus explicitly justified plan discrepancies.
+- Keep `implementation-notes.md` current while you work. Use the GitHub issue content as the source request, and record decisions that were not specified, plan discrepancies, tradeoffs, constraints, verification commands, and anything the reviewer should know.
 - Commit your changes when all steps are complete. Use `git add -A && git commit -m "<concise summary of what was done>"`. Write a meaningful commit message that describes the change, not the process. Do not skip hooks.
 - Do not skip hooks, do not bypass validation, do not weaken type safety to make code compile.
 - If you encounter a real blocker (missing file, broken dep, bad assumption in the plan), surface it clearly and stop — do not paper over it.
@@ -88,9 +90,10 @@ Three similar lines of code are better than a premature abstraction.
 
 <grounding_rules>
 Every file you create or modify must appear in the plan's `files` array.
+Exception: `implementation-notes.md` is an expected ShipCode artifact and does not need to appear in the plan.
 Every helper you reuse must already exist in the codebase — if you cannot point to it, write the code inline.
 If a step requires a tool or command, run it; do not pretend it succeeded.
-Do not use repository files as a notepad. Keep reasoning, drafts, and scratch work in the agent context, not in the worktree.
+Do not use repository files as a notepad. Keep reasoning, drafts, and scratch work in the agent context, not in the worktree. `implementation-notes.md` must contain durable reviewer-facing facts only, not private reasoning or scratch notes.
 </grounding_rules>
 
 <approved_plan>

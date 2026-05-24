@@ -92,6 +92,33 @@ describe('analyzeCleanup', () => {
     expect(items).toHaveLength(0);
   });
 
+  it('flags worktree artifact cleanup without requiring merged branch state', () => {
+    const items = analyzeCleanup(
+      input({
+        worktrees: [
+          {
+            path: '/wt/a',
+            branch: 'ship/77-open',
+            dirty: true,
+            aheadCount: 3,
+            compareRef: 'main',
+            artifactPaths: ['node_modules', '.next'],
+          },
+        ],
+      }),
+    );
+
+    expect(items).toEqual([
+      {
+        id: 'wt-artifacts:/wt/a',
+        kind: 'worktree-artifacts',
+        worktreePath: '/wt/a',
+        branch: 'ship/77-open',
+        artifactPaths: ['node_modules', '.next'],
+      },
+    ]);
+  });
+
   it('flags managed no-PR worktrees with clean verified trees when enabled', () => {
     const items = analyzeCleanup(
       input({

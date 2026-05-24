@@ -362,6 +362,7 @@ export function createPipelineContextHelpers(
       runtimeQaOutput: null,
       cpuQueueStartedAt: seed.cpuQueueStartedAt ?? null,
       cpuQueueLastNotifiedAt: seed.cpuQueueLastNotifiedAt ?? null,
+      isAutomationRun: seed.isAutomationRun ?? false,
     };
     activePipelines.set(threadId, context);
     emitWorkflowWarning(deps, context);

@@ -531,6 +531,40 @@ describe('cleanup git workflows', () => {
     );
   }, 20_000);
 
+  it('applies artifact cleanup without deleting the worktree or branch', async () => {
+    const [{ runCleanupApply }, { repoPath, worktreePath }] = await Promise.all([
+      import('./git-workflows'),
+      createFixtureRepo(),
+    ]);
+    fs.mkdirSync(path.join(worktreePath, 'node_modules/pkg'), { recursive: true });
+    fs.mkdirSync(path.join(worktreePath, '.next/cache'), { recursive: true });
+    fs.writeFileSync(path.join(worktreePath, 'source.txt'), 'keep\n');
+
+    const result = await runCleanupApply({
+      project: makeProject(repoPath),
+      items: [
+        {
+          id: 'artifacts',
+          kind: 'worktree-artifacts',
+          branch: 'ship/12-done',
+          worktreePath,
+          artifactPaths: ['node_modules', '.next'],
+        },
+      ] as CleanupItem[],
+      itemIds: ['artifacts'],
+      lockFor: async (_worktreePath, fn) => fn(),
+    });
+
+    expect(result).toEqual({ succeeded: ['artifacts'], failed: [] });
+    expect(fs.existsSync(worktreePath)).toBe(true);
+    expect(fs.existsSync(path.join(worktreePath, 'node_modules'))).toBe(false);
+    expect(fs.existsSync(path.join(worktreePath, '.next'))).toBe(false);
+    expect(fs.existsSync(path.join(worktreePath, 'source.txt'))).toBe(true);
+    await expect(
+      gitCan(repoPath, ['show-ref', '--verify', 'refs/heads/ship/12-done']),
+    ).resolves.toBe(true);
+  }, 20_000);
+
   it('applies cleanup with unselected skips, worktree ahead checks, remove failures, and branch deletion', async () => {
     const [{ runCleanupApply }, { repoPath, worktreePath }] = await Promise.all([
       import('./git-workflows'),

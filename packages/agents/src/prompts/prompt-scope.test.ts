@@ -2,7 +2,7 @@ import type { ShipCodePlan } from '@shipcode/shared';
 import { describe, expect, it, vi } from 'vitest';
 import type { PromptMaterial } from '../prompt-scope';
 import type { SkillsRowSource } from '../skills';
-import { buildExecutionPrompt } from './execute-prompt';
+import { appendExecutionNotesProtocol, buildExecutionPrompt } from './execute-prompt';
 import { buildPlanPrompt, buildRevisionPrompt } from './plan-prompt';
 import { buildReviewPrompt } from './review-prompt';
 import { buildVerificationPrompt } from './verification-prompt';
@@ -107,6 +107,9 @@ describe('scoped prompt builders', () => {
     expect(prompt).not.toContain('REPO_GRAPH_SENTINEL');
     expect(prompt).toContain('PLAN_OUTPUT_SENTINEL');
     expect(prompt).toContain('TEST_CONTEXT_SENTINEL');
+    expect(prompt).toContain('<implementation_notes_protocol>');
+    expect(prompt).toContain('implementation-notes.md');
+    expect(prompt).toContain('GitHub issue content');
   });
 
   it('execution can build without extra scoped context', () => {
@@ -114,6 +117,15 @@ describe('scoped prompt builders', () => {
 
     expect(prompt).toContain('"objective": "Ship scoped prompts"');
     expect(prompt).not.toContain('<repo_context>');
+    expect(prompt).toContain('<implementation_notes_protocol>');
+  });
+
+  it('execution notes protocol appender is idempotent for custom workflow prompts', () => {
+    const prompt = appendExecutionNotesProtocol('Custom execution prompt');
+    const appendedAgain = appendExecutionNotesProtocol(prompt);
+
+    expect(prompt).toContain('<implementation_notes_protocol>');
+    expect(appendedAgain.match(/<implementation_notes_protocol>/g)).toHaveLength(1);
   });
 
   it('execution reports invalid overrides and falls back to the bundled skill', () => {

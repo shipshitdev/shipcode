@@ -523,6 +523,33 @@ export function registerProjectHandlers({
   pipeline,
   chatNotificationService,
 }: IpcHandlerDeps): void {
+  const cleanupTrackedWorktrees = async (project: Project): Promise<void> => {
+    const appSettings = queries.settings.get();
+    const worktreeManager = new WorktreeManager(project.path, {
+      worktreeRoot: appSettings.worktreeRoot,
+    });
+    const threads = queries.threads.list(project.id);
+    const failures = (
+      await Promise.all(
+        threads.flatMap((thread) =>
+          thread.worktreePath && thread.worktreeBranch
+            ? [
+                worktreeManager
+                  .remove(thread.worktreePath, thread.worktreeBranch)
+                  .then((result) =>
+                    result.error ? `${thread.worktreePath}: ${result.error}` : null,
+                  ),
+              ]
+            : [],
+        ),
+      )
+    ).flatMap((failure) => (failure ? [failure] : []));
+
+    if (failures.length > 0) {
+      throw new Error(`Failed to clean up ${failures.length} worktree(s):\n${failures.join('\n')}`);
+    }
+  };
+
   ipcMain.handle('project:list', () => {
     return enrichProjectPaths(queries.projects.list());
   });
@@ -664,29 +691,18 @@ export function registerProjectHandlers({
     }
 
     if (project) {
-      const appSettings = queries.settings.get();
-      const worktreeManager = new WorktreeManager(project.path, {
-        worktreeRoot: appSettings.worktreeRoot,
-      });
-      const threads = queries.threads.list(projectId);
-      const failures = (
-        await Promise.all(
-          threads.flatMap((thread) =>
-            thread.worktreePath && thread.worktreeBranch
-              ? [
-                  worktreeManager
-                    .remove(thread.worktreePath, thread.worktreeBranch)
-                    .then((result) =>
-                      result.error ? `${thread.worktreePath}: ${result.error}` : null,
-                    ),
-                ]
-              : [],
-          ),
-        )
-      ).flatMap((failure) => (failure ? [failure] : []));
-      if (failures.length > 0) {
+      try {
+        await cleanupTrackedWorktrees(project);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const removeMessage = message.replace(
+          /^(Failed to clean up \d+ worktree\(s\)):\n/,
+          '$1. Project not removed:\n',
+        );
         throw new Error(
-          `Failed to clean up ${failures.length} worktree(s). Project not removed:\n${failures.join('\n')}`,
+          removeMessage === message
+            ? `${message.replace(/:$/, '')}. Project not removed.`
+            : removeMessage,
         );
       }
     }
@@ -711,6 +727,31 @@ export function registerProjectHandlers({
   ipcMain.handle('project:archive', async (_event, { projectId }: { projectId: string }) => {
     const project = queries.projects.getById(projectId);
     const ignoreAttentionOnly = project ? !fs.existsSync(project.path) : false;
+    if (queries.projects.hasLiveWork(projectId, { ignoreAttentionOnly })) {
+      throw new Error(
+        ignoreAttentionOnly
+          ? 'Cannot archive this missing project while a pipeline is still active. Stop running pipelines first.'
+          : 'Cannot archive a project with active work. Stop running pipelines and dismiss notifications first.',
+      );
+    }
+
+    if (project) {
+      try {
+        await cleanupTrackedWorktrees(project);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const archiveMessage = message.replace(
+          /^(Failed to clean up \d+ worktree\(s\)):\n/,
+          '$1. Project not archived:\n',
+        );
+        throw new Error(
+          archiveMessage === message
+            ? `${message.replace(/:$/, '')}. Project not archived.`
+            : archiveMessage,
+        );
+      }
+    }
+
     const archived = queries.projects.archiveIfIdle(projectId, { ignoreAttentionOnly });
     if (!archived) {
       throw new Error(

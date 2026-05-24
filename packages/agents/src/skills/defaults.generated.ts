@@ -367,6 +367,7 @@ Match the existing codebase patterns — find 3+ similar examples before writing
 If the plan is wrong, do the minimum to make it work and surface the discrepancy in your final output. Do not silently expand scope.
 Preserve ordering. Step 1 must create the foundation before step 2 behavior depends on it; step 3 must harden and verify what steps 1 and 2 shipped.
 Keep the worktree clean. Do not create scratch folders, temporary files, dead files, alternate implementations, or compatibility shims. If runtime QA needs \`.shipcode/runtime-tests/\`, keep those files focused and let ShipCode clean them before commit.
+\`implementation-notes.md\` at the worktree root is the one allowed durable notes artifact. It exists for reviewer-facing decisions and tradeoffs, not scratch work.
 </operating_stance>
 
 <anti_rationalization>
@@ -401,6 +402,7 @@ Throughout execution:
 - Do not introduce new dependencies unless the plan explicitly calls for them.
 - Remove any obsolete files made dead by your change when they are in the plan. Do not leave duplicate old/new implementations behind.
 - Before committing, run \`git status --short\` and inspect every changed path. The final diff must contain only planned work plus explicitly justified plan discrepancies.
+- Keep \`implementation-notes.md\` current while you work. Use the GitHub issue content as the source request, and record decisions that were not specified, plan discrepancies, tradeoffs, constraints, verification commands, and anything the reviewer should know.
 - Commit your changes when all steps are complete. Use \`git add -A && git commit -m "<concise summary of what was done>"\`. Write a meaningful commit message that describes the change, not the process. Do not skip hooks.
 - Do not skip hooks, do not bypass validation, do not weaken type safety to make code compile.
 - If you encounter a real blocker (missing file, broken dep, bad assumption in the plan), surface it clearly and stop — do not paper over it.
@@ -428,16 +430,17 @@ Three similar lines of code are better than a premature abstraction.
 
 <grounding_rules>
 Every file you create or modify must appear in the plan's \`files\` array.
+Exception: \`implementation-notes.md\` is an expected ShipCode artifact and does not need to appear in the plan.
 Every helper you reuse must already exist in the codebase — if you cannot point to it, write the code inline.
 If a step requires a tool or command, run it; do not pretend it succeeded.
-Do not use repository files as a notepad. Keep reasoning, drafts, and scratch work in the agent context, not in the worktree.
+Do not use repository files as a notepad. Keep reasoning, drafts, and scratch work in the agent context, not in the worktree. \`implementation-notes.md\` must contain durable reviewer-facing facts only, not private reasoning or scratch notes.
 </grounding_rules>
 
 <approved_plan>
 {{APPROVED_PLAN}}
 </approved_plan>
 `,
-    version: '820a8bed3585af2b',
+    version: '2a1d34cf88783351',
     requiredSlots: ['APPROVED_PLAN'] as const,
     schemaVersion: 1,
   },
@@ -494,7 +497,8 @@ Cross-checks:
 - Every file in the plan's \`files\` array should be touched by the diff (unless the plan explicitly marks it as conditional).
 - Every step in the plan's \`steps\` array should have a corresponding hunk in the diff.
 - The step evidence must preserve order: foundation/spec plumbing first, primary behavior second, hardening/verification third.
-- Files modified in the diff that are NOT in the plan's \`files\` array are scope creep — flag as warnings unless they are obvious side effects (lockfiles, generated files).
+- Files modified in the diff that are NOT in the plan's \`files\` array are scope creep — flag as warnings unless they are obvious side effects (lockfiles, generated files) or the expected ShipCode artifact \`implementation-notes.md\`.
+- Treat \`implementation-notes.md\` as reviewer evidence only. Do not use it as proof that source behavior changed, but do not fail verification merely because it exists.
 - The worktree must be clean — no uncommitted changes, no stray files.
 </verification_method>
 
@@ -528,7 +532,7 @@ Do not infer success from the absence of failure.
 {{ACCEPTANCE_CRITERIA}}
 </acceptance_criteria>
 `,
-    version: '0fa873ae640511f2',
+    version: '0f7417a49be983a8',
     requiredSlots: ['PLAN_JSON', 'DIFF', 'ACCEPTANCE_CRITERIA', 'OUTPUT_SCHEMA'] as const,
     schemaVersion: 1,
   },

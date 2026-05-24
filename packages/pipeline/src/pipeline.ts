@@ -414,7 +414,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       },
     });
     const seededContext = activePipelines.get(threadId);
-    if (seededContext && runId) seededContext.runId = runId;
+    if (seededContext) {
+      seededContext.isAutomationRun = true;
+      if (runId) seededContext.runId = runId;
+    }
 
     deps.emitter.emit({
       type: 'pipeline:start-context',

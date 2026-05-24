@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, rmSync } from 'node:fs';
 import {
+  appendExecutionNotesProtocol,
   buildExecutionPrompt,
   buildPRBody,
   buildVerificationPrompt,
@@ -987,12 +988,15 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       return;
     }
     const executionTaskGraph = usesTaskGraph ? taskGraph : null;
+    const baseExecutionPrompt =
+      workflowExecutionPrompt ??
+      buildExecutionPrompt(executionPlan, skill.context, skill.deps, {
+        promptMaterials: executeMaterials,
+        testingContext: getTestingContext(context),
+        isAutomationRun: context.isAutomationRun,
+      });
     const executionPrompt =
-      (workflowExecutionPrompt ??
-        buildExecutionPrompt(executionPlan, skill.context, skill.deps, {
-          promptMaterials: executeMaterials,
-          testingContext: getTestingContext(context),
-        })) +
+      appendExecutionNotesProtocol(baseExecutionPrompt) +
       formatTaskGraphExecutionContract(executionTaskGraph, { activeNode: activeTaskNode }) +
       verificationFeedback +
       testFeedback +

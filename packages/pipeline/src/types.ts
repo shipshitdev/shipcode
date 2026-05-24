@@ -332,6 +332,13 @@ export interface PipelineContext {
   cpuQueueStartedAt: number | null;
   /** Last terminal notice emitted while waiting for a CPU-heavy local command slot. */
   cpuQueueLastNotifiedAt: number | null;
+  /**
+   * True when this run was started via startFromAutomation (cron tick).
+   * The executor prompt drops file-restriction language because the
+   * synthesized plan has empty files/steps arrays — the prompt itself
+   * is the source of truth and the executor must discover files itself.
+   */
+  isAutomationRun: boolean;
 }
 
 /**

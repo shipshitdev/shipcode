@@ -2,6 +2,12 @@ import path from 'node:path';
 import { formatIssueBranch as formatIssueBranchShared, slugifyIssueTitle } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
 import { type SimpleGit, simpleGit } from 'simple-git';
+import {
+  listWorktreeArtifacts,
+  pruneWorktreeArtifacts,
+  type WorktreeArtifact,
+  type WorktreeArtifactCleanupResult,
+} from './worktree-artifacts';
 
 export interface WorktreeManagerOptions {
   /**
@@ -248,6 +254,14 @@ export class WorktreeManager {
 
   async prune(): Promise<void> {
     await this.git.raw(['worktree', 'prune']);
+  }
+
+  async listArtifacts(worktreePath: string): Promise<WorktreeArtifact[]> {
+    return listWorktreeArtifacts(worktreePath);
+  }
+
+  async pruneArtifacts(worktreePath: string): Promise<WorktreeArtifactCleanupResult> {
+    return pruneWorktreeArtifacts(worktreePath);
   }
 
   async move(fromPath: string, toPath: string): Promise<void> {

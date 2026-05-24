@@ -20,6 +20,7 @@ const KIND_LABELS: Record<CleanupItem['kind'], string> = {
   'worktree-merged-pr': 'Worktrees with merged PR',
   'worktree-closed-pr': 'Worktrees with closed PR',
   'worktree-no-pr-clean': 'Clean merged worktrees without PR',
+  'worktree-artifacts': 'Worktree disk artifacts',
   'local-branch-merged': 'Local branches (merged)',
   'local-branch-no-remote': 'Local branches with no remote',
   'remote-branch-merged': 'Remote branches (merged)',
@@ -62,6 +63,11 @@ function describeItem(item: CleanupItem): { primary: string; secondary?: string 
         secondary: [item.worktreePath, item.dirty ? 'LOCAL WORK' : null, divergence]
           .filter(Boolean)
           .join('  ·  '),
+      };
+    case 'worktree-artifacts':
+      return {
+        primary: item.branch,
+        secondary: [item.worktreePath, `delete ${item.artifactPaths.join(', ')}`].join('  ·  '),
       };
     case 'local-branch-merged':
       return {
@@ -225,12 +231,22 @@ function useCleanupModalView({ open, onClose, projectId, criteria }: CleanupModa
     return analysis.items.filter((item) => selected.has(item.id));
   }, [analysis, selected]);
 
+  const hasArtifactSelection = selectedItems.some((item) => item.kind === 'worktree-artifacts');
+  const hasDeleteSelection = selectedItems.some((item) => item.kind !== 'worktree-artifacts');
+
   const confirmationGroups = useMemo(() => {
     const worktrees: Array<{ branch: string; path: string }> = [];
+    const artifacts: Array<{ branch: string; path: string; artifactPaths: string[] }> = [];
     const localBranches: string[] = [];
     const remoteBranches: string[] = [];
     for (const item of selectedItems) {
-      if (WORKTREE_KINDS.has(item.kind) && 'worktreePath' in item) {
+      if (item.kind === 'worktree-artifacts') {
+        artifacts.push({
+          branch: item.branch,
+          path: item.worktreePath,
+          artifactPaths: item.artifactPaths,
+        });
+      } else if (WORKTREE_KINDS.has(item.kind) && 'worktreePath' in item) {
         worktrees.push({ branch: item.branch, path: item.worktreePath });
       } else if (LOCAL_BRANCH_KINDS.has(item.kind)) {
         localBranches.push(item.branch);
@@ -238,7 +254,7 @@ function useCleanupModalView({ open, onClose, projectId, criteria }: CleanupModa
         remoteBranches.push(`${item.remote}/${item.branch}`);
       }
     }
-    return { worktrees, localBranches, remoteBranches };
+    return { worktrees, artifacts, localBranches, remoteBranches };
   }, [selectedItems]);
 
   const apply = useMutation({
@@ -379,13 +395,21 @@ function useCleanupModalView({ open, onClose, projectId, criteria }: CleanupModa
             >
               Confirm cleanup
             </div>
-            <p className="mt-1 text-xs text-secondary">
-              ShipCode verified these selected branches are merged into{' '}
-              <span className="font-mono text-primary">
-                {analysis?.baseRef ?? 'the default branch'}
-              </span>{' '}
-              and will re-check before deleting anything.
-            </p>
+            {hasDeleteSelection ? (
+              <p className="mt-1 text-xs text-secondary">
+                ShipCode verified these selected branches are merged into{' '}
+                <span className="font-mono text-primary">
+                  {analysis?.baseRef ?? 'the default branch'}
+                </span>{' '}
+                and will re-check before deleting anything.
+              </p>
+            ) : null}
+            {hasArtifactSelection ? (
+              <p className="mt-1 text-xs text-secondary">
+                Artifact cleanup deletes install, build, test, and log output directories only; it
+                leaves branches and source files in place.
+              </p>
+            ) : null}
             {hasRemoteSelection ? (
               <p className="mt-1 text-xs text-secondary">
                 Remote branch deletion removes refs from origin; branch protection rules may reject
@@ -400,6 +424,18 @@ function useCleanupModalView({ open, onClose, projectId, criteria }: CleanupModa
                     {confirmationGroups.worktrees.map((worktree) => (
                       <li key={`${worktree.branch}:${worktree.path}`} className="break-all">
                         {worktree.branch} · {worktree.path}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {confirmationGroups.artifacts.length > 0 ? (
+                <div>
+                  <div className="mb-1 font-semibold text-primary">Artifacts</div>
+                  <ul className="space-y-1 font-mono text-secondary">
+                    {confirmationGroups.artifacts.map((artifact) => (
+                      <li key={`${artifact.branch}:${artifact.path}`} className="break-all">
+                        {artifact.branch} · {artifact.artifactPaths.join(', ')} · {artifact.path}
                       </li>
                     ))}
                   </ul>

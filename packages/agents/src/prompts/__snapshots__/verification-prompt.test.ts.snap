@@ -41,7 +41,8 @@ Cross-checks:
 - Every file in the plan's \`files\` array should be touched by the diff (unless the plan explicitly marks it as conditional).
 - Every step in the plan's \`steps\` array should have a corresponding hunk in the diff.
 - The step evidence must preserve order: foundation/spec plumbing first, primary behavior second, hardening/verification third.
-- Files modified in the diff that are NOT in the plan's \`files\` array are scope creep — flag as warnings unless they are obvious side effects (lockfiles, generated files).
+- Files modified in the diff that are NOT in the plan's \`files\` array are scope creep — flag as warnings unless they are obvious side effects (lockfiles, generated files) or the expected ShipCode artifact \`implementation-notes.md\`.
+- Treat \`implementation-notes.md\` as reviewer evidence only. Do not use it as proof that source behavior changed, but do not fail verification merely because it exists.
 - The worktree must be clean — no uncommitted changes, no stray files.
 </verification_method>
 
