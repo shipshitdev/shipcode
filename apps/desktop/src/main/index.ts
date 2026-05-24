@@ -18,7 +18,21 @@ process.emit = ((event: string | symbol, ...args: unknown[]) => {
 // Prevent unhandled errors (e.g. EIO on shutdown, destroyed WebContents race)
 // from showing Electron's crash dialog. Log to file instead.
 import log from './logger.service';
+import { fixMainProcessPath } from './path-fix';
 import { captureMainException, configureMainTelemetry } from './telemetry';
+
+// Patch PATH for packaged builds so child processes (git, bun, codex, claude)
+// resolve from the user's login-shell environment instead of Electron's
+// minimal GUI inheritance. Must run before any execFileSync / spawn of
+// these binaries (worktree creation, project setup, executor invocation).
+const pathFixResult = fixMainProcessPath();
+if (pathFixResult.applied) {
+  log.info(
+    `[main] PATH patched from login shell (${pathFixResult.newPathEntries?.length ?? 0} entries)`,
+  );
+} else if (pathFixResult.reason === 'shell_failed') {
+  log.warn(`[main] PATH fix skipped: ${pathFixResult.shellError ?? 'unknown'}`);
+}
 
 process.on('uncaughtException', (err) => {
   log.error('[main] uncaught exception:', err);
