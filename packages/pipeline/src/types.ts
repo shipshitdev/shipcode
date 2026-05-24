@@ -132,7 +132,7 @@ export type PipelineEvent =
       type: 'pipeline:approval-gate';
       threadId: string;
       outcome: 'approval' | 'auto_execute';
-      reviewDecision: 'approve' | 'request_changes' | 'parse_failure';
+      reviewDecision: 'approve' | 'request_changes' | 'reject' | 'parse_failure';
       planVersion: number | null;
       requireApproval: boolean;
       autonomous: boolean;
@@ -147,6 +147,7 @@ export type PipelineEvent =
         | 'revisionsExhausted'
         | 'parseFailure'
         | 'manualSkipReview'
+        | 'reviewRejected'
       )[];
     }
   | {

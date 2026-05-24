@@ -1711,7 +1711,7 @@ Custom prompt`,
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
     });
 
-    it('reject → emits failed', async () => {
+    it('reject → halts at approval gate', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
 
@@ -1721,12 +1721,9 @@ Custom prompt`,
       await mock.trigger('exit', 'proc-2', 0);
 
       expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'rejected');
-      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
-        't1',
-        expect.any(String),
-        expect.any(String),
-      );
-      expect(pipeline.getContext('t1')).toBeUndefined();
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approval');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'approval');
+      expect(mock.deps.threads.recordFailure).not.toHaveBeenCalled();
     });
 
     it('parse failure → emits failed', async () => {

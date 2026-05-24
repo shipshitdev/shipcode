@@ -717,6 +717,40 @@ export function createPlanningPhaseHandlers({
                 handlers.startExecution(threadId, latestStructuredPlan);
               }
             }
+          } else if (result.data.decision === 'reject') {
+            // Reviewer rejected the plan outright — do not loop revisions
+            // and do not auto-execute even in autonomous mode. Halt at the
+            // approval gate so the user can intervene (edit issue, retry,
+            // or abandon).
+            const hasCriticalOrMajor = result.data.findings.some(
+              (finding: { severity: string }) =>
+                finding.severity === 'critical' || finding.severity === 'major',
+            );
+            const requireApproval = getRequireApprovalForContext(context);
+            const revisionCountLimit = getRevisionCountForContext(context);
+            const reasons: Array<
+              'requireApproval' | 'nonAutonomous' | 'criticalFindings' | 'reviewRejected'
+            > = ['reviewRejected'];
+            if (requireApproval) reasons.push('requireApproval');
+            if (!context.autonomous) reasons.push('nonAutonomous');
+            if (hasCriticalOrMajor) reasons.push('criticalFindings');
+
+            deps.emitter.emit({
+              type: 'pipeline:approval-gate',
+              threadId,
+              outcome: 'approval',
+              reviewDecision: 'reject',
+              planVersion: latestPlan.version,
+              requireApproval,
+              autonomous: context.autonomous,
+              reviewRound: context.reviewRound,
+              revisionCount: revisionCountLimit,
+              hasCriticalOrMajor,
+              reasons,
+            });
+            deps.plans.updateStatus(latestPlan.id, 'approval');
+            void postPlanComment(context, latestStructuredPlan);
+            emitPhase(threadId, 'approval');
           } else {
             emitPhase(
               threadId,
