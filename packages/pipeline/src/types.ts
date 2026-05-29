@@ -383,31 +383,18 @@ export interface PhaseInput {
 }
 
 /**
- * Frozen input for a single `runProviderPhaseCore` call. Extends the identity
- * snapshot (`PhaseInput`) with the execution-context fields the provider call
- * needs — models, run id, abort signal, the phase's prompt-material summary,
- * and the prompt-telemetry counter captured at call time. The core reads only
- * this; it never touches the mutable `PipelineContext`. Mutations flow back out
- * via `ProviderPhaseDeltas`, which the orchestrator (the `runProviderPhase`
- * wrapper, and later the #137 dispatch loop) applies to context.
+ * Consumed-once carry threaded from the previous phase into the next phase's
+ * `PhasePayload` via `buildPhasePayload`'s `prevOutput` arg. Each field is read
+ * once by the receiving phase when building its prompt. All optional: an omitted
+ * field means "no carry of this kind". (#138 builds the pipe; #139 will move the
+ * *writes* off `PipelineContext` into typed `PhaseOutcome` results.)
  */
-export interface ProviderPhaseInput extends PhaseInput {
-  readonly runId: string | null;
-  /** The live signal (not the controller) so the core can read `.aborted`. */
-  readonly abort: AbortSignal;
-  /** `promptTelemetry.length` at snapshot time; the next attempt is this + 1. */
-  readonly promptTelemetryCount: number;
-  /** Pre-sliced summary for this phase from `promptMaterialSummaries[phase]`. */
-  readonly promptMaterialSummary: PromptMaterialSummary | undefined;
-  readonly executorModel: PipelineExecutorModel;
-  readonly plannerModel: PipelineExecutorModel;
-  readonly reviewerModel: PipelineExecutorModel;
-  readonly verifierModel: PipelineExecutorModel;
-  readonly executorModelOverride: string | null;
-  readonly plannerModelIdOverride: string | null;
-  readonly reviewerModelIdOverride: string | null;
-  readonly executorModelIdOverride: string | null;
-  readonly verifierModelIdOverride: string | null;
+export interface PhaseCarryOutput {
+  readonly stabilizationFeedback?: string | null;
+  readonly executionResumeContext?: string | null;
+  readonly previousPlanRawOutput?: string | null;
+  readonly testOutput?: string | null;
+  readonly runtimeQaOutput?: string | null;
 }
 
 /**
@@ -424,13 +411,14 @@ export interface ProviderPhaseDeltas {
 /**
  * Frozen, per-phase input built by `buildPhasePayload` before a phase runs.
  * Carries identity, the phase-resolved model + model-id override + reasoning
- * effort, and the phase's prompt materials — everything a single phase reads,
- * and nothing the orchestrator mutates across phases. Read-only by design;
- * phase-local carry (stabilizationFeedback etc.) is deliberately absent.
+ * effort, the phase's prompt materials, the prompt-telemetry counter, and the
+ * consumed-once `carry` from the previous phase — everything a single phase
+ * reads, and nothing it mutates. Read-only by design; the live `PipelineContext`
+ * remains the orchestrator's mutable store.
  *
- * Dormant in #136 (defined and unit-tested, no production caller). The #138
- * dispatch loop will construct one per phase invocation from `OrchestratorState`
- * and the phase will read it instead of the mutable `PipelineContext`.
+ * The single per-phase snapshot (#138): `runProviderPhaseCore` reads this
+ * directly. The `runProviderPhase` wrapper builds one per invocation via
+ * `buildPhasePayload` and threads it to the provider call.
  */
 export interface PhasePayload {
   readonly threadId: string;
@@ -445,8 +433,10 @@ export interface PhasePayload {
   readonly autonomous: boolean;
   readonly runId: string | null;
   readonly isAutomationRun: boolean;
-  /** The live abort signal (not the controller), mirroring `ProviderPhaseInput`. */
+  /** The live abort signal (not the controller) so the core can read `.aborted`. */
   readonly abort: AbortSignal;
+  /** `promptTelemetry.length` at build time; the next attempt is this + 1. */
+  readonly promptTelemetryCount: number;
   readonly phase: PipelinePromptPhase;
   /** Model resolved for this phase (mirrors `resolveAgentForPhase`). */
   readonly model: PipelineExecutorModel;
@@ -456,6 +446,8 @@ export interface PhasePayload {
   readonly repoContext: string | null;
   readonly repoPromptMaterials: readonly PromptMaterial[];
   readonly promptMaterialSummary: PromptMaterialSummary | undefined;
+  /** Consumed-once carry from the previous phase; `{}` when none. */
+  readonly carry: PhaseCarryOutput;
 }
 
 /**

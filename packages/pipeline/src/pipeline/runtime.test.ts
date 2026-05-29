@@ -5,7 +5,7 @@ import { type AgentProvider, GhCli } from '@shipcode/agents/source';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineContext, PipelineDeps } from '../types';
-import { snapshotProviderPhaseInput } from './context';
+import { buildPhasePayload } from './context';
 import { buildFrozenInstallFallback, createPipelineRuntime, resolveSetupShell } from './runtime';
 
 const { mockExecFile, mockLoadRepoSetupContract, mockGhCli } = vi.hoisted(() => ({
@@ -954,7 +954,13 @@ describe('createPipelineRuntime', () => {
       promptMaterialSummaries: { plan: { totalMaterials: 0 } } as never,
     });
 
-    const result = await runtime.runProviderPhase(context, 'plan', 'prompt', [], {});
+    const result = await runtime.runProviderPhase(
+      context,
+      buildPhasePayload(context, 'plan'),
+      'prompt',
+      [],
+      {},
+    );
 
     expect(result.rawOutput).toBe('done');
     expect(provider.generate).toHaveBeenCalledWith(
@@ -997,12 +1003,13 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
+    const context = makeContext({
+      worktreePath: null,
+      executorModelOverride: 'claude-sonnet',
+    });
     const result = await runtime.runProviderPhase(
-      makeContext({
-        worktreePath: null,
-        executorModelOverride: 'claude-sonnet',
-      }),
-      'execute',
+      context,
+      buildPhasePayload(context, 'execute'),
       'prompt',
       [],
       {},
@@ -1032,9 +1039,10 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
+    const context = makeContext({ plannerModelIdOverride: 'claude-opus' });
     const result = await runtime.runProviderPhase(
-      makeContext({ plannerModelIdOverride: 'claude-opus' }),
-      'revision',
+      context,
+      buildPhasePayload(context, 'revision'),
       'prompt',
       [],
       {},
@@ -1067,8 +1075,9 @@ describe('createPipelineRuntime', () => {
     deps.pipelineSteps = pipelineSteps as never;
     const runtime = createPipelineRuntime(deps, {} as never);
 
+    const context = makeContext();
     await expect(
-      runtime.runProviderPhase(makeContext(), 'plan', 'prompt', [], {}),
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {}),
     ).resolves.toEqual(expect.objectContaining({ rawOutput: 'done', exitCode: 0 }));
     expect(pipelineSteps.complete).toHaveBeenCalledWith(
       'step-1',
@@ -1096,7 +1105,14 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
-    const result = await runtime.runProviderPhase(makeContext(), 'plan', 'prompt', [], {});
+    const context = makeContext();
+    const result = await runtime.runProviderPhase(
+      context,
+      buildPhasePayload(context, 'plan'),
+      'prompt',
+      [],
+      {},
+    );
 
     expect(JSON.parse(result.rawOutput)).toEqual({
       token: 'gh-token',
@@ -1139,7 +1155,14 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
-    const result = await runtime.runProviderPhase(makeContext(), 'plan', 'prompt', [], {});
+    const context = makeContext();
+    const result = await runtime.runProviderPhase(
+      context,
+      buildPhasePayload(context, 'plan'),
+      'prompt',
+      [],
+      {},
+    );
 
     expect(JSON.parse(result.rawOutput)).toEqual({
       token: null,
@@ -1170,7 +1193,14 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
-    const result = await runtime.runProviderPhase(makeContext(), 'plan', 'prompt', [], {});
+    const context = makeContext();
+    const result = await runtime.runProviderPhase(
+      context,
+      buildPhasePayload(context, 'plan'),
+      'prompt',
+      [],
+      {},
+    );
 
     expect(JSON.parse(result.rawOutput)).toEqual({ token: null });
   });
@@ -1190,7 +1220,8 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
-    await runtime.runProviderPhase(makeContext(), 'verify', 'prompt', [], {});
+    const context = makeContext();
+    await runtime.runProviderPhase(context, buildPhasePayload(context, 'verify'), 'prompt', [], {});
 
     expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
       'step-1',
@@ -1216,7 +1247,8 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
-    await runtime.runProviderPhase(makeContext(), 'verify', 'prompt', [], {});
+    const context = makeContext();
+    await runtime.runProviderPhase(context, buildPhasePayload(context, 'verify'), 'prompt', [], {});
 
     expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
       'step-1',
@@ -1242,9 +1274,9 @@ describe('createPipelineRuntime', () => {
     const context = makeContext();
     context.abort.abort();
 
-    await expect(runtime.runProviderPhase(context, 'execute', 'prompt', [], {})).rejects.toThrow(
-      'AbortError',
-    );
+    await expect(
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'execute'), 'prompt', [], {}),
+    ).rejects.toThrow('AbortError');
     expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
       'step-1',
       expect.objectContaining({
@@ -1292,9 +1324,9 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
 
-    await expect(runtime.runProviderPhase(context, 'plan', 'prompt', [], {})).resolves.toEqual(
-      expect.objectContaining({ rawOutput: 'done', exitCode: 0 }),
-    );
+    await expect(
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {}),
+    ).resolves.toEqual(expect.objectContaining({ rawOutput: 'done', exitCode: 0 }));
     expect(context.promptTelemetryDiagnostics).toContainEqual(
       expect.objectContaining({ phase: 'plan', message: 'telemetry offline', nonFatal: true }),
     );
@@ -1325,9 +1357,9 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
 
-    await expect(runtime.runProviderPhase(context, 'plan', 'prompt', [], {})).resolves.toEqual(
-      expect.objectContaining({ rawOutput: 'done', exitCode: 0 }),
-    );
+    await expect(
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {}),
+    ).resolves.toEqual(expect.objectContaining({ rawOutput: 'done', exitCode: 0 }));
 
     expect(context.promptTelemetryDiagnostics).toContainEqual({
       phase: 'plan',
@@ -1346,9 +1378,9 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
-    const input = snapshotProviderPhaseInput(context, 'plan');
+    const input = buildPhasePayload(context, 'plan');
 
-    const result = await runtime.runProviderPhaseCore(input, 'plan', 'prompt', [], {});
+    const result = await runtime.runProviderPhaseCore(input, 'prompt', [], {});
 
     // The pure core leaves the mutable context untouched...
     expect(context.promptTelemetry).toHaveLength(0);
@@ -1369,7 +1401,7 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
 
-    await runtime.runProviderPhase(context, 'plan', 'prompt', [], {});
+    await runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {});
 
     expect(context.promptTelemetry).toHaveLength(1);
   });
@@ -1387,7 +1419,7 @@ describe('createPipelineRuntime', () => {
     // One prior telemetry entry → this invocation is attempt 2.
     context.promptTelemetry.push({} as never);
 
-    await runtime.runProviderPhase(context, 'plan', 'prompt', [], {});
+    await runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {});
 
     expect(deps.promptTelemetry?.create).toHaveBeenCalledWith(
       expect.objectContaining({ invocationId: 'thread-1:plan:2', attempt: 2 }),
@@ -1411,9 +1443,9 @@ describe('createPipelineRuntime', () => {
     } as never;
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
-    const input = snapshotProviderPhaseInput(context, 'plan');
+    const input = buildPhasePayload(context, 'plan');
 
-    const result = await runtime.runProviderPhaseCore(input, 'plan', 'prompt', [], {});
+    const result = await runtime.runProviderPhaseCore(input, 'prompt', [], {});
 
     expect(result.deltas.diagnosticEntry).toEqual({
       phase: 'plan',
@@ -1446,8 +1478,9 @@ describe('createPipelineRuntime', () => {
     } as never;
     const runtime = createPipelineRuntime(deps, {} as never);
 
+    const context = makeContext();
     await expect(
-      runtime.runProviderPhase(makeContext(), 'execute', 'prompt', [], {}),
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'execute'), 'prompt', [], {}),
     ).rejects.toThrow('provider exploded');
   });
 
@@ -1769,9 +1802,9 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
 
-    await expect(runtime.runProviderPhase(context, 'execute', 'prompt', [], {})).rejects.toThrow(
-      'provider exploded',
-    );
+    await expect(
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'execute'), 'prompt', [], {}),
+    ).rejects.toThrow('provider exploded');
     expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
       'step-1',
       expect.objectContaining({
@@ -2039,9 +2072,9 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
 
-    await expect(runtime.runProviderPhase(context, 'plan', 'prompt', [], {})).rejects.toBe(
-      'provider string failure',
-    );
+    await expect(
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {}),
+    ).rejects.toBe('provider string failure');
 
     expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
       'step-1',
@@ -2068,9 +2101,9 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
 
-    await expect(runtime.runProviderPhase(context, 'execute', 'prompt', [], {})).resolves.toEqual(
-      expect.objectContaining({ rawOutput: 'failed', exitCode: 2 }),
-    );
+    await expect(
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'execute'), 'prompt', [], {}),
+    ).resolves.toEqual(expect.objectContaining({ rawOutput: 'failed', exitCode: 2 }));
 
     expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
       'step-1',

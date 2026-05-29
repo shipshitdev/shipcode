@@ -6,7 +6,6 @@ import {
   createPipelineContextHelpers,
   resetPhaseState,
   snapshotPhaseInput,
-  snapshotProviderPhaseInput,
 } from './context';
 
 describe('resetPhaseState', () => {
@@ -110,57 +109,6 @@ describe('snapshotPhaseInput', () => {
   });
 });
 
-describe('snapshotProviderPhaseInput', () => {
-  it('captures execution-context fields, slices the phase summary, and excludes phase-local state', () => {
-    const abort = new AbortController();
-    const context = {
-      threadId: 'thread-1',
-      projectPath: '/repo',
-      projectId: 'project-1',
-      worktreePath: '/worktree',
-      baseBranch: 'main',
-      forkPointSha: 'abc123',
-      githubIssueNumber: 42,
-      githubIssueTitle: 'Issue title',
-      githubRepo: 'shipshitdev/shipcode',
-      autonomous: true,
-      runId: 'run-1',
-      abort,
-      promptTelemetry: [{}],
-      promptMaterialSummaries: {
-        plan: { totalMaterials: 3 },
-        review: { totalMaterials: 9 },
-      },
-      executorModel: 'claude',
-      plannerModel: 'codex',
-      reviewerModel: 'openrouter',
-      verifierModel: 'claude',
-      executorModelOverride: 'openrouter/auto',
-      plannerModelIdOverride: 'claude-opus',
-      reviewerModelIdOverride: null,
-      executorModelIdOverride: null,
-      verifierModelIdOverride: null,
-      stabilizationFeedback: 'must not leak',
-    } as unknown as PipelineContext;
-
-    const snapshot = snapshotProviderPhaseInput(context, 'plan');
-
-    expect(snapshot.threadId).toBe('thread-1');
-    expect(snapshot.runId).toBe('run-1');
-    // The live signal is captured, not the controller.
-    expect(snapshot.abort).toBe(abort.signal);
-    // Counter is the length at snapshot time (next attempt is this + 1).
-    expect(snapshot.promptTelemetryCount).toBe(1);
-    // Only the requested phase's summary is carried, not the whole record.
-    expect(snapshot.promptMaterialSummary).toEqual({ totalMaterials: 3 });
-    expect(snapshot.plannerModel).toBe('codex');
-    expect(snapshot.executorModelOverride).toBe('openrouter/auto');
-    // Phase-local context must not bleed into the provider snapshot.
-    expect('stabilizationFeedback' in snapshot).toBe(false);
-    expect(Object.isFrozen(snapshot)).toBe(true);
-  });
-});
-
 describe('buildPhasePayload', () => {
   function makeContext(abort = new AbortController()): PipelineContext {
     return {
@@ -177,6 +125,7 @@ describe('buildPhasePayload', () => {
       runId: 'run-1',
       isAutomationRun: true,
       abort,
+      promptTelemetry: [{}],
       plannerModel: 'codex',
       reviewerModel: 'openrouter',
       verifierModel: 'openrouter',
@@ -221,9 +170,21 @@ describe('buildPhasePayload', () => {
     expect(payload.reasoningEffort).toBe('high');
     // The live signal is captured, not the controller.
     expect(payload.abort).toBe(abort.signal);
+    // Counter is promptTelemetry.length at build time (next attempt is this + 1).
+    expect(payload.promptTelemetryCount).toBe(1);
+    // No prevOutput → carry is an empty object.
+    expect(payload.carry).toEqual({});
     // Only the requested phase's summary is carried.
     expect(payload.promptMaterialSummary).toEqual({ totalMaterials: 3 });
     expect(Object.isFrozen(payload)).toBe(true);
+  });
+
+  it('captures promptTelemetry.length as the telemetry counter', () => {
+    const context = makeContext();
+    context.promptTelemetry = [{}, {}, {}] as PipelineContext['promptTelemetry'];
+    const payload = buildPhasePayload(context, 'plan');
+
+    expect(payload.promptTelemetryCount).toBe(3);
   });
 
   it('resolves the executor model + run-level override for the execute phase', () => {
@@ -254,13 +215,27 @@ describe('buildPhasePayload', () => {
     expect(payload.repoPromptMaterials).toEqual([]);
   });
 
-  it('excludes phase-local carry fields from the payload', () => {
+  it('never auto-copies context phase-local fields into the payload', () => {
     const payload = buildPhasePayload(makeContext(), 'plan');
 
+    // Carry comes only from prevOutput, never lifted implicitly from context.
+    expect(payload.carry).toEqual({});
     expect('stabilizationFeedback' in payload).toBe(false);
     expect('testOutput' in payload).toBe(false);
     expect('executionResumeContext' in payload).toBe(false);
     expect('previousPlanRawOutput' in payload).toBe(false);
+  });
+
+  it('threads the previous phase carry through prevOutput', () => {
+    const payload = buildPhasePayload(makeContext(), 'plan', {
+      previousPlanRawOutput: 'raw plan output',
+      stabilizationFeedback: 'fix the tests',
+    });
+
+    expect(payload.carry.previousPlanRawOutput).toBe('raw plan output');
+    expect(payload.carry.stabilizationFeedback).toBe('fix the tests');
+    // Fields not provided in prevOutput stay absent.
+    expect(payload.carry.testOutput).toBeUndefined();
   });
 
   it('resolves per-phase model/override for review and revision', () => {

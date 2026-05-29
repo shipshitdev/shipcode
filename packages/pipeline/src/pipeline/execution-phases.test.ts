@@ -1148,8 +1148,8 @@ describe('execution phase handlers', () => {
       markNodeCompletedAndPromote: vi.fn(() => graph),
       markNodeFailed: vi.fn(() => graph),
     } as never;
-    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, phase) => {
-      if (phase === 'verify') throw new Error('verifier offline');
+    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, payload) => {
+      if (payload.phase === 'verify') throw new Error('verifier offline');
       return { rawOutput: 'done', exitCode: 0 };
     });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
@@ -1199,8 +1199,8 @@ describe('execution phase handlers', () => {
       markNodeCompletedAndPromote: vi.fn(() => graph),
       markNodeFailed: vi.fn(() => graph),
     } as never;
-    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, phase) => {
-      if (phase === 'verify') context.cancelled = true;
+    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, payload) => {
+      if (payload.phase === 'verify') context.cancelled = true;
       return { rawOutput: verificationFailed, exitCode: 0 };
     });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
