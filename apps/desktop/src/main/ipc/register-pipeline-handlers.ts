@@ -730,12 +730,12 @@ export function registerPipelineHandlers({
     }
 
     if (thread.pausedPhase === PIPELINE_PHASE.executing) {
-      const context = pipeline.getContext(threadId);
       const resumeContext = await buildExecutionResumeContext(thread, queries);
-      if (context && resumeContext) {
-        context.executionResumeContext = resumeContext;
-      }
-      await pipeline.startExecution(threadId, structuredPlan);
+      await pipeline.startExecution(
+        threadId,
+        structuredPlan,
+        ...(resumeContext ? ([{ executionResumeContext: resumeContext }] as const) : ([] as const)),
+      );
       return;
     }
 
@@ -821,16 +821,14 @@ export function registerPipelineHandlers({
       }
       const latestVerification = queries.verifications.getLatest(threadId);
       const retryAction = getRetryAction(thread, latestPlan, latestVerification);
-      const attachExecutionResumeContext = async () => {
-        const context = pipeline.getContext(threadId);
-        if (!context) return;
+      const resolveExecutionResumeContext = async (): Promise<string | null> => {
         const resumeContext = await buildExecutionResumeContext(thread, queries);
-        if (!resumeContext) return;
-        context.executionResumeContext = resumeContext;
+        if (!resumeContext) return null;
         emitTerminalEvent(threadId, {
           kind: 'lifecycle',
           message: 'Retry is resuming from interrupted worktree state.',
         });
+        return resumeContext;
       };
       if (retryAction === 'review') {
         if (latestPlan) queries.plans.updateStatus(latestPlan.id, 'pending_review');
@@ -839,23 +837,28 @@ export function registerPipelineHandlers({
         if (latestPlan?.status === 'superseded') {
           queries.plans.updateStatus(latestPlan.id, 'approved');
         }
-        await attachExecutionResumeContext();
-        await pipeline.startExecution(threadId, structured);
+        const resumeContext = await resolveExecutionResumeContext();
+        await pipeline.startExecution(
+          threadId,
+          structured,
+          ...(resumeContext
+            ? ([{ executionResumeContext: resumeContext }] as const)
+            : ([] as const)),
+        );
       } else if (retryAction === 'verify') {
         await pipeline.startVerification(threadId);
       } else if (retryAction === 'commit_and_push') {
         await pipeline.startCommitAndPush(threadId);
       } else {
-        const retryCtx = pipeline.getContext(threadId);
-        if (retryCtx && latestPlan?.rawOutput) {
-          retryCtx.previousPlanRawOutput = latestPlan.rawOutput;
-        }
         queries.plans.supersedeAll(threadId);
         await pipeline.startPlanGeneration(
           threadId,
           thread.prompt,
           project.path,
           thread.worktreePath,
+          ...(latestPlan?.rawOutput
+            ? ([{ previousPlanRawOutput: latestPlan.rawOutput }] as const)
+            : ([] as const)),
         );
       }
       return;
@@ -894,13 +897,17 @@ export function registerPipelineHandlers({
 
     // No structured plan exists anywhere — restart planning from scratch.
     const failedPlan = queries.plans.getLatest(threadId);
-    const ctx = pipeline.getContext(threadId);
-    if (ctx && failedPlan?.rawOutput) {
-      ctx.previousPlanRawOutput = failedPlan.rawOutput;
-    }
 
     queries.plans.supersedeAll(threadId);
-    await pipeline.startPlanGeneration(threadId, thread.prompt, project.path, thread.worktreePath);
+    await pipeline.startPlanGeneration(
+      threadId,
+      thread.prompt,
+      project.path,
+      thread.worktreePath,
+      ...(failedPlan?.rawOutput
+        ? ([{ previousPlanRawOutput: failedPlan.rawOutput }] as const)
+        : ([] as const)),
+    );
   };
 
   ipcMain.handle('pipeline:retry', async (_event, { threadId }: { threadId: string }) => {

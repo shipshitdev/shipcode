@@ -360,10 +360,9 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
     emitPhase(threadId, 'planning');
 
     const skill = skillCallSite(context);
-    // Prefer the typed carry from an internal retry; fall back to the context
-    // field seeded externally by the desktop retry IPC. Consume either way.
-    const previousAttempt = carry?.previousPlanRawOutput ?? context.previousPlanRawOutput;
-    context.previousPlanRawOutput = null;
+    // Previous failed-plan raw output arrives only as typed carry now — from an
+    // internal plan retry's outcome or the desktop retry IPC's seed carry.
+    const previousAttempt = carry?.previousPlanRawOutput ?? null;
     const clarificationContext = buildClarificationContext(context);
     const planMaterials: PromptMaterial[] = [
       { kind: 'issue_prompt', label: 'issue prompt', content: prompt },

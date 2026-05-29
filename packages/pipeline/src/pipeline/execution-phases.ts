@@ -968,16 +968,14 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       latestPlanRecord?.id ?? null,
     );
     // The execute carry is the typed hand-off from the producing phase (test-fix,
-    // node-verification, stabilization, or plan→execute). `executionResumeContext`
-    // is also seeded externally by the desktop resume IPC, so fall back to the
-    // context field and consume it. Threaded into this invocation's PhasePayload
-    // below and read back from `payload.carry` when building the prompt.
+    // node-verification, stabilization, plan→execute) or the desktop resume/retry
+    // IPC's seed carry. Threaded into this invocation's PhasePayload below and read
+    // back from `payload.carry` when building the prompt.
     const executeCarry: ExecutePhaseCarry = {
       testOutput: carry?.testOutput,
       stabilizationFeedback: carry?.stabilizationFeedback,
-      executionResumeContext: carry?.executionResumeContext ?? context.executionResumeContext,
+      executionResumeContext: carry?.executionResumeContext,
     };
-    context.executionResumeContext = null;
     const executeMaterials: PromptMaterial[] = [
       {
         kind: 'issue_prompt',
@@ -1297,6 +1295,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
 
     // --- Phase 2: Runtime QA (server lifecycle + runtime tests) ---
+    let runtimeQaOutput: string | null = null;
     if (hasRuntimeQa) {
       const runtimeQaResult = await runRuntimeQa(
         threadId,
@@ -1313,16 +1312,21 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         }
         return runtimeQaResult.outcome;
       }
+      runtimeQaOutput = runtimeQaResult.runtimeQaOutput;
     }
 
     context.testRetries = 0;
-    // `runtimeQaOutput` stays on context (out of #139 scope) and is preserved into
-    // verify; the passing test output is handed forward as typed carry instead.
-    resetPhaseState(context, ['runtimeQaOutput']);
-    return {
-      next: 'verification',
-      carry: accumulatedTestOutput ? { testOutput: accumulatedTestOutput } : undefined,
-    };
+    resetPhaseState(context);
+    // Passing test output and runtime-QA output are handed to verify as typed
+    // carry — they previously survived `resetPhaseState` as context fields.
+    const verifyCarry: VerifyPhaseCarry | undefined =
+      accumulatedTestOutput || runtimeQaOutput
+        ? {
+            ...(accumulatedTestOutput ? { testOutput: accumulatedTestOutput } : {}),
+            ...(runtimeQaOutput ? { runtimeQaOutput } : {}),
+          }
+        : undefined;
+    return { next: 'verification', carry: verifyCarry };
   }
 
   async function runRuntimeQa(
@@ -1332,11 +1336,11 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     config: NonNullable<PipelineContext['repoSetupContract']>['contract']['runtimeQa'],
     priorTestOutput: string,
   ): Promise<
-    | { ok: true }
+    | { ok: true; runtimeQaOutput: string | null }
     | { ok: false; fatal: true; error: string }
     | { ok: false; fatal: false; outcome: PhaseOutcome }
   > {
-    if (!config) return { ok: true };
+    if (!config) return { ok: true, runtimeQaOutput: null };
 
     emitTerminalLifecycle(threadId, '[runtime-qa] Starting runtime QA\r\n');
 
@@ -1384,6 +1388,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       }
 
       const runtimeOutputs: string[] = [];
+      let runtimeQaOutput: string | null = null;
       const qaFlowResults: ReturnType<typeof extractQaFlowResults> = [];
       const persistQaFlowResults = () => {
         if (!context.featureQaState || qaFlowResults.length === 0) return;
@@ -1405,8 +1410,8 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         if (server?.crashed) {
           const failMsg = '[runtime-qa] Server crashed during testing';
           runtimeOutputs.push(failMsg);
-          context.runtimeQaOutput = runtimeOutputs.join('\n').slice(-16384);
-          const mergedOutput = `${priorTestOutput}\n${context.runtimeQaOutput}`.slice(-16384);
+          runtimeQaOutput = runtimeOutputs.join('\n').slice(-16384);
+          const mergedOutput = `${priorTestOutput}\n${runtimeQaOutput}`.slice(-16384);
           const crashRetry = scheduleCoordinatedTestFixRetry(
             threadId,
             context,
@@ -1423,7 +1428,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             extraEnv,
           });
           runtimeOutputs.push(`[runtime-qa] ${command}\n${result.output}`);
-          context.runtimeQaOutput = runtimeOutputs.join('\n').slice(-16384);
+          runtimeQaOutput = runtimeOutputs.join('\n').slice(-16384);
           const commandQaResults = extractQaFlowResults(result.output);
           if (commandQaResults.length > 0) {
             qaFlowResults.push(...commandQaResults);
@@ -1433,8 +1438,9 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           if (result.exitCode !== 0 || hasFailedQaResult) {
             persistQaFlowResults();
             const visualFeedback = formatVisualQaFailureFeedback(commandQaResults);
-            const mergedOutput =
-              `${priorTestOutput}\n${context.runtimeQaOutput}${visualFeedback}`.slice(-16384);
+            const mergedOutput = `${priorTestOutput}\n${runtimeQaOutput}${visualFeedback}`.slice(
+              -16384,
+            );
             const commandRetry = scheduleCoordinatedTestFixRetry(
               threadId,
               context,
@@ -1456,7 +1462,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
       persistQaFlowResults();
       emitTerminalLifecycle(threadId, '[runtime-qa] All runtime tests passed\r\n');
-      return { ok: true };
+      return { ok: true, runtimeQaOutput };
     } finally {
       await cleanupServer();
       context.runtimeQaCleanup = null;
@@ -1473,9 +1479,11 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
     emitPhase(threadId, 'verifying');
 
-    // Passing test output is handed in as typed carry from the testing phase
-    // (and is absent when verify is entered directly, e.g. via the re-verify IPC).
+    // Passing test output and runtime-QA output are handed in as typed carry
+    // from the testing phase (absent when verify is entered directly, e.g. via
+    // the re-verify IPC).
     const testOutput = carry?.testOutput ?? null;
+    const runtimeQaOutput = carry?.runtimeQaOutput ?? null;
 
     const cwd = context.worktreePath ?? context.projectPath;
     const latestPlan = deps.plans.getLatest(threadId);
@@ -1562,12 +1570,12 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             },
           ]
         : []),
-      ...(context.runtimeQaOutput
+      ...(runtimeQaOutput
         ? [
             {
               kind: 'verification_output' as const,
               label: 'runtime QA output',
-              content: context.runtimeQaOutput,
+              content: runtimeQaOutput,
             },
           ]
         : []),

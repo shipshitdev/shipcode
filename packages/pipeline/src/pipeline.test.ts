@@ -2220,23 +2220,23 @@ Custom prompt`,
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
-    it('appends interrupted execution resume context once', async () => {
+    it('appends interrupted execution resume context from the start carry', async () => {
       const pipeline = createPipeline(mock.deps);
       pipeline.initializeContext('t1', {
         projectPath: '/proj',
         worktreePath: '/worktree',
         baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON), {
         executionResumeContext:
           '\n\n<interrupted_run_context>\nContinue from the existing WIP.\n</interrupted_run_context>',
       });
-
-      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
       await flush();
 
       const executeCall = vi.mocked(mock.deps.processManager.spawn).mock.calls[0];
       expect(executeCall[2][1]).toContain('<interrupted_run_context>');
       expect(executeCall[2][1]).toContain('Continue from the existing WIP.');
-      expect(requireContext(pipeline).executionResumeContext).toBeNull();
     });
 
     it('exit 0 + autonomous → starts verification (emits verifying)', async () => {

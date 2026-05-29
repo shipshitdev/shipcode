@@ -152,12 +152,9 @@ function makePlanningContext(overrides: Partial<PipelineContext> = {}): Pipeline
     workflowWarningEmitted: false,
     abort: new AbortController(),
     stabilizationFeedback: null,
-    executionResumeContext: null,
-    previousPlanRawOutput: null,
     turnCount: 0,
     featureQaState: null,
     runtimeQaCleanup: null,
-    runtimeQaOutput: null,
     cpuQueueStartedAt: null,
     cpuQueueLastNotifiedAt: null,
     ...overrides,
@@ -534,12 +531,10 @@ describe('planning phase helpers', () => {
         carry: { previousPlanRawOutput: 'garbled plan output' },
       },
     });
-    // The failed attempt rides the outcome carry, not the context field.
-    expect(harness.context.previousPlanRawOutput).toBeNull();
   });
 
-  it('prefers the carry previousPlanRawOutput over the context seed and consumes it', async () => {
-    const context = makePlanningContext({ previousPlanRawOutput: 'stale context seed' });
+  it('reads the carry previousPlanRawOutput into the plan prompt', async () => {
+    const context = makePlanningContext({});
     const harness = makePlanningHarness(context);
     vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
       rawOutput: 'no plan',
@@ -552,13 +547,12 @@ describe('planning phase helpers', () => {
     await Promise.resolve();
 
     const prompt = vi.mocked(harness.runtime.runProviderPhase).mock.calls[0][2];
+    expect(prompt).toContain('<previous_attempt_failed>');
     expect(prompt).toContain('carried attempt output');
-    expect(prompt).not.toContain('stale context seed');
-    expect(harness.context.previousPlanRawOutput).toBeNull();
   });
 
-  it('falls back to the externally-seeded context previousPlanRawOutput when no carry is given', async () => {
-    const context = makePlanningContext({ previousPlanRawOutput: 'desktop-seeded retry output' });
+  it('omits previous-attempt context when no carry is given', async () => {
+    const context = makePlanningContext({});
     const harness = makePlanningHarness(context);
     vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
       rawOutput: 'no plan',
@@ -569,8 +563,7 @@ describe('planning phase helpers', () => {
     await Promise.resolve();
 
     const prompt = vi.mocked(harness.runtime.runProviderPhase).mock.calls[0][2];
-    expect(prompt).toContain('desktop-seeded retry output');
-    expect(harness.context.previousPlanRawOutput).toBeNull();
+    expect(prompt).not.toContain('<previous_attempt_failed>');
   });
 
   it('routes review CLI missing failures and request-changes revisions', async () => {

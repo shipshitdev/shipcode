@@ -335,24 +335,8 @@ export interface PipelineContext extends OrchestratorState {
   repoContext: string | null;
   repoPromptMaterials: PromptMaterial[] | null;
   promptMaterialSummaries: Partial<Record<PipelinePromptPhase, PromptMaterialSummary>>;
-  /**
-   * Optional context for semantic resume after an interrupted execution. Seeded
-   * externally by the desktop resume IPC (`register-pipeline-handlers`); the next
-   * execute pass folds it into `ExecutePhaseCarry` and then clears it.
-   */
-  executionResumeContext: string | null;
-  /**
-   * Raw output from a previous failed plan attempt, for format-correction
-   * context. Seeded externally by the desktop retry IPC
-   * (`register-pipeline-handlers`); internal plan retries carry it on the
-   * `{ next: 'plan' }` outcome instead. `startPlanGeneration` prefers the
-   * outcome carry and falls back to this field, consuming (clearing) it.
-   */
-  previousPlanRawOutput: string | null;
   /** Cleanup function for a running runtime QA server. Called on cancel. */
   runtimeQaCleanup: (() => Promise<void>) | null;
-  /** Captured output from runtime QA test commands. Fed to verifier. */
-  runtimeQaOutput: string | null;
   /** Timestamp when this thread started waiting for a CPU-heavy local command slot. */
   cpuQueueStartedAt: number | null;
   /** Last terminal notice emitted while waiting for a CPU-heavy local command slot. */
@@ -410,6 +394,8 @@ export interface ExecutePhaseCarry {
 export interface VerifyPhaseCarry {
   /** Passing test/verify output, shown to the verifier as evidence. */
   readonly testOutput?: string | null;
+  /** Accumulated runtime-QA output, shown to the verifier as evidence. */
+  readonly runtimeQaOutput?: string | null;
 }
 
 /**
@@ -473,22 +459,16 @@ export interface PhasePayload {
 }
 
 /**
- * Fields on PipelineContext that are scoped to a single phase and should be
- * cleared between transitions. `resetPhaseState` nulls these before handing
- * control to the next phase handler.
+ * Live runtime/queue state on PipelineContext that is scoped to a single phase
+ * and should be cleared between transitions. `resetPhaseState` nulls these
+ * before handing control to the next phase handler. Cross-phase *data* no
+ * longer lives here — it travels typed on the `PhaseOutcome` carry (#139 and
+ * its follow-up); only genuine live state (the QA-server cleanup handle and the
+ * CPU-queue timestamps) remains.
  */
-export type PhaseLocalField =
-  | 'executionResumeContext'
-  | 'previousPlanRawOutput'
-  | 'runtimeQaOutput'
-  | 'runtimeQaCleanup'
-  | 'cpuQueueStartedAt'
-  | 'cpuQueueLastNotifiedAt';
+export type PhaseLocalField = 'runtimeQaCleanup' | 'cpuQueueStartedAt' | 'cpuQueueLastNotifiedAt';
 
 export const PHASE_LOCAL_FIELDS: readonly PhaseLocalField[] = [
-  'executionResumeContext',
-  'previousPlanRawOutput',
-  'runtimeQaOutput',
   'runtimeQaCleanup',
   'cpuQueueStartedAt',
   'cpuQueueLastNotifiedAt',
@@ -561,10 +541,17 @@ export interface Pipeline {
     prompt: string,
     projectPath: string,
     worktreePath: string | null,
+    /** Typed seed carried into the (re)entered plan phase, e.g. a desktop retry's previous raw output. */
+    carry?: PlanPhaseCarry,
   ) => Promise<void>;
   startReview: (threadId: string, plan: ShipCodePlan) => Promise<void>;
   startRevision: (threadId: string, plan: ShipCodePlan, reviewFeedback: string) => Promise<void>;
-  startExecution: (threadId: string, plan: ShipCodePlan) => Promise<void>;
+  /** `carry` seeds the execute phase, e.g. a desktop resume/retry's `executionResumeContext`. */
+  startExecution: (
+    threadId: string,
+    plan: ShipCodePlan,
+    carry?: ExecutePhaseCarry,
+  ) => Promise<void>;
   startTesting: (threadId: string) => Promise<void>;
   startVerification: (threadId: string) => Promise<void>;
   startCommitAndPush: (threadId: string) => Promise<void>;
