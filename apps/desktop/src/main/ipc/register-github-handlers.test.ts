@@ -16,6 +16,7 @@ const {
   createIssueMock,
   editIssueMock,
   getIssueMock,
+  applyIssueLabelActionsMock,
   getRepoMetadataMock,
   reopenIssueMock,
   listAllIssuesMock,
@@ -39,6 +40,13 @@ const {
   createIssueMock: vi.fn(),
   editIssueMock: vi.fn(),
   getIssueMock: vi.fn(),
+  applyIssueLabelActionsMock: vi.fn(
+    async (): Promise<{ added: string[]; removed: string[]; skipped: string[] }> => ({
+      added: [],
+      removed: [],
+      skipped: [],
+    }),
+  ),
   getRepoMetadataMock: vi.fn(),
   reopenIssueMock: vi.fn(),
   listAllIssuesMock: vi.fn(async () => [] as Array<unknown>),
@@ -70,6 +78,7 @@ vi.mock('@shipcode/agents', async () => {
     createIssue = createIssueMock;
     editIssue = editIssueMock;
     getIssue = getIssueMock;
+    applyIssueLabelActions = applyIssueLabelActionsMock;
     getRepoMetadata = getRepoMetadataMock;
     reopenIssue = reopenIssueMock;
     listAllIssues = listAllIssuesMock;
@@ -5160,6 +5169,165 @@ describe('registerGitHubHandlers', () => {
       expect(queries.githubIssues.reconcileCompletedFromEvidence).toHaveBeenCalledWith(
         baseIssue.id,
       );
+    });
+  });
+
+  describe('github:refresh-issues triage rules', () => {
+    const project = {
+      ...baseProject,
+      path: '/tmp',
+      githubProjectUrl: null,
+      githubStatusMapping: null,
+    };
+
+    const matchingRule = {
+      id: 'rule-1',
+      projectId: 'project-1',
+      orderIndex: 0,
+      name: 'bug rule',
+      enabled: true,
+      conditions: { operator: 'any', items: [{ kind: 'title_contains', value: 'issue' }] },
+      actions: { addLabels: ['agent:claude'], removeLabels: [] },
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    const ghIssue = {
+      number: 42,
+      title: 'Issue title',
+      body: 'Issue body',
+      labels: [],
+      assignee: null,
+      state: 'open' as const,
+      updatedAt: '2026-05-08T00:00:00.000Z',
+      url: 'https://github.com/acme/repo/issues/42',
+    };
+
+    function buildTriageQueries(upsertRecord: Record<string, unknown>) {
+      return {
+        projects: {
+          getById: vi.fn(() => project),
+          updateGithubRepoIdentity: vi.fn(),
+        },
+        triageRules: { list: vi.fn(() => [matchingRule]) },
+        githubIssues: buildGithubIssuesQueries({
+          list: vi.fn().mockReturnValueOnce([]).mockReturnValue([upsertRecord]),
+          // The issue is newly discovered: no existing cache row.
+          getByNumber: vi.fn(() => null),
+          upsert: vi.fn(() => upsertRecord),
+          markClosedOnClose: vi.fn(),
+          updateState: vi.fn(),
+          clearArchivedAt: vi.fn(),
+          setPriority: vi.fn(),
+          setIssueType: vi.fn(),
+        }),
+        issueEdges: { replaceBodyEdges: vi.fn() },
+        threads: {
+          getById: vi.fn(() => null),
+          getByProjectAndGithubIssue: vi.fn(() => null),
+        },
+      };
+    }
+
+    function registerWith(queries: ReturnType<typeof buildTriageQueries>) {
+      registerGitHubHandlers({
+        ipcMain,
+        mainWindow: mainWindow as never,
+        queries: queries as never,
+        pipeline: {} as never,
+        emitter: { emit: vi.fn() } as never,
+        notificationService: {} as never,
+        chatNotificationService: {} as never,
+        processManager: {} as never,
+      });
+      const refresh = handlers.get('github:refresh-issues');
+      if (!refresh) throw new Error('github:refresh-issues handler not registered');
+      return refresh;
+    }
+
+    it('applies the first matching rule once and syncs refreshed labels back', async () => {
+      const upsertRecord = { ...baseIssue, id: 'issue-1', issueNumber: 42, labels: [] };
+      const queries = buildTriageQueries(upsertRecord);
+      listAllIssuesMock.mockResolvedValue([ghIssue]);
+      applyIssueLabelActionsMock.mockResolvedValueOnce({
+        added: ['agent:claude'],
+        removed: [],
+        skipped: [],
+      });
+      getIssueMock.mockResolvedValueOnce({ ...ghIssue, labels: ['agent:claude'] });
+
+      const refresh = registerWith(queries);
+      await expect(refresh(undefined, { projectId: 'project-1', force: true })).resolves.toEqual([
+        upsertRecord,
+      ]);
+
+      expect(applyIssueLabelActionsMock).toHaveBeenCalledWith(42, matchingRule.actions);
+      expect(queries.githubIssues.markTriageRulesApplied).toHaveBeenCalledWith('issue-1');
+      expect(queries.githubIssues.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ issueNumber: 42, labels: ['agent:claude'] }),
+      );
+    });
+
+    it('records a triage failure without rejecting the refresh', async () => {
+      const upsertRecord = { ...baseIssue, id: 'issue-1', issueNumber: 42, labels: [] };
+      const queries = buildTriageQueries(upsertRecord);
+      listAllIssuesMock.mockResolvedValue([ghIssue]);
+      applyIssueLabelActionsMock.mockRejectedValueOnce(new Error('gh: label not found'));
+
+      const refresh = registerWith(queries);
+      await expect(
+        refresh(undefined, { projectId: 'project-1', force: true }),
+      ).resolves.toBeDefined();
+
+      expect(queries.githubIssues.recordTriageRulesFailure).toHaveBeenCalledTimes(1);
+      expect(queries.githubIssues.recordTriageRulesFailure).toHaveBeenCalledWith(
+        'issue-1',
+        expect.stringContaining('label not found'),
+      );
+      expect(queries.githubIssues.markTriageRulesApplied).not.toHaveBeenCalled();
+    });
+
+    it('skips issues whose rules were already applied', async () => {
+      const upsertRecord = {
+        ...baseIssue,
+        id: 'issue-1',
+        issueNumber: 42,
+        rulesAppliedAt: '2026-05-01T00:00:00.000Z',
+      };
+      const queries = buildTriageQueries(upsertRecord);
+      listAllIssuesMock.mockResolvedValue([ghIssue]);
+
+      const refresh = registerWith(queries);
+      await refresh(undefined, { projectId: 'project-1', force: true });
+
+      expect(applyIssueLabelActionsMock).not.toHaveBeenCalled();
+      expect(queries.githubIssues.markTriageRulesApplied).not.toHaveBeenCalled();
+    });
+
+    it('does not reject the refresh when a triage DB write throws', async () => {
+      const upsertRecord = { ...baseIssue, id: 'issue-1', issueNumber: 42, labels: [] };
+      const queries = buildTriageQueries(upsertRecord);
+      // Non-matching rule drives the no-match path, where markTriageRulesApplied
+      // is called outside applyTriageRulesOnce's try/catch.
+      queries.triageRules.list = vi.fn(() => [
+        {
+          ...matchingRule,
+          conditions: {
+            operator: 'any' as const,
+            items: [{ kind: 'title_contains' as const, value: 'zzz-no-match' }],
+          },
+        },
+      ]);
+      queries.githubIssues.markTriageRulesApplied = vi.fn(() => {
+        throw new Error('database is locked');
+      });
+      listAllIssuesMock.mockResolvedValue([ghIssue]);
+
+      const refresh = registerWith(queries);
+      await expect(
+        refresh(undefined, { projectId: 'project-1', force: true }),
+      ).resolves.toBeDefined();
+      expect(queries.githubIssues.markTriageRulesApplied).toHaveBeenCalled();
     });
   });
 });

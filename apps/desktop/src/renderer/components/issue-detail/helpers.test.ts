@@ -7,6 +7,7 @@ import {
   encodePhaseOption,
   getFailurePresentation,
   getPlanStatusPresentation,
+  getTriageFailurePresentation,
   resolveClientSidePlan,
   resolveFailingPhaseOutput,
   safeErrorMessage,
@@ -264,6 +265,21 @@ describe('getFailurePresentation', () => {
     expect(getFailurePresentation('unexpected crash')).toEqual({
       label: 'Pipeline error',
       detail: null,
+    });
+  });
+});
+
+describe('getTriageFailurePresentation', () => {
+  it('returns null when there is no reason', () => {
+    expect(getTriageFailurePresentation(null)).toBeNull();
+    expect(getTriageFailurePresentation(undefined)).toBeNull();
+    expect(getTriageFailurePresentation('   ')).toBeNull();
+  });
+
+  it('surfaces a label and the clamped reason as detail', () => {
+    expect(getTriageFailurePresentation('  gh: label not found  ')).toEqual({
+      label: 'Triage rule failed',
+      detail: 'gh: label not found',
     });
   });
 });

@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, Copy, GitPullRequest } from 'lucide-react';
 import { ApprovalSection } from './ApprovalSection';
 import {
   getFailurePresentation,
+  getTriageFailurePresentation,
   PIPELINE_PREVIEW_PHASES,
   safeErrorMessage,
   stripAnsi,
@@ -21,6 +22,7 @@ interface IssueDetailActionsProps {
   effectiveRevisionCount: number;
   clarificationRequest: ClarificationRequest | null;
   failingPhaseOutput: string | null;
+  triageFailureReason?: string | null;
   hasDiffs: boolean;
   hasApprovalDecision: boolean;
   isCompleted: boolean;
@@ -60,6 +62,7 @@ export function buildIssueDetailActions({
   effectiveRevisionCount,
   clarificationRequest,
   failingPhaseOutput,
+  triageFailureReason,
   hasDiffs,
   hasApprovalDecision,
   isCompleted,
@@ -91,6 +94,7 @@ export function buildIssueDetailActions({
     thread?.lastError ?? failingPhaseOutput,
     thread,
   );
+  const triageFailurePresentation = getTriageFailurePresentation(triageFailureReason);
   const answeredClarification = thread?.answeredClarification ?? null;
   const isThreadRunning = thread ? AGENT_RUNNING_PHASES.includes(thread.status) : false;
   const previewPhases =
@@ -441,11 +445,21 @@ export function buildIssueDetailActions({
     </div>
   ) : null;
 
+  const triageFailureSection = triageFailurePresentation ? (
+    <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-danger">
+        {triageFailurePresentation.label}
+      </p>
+      <p className="text-[12px] text-danger/80 break-words">{triageFailurePresentation.detail}</p>
+    </div>
+  ) : null;
+
   return {
     approvalSection,
     clarificationSection,
     completionSection,
     pipelineStartCard,
     rerunSection,
+    triageFailureSection,
   };
 }

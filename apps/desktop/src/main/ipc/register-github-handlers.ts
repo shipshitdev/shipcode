@@ -267,6 +267,7 @@ export function registerGitHubHandlers({
               body: issue.body,
               labels: issue.labels,
               assignee: issue.assignee,
+              author: issue.author?.login ?? null,
               state: issue.state,
               updatedAt: issue.updatedAt ?? null,
             });
@@ -295,29 +296,41 @@ export function registerGitHubHandlers({
 
         await Promise.all(
           newIssues.map(async ({ record }) => {
-            const result = await applyTriageRulesOnce({
-              issue: record,
-              rules: triageRules,
-              ghCli,
-              markApplied: (issueId) => queries.githubIssues.markTriageRulesApplied(issueId),
-              recordFailure: (issueId, reason) =>
-                queries.githubIssues.recordTriageRulesFailure(issueId, reason),
-              onWarn: (message, err) => log.warn(message, err),
-            });
+            // Triage is best-effort per issue: a DB/network error for one issue
+            // (including the markApplied/recordFailure writes inside
+            // applyTriageRulesOnce, or the label-sync upsert below) must never
+            // reject the whole refresh.
+            try {
+              const result = await applyTriageRulesOnce({
+                issue: record,
+                rules: triageRules,
+                ghCli,
+                markApplied: (issueId) => queries.githubIssues.markTriageRulesApplied(issueId),
+                recordFailure: (issueId, reason) =>
+                  queries.githubIssues.recordTriageRulesFailure(issueId, reason),
+                onWarn: (message, err) => log.warn(message, err),
+              });
 
-            if (result.status !== 'applied') return;
+              if (result.status !== 'applied') return;
 
-            const refreshedIssue = result.refreshedIssue;
-            queries.githubIssues.upsert({
-              projectId,
-              issueNumber: refreshedIssue.number,
-              title: refreshedIssue.title,
-              body: refreshedIssue.body,
-              labels: refreshedIssue.labels,
-              assignee: refreshedIssue.assignee,
-              state: refreshedIssue.state,
-              updatedAt: refreshedIssue.updatedAt ?? null,
-            });
+              const refreshedIssue = result.refreshedIssue;
+              queries.githubIssues.upsert({
+                projectId,
+                issueNumber: refreshedIssue.number,
+                title: refreshedIssue.title,
+                body: refreshedIssue.body,
+                labels: refreshedIssue.labels,
+                assignee: refreshedIssue.assignee,
+                author: refreshedIssue.author?.login ?? null,
+                state: refreshedIssue.state,
+                updatedAt: refreshedIssue.updatedAt ?? null,
+              });
+            } catch (err) {
+              log.warn(
+                `[github:refresh-issues] triage rules failed for #${record.issueNumber}`,
+                err,
+              );
+            }
           }),
         );
 

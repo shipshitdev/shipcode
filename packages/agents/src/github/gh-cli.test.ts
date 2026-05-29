@@ -111,6 +111,72 @@ describe('GhCli', () => {
     });
   });
 
+  describe('applyIssueLabelActions', () => {
+    it('adds available labels, removes present labels, and reports skipped', async () => {
+      // 1) listRepoLabels (filterExistingLabels), 2) getIssue, 3) add edit, 4) remove edit
+      success(JSON.stringify([{ name: 'agent:claude' }, { name: 'stale' }]));
+      success(
+        JSON.stringify({
+          number: 9,
+          title: 'Bug',
+          labels: [{ name: 'stale' }],
+          assignees: [],
+          state: 'open',
+          url: '',
+        }),
+      );
+      success('');
+      success('');
+
+      const result = await gh.applyIssueLabelActions(9, {
+        addLabels: ['agent:claude', 'ghost'],
+        removeLabels: ['stale'],
+      });
+
+      expect(result).toEqual({
+        added: ['agent:claude'],
+        removed: ['stale'],
+        skipped: ['ghost'],
+      });
+      expect(mockExecFileAsync).toHaveBeenCalledWith(
+        'gh',
+        ['issue', 'edit', '9', '--add-label', 'agent:claude'],
+        ghExecOptions,
+      );
+      expect(mockExecFileAsync).toHaveBeenCalledWith(
+        'gh',
+        ['issue', 'edit', '9', '--remove-label', 'stale'],
+        ghExecOptions,
+      );
+    });
+
+    it('does not re-add labels already present on the issue', async () => {
+      success(JSON.stringify([{ name: 'agent:claude' }]));
+      success(
+        JSON.stringify({
+          number: 4,
+          title: 'x',
+          labels: [{ name: 'agent:claude' }],
+          assignees: [],
+          state: 'open',
+          url: '',
+        }),
+      );
+
+      const result = await gh.applyIssueLabelActions(4, {
+        addLabels: ['agent:claude'],
+        removeLabels: [],
+      });
+
+      expect(result).toEqual({ added: [], removed: [], skipped: [] });
+      expect(mockExecFileAsync).not.toHaveBeenCalledWith(
+        'gh',
+        expect.arrayContaining(['--add-label']),
+        ghExecOptions,
+      );
+    });
+  });
+
   describe('listIssues', () => {
     it('maps JSON response to GitHubIssue[]', async () => {
       const raw = [
