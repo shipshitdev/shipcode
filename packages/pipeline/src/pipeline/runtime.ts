@@ -27,13 +27,13 @@ import {
 import { GhSyncQueue, type GhSyncWriteOpts } from '../gh-sync-queue';
 import { syncThreadAndIssuePhase } from '../phase-sync';
 import type {
+  OrchestratorState,
+  PhasePayload,
   PipelineContext,
   PipelineDeps,
   PipelineExecutorModel,
   ProviderPhaseDeltas,
-  ProviderPhaseInput,
 } from '../types';
-import { snapshotProviderPhaseInput } from './context';
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
 const execFileAsync = promisify(execFile);
@@ -539,7 +539,7 @@ export function createPipelineRuntime(
 
   function resolveAgentForPhase(
     input: Pick<
-      ProviderPhaseInput,
+      OrchestratorState,
       'plannerModel' | 'reviewerModel' | 'verifierModel' | 'executorModel'
     >,
     phase: ProviderPhase,
@@ -559,15 +559,14 @@ export function createPipelineRuntime(
   }
 
   /**
-   * Pure provider-phase execution. Reads only the frozen `ProviderPhaseInput`
-   * snapshot — never the mutable `PipelineContext` — and returns the context
-   * mutations it would have made (`deltas`) for the orchestrator to apply.
-   * The `runProviderPhase` wrapper (and, later, the #137 dispatch loop) owns
-   * snapshotting and delta application.
+   * Pure provider-phase execution. Reads only the frozen `PhasePayload` snapshot
+   * — never the mutable `PipelineContext` — and returns the context mutations it
+   * would have made (`deltas`) for the orchestrator to apply. The
+   * `runProviderPhase` wrapper builds the payload (via `buildPhasePayload`) and
+   * applies the deltas.
    */
   async function runProviderPhaseCore(
-    input: ProviderPhaseInput,
-    phase: ProviderPhase,
+    input: PhasePayload,
     prompt: string,
     promptMaterials: PromptMaterial[],
     phaseHints: ProviderRequest['phaseHints'],
@@ -579,28 +578,16 @@ export function createPipelineRuntime(
     clarificationRequest?: import('@shipcode/shared').ClarificationRequest;
     deltas: ProviderPhaseDeltas;
   }> {
-    const agent = resolveAgentForPhase(input, phase);
+    // PhasePayload pre-resolves the phase's agent + model-id override (identical
+    // logic to the old internal `resolveAgentForPhase` + `modelHint` IIFE).
+    const phase = input.phase;
+    const agent = input.model;
+    const modelHint = input.modelIdOverride;
     const provider = deps.providers.for(agent, phase);
     // When a GitHub issue is resumed, planning/review should inspect the same
     // worktree that already contains in-progress changes instead of the clean
     // project root.
     const cwd = input.worktreePath ?? input.projectPath;
-    const modelHint = (() => {
-      if (agent === input.executorModel && input.executorModelOverride) {
-        return input.executorModelOverride;
-      }
-      switch (phase) {
-        case 'plan':
-        case 'revision':
-          return input.plannerModelIdOverride;
-        case 'review':
-          return input.reviewerModelIdOverride;
-        case 'execute':
-          return input.executorModelIdOverride;
-        case 'verify':
-          return input.verifierModelIdOverride;
-      }
-    })();
 
     const plannerPhases: ProviderPhase[] = ['plan', 'revision', 'verify'];
     const configuredRunMode =
@@ -858,15 +845,15 @@ export function createPipelineRuntime(
   }
 
   /**
-   * Orchestrator seam: snapshot the mutable context into a frozen
-   * `ProviderPhaseInput`, run the pure core, then apply the returned mutation
-   * deltas back to context. No `await` sits between snapshot and apply, so the
-   * `promptTelemetryCount` captured in the snapshot stays consistent with the
-   * push below.
+   * Orchestrator seam: run the pure core against the caller-built frozen
+   * `PhasePayload`, then apply the returned mutation deltas back to context. The
+   * caller builds the payload (capturing `promptTelemetryCount`) immediately
+   * before this call with no intervening telemetry push, so the count stays
+   * consistent with the push below.
    */
   async function runProviderPhase(
     context: PipelineContext,
-    phase: ProviderPhase,
+    payload: PhasePayload,
     prompt: string,
     promptMaterials: PromptMaterial[],
     phaseHints: ProviderRequest['phaseHints'],
@@ -877,10 +864,8 @@ export function createPipelineRuntime(
     promptTelemetry?: import('@shipcode/agents/source').PhasePromptTelemetry;
     clarificationRequest?: import('@shipcode/shared').ClarificationRequest;
   }> {
-    const input = snapshotProviderPhaseInput(context, phase);
     const { deltas, ...response } = await runProviderPhaseCore(
-      input,
-      phase,
+      payload,
       prompt,
       promptMaterials,
       phaseHints,

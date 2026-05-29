@@ -1,11 +1,11 @@
 import { DEFAULT_SETTINGS, PIPELINE_PHASE } from '@shipcode/shared';
 import { describe, expect, it, vi } from 'vitest';
-import type { PipelineContext } from '../types';
+import type { OrchestratorState, PipelineContext } from '../types';
 import {
+  buildPhasePayload,
   createPipelineContextHelpers,
   resetPhaseState,
   snapshotPhaseInput,
-  snapshotProviderPhaseInput,
 } from './context';
 
 describe('resetPhaseState', () => {
@@ -109,10 +109,9 @@ describe('snapshotPhaseInput', () => {
   });
 });
 
-describe('snapshotProviderPhaseInput', () => {
-  it('captures execution-context fields, slices the phase summary, and excludes phase-local state', () => {
-    const abort = new AbortController();
-    const context = {
+describe('buildPhasePayload', () => {
+  function makeContext(abort = new AbortController()): PipelineContext {
+    return {
       threadId: 'thread-1',
       projectPath: '/repo',
       projectId: 'project-1',
@@ -124,39 +123,148 @@ describe('snapshotProviderPhaseInput', () => {
       githubRepo: 'shipshitdev/shipcode',
       autonomous: true,
       runId: 'run-1',
+      isAutomationRun: true,
       abort,
       promptTelemetry: [{}],
-      promptMaterialSummaries: {
-        plan: { totalMaterials: 3 },
-        review: { totalMaterials: 9 },
-      },
-      executorModel: 'claude',
       plannerModel: 'codex',
       reviewerModel: 'openrouter',
-      verifierModel: 'claude',
-      executorModelOverride: 'openrouter/auto',
+      verifierModel: 'openrouter',
+      executorModel: 'claude',
       plannerModelIdOverride: 'claude-opus',
-      reviewerModelIdOverride: null,
-      executorModelIdOverride: null,
-      verifierModelIdOverride: null,
+      reviewerModelIdOverride: 'or-review',
+      verifierModelIdOverride: 'or-verify',
+      executorModelIdOverride: 'claude-exec-id',
+      executorModelOverride: 'openrouter/auto',
+      phaseReasoningEfforts: {
+        plan: 'high',
+        review: 'medium',
+        revision: 'low',
+        verify: 'medium',
+        execute: 'low',
+      },
+      repoContext: 'repo context',
+      repoPromptMaterials: [{ kind: 'repoContextFile' }],
+      promptMaterialSummaries: {
+        plan: { totalMaterials: 3 },
+        execute: { totalMaterials: 7 },
+      },
+      // Phase-local fields that must never appear in the payload.
       stabilizationFeedback: 'must not leak',
+      testOutput: 'must not leak',
     } as unknown as PipelineContext;
+  }
 
-    const snapshot = snapshotProviderPhaseInput(context, 'plan');
+  it('snapshots identity, materials, and the plan-phase model/effort', () => {
+    const abort = new AbortController();
+    const payload = buildPhasePayload(makeContext(abort), 'plan');
 
-    expect(snapshot.threadId).toBe('thread-1');
-    expect(snapshot.runId).toBe('run-1');
+    expect(payload.threadId).toBe('thread-1');
+    expect(payload.worktreePath).toBe('/worktree');
+    expect(payload.runId).toBe('run-1');
+    expect(payload.isAutomationRun).toBe(true);
+    expect(payload.phase).toBe('plan');
+    expect(payload.repoContext).toBe('repo context');
+    // plan resolves to plannerModel; its id override applies (not the executor's).
+    expect(payload.model).toBe('codex');
+    expect(payload.modelIdOverride).toBe('claude-opus');
+    expect(payload.reasoningEffort).toBe('high');
     // The live signal is captured, not the controller.
-    expect(snapshot.abort).toBe(abort.signal);
-    // Counter is the length at snapshot time (next attempt is this + 1).
-    expect(snapshot.promptTelemetryCount).toBe(1);
-    // Only the requested phase's summary is carried, not the whole record.
-    expect(snapshot.promptMaterialSummary).toEqual({ totalMaterials: 3 });
-    expect(snapshot.plannerModel).toBe('codex');
-    expect(snapshot.executorModelOverride).toBe('openrouter/auto');
-    // Phase-local context must not bleed into the provider snapshot.
-    expect('stabilizationFeedback' in snapshot).toBe(false);
-    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(payload.abort).toBe(abort.signal);
+    // Counter is promptTelemetry.length at build time (next attempt is this + 1).
+    expect(payload.promptTelemetryCount).toBe(1);
+    // No prevOutput → carry is an empty object.
+    expect(payload.carry).toEqual({});
+    // Only the requested phase's summary is carried.
+    expect(payload.promptMaterialSummary).toEqual({ totalMaterials: 3 });
+    expect(Object.isFrozen(payload)).toBe(true);
+  });
+
+  it('captures promptTelemetry.length as the telemetry counter', () => {
+    const context = makeContext();
+    context.promptTelemetry = [{}, {}, {}] as PipelineContext['promptTelemetry'];
+    const payload = buildPhasePayload(context, 'plan');
+
+    expect(payload.promptTelemetryCount).toBe(3);
+  });
+
+  it('resolves the executor model + run-level override for the execute phase', () => {
+    const payload = buildPhasePayload(makeContext(), 'execute');
+
+    expect(payload.model).toBe('claude');
+    // execute resolves to executorModel, so the run-level override wins.
+    expect(payload.modelIdOverride).toBe('openrouter/auto');
+    expect(payload.reasoningEffort).toBe('low');
+    expect(payload.promptMaterialSummary).toEqual({ totalMaterials: 7 });
+  });
+
+  it('resolves per-phase model/override for verify (no executor-override bleed)', () => {
+    const payload = buildPhasePayload(makeContext(), 'verify');
+
+    expect(payload.model).toBe('openrouter');
+    expect(payload.modelIdOverride).toBe('or-verify');
+    expect(payload.reasoningEffort).toBe('medium');
+    // verify has no material summary in this context.
+    expect(payload.promptMaterialSummary).toBeUndefined();
+  });
+
+  it('falls back to an empty materials array when none are loaded', () => {
+    const context = makeContext();
+    context.repoPromptMaterials = null;
+    const payload = buildPhasePayload(context, 'plan');
+
+    expect(payload.repoPromptMaterials).toEqual([]);
+  });
+
+  it('never auto-copies context phase-local fields into the payload', () => {
+    const payload = buildPhasePayload(makeContext(), 'plan');
+
+    // Carry comes only from prevOutput, never lifted implicitly from context.
+    expect(payload.carry).toEqual({});
+    expect('stabilizationFeedback' in payload).toBe(false);
+    expect('testOutput' in payload).toBe(false);
+    expect('executionResumeContext' in payload).toBe(false);
+    expect('previousPlanRawOutput' in payload).toBe(false);
+  });
+
+  it('threads the previous phase carry through prevOutput', () => {
+    const payload = buildPhasePayload(makeContext(), 'plan', {
+      previousPlanRawOutput: 'raw plan output',
+      stabilizationFeedback: 'fix the tests',
+    });
+
+    expect(payload.carry.previousPlanRawOutput).toBe('raw plan output');
+    expect(payload.carry.stabilizationFeedback).toBe('fix the tests');
+    // Fields not provided in prevOutput stay absent.
+    expect(payload.carry.testOutput).toBeUndefined();
+  });
+
+  it('resolves per-phase model/override for review and revision', () => {
+    const review = buildPhasePayload(makeContext(), 'review');
+    expect(review.model).toBe('openrouter');
+    expect(review.modelIdOverride).toBe('or-review');
+    expect(review.reasoningEffort).toBe('medium');
+
+    // revision shares the planner model with the plan phase.
+    const revision = buildPhasePayload(makeContext(), 'revision');
+    expect(revision.model).toBe('codex');
+    expect(revision.modelIdOverride).toBe('claude-opus');
+    expect(revision.reasoningEffort).toBe('low');
+  });
+
+  it('uses the executor id override when no run-level override is set', () => {
+    const context = makeContext();
+    context.executorModelOverride = null;
+    const payload = buildPhasePayload(context, 'execute');
+
+    expect(payload.model).toBe('claude');
+    expect(payload.modelIdOverride).toBe('claude-exec-id');
+  });
+
+  it('PipelineContext is assignable to OrchestratorState (type-level)', () => {
+    const context = makeContext();
+    // Compiles only if `PipelineContext extends OrchestratorState` holds.
+    const state: OrchestratorState = context;
+    expect(state.threadId).toBe(context.threadId);
   });
 });
 

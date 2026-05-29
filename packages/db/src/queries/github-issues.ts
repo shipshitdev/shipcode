@@ -26,6 +26,7 @@ interface GitHubIssueCacheRow {
   body: string;
   labels: string;
   assignee: string | null;
+  author: string | null;
   state: string;
   pipeline_status: IssuePipelineStatus;
   thread_id: string | null;
@@ -159,6 +160,7 @@ export class GitHubIssueQueries {
                   body = ?,
                   labels = ?,
                   assignee = ?,
+                  author = COALESCE(?, author),
                   state = ?,
                   github_updated_at = COALESCE(?, github_updated_at),
                   fetched_at = ${ISO_NOW_SQL}
@@ -169,6 +171,7 @@ export class GitHubIssueQueries {
           record.body,
           JSON.stringify(record.labels),
           record.assignee,
+          record.author ?? null,
           record.state,
           record.updatedAt ?? null,
           existing.id,
@@ -185,8 +188,8 @@ export class GitHubIssueQueries {
     this.db
       .prepare(
         `INSERT INTO github_issue_cache (
-           id, project_id, issue_number, title, body, labels, assignee, state, github_updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           id, project_id, issue_number, title, body, labels, assignee, author, state, github_updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -196,6 +199,7 @@ export class GitHubIssueQueries {
         record.body,
         JSON.stringify(record.labels),
         record.assignee,
+        record.author ?? null,
         record.state,
         record.updatedAt ?? null,
       );
@@ -787,6 +791,7 @@ export class GitHubIssueQueries {
       body: row.body,
       labels: JSON.parse(row.labels),
       assignee: row.assignee,
+      author: row.author ?? null,
       state: row.state,
       pipelineStatus: row.pipeline_status,
       threadId: row.thread_id,

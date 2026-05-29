@@ -977,4 +977,54 @@ describe('GitHubIssueQueries', () => {
       prepare.mockRestore();
     });
   });
+
+  describe('author persistence', () => {
+    it('persists the issue author and preserves it when omitted on re-upsert', () => {
+      const created = issues.upsert(makeIssue({ issueNumber: 60 }));
+      expect(created.author ?? null).toBeNull();
+
+      const withAuthor = issues.upsert({ ...makeIssue({ issueNumber: 60 }), author: 'octocat' });
+      expect(withAuthor.author).toBe('octocat');
+
+      // A later refresh without author (COALESCE) must not clobber it.
+      const reupserted = issues.upsert(makeIssue({ issueNumber: 60 }));
+      expect(reupserted.author).toBe('octocat');
+    });
+  });
+
+  describe('triage rule application state', () => {
+    it('markTriageRulesApplied sets rules_applied_at and clears the failure reason', () => {
+      const record = issues.upsert(makeIssue({ issueNumber: 50 }));
+      expect(record.rulesAppliedAt ?? null).toBeNull();
+
+      issues.recordTriageRulesFailure(record.id, 'gh: boom');
+      issues.markTriageRulesApplied(record.id);
+
+      const after = issues.getByNumber(projectId, 50);
+      expect(after?.rulesAppliedAt).toBeTruthy();
+      expect(after?.triageFailureReason ?? null).toBeNull();
+    });
+
+    it('recordTriageRulesFailure stores the reason and consumes the issue', () => {
+      const record = issues.upsert(makeIssue({ issueNumber: 51 }));
+      issues.recordTriageRulesFailure(record.id, 'label not found');
+
+      const after = issues.getByNumber(projectId, 51);
+      expect(after?.rulesAppliedAt).toBeTruthy();
+      expect(after?.triageFailureReason).toBe('label not found');
+    });
+
+    it('re-upserting refreshed labels does not reset rules_applied_at (no re-fire)', () => {
+      const record = issues.upsert(makeIssue({ issueNumber: 52, labels: ['bug'] }));
+      issues.markTriageRulesApplied(record.id);
+      const appliedAt = issues.getByNumber(projectId, 52)?.rulesAppliedAt;
+      expect(appliedAt).toBeTruthy();
+
+      issues.upsert(makeIssue({ issueNumber: 52, labels: ['bug', 'agent:claude'] }));
+
+      const after = issues.getByNumber(projectId, 52);
+      expect(after?.labels).toEqual(['bug', 'agent:claude']);
+      expect(after?.rulesAppliedAt).toBe(appliedAt);
+    });
+  });
 });

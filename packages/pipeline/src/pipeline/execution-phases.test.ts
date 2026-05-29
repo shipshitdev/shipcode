@@ -15,7 +15,7 @@ import {
   resolveWorktreeDiffBase,
   worktreeHasChanges,
 } from './execution-phases';
-import type { PipelineContextHelpers, PipelinePhaseHandlers, PipelineRuntime } from './shared';
+import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
 type ExecutionHarnessDeps = {
   plans: { getLatest: ReturnType<typeof vi.fn> };
@@ -242,21 +242,11 @@ function makeExecutionHarness(context = makeContext()) {
     runProviderPhase: vi.fn(async () => ({ rawOutput: 'done', exitCode: 0 })),
     postTaskGraphComment: vi.fn(),
   } as unknown as PipelineRuntime;
-  const handlers = {
-    startExecution: vi.fn(),
-    startTesting: vi.fn(),
-    startVerification: vi.fn(),
-    startPlanGeneration: vi.fn(),
-    startCommitAndPush: vi.fn(),
-    startShipping: vi.fn(),
-  } as unknown as PipelinePhaseHandlers;
-  const phaseHandlers = createExecutionPhaseHandlers({
+  const handlers = createExecutionPhaseHandlers({
     deps: deps as never,
     contextHelpers,
     runtime,
-    handlers,
   });
-  Object.assign(handlers, phaseHandlers);
   return { activePipelines, context, contextHelpers, deps, handlers, runtime };
 }
 
@@ -574,8 +564,7 @@ describe('execution phase handlers', () => {
     }
   });
 
-  it('queues testing when CPU slots are busy and cancellation suppresses the retry callback', async () => {
-    vi.useFakeTimers();
+  it('queues testing as a retry outcome when CPU slots are busy', async () => {
     const context = makeContext();
     const harness = makeExecutionHarness(context);
     vi.mocked(harness.contextHelpers.listActiveInPhases).mockReturnValue([
@@ -588,22 +577,23 @@ describe('execution phase handlers', () => {
     ] as never);
     vi.mocked(harness.runtime.getVerifyCommands).mockReturnValue(['bun test']);
 
-    await harness.handlers.startTesting('thread-1');
+    const outcome = await harness.handlers.startTesting('thread-1');
 
     expect(harness.runtime.emitTerminalLifecycle).toHaveBeenCalledWith(
       'thread-1',
       expect.stringContaining('CPU-heavy task slots are busy'),
     );
-    expect(context.retryTimer).not.toBeNull();
-
-    context.cancelled = true;
-    await vi.runOnlyPendingTimersAsync();
-
-    expect(harness.runtime.emitPhase).not.toHaveBeenCalledWith('thread-1', 'testing');
+    // CPU backpressure is now a retry outcome; the dispatch loop owns the delay,
+    // so the phase no longer arms context.retryTimer.
+    expect(outcome).toEqual({
+      next: 'retry',
+      delayMs: expect.any(Number),
+      andThen: { next: 'testing' },
+    });
+    expect(context.retryTimer).toBeNull();
   });
 
   it('queues testing on CPU gate pressure without repeating recent queue notices', async () => {
-    vi.useFakeTimers();
     const context = makeContext({
       cpuQueueLastNotifiedAt: Date.now(),
     });
@@ -618,22 +608,16 @@ describe('execution phase handlers', () => {
     } as never;
     vi.mocked(harness.runtime.getVerifyCommands).mockReturnValue(['bun test']);
 
-    await harness.handlers.startTesting('thread-1');
+    const outcome = await harness.handlers.startTesting('thread-1');
 
-    expect(context.retryTimer).not.toBeNull();
+    expect(outcome).toEqual({ next: 'retry', delayMs: 123, andThen: { next: 'testing' } });
     expect(harness.runtime.emitTerminalLifecycle).not.toHaveBeenCalledWith(
       'thread-1',
       expect.stringContaining('[cpu-queue]'),
     );
-
-    await vi.advanceTimersByTimeAsync(123);
-
-    expect(gateCheck).toHaveBeenCalledTimes(2);
-    expect(harness.runtime.emitPhase).toHaveBeenCalledWith('thread-1', 'testing');
   });
 
   it('routes selector-readiness feature QA failures through coordinated test-fix retry', async () => {
-    vi.useFakeTimers();
     const context = makeContext({
       featureQaState: {
         featureId: 'feature-1',
@@ -669,16 +653,21 @@ describe('execution phase handlers', () => {
       return context.repoSetupContract;
     });
 
-    await harness.handlers.startTesting('thread-1');
+    const outcome = await harness.handlers.startTesting('thread-1');
 
     expect(context.testRetries).toBe(1);
-    expect(context.testOutput).toContain('Visual QA requires stable selectors');
+    // The accumulated failure output is consumed into the test-fix feedback that
+    // the re-execution will read.
+    expect(context.stabilizationFeedback).toContain('Visual QA requires stable selectors');
     expect(context.stabilizationFeedback).toContain('failed on attempt 1');
-    expect(context.retryTimer).not.toBeNull();
+    expect(outcome).toEqual({
+      next: 'retry',
+      delayMs: expect.any(Number),
+      andThen: { next: 'execute', plan: expect.anything() },
+    });
   });
 
-  it('drops a scheduled test-fix retry when the context disappears before callback entry', async () => {
-    vi.useFakeTimers();
+  it('emits a failure when the test-fix retry cannot find a structured plan', async () => {
     const context = makeContext({
       featureQaState: {
         featureId: 'feature-1',
@@ -713,14 +702,12 @@ describe('execution phase handlers', () => {
       };
       return context.repoSetupContract;
     });
+    // No structured plan available when the test-fix outcome is built.
+    harness.deps.plans.getLatest.mockReturnValue(null);
 
     await harness.handlers.startTesting('thread-1');
-    harness.activePipelines.get = vi.fn(() => undefined) as never;
-    harness.activePipelines.has = vi.fn(() => true) as never;
 
-    await vi.runOnlyPendingTimersAsync();
-
-    expect(harness.runtime.emitPhase).not.toHaveBeenCalledWith(
+    expect(harness.runtime.emitPhase).toHaveBeenCalledWith(
       'thread-1',
       'failed',
       'Test fix cannot start: structured plan missing for this thread.',
@@ -1161,8 +1148,8 @@ describe('execution phase handlers', () => {
       markNodeCompletedAndPromote: vi.fn(() => graph),
       markNodeFailed: vi.fn(() => graph),
     } as never;
-    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, phase) => {
-      if (phase === 'verify') throw new Error('verifier offline');
+    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, payload) => {
+      if (payload.phase === 'verify') throw new Error('verifier offline');
       return { rawOutput: 'done', exitCode: 0 };
     });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
@@ -1212,8 +1199,8 @@ describe('execution phase handlers', () => {
       markNodeCompletedAndPromote: vi.fn(() => graph),
       markNodeFailed: vi.fn(() => graph),
     } as never;
-    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, phase) => {
-      if (phase === 'verify') context.cancelled = true;
+    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, payload) => {
+      if (payload.phase === 'verify') context.cancelled = true;
       return { rawOutput: verificationFailed, exitCode: 0 };
     });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
@@ -1846,8 +1833,7 @@ describe('execution phase handlers', () => {
     );
   });
 
-  it('schedules execution retry after failed verification and honors cancelled timers', async () => {
-    vi.useFakeTimers();
+  it('returns an execution retry outcome after failed verification', async () => {
     const context = makeContext({ verificationRetries: 0 });
     const harness = makeExecutionHarness(context);
     harness.deps.plans.getLatest.mockReturnValue({
@@ -1871,44 +1857,16 @@ describe('execution phase handlers', () => {
       return '';
     });
 
-    await harness.handlers.startVerification('thread-1');
-    await Promise.resolve();
-    await Promise.resolve();
+    const outcome = await harness.handlers.startVerification('thread-1');
 
     expect(context.verificationRetries).toBe(1);
-    expect(context.retryTimer).not.toBeNull();
-
-    context.cancelled = true;
-    await vi.runOnlyPendingTimersAsync();
-
+    // The phase returns the retry outcome; the dispatch loop owns the delay and
+    // the cancellable timer (no context.retryTimer armed here).
+    expect(outcome).toEqual({
+      next: 'retry',
+      delayMs: expect.any(Number),
+      andThen: { next: 'execute', plan },
+    });
     expect(harness.runtime.runProviderPhase).toHaveBeenCalledTimes(1);
-  });
-
-  it('replaces existing verification retry timers before scheduling continuation', async () => {
-    vi.useFakeTimers();
-    const oldTimerCallback = vi.fn();
-    const context = makeContext({
-      verificationRetries: 0,
-      retryTimer: setTimeout(oldTimerCallback, 1) as unknown as PipelineContext['retryTimer'],
-    });
-    const harness = makeExecutionHarness(context);
-    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
-      rawOutput: verificationFailed,
-      exitCode: 0,
-    });
-    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'status') return '';
-      if (args[0] === 'rev-parse') return 'head-sha\n';
-      if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
-      return '';
-    });
-
-    await harness.handlers.startVerification('thread-1');
-    await Promise.resolve();
-    await Promise.resolve();
-    context.cancelled = true;
-    await vi.runOnlyPendingTimersAsync();
-
-    expect(oldTimerCallback).not.toHaveBeenCalled();
   });
 });

@@ -338,5 +338,20 @@ export function getFailurePresentation(
   };
 }
 
+// Triage-rule failures live on the issue cache record (triageFailureReason),
+// independent of pipeline/thread failures. Surface them through the same
+// danger styling used by getFailurePresentation rather than crashing the
+// renderer (PRD triage-rules-engine NFR).
+export function getTriageFailurePresentation(
+  reason: string | null | undefined,
+): { label: string; detail: string } | null {
+  const text = reason?.trim();
+  if (!text) return null;
+  return {
+    label: 'Triage rule failed',
+    detail: stripAnsi(safeErrorMessage(text)),
+  };
+}
+
 export const PRD_PROSE_CLASSES =
   'space-y-3 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-secondary [&_code]:rounded [&_code]:bg-tertiary [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:whitespace-pre-wrap [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-tertiary [&_pre]:p-3 [&_pre]:text-xs [&_ul]:list-disc [&_ul]:pl-5';

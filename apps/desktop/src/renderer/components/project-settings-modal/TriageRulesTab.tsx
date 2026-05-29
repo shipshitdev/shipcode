@@ -36,6 +36,22 @@ const CONDITION_KIND_LABELS: Record<TriageRuleConditionKind, string> = {
   label_includes: 'Label includes',
   label_excludes: 'Label excludes',
   title_contains: 'Title contains',
+  body_contains: 'Body contains',
+  assignee_is: 'Assignee is',
+  author_is: 'Author is',
+  title_matches: 'Title matches (regex)',
+  body_matches: 'Body matches (regex)',
+};
+
+const CONDITION_PLACEHOLDERS: Record<TriageRuleConditionKind, string> = {
+  label_includes: 'complexity:low',
+  label_excludes: 'complexity:low',
+  title_contains: 'bug',
+  body_contains: 'stack trace',
+  assignee_is: 'octocat',
+  author_is: 'octocat',
+  title_matches: '^\\[bug\\]',
+  body_matches: 'panic|segfault',
 };
 
 function newClientId(): string {
@@ -343,7 +359,7 @@ function TriageRuleCard({
                     value: event.target.value,
                   })
                 }
-                placeholder={condition.kind === 'title_contains' ? 'bug' : 'complexity:low'}
+                placeholder={CONDITION_PLACEHOLDERS[condition.kind]}
               />
               <Button
                 type="button"

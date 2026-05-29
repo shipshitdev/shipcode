@@ -33,8 +33,8 @@ import type { TaskGraphWithNodes } from '@shipcode/shared/source';
 import { computeRetryDelayMs } from '../retry-scheduler';
 import type { PipelineContext } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
-import { resetPhaseState } from './context';
-import type { PipelineHelperEnv } from './shared';
+import { buildPhasePayload, resetPhaseState } from './context';
+import type { PhaseOutcome, PipelineHelperEnv } from './shared';
 
 const NO_VALID_PLAN_REASON = 'Plan generation failed — no valid shipcode-plan block was produced.';
 
@@ -90,12 +90,7 @@ export function buildClarificationContext(context: PipelineContext): string | nu
   ].join('\n\n');
 }
 
-export function createPlanningPhaseHandlers({
-  deps,
-  contextHelpers,
-  runtime,
-  handlers,
-}: PipelineHelperEnv) {
+export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: PipelineHelperEnv) {
   const { activePipelines, ensureContext, skillCallSite } = contextHelpers;
   const {
     buildRepoSetupPlannerNote,
@@ -144,7 +139,7 @@ export function createPlanningPhaseHandlers({
     threadId: string,
     context: ReturnType<typeof ensureContext>,
     request: ClarificationRequest,
-  ) {
+  ): PhaseOutcome {
     const nextRound = context.clarificationRound + 1;
     if (nextRound > MAX_CLARIFICATION_ROUNDS) {
       emitPhase(
@@ -153,7 +148,7 @@ export function createPlanningPhaseHandlers({
         `Planning clarification limit reached after ${MAX_CLARIFICATION_ROUNDS} rounds.`,
       );
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
 
     context.clarificationRound = nextRound;
@@ -177,6 +172,7 @@ export function createPlanningPhaseHandlers({
       },
     });
     emitPhase(threadId, 'clarifying');
+    return { next: 'paused' };
   }
 
   function clearClarificationState(threadId: string, context: ReturnType<typeof ensureContext>) {
@@ -230,7 +226,7 @@ export function createPlanningPhaseHandlers({
     context: ReturnType<typeof ensureContext>,
     plan: PlanRecord,
     structuredPlan: ShipCodePlan,
-  ) {
+  ): Promise<PhaseOutcome> {
     let taskGraph: TaskGraphWithNodes | null = null;
     try {
       taskGraph =
@@ -250,8 +246,7 @@ export function createPlanningPhaseHandlers({
     if (revisionCount > 0) {
       deps.plans.updateStatus(plan.id, 'pending_review');
       resetPhaseState(context);
-      handlers.startReview(threadId, structuredPlan);
-      return;
+      return { next: 'review', plan: structuredPlan };
     }
 
     deps.plans.updateStatus(plan.id, 'approved');
@@ -279,7 +274,7 @@ export function createPlanningPhaseHandlers({
       deps.plans.updateStatus(plan.id, 'approval');
       void postPlanComment(context, structuredPlan);
       emitPhase(threadId, 'approval');
-      return;
+      return { next: 'paused' };
     }
 
     deps.emitter.emit({
@@ -296,7 +291,7 @@ export function createPlanningPhaseHandlers({
       reasons,
     });
     resetPhaseState(context);
-    handlers.startExecution(threadId, structuredPlan);
+    return { next: 'execute', plan: structuredPlan };
   }
 
   async function startPlanGeneration(
@@ -304,7 +299,7 @@ export function createPlanningPhaseHandlers({
     prompt: string,
     projectPath: string,
     worktreePath: string | null,
-  ) {
+  ): Promise<PhaseOutcome> {
     const context = ensureContext(threadId, { projectPath, worktreePath });
     clearRetryTimer(context);
 
@@ -323,7 +318,7 @@ export function createPlanningPhaseHandlers({
     } catch (error) {
       emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
 
     // PRD quality gate — check issue body for required sections and structure.
@@ -340,7 +335,7 @@ export function createPlanningPhaseHandlers({
           `PRD quality gate: ${issueList}. Update the issue body and re-trigger.`,
         );
         activePipelines.delete(threadId);
-        return;
+        return { next: 'failed' };
       }
 
       // Gate OFF (default) — post/log a warning and continue
@@ -372,6 +367,9 @@ export function createPlanningPhaseHandlers({
       ...ensureRepoPromptMaterials(context),
     ];
     rememberMaterialSummary(context, 'plan', planMaterials);
+    const payload = buildPhasePayload(context, 'plan', {
+      previousPlanRawOutput: previousAttempt,
+    });
     let workflowPlanPrompt: string | null;
     try {
       workflowPlanPrompt = renderWorkflowPromptTemplate(context, deps, 'plan');
@@ -382,7 +380,7 @@ export function createPlanningPhaseHandlers({
         `WORKFLOW.md template render error: ${error instanceof Error ? error.message : String(error)}`,
       );
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
     const planPrompt =
       (workflowPlanPrompt ??
@@ -398,136 +396,132 @@ export function createPlanningPhaseHandlers({
           getVerifyCommands(context).join(' && ') || null,
         )) +
       buildRepoSetupPlannerNote(context) +
-      (previousAttempt ? buildPreviousAttemptContext(previousAttempt) : '');
+      (payload.carry.previousPlanRawOutput
+        ? buildPreviousAttemptContext(payload.carry.previousPlanRawOutput)
+        : '');
 
-    void (async () => {
-      try {
-        const response = await runProviderPhase(context, 'plan', planPrompt, planMaterials, {
-          reasoningEffort: context.phaseReasoningEfforts.plan,
-        });
+    try {
+      const response = await runProviderPhase(context, payload, planPrompt, planMaterials, {
+        reasoningEffort: context.phaseReasoningEfforts.plan,
+      });
 
-        if (context.cancelled) return;
+      if (context.cancelled) return { next: 'paused' };
 
-        if (response.exitCode === 127) {
-          const agent = resolveAgentForPhase(context, 'plan');
-          const name = agent === 'openrouter' ? 'Provider' : `${agent} CLI`;
-          emitPhase(
-            threadId,
-            'failed',
-            `${name} not found (exit 127). Is the ${agent} binary installed and on PATH?`,
-          );
-          activePipelines.delete(threadId);
-          return;
-        }
-
-        const parser = new StreamParser();
-        parser.feed(response.rawOutput);
-        const clarificationRequest = resolveClarificationRequest(
-          parser,
-          response.clarificationRequest,
+      if (response.exitCode === 127) {
+        const agent = resolveAgentForPhase(context, 'plan');
+        const name = agent === 'openrouter' ? 'Provider' : `${agent} CLI`;
+        emitPhase(
+          threadId,
+          'failed',
+          `${name} not found (exit 127). Is the ${agent} binary installed and on PATH?`,
         );
+        activePipelines.delete(threadId);
+        return { next: 'failed' };
+      }
 
-        if (response.exitCode !== 0) {
-          const result = parser.extractPlan();
-          if (result.success && result.data) {
-            clearClarificationState(threadId, context);
-            const nextVersion = deps.plans.getMaxVersion(threadId) + 1;
-            const plan = deps.plans.create(threadId, result.raw, result.data, nextVersion);
-            await continueFromStructuredPlan(threadId, context, plan, result.data);
-          } else if (clarificationRequest) {
-            enterClarifying(threadId, context, clarificationRequest);
-          } else {
-            const detectedError = parser.detectError();
-            if (context.retryCount < PIPELINE_MAX_RETRIES) {
-              context.retryCount++;
-              context.previousPlanRawOutput = response.rawOutput;
-              const delayMs = computeRetryDelayMs({
-                reason: 'failure',
-                attempt: context.retryCount,
-                maxRetryBackoffMs: context.workflowPolicy.agent.maxRetryBackoffMs,
-              });
-              if (context.retryTimer) clearTimeout(context.retryTimer);
-              context.retryTimer = setTimeout(() => {
-                context.retryTimer = null;
-                if (context.cancelled || !activePipelines.has(threadId)) return;
-                void handlers.startPlanGeneration(threadId, prompt, projectPath, worktreePath);
-              }, delayMs);
-            } else {
-              let cliError: string | null = null;
-              for (const line of parser
-                .getRawOutput()
-                .trim()
-                .split('\n')
-                .filter(Boolean)
-                .reverse()) {
-                try {
-                  const obj = JSON.parse(line.trim()) as Record<string, unknown>;
-                  if (obj.type === 'result') {
-                    if (typeof obj.result === 'string') {
-                      cliError = obj.result.slice(0, 300);
-                      break;
-                    }
-                    if (
-                      Array.isArray(obj.errors) &&
-                      obj.errors.length > 0 &&
-                      typeof obj.errors[0] === 'string'
-                    ) {
-                      cliError = obj.errors[0].slice(0, 300);
-                      break;
-                    }
-                  }
-                } catch {
-                  // skip malformed lines
-                }
-              }
-              const rawSnippet =
-                cliError ??
-                detectedError?.match ??
-                parser
-                  .getRawOutput()
-                  .trim()
-                  .split('\n')
-                  .filter(Boolean)
-                  .slice(-3)
-                  .join(' ')
-                  .slice(0, 300);
-              const reason = rawSnippet?.trimStart().startsWith('{') ? '' : rawSnippet;
-              emitPhase(
-                threadId,
-                'failed',
-                reason || 'Plan generation failed — no structured plan was produced.',
-              );
-              activePipelines.delete(threadId);
-            }
-          }
-          return;
-        }
+      const parser = new StreamParser();
+      parser.feed(response.rawOutput);
+      const clarificationRequest = resolveClarificationRequest(
+        parser,
+        response.clarificationRequest,
+      );
 
+      if (response.exitCode !== 0) {
         const result = parser.extractPlan();
-        const nextVersion = deps.plans.getMaxVersion(threadId) + 1;
         if (result.success && result.data) {
           clearClarificationState(threadId, context);
+          const nextVersion = deps.plans.getMaxVersion(threadId) + 1;
           const plan = deps.plans.create(threadId, result.raw, result.data, nextVersion);
-          await continueFromStructuredPlan(threadId, context, plan, result.data);
-        } else if (clarificationRequest) {
-          enterClarifying(threadId, context, clarificationRequest);
-        } else {
-          deps.plans.create(threadId, result.raw, null, nextVersion);
-          emitPhase(threadId, 'failed', formatPlanParseFailure(result.error));
-          activePipelines.delete(threadId);
+          return await continueFromStructuredPlan(threadId, context, plan, result.data);
         }
-      } catch (error) {
-        if (!context.cancelled) {
-          emitPhase(threadId, 'failed', `Plan generation error: ${String(error)}`);
-          activePipelines.delete(threadId);
+        if (clarificationRequest) {
+          return enterClarifying(threadId, context, clarificationRequest);
         }
+        const detectedError = parser.detectError();
+        if (context.retryCount < PIPELINE_MAX_RETRIES) {
+          context.retryCount++;
+          context.previousPlanRawOutput = response.rawOutput;
+          const delayMs = computeRetryDelayMs({
+            reason: 'failure',
+            attempt: context.retryCount,
+            maxRetryBackoffMs: context.workflowPolicy.agent.maxRetryBackoffMs,
+          });
+          return {
+            next: 'retry',
+            delayMs,
+            andThen: { next: 'plan', prompt, projectPath, worktreePath },
+          };
+        }
+        let cliError: string | null = null;
+        for (const line of parser.getRawOutput().trim().split('\n').filter(Boolean).reverse()) {
+          try {
+            const obj = JSON.parse(line.trim()) as Record<string, unknown>;
+            if (obj.type === 'result') {
+              if (typeof obj.result === 'string') {
+                cliError = obj.result.slice(0, 300);
+                break;
+              }
+              if (
+                Array.isArray(obj.errors) &&
+                obj.errors.length > 0 &&
+                typeof obj.errors[0] === 'string'
+              ) {
+                cliError = obj.errors[0].slice(0, 300);
+                break;
+              }
+            }
+          } catch {
+            // skip malformed lines
+          }
+        }
+        const rawSnippet =
+          cliError ??
+          detectedError?.match ??
+          parser
+            .getRawOutput()
+            .trim()
+            .split('\n')
+            .filter(Boolean)
+            .slice(-3)
+            .join(' ')
+            .slice(0, 300);
+        const reason = rawSnippet?.trimStart().startsWith('{') ? '' : rawSnippet;
+        emitPhase(
+          threadId,
+          'failed',
+          reason || 'Plan generation failed — no structured plan was produced.',
+        );
+        activePipelines.delete(threadId);
+        return { next: 'failed' };
       }
-    })();
+
+      const result = parser.extractPlan();
+      const nextVersion = deps.plans.getMaxVersion(threadId) + 1;
+      if (result.success && result.data) {
+        clearClarificationState(threadId, context);
+        const plan = deps.plans.create(threadId, result.raw, result.data, nextVersion);
+        return await continueFromStructuredPlan(threadId, context, plan, result.data);
+      }
+      if (clarificationRequest) {
+        return enterClarifying(threadId, context, clarificationRequest);
+      }
+      deps.plans.create(threadId, result.raw, null, nextVersion);
+      emitPhase(threadId, 'failed', formatPlanParseFailure(result.error));
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
+    } catch (error) {
+      if (!context.cancelled) {
+        emitPhase(threadId, 'failed', `Plan generation error: ${String(error)}`);
+        activePipelines.delete(threadId);
+        return { next: 'failed' };
+      }
+      return { next: 'paused' };
+    }
   }
 
-  async function startReview(threadId: string, plan: ShipCodePlan) {
+  async function startReview(threadId: string, plan: ShipCodePlan): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
-    if (!context) return;
+    if (!context) return { next: 'paused' };
 
     emitPhase(threadId, 'reviewing');
 
@@ -551,7 +545,7 @@ export function createPlanningPhaseHandlers({
         `WORKFLOW.md template render error: ${error instanceof Error ? error.message : String(error)}`,
       );
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
     const reviewPromptText =
       workflowReviewPrompt ??
@@ -560,232 +554,233 @@ export function createPlanningPhaseHandlers({
         promptMaterials: reviewMaterials,
       });
 
-    void (async () => {
-      try {
-        const response = await runProviderPhase(
-          context,
-          'review',
-          reviewPromptText,
-          reviewMaterials,
-          {
-            reasoningEffort: context.phaseReasoningEfforts.review,
-          },
+    const payload = buildPhasePayload(context, 'review');
+    try {
+      const response = await runProviderPhase(context, payload, reviewPromptText, reviewMaterials, {
+        reasoningEffort: context.phaseReasoningEfforts.review,
+      });
+
+      if (context.cancelled) return { next: 'paused' };
+
+      if (response.exitCode === 127) {
+        const agent = resolveAgentForPhase(context, 'review');
+        const name = agent === 'openrouter' ? 'Provider' : `${agent} CLI`;
+        emitPhase(
+          threadId,
+          'failed',
+          `${name} not found (exit 127). Is the ${agent} binary installed and on PATH?`,
         );
-
-        if (context.cancelled) return;
-
-        if (response.exitCode === 127) {
-          const agent = resolveAgentForPhase(context, 'review');
-          const name = agent === 'openrouter' ? 'Provider' : `${agent} CLI`;
-          emitPhase(
-            threadId,
-            'failed',
-            `${name} not found (exit 127). Is the ${agent} binary installed and on PATH?`,
-          );
-          activePipelines.delete(threadId);
-          return;
-        }
-
-        const parser = new StreamParser();
-        parser.feed(response.rawOutput);
-
-        const result = parser.extractReview();
-        const latestPlan = deps.plans.getLatest(threadId);
-
-        if (result.success && result.data && latestPlan) {
-          const latestStructuredPlan = latestPlan.structured;
-          if (!latestStructuredPlan) {
-            emitPhase(
-              threadId,
-              'failed',
-              'Review aborted: latest plan record has no structured plan.',
-            );
-            activePipelines.delete(threadId);
-            return;
-          }
-          deps.reviews.create(latestPlan.id, result.raw, result.data);
-          deps.plans.updateStatus(
-            latestPlan.id,
-            result.data.decision === 'approve' ? 'approved' : 'rejected',
-          );
-          deps.emitter.emit({ type: 'review:parsed', threadId, review: result.data });
-
-          if (result.data.decision === 'approve') {
-            const requireApproval = getRequireApprovalForContext(context);
-            const revisionCount = getRevisionCountForContext(context);
-            const reasons: Array<'requireApproval' | 'nonAutonomous' | 'reviewApproved'> = [
-              'reviewApproved',
-            ];
-            if (requireApproval) reasons.push('requireApproval');
-            if (!context.autonomous) reasons.push('nonAutonomous');
-
-            if (requireApproval || !context.autonomous) {
-              deps.emitter.emit({
-                type: 'pipeline:approval-gate',
-                threadId,
-                outcome: 'approval',
-                reviewDecision: 'approve',
-                planVersion: latestPlan.version,
-                requireApproval,
-                autonomous: context.autonomous,
-                reviewRound: context.reviewRound,
-                revisionCount,
-                hasCriticalOrMajor: false,
-                reasons,
-              });
-              deps.plans.updateStatus(latestPlan.id, 'approval');
-              void postPlanComment(context, latestStructuredPlan);
-              emitPhase(threadId, 'approval');
-            } else {
-              deps.emitter.emit({
-                type: 'pipeline:approval-gate',
-                threadId,
-                outcome: 'auto_execute',
-                reviewDecision: 'approve',
-                planVersion: latestPlan.version,
-                requireApproval,
-                autonomous: context.autonomous,
-                reviewRound: context.reviewRound,
-                revisionCount,
-                hasCriticalOrMajor: false,
-                reasons,
-              });
-              resetPhaseState(context);
-              handlers.startExecution(threadId, latestStructuredPlan);
-            }
-          } else if (result.data.decision === 'request_changes') {
-            const revisionCountLimit = getRevisionCountForContext(context);
-            if (context.reviewRound < revisionCountLimit) {
-              context.reviewRound++;
-              deps.threads.incrementReviewRound(threadId);
-              const feedback =
-                result.data.suggestedChanges.join('\n') +
-                '\n\nFindings:\n' +
-                result.data.findings
-                  .map(
-                    (finding: { severity: string; description: string; suggestion?: string }) =>
-                      `[${finding.severity}] ${finding.description}${finding.suggestion ? ` — ${finding.suggestion}` : ''}`,
-                  )
-                  .join('\n');
-              resetPhaseState(context);
-              handlers.startRevision(threadId, latestStructuredPlan, feedback);
-            } else {
-              const hasCriticalOrMajor = result.data.findings.some(
-                (finding: { severity: string }) =>
-                  finding.severity === 'critical' || finding.severity === 'major',
-              );
-              const requireApproval = getRequireApprovalForContext(context);
-              const reasons: Array<
-                'requireApproval' | 'nonAutonomous' | 'criticalFindings' | 'revisionsExhausted'
-              > = ['revisionsExhausted'];
-              if (requireApproval) reasons.push('requireApproval');
-              if (!context.autonomous) reasons.push('nonAutonomous');
-              if (hasCriticalOrMajor) reasons.push('criticalFindings');
-
-              if (requireApproval || !context.autonomous || hasCriticalOrMajor) {
-                deps.emitter.emit({
-                  type: 'pipeline:approval-gate',
-                  threadId,
-                  outcome: 'approval',
-                  reviewDecision: 'request_changes',
-                  planVersion: latestPlan.version,
-                  requireApproval,
-                  autonomous: context.autonomous,
-                  reviewRound: context.reviewRound,
-                  revisionCount: revisionCountLimit,
-                  hasCriticalOrMajor,
-                  reasons,
-                });
-                deps.plans.updateStatus(latestPlan.id, 'approval');
-                void postPlanComment(context, latestStructuredPlan);
-                emitPhase(threadId, 'approval');
-              } else {
-                deps.emitter.emit({
-                  type: 'pipeline:approval-gate',
-                  threadId,
-                  outcome: 'auto_execute',
-                  reviewDecision: 'request_changes',
-                  planVersion: latestPlan.version,
-                  requireApproval,
-                  autonomous: context.autonomous,
-                  reviewRound: context.reviewRound,
-                  revisionCount: revisionCountLimit,
-                  hasCriticalOrMajor,
-                  reasons,
-                });
-                resetPhaseState(context);
-                handlers.startExecution(threadId, latestStructuredPlan);
-              }
-            }
-          } else if (result.data.decision === 'reject') {
-            // Reviewer rejected the plan outright — do not loop revisions
-            // and do not auto-execute even in autonomous mode. Halt at the
-            // approval gate so the user can intervene (edit issue, retry,
-            // or abandon).
-            const hasCriticalOrMajor = result.data.findings.some(
-              (finding: { severity: string }) =>
-                finding.severity === 'critical' || finding.severity === 'major',
-            );
-            const requireApproval = getRequireApprovalForContext(context);
-            const revisionCountLimit = getRevisionCountForContext(context);
-            const reasons: Array<
-              'requireApproval' | 'nonAutonomous' | 'criticalFindings' | 'reviewRejected'
-            > = ['reviewRejected'];
-            if (requireApproval) reasons.push('requireApproval');
-            if (!context.autonomous) reasons.push('nonAutonomous');
-            if (hasCriticalOrMajor) reasons.push('criticalFindings');
-
-            deps.emitter.emit({
-              type: 'pipeline:approval-gate',
-              threadId,
-              outcome: 'approval',
-              reviewDecision: 'reject',
-              planVersion: latestPlan.version,
-              requireApproval,
-              autonomous: context.autonomous,
-              reviewRound: context.reviewRound,
-              revisionCount: revisionCountLimit,
-              hasCriticalOrMajor,
-              reasons,
-            });
-            deps.plans.updateStatus(latestPlan.id, 'approval');
-            void postPlanComment(context, latestStructuredPlan);
-            emitPhase(threadId, 'approval');
-          } else {
-            emitPhase(
-              threadId,
-              'failed',
-              `Review failed: reviewer returned an unexpected decision (${result.data.decision ?? 'unknown'}).`,
-            );
-            activePipelines.delete(threadId);
-          }
-        } else {
-          if (latestPlan) {
-            deps.reviews.create(latestPlan.id, parser.getRawOutput(), null);
-          }
-          emitPhase(
-            threadId,
-            'failed',
-            'Review output could not be parsed — reviewer did not emit a shipcode-review block.',
-          );
-          activePipelines.delete(threadId);
-        }
-      } catch (error) {
-        if (!context.cancelled) {
-          emitPhase(
-            threadId,
-            'failed',
-            `Review error: ${error instanceof Error ? error.message : String(error)}`,
-          );
-          activePipelines.delete(threadId);
-        }
+        activePipelines.delete(threadId);
+        return { next: 'failed' };
       }
-    })();
+
+      const parser = new StreamParser();
+      parser.feed(response.rawOutput);
+
+      const result = parser.extractReview();
+      const latestPlan = deps.plans.getLatest(threadId);
+
+      if (!(result.success && result.data && latestPlan)) {
+        if (latestPlan) {
+          deps.reviews.create(latestPlan.id, parser.getRawOutput(), null);
+        }
+        emitPhase(
+          threadId,
+          'failed',
+          'Review output could not be parsed — reviewer did not emit a shipcode-review block.',
+        );
+        activePipelines.delete(threadId);
+        return { next: 'failed' };
+      }
+
+      const latestStructuredPlan = latestPlan.structured;
+      if (!latestStructuredPlan) {
+        emitPhase(threadId, 'failed', 'Review aborted: latest plan record has no structured plan.');
+        activePipelines.delete(threadId);
+        return { next: 'failed' };
+      }
+      deps.reviews.create(latestPlan.id, result.raw, result.data);
+      deps.plans.updateStatus(
+        latestPlan.id,
+        result.data.decision === 'approve' ? 'approved' : 'rejected',
+      );
+      deps.emitter.emit({ type: 'review:parsed', threadId, review: result.data });
+
+      if (result.data.decision === 'approve') {
+        const requireApproval = getRequireApprovalForContext(context);
+        const revisionCount = getRevisionCountForContext(context);
+        const reasons: Array<'requireApproval' | 'nonAutonomous' | 'reviewApproved'> = [
+          'reviewApproved',
+        ];
+        if (requireApproval) reasons.push('requireApproval');
+        if (!context.autonomous) reasons.push('nonAutonomous');
+
+        if (requireApproval || !context.autonomous) {
+          deps.emitter.emit({
+            type: 'pipeline:approval-gate',
+            threadId,
+            outcome: 'approval',
+            reviewDecision: 'approve',
+            planVersion: latestPlan.version,
+            requireApproval,
+            autonomous: context.autonomous,
+            reviewRound: context.reviewRound,
+            revisionCount,
+            hasCriticalOrMajor: false,
+            reasons,
+          });
+          deps.plans.updateStatus(latestPlan.id, 'approval');
+          void postPlanComment(context, latestStructuredPlan);
+          emitPhase(threadId, 'approval');
+          return { next: 'paused' };
+        }
+        deps.emitter.emit({
+          type: 'pipeline:approval-gate',
+          threadId,
+          outcome: 'auto_execute',
+          reviewDecision: 'approve',
+          planVersion: latestPlan.version,
+          requireApproval,
+          autonomous: context.autonomous,
+          reviewRound: context.reviewRound,
+          revisionCount,
+          hasCriticalOrMajor: false,
+          reasons,
+        });
+        resetPhaseState(context);
+        return { next: 'execute', plan: latestStructuredPlan };
+      }
+
+      if (result.data.decision === 'request_changes') {
+        const revisionCountLimit = getRevisionCountForContext(context);
+        if (context.reviewRound < revisionCountLimit) {
+          context.reviewRound++;
+          deps.threads.incrementReviewRound(threadId);
+          const feedback =
+            result.data.suggestedChanges.join('\n') +
+            '\n\nFindings:\n' +
+            result.data.findings
+              .map(
+                (finding: { severity: string; description: string; suggestion?: string }) =>
+                  `[${finding.severity}] ${finding.description}${finding.suggestion ? ` — ${finding.suggestion}` : ''}`,
+              )
+              .join('\n');
+          resetPhaseState(context);
+          return { next: 'revision', plan: latestStructuredPlan, reviewFeedback: feedback };
+        }
+        const hasCriticalOrMajor = result.data.findings.some(
+          (finding: { severity: string }) =>
+            finding.severity === 'critical' || finding.severity === 'major',
+        );
+        const requireApproval = getRequireApprovalForContext(context);
+        const reasons: Array<
+          'requireApproval' | 'nonAutonomous' | 'criticalFindings' | 'revisionsExhausted'
+        > = ['revisionsExhausted'];
+        if (requireApproval) reasons.push('requireApproval');
+        if (!context.autonomous) reasons.push('nonAutonomous');
+        if (hasCriticalOrMajor) reasons.push('criticalFindings');
+
+        if (requireApproval || !context.autonomous || hasCriticalOrMajor) {
+          deps.emitter.emit({
+            type: 'pipeline:approval-gate',
+            threadId,
+            outcome: 'approval',
+            reviewDecision: 'request_changes',
+            planVersion: latestPlan.version,
+            requireApproval,
+            autonomous: context.autonomous,
+            reviewRound: context.reviewRound,
+            revisionCount: revisionCountLimit,
+            hasCriticalOrMajor,
+            reasons,
+          });
+          deps.plans.updateStatus(latestPlan.id, 'approval');
+          void postPlanComment(context, latestStructuredPlan);
+          emitPhase(threadId, 'approval');
+          return { next: 'paused' };
+        }
+        deps.emitter.emit({
+          type: 'pipeline:approval-gate',
+          threadId,
+          outcome: 'auto_execute',
+          reviewDecision: 'request_changes',
+          planVersion: latestPlan.version,
+          requireApproval,
+          autonomous: context.autonomous,
+          reviewRound: context.reviewRound,
+          revisionCount: revisionCountLimit,
+          hasCriticalOrMajor,
+          reasons,
+        });
+        resetPhaseState(context);
+        return { next: 'execute', plan: latestStructuredPlan };
+      }
+
+      if (result.data.decision === 'reject') {
+        // Reviewer rejected the plan outright — do not loop revisions
+        // and do not auto-execute even in autonomous mode. Halt at the
+        // approval gate so the user can intervene (edit issue, retry,
+        // or abandon).
+        const hasCriticalOrMajor = result.data.findings.some(
+          (finding: { severity: string }) =>
+            finding.severity === 'critical' || finding.severity === 'major',
+        );
+        const requireApproval = getRequireApprovalForContext(context);
+        const revisionCountLimit = getRevisionCountForContext(context);
+        const reasons: Array<
+          'requireApproval' | 'nonAutonomous' | 'criticalFindings' | 'reviewRejected'
+        > = ['reviewRejected'];
+        if (requireApproval) reasons.push('requireApproval');
+        if (!context.autonomous) reasons.push('nonAutonomous');
+        if (hasCriticalOrMajor) reasons.push('criticalFindings');
+
+        deps.emitter.emit({
+          type: 'pipeline:approval-gate',
+          threadId,
+          outcome: 'approval',
+          reviewDecision: 'reject',
+          planVersion: latestPlan.version,
+          requireApproval,
+          autonomous: context.autonomous,
+          reviewRound: context.reviewRound,
+          revisionCount: revisionCountLimit,
+          hasCriticalOrMajor,
+          reasons,
+        });
+        deps.plans.updateStatus(latestPlan.id, 'approval');
+        void postPlanComment(context, latestStructuredPlan);
+        emitPhase(threadId, 'approval');
+        return { next: 'paused' };
+      }
+
+      emitPhase(
+        threadId,
+        'failed',
+        `Review failed: reviewer returned an unexpected decision (${result.data.decision ?? 'unknown'}).`,
+      );
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
+    } catch (error) {
+      if (!context.cancelled) {
+        emitPhase(
+          threadId,
+          'failed',
+          `Review error: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        activePipelines.delete(threadId);
+        return { next: 'failed' };
+      }
+      return { next: 'paused' };
+    }
   }
 
-  async function startRevision(threadId: string, plan: ShipCodePlan, reviewFeedback: string) {
+  async function startRevision(
+    threadId: string,
+    plan: ShipCodePlan,
+    reviewFeedback: string,
+  ): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
-    if (!context) return;
+    if (!context) return { next: 'paused' };
 
     emitPhase(threadId, 'revising');
 
@@ -819,56 +814,51 @@ export function createPlanningPhaseHandlers({
         `WORKFLOW.md template render error: ${error instanceof Error ? error.message : String(error)}`,
       );
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
 
-    void (async () => {
-      try {
-        const response = await runProviderPhase(
-          context,
-          'revision',
-          revisionPrompt,
-          revisionMaterials,
-          {
-            reasoningEffort: context.phaseReasoningEfforts.revision,
-          },
-        );
+    const payload = buildPhasePayload(context, 'revision');
+    try {
+      const response = await runProviderPhase(context, payload, revisionPrompt, revisionMaterials, {
+        reasoningEffort: context.phaseReasoningEfforts.revision,
+      });
 
-        if (context.cancelled) return;
+      if (context.cancelled) return { next: 'paused' };
 
-        const parser = new StreamParser();
-        parser.feed(response.rawOutput);
+      const parser = new StreamParser();
+      parser.feed(response.rawOutput);
 
-        const result = parser.extractPlan();
-        if (result.success && result.data) {
-          deps.plans.supersedeAll(threadId);
-          const newPlan = deps.plans.create(threadId, result.raw, result.data, plan.version + 1);
-          deps.plans.updateStatus(newPlan.id, 'pending_review');
-          deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data });
-          resetPhaseState(context);
-          handlers.startReview(threadId, result.data);
-        } else {
-          deps.plans.supersedeAll(threadId);
-          deps.plans.create(threadId, result.raw, null, plan.version + 1);
-          emitPhase(
-            threadId,
-            'failed',
-            'Revision output could not be parsed — revisor did not emit a shipcode-plan block.',
-          );
-          activePipelines.delete(threadId);
-        }
-      } catch (error) {
-        if (!context.cancelled) {
-          deps.plans.supersedeAll(threadId);
-          emitPhase(
-            threadId,
-            'failed',
-            `Revision error: ${error instanceof Error ? error.message : String(error)}`,
-          );
-          activePipelines.delete(threadId);
-        }
+      const result = parser.extractPlan();
+      if (result.success && result.data) {
+        deps.plans.supersedeAll(threadId);
+        const newPlan = deps.plans.create(threadId, result.raw, result.data, plan.version + 1);
+        deps.plans.updateStatus(newPlan.id, 'pending_review');
+        deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data });
+        resetPhaseState(context);
+        return { next: 'review', plan: result.data };
       }
-    })();
+      deps.plans.supersedeAll(threadId);
+      deps.plans.create(threadId, result.raw, null, plan.version + 1);
+      emitPhase(
+        threadId,
+        'failed',
+        'Revision output could not be parsed — revisor did not emit a shipcode-plan block.',
+      );
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
+    } catch (error) {
+      if (!context.cancelled) {
+        deps.plans.supersedeAll(threadId);
+        emitPhase(
+          threadId,
+          'failed',
+          `Revision error: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        activePipelines.delete(threadId);
+        return { next: 'failed' };
+      }
+      return { next: 'paused' };
+    }
   }
 
   return {
