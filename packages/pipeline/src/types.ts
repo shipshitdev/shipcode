@@ -412,7 +412,11 @@ export interface VerifyPhaseCarry {
   readonly testOutput?: string | null;
 }
 
-/** Union accepted by `buildPhasePayload`'s `prevOutput` arg (any phase's carry). */
+/**
+ * Carry accepted by `buildPhasePayload`'s `prevOutput` arg — plan + execute only.
+ * Verification carry (`VerifyPhaseCarry`) flows directly into `startVerification`
+ * and is not threaded through `buildPhasePayload`, so it is intentionally excluded.
+ */
 export type PhaseCarryOutput = PlanPhaseCarry & ExecutePhaseCarry;
 
 /**

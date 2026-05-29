@@ -142,9 +142,9 @@ describe('buildPhasePayload', () => {
         plan: { totalMaterials: 3 },
         execute: { totalMaterials: 7 },
       },
-      // Phase-local fields that must never appear in the payload.
-      stabilizationFeedback: 'must not leak',
-      testOutput: 'must not leak',
+      // Real phase-local fields that must never be auto-lifted into the payload.
+      executionResumeContext: 'must not leak',
+      previousPlanRawOutput: 'must not leak',
     } as unknown as PipelineContext;
   }
 
@@ -214,8 +214,6 @@ describe('buildPhasePayload', () => {
 
     // Carry comes only from prevOutput, never lifted implicitly from context.
     expect(payload.carry).toEqual({});
-    expect('stabilizationFeedback' in payload).toBe(false);
-    expect('testOutput' in payload).toBe(false);
     expect('executionResumeContext' in payload).toBe(false);
     expect('previousPlanRawOutput' in payload).toBe(false);
   });
