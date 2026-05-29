@@ -213,7 +213,11 @@ function clampCursorFailure(rawOutput: string, prompt: string): string {
 export function createCursorCliProvider(processManager: ProcessManager): AgentProvider {
   return {
     id: 'cursor-cli',
-    supports: new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute']),
+    // Execute-only: Cursor's CLI cannot run read-only (its sandbox blocks writes
+    // outside the workspace but still allows in-worktree edits), so it must not
+    // drive plan/review/revision/verify, which the pipeline treats as read-only.
+    // Execute intentionally writes inside an isolated worktree.
+    supports: new Set<ProviderPhase>(['execute']),
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
       const command = buildCursorCommand(req);
       const result = await runCursorCli(processManager, command, req);

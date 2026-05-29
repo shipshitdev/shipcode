@@ -149,8 +149,16 @@ const VALID_PHASE_PROVIDERS = [
   'claude',
   'codex',
   'gemini',
-  'cursor',
   'openrouter',
+] as const satisfies readonly ExecutorModel[];
+
+// Cursor's CLI has no read-only mode (its sandbox only blocks writes outside
+// the workspace, not in-worktree edits), so it can only safely run the execute
+// phase, which intentionally writes inside an isolated worktree. Offering it for
+// plan/review/verify would let those read-only phases mutate the tree.
+const EXECUTOR_PHASE_PROVIDERS = [
+  ...VALID_PHASE_PROVIDERS,
+  'cursor',
 ] as const satisfies readonly ExecutorModel[];
 
 export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
@@ -195,7 +203,7 @@ export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
   {
     key: 'executor',
     label: 'Executor',
-    validProviders: VALID_PHASE_PROVIDERS,
+    validProviders: EXECUTOR_PHASE_PROVIDERS,
     settingsModelKey: 'executorModel',
     settingsModelIdKey: 'openrouterExecutorModel',
     settingsReasoningEffortKey: 'executorReasoningEffort',

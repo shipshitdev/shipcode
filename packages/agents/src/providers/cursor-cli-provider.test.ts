@@ -293,4 +293,14 @@ describe('cursor-cli-provider', () => {
 
     await expect(provider.healthCheck()).resolves.toEqual({ ok: true });
   });
+
+  it('supports only the execute phase (no read-only mode available)', () => {
+    const provider = createCursorCliProvider(new FakeProcessManager() as unknown as ProcessManager);
+
+    expect([...provider.supports]).toEqual(['execute']);
+    expect(provider.supports.has('plan')).toBe(false);
+    expect(provider.supports.has('review')).toBe(false);
+    expect(provider.supports.has('revision')).toBe(false);
+    expect(provider.supports.has('verify')).toBe(false);
+  });
 });
