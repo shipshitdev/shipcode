@@ -347,7 +347,6 @@ describe('createPipelineContextHelpers', () => {
         warning: null,
       },
       workflowWarningEmitted: false,
-      executionResumeContext: null,
     } as unknown as PipelineContext;
     const helpers = createPipelineContextHelpers(
       deps as never,
