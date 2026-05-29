@@ -235,6 +235,30 @@ export function captureIpcFailure(
   });
 }
 
+export interface TelemetryBreadcrumb {
+  category: string;
+  message: string;
+  level?: 'debug' | 'info' | 'warning' | 'error';
+  data?: Record<string, unknown>;
+}
+
+/**
+ * Record a Sentry breadcrumb on the main-process telemetry client. Breadcrumbs
+ * are buffered by the SDK and attached to the next captured exception/message,
+ * so a pipeline failure (or crashed IPC handler) arrives with the trail of
+ * lifecycle steps that preceded it. No-ops until telemetry is initialized, and
+ * the payload is scrubbed through the same redaction path as captured events.
+ */
+export function recordBreadcrumb(breadcrumb: TelemetryBreadcrumb): void {
+  mainTelemetry.addBreadcrumb({
+    type: 'default',
+    level: breadcrumb.level ?? 'info',
+    category: breadcrumb.category,
+    message: breadcrumb.message,
+    ...(breadcrumb.data ? { data: breadcrumb.data } : {}),
+  });
+}
+
 export function capturePipelineFailure(context: PipelineFailureTelemetry): void {
   mainTelemetry.captureMessage(`Pipeline failed in ${context.phase}`, {
     tags: {

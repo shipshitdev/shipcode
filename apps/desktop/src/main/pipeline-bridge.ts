@@ -17,7 +17,7 @@ import type { BrowserWindow } from 'electron';
 import type { ChatNotificationService } from './chat-notification-service';
 import log, { logEvent } from './logger.service';
 import type { NotificationService } from './notification-service';
-import { capturePipelineFailure } from './telemetry';
+import { capturePipelineFailure, recordBreadcrumb, type TelemetryBreadcrumb } from './telemetry';
 
 interface EmitterDeps {
   activity: ActivityQueries;
@@ -111,6 +111,61 @@ const TERMINAL_PHASES = new Set<PipelinePhase>([
   PIPELINE_PHASE.paused,
   PIPELINE_PHASE.idle,
 ]);
+
+/**
+ * Map a pipeline event to a Sentry breadcrumb for the lifecycle trail, or null
+ * for events that are too noisy/low-signal to record (per-turn, per-token,
+ * raw output). Pure — exported for focused tests. The trail attached to a
+ * captured failure reads e.g. `run started → phase planning → approval-gate →
+ * phase executing → verification exhausted → phase failed`.
+ */
+export function breadcrumbForEvent(event: PipelineEvent): TelemetryBreadcrumb | null {
+  switch (event.type) {
+    case 'pipeline:start-context':
+      return {
+        category: 'pipeline.lifecycle',
+        message: `run started via ${event.source}`,
+        data: {
+          threadId: event.threadId,
+          source: event.source,
+          githubIssueNumber: event.githubIssueNumber,
+          autonomous: event.autonomous,
+          requireApproval: event.requireApproval,
+          reviewRound: event.reviewRound,
+        },
+      };
+    case 'pipeline:phase':
+      return {
+        category: 'pipeline.phase',
+        level: event.phase === PIPELINE_PHASE.failed ? 'error' : 'info',
+        message: `phase: ${event.phase}`,
+        data: { threadId: event.threadId, phase: event.phase, runId: event.runId ?? null },
+      };
+    case 'pipeline:approval-gate':
+      return {
+        category: 'pipeline.approval',
+        message: `approval-gate: ${event.outcome} (review: ${event.reviewDecision})`,
+        data: {
+          threadId: event.threadId,
+          outcome: event.outcome,
+          reviewDecision: event.reviewDecision,
+          requireApproval: event.requireApproval,
+          autonomous: event.autonomous,
+          reviewRound: event.reviewRound,
+          reasons: event.reasons,
+        },
+      };
+    case 'pipeline:verification-exhausted':
+      return {
+        category: 'pipeline.verification',
+        level: 'warning',
+        message: `verification exhausted after ${event.retries} retries`,
+        data: { threadId: event.threadId, retries: event.retries },
+      };
+    default:
+      return null;
+  }
+}
 
 export function createElectronEmitter(
   mainWindow: BrowserWindow,
@@ -381,6 +436,13 @@ export function createElectronEmitter(
         writeEventLog(event);
       } catch (err) {
         log.error('[pipeline-bridge] event log write failed:', err);
+      }
+
+      try {
+        const crumb = breadcrumbForEvent(event);
+        if (crumb) recordBreadcrumb(crumb);
+      } catch (err) {
+        log.error('[pipeline-bridge] breadcrumb record failed:', err);
       }
 
       try {

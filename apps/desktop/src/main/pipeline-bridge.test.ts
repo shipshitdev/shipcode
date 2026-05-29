@@ -14,11 +14,12 @@ vi.mock('./logger.service', () => ({
 
 vi.mock('./telemetry', () => ({
   capturePipelineFailure: vi.fn(),
+  recordBreadcrumb: vi.fn(),
 }));
 
 import { logEvent } from './logger.service';
-import { createElectronEmitter } from './pipeline-bridge';
-import { capturePipelineFailure } from './telemetry';
+import { breadcrumbForEvent, createElectronEmitter } from './pipeline-bridge';
+import { capturePipelineFailure, recordBreadcrumb } from './telemetry';
 
 function makeMainWindow() {
   return {
@@ -176,6 +177,128 @@ describe('createElectronEmitter onPipelineTerminal (slot-freed) callback', () =>
         phase: 'completed',
       } as PipelineEvent),
     ).not.toThrow();
+  });
+});
+
+describe('breadcrumbForEvent', () => {
+  it('maps a phase transition to an info breadcrumb', () => {
+    const crumb = breadcrumbForEvent({
+      type: 'pipeline:phase',
+      threadId: 'thread-1',
+      phase: 'executing',
+      runId: 'run-9',
+    } as PipelineEvent);
+    expect(crumb).toEqual({
+      category: 'pipeline.phase',
+      level: 'info',
+      message: 'phase: executing',
+      data: { threadId: 'thread-1', phase: 'executing', runId: 'run-9' },
+    });
+  });
+
+  it('marks the failed phase as an error-level breadcrumb', () => {
+    const crumb = breadcrumbForEvent({
+      type: 'pipeline:phase',
+      threadId: 'thread-1',
+      phase: 'failed',
+    } as PipelineEvent);
+    expect(crumb?.level).toBe('error');
+    expect(crumb?.data).toMatchObject({ phase: 'failed', runId: null });
+  });
+
+  it('records run start, approval-gate, and verification-exhausted lifecycle steps', () => {
+    expect(
+      breadcrumbForEvent({
+        type: 'pipeline:start-context',
+        threadId: 't',
+        source: 'github:start-issue',
+        projectPath: '/p',
+        githubIssueNumber: 42,
+        autonomous: true,
+        requireApproval: false,
+        reviewRound: 0,
+      } as PipelineEvent),
+    ).toMatchObject({
+      category: 'pipeline.lifecycle',
+      message: 'run started via github:start-issue',
+    });
+
+    expect(
+      breadcrumbForEvent({
+        type: 'pipeline:approval-gate',
+        threadId: 't',
+        outcome: 'auto_execute',
+        reviewDecision: 'approve',
+        planVersion: 1,
+        requireApproval: false,
+        autonomous: true,
+        reviewRound: 1,
+        revisionCount: 0,
+        hasCriticalOrMajor: false,
+        reasons: ['reviewApproved'],
+      } as PipelineEvent),
+    ).toMatchObject({
+      category: 'pipeline.approval',
+      message: 'approval-gate: auto_execute (review: approve)',
+    });
+
+    expect(
+      breadcrumbForEvent({
+        type: 'pipeline:verification-exhausted',
+        threadId: 't',
+        retries: 3,
+      } as PipelineEvent),
+    ).toMatchObject({
+      category: 'pipeline.verification',
+      level: 'warning',
+      message: 'verification exhausted after 3 retries',
+    });
+  });
+
+  it('returns null for noisy / low-signal events', () => {
+    expect(
+      breadcrumbForEvent({ type: 'pipeline:output', threadId: 't', chunk: 'x' } as PipelineEvent),
+    ).toBeNull();
+    expect(
+      breadcrumbForEvent({
+        type: 'pipeline:turn-started',
+        threadId: 't',
+        turnNumber: 1,
+      } as PipelineEvent),
+    ).toBeNull();
+  });
+});
+
+describe('createElectronEmitter breadcrumb recording', () => {
+  let mainWindow: ReturnType<typeof makeMainWindow>;
+  let deps: ReturnType<typeof makeDeps>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mainWindow = makeMainWindow();
+    deps = makeDeps();
+  });
+
+  it('records a Sentry breadcrumb for lifecycle phase events', () => {
+    const emitter = createElectronEmitter(mainWindow as never, deps as never);
+    emitter.emit({
+      type: 'pipeline:phase',
+      threadId: 'thread-1',
+      phase: 'executing',
+    } as PipelineEvent);
+    expect(recordBreadcrumb).toHaveBeenCalledWith(
+      expect.objectContaining({ category: 'pipeline.phase', message: 'phase: executing' }),
+    );
+  });
+
+  it('does not record a breadcrumb for raw output events', () => {
+    const emitter = createElectronEmitter(mainWindow as never, deps as never);
+    emitter.emit({
+      type: 'pipeline:output',
+      threadId: 'thread-1',
+      chunk: 'noise',
+    } as PipelineEvent);
+    expect(recordBreadcrumb).not.toHaveBeenCalled();
   });
 });
 
