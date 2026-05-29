@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+reviews:
+  auto_review:
+    enabled: true
+    # Auto-review PRs targeting these branches in addition to the repo default.
+    # `develop` is our integration branch where feature PRs land.
+    base_branches:
+      - develop
