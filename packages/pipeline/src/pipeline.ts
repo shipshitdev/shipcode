@@ -12,30 +12,125 @@ import { createPipelineContextHelpers } from './pipeline/context';
 import { createExecutionPhaseHandlers } from './pipeline/execution-phases';
 import { createPlanningPhaseHandlers } from './pipeline/planning-phases';
 import { createPipelineRuntime } from './pipeline/runtime';
-import type { PipelinePhaseHandlers } from './pipeline/shared';
+import type { PhaseOutcome } from './pipeline/shared';
 import type { Pipeline, PipelineContext, PipelineDeps, PipelineExecutorModel } from './types';
 
 export function createPipeline(deps: PipelineDeps): Pipeline {
   const activePipelines = new Map<string, PipelineContext>();
   const contextHelpers = createPipelineContextHelpers(deps, activePipelines);
   const runtime = createPipelineRuntime(deps, contextHelpers);
-  const handlers = {} as PipelinePhaseHandlers;
+  const planning = createPlanningPhaseHandlers({ deps, contextHelpers, runtime });
+  const execution = createExecutionPhaseHandlers({ deps, contextHelpers, runtime });
 
-  Object.assign(
-    handlers,
-    createPlanningPhaseHandlers({
-      deps,
-      contextHelpers,
-      runtime,
-      handlers,
-    }),
-    createExecutionPhaseHandlers({
-      deps,
-      contextHelpers,
-      runtime,
-      handlers,
-    }),
-  );
+  /**
+   * Wait `delayMs`, resolving `true` on normal expiry or `false` if the run is
+   * aborted first. The timer handle is stored on `context.retryTimer` and the
+   * wait is tied to `context.abort.signal`, so `cancel()`/`pause()` (which call
+   * `abort.abort()`) unblock a pending retry immediately — exact parity with the
+   * old `if (cancelled || !activePipelines.has) return` guard inside setTimeout.
+   */
+  function cancelableDelay(context: PipelineContext, delayMs: number): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      if (context.retryTimer) clearTimeout(context.retryTimer);
+      let handle: ReturnType<typeof setTimeout> | undefined;
+      const onAbort = () => {
+        if (handle) clearTimeout(handle);
+        context.retryTimer = null;
+        resolve(false);
+      };
+      handle = setTimeout(() => {
+        context.retryTimer = null;
+        context.abort.signal.removeEventListener('abort', onAbort);
+        resolve(true);
+      }, delayMs);
+      context.retryTimer = handle;
+      if (context.abort.signal.aborted) {
+        onAbort();
+        return;
+      }
+      context.abort.signal.addEventListener('abort', onAbort, { once: true });
+    });
+  }
+
+  /**
+   * Orchestrator dispatch loop. Drives the pipeline as an explicit state machine:
+   * each phase returns a `PhaseOutcome`, and this loop advances to the next phase.
+   * Terminal outcomes (`done`/`paused`/`failed`) — whose `emitPhase` + cleanup the
+   * phase already performed — stop the loop. `retry` waits a cancelable delay then
+   * dispatches its `then` outcome.
+   */
+  async function dispatch(threadId: string, initial: PhaseOutcome): Promise<void> {
+    let outcome = initial;
+    while (true) {
+      switch (outcome.next) {
+        case 'plan':
+          outcome = await planning.startPlanGeneration(
+            threadId,
+            outcome.prompt,
+            outcome.projectPath,
+            outcome.worktreePath,
+          );
+          break;
+        case 'review':
+          outcome = await planning.startReview(threadId, outcome.plan);
+          break;
+        case 'revision':
+          outcome = await planning.startRevision(threadId, outcome.plan, outcome.reviewFeedback);
+          break;
+        case 'execute':
+          outcome = await execution.startExecution(threadId, outcome.plan);
+          break;
+        case 'testing':
+          outcome = await execution.startTesting(threadId);
+          break;
+        case 'verification':
+          outcome = await execution.startVerification(threadId);
+          break;
+        case 'commit':
+          outcome = await execution.startCommitAndPush(threadId);
+          break;
+        case 'shipping':
+          outcome = await execution.startShipping(threadId);
+          break;
+        case 'retry': {
+          const context = activePipelines.get(threadId);
+          if (!context || context.cancelled) return;
+          const proceed = await cancelableDelay(context, outcome.delayMs);
+          if (!proceed || context.cancelled || !activePipelines.has(threadId)) return;
+          outcome = outcome.andThen;
+          break;
+        }
+        case 'done':
+        case 'paused':
+        case 'failed':
+          return;
+      }
+    }
+  }
+
+  /**
+   * Kick off the dispatch loop for a phase WITHOUT blocking the caller. The
+   * phase's synchronous setup (e.g. `emitPhase('planning')`) runs immediately;
+   * the provider calls and subsequent phases advance in the background — exactly
+   * the old fire-and-forget behavior, where public `startX` resolved after setup
+   * and the pipeline progressed on its own. Phase handlers own their own error
+   * handling (emit `failed` + cleanup); this guard only catches the unexpected.
+   */
+  function launch(threadId: string, start: () => Promise<PhaseOutcome>): void {
+    void (async () => {
+      try {
+        await dispatch(threadId, await start());
+      } catch (error) {
+        console.error(`[pipeline] dispatch loop crashed for thread ${threadId}:`, error);
+        runtime.emitPhase(
+          threadId,
+          'failed',
+          error instanceof Error ? error.message : String(error),
+        );
+        activePipelines.delete(threadId);
+      }
+    })();
+  }
 
   function createRun(input: {
     threadId: string;
@@ -228,11 +323,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     const prompt =
       `GitHub Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ''}` +
       buildWorkpadProtocol({ issueNumber: issue.number });
-    await handlers.startPlanGeneration(
-      threadId,
-      prompt,
-      projectPath,
-      options?.worktreePath ?? null,
+    launch(threadId, () =>
+      planning.startPlanGeneration(threadId, prompt, projectPath, options?.worktreePath ?? null),
     );
   }
 
@@ -394,7 +486,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     deps.plans.updateStatus(planRecord.id, 'approved');
     deps.taskGraphs?.replaceForPlan(threadId, planRecord.id, synthesizedPlan, { speedProfile });
 
-    await handlers.startExecution(threadId, synthesizedPlan);
+    launch(threadId, () => execution.startExecution(threadId, synthesizedPlan));
   }
 
   async function startFromAutomation(
@@ -465,7 +557,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       speedProfile: resolvePipelineSpeedProfile(deps.settings.get(), project),
     });
 
-    await handlers.startExecution(threadId, synthesizedPlan);
+    launch(threadId, () => execution.startExecution(threadId, synthesizedPlan));
   }
 
   function cancel(threadId: string) {
@@ -521,15 +613,39 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
   return {
     rehydrateContext: contextHelpers.rehydrateContext,
-    startPlanGeneration: handlers.startPlanGeneration,
-    startReview: handlers.startReview,
-    startRevision: handlers.startRevision,
-    startExecution: handlers.startExecution,
-    startTesting: handlers.startTesting,
-    startVerification: handlers.startVerification,
-    startCommitAndPush: handlers.startCommitAndPush,
-    startShipping: handlers.startShipping,
-    startStabilization: handlers.startStabilization,
+    startPlanGeneration: async (threadId, prompt, projectPath, worktreePath) => {
+      launch(threadId, () =>
+        planning.startPlanGeneration(threadId, prompt, projectPath, worktreePath),
+      );
+    },
+    startReview: async (threadId, plan) => {
+      launch(threadId, () => planning.startReview(threadId, plan));
+    },
+    startRevision: async (threadId, plan, reviewFeedback) => {
+      launch(threadId, () => planning.startRevision(threadId, plan, reviewFeedback));
+    },
+    startExecution: async (threadId, plan) => {
+      launch(threadId, () => execution.startExecution(threadId, plan));
+    },
+    startTesting: async (threadId) => {
+      launch(threadId, () => execution.startTesting(threadId));
+    },
+    startVerification: async (threadId) => {
+      launch(threadId, () => execution.startVerification(threadId));
+    },
+    startCommitAndPush: async (threadId) => {
+      launch(threadId, () => execution.startCommitAndPush(threadId));
+    },
+    startShipping: async (threadId) => {
+      launch(threadId, () => execution.startShipping(threadId));
+    },
+    startStabilization: async (threadId, inputs) => {
+      // Await the synchronous setup so a missing-plan throw reaches the caller
+      // (e.g. the PR-check webhook handler), then dispatch the execute outcome
+      // in the background like every other phase.
+      const outcome = await execution.startStabilization(threadId, inputs);
+      launch(threadId, () => Promise.resolve(outcome));
+    },
     startFromGitHubIssue,
     startFromQuickTask,
     startFromAutomation,

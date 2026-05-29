@@ -14,12 +14,15 @@ import {
   type SkillResolutionSource,
 } from '@shipcode/shared';
 import {
+  type OrchestratorState,
   PHASE_LOCAL_FIELDS,
   type PhaseInput,
   type PhaseLocalField,
+  type PhasePayload,
   type PipelineContext,
   type PipelineDeps,
   type PipelineExecutorModel,
+  type PipelinePromptPhase,
   type ProviderPhaseInput,
 } from '../types';
 import { loadWorkflowPolicy } from '../workflow-loader';
@@ -83,6 +86,109 @@ export function snapshotProviderPhaseInput(
     reviewerModelIdOverride: context.reviewerModelIdOverride,
     executorModelIdOverride: context.executorModelIdOverride,
     verifierModelIdOverride: context.verifierModelIdOverride,
+  });
+}
+
+/** Fields `buildPhasePayload` needs that live on `PipelineContext`, not `OrchestratorState`. */
+type PhasePayloadSource = OrchestratorState &
+  Pick<PipelineContext, 'repoContext' | 'repoPromptMaterials' | 'promptMaterialSummaries'>;
+
+/**
+ * Resolve the executor model for a phase. Mirrors `resolveAgentForPhase` in
+ * runtime.ts so `PhasePayload.model` matches what the provider call will use.
+ */
+function resolveModelForPhase(
+  state: Pick<
+    OrchestratorState,
+    'plannerModel' | 'reviewerModel' | 'verifierModel' | 'executorModel'
+  >,
+  phase: PipelinePromptPhase,
+): PipelineExecutorModel {
+  switch (phase) {
+    case 'plan':
+    case 'revision':
+      return state.plannerModel;
+    case 'review':
+      return state.reviewerModel;
+    case 'verify':
+      return state.verifierModel;
+    case 'execute':
+      return state.executorModel || 'claude';
+  }
+}
+
+/**
+ * Resolve the model-id override for a phase. Mirrors the `modelHint` logic in
+ * `runProviderPhaseCore`: the executor override wins when the phase resolves to
+ * the executor model, otherwise the phase's own id override applies.
+ */
+function resolveModelIdOverrideForPhase(
+  state: Pick<
+    OrchestratorState,
+    | 'plannerModel'
+    | 'reviewerModel'
+    | 'verifierModel'
+    | 'executorModel'
+    | 'executorModelOverride'
+    | 'plannerModelIdOverride'
+    | 'reviewerModelIdOverride'
+    | 'executorModelIdOverride'
+    | 'verifierModelIdOverride'
+  >,
+  phase: PipelinePromptPhase,
+): string | null {
+  const model = resolveModelForPhase(state, phase);
+  if (model === state.executorModel && state.executorModelOverride) {
+    return state.executorModelOverride;
+  }
+  switch (phase) {
+    case 'plan':
+    case 'revision':
+      return state.plannerModelIdOverride;
+    case 'review':
+      return state.reviewerModelIdOverride;
+    case 'execute':
+      return state.executorModelIdOverride;
+    case 'verify':
+      return state.verifierModelIdOverride;
+  }
+}
+
+/**
+ * Build a frozen `PhasePayload` for a single phase from orchestrator state.
+ * Mirrors `snapshotProviderPhaseInput`: identity + the phase-resolved model,
+ * model-id override, and reasoning effort + the phase's prompt materials. The
+ * phase reads this scoped view; it never mutates orchestrator state.
+ *
+ * Dormant in #136 — defined and unit-tested but not yet wired into a phase
+ * handler. The #138 dispatch loop will call this once per phase invocation,
+ * passing the live `PipelineContext` (which satisfies the parameter type).
+ */
+export function buildPhasePayload(
+  state: PhasePayloadSource,
+  phase: PipelinePromptPhase,
+): PhasePayload {
+  return Object.freeze({
+    threadId: state.threadId,
+    projectPath: state.projectPath,
+    projectId: state.projectId,
+    worktreePath: state.worktreePath,
+    baseBranch: state.baseBranch,
+    forkPointSha: state.forkPointSha,
+    githubIssueNumber: state.githubIssueNumber,
+    githubIssueTitle: state.githubIssueTitle,
+    githubRepo: state.githubRepo,
+    autonomous: state.autonomous,
+    runId: state.runId,
+    isAutomationRun: state.isAutomationRun,
+    abort: state.abort.signal,
+    phase,
+    model: resolveModelForPhase(state, phase),
+    modelIdOverride: resolveModelIdOverrideForPhase(state, phase),
+    reasoningEffort: state.phaseReasoningEfforts[phase],
+    repoContext: state.repoContext,
+    repoPromptMaterials: state.repoPromptMaterials ?? [],
+    promptMaterialSummary: state.promptMaterialSummaries[phase],
   });
 }
 

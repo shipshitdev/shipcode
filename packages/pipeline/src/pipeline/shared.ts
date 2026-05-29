@@ -112,36 +112,37 @@ export interface PipelineRuntime {
   postTaskGraphComment: (context: PipelineContext, graph: TaskGraphWithNodes) => Promise<void>;
 }
 
-export interface PipelinePhaseHandlers {
-  startPlanGeneration: (
-    threadId: string,
-    prompt: string,
-    projectPath: string,
-    worktreePath: string | null,
-  ) => Promise<void>;
-  startReview: (threadId: string, plan: ShipCodePlan) => Promise<void>;
-  startRevision: (threadId: string, plan: ShipCodePlan, reviewFeedback: string) => Promise<void>;
-  startExecution: (threadId: string, plan: ShipCodePlan) => Promise<void>;
-  startTesting: (threadId: string) => Promise<void>;
-  startVerification: (threadId: string) => Promise<void>;
-  startCommitAndPush: (threadId: string) => Promise<void>;
-  startShipping: (threadId: string) => Promise<void>;
-  startStabilization: (
-    threadId: string,
-    inputs: {
-      prNumber: number;
-      prUrl: string | null;
-      failingChecks: GitHubPrCheckSummary[];
-      unresolvedReviewComments: GitHubPrReviewCommentSummary[];
-    },
-  ) => Promise<void>;
-}
+/**
+ * The result of running a single pipeline phase. A phase no longer calls the
+ * next phase directly; it returns one of these and the orchestrator dispatch
+ * loop (pipeline.ts) advances. This replaces the implicit `handlers.startX()`
+ * call graph with an explicit state machine.
+ *
+ * Ownership: for `done` / `paused` / `failed`, the phase has ALREADY called
+ * `emitPhase` (and `activePipelines.delete` for `done`/`failed`) together with
+ * its ordered side-effects (approval-gate event, plan comment, turn-completed,
+ * etc.); the loop treats them as pure stop signals and never re-emits.
+ * `retry` emits nothing — the loop owns the (cancelable) delay, then dispatches
+ * `then`.
+ */
+export type PhaseOutcome =
+  | { next: 'plan'; prompt: string; projectPath: string; worktreePath: string | null }
+  | { next: 'review'; plan: ShipCodePlan }
+  | { next: 'revision'; plan: ShipCodePlan; reviewFeedback: string }
+  | { next: 'execute'; plan: ShipCodePlan }
+  | { next: 'testing' }
+  | { next: 'verification' }
+  | { next: 'commit' }
+  | { next: 'shipping' }
+  | { next: 'done' }
+  | { next: 'paused' }
+  | { next: 'failed' }
+  | { next: 'retry'; delayMs: number; andThen: PhaseOutcome };
 
 export interface PipelineHelperEnv {
   deps: PipelineDeps;
   contextHelpers: PipelineContextHelpers;
   runtime: PipelineRuntime;
-  handlers: PipelinePhaseHandlers;
 }
 
 export type ThreadStatus = Parameters<PipelineDeps['threads']['updateStatus']>[1];
