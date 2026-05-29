@@ -44,7 +44,7 @@ import type { PipelineContext } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { resetPhaseState } from './context';
 import { extractQaFlowResults } from './qa-result-parser';
-import type { PipelineHelperEnv } from './shared';
+import type { PhaseOutcome, PipelineHelperEnv } from './shared';
 import {
   collectQaEvidencePaths,
   formatVisualQaFailureFeedback,
@@ -324,12 +324,7 @@ export function resolveWorktreeDiffBase(context: PipelineContext): string | null
   }
 }
 
-export function createExecutionPhaseHandlers({
-  deps,
-  contextHelpers,
-  runtime,
-  handlers,
-}: PipelineHelperEnv) {
+export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: PipelineHelperEnv) {
   const { activePipelines, skillCallSite } = contextHelpers;
   const {
     emitPhase,
@@ -432,12 +427,20 @@ export function createExecutionPhaseHandlers({
     );
   }
 
+  /**
+   * Coordinate a test-fix retry after a failed verify/runtime command.
+   * Returns the `PhaseOutcome` the caller should propagate:
+   *   - `{ next: 'retry', then: <re-execute> }` to schedule a fix attempt,
+   *   - `{ next: 'failed' }` when a shared-failure block halts this thread
+   *     (emitPhase + delete already done), or
+   *   - `null` when the retry budget is exhausted (caller emits the failure).
+   */
   function scheduleCoordinatedTestFixRetry(
     threadId: string,
     context: NonNullable<ReturnType<typeof activePipelines.get>>,
     command: string,
     testOutput: string,
-  ): boolean {
+  ): PhaseOutcome | null {
     context.testOutput = context.testOutput?.includes(testOutput)
       ? context.testOutput
       : `${context.testOutput ?? ''}\n${testOutput}`.slice(-16384);
@@ -446,30 +449,53 @@ export function createExecutionPhaseHandlers({
       emitTerminalLifecycle(threadId, `[shared-failure] ${blockMessage}\r\n`);
       emitPhase(threadId, 'failed', blockMessage);
       activePipelines.delete(threadId);
-      return true;
+      return { next: 'failed' };
     }
 
-    if (context.testRetries >= MAX_TEST_RETRIES) return false;
+    if (context.testRetries >= MAX_TEST_RETRIES) return null;
 
     context.testRetries++;
-    context.stabilizationFeedback = formatTestFixFeedback(context.testOutput, context.testRetries);
     const delayMs = computeRetryDelayMs({
       reason: 'continuation',
       attempt: context.testRetries,
     });
-    if (context.retryTimer) clearTimeout(context.retryTimer);
-    context.retryTimer = setTimeout(() => {
-      context.retryTimer = null;
-      if (context.cancelled || !activePipelines.has(threadId)) return;
-      void startTestFix(threadId);
-    }, delayMs);
-    return true;
+    return { next: 'retry', delayMs, andThen: makeTestFixOutcome(threadId) };
+  }
+
+  /**
+   * Build the re-execution outcome for a test-fix retry. Mirrors the old
+   * `startTestFix`: consume accumulated test output, reset phase state, and
+   * inject focused test-fix feedback before re-entering execute.
+   */
+  function makeTestFixOutcome(threadId: string): PhaseOutcome {
+    const context = activePipelines.get(threadId);
+    if (!context) return { next: 'paused' };
+
+    const testOutput = context.testOutput ?? '';
+    context.testOutput = null;
+
+    const latestPlan = deps.plans.getLatest(threadId);
+    const structuredPlan = latestPlan?.structured;
+    if (!structuredPlan) {
+      emitPhase(
+        threadId,
+        'failed',
+        'Test fix cannot start: structured plan missing for this thread.',
+      );
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
+    }
+
+    // Reset phase state, then inject focused test-fix feedback (consumed-once).
+    resetPhaseState(context);
+    context.stabilizationFeedback = formatTestFixFeedback(testOutput, context.testRetries);
+    return { next: 'execute', plan: structuredPlan };
   }
 
   function queueTestingIfCpuBusy(
     threadId: string,
     context: NonNullable<ReturnType<typeof activePipelines.get>>,
-  ): boolean {
+  ): PhaseOutcome | null {
     const settings = deps.settings.get();
     const maxConcurrentCpuTasks = Math.max(1, settings.maxConcurrentCpuTasks ?? 1);
     const runningCpuTasks = contextHelpers
@@ -482,7 +508,7 @@ export function createExecutionPhaseHandlers({
     if (!blockedBySlot && !blockedByCpu) {
       context.cpuQueueStartedAt = null;
       context.cpuQueueLastNotifiedAt = null;
-      return false;
+      return null;
     }
 
     const now = Date.now();
@@ -505,13 +531,7 @@ export function createExecutionPhaseHandlers({
     }
 
     const retryMs = deps.cpuTaskGate?.retryDelayMs ?? DEFAULT_CPU_QUEUE_RETRY_MS;
-    if (context.retryTimer) clearTimeout(context.retryTimer);
-    context.retryTimer = setTimeout(() => {
-      context.retryTimer = null;
-      if (context.cancelled || !activePipelines.has(threadId)) return;
-      void handlers.startTesting(threadId);
-    }, retryMs);
-    return true;
+    return { next: 'retry', delayMs: retryMs, andThen: { next: 'testing' } };
   }
 
   function claimSharedTestFailure(
@@ -721,9 +741,9 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
   // ─── End per-node verification helpers ─────────────────────────────────────
 
-  async function startExecution(threadId: string, plan: ShipCodePlan) {
+  async function startExecution(threadId: string, plan: ShipCodePlan): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
-    if (!context) return;
+    if (!context) return { next: 'paused' };
 
     // Defense-in-depth: every direct caller already passes a parsed
     // ShipCodePlan, but the DB record is the source of truth. Halt at the
@@ -733,7 +753,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     if (!executionGatePlan) {
       emitPhase(threadId, 'failed', 'Refusing to execute: no plan record found for this thread.');
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
     if (executionGatePlan.structured === null) {
       emitPhase(
@@ -742,7 +762,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         'Refusing to execute: latest plan has no parsed structured output.',
       );
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
     if (executionGatePlan.status === 'superseded' || executionGatePlan.status === 'rejected') {
       emitPhase(
@@ -751,7 +771,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         `Refusing to execute: latest plan is ${executionGatePlan.status}.`,
       );
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
 
     const settings = deps.settings.get();
@@ -765,7 +785,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     if (executingCount >= maxConcurrentExecutions) {
       // Project execution slots full — stay in approval until a slot frees.
       emitPhase(threadId, 'approval');
-      return;
+      return { next: 'paused' };
     }
 
     if (
@@ -783,7 +803,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         lockedIssue.executionRunId !== context.runId
       ) {
         emitPhase(threadId, 'approval');
-        return;
+        return { next: 'paused' };
       }
     }
 
@@ -795,7 +815,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     } catch (error) {
       emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
 
     if (!context.worktreePath || !existsSync(context.worktreePath)) {
@@ -822,7 +842,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         console.error(`[pipeline] worktree creation failed for thread ${threadId}:`, error);
         emitPhase(threadId, 'failed', `Worktree creation failed: ${String(error)}`);
         activePipelines.delete(threadId);
-        return;
+        return { next: 'failed' };
       }
     }
 
@@ -830,7 +850,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     if (!preparation.ok) {
       emitPhase(threadId, 'failed', `Setup failed: ${preparation.error}`);
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
 
     try {
@@ -870,7 +890,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       const message = error instanceof Error ? error.message : String(error);
       emitPhase(threadId, 'failed', `Checkpoint creation failed: ${message}`);
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
 
     const skill = skillCallSite(context);
@@ -910,22 +930,21 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           void postTaskGraphComment(context, completedGraph);
           if (context.autonomous) {
             resetPhaseState(context);
-            handlers.startTesting(threadId);
-          } else {
-            // Check if any code was actually changed
-            if (!worktreeHasChanges(context)) {
-              emitPhase(
-                threadId,
-                'failed',
-                'All task graph nodes completed but no code changes were produced',
-              );
-              activePipelines.delete(threadId);
-              return;
-            }
-            emitPhase(threadId, 'completed');
-            activePipelines.delete(threadId);
+            return { next: 'testing' };
           }
-          return;
+          // Check if any code was actually changed
+          if (!worktreeHasChanges(context)) {
+            emitPhase(
+              threadId,
+              'failed',
+              'All task graph nodes completed but no code changes were produced',
+            );
+            activePipelines.delete(threadId);
+            return { next: 'failed' };
+          }
+          emitPhase(threadId, 'completed');
+          activePipelines.delete(threadId);
+          return { next: 'done' };
         }
 
         const blockedSummary = incompleteNodes
@@ -933,7 +952,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           .join(', ');
         emitPhase(threadId, 'failed', `Task graph has no ready node (${blockedSummary}).`);
         activePipelines.delete(threadId);
-        return;
+        return { next: 'failed' };
       }
 
       deps.taskGraphs.updateNodeStatus(activeTaskNode.id, 'running');
@@ -985,7 +1004,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         `WORKFLOW.md template render error: ${error instanceof Error ? error.message : String(error)}`,
       );
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
     const executionTaskGraph = usesTaskGraph ? taskGraph : null;
     const baseExecutionPrompt =
@@ -1008,180 +1027,141 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       context.nodeAnchorSha = captureNodeAnchorSha(context);
     }
 
-    void (async () => {
-      try {
-        const response = await runProviderPhase(
-          context,
-          'execute',
-          executionPrompt,
-          executeMaterials,
-          {
-            reasoningEffort:
-              activeTaskNode?.suggestedReasoningEffort ?? context.phaseReasoningEfforts.execute,
-          },
-        );
+    try {
+      const response = await runProviderPhase(
+        context,
+        'execute',
+        executionPrompt,
+        executeMaterials,
+        {
+          reasoningEffort:
+            activeTaskNode?.suggestedReasoningEffort ?? context.phaseReasoningEfforts.execute,
+        },
+      );
 
-        if (context.cancelled) return;
+      if (context.cancelled) return { next: 'paused' };
 
-        if (response.exitCode === 0) {
-          if (activeTaskNode && deps.taskGraphs) {
-            // ─── Per-node verification gate ───
-            const nodeOutcome = await verifyNodeCompletion(threadId, plan, activeTaskNode);
+      if (response.exitCode === 0) {
+        if (activeTaskNode && deps.taskGraphs) {
+          // ─── Per-node verification gate ───
+          const nodeOutcome = await verifyNodeCompletion(threadId, plan, activeTaskNode);
 
-            if (nodeOutcome === 'passed') {
-              context.nodeVerificationRetries = 0;
-              context.nodeAnchorSha = null;
-              const updatedGraph = deps.taskGraphs.markNodeCompletedAndPromote(activeTaskNode.id);
-              void postTaskGraphComment(context, updatedGraph);
-              resetPhaseState(context);
-              handlers.startExecution(threadId, plan);
-              return;
-            }
-
-            if (nodeOutcome === 'retry') {
-              // Budget check BEFORE scheduling — covers all retry sources (empty diff,
-              // provider error, LLM non-pass). Without this the loop is unbounded.
-              if (context.nodeVerificationRetries >= MAX_NODE_VERIFICATION_RETRIES) {
-                const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
-                void postTaskGraphComment(context, failedGraph);
-                emitPhase(
-                  threadId,
-                  'failed',
-                  `Node "${activeTaskNode.stableKey}" failed verification after ${MAX_NODE_VERIFICATION_RETRIES + 1} attempts.`,
-                );
-                activePipelines.delete(threadId);
-                return;
-              }
-              context.nodeVerificationRetries++;
-              context.stabilizationFeedback = formatNodeVerificationFailureFeedback(
-                activeTaskNode,
-                context.nodeVerificationRetries,
-              );
-              deps.taskGraphs.updateNodeStatus(activeTaskNode.id, 'ready');
-              const delayMs = computeRetryDelayMs({
-                reason: 'continuation',
-                attempt: context.nodeVerificationRetries,
-              });
-              if (context.retryTimer) clearTimeout(context.retryTimer);
-              context.retryTimer = setTimeout(() => {
-                context.retryTimer = null;
-                if (context.cancelled || !activePipelines.has(threadId)) return;
-                handlers.startExecution(threadId, plan);
-              }, delayMs);
-              return;
-            }
-
-            // nodeOutcome === 'failed' — max retries exhausted
-            const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
-            void postTaskGraphComment(context, failedGraph);
-            emitPhase(
-              threadId,
-              'failed',
-              `Node "${activeTaskNode.stableKey}" failed verification after ${MAX_NODE_VERIFICATION_RETRIES + 1} attempts.`,
-            );
-            activePipelines.delete(threadId);
-            return;
-            // ─── End per-node verification gate ───
-          }
-
-          if (taskGraph?.mode === 'direct' && deps.taskGraphs && taskGraph.status !== 'completed') {
-            try {
-              deps.taskGraphs.updateGraphStatus(taskGraph.id, 'completed');
-            } catch (error) {
-              console.error(
-                `[pipeline] direct task graph completion failed for ${threadId}:`,
-                error,
-              );
-            }
-          }
-
-          if (context.autonomous) {
+          if (nodeOutcome === 'passed') {
+            context.nodeVerificationRetries = 0;
+            context.nodeAnchorSha = null;
+            const updatedGraph = deps.taskGraphs.markNodeCompletedAndPromote(activeTaskNode.id);
+            void postTaskGraphComment(context, updatedGraph);
             resetPhaseState(context);
-            handlers.startTesting(threadId);
-          } else {
-            // Check if executor actually produced code changes
-            const hasChanges = worktreeHasChanges(context);
-            if (!hasChanges) {
-              const errSnippet = extractExecutionErrorSnippet(response.rawOutput);
+            return { next: 'execute', plan };
+          }
+
+          if (nodeOutcome === 'retry') {
+            // Budget check BEFORE scheduling — covers all retry sources (empty diff,
+            // provider error, LLM non-pass). Without this the loop is unbounded.
+            if (context.nodeVerificationRetries >= MAX_NODE_VERIFICATION_RETRIES) {
+              const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
+              void postTaskGraphComment(context, failedGraph);
               emitPhase(
                 threadId,
                 'failed',
-                `Executor exited successfully but produced no code changes${errSnippet ? `: ${errSnippet}` : ''}`,
+                `Node "${activeTaskNode.stableKey}" failed verification after ${MAX_NODE_VERIFICATION_RETRIES + 1} attempts.`,
               );
               activePipelines.delete(threadId);
-              return;
+              return { next: 'failed' };
             }
-            emitPhase(threadId, 'completed');
-            activePipelines.delete(threadId);
+            context.nodeVerificationRetries++;
+            context.stabilizationFeedback = formatNodeVerificationFailureFeedback(
+              activeTaskNode,
+              context.nodeVerificationRetries,
+            );
+            deps.taskGraphs.updateNodeStatus(activeTaskNode.id, 'ready');
+            const delayMs = computeRetryDelayMs({
+              reason: 'continuation',
+              attempt: context.nodeVerificationRetries,
+            });
+            return { next: 'retry', delayMs, andThen: { next: 'execute', plan } };
           }
-        } else {
-          const errSnippet = extractExecutionErrorSnippet(response.rawOutput);
-          if (activeTaskNode && deps.taskGraphs) {
-            const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
-            void postTaskGraphComment(context, failedGraph);
-          } else if (
-            taskGraph?.mode === 'direct' &&
-            deps.taskGraphs &&
-            taskGraph.status !== 'failed'
-          ) {
-            try {
-              deps.taskGraphs.updateGraphStatus(taskGraph.id, 'failed');
-            } catch (error) {
-              console.error(`[pipeline] direct task graph failure failed for ${threadId}:`, error);
-            }
-          }
+
+          // nodeOutcome === 'failed' — max retries exhausted
+          const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
+          void postTaskGraphComment(context, failedGraph);
           emitPhase(
             threadId,
             'failed',
-            `Execution failed (exit ${response.exitCode})${errSnippet ? `: ${errSnippet}` : ''}`,
+            `Node "${activeTaskNode.stableKey}" failed verification after ${MAX_NODE_VERIFICATION_RETRIES + 1} attempts.`,
           );
           activePipelines.delete(threadId);
+          return { next: 'failed' };
+          // ─── End per-node verification gate ───
         }
-      } catch (error) {
-        if (!context.cancelled) {
-          emitPhase(threadId, 'failed', `Execution error: ${String(error)}`);
+
+        if (taskGraph?.mode === 'direct' && deps.taskGraphs && taskGraph.status !== 'completed') {
+          try {
+            deps.taskGraphs.updateGraphStatus(taskGraph.id, 'completed');
+          } catch (error) {
+            console.error(`[pipeline] direct task graph completion failed for ${threadId}:`, error);
+          }
+        }
+
+        if (context.autonomous) {
+          resetPhaseState(context);
+          return { next: 'testing' };
+        }
+        // Check if executor actually produced code changes
+        const hasChanges = worktreeHasChanges(context);
+        if (!hasChanges) {
+          const errSnippet = extractExecutionErrorSnippet(response.rawOutput);
+          emitPhase(
+            threadId,
+            'failed',
+            `Executor exited successfully but produced no code changes${errSnippet ? `: ${errSnippet}` : ''}`,
+          );
           activePipelines.delete(threadId);
+          return { next: 'failed' };
+        }
+        emitPhase(threadId, 'completed');
+        activePipelines.delete(threadId);
+        return { next: 'done' };
+      }
+
+      const errSnippet = extractExecutionErrorSnippet(response.rawOutput);
+      if (activeTaskNode && deps.taskGraphs) {
+        const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
+        void postTaskGraphComment(context, failedGraph);
+      } else if (taskGraph?.mode === 'direct' && deps.taskGraphs && taskGraph.status !== 'failed') {
+        try {
+          deps.taskGraphs.updateGraphStatus(taskGraph.id, 'failed');
+        } catch (error) {
+          console.error(`[pipeline] direct task graph failure failed for ${threadId}:`, error);
         }
       }
-    })();
-  }
-
-  async function startTestFix(threadId: string) {
-    const context = activePipelines.get(threadId);
-    if (!context) return;
-
-    const testOutput = context.testOutput ?? '';
-    context.testOutput = null;
-
-    const latestPlan = deps.plans.getLatest(threadId);
-    const structuredPlan = latestPlan?.structured;
-    if (!structuredPlan) {
       emitPhase(
         threadId,
         'failed',
-        'Test fix cannot start: structured plan missing for this thread.',
+        `Execution failed (exit ${response.exitCode})${errSnippet ? `: ${errSnippet}` : ''}`,
       );
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
+    } catch (error) {
+      if (!context.cancelled) {
+        emitPhase(threadId, 'failed', `Execution error: ${String(error)}`);
+        activePipelines.delete(threadId);
+        return { next: 'failed' };
+      }
+      return { next: 'paused' };
     }
-
-    // Reset phase state, then inject focused test-fix feedback (consumed-once).
-    resetPhaseState(context);
-    context.stabilizationFeedback = formatTestFixFeedback(testOutput, context.testRetries);
-
-    await handlers.startExecution(threadId, structuredPlan);
   }
 
-  async function startTesting(threadId: string) {
+  async function startTesting(threadId: string): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
-    if (!context) return;
+    if (!context) return { next: 'paused' };
 
     try {
       ensureRepoSetupContract(context);
     } catch (error) {
       emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
 
     const verifyCommands = getVerifyCommands(context);
@@ -1196,11 +1176,11 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
     if (verifyCommands.length === 0 && !hasRuntimeQa) {
       resetPhaseState(context);
-      handlers.startVerification(threadId);
-      return;
+      return { next: 'verification' };
     }
 
-    if (queueTestingIfCpuBusy(threadId, context)) return;
+    const cpuQueueOutcome = queueTestingIfCpuBusy(threadId, context);
+    if (cpuQueueOutcome) return cpuQueueOutcome;
 
     emitPhase(threadId, 'testing');
 
@@ -1209,7 +1189,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     if (!preparation.ok) {
       emitPhase(threadId, 'failed', `Verification preflight failed: ${preparation.error}`);
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
 
     if (hasVisualQa && context.featureQaState) {
@@ -1217,18 +1197,16 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         const message =
           `[runtime-qa] Visual QA requires stable selectors, but selectorReadiness is ` +
           `"${context.featureQaState.selectorReadiness}". Add stable data-testid selectors for the visual QA targets.`;
-        if (
-          scheduleCoordinatedTestFixRetry(
-            threadId,
-            context,
-            'runtime-qa:selector-readiness',
-            message,
-          )
-        )
-          return;
+        const selectorRetry = scheduleCoordinatedTestFixRetry(
+          threadId,
+          context,
+          'runtime-qa:selector-readiness',
+          message,
+        );
+        if (selectorRetry) return selectorRetry;
         emitPhase(threadId, 'failed', message);
         activePipelines.delete(threadId);
-        return;
+        return { next: 'failed' };
       }
 
       const visualRoutes = context.featureQaState.visualAssertions ?? [];
@@ -1239,7 +1217,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           'Configure .shipcode/setup.json runtimeQa.server so ShipCode can start the app under test.';
         emitPhase(threadId, 'failed', message);
         activePipelines.delete(threadId);
-        return;
+        return { next: 'failed' };
       }
 
       try {
@@ -1247,7 +1225,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         if (!tooling.available) {
           emitPhase(threadId, 'failed', tooling.message);
           activePipelines.delete(threadId);
-          return;
+          return { next: 'failed' };
         }
         emitTerminalLifecycle(threadId, `[runtime-qa] ${tooling.message}\r\n`);
         if (tooling.warning) {
@@ -1263,7 +1241,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         const message = error instanceof Error ? error.message : String(error);
         emitPhase(threadId, 'failed', `Visual QA generation failed: ${message}`);
         activePipelines.delete(threadId);
-        return;
+        return { next: 'failed' };
       }
     }
 
@@ -1276,28 +1254,33 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         outputs.push(result.output);
         context.testOutput = outputs.join('\n').slice(-16384);
         if (result.exitCode !== 0) {
-          if (!scheduleCoordinatedTestFixRetry(threadId, context, command, result.output)) {
-            const testSummary = extractTestFailureSummary(context.testOutput ?? '');
-            deps.emitter.emit({
-              type: 'pipeline:verification-exhausted',
-              threadId,
-              retries: context.testRetries,
-              testSummary,
-            });
-            emitPhase(
-              threadId,
-              'failed',
-              `Test fix exhausted after ${context.testRetries + 1} attempt(s): ${testSummary}`,
-            );
-            activePipelines.delete(threadId);
-          }
-          return;
+          const retryOutcome = scheduleCoordinatedTestFixRetry(
+            threadId,
+            context,
+            command,
+            result.output,
+          );
+          if (retryOutcome) return retryOutcome;
+          const testSummary = extractTestFailureSummary(context.testOutput ?? '');
+          deps.emitter.emit({
+            type: 'pipeline:verification-exhausted',
+            threadId,
+            retries: context.testRetries,
+            testSummary,
+          });
+          emitPhase(
+            threadId,
+            'failed',
+            `Test fix exhausted after ${context.testRetries + 1} attempt(s): ${testSummary}`,
+          );
+          activePipelines.delete(threadId);
+          return { next: 'failed' };
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         emitPhase(threadId, 'failed', `Verification command error: ${message}`);
         activePipelines.delete(threadId);
-        return;
+        return { next: 'failed' };
       }
     }
 
@@ -1313,14 +1296,15 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         if (runtimeQaResult.fatal) {
           emitPhase(threadId, 'failed', runtimeQaResult.error);
           activePipelines.delete(threadId);
+          return { next: 'failed' };
         }
-        return;
+        return runtimeQaResult.outcome;
       }
     }
 
     context.testRetries = 0;
     resetPhaseState(context, ['testOutput', 'runtimeQaOutput']);
-    handlers.startVerification(threadId);
+    return { next: 'verification' };
   }
 
   async function runRuntimeQa(
@@ -1328,7 +1312,11 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     context: PipelineContext,
     cwd: string,
     config: NonNullable<PipelineContext['repoSetupContract']>['contract']['runtimeQa'],
-  ): Promise<{ ok: true } | { ok: false; fatal: boolean; error: string }> {
+  ): Promise<
+    | { ok: true }
+    | { ok: false; fatal: true; error: string }
+    | { ok: false; fatal: false; outcome: PhaseOutcome }
+  > {
     if (!config) return { ok: true };
 
     emitTerminalLifecycle(threadId, '[runtime-qa] Starting runtime QA\r\n');
@@ -1402,11 +1390,13 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           context.testOutput = `${context.testOutput ?? ''}\n${context.runtimeQaOutput}`.slice(
             -16384,
           );
-          if (
-            scheduleCoordinatedTestFixRetry(threadId, context, 'runtime-qa:server-crashed', failMsg)
-          ) {
-            return { ok: false, fatal: false, error: failMsg };
-          }
+          const crashRetry = scheduleCoordinatedTestFixRetry(
+            threadId,
+            context,
+            'runtime-qa:server-crashed',
+            failMsg,
+          );
+          if (crashRetry) return { ok: false, fatal: false, outcome: crashRetry };
           return { ok: false, fatal: true, error: failMsg };
         }
 
@@ -1427,9 +1417,13 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             persistQaFlowResults();
             const visualFeedback = formatVisualQaFailureFeedback(commandQaResults);
             const output = `${context.runtimeQaOutput}${visualFeedback}`;
-            if (scheduleCoordinatedTestFixRetry(threadId, context, command, output)) {
-              return { ok: false, fatal: false, error: `Runtime test failed: ${command}` };
-            }
+            const commandRetry = scheduleCoordinatedTestFixRetry(
+              threadId,
+              context,
+              command,
+              output,
+            );
+            if (commandRetry) return { ok: false, fatal: false, outcome: commandRetry };
             return {
               ok: false,
               fatal: true,
@@ -1452,9 +1446,9 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
   }
 
-  async function startVerification(threadId: string) {
+  async function startVerification(threadId: string): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
-    if (!context) return;
+    if (!context) return { next: 'paused' };
 
     emitPhase(threadId, 'verifying');
 
@@ -1467,7 +1461,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         'Verification cannot start: structured plan missing for this thread.',
       );
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
 
     const plan = latestPlan.structured;
@@ -1495,7 +1489,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       console.error(`[pipeline] pre-verification commit failed for thread ${threadId}:`, msg);
       emitPhase(threadId, 'failed', `Pre-verification commit failed: ${msg}`);
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
 
     const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim();
@@ -1525,7 +1519,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         'Verification skipped: executor produced no file changes (empty diff vs. worktree base).',
       );
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
 
     deps.diffs.replaceForThread(threadId, parseUnifiedDiff(diff));
@@ -1591,150 +1585,148 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         `WORKFLOW.md template render error: ${error instanceof Error ? error.message : String(error)}`,
       );
       activePipelines.delete(threadId);
-      return;
+      return { next: 'failed' };
     }
 
-    void (async () => {
-      try {
-        const response = await runProviderPhase(
-          context,
-          'verify',
-          verificationPrompt,
-          verifyMaterials,
-          {
-            reasoningEffort: context.phaseReasoningEfforts.verify,
-          },
+    try {
+      const response = await runProviderPhase(
+        context,
+        'verify',
+        verificationPrompt,
+        verifyMaterials,
+        {
+          reasoningEffort: context.phaseReasoningEfforts.verify,
+        },
+      );
+
+      if (context.cancelled) return { next: 'paused' };
+
+      const parser = new StreamParser();
+      parser.feed(response.rawOutput);
+      const result = parser.extractVerification();
+
+      if (!(result.success && result.data)) {
+        deps.verifications.create(threadId, latestPlan.id, parser.getRawOutput(), null);
+        emitPhase(
+          threadId,
+          'failed',
+          'Verification output could not be parsed — verifier did not emit a shipcode-verify block.',
         );
+        activePipelines.delete(threadId);
+        return { next: 'failed' };
+      }
 
-        if (context.cancelled) return;
+      deps.verifications.create(threadId, latestPlan.id, result.raw, result.data);
+      deps.emitter.emit({ type: 'verification:parsed', threadId, verification: result.data });
 
-        const parser = new StreamParser();
-        parser.feed(response.rawOutput);
-        const result = parser.extractVerification();
-
-        if (result.success && result.data) {
-          deps.verifications.create(threadId, latestPlan.id, result.raw, result.data);
-          deps.emitter.emit({ type: 'verification:parsed', threadId, verification: result.data });
-
-          if (context.featureQaState) {
-            try {
-              const qaFlowResults = extractQaFlowResults(response.rawOutput);
-              if (qaFlowResults.length > 0) {
-                deps.featureQaResults?.insert({
-                  threadId,
-                  featureId: context.featureQaState.featureId,
-                  status: toQaStatus(qaFlowResults),
-                  flowResults: qaFlowResults,
-                  summary: result.data.summary,
-                  evidencePaths: collectQaEvidencePaths(qaFlowResults),
-                });
-              }
-            } catch (err) {
-              console.error('[pipeline] feature QA result insert failed:', err);
-            }
-          }
-
-          if (result.data.result === 'passed') {
-            resetPhaseState(context);
-            handlers.startCommitAndPush(threadId);
-          } else if (context.verificationRetries < MAX_VERIFICATION_RETRIES) {
-            context.verificationRetries++;
-            const delayMs = computeRetryDelayMs({
-              reason: 'continuation',
-              attempt: context.verificationRetries,
-            });
-            if (context.retryTimer) clearTimeout(context.retryTimer);
-            context.retryTimer = setTimeout(() => {
-              context.retryTimer = null;
-              if (context.cancelled || !activePipelines.has(threadId)) return;
-              resetPhaseState(context);
-              handlers.startExecution(threadId, plan);
-            }, delayMs);
-          } else {
-            deps.emitter.emit({
-              type: 'pipeline:verification-exhausted',
+      if (context.featureQaState) {
+        try {
+          const qaFlowResults = extractQaFlowResults(response.rawOutput);
+          if (qaFlowResults.length > 0) {
+            deps.featureQaResults?.insert({
               threadId,
-              retries: context.verificationRetries,
+              featureId: context.featureQaState.featureId,
+              status: toQaStatus(qaFlowResults),
+              flowResults: qaFlowResults,
+              summary: result.data.summary,
+              evidencePaths: collectQaEvidencePaths(qaFlowResults),
             });
-
-            // Turn-level retry: if maxTurns allows, start a new turn
-            // (re-enter planning with a continuation prompt).
-            const maxTurns = context.workflowPolicy.agent.maxTurns;
-            if (context.turnCount + 1 < maxTurns) {
-              deps.emitter.emit({
-                type: 'pipeline:turn-completed',
-                threadId,
-                turnNumber: context.turnCount + 1,
-                result: 'failed',
-              });
-              context.turnCount++;
-              context.verificationRetries = 0;
-              context.testRetries = 0;
-              context.retryCount = 0;
-              deps.emitter.emit({
-                type: 'pipeline:turn-started',
-                threadId,
-                turnNumber: context.turnCount + 1,
-              });
-
-              // Build continuation prompt — short, references prior failure
-              const failureReason =
-                result.data.summary ?? 'Verification failed — address remaining gaps.';
-              const continuationPrompt = buildContinuationPrompt(context, failureReason);
-
-              const delayMs = computeRetryDelayMs({
-                reason: 'continuation',
-                attempt: 1,
-              });
-              if (context.retryTimer) clearTimeout(context.retryTimer);
-              context.retryTimer = setTimeout(() => {
-                context.retryTimer = null;
-                if (context.cancelled || !activePipelines.has(threadId)) return;
-                resetPhaseState(context);
-                handlers.startPlanGeneration(
-                  threadId,
-                  continuationPrompt,
-                  context.projectPath,
-                  context.worktreePath,
-                );
-              }, delayMs);
-            } else {
-              deps.emitter.emit({
-                type: 'pipeline:turn-completed',
-                threadId,
-                turnNumber: context.turnCount + 1,
-                result: 'max_turns_reached',
-              });
-              emitPhase(
-                threadId,
-                'failed',
-                `Verification failed: max turns reached (${context.turnCount + 1}/${maxTurns}).`,
-              );
-              activePipelines.delete(threadId);
-            }
           }
-        } else {
-          deps.verifications.create(threadId, latestPlan.id, parser.getRawOutput(), null);
-          emitPhase(
-            threadId,
-            'failed',
-            'Verification output could not be parsed — verifier did not emit a shipcode-verify block.',
-          );
-          activePipelines.delete(threadId);
-        }
-      } catch (err) {
-        if (!context.cancelled) {
-          const message = err instanceof Error ? err.message : String(err);
-          emitPhase(threadId, 'failed', `Verification error: ${message}`);
-          activePipelines.delete(threadId);
+        } catch (err) {
+          console.error('[pipeline] feature QA result insert failed:', err);
         }
       }
-    })();
+
+      if (result.data.result === 'passed') {
+        resetPhaseState(context);
+        return { next: 'commit' };
+      }
+
+      if (context.verificationRetries < MAX_VERIFICATION_RETRIES) {
+        context.verificationRetries++;
+        const delayMs = computeRetryDelayMs({
+          reason: 'continuation',
+          attempt: context.verificationRetries,
+        });
+        resetPhaseState(context);
+        return { next: 'retry', delayMs, andThen: { next: 'execute', plan } };
+      }
+
+      deps.emitter.emit({
+        type: 'pipeline:verification-exhausted',
+        threadId,
+        retries: context.verificationRetries,
+      });
+
+      // Turn-level retry: if maxTurns allows, start a new turn
+      // (re-enter planning with a continuation prompt).
+      const maxTurns = context.workflowPolicy.agent.maxTurns;
+      if (context.turnCount + 1 < maxTurns) {
+        deps.emitter.emit({
+          type: 'pipeline:turn-completed',
+          threadId,
+          turnNumber: context.turnCount + 1,
+          result: 'failed',
+        });
+        context.turnCount++;
+        context.verificationRetries = 0;
+        context.testRetries = 0;
+        context.retryCount = 0;
+        deps.emitter.emit({
+          type: 'pipeline:turn-started',
+          threadId,
+          turnNumber: context.turnCount + 1,
+        });
+
+        // Build continuation prompt — short, references prior failure
+        const failureReason =
+          result.data.summary ?? 'Verification failed — address remaining gaps.';
+        const continuationPrompt = buildContinuationPrompt(context, failureReason);
+
+        const delayMs = computeRetryDelayMs({
+          reason: 'continuation',
+          attempt: 1,
+        });
+        resetPhaseState(context);
+        return {
+          next: 'retry',
+          delayMs,
+          andThen: {
+            next: 'plan',
+            prompt: continuationPrompt,
+            projectPath: context.projectPath,
+            worktreePath: context.worktreePath,
+          },
+        };
+      }
+
+      deps.emitter.emit({
+        type: 'pipeline:turn-completed',
+        threadId,
+        turnNumber: context.turnCount + 1,
+        result: 'max_turns_reached',
+      });
+      emitPhase(
+        threadId,
+        'failed',
+        `Verification failed: max turns reached (${context.turnCount + 1}/${maxTurns}).`,
+      );
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
+    } catch (err) {
+      if (!context.cancelled) {
+        const message = err instanceof Error ? err.message : String(err);
+        emitPhase(threadId, 'failed', `Verification error: ${message}`);
+        activePipelines.delete(threadId);
+        return { next: 'failed' };
+      }
+      return { next: 'paused' };
+    }
   }
 
-  async function startCommitAndPush(threadId: string) {
+  async function startCommitAndPush(threadId: string): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
-    if (!context) return;
+    if (!context) return { next: 'paused' };
 
     const cwd = context.worktreePath ?? context.projectPath;
 
@@ -1750,7 +1742,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           'Commit aborted: HEAD moved after verification (verifiedSha mismatch).',
         );
         activePipelines.delete(threadId);
-        return;
+        return { next: 'failed' };
       }
 
       const diffBase = resolveWorktreeDiffBase(context);
@@ -1767,7 +1759,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           'Commit aborted: no commits ahead of worktree base — nothing to push.',
         );
         activePipelines.delete(threadId);
-        return;
+        return { next: 'failed' };
       }
 
       const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
@@ -1777,7 +1769,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       execFileSync('git', ['push', 'origin', branch, '--set-upstream'], { cwd, encoding: 'utf-8' });
 
       resetPhaseState(context);
-      handlers.startShipping(threadId);
+      return { next: 'shipping' };
     } catch (firstErr) {
       try {
         const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
@@ -1789,7 +1781,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           encoding: 'utf-8',
         });
         resetPhaseState(context);
-        handlers.startShipping(threadId);
+        return { next: 'shipping' };
       } catch (secondErr) {
         const message = secondErr instanceof Error ? secondErr.message : String(secondErr);
         const firstMessage = firstErr instanceof Error ? firstErr.message : String(firstErr);
@@ -1799,13 +1791,14 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           `Commit and push failed (both attempts). first=${firstMessage.slice(0, 120)} retry=${message.slice(0, 120)}`,
         );
         activePipelines.delete(threadId);
+        return { next: 'failed' };
       }
     }
   }
 
-  async function startShipping(threadId: string) {
+  async function startShipping(threadId: string): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
-    if (!context) return;
+    if (!context) return { next: 'paused' };
 
     emitPhase(threadId, 'shipping');
 
@@ -1814,7 +1807,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       // skip PR shipping. Branch is left on disk for manual follow-up.
       emitPhase(threadId, 'completed');
       activePipelines.delete(threadId);
-      return;
+      return { next: 'done' };
     }
     const issueNumber = context.githubIssueNumber;
 
@@ -1963,11 +1956,14 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       }
 
       emitPhase(threadId, 'completed');
+      activePipelines.delete(threadId);
+      return { next: 'done' };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       emitPhase(threadId, 'failed', `Shipping failed: ${message}`);
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
     }
-    activePipelines.delete(threadId);
   }
 
   async function startStabilization(
@@ -1978,9 +1974,9 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       failingChecks: GitHubPrCheckSummary[];
       unresolvedReviewComments: GitHubPrReviewCommentSummary[];
     },
-  ) {
+  ): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
-    if (!context) return;
+    if (!context) return { next: 'paused' };
 
     const latestPlan = deps.plans.getLatest(threadId);
     if (!latestPlan?.structured) {
@@ -1991,7 +1987,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     resetPhaseState(context);
     context.stabilizationFeedback = formatStabilizationFeedback(inputs);
     context.verifiedSha = null;
-    await handlers.startExecution(threadId, latestPlan.structured);
+    return { next: 'execute', plan: latestPlan.structured };
   }
 
   return {

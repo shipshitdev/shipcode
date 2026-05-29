@@ -4357,6 +4357,7 @@ Custom prompt`,
       });
 
       await pipeline.startTesting('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -4427,6 +4428,7 @@ Custom prompt`,
       });
 
       await pipeline.startTesting('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -4523,6 +4525,7 @@ Custom prompt`,
       };
 
       await pipeline.startTesting('t1');
+      await flush();
 
       expect(context.retryTimer).not.toBeNull();
       expect(mock.deps.threads.recordFailure).not.toHaveBeenCalledWith(
@@ -4684,6 +4687,7 @@ Custom prompt`,
       };
 
       await pipeline.startTesting('t1');
+      await flush();
 
       expect(mock.deps.processManager.spawnWithStdin).not.toHaveBeenCalledWith(
         'shell',
@@ -4743,6 +4747,7 @@ Custom prompt`,
       };
 
       await pipeline.startTesting('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',

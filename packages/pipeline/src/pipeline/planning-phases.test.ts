@@ -10,7 +10,7 @@ import {
   createPlanningPhaseHandlers,
   formatPlanParseFailure,
 } from './planning-phases';
-import type { PipelineContextHelpers, PipelinePhaseHandlers, PipelineRuntime } from './shared';
+import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
 function clarificationRequest(id: string, questionId: string, title: string) {
   return {
@@ -215,18 +215,11 @@ function makePlanningHarness(context = makePlanningContext()) {
     resolveAgentForPhase: vi.fn(() => context.plannerModel),
     runProviderPhase: vi.fn(async () => ({ rawOutput: planBlock, exitCode: 0 })),
   } as unknown as PipelineRuntime;
-  const handlers = {
-    startExecution: vi.fn(),
-    startReview: vi.fn(),
-    startRevision: vi.fn(),
-  } as unknown as PipelinePhaseHandlers;
-  const phaseHandlers = createPlanningPhaseHandlers({
+  const handlers = createPlanningPhaseHandlers({
     deps: deps as never,
     contextHelpers,
     runtime,
-    handlers,
   });
-  Object.assign(handlers, phaseHandlers);
   return { activePipelines, context, deps, handlers, runtime };
 }
 
@@ -541,19 +534,16 @@ describe('planning phase helpers', () => {
       exitCode: 0,
     });
 
-    await revision.handlers.startReview('thread-1', plan as never);
-    await Promise.resolve();
-    await Promise.resolve();
+    const revisionOutcome = await revision.handlers.startReview('thread-1', plan as never);
 
     expect(revision.deps.threads.incrementReviewRound).toHaveBeenCalledWith('thread-1');
-    expect(revision.runtime.emitPhase).toHaveBeenCalledWith('thread-1', 'revising');
-    expect(revision.runtime.runProviderPhase).toHaveBeenCalledWith(
-      revision.context,
-      'revision',
-      expect.stringContaining('[minor] Missing test'),
-      expect.any(Array),
-      expect.any(Object),
-    );
+    // request_changes within the revision budget returns a revision outcome for
+    // the dispatch loop (it no longer calls startRevision directly).
+    expect(revisionOutcome).toEqual({
+      next: 'revision',
+      plan,
+      reviewFeedback: expect.stringContaining('[minor] Missing test'),
+    });
   });
 
   it('fails review on parser-impossible decisions and ignores cancelled review errors', async () => {
