@@ -26,7 +26,14 @@ import {
 } from '@shipcode/shared/source';
 import { GhSyncQueue, type GhSyncWriteOpts } from '../gh-sync-queue';
 import { syncThreadAndIssuePhase } from '../phase-sync';
-import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../types';
+import type {
+  PipelineContext,
+  PipelineDeps,
+  PipelineExecutorModel,
+  ProviderPhaseDeltas,
+  ProviderPhaseInput,
+} from '../types';
+import { snapshotProviderPhaseInput } from './context';
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
 const execFileAsync = promisify(execFile);
@@ -531,25 +538,35 @@ export function createPipelineRuntime(
   }
 
   function resolveAgentForPhase(
-    context: PipelineContext,
+    input: Pick<
+      ProviderPhaseInput,
+      'plannerModel' | 'reviewerModel' | 'verifierModel' | 'executorModel'
+    >,
     phase: ProviderPhase,
   ): PipelineExecutorModel {
     switch (phase) {
       case 'plan':
       case 'revision':
-        return context.plannerModel;
+        return input.plannerModel;
       case 'review':
-        return context.reviewerModel;
+        return input.reviewerModel;
       case 'verify':
-        return context.verifierModel;
+        return input.verifierModel;
       case 'execute':
-        if (context.executorModel) return context.executorModel;
+        if (input.executorModel) return input.executorModel;
         return 'claude';
     }
   }
 
-  async function runProviderPhase(
-    context: PipelineContext,
+  /**
+   * Pure provider-phase execution. Reads only the frozen `ProviderPhaseInput`
+   * snapshot — never the mutable `PipelineContext` — and returns the context
+   * mutations it would have made (`deltas`) for the orchestrator to apply.
+   * The `runProviderPhase` wrapper (and, later, the #137 dispatch loop) owns
+   * snapshotting and delta application.
+   */
+  async function runProviderPhaseCore(
+    input: ProviderPhaseInput,
     phase: ProviderPhase,
     prompt: string,
     promptMaterials: PromptMaterial[],
@@ -560,27 +577,28 @@ export function createPipelineRuntime(
     resolvedModel?: string;
     promptTelemetry?: import('@shipcode/agents/source').PhasePromptTelemetry;
     clarificationRequest?: import('@shipcode/shared').ClarificationRequest;
+    deltas: ProviderPhaseDeltas;
   }> {
-    const agent = resolveAgentForPhase(context, phase);
+    const agent = resolveAgentForPhase(input, phase);
     const provider = deps.providers.for(agent, phase);
     // When a GitHub issue is resumed, planning/review should inspect the same
     // worktree that already contains in-progress changes instead of the clean
     // project root.
-    const cwd = context.worktreePath ?? context.projectPath;
+    const cwd = input.worktreePath ?? input.projectPath;
     const modelHint = (() => {
-      if (agent === context.executorModel && context.executorModelOverride) {
-        return context.executorModelOverride;
+      if (agent === input.executorModel && input.executorModelOverride) {
+        return input.executorModelOverride;
       }
       switch (phase) {
         case 'plan':
         case 'revision':
-          return context.plannerModelIdOverride;
+          return input.plannerModelIdOverride;
         case 'review':
-          return context.reviewerModelIdOverride;
+          return input.reviewerModelIdOverride;
         case 'execute':
-          return context.executorModelIdOverride;
+          return input.executorModelIdOverride;
         case 'verify':
-          return context.verifierModelIdOverride;
+          return input.verifierModelIdOverride;
       }
     })();
 
@@ -600,10 +618,10 @@ export function createPipelineRuntime(
       try {
         return (
           deps.pipelineSteps?.start({
-            threadId: context.threadId,
-            runId: context.runId,
+            threadId: input.threadId,
+            runId: input.runId,
             phase,
-            attempt: context.promptTelemetry.length + 1,
+            attempt: input.promptTelemetryCount + 1,
             provider: provider.id,
             requestedModel: modelHint ?? agent,
           }) ?? null
@@ -620,10 +638,10 @@ export function createPipelineRuntime(
       try {
         return (
           deps.agentConversations?.insert({
-            threadId: context.threadId,
-            runId: context.runId,
+            threadId: input.threadId,
+            runId: input.runId,
             phase,
-            round: context.promptTelemetry.length,
+            round: input.promptTelemetryCount,
             speaker: 'pipeline',
             role: 'prompt',
             provider: provider.id,
@@ -642,17 +660,17 @@ export function createPipelineRuntime(
       // Defense in depth: only assert workspace shape when running inside a
       // worktree. Plan/review for issues that haven't materialized a
       // worktree yet still spawn at the project root and skip the check.
-      const workspaceRoot = context.worktreePath ? deps.settings.get().worktreeRoot : undefined;
+      const workspaceRoot = input.worktreePath ? deps.settings.get().worktreeRoot : undefined;
       response = await provider.generate({
         phase,
         prompt,
         cwd,
-        projectPath: context.projectPath,
-        signal: context.abort.signal,
+        projectPath: input.projectPath,
+        signal: input.abort,
         phaseHints: mergedHints,
-        promptMaterialSummary: context.promptMaterialSummaries[phase],
+        promptMaterialSummary: input.promptMaterialSummary,
         modelHint: modelHint ?? undefined,
-        threadId: context.threadId,
+        threadId: input.threadId,
         ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
         githubGraphql: {
           // Token read happens at tool-call time, not now — captures
@@ -660,7 +678,7 @@ export function createPipelineRuntime(
           getToken: () => readGhAuthToken(),
           getDefaultRepo: async () => {
             try {
-              const { githubRepoFullName } = await new GhCli(context.projectPath).getRepoMetadata();
+              const { githubRepoFullName } = await new GhCli(input.projectPath).getRepoMetadata();
               const [owner, repo] = githubRepoFullName.split('/');
               if (!owner || !repo) return null;
               return { owner, repo };
@@ -672,22 +690,22 @@ export function createPipelineRuntime(
         onTerminalEvent: (event) =>
           deps.emitter.emit({
             type: 'terminal:event',
-            threadId: context.threadId,
-            ...(context.runId ? { runId: context.runId } : {}),
+            threadId: input.threadId,
+            ...(input.runId ? { runId: input.runId } : {}),
             event,
           }),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const aborted = context.abort.signal.aborted || /abort/i.test(message);
+      const aborted = input.abort.aborted || /abort/i.test(message);
 
       // Conversation log: write synthetic error response row.
       try {
         deps.agentConversations?.insert({
-          threadId: context.threadId,
-          runId: context.runId,
+          threadId: input.threadId,
+          runId: input.runId,
           phase,
-          round: context.promptTelemetry.length,
+          round: input.promptTelemetryCount,
           speaker: 'pipeline',
           role: 'response',
           parentId: promptConvRow?.id ?? null,
@@ -715,10 +733,10 @@ export function createPipelineRuntime(
     // Conversation log: write the provider response row.
     try {
       deps.agentConversations?.insert({
-        threadId: context.threadId,
-        runId: context.runId,
+        threadId: input.threadId,
+        runId: input.runId,
         phase,
-        round: context.promptTelemetry.length,
+        round: input.promptTelemetryCount,
         speaker: provider.id,
         role: 'response',
         parentId: promptConvRow?.id ?? null,
@@ -768,14 +786,18 @@ export function createPipelineRuntime(
       prompt,
       materials: promptMaterials,
     });
-    context.promptTelemetry.push(promptTelemetry);
+    // Mutation delta, applied to context by the caller. The "+ 1" reproduces
+    // the old post-push `promptTelemetry.length` (count at snapshot time, plus
+    // this very entry) used for invocationId/attempt.
+    const deltas: ProviderPhaseDeltas = { promptTelemetry, diagnosticEntry: null };
+    const nextAttempt = input.promptTelemetryCount + 1;
     try {
       deps.promptTelemetry?.create({
-        threadId: context.threadId,
-        runId: context.runId,
+        threadId: input.threadId,
+        runId: input.runId,
         phase,
-        invocationId: `${context.threadId}:${phase}:${context.promptTelemetry.length}`,
-        attempt: context.promptTelemetry.length,
+        invocationId: `${input.threadId}:${phase}:${nextAttempt}`,
+        attempt: nextAttempt,
         provider: provider.id,
         model: response.resolvedModel ?? modelHint ?? agent,
         promptCharacters: promptTelemetry.promptSize.characters,
@@ -790,21 +812,21 @@ export function createPipelineRuntime(
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      context.promptTelemetryDiagnostics.push({ phase, message, nonFatal: true });
+      deltas.diagnosticEntry = { phase, message, nonFatal: true };
       console.error('[pipeline] prompt telemetry persistence failed:', error);
     }
 
     if (response.resolvedModel) {
       const requestedModel = modelHint ?? agent;
       try {
-        deps.threads.setResolvedModel(context.threadId, phase, response.resolvedModel);
+        deps.threads.setResolvedModel(input.threadId, phase, response.resolvedModel);
       } catch (error) {
         console.error('[pipeline] setResolvedModel failed:', error);
       }
       if (response.tokensUsed) {
         try {
           deps.threads.addTokenUsage(
-            context.threadId,
+            input.threadId,
             response.tokensUsed.prompt,
             response.tokensUsed.completion,
             response.costUsd ?? 0,
@@ -815,8 +837,8 @@ export function createPipelineRuntime(
       }
       deps.emitter.emit({
         type: 'pipeline:model-resolved',
-        threadId: context.threadId,
-        ...(context.runId ? { runId: context.runId } : {}),
+        threadId: input.threadId,
+        ...(input.runId ? { runId: input.runId } : {}),
         phase,
         requestedModel,
         resolvedModel: response.resolvedModel,
@@ -831,7 +853,43 @@ export function createPipelineRuntime(
       resolvedModel: response.resolvedModel,
       promptTelemetry,
       clarificationRequest: response.clarificationRequest,
+      deltas,
     };
+  }
+
+  /**
+   * Orchestrator seam: snapshot the mutable context into a frozen
+   * `ProviderPhaseInput`, run the pure core, then apply the returned mutation
+   * deltas back to context. No `await` sits between snapshot and apply, so the
+   * `promptTelemetryCount` captured in the snapshot stays consistent with the
+   * push below.
+   */
+  async function runProviderPhase(
+    context: PipelineContext,
+    phase: ProviderPhase,
+    prompt: string,
+    promptMaterials: PromptMaterial[],
+    phaseHints: ProviderRequest['phaseHints'],
+  ): Promise<{
+    rawOutput: string;
+    exitCode: number;
+    resolvedModel?: string;
+    promptTelemetry?: import('@shipcode/agents/source').PhasePromptTelemetry;
+    clarificationRequest?: import('@shipcode/shared').ClarificationRequest;
+  }> {
+    const input = snapshotProviderPhaseInput(context, phase);
+    const { deltas, ...response } = await runProviderPhaseCore(
+      input,
+      phase,
+      prompt,
+      promptMaterials,
+      phaseHints,
+    );
+    context.promptTelemetry.push(deltas.promptTelemetry);
+    if (deltas.diagnosticEntry !== null) {
+      context.promptTelemetryDiagnostics.push(deltas.diagnosticEntry);
+    }
+    return response;
   }
 
   /** Perform the actual GH write for a single state snapshot. */
@@ -1147,6 +1205,7 @@ export function createPipelineRuntime(
     formatTestFixFeedback,
     resolveAgentForPhase,
     runProviderPhase,
+    runProviderPhaseCore,
     emitPhase,
     postPlanComment,
     postTaskGraphComment,

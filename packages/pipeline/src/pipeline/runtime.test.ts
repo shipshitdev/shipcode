@@ -5,6 +5,7 @@ import { type AgentProvider, GhCli } from '@shipcode/agents/source';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineContext, PipelineDeps } from '../types';
+import { snapshotProviderPhaseInput } from './context';
 import { buildFrozenInstallFallback, createPipelineRuntime, resolveSetupShell } from './runtime';
 
 const { mockExecFile, mockLoadRepoSetupContract, mockGhCli } = vi.hoisted(() => ({
@@ -1333,6 +1334,93 @@ describe('createPipelineRuntime', () => {
       message: 'telemetry string failure',
       nonFatal: true,
     });
+  });
+
+  it('runProviderPhaseCore does not mutate context and returns telemetry deltas', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan']),
+      generate: vi.fn(async () => ({ rawOutput: 'done', exitCode: 0 })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+    const input = snapshotProviderPhaseInput(context, 'plan');
+
+    const result = await runtime.runProviderPhaseCore(input, 'plan', 'prompt', [], {});
+
+    // The pure core leaves the mutable context untouched...
+    expect(context.promptTelemetry).toHaveLength(0);
+    expect(context.promptTelemetryDiagnostics).toHaveLength(0);
+    // ...and surfaces the mutation it would have made as deltas instead.
+    expect(result.deltas.promptTelemetry).toBeDefined();
+    expect(result.deltas.diagnosticEntry).toBeNull();
+  });
+
+  it('runProviderPhase wrapper applies the telemetry delta to context', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan']),
+      generate: vi.fn(async () => ({ rawOutput: 'done', exitCode: 0 })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+
+    await runtime.runProviderPhase(context, 'plan', 'prompt', [], {});
+
+    expect(context.promptTelemetry).toHaveLength(1);
+  });
+
+  it('threads the post-push telemetry counter into invocationId and attempt', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan']),
+      generate: vi.fn(async () => ({ rawOutput: 'done', exitCode: 0 })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+    // One prior telemetry entry → this invocation is attempt 2.
+    context.promptTelemetry.push({} as never);
+
+    await runtime.runProviderPhase(context, 'plan', 'prompt', [], {});
+
+    expect(deps.promptTelemetry?.create).toHaveBeenCalledWith(
+      expect.objectContaining({ invocationId: 'thread-1:plan:2', attempt: 2 }),
+    );
+    // Wrapper appended this invocation's entry on top of the pre-seeded one.
+    expect(context.promptTelemetry).toHaveLength(2);
+  });
+
+  it('runProviderPhaseCore returns a diagnostic delta without mutating context', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan']),
+      generate: vi.fn(async () => ({ rawOutput: 'done', exitCode: 0 })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    deps.promptTelemetry = {
+      create: vi.fn(() => {
+        throw new Error('telemetry offline');
+      }),
+    } as never;
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+    const input = snapshotProviderPhaseInput(context, 'plan');
+
+    const result = await runtime.runProviderPhaseCore(input, 'plan', 'prompt', [], {});
+
+    expect(result.deltas.diagnosticEntry).toEqual({
+      phase: 'plan',
+      message: 'telemetry offline',
+      nonFatal: true,
+    });
+    expect(context.promptTelemetryDiagnostics).toHaveLength(0);
   });
 
   it('keeps provider exception handling nonfatal when error logging fails', async () => {

@@ -18,6 +18,8 @@ import type {
   PipelineContext,
   PipelineDeps,
   PipelineExecutorModel,
+  ProviderPhaseDeltas,
+  ProviderPhaseInput,
 } from '../types';
 
 export interface PipelineContextHelpers {
@@ -79,6 +81,27 @@ export interface PipelineRuntime {
     exitCode: number;
     resolvedModel?: string;
     clarificationRequest?: ClarificationRequest;
+  }>;
+  /**
+   * Pure variant of `runProviderPhase`: reads a frozen `ProviderPhaseInput`
+   * snapshot and returns the context mutations as `deltas` for the caller to
+   * apply. The orchestrator dispatch loop (#137) drives this directly.
+   */
+  runProviderPhaseCore: (
+    input: ProviderPhaseInput,
+    phase: ProviderPhase,
+    prompt: string,
+    promptMaterials: PromptMaterial[],
+    phaseHints: {
+      maxTurns?: number;
+      reasoningEffort?: PipelineContext['plannerReasoningEffort'];
+    },
+  ) => Promise<{
+    rawOutput: string;
+    exitCode: number;
+    resolvedModel?: string;
+    clarificationRequest?: ClarificationRequest;
+    deltas: ProviderPhaseDeltas;
   }>;
   emitPhase: (
     threadId: string,
