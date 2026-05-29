@@ -156,12 +156,9 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
     },
     workflowWarningEmitted: false,
     abort: new AbortController(),
-    executionResumeContext: null,
-    previousPlanRawOutput: null,
     turnCount: 0,
     featureQaState: null,
     runtimeQaCleanup: null,
-    runtimeQaOutput: null,
     cpuQueueStartedAt: null,
     cpuQueueLastNotifiedAt: null,
     ...overrides,
@@ -1835,6 +1832,42 @@ describe('execution phase handlers', () => {
     expect(harness.runtime.emitTerminalLifecycle).toHaveBeenCalledWith(
       'thread-1',
       '[runtime-qa] All runtime tests passed\r\n',
+    );
+  });
+
+  it('threads runtime QA output onto the verification carry', async () => {
+    const context = makeContext({ worktreePath: tempDir('runtime-qa-carry') });
+    const harness = makeExecutionHarness(context);
+    vi.mocked(harness.runtime.ensureRepoSetupContract).mockImplementation(() => {
+      context.repoSetupContract = {
+        path: '/repo/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: { testCommands: ['runtime-pass'], discoverAgentTests: false },
+        },
+      };
+      return context.repoSetupContract;
+    });
+    vi.mocked(harness.runtime.runShellCommand).mockResolvedValue({
+      exitCode: 0,
+      output: 'runtime smoke ok',
+    });
+
+    const outcome = await harness.handlers.startTesting('thread-1');
+
+    // Runtime QA output now rides the verification carry, not context.runtimeQaOutput.
+    expect(outcome).toEqual(
+      expect.objectContaining({
+        next: 'verification',
+        carry: expect.objectContaining({
+          runtimeQaOutput: expect.stringContaining('runtime smoke ok'),
+        }),
+      }),
     );
   });
 

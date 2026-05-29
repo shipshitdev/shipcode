@@ -17,7 +17,6 @@ import {
   PHASE_LOCAL_FIELDS,
   type PhaseCarryOutput,
   type PhaseInput,
-  type PhaseLocalField,
   type PhasePayload,
   type PipelineContext,
   type PipelineDeps,
@@ -156,19 +155,13 @@ export function buildPhasePayload(
 }
 
 /**
- * Clear phase-local fields on PipelineContext before entering the next phase.
- * Fields that were explicitly set for the upcoming phase (e.g. executionResumeContext
- * seeded by the desktop resume IPC before entering execute) are preserved by the
- * caller setting them *after* calling resetPhaseState. Cross-phase fix/test carry
- * now travels on the `PhaseOutcome` (see `ExecutePhaseCarry`), not here.
+ * Clear phase-local runtime state on PipelineContext before entering the next
+ * phase. Only live state remains here (the QA-server cleanup handle and the
+ * CPU-queue timestamps); all cross-phase data — fix/test/QA output, resume and
+ * retry seeds — now travels typed on the `PhaseOutcome` carry, not on context.
  */
-export function resetPhaseState(
-  context: PipelineContext,
-  preserve: readonly PhaseLocalField[] = [],
-): void {
-  const preserved = new Set<PhaseLocalField>(preserve);
+export function resetPhaseState(context: PipelineContext): void {
   for (const field of PHASE_LOCAL_FIELDS) {
-    if (preserved.has(field)) continue;
     (context as unknown as Record<string, unknown>)[field] = null;
   }
 }
@@ -339,8 +332,6 @@ export function createPipelineContextHelpers(
         workflowPolicy: seed.workflowPolicy ?? existing.workflowPolicy,
         workflowWarningEmitted:
           seed.workflowWarningEmitted ?? existing.workflowWarningEmitted ?? false,
-        executionResumeContext:
-          seed.executionResumeContext ?? existing.executionResumeContext ?? null,
       });
       emitWorkflowWarning(deps, existing);
       return existing;
@@ -466,12 +457,9 @@ export function createPipelineContextHelpers(
       workflowPolicy,
       workflowWarningEmitted: seed.workflowWarningEmitted ?? false,
       abort: seed.abort ?? new AbortController(),
-      executionResumeContext: seed.executionResumeContext ?? null,
-      previousPlanRawOutput: seed.previousPlanRawOutput ?? null,
       turnCount: seed.turnCount ?? 0,
       featureQaState: seed.featureQaState ?? null,
       runtimeQaCleanup: null,
-      runtimeQaOutput: null,
       cpuQueueStartedAt: seed.cpuQueueStartedAt ?? null,
       cpuQueueLastNotifiedAt: seed.cpuQueueLastNotifiedAt ?? null,
       isAutomationRun: seed.isAutomationRun ?? false,
@@ -556,8 +544,6 @@ export function createPipelineContextHelpers(
       activeProcessId: null,
       cancelled: false,
       verifiedSha: null,
-      executionResumeContext: null,
-      previousPlanRawOutput: null,
     });
   }
 

@@ -614,9 +614,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
   return {
     rehydrateContext: contextHelpers.rehydrateContext,
-    startPlanGeneration: async (threadId, prompt, projectPath, worktreePath) => {
+    startPlanGeneration: async (threadId, prompt, projectPath, worktreePath, carry) => {
       launch(threadId, () =>
-        planning.startPlanGeneration(threadId, prompt, projectPath, worktreePath),
+        planning.startPlanGeneration(threadId, prompt, projectPath, worktreePath, carry),
       );
     },
     startReview: async (threadId, plan) => {
@@ -625,8 +625,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     startRevision: async (threadId, plan, reviewFeedback) => {
       launch(threadId, () => planning.startRevision(threadId, plan, reviewFeedback));
     },
-    startExecution: async (threadId, plan) => {
-      launch(threadId, () => execution.startExecution(threadId, plan));
+    startExecution: async (threadId, plan, carry) => {
+      launch(threadId, () => execution.startExecution(threadId, plan, carry));
     },
     startTesting: async (threadId) => {
       launch(threadId, () => execution.startTesting(threadId));

@@ -9,38 +9,16 @@ import {
 } from './context';
 
 describe('resetPhaseState', () => {
-  it('clears phase-local context fields', () => {
+  it('clears phase-local runtime state fields', () => {
     const context = {
-      executionResumeContext: 'resume from checkpoint',
-      previousPlanRawOutput: 'old plan',
-      runtimeQaOutput: 'runtime output',
       runtimeQaCleanup: async () => {},
       cpuQueueStartedAt: 1,
       cpuQueueLastNotifiedAt: 2,
-    } as PipelineContext;
+    } as unknown as PipelineContext;
 
     resetPhaseState(context);
 
-    expect(context.executionResumeContext).toBeNull();
-    expect(context.previousPlanRawOutput).toBeNull();
-    expect(context.runtimeQaOutput).toBeNull();
     expect(context.runtimeQaCleanup).toBeNull();
-    expect(context.cpuQueueStartedAt).toBeNull();
-    expect(context.cpuQueueLastNotifiedAt).toBeNull();
-  });
-
-  it('preserves selected phase-local fields for verifier evidence handoff', () => {
-    const context = {
-      previousPlanRawOutput: 'old plan',
-      runtimeQaOutput: 'playwright passed',
-      cpuQueueStartedAt: 1,
-      cpuQueueLastNotifiedAt: 2,
-    } as PipelineContext;
-
-    resetPhaseState(context, ['runtimeQaOutput']);
-
-    expect(context.previousPlanRawOutput).toBeNull();
-    expect(context.runtimeQaOutput).toBe('playwright passed');
     expect(context.cpuQueueStartedAt).toBeNull();
     expect(context.cpuQueueLastNotifiedAt).toBeNull();
   });
@@ -84,7 +62,6 @@ describe('snapshotPhaseInput', () => {
       githubIssueTitle: 'Issue title',
       githubRepo: 'shipshitdev/shipcode',
       autonomous: true,
-      executionResumeContext: 'must not leak',
     } as PipelineContext);
 
     expect(snapshot).toEqual({
@@ -142,9 +119,6 @@ describe('buildPhasePayload', () => {
         plan: { totalMaterials: 3 },
         execute: { totalMaterials: 7 },
       },
-      // Real phase-local fields that must never be auto-lifted into the payload.
-      executionResumeContext: 'must not leak',
-      previousPlanRawOutput: 'must not leak',
     } as unknown as PipelineContext;
   }
 
@@ -209,13 +183,11 @@ describe('buildPhasePayload', () => {
     expect(payload.repoPromptMaterials).toEqual([]);
   });
 
-  it('never auto-copies context phase-local fields into the payload', () => {
+  it('defaults carry to empty when no prevOutput is given', () => {
     const payload = buildPhasePayload(makeContext(), 'plan');
 
     // Carry comes only from prevOutput, never lifted implicitly from context.
     expect(payload.carry).toEqual({});
-    expect('executionResumeContext' in payload).toBe(false);
-    expect('previousPlanRawOutput' in payload).toBe(false);
   });
 
   it('threads the previous phase carry through prevOutput', () => {
@@ -321,7 +293,6 @@ describe('createPipelineContextHelpers', () => {
         warning: null,
       },
       workflowWarningEmitted: undefined,
-      executionResumeContext: undefined,
     } as unknown as PipelineContext;
     const helpers = createPipelineContextHelpers(
       deps as never,
@@ -343,7 +314,6 @@ describe('createPipelineContextHelpers', () => {
     expect(context.phaseReasoningOverrides.verify).toBe('low');
     expect(context.clarificationHistory).toEqual([]);
     expect(context.repoPromptMaterials).toBeNull();
-    expect(context.executionResumeContext).toBeNull();
   });
 
   it('falls back to settings reasoning efforts when reusing sparse contexts', () => {
@@ -377,7 +347,6 @@ describe('createPipelineContextHelpers', () => {
         warning: null,
       },
       workflowWarningEmitted: false,
-      executionResumeContext: null,
     } as unknown as PipelineContext;
     const helpers = createPipelineContextHelpers(
       deps as never,

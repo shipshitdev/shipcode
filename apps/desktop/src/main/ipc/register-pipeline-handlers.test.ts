@@ -406,6 +406,21 @@ describe('registerPipelineHandlers', () => {
     });
   });
 
+  // Resume/retry context now rides the typed start-call carry, not a mutated
+  // PipelineContext. These read the last start call's carry argument.
+  const lastExecutionResumeContext = (): string => {
+    const calls = vi.mocked(pipeline.startExecution).mock.calls as unknown as Array<
+      [string, unknown, { executionResumeContext?: string } | undefined]
+    >;
+    return calls.at(-1)?.[2]?.executionResumeContext ?? '';
+  };
+  const lastPlanPreviousRawOutput = (): string | null => {
+    const calls = vi.mocked(pipeline.startPlanGeneration).mock.calls as unknown as Array<
+      [string, string, string, string | null, { previousPlanRawOutput?: string | null } | undefined]
+    >;
+    return calls.at(-1)?.[4]?.previousPlanRawOutput ?? null;
+  };
+
   describe('terminal:list', () => {
     it('returns verification and latest task graph records through simple read handlers', () => {
       const verification = { id: 'verification-1', threadId: 'thread-1' };
@@ -1151,10 +1166,11 @@ describe('registerPipelineHandlers', () => {
 
       expect(pipeline.rehydrateContext).toHaveBeenCalledWith('thread-1', '/tmp/project', undefined);
       expect(notificationService.dismissByThread).toHaveBeenCalledWith('thread-1');
-      expect(context.executionResumeContext).toContain('previous execution was paused by the user');
+      expect(lastExecutionResumeContext()).toContain('previous execution was paused by the user');
       expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
+        expect.objectContaining({ executionResumeContext: expect.any(String) }),
       );
     });
 
@@ -1283,28 +1299,27 @@ describe('registerPipelineHandlers', () => {
         expect.objectContaining({ cwd: '/tmp/worktree' }),
         expect.any(Function),
       );
-      expect(context.executionResumeContext).toContain(
+      expect(lastExecutionResumeContext()).toContain(
         'The previous execution was paused by the user',
       );
-      expect(context.executionResumeContext).toContain(
-        'Checkpoint before execution: Before execute',
-      );
-      expect(context.executionResumeContext).toContain('apps/desktop/src/renderer/App.tsx');
-      expect(context.executionResumeContext).toContain('considering the fix');
-      expect(context.executionResumeContext).toContain('[error] command failed');
-      expect(context.executionResumeContext).toContain('[lifecycle] process exited');
-      expect(context.executionResumeContext).toContain('[tool:start] vitest: running tests');
-      expect(context.executionResumeContext).toContain('[tool:end] vitest exit=1 1 failed');
-      expect(context.executionResumeContext).toContain('[tool:end] tsc');
-      expect(context.executionResumeContext).toContain('[turn:start] 2');
-      expect(context.executionResumeContext).toContain('[turn:end] 2');
-      expect(context.executionResumeContext).toContain('[action] Edit App.tsx');
-      expect(context.executionResumeContext).toContain('[clarification_requested] Need env var');
-      expect(context.executionResumeContext).toContain('[clarification_answered] 2 answers');
-      expect(context.executionResumeContext).toContain('[done]');
+      expect(lastExecutionResumeContext()).toContain('Checkpoint before execution: Before execute');
+      expect(lastExecutionResumeContext()).toContain('apps/desktop/src/renderer/App.tsx');
+      expect(lastExecutionResumeContext()).toContain('considering the fix');
+      expect(lastExecutionResumeContext()).toContain('[error] command failed');
+      expect(lastExecutionResumeContext()).toContain('[lifecycle] process exited');
+      expect(lastExecutionResumeContext()).toContain('[tool:start] vitest: running tests');
+      expect(lastExecutionResumeContext()).toContain('[tool:end] vitest exit=1 1 failed');
+      expect(lastExecutionResumeContext()).toContain('[tool:end] tsc');
+      expect(lastExecutionResumeContext()).toContain('[turn:start] 2');
+      expect(lastExecutionResumeContext()).toContain('[turn:end] 2');
+      expect(lastExecutionResumeContext()).toContain('[action] Edit App.tsx');
+      expect(lastExecutionResumeContext()).toContain('[clarification_requested] Need env var');
+      expect(lastExecutionResumeContext()).toContain('[clarification_answered] 2 answers');
+      expect(lastExecutionResumeContext()).toContain('[done]');
       expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
+        expect.objectContaining({ executionResumeContext: expect.any(String) }),
       );
     });
 
@@ -1336,13 +1351,14 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(context.executionResumeContext).toContain(
+      expect(lastExecutionResumeContext()).toContain(
         '[resume context truncated after 24000 chars]',
       );
-      expect(context.executionResumeContext?.length).toBeLessThan(24_200);
+      expect(lastExecutionResumeContext().length).toBeLessThan(24_200);
       expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
+        expect.objectContaining({ executionResumeContext: expect.any(String) }),
       );
     });
 
@@ -2203,10 +2219,10 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(context.executionResumeContext).toContain(
+      expect(lastExecutionResumeContext()).toContain(
         '[Unable to read git status: git unavailable]',
       );
-      expect(context.executionResumeContext).toContain('<interrupted_run_context>');
+      expect(lastExecutionResumeContext()).toContain('<interrupted_run_context>');
       expect(queries.terminalEvents.create).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({
@@ -2217,10 +2233,11 @@ describe('registerPipelineHandlers', () => {
       expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
+        expect.objectContaining({ executionResumeContext: expect.any(String) }),
       );
     });
 
-    it('continues interrupted execution retry when runtime context is unavailable', async () => {
+    it('attaches resume context on retry even when the in-memory context is gone', async () => {
       queries.threads.getById.mockReturnValue(
         makeThread({
           status: 'failed',
@@ -2236,7 +2253,9 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(queries.terminalEvents.create).not.toHaveBeenCalledWith(
+      // Resume context is built from persisted thread state and threaded on the
+      // start carry, so it no longer depends on an in-memory PipelineContext.
+      expect(queries.terminalEvents.create).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({
           kind: 'lifecycle',
@@ -2246,6 +2265,7 @@ describe('registerPipelineHandlers', () => {
       expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
+        expect.objectContaining({ executionResumeContext: expect.any(String) }),
       );
     });
 
@@ -2308,6 +2328,7 @@ describe('registerPipelineHandlers', () => {
         'Fix it',
         '/tmp/project',
         '/tmp/worktree',
+        expect.objectContaining({ previousPlanRawOutput: expect.any(String) }),
       );
     });
 
@@ -2425,14 +2446,14 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(context.executionResumeContext).toContain('The previous execution was interrupted');
-      expect(context.executionResumeContext).toContain('Agent process stalled');
-      expect(context.executionResumeContext).toContain('plain output');
-      expect(context.executionResumeContext).toContain('[error] vitest timed out');
-      expect(context.executionResumeContext).toContain('[tool:start] Read: Inspect file');
-      expect(context.executionResumeContext).toContain('[tool:end] Read exit=0 done');
-      expect(context.executionResumeContext).toContain('[clarification_answered] 2 answers');
-      expect(context.executionResumeContext).toContain('[done]');
+      expect(lastExecutionResumeContext()).toContain('The previous execution was interrupted');
+      expect(lastExecutionResumeContext()).toContain('Agent process stalled');
+      expect(lastExecutionResumeContext()).toContain('plain output');
+      expect(lastExecutionResumeContext()).toContain('[error] vitest timed out');
+      expect(lastExecutionResumeContext()).toContain('[tool:start] Read: Inspect file');
+      expect(lastExecutionResumeContext()).toContain('[tool:end] Read exit=0 done');
+      expect(lastExecutionResumeContext()).toContain('[clarification_answered] 2 answers');
+      expect(lastExecutionResumeContext()).toContain('[done]');
       expect(queries.terminalEvents.create).toHaveBeenCalledWith('thread-1', {
         kind: 'lifecycle',
         message: 'Retry is resuming from interrupted worktree state.',
@@ -2440,6 +2461,7 @@ describe('registerPipelineHandlers', () => {
       expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
+        expect.objectContaining({ executionResumeContext: expect.any(String) }),
       );
     });
 
@@ -2610,13 +2632,14 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(context.previousPlanRawOutput).toBe('unparseable failed plan');
+      expect(lastPlanPreviousRawOutput()).toBe('unparseable failed plan');
       expect(queries.plans.supersedeAll).toHaveBeenCalledWith('thread-1');
       expect(pipeline.startPlanGeneration).toHaveBeenCalledWith(
         'thread-1',
         'Fix it',
         '/tmp/project',
         '/tmp/worktree',
+        expect.objectContaining({ previousPlanRawOutput: expect.any(String) }),
       );
     });
   });
