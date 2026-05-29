@@ -59,6 +59,8 @@ import {
   migrateV56,
   migrateV57,
   migrateV58,
+  migrateV59,
+  migrateV60,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -155,6 +157,8 @@ const migrations = [
   migrateV56,
   migrateV57,
   migrateV58,
+  migrateV59,
+  migrateV60,
 ] as const;
 
 function migrateThrough(db: DatabaseSync, target: (db: DatabaseSync) => void): void {
@@ -1443,5 +1447,93 @@ describe('migrateV58', () => {
       (column) => column.name === 'issue_type',
     );
     expect(issueTypeColumns).toHaveLength(1);
+  });
+});
+
+describe('migrateV54', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('creates the triage_rules table, indexes, and issue-cache triage columns', () => {
+    migrateThrough(db, migrateV54);
+
+    expect(tableExists(db, 'triage_rules')).toBe(true);
+    expect(indexExists(db, 'idx_triage_rules_project_order')).toBe(true);
+    expect(indexExists(db, 'idx_triage_rules_project_enabled_order')).toBe(true);
+    expect(columnExists(db, 'github_issue_cache', 'rules_applied_at')).toBe(true);
+    expect(columnExists(db, 'github_issue_cache', 'triage_failure_reason')).toBe(true);
+  });
+
+  it('backfills rules_applied_at for issues that existed before the migration', () => {
+    migrateThrough(db, migrateV53);
+    expect(columnExists(db, 'github_issue_cache', 'rules_applied_at')).toBe(false);
+
+    // FK enforcement is irrelevant to the migration's backfill logic; skip the
+    // projects-row prerequisite so the test stays focused on rules_applied_at.
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec(`
+      INSERT INTO github_issue_cache (id, project_id, issue_number, title)
+      VALUES ('issue-pre', 'project-pre', 1, 'Legacy issue');
+    `);
+
+    migrateV54(db);
+
+    const row = db
+      .prepare(
+        'SELECT rules_applied_at, triage_failure_reason FROM github_issue_cache WHERE id = ?',
+      )
+      .get('issue-pre') as {
+      rules_applied_at: string | null;
+      triage_failure_reason: string | null;
+    };
+    expect(row.rules_applied_at).toBeTruthy();
+    expect(row.triage_failure_reason).toBeNull();
+  });
+
+  it('is idempotent', () => {
+    migrateThrough(db, migrateV54);
+    expect(() => migrateV54(db)).not.toThrow();
+
+    const columns = getColumns(db, 'github_issue_cache').filter(
+      (column) => column.name === 'rules_applied_at',
+    );
+    expect(columns).toHaveLength(1);
+  });
+});
+
+describe('migrateV60', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('adds the author column to github_issue_cache', () => {
+    migrateThrough(db, migrateV59);
+    expect(columnExists(db, 'github_issue_cache', 'author')).toBe(false);
+
+    migrateV60(db);
+    expect(columnExists(db, 'github_issue_cache', 'author')).toBe(true);
+  });
+
+  it('is idempotent', () => {
+    migrateThrough(db, migrateV60);
+    expect(() => migrateV60(db)).not.toThrow();
+
+    const columns = getColumns(db, 'github_issue_cache').filter(
+      (column) => column.name === 'author',
+    );
+    expect(columns).toHaveLength(1);
   });
 });

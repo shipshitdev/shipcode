@@ -1523,6 +1523,7 @@ export interface GitHubIssueCacheRecord {
   body: string | null;
   labels: string[];
   assignee: string | null;
+  author?: string | null;
   state: string;
   pipelineStatus: IssuePipelineStatus;
   threadId: string | null;

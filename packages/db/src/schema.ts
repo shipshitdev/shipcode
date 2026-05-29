@@ -1793,3 +1793,17 @@ export function migrateV59(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (59)`);
   });
 }
+
+export function migrateV60(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 60) return;
+
+  transaction(db, () => {
+    // Issue author login, used by the triage `author_is` condition kind.
+    execAlterTableIfMissing(db, 'ALTER TABLE github_issue_cache ADD COLUMN author TEXT');
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (60)`);
+  });
+}

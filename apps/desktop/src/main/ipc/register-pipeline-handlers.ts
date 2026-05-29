@@ -1252,14 +1252,15 @@ export function registerPipelineHandlers({
       const stepsByRun = new Map(
         runs.map((run) => [run.id, steps.filter((step) => step.runId === run.id)]),
       );
+      const runById = new Map(runs.map((run) => [run.id, run]));
       const retryDepth = (runId: string): number => {
         let depth = 0;
-        let cursor = runs.find((run) => run.id === runId)?.retryOfRunId ?? null;
+        let cursor = runById.get(runId)?.retryOfRunId ?? null;
         const seen = new Set<string>([runId]);
         while (cursor && runIds.has(cursor) && !seen.has(cursor)) {
           seen.add(cursor);
           depth += 1;
-          cursor = runs.find((run) => run.id === cursor)?.retryOfRunId ?? null;
+          cursor = runById.get(cursor)?.retryOfRunId ?? null;
         }
         return depth;
       };

@@ -1606,6 +1606,7 @@ function useIssueDetailView() {
     completionSection,
     pipelineStartCard,
     rerunSection,
+    triageFailureSection,
   } = buildIssueDetailActions({
     approveError,
     approvedAwaitingExecution,
@@ -1615,6 +1616,7 @@ function useIssueDetailView() {
     effectiveRevisionCount,
     clarificationRequest: thread?.clarificationRequest ?? null,
     failingPhaseOutput,
+    triageFailureReason: activeIssue?.triageFailureReason ?? null,
     hasDiffs: (diffs?.length ?? 0) > 0,
     hasApprovalDecision,
     isCompleted: activeIssue?.pipelineStatus === ISSUE_PIPELINE_STATUS.completed,
@@ -1759,12 +1761,14 @@ function useIssueDetailView() {
   const detailActionStack =
     pipelineStartCard ||
     rerunSection ||
+    triageFailureSection ||
     clarificationSection ||
     approvalSection ||
     completionSection ? (
       <div className="space-y-4 mb-6">
         {pipelineStartCard}
         {rerunSection}
+        {triageFailureSection}
         {completionSection}
         {clarificationSection}
         {approvalSection}

@@ -1,0 +1,38 @@
+{
+  "ignore": {
+    "files": ["**/_meta.tsx", "**/_meta.ts", "public/docs/**", "**/public/docs/**"],
+    "overrides": [
+      {
+        "files": [
+          "**/UpdateBanner.tsx",
+          "**/ProjectSidebar.tsx",
+          "**/InboxView.tsx",
+          "**/AboutSettingsSection.tsx",
+          "**/project-graph-tab.tsx"
+        ],
+        "rules": ["react-doctor/effect-needs-cleanup"]
+      },
+      {
+        "files": ["**/renderer/telemetry.ts"],
+        "rules": ["react-doctor/async-defer-await"]
+      },
+      {
+        "files": [
+          "**/AssistantPanel.tsx",
+          "**/ActivePipelineCard.tsx",
+          "**/kanban-board/IssueListView.tsx",
+          "**/kanban-board/IssueCardParts.tsx"
+        ],
+        "rules": ["react-doctor/prefer-tag-over-role"]
+      },
+      {
+        "files": ["**/CleanupModal.tsx", "**/project-git-visualizer.tsx", "**/KanbanBoard.tsx"],
+        "rules": ["react-doctor/no-event-handler"]
+      },
+      {
+        "files": ["**/terminal-panes/useTerminalPane.ts"],
+        "rules": ["react-doctor/no-adjust-state-on-prop-change"]
+      }
+    ]
+  }
+}
