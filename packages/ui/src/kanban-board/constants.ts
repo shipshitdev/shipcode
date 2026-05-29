@@ -130,14 +130,6 @@ export const COLUMNS: BoardColumn[] = [
   },
 ];
 
-export const COLUMN_DOT_CLASS: Record<ColumnKey, string> = {
-  todo: 'bg-success',
-  agent: 'bg-agent',
-  human: 'bg-warning',
-  done: 'bg-done',
-  deferred: 'bg-text-muted-foreground',
-};
-
 export const COLUMN_FILL: Record<ColumnKey, number> = {
   todo: 0,
   agent: 0.5,
