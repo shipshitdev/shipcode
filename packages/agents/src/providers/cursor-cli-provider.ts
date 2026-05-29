@@ -48,9 +48,11 @@ function buildCursorCommand(req: ProviderRequest): CursorCommand {
   // stdin. `--output-format json` emits a single result object we can parse.
   const args = ['-p', '--output-format', 'json'];
   if (req.modelHint) args.push('--model', req.modelHint);
-  // Cursor has no sandbox flag. Only the execute phase may mutate the tree, so
-  // it gets `--force` (auto-apply edits). Read-only phases omit it so the agent
-  // cannot write.
+  // This provider is execute-only (see `supports`) because Cursor has no
+  // read-only mode. Execute intentionally writes inside an isolated worktree, so
+  // it gets `--force` to auto-apply edits without prompting. The phase guard is
+  // defensive: if some caller ever invoked another phase directly, it would not
+  // receive auto-apply.
   if (req.phase === 'execute') args.push('--force');
   return { args, stdin: req.prompt };
 }
