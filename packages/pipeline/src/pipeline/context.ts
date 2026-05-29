@@ -157,9 +157,10 @@ export function buildPhasePayload(
 
 /**
  * Clear phase-local fields on PipelineContext before entering the next phase.
- * Fields that were explicitly set for the upcoming phase (e.g. stabilizationFeedback
- * set by startStabilization before entering execute) are preserved by the caller
- * setting them *after* calling resetPhaseState.
+ * Fields that were explicitly set for the upcoming phase (e.g. executionResumeContext
+ * seeded by the desktop resume IPC before entering execute) are preserved by the
+ * caller setting them *after* calling resetPhaseState. Cross-phase fix/test carry
+ * now travels on the `PhaseOutcome` (see `ExecutePhaseCarry`), not here.
  */
 export function resetPhaseState(
   context: PipelineContext,
@@ -430,7 +431,6 @@ export function createPipelineContextHelpers(
       nodeVerificationRetries: seed.nodeVerificationRetries ?? 0,
       nodeAnchorSha: seed.nodeAnchorSha ?? null,
       testRetries: seed.testRetries ?? 0,
-      testOutput: seed.testOutput ?? null,
       githubIssueNumber: seed.githubIssueNumber ?? null,
       githubIssueTitle: seed.githubIssueTitle ?? null,
       githubRepo: seed.githubRepo ?? null,
@@ -466,7 +466,6 @@ export function createPipelineContextHelpers(
       workflowPolicy,
       workflowWarningEmitted: seed.workflowWarningEmitted ?? false,
       abort: seed.abort ?? new AbortController(),
-      stabilizationFeedback: seed.stabilizationFeedback ?? null,
       executionResumeContext: seed.executionResumeContext ?? null,
       previousPlanRawOutput: seed.previousPlanRawOutput ?? null,
       turnCount: seed.turnCount ?? 0,
@@ -557,7 +556,6 @@ export function createPipelineContextHelpers(
       activeProcessId: null,
       cancelled: false,
       verifiedSha: null,
-      stabilizationFeedback: null,
       executionResumeContext: null,
       previousPlanRawOutput: null,
     });

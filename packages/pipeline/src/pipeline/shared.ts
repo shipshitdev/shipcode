@@ -15,11 +15,14 @@ import type {
 import type { TaskGraphWithNodes } from '@shipcode/shared/source';
 import type {
   ActivePipelineSummary,
+  ExecutePhaseCarry,
   PhasePayload,
   PipelineContext,
   PipelineDeps,
   PipelineExecutorModel,
+  PlanPhaseCarry,
   ProviderPhaseDeltas,
+  VerifyPhaseCarry,
 } from '../types';
 
 export interface PipelineContextHelpers {
@@ -125,12 +128,28 @@ export interface PipelineRuntime {
  * `then`.
  */
 export type PhaseOutcome =
-  | { next: 'plan'; prompt: string; projectPath: string; worktreePath: string | null }
+  | {
+      next: 'plan';
+      prompt: string;
+      projectPath: string;
+      worktreePath: string | null;
+      /** Typed carry into the (re)entered plan phase; see `PlanPhaseCarry`. */
+      carry?: PlanPhaseCarry;
+    }
   | { next: 'review'; plan: ShipCodePlan }
   | { next: 'revision'; plan: ShipCodePlan; reviewFeedback: string }
-  | { next: 'execute'; plan: ShipCodePlan }
+  | {
+      next: 'execute';
+      plan: ShipCodePlan;
+      /** Typed carry into the execute phase; see `ExecutePhaseCarry`. */
+      carry?: ExecutePhaseCarry;
+    }
   | { next: 'testing' }
-  | { next: 'verification' }
+  | {
+      next: 'verification';
+      /** Typed carry into the verify phase (passing test output); see `VerifyPhaseCarry`. */
+      carry?: VerifyPhaseCarry;
+    }
   | { next: 'commit' }
   | { next: 'shipping' }
   | { next: 'done' }

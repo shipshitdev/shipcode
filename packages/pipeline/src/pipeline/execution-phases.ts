@@ -40,7 +40,7 @@ import {
   type TaskNodeRecord,
 } from '@shipcode/shared/source';
 import { computeRetryDelayMs } from '../retry-scheduler';
-import type { PhaseCarryOutput, PipelineContext } from '../types';
+import type { ExecutePhaseCarry, PipelineContext, VerifyPhaseCarry } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { buildPhasePayload, resetPhaseState } from './context';
 import { extractQaFlowResults } from './qa-result-parser';
@@ -441,10 +441,7 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
     command: string,
     testOutput: string,
   ): PhaseOutcome | null {
-    context.testOutput = context.testOutput?.includes(testOutput)
-      ? context.testOutput
-      : `${context.testOutput ?? ''}\n${testOutput}`.slice(-16384);
-    const blockMessage = claimSharedTestFailure(threadId, context, command, context.testOutput);
+    const blockMessage = claimSharedTestFailure(threadId, context, command, testOutput);
     if (blockMessage) {
       emitTerminalLifecycle(threadId, `[shared-failure] ${blockMessage}\r\n`);
       emitPhase(threadId, 'failed', blockMessage);
@@ -459,7 +456,7 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
       reason: 'continuation',
       attempt: context.testRetries,
     });
-    return { next: 'retry', delayMs, andThen: makeTestFixOutcome(threadId) };
+    return { next: 'retry', delayMs, andThen: makeTestFixOutcome(threadId, testOutput) };
   }
 
   /**
@@ -467,12 +464,9 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
    * `startTestFix`: consume accumulated test output, reset phase state, and
    * inject focused test-fix feedback before re-entering execute.
    */
-  function makeTestFixOutcome(threadId: string): PhaseOutcome {
+  function makeTestFixOutcome(threadId: string, testOutput: string): PhaseOutcome {
     const context = activePipelines.get(threadId);
     if (!context) return { next: 'paused' };
-
-    const testOutput = context.testOutput ?? '';
-    context.testOutput = null;
 
     const latestPlan = deps.plans.getLatest(threadId);
     const structuredPlan = latestPlan?.structured;
@@ -486,10 +480,14 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
       return { next: 'failed' };
     }
 
-    // Reset phase state, then inject focused test-fix feedback (consumed-once).
+    // Clear remaining phase-local state, then carry focused test-fix feedback into
+    // the re-execute on the outcome (consumed-once by the execute phase).
     resetPhaseState(context);
-    context.stabilizationFeedback = formatTestFixFeedback(testOutput, context.testRetries);
-    return { next: 'execute', plan: structuredPlan };
+    return {
+      next: 'execute',
+      plan: structuredPlan,
+      carry: { stabilizationFeedback: formatTestFixFeedback(testOutput, context.testRetries) },
+    };
   }
 
   function queueTestingIfCpuBusy(
@@ -742,7 +740,11 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
   // ─── End per-node verification helpers ─────────────────────────────────────
 
-  async function startExecution(threadId: string, plan: ShipCodePlan): Promise<PhaseOutcome> {
+  async function startExecution(
+    threadId: string,
+    plan: ShipCodePlan,
+    carry?: ExecutePhaseCarry,
+  ): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
     if (!context) return { next: 'paused' };
 
@@ -908,7 +910,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       const isRetry =
         context.testRetries > 0 ||
         context.verificationRetries > 0 ||
-        Boolean(context.stabilizationFeedback) ||
+        Boolean(carry?.stabilizationFeedback) ||
         taskGraph.status === 'failed';
       const hasTerminalNodesOnly = taskGraph.nodes.every((node) =>
         ['completed', 'failed', 'blocked'].includes(node.status),
@@ -965,16 +967,16 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       threadId,
       latestPlanRecord?.id ?? null,
     );
-    // Snapshot + consume (one-shot) the carry the executor prompt folds in; it
-    // is threaded into this invocation's PhasePayload below and read back from
-    // `payload.carry` when building the prompt.
-    const executeCarry: PhaseCarryOutput = {
-      testOutput: context.testOutput,
-      stabilizationFeedback: context.stabilizationFeedback,
-      executionResumeContext: context.executionResumeContext,
+    // The execute carry is the typed hand-off from the producing phase (test-fix,
+    // node-verification, stabilization, or plan→execute). `executionResumeContext`
+    // is also seeded externally by the desktop resume IPC, so fall back to the
+    // context field and consume it. Threaded into this invocation's PhasePayload
+    // below and read back from `payload.carry` when building the prompt.
+    const executeCarry: ExecutePhaseCarry = {
+      testOutput: carry?.testOutput,
+      stabilizationFeedback: carry?.stabilizationFeedback,
+      executionResumeContext: carry?.executionResumeContext ?? context.executionResumeContext,
     };
-    context.testOutput = null;
-    context.stabilizationFeedback = null;
     context.executionResumeContext = null;
     const executeMaterials: PromptMaterial[] = [
       {
@@ -1072,7 +1074,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
               return { next: 'failed' };
             }
             context.nodeVerificationRetries++;
-            context.stabilizationFeedback = formatNodeVerificationFailureFeedback(
+            const nodeFeedback = formatNodeVerificationFailureFeedback(
               activeTaskNode,
               context.nodeVerificationRetries,
             );
@@ -1081,7 +1083,11 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
               reason: 'continuation',
               attempt: context.nodeVerificationRetries,
             });
-            return { next: 'retry', delayMs, andThen: { next: 'execute', plan } };
+            return {
+              next: 'retry',
+              delayMs,
+              andThen: { next: 'execute', plan, carry: { stabilizationFeedback: nodeFeedback } },
+            };
           }
 
           // nodeOutcome === 'failed' — max retries exhausted
@@ -1248,22 +1254,26 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
 
     // --- Phase 1: Static verify commands (unit tests, typecheck, build) ---
+    // Accumulate verify output in a local (no longer on `context`); the testing
+    // phase's output is handed forward as typed carry — to verify on success, to
+    // execute (test-fix) on failure.
     const outputs: string[] = [];
+    let accumulatedTestOutput = '';
     for (const command of verifyCommands) {
       emitTerminalLifecycle(threadId, `[verify] $ ${command}\r\n`);
       try {
         const result = await runShellCommand(threadId, cwd, command, context.abort.signal);
         outputs.push(result.output);
-        context.testOutput = outputs.join('\n').slice(-16384);
+        accumulatedTestOutput = outputs.join('\n').slice(-16384);
         if (result.exitCode !== 0) {
           const retryOutcome = scheduleCoordinatedTestFixRetry(
             threadId,
             context,
             command,
-            result.output,
+            accumulatedTestOutput,
           );
           if (retryOutcome) return retryOutcome;
-          const testSummary = extractTestFailureSummary(context.testOutput ?? '');
+          const testSummary = extractTestFailureSummary(accumulatedTestOutput);
           deps.emitter.emit({
             type: 'pipeline:verification-exhausted',
             threadId,
@@ -1293,6 +1303,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         context,
         cwd,
         runtimeQa ?? { testCommands: [], discoverAgentTests: true },
+        accumulatedTestOutput,
       );
       if (!runtimeQaResult.ok) {
         if (runtimeQaResult.fatal) {
@@ -1305,8 +1316,13 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
 
     context.testRetries = 0;
-    resetPhaseState(context, ['testOutput', 'runtimeQaOutput']);
-    return { next: 'verification' };
+    // `runtimeQaOutput` stays on context (out of #139 scope) and is preserved into
+    // verify; the passing test output is handed forward as typed carry instead.
+    resetPhaseState(context, ['runtimeQaOutput']);
+    return {
+      next: 'verification',
+      carry: accumulatedTestOutput ? { testOutput: accumulatedTestOutput } : undefined,
+    };
   }
 
   async function runRuntimeQa(
@@ -1314,6 +1330,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     context: PipelineContext,
     cwd: string,
     config: NonNullable<PipelineContext['repoSetupContract']>['contract']['runtimeQa'],
+    priorTestOutput: string,
   ): Promise<
     | { ok: true }
     | { ok: false; fatal: true; error: string }
@@ -1389,14 +1406,12 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           const failMsg = '[runtime-qa] Server crashed during testing';
           runtimeOutputs.push(failMsg);
           context.runtimeQaOutput = runtimeOutputs.join('\n').slice(-16384);
-          context.testOutput = `${context.testOutput ?? ''}\n${context.runtimeQaOutput}`.slice(
-            -16384,
-          );
+          const mergedOutput = `${priorTestOutput}\n${context.runtimeQaOutput}`.slice(-16384);
           const crashRetry = scheduleCoordinatedTestFixRetry(
             threadId,
             context,
             'runtime-qa:server-crashed',
-            failMsg,
+            mergedOutput,
           );
           if (crashRetry) return { ok: false, fatal: false, outcome: crashRetry };
           return { ok: false, fatal: true, error: failMsg };
@@ -1418,12 +1433,13 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           if (result.exitCode !== 0 || hasFailedQaResult) {
             persistQaFlowResults();
             const visualFeedback = formatVisualQaFailureFeedback(commandQaResults);
-            const output = `${context.runtimeQaOutput}${visualFeedback}`;
+            const mergedOutput =
+              `${priorTestOutput}\n${context.runtimeQaOutput}${visualFeedback}`.slice(-16384);
             const commandRetry = scheduleCoordinatedTestFixRetry(
               threadId,
               context,
               command,
-              output,
+              mergedOutput,
             );
             if (commandRetry) return { ok: false, fatal: false, outcome: commandRetry };
             return {
@@ -1448,11 +1464,18 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
   }
 
-  async function startVerification(threadId: string): Promise<PhaseOutcome> {
+  async function startVerification(
+    threadId: string,
+    carry?: VerifyPhaseCarry,
+  ): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
     if (!context) return { next: 'paused' };
 
     emitPhase(threadId, 'verifying');
+
+    // Passing test output is handed in as typed carry from the testing phase
+    // (and is absent when verify is entered directly, e.g. via the re-verify IPC).
+    const testOutput = carry?.testOutput ?? null;
 
     const cwd = context.worktreePath ?? context.projectPath;
     const latestPlan = deps.plans.getLatest(threadId);
@@ -1530,12 +1553,12 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     const verifyMaterials: PromptMaterial[] = [
       ...ensureRepoPromptMaterials(context),
       { kind: 'diff_summary', label: 'implementation diff', content: diff },
-      ...(context.testOutput
+      ...(testOutput
         ? [
             {
               kind: 'verification_output' as const,
               label: 'test output',
-              content: context.testOutput,
+              content: testOutput,
             },
           ]
         : []),
@@ -1566,7 +1589,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           plan,
           diff,
           acceptanceCriteria: plan.acceptanceCriteria,
-          testOutput: context.testOutput,
+          testOutput,
         }) ??
         buildVerificationPrompt(
           plan,
@@ -1574,7 +1597,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           plan.acceptanceCriteria,
           skill.context,
           skill.deps,
-          context.testOutput ?? null,
+          testOutput,
           {
             promptMaterials: verifyMaterials,
             qaState: context.featureQaState ?? undefined,
@@ -1988,9 +2011,12 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
     context.cancelled = false;
     resetPhaseState(context);
-    context.stabilizationFeedback = formatStabilizationFeedback(inputs);
     context.verifiedSha = null;
-    return { next: 'execute', plan: latestPlan.structured };
+    return {
+      next: 'execute',
+      plan: latestPlan.structured,
+      carry: { stabilizationFeedback: formatStabilizationFeedback(inputs) },
+    };
   }
 
   return {

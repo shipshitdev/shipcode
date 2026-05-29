@@ -328,7 +328,6 @@ export interface OrchestratorState {
  * reads, writes, construction, and persistence are unchanged.
  */
 export interface PipelineContext extends OrchestratorState {
-  testOutput: string | null;
   /**
    * Pre-loaded repo context string for injection into phase prompts.
    * Read once from `<projectPath>/.agents/memory/` at pipeline start.
@@ -337,20 +336,17 @@ export interface PipelineContext extends OrchestratorState {
   repoPromptMaterials: PromptMaterial[] | null;
   promptMaterialSummaries: Partial<Record<PipelinePromptPhase, PromptMaterialSummary>>;
   /**
-   * Optional follow-up inputs from a linked draft PR. When set, the next
-   * execute pass appends them to the prompt and then clears the field.
-   */
-  stabilizationFeedback: string | null;
-  /**
-   * Optional context for semantic resume after an interrupted execution.
-   * When set, the next execute pass appends it to the prompt and then clears it.
+   * Optional context for semantic resume after an interrupted execution. Seeded
+   * externally by the desktop resume IPC (`register-pipeline-handlers`); the next
+   * execute pass folds it into `ExecutePhaseCarry` and then clears it.
    */
   executionResumeContext: string | null;
   /**
-   * Raw output from a previous failed plan attempt. When set,
-   * `startPlanGeneration` appends format-correction context so the
-   * model can fix its output format instead of starting from scratch.
-   * Consumed (cleared) after use.
+   * Raw output from a previous failed plan attempt, for format-correction
+   * context. Seeded externally by the desktop retry IPC
+   * (`register-pipeline-handlers`); internal plan retries carry it on the
+   * `{ next: 'plan' }` outcome instead. `startPlanGeneration` prefers the
+   * outcome carry and falls back to this field, consuming (clearing) it.
    */
   previousPlanRawOutput: string | null;
   /** Cleanup function for a running runtime QA server. Called on cancel. */
@@ -383,19 +379,45 @@ export interface PhaseInput {
 }
 
 /**
- * Consumed-once carry threaded from the previous phase into the next phase's
- * `PhasePayload` via `buildPhasePayload`'s `prevOutput` arg. Each field is read
- * once by the receiving phase when building its prompt. All optional: an omitted
- * field means "no carry of this kind". (#138 builds the pipe; #139 will move the
- * *writes* off `PipelineContext` into typed `PhaseOutcome` results.)
+ * Typed, consumed-once carry threaded from the previous phase into the next via
+ * the `carry` field on its `PhaseOutcome` transition, then surfaced on
+ * `PhasePayload.carry` (built by `buildPhasePayload`). Each field is read once by
+ * the receiving phase when building its prompt. This is the typed hand-off that
+ * replaces the old mutate-`PipelineContext`-then-`resetPhaseState` round-trip (#139).
+ *
+ * How the issue's named phase-result types map onto the as-built state machine
+ * (#137): a phase's *decision* already rides a `PhaseOutcome` variant — a
+ * PlanPhaseResult's plan is `{ next: 'review', plan }`; a ReviewPhaseResult's
+ * decision is the revision-vs-execute variant; Execute/Verify/Test
+ * exit-code/passed/fingerprint are consumed internally to pick the next variant.
+ * What previously crossed phases only as loose `PipelineContext` fields — and is
+ * now typed here and carried on the outcome — is the data below.
  */
-export interface PhaseCarryOutput {
-  readonly stabilizationFeedback?: string | null;
-  readonly executionResumeContext?: string | null;
+export interface PlanPhaseCarry {
+  /** Raw output of a previous failed plan attempt, for format-correction context. */
   readonly previousPlanRawOutput?: string | null;
-  readonly testOutput?: string | null;
-  readonly runtimeQaOutput?: string | null;
 }
+
+export interface ExecutePhaseCarry {
+  /** Accumulated test / runtime-QA failure output to fold into the executor prompt. */
+  readonly testOutput?: string | null;
+  /** Focused fix feedback (test-fix, node-verification, or PR stabilization). */
+  readonly stabilizationFeedback?: string | null;
+  /** Resume context appended after an interrupted execution. */
+  readonly executionResumeContext?: string | null;
+}
+
+export interface VerifyPhaseCarry {
+  /** Passing test/verify output, shown to the verifier as evidence. */
+  readonly testOutput?: string | null;
+}
+
+/**
+ * Carry accepted by `buildPhasePayload`'s `prevOutput` arg — plan + execute only.
+ * Verification carry (`VerifyPhaseCarry`) flows directly into `startVerification`
+ * and is not threaded through `buildPhasePayload`, so it is intentionally excluded.
+ */
+export type PhaseCarryOutput = PlanPhaseCarry & ExecutePhaseCarry;
 
 /**
  * Context mutations produced by a `runProviderPhaseCore` call, returned instead
@@ -456,20 +478,16 @@ export interface PhasePayload {
  * control to the next phase handler.
  */
 export type PhaseLocalField =
-  | 'stabilizationFeedback'
   | 'executionResumeContext'
   | 'previousPlanRawOutput'
-  | 'testOutput'
   | 'runtimeQaOutput'
   | 'runtimeQaCleanup'
   | 'cpuQueueStartedAt'
   | 'cpuQueueLastNotifiedAt';
 
 export const PHASE_LOCAL_FIELDS: readonly PhaseLocalField[] = [
-  'stabilizationFeedback',
   'executionResumeContext',
   'previousPlanRawOutput',
-  'testOutput',
   'runtimeQaOutput',
   'runtimeQaCleanup',
   'cpuQueueStartedAt',

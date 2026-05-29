@@ -11,10 +11,8 @@ import {
 describe('resetPhaseState', () => {
   it('clears phase-local context fields', () => {
     const context = {
-      stabilizationFeedback: 'fix tests',
       executionResumeContext: 'resume from checkpoint',
       previousPlanRawOutput: 'old plan',
-      testOutput: 'test output',
       runtimeQaOutput: 'runtime output',
       runtimeQaCleanup: async () => {},
       cpuQueueStartedAt: 1,
@@ -23,10 +21,8 @@ describe('resetPhaseState', () => {
 
     resetPhaseState(context);
 
-    expect(context.stabilizationFeedback).toBeNull();
     expect(context.executionResumeContext).toBeNull();
     expect(context.previousPlanRawOutput).toBeNull();
-    expect(context.testOutput).toBeNull();
     expect(context.runtimeQaOutput).toBeNull();
     expect(context.runtimeQaCleanup).toBeNull();
     expect(context.cpuQueueStartedAt).toBeNull();
@@ -35,17 +31,15 @@ describe('resetPhaseState', () => {
 
   it('preserves selected phase-local fields for verifier evidence handoff', () => {
     const context = {
-      stabilizationFeedback: 'fix tests',
-      testOutput: 'typecheck passed',
+      previousPlanRawOutput: 'old plan',
       runtimeQaOutput: 'playwright passed',
       cpuQueueStartedAt: 1,
       cpuQueueLastNotifiedAt: 2,
     } as PipelineContext;
 
-    resetPhaseState(context, ['testOutput', 'runtimeQaOutput']);
+    resetPhaseState(context, ['runtimeQaOutput']);
 
-    expect(context.stabilizationFeedback).toBeNull();
-    expect(context.testOutput).toBe('typecheck passed');
+    expect(context.previousPlanRawOutput).toBeNull();
     expect(context.runtimeQaOutput).toBe('playwright passed');
     expect(context.cpuQueueStartedAt).toBeNull();
     expect(context.cpuQueueLastNotifiedAt).toBeNull();
@@ -90,7 +84,7 @@ describe('snapshotPhaseInput', () => {
       githubIssueTitle: 'Issue title',
       githubRepo: 'shipshitdev/shipcode',
       autonomous: true,
-      stabilizationFeedback: 'must not leak',
+      executionResumeContext: 'must not leak',
     } as PipelineContext);
 
     expect(snapshot).toEqual({
@@ -148,9 +142,9 @@ describe('buildPhasePayload', () => {
         plan: { totalMaterials: 3 },
         execute: { totalMaterials: 7 },
       },
-      // Phase-local fields that must never appear in the payload.
-      stabilizationFeedback: 'must not leak',
-      testOutput: 'must not leak',
+      // Real phase-local fields that must never be auto-lifted into the payload.
+      executionResumeContext: 'must not leak',
+      previousPlanRawOutput: 'must not leak',
     } as unknown as PipelineContext;
   }
 
@@ -220,8 +214,6 @@ describe('buildPhasePayload', () => {
 
     // Carry comes only from prevOutput, never lifted implicitly from context.
     expect(payload.carry).toEqual({});
-    expect('stabilizationFeedback' in payload).toBe(false);
-    expect('testOutput' in payload).toBe(false);
     expect('executionResumeContext' in payload).toBe(false);
     expect('previousPlanRawOutput' in payload).toBe(false);
   });
