@@ -238,6 +238,7 @@ function makeExecutionHarness(context = makeContext()) {
     formatTestFixFeedback: vi.fn(
       (testOutput: string, attempt: number) => `Tests failed on attempt ${attempt}\n${testOutput}`,
     ),
+    formatStabilizationFeedback: vi.fn(() => 'stabilization feedback'),
     runShellCommand: vi.fn(),
     runProviderPhase: vi.fn(async () => ({ rawOutput: 'done', exitCode: 0 })),
     postTaskGraphComment: vi.fn(),
@@ -656,15 +657,16 @@ describe('execution phase handlers', () => {
     const outcome = await harness.handlers.startTesting('thread-1');
 
     expect(context.testRetries).toBe(1);
-    // The accumulated failure output is consumed into the test-fix feedback that
-    // the re-execution will read.
-    expect(context.stabilizationFeedback).toContain('Visual QA requires stable selectors');
-    expect(context.stabilizationFeedback).toContain('failed on attempt 1');
-    expect(outcome).toEqual({
+    // The accumulated failure output is carried into the re-execution as fix feedback.
+    expect(outcome).toMatchObject({
       next: 'retry',
       delayMs: expect.any(Number),
       andThen: { next: 'execute', plan: expect.anything() },
     });
+    const fixFeedback = (outcome as { andThen?: { carry?: { stabilizationFeedback?: string } } })
+      .andThen?.carry?.stabilizationFeedback;
+    expect(fixFeedback).toContain('Visual QA requires stable selectors');
+    expect(fixFeedback).toContain('failed on attempt 1');
   });
 
   it('emits a failure when the test-fix retry cannot find a structured plan', async () => {
@@ -803,7 +805,7 @@ describe('execution phase handlers', () => {
   });
 
   it('blocks duplicate shared test failures owned by another active thread', async () => {
-    const context = makeContext({ testOutput: 'FAIL packages/foo.test.ts\nAssertionError: no' });
+    const context = makeContext();
     const harness = makeExecutionHarness(context);
     harness.deps.projectFailures = {
       claimOrCreate: vi.fn(() => ({
@@ -828,7 +830,7 @@ describe('execution phase handlers', () => {
   });
 
   it('blocks shared test failures already resolved by another thread', async () => {
-    const context = makeContext({ testOutput: 'FAIL packages/foo.test.ts\nAssertionError: no' });
+    const context = makeContext();
     const harness = makeExecutionHarness(context);
     harness.deps.projectFailures = {
       claimOrCreate: vi.fn(() => ({
@@ -942,12 +944,14 @@ describe('execution phase handlers', () => {
       return '';
     });
 
-    await harness.handlers.startExecution('thread-1', plan as never);
+    const outcome = await harness.handlers.startExecution('thread-1', plan as never);
     await Promise.resolve();
     await Promise.resolve();
 
     expect(context.nodeVerificationRetries).toBe(1);
-    expect(context.stabilizationFeedback).toContain('failed verification on attempt 1');
+    const nodeFeedback = (outcome as { andThen?: { carry?: { stabilizationFeedback?: string } } })
+      .andThen?.carry?.stabilizationFeedback;
+    expect(nodeFeedback).toContain('failed verification on attempt 1');
     expect(
       (harness.deps as never as { taskGraphs: { updateNodeStatus: ReturnType<typeof vi.fn> } })
         .taskGraphs.updateNodeStatus,
@@ -1160,12 +1164,14 @@ describe('execution phase handlers', () => {
       return '';
     });
 
-    await harness.handlers.startExecution('thread-1', plan as never);
+    const outcome = await harness.handlers.startExecution('thread-1', plan as never);
     await Promise.resolve();
     await Promise.resolve();
 
     expect(context.nodeVerificationRetries).toBe(1);
-    expect(context.stabilizationFeedback).toContain('failed verification on attempt 1');
+    const nodeFeedback = (outcome as { andThen?: { carry?: { stabilizationFeedback?: string } } })
+      .andThen?.carry?.stabilizationFeedback;
+    expect(nodeFeedback).toContain('failed verification on attempt 1');
   });
 
   it('fails cancelled scoped node verification without scheduling another retry', async () => {
@@ -1607,13 +1613,14 @@ describe('execution phase handlers', () => {
       return context.repoSetupContract;
     });
 
-    await harness.handlers.startTesting('thread-1');
+    const outcome = await harness.handlers.startTesting('thread-1');
 
     expect(context.testRetries).toBe(1);
-    expect(context.testOutput).toContain('Server startup failed: readiness timeout');
+    const fixFeedback = (outcome as { andThen?: { carry?: { stabilizationFeedback?: string } } })
+      .andThen?.carry?.stabilizationFeedback;
+    expect(fixFeedback).toContain('Server startup failed: readiness timeout');
 
     context.testRetries = 3;
-    context.testOutput = null;
     mockServerLifecycleStart.mockRejectedValueOnce('offline');
 
     await harness.handlers.startTesting('thread-1');
@@ -1868,5 +1875,67 @@ describe('execution phase handlers', () => {
       andThen: { next: 'execute', plan },
     });
     expect(harness.runtime.runProviderPhase).toHaveBeenCalledTimes(1);
+  });
+
+  describe('typed phase-result carry (#139)', () => {
+    it('carries passing test output to verification as typed carry', async () => {
+      const context = makeContext();
+      const harness = makeExecutionHarness(context);
+      vi.mocked(harness.runtime.getVerifyCommands).mockReturnValue(['bun test']);
+      vi.mocked(harness.runtime.runShellCommand).mockResolvedValue({
+        exitCode: 0,
+        output: 'PASS all green',
+      });
+
+      const outcome = await harness.handlers.startTesting('thread-1');
+
+      expect(outcome).toEqual({
+        next: 'verification',
+        carry: { testOutput: expect.stringContaining('PASS all green') },
+      });
+    });
+
+    it('folds carry.testOutput into the verifier prompt materials', async () => {
+      const context = makeContext({ worktreePath: tempDir('verify-carry') });
+      const harness = makeExecutionHarness(context);
+      vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+        rawOutput: verificationPassed,
+        exitCode: 0,
+      });
+      mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+        if (args[0] === 'status') return '';
+        if (args[0] === 'rev-parse') return 'head-sha\n';
+        if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
+        return '';
+      });
+
+      await harness.handlers.startVerification('thread-1', { testOutput: 'COVERAGE 100% green' });
+
+      const materials = vi.mocked(harness.runtime.runProviderPhase).mock.calls[0][3];
+      expect(materials).toContainEqual(
+        expect.objectContaining({ label: 'test output', content: 'COVERAGE 100% green' }),
+      );
+    });
+
+    it('carries stabilization feedback on the execute outcome instead of mutating context', async () => {
+      const context = makeContext();
+      const harness = makeExecutionHarness(context);
+      vi.mocked(harness.runtime.formatStabilizationFeedback).mockReturnValue(
+        'STABILIZE: fix failing CI',
+      );
+
+      const outcome = await harness.handlers.startStabilization('thread-1', {
+        prNumber: 7,
+        prUrl: null,
+        failingChecks: [],
+        unresolvedReviewComments: [],
+      });
+
+      expect(outcome).toEqual({
+        next: 'execute',
+        plan,
+        carry: { stabilizationFeedback: 'STABILIZE: fix failing CI' },
+      });
+    });
   });
 });

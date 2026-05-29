@@ -69,6 +69,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             outcome.prompt,
             outcome.projectPath,
             outcome.worktreePath,
+            outcome.carry,
           );
           break;
         case 'review':
@@ -78,13 +79,13 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           outcome = await planning.startRevision(threadId, outcome.plan, outcome.reviewFeedback);
           break;
         case 'execute':
-          outcome = await execution.startExecution(threadId, outcome.plan);
+          outcome = await execution.startExecution(threadId, outcome.plan, outcome.carry);
           break;
         case 'testing':
           outcome = await execution.startTesting(threadId);
           break;
         case 'verification':
-          outcome = await execution.startVerification(threadId);
+          outcome = await execution.startVerification(threadId, outcome.carry);
           break;
         case 'commit':
           outcome = await execution.startCommitAndPush(threadId);

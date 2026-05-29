@@ -2683,7 +2683,8 @@ Custom prompt`,
       const context = requireContext(pipeline);
       expect(context.nodeVerificationRetries).toBe(1);
       expect(context.retryTimer).not.toBeNull();
-      expect(context.stabilizationFeedback).toContain('<node_verification_failure>');
+      // Node-verification feedback now rides the carried execute outcome (asserted
+      // at the unit level in execution-phases.test.ts), not context.stabilizationFeedback.
       expect(taskGraphs.updateNodeStatus).toHaveBeenLastCalledWith('node-1', 'ready');
 
       await vi.advanceTimersByTimeAsync(1000);
@@ -5807,7 +5808,6 @@ Custom prompt`,
         worktreePath: '/worktree',
         cancelled: true,
         verifiedSha: 'old-sha',
-        stabilizationFeedback: 'old feedback',
         autonomous: true,
       });
 

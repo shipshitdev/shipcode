@@ -31,7 +31,7 @@ import {
 } from '@shipcode/shared';
 import type { TaskGraphWithNodes } from '@shipcode/shared/source';
 import { computeRetryDelayMs } from '../retry-scheduler';
-import type { PipelineContext } from '../types';
+import type { PipelineContext, PlanPhaseCarry } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { buildPhasePayload, resetPhaseState } from './context';
 import type { PhaseOutcome, PipelineHelperEnv } from './shared';
@@ -299,6 +299,7 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
     prompt: string,
     projectPath: string,
     worktreePath: string | null,
+    carry?: PlanPhaseCarry,
   ): Promise<PhaseOutcome> {
     const context = ensureContext(threadId, { projectPath, worktreePath });
     clearRetryTimer(context);
@@ -359,8 +360,10 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
     emitPhase(threadId, 'planning');
 
     const skill = skillCallSite(context);
-    const previousAttempt = context.previousPlanRawOutput;
-    context.previousPlanRawOutput = null; // consume — one shot
+    // Prefer the typed carry from an internal retry; fall back to the context
+    // field seeded externally by the desktop retry IPC. Consume either way.
+    const previousAttempt = carry?.previousPlanRawOutput ?? context.previousPlanRawOutput;
+    context.previousPlanRawOutput = null;
     const clarificationContext = buildClarificationContext(context);
     const planMaterials: PromptMaterial[] = [
       { kind: 'issue_prompt', label: 'issue prompt', content: prompt },
@@ -440,7 +443,6 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
         const detectedError = parser.detectError();
         if (context.retryCount < PIPELINE_MAX_RETRIES) {
           context.retryCount++;
-          context.previousPlanRawOutput = response.rawOutput;
           const delayMs = computeRetryDelayMs({
             reason: 'failure',
             attempt: context.retryCount,
@@ -449,7 +451,13 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
           return {
             next: 'retry',
             delayMs,
-            andThen: { next: 'plan', prompt, projectPath, worktreePath },
+            andThen: {
+              next: 'plan',
+              prompt,
+              projectPath,
+              worktreePath,
+              carry: { previousPlanRawOutput: response.rawOutput },
+            },
           };
         }
         let cliError: string | null = null;

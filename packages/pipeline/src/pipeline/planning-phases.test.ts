@@ -508,6 +508,71 @@ describe('planning phase helpers', () => {
     );
   });
 
+  it('carries previousPlanRawOutput on the plan retry outcome instead of mutating context', async () => {
+    const context = makePlanningContext({ retryCount: 0 });
+    const harness = makePlanningHarness(context);
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: 'garbled plan output',
+      exitCode: 1,
+    });
+
+    const outcome = await harness.handlers.startPlanGeneration(
+      'thread-1',
+      'do stuff',
+      process.cwd(),
+      null,
+    );
+
+    expect(outcome).toEqual({
+      next: 'retry',
+      delayMs: expect.any(Number),
+      andThen: {
+        next: 'plan',
+        prompt: 'do stuff',
+        projectPath: expect.any(String),
+        worktreePath: null,
+        carry: { previousPlanRawOutput: 'garbled plan output' },
+      },
+    });
+    // The failed attempt rides the outcome carry, not the context field.
+    expect(harness.context.previousPlanRawOutput).toBeNull();
+  });
+
+  it('prefers the carry previousPlanRawOutput over the context seed and consumes it', async () => {
+    const context = makePlanningContext({ previousPlanRawOutput: 'stale context seed' });
+    const harness = makePlanningHarness(context);
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: 'no plan',
+      exitCode: 1,
+    });
+
+    await harness.handlers.startPlanGeneration('thread-1', 'do stuff', process.cwd(), null, {
+      previousPlanRawOutput: 'carried attempt output',
+    });
+    await Promise.resolve();
+
+    const prompt = vi.mocked(harness.runtime.runProviderPhase).mock.calls[0][2];
+    expect(prompt).toContain('carried attempt output');
+    expect(prompt).not.toContain('stale context seed');
+    expect(harness.context.previousPlanRawOutput).toBeNull();
+  });
+
+  it('falls back to the externally-seeded context previousPlanRawOutput when no carry is given', async () => {
+    const context = makePlanningContext({ previousPlanRawOutput: 'desktop-seeded retry output' });
+    const harness = makePlanningHarness(context);
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: 'no plan',
+      exitCode: 1,
+    });
+
+    await harness.handlers.startPlanGeneration('thread-1', 'do stuff', process.cwd(), null);
+    await Promise.resolve();
+
+    const prompt = vi.mocked(harness.runtime.runProviderPhase).mock.calls[0][2];
+    expect(prompt).toContain('desktop-seeded retry output');
+    expect(harness.context.previousPlanRawOutput).toBeNull();
+  });
+
   it('routes review CLI missing failures and request-changes revisions', async () => {
     const context = makePlanningContext({ reviewerModel: 'openrouter' });
     const missing = makePlanningHarness(context);
