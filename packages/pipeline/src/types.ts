@@ -361,6 +361,45 @@ export interface PhaseInput {
 }
 
 /**
+ * Frozen input for a single `runProviderPhaseCore` call. Extends the identity
+ * snapshot (`PhaseInput`) with the execution-context fields the provider call
+ * needs — models, run id, abort signal, the phase's prompt-material summary,
+ * and the prompt-telemetry counter captured at call time. The core reads only
+ * this; it never touches the mutable `PipelineContext`. Mutations flow back out
+ * via `ProviderPhaseDeltas`, which the orchestrator (the `runProviderPhase`
+ * wrapper, and later the #137 dispatch loop) applies to context.
+ */
+export interface ProviderPhaseInput extends PhaseInput {
+  readonly runId: string | null;
+  /** The live signal (not the controller) so the core can read `.aborted`. */
+  readonly abort: AbortSignal;
+  /** `promptTelemetry.length` at snapshot time; the next attempt is this + 1. */
+  readonly promptTelemetryCount: number;
+  /** Pre-sliced summary for this phase from `promptMaterialSummaries[phase]`. */
+  readonly promptMaterialSummary: PromptMaterialSummary | undefined;
+  readonly executorModel: PipelineExecutorModel;
+  readonly plannerModel: PipelineExecutorModel;
+  readonly reviewerModel: PipelineExecutorModel;
+  readonly verifierModel: PipelineExecutorModel;
+  readonly executorModelOverride: string | null;
+  readonly plannerModelIdOverride: string | null;
+  readonly reviewerModelIdOverride: string | null;
+  readonly executorModelIdOverride: string | null;
+  readonly verifierModelIdOverride: string | null;
+}
+
+/**
+ * Context mutations produced by a `runProviderPhaseCore` call, returned instead
+ * of being applied directly. The orchestrator appends `promptTelemetry` to
+ * `context.promptTelemetry`, and — only when telemetry persistence failed —
+ * appends `diagnosticEntry` to `context.promptTelemetryDiagnostics`.
+ */
+export interface ProviderPhaseDeltas {
+  promptTelemetry: PhasePromptTelemetry;
+  diagnosticEntry: PromptTelemetryPersistenceDiagnostic | null;
+}
+
+/**
  * Fields on PipelineContext that are scoped to a single phase and should be
  * cleared between transitions. `resetPhaseState` nulls these before handing
  * control to the next phase handler.

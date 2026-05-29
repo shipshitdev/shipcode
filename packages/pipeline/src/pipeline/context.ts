@@ -1,4 +1,5 @@
 import {
+  type ProviderPhase,
   type ResolveResult,
   resolvePhaseReasoningEffort,
   type SkillValidationError,
@@ -19,6 +20,7 @@ import {
   type PipelineContext,
   type PipelineDeps,
   type PipelineExecutorModel,
+  type ProviderPhaseInput,
 } from '../types';
 import { loadWorkflowPolicy } from '../workflow-loader';
 import type { PipelineContextHelpers } from './shared';
@@ -39,6 +41,48 @@ export function snapshotPhaseInput(context: PipelineContext): PhaseInput {
     githubIssueTitle: context.githubIssueTitle,
     githubRepo: context.githubRepo,
     autonomous: context.autonomous,
+  });
+}
+
+/**
+ * Create a frozen `ProviderPhaseInput` for a single `runProviderPhaseCore`
+ * call. Extends the identity snapshot with the execution-context fields the
+ * provider call reads: models, run id, the live abort signal, the phase's
+ * prompt-material summary, and the prompt-telemetry counter.
+ *
+ * `promptTelemetryCount` captures `promptTelemetry.length` at this instant.
+ * The caller must apply the returned telemetry delta to context with no
+ * intervening `await` that could push to `promptTelemetry`, or the count
+ * goes stale (the `runProviderPhase` wrapper upholds this).
+ */
+export function snapshotProviderPhaseInput(
+  context: PipelineContext,
+  phase: ProviderPhase,
+): ProviderPhaseInput {
+  return Object.freeze({
+    threadId: context.threadId,
+    projectPath: context.projectPath,
+    projectId: context.projectId,
+    worktreePath: context.worktreePath,
+    baseBranch: context.baseBranch,
+    forkPointSha: context.forkPointSha,
+    githubIssueNumber: context.githubIssueNumber,
+    githubIssueTitle: context.githubIssueTitle,
+    githubRepo: context.githubRepo,
+    autonomous: context.autonomous,
+    runId: context.runId,
+    abort: context.abort.signal,
+    promptTelemetryCount: context.promptTelemetry.length,
+    promptMaterialSummary: context.promptMaterialSummaries[phase],
+    executorModel: context.executorModel,
+    plannerModel: context.plannerModel,
+    reviewerModel: context.reviewerModel,
+    verifierModel: context.verifierModel,
+    executorModelOverride: context.executorModelOverride,
+    plannerModelIdOverride: context.plannerModelIdOverride,
+    reviewerModelIdOverride: context.reviewerModelIdOverride,
+    executorModelIdOverride: context.executorModelIdOverride,
+    verifierModelIdOverride: context.verifierModelIdOverride,
   });
 }
 

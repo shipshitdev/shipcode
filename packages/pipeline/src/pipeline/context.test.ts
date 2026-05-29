@@ -1,7 +1,12 @@
 import { DEFAULT_SETTINGS, PIPELINE_PHASE } from '@shipcode/shared';
 import { describe, expect, it, vi } from 'vitest';
 import type { PipelineContext } from '../types';
-import { createPipelineContextHelpers, resetPhaseState, snapshotPhaseInput } from './context';
+import {
+  createPipelineContextHelpers,
+  resetPhaseState,
+  snapshotPhaseInput,
+  snapshotProviderPhaseInput,
+} from './context';
 
 describe('resetPhaseState', () => {
   it('clears phase-local context fields', () => {
@@ -100,6 +105,57 @@ describe('snapshotPhaseInput', () => {
       githubRepo: 'shipshitdev/shipcode',
       autonomous: true,
     });
+    expect(Object.isFrozen(snapshot)).toBe(true);
+  });
+});
+
+describe('snapshotProviderPhaseInput', () => {
+  it('captures execution-context fields, slices the phase summary, and excludes phase-local state', () => {
+    const abort = new AbortController();
+    const context = {
+      threadId: 'thread-1',
+      projectPath: '/repo',
+      projectId: 'project-1',
+      worktreePath: '/worktree',
+      baseBranch: 'main',
+      forkPointSha: 'abc123',
+      githubIssueNumber: 42,
+      githubIssueTitle: 'Issue title',
+      githubRepo: 'shipshitdev/shipcode',
+      autonomous: true,
+      runId: 'run-1',
+      abort,
+      promptTelemetry: [{}],
+      promptMaterialSummaries: {
+        plan: { totalMaterials: 3 },
+        review: { totalMaterials: 9 },
+      },
+      executorModel: 'claude',
+      plannerModel: 'codex',
+      reviewerModel: 'openrouter',
+      verifierModel: 'claude',
+      executorModelOverride: 'openrouter/auto',
+      plannerModelIdOverride: 'claude-opus',
+      reviewerModelIdOverride: null,
+      executorModelIdOverride: null,
+      verifierModelIdOverride: null,
+      stabilizationFeedback: 'must not leak',
+    } as unknown as PipelineContext;
+
+    const snapshot = snapshotProviderPhaseInput(context, 'plan');
+
+    expect(snapshot.threadId).toBe('thread-1');
+    expect(snapshot.runId).toBe('run-1');
+    // The live signal is captured, not the controller.
+    expect(snapshot.abort).toBe(abort.signal);
+    // Counter is the length at snapshot time (next attempt is this + 1).
+    expect(snapshot.promptTelemetryCount).toBe(1);
+    // Only the requested phase's summary is carried, not the whole record.
+    expect(snapshot.promptMaterialSummary).toEqual({ totalMaterials: 3 });
+    expect(snapshot.plannerModel).toBe('codex');
+    expect(snapshot.executorModelOverride).toBe('openrouter/auto');
+    // Phase-local context must not bleed into the provider snapshot.
+    expect('stabilizationFeedback' in snapshot).toBe(false);
     expect(Object.isFrozen(snapshot)).toBe(true);
   });
 });
