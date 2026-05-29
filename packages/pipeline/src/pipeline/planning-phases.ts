@@ -33,7 +33,7 @@ import type { TaskGraphWithNodes } from '@shipcode/shared/source';
 import { computeRetryDelayMs } from '../retry-scheduler';
 import type { PipelineContext } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
-import { resetPhaseState } from './context';
+import { buildPhasePayload, resetPhaseState } from './context';
 import type { PhaseOutcome, PipelineHelperEnv } from './shared';
 
 const NO_VALID_PLAN_REASON = 'Plan generation failed — no valid shipcode-plan block was produced.';
@@ -367,6 +367,9 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
       ...ensureRepoPromptMaterials(context),
     ];
     rememberMaterialSummary(context, 'plan', planMaterials);
+    const payload = buildPhasePayload(context, 'plan', {
+      previousPlanRawOutput: previousAttempt,
+    });
     let workflowPlanPrompt: string | null;
     try {
       workflowPlanPrompt = renderWorkflowPromptTemplate(context, deps, 'plan');
@@ -393,10 +396,12 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
           getVerifyCommands(context).join(' && ') || null,
         )) +
       buildRepoSetupPlannerNote(context) +
-      (previousAttempt ? buildPreviousAttemptContext(previousAttempt) : '');
+      (payload.carry.previousPlanRawOutput
+        ? buildPreviousAttemptContext(payload.carry.previousPlanRawOutput)
+        : '');
 
     try {
-      const response = await runProviderPhase(context, 'plan', planPrompt, planMaterials, {
+      const response = await runProviderPhase(context, payload, planPrompt, planMaterials, {
         reasoningEffort: context.phaseReasoningEfforts.plan,
       });
 
@@ -549,16 +554,11 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
         promptMaterials: reviewMaterials,
       });
 
+    const payload = buildPhasePayload(context, 'review');
     try {
-      const response = await runProviderPhase(
-        context,
-        'review',
-        reviewPromptText,
-        reviewMaterials,
-        {
-          reasoningEffort: context.phaseReasoningEfforts.review,
-        },
-      );
+      const response = await runProviderPhase(context, payload, reviewPromptText, reviewMaterials, {
+        reasoningEffort: context.phaseReasoningEfforts.review,
+      });
 
       if (context.cancelled) return { next: 'paused' };
 
@@ -817,16 +817,11 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
       return { next: 'failed' };
     }
 
+    const payload = buildPhasePayload(context, 'revision');
     try {
-      const response = await runProviderPhase(
-        context,
-        'revision',
-        revisionPrompt,
-        revisionMaterials,
-        {
-          reasoningEffort: context.phaseReasoningEfforts.revision,
-        },
-      );
+      const response = await runProviderPhase(context, payload, revisionPrompt, revisionMaterials, {
+        reasoningEffort: context.phaseReasoningEfforts.revision,
+      });
 
       if (context.cancelled) return { next: 'paused' };
 

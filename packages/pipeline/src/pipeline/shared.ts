@@ -15,11 +15,11 @@ import type {
 import type { TaskGraphWithNodes } from '@shipcode/shared/source';
 import type {
   ActivePipelineSummary,
+  PhasePayload,
   PipelineContext,
   PipelineDeps,
   PipelineExecutorModel,
   ProviderPhaseDeltas,
-  ProviderPhaseInput,
 } from '../types';
 
 export interface PipelineContextHelpers {
@@ -69,7 +69,7 @@ export interface PipelineRuntime {
   resolveAgentForPhase: (context: PipelineContext, phase: ProviderPhase) => PipelineExecutorModel;
   runProviderPhase: (
     context: PipelineContext,
-    phase: ProviderPhase,
+    payload: PhasePayload,
     prompt: string,
     promptMaterials: PromptMaterial[],
     phaseHints: {
@@ -83,13 +83,12 @@ export interface PipelineRuntime {
     clarificationRequest?: ClarificationRequest;
   }>;
   /**
-   * Pure variant of `runProviderPhase`: reads a frozen `ProviderPhaseInput`
-   * snapshot and returns the context mutations as `deltas` for the caller to
-   * apply. The orchestrator dispatch loop (#137) drives this directly.
+   * Pure variant of `runProviderPhase`: reads a frozen `PhasePayload` snapshot
+   * (phase, resolved model + override, materials, telemetry counter) and returns
+   * the context mutations as `deltas` for the caller to apply.
    */
   runProviderPhaseCore: (
-    input: ProviderPhaseInput,
-    phase: ProviderPhase,
+    payload: PhasePayload,
     prompt: string,
     promptMaterials: PromptMaterial[],
     phaseHints: {

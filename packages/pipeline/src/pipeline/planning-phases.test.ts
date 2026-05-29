@@ -446,7 +446,7 @@ describe('planning phase helpers', () => {
     expect(context.repoContext).toContain('Repo memory note');
     expect(harness.runtime.runProviderPhase).toHaveBeenCalledWith(
       context,
-      'plan',
+      expect.objectContaining({ phase: 'plan' }),
       expect.any(String),
       expect.arrayContaining([expect.objectContaining({ label: '.agents/memory/goal.md' })]),
       expect.any(Object),

@@ -1,5 +1,4 @@
 import {
-  type ProviderPhase,
   type ResolveResult,
   resolvePhaseReasoningEffort,
   type SkillValidationError,
@@ -16,6 +15,7 @@ import {
 import {
   type OrchestratorState,
   PHASE_LOCAL_FIELDS,
+  type PhaseCarryOutput,
   type PhaseInput,
   type PhaseLocalField,
   type PhasePayload,
@@ -23,7 +23,6 @@ import {
   type PipelineDeps,
   type PipelineExecutorModel,
   type PipelinePromptPhase,
-  type ProviderPhaseInput,
 } from '../types';
 import { loadWorkflowPolicy } from '../workflow-loader';
 import type { PipelineContextHelpers } from './shared';
@@ -44,48 +43,6 @@ export function snapshotPhaseInput(context: PipelineContext): PhaseInput {
     githubIssueTitle: context.githubIssueTitle,
     githubRepo: context.githubRepo,
     autonomous: context.autonomous,
-  });
-}
-
-/**
- * Create a frozen `ProviderPhaseInput` for a single `runProviderPhaseCore`
- * call. Extends the identity snapshot with the execution-context fields the
- * provider call reads: models, run id, the live abort signal, the phase's
- * prompt-material summary, and the prompt-telemetry counter.
- *
- * `promptTelemetryCount` captures `promptTelemetry.length` at this instant.
- * The caller must apply the returned telemetry delta to context with no
- * intervening `await` that could push to `promptTelemetry`, or the count
- * goes stale (the `runProviderPhase` wrapper upholds this).
- */
-export function snapshotProviderPhaseInput(
-  context: PipelineContext,
-  phase: ProviderPhase,
-): ProviderPhaseInput {
-  return Object.freeze({
-    threadId: context.threadId,
-    projectPath: context.projectPath,
-    projectId: context.projectId,
-    worktreePath: context.worktreePath,
-    baseBranch: context.baseBranch,
-    forkPointSha: context.forkPointSha,
-    githubIssueNumber: context.githubIssueNumber,
-    githubIssueTitle: context.githubIssueTitle,
-    githubRepo: context.githubRepo,
-    autonomous: context.autonomous,
-    runId: context.runId,
-    abort: context.abort.signal,
-    promptTelemetryCount: context.promptTelemetry.length,
-    promptMaterialSummary: context.promptMaterialSummaries[phase],
-    executorModel: context.executorModel,
-    plannerModel: context.plannerModel,
-    reviewerModel: context.reviewerModel,
-    verifierModel: context.verifierModel,
-    executorModelOverride: context.executorModelOverride,
-    plannerModelIdOverride: context.plannerModelIdOverride,
-    reviewerModelIdOverride: context.reviewerModelIdOverride,
-    executorModelIdOverride: context.executorModelIdOverride,
-    verifierModelIdOverride: context.verifierModelIdOverride,
   });
 }
 
@@ -155,18 +112,22 @@ function resolveModelIdOverrideForPhase(
 }
 
 /**
- * Build a frozen `PhasePayload` for a single phase from orchestrator state.
- * Mirrors `snapshotProviderPhaseInput`: identity + the phase-resolved model,
- * model-id override, and reasoning effort + the phase's prompt materials. The
- * phase reads this scoped view; it never mutates orchestrator state.
+ * Build a frozen `PhasePayload` for a single phase invocation from orchestrator
+ * state plus the previous phase's consumed-once `prevOutput`. Identity + the
+ * phase-resolved model, model-id override, and reasoning effort + the phase's
+ * prompt materials + `promptTelemetryCount` + `carry`. The phase reads this
+ * scoped view; it never mutates orchestrator state.
  *
- * Dormant in #136 — defined and unit-tested but not yet wired into a phase
- * handler. The #138 dispatch loop will call this once per phase invocation,
- * passing the live `PipelineContext` (which satisfies the parameter type).
+ * `promptTelemetryCount` captures `promptTelemetry.length` at this instant; the
+ * `runProviderPhase` wrapper must apply the returned telemetry delta with no
+ * intervening `await` that could push to `promptTelemetry`, or the count goes
+ * stale. `PipelineContext` satisfies `PhasePayloadSource`, so callers pass the
+ * live context directly.
  */
 export function buildPhasePayload(
   state: PhasePayloadSource,
   phase: PipelinePromptPhase,
+  prevOutput?: PhaseCarryOutput,
 ): PhasePayload {
   return Object.freeze({
     threadId: state.threadId,
@@ -182,6 +143,7 @@ export function buildPhasePayload(
     runId: state.runId,
     isAutomationRun: state.isAutomationRun,
     abort: state.abort.signal,
+    promptTelemetryCount: state.promptTelemetry.length,
     phase,
     model: resolveModelForPhase(state, phase),
     modelIdOverride: resolveModelIdOverrideForPhase(state, phase),
@@ -189,6 +151,7 @@ export function buildPhasePayload(
     repoContext: state.repoContext,
     repoPromptMaterials: state.repoPromptMaterials ?? [],
     promptMaterialSummary: state.promptMaterialSummaries[phase],
+    carry: prevOutput ?? {},
   });
 }
 

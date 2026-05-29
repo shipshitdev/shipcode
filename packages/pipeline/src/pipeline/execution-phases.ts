@@ -40,9 +40,9 @@ import {
   type TaskNodeRecord,
 } from '@shipcode/shared/source';
 import { computeRetryDelayMs } from '../retry-scheduler';
-import type { PipelineContext } from '../types';
+import type { PhaseCarryOutput, PipelineContext } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
-import { resetPhaseState } from './context';
+import { buildPhasePayload, resetPhaseState } from './context';
 import { extractQaFlowResults } from './qa-result-parser';
 import type { PhaseOutcome, PipelineHelperEnv } from './shared';
 import {
@@ -708,8 +708,9 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       },
     ];
 
+    const payload = buildPhasePayload(context, 'verify');
     try {
-      const response = await runProviderPhase(context, 'verify', prompt, verifyMaterials, {
+      const response = await runProviderPhase(context, payload, prompt, verifyMaterials, {
         maxTurns: 1,
         reasoningEffort: 'low',
       });
@@ -964,14 +965,16 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       threadId,
       latestPlanRecord?.id ?? null,
     );
-    const testFeedback =
-      context.testOutput && context.testRetries > 0
-        ? `\n\n<previous_test_failure>\nTests failed on the previous attempt. Fix these issues before finishing:\n\n${context.testOutput}\n</previous_test_failure>`
-        : '';
+    // Snapshot + consume (one-shot) the carry the executor prompt folds in; it
+    // is threaded into this invocation's PhasePayload below and read back from
+    // `payload.carry` when building the prompt.
+    const executeCarry: PhaseCarryOutput = {
+      testOutput: context.testOutput,
+      stabilizationFeedback: context.stabilizationFeedback,
+      executionResumeContext: context.executionResumeContext,
+    };
     context.testOutput = null;
-    const stabilizationFeedback = context.stabilizationFeedback ?? '';
     context.stabilizationFeedback = null;
-    const executionResumeContext = context.executionResumeContext ?? '';
     context.executionResumeContext = null;
     const executeMaterials: PromptMaterial[] = [
       {
@@ -991,6 +994,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         : []),
     ];
     rememberMaterialSummary(context, 'execute', executeMaterials);
+    const payload = buildPhasePayload(context, 'execute', executeCarry);
     const executionPlan = activeTaskNode ? buildTaskNodePlan(plan, activeTaskNode) : plan;
     let workflowExecutionPrompt: string | null;
     try {
@@ -1014,13 +1018,17 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         testingContext: getTestingContext(context),
         isAutomationRun: context.isAutomationRun,
       });
+    const testFeedback =
+      payload.carry.testOutput && context.testRetries > 0
+        ? `\n\n<previous_test_failure>\nTests failed on the previous attempt. Fix these issues before finishing:\n\n${payload.carry.testOutput}\n</previous_test_failure>`
+        : '';
     const executionPrompt =
       appendExecutionNotesProtocol(baseExecutionPrompt) +
       formatTaskGraphExecutionContract(executionTaskGraph, { activeNode: activeTaskNode }) +
       verificationFeedback +
       testFeedback +
-      stabilizationFeedback +
-      executionResumeContext;
+      (payload.carry.stabilizationFeedback ?? '') +
+      (payload.carry.executionResumeContext ?? '');
 
     // Capture HEAD before execution for per-node diff scoping
     if (activeTaskNode) {
@@ -1028,16 +1036,10 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
 
     try {
-      const response = await runProviderPhase(
-        context,
-        'execute',
-        executionPrompt,
-        executeMaterials,
-        {
-          reasoningEffort:
-            activeTaskNode?.suggestedReasoningEffort ?? context.phaseReasoningEfforts.execute,
-        },
-      );
+      const response = await runProviderPhase(context, payload, executionPrompt, executeMaterials, {
+        reasoningEffort:
+          activeTaskNode?.suggestedReasoningEffort ?? context.phaseReasoningEfforts.execute,
+      });
 
       if (context.cancelled) return { next: 'paused' };
 
@@ -1588,10 +1590,11 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       return { next: 'failed' };
     }
 
+    const payload = buildPhasePayload(context, 'verify');
     try {
       const response = await runProviderPhase(
         context,
-        'verify',
+        payload,
         verificationPrompt,
         verifyMaterials,
         {
