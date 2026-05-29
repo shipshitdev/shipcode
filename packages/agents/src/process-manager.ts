@@ -7,7 +7,11 @@ import { assertWorkspaceSafe } from '@shipcode/shared/worktree-path';
 import { nanoid } from 'nanoid';
 import * as pty from 'node-pty';
 
-export type ProcessManagerAgentCommand = Extract<AgentType, 'claude' | 'codex' | 'gemini' | 'gh'>;
+export type ProcessManagerAgentCommand =
+  | Extract<AgentType, 'claude' | 'codex' | 'gemini' | 'gh'>
+  // Cursor's binary is `cursor-agent`, not `cursor`, so the allowlisted command
+  // string diverges from its AgentType tag (unlike the other CLIs).
+  | 'cursor-agent';
 export type ProcessManagerShellCommand = (typeof TRUSTED_SHELL_COMMANDS)[number];
 export type ProcessManagerPackageCommand = (typeof TRUSTED_PACKAGE_COMMANDS)[number];
 export type ProcessManagerCommand =
@@ -19,6 +23,7 @@ const ALLOWED_AGENT_COMMANDS = new Set<ProcessManagerAgentCommand>([
   'claude',
   'codex',
   'gemini',
+  'cursor-agent',
   'gh',
 ]);
 const TRUSTED_SHELL_COMMANDS = [
@@ -53,6 +58,7 @@ const SAFE_ENV_KEYS = new Set([
   'GEMINI_API_KEY',
   'GOOGLE_API_KEY',
   'GOOGLE_APPLICATION_CREDENTIALS',
+  'CURSOR_API_KEY',
 ]);
 
 function filterEnv(env: Record<string, string>): Record<string, string> {

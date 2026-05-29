@@ -21,6 +21,7 @@ export const PIPELINE_EXECUTOR_PROVIDERS = [
   'claude',
   'codex',
   'gemini',
+  'cursor',
   'openrouter',
 ] as const satisfies readonly ExecutorModel[];
 

@@ -149,6 +149,7 @@ const VALID_PHASE_PROVIDERS = [
   'claude',
   'codex',
   'gemini',
+  'cursor',
   'openrouter',
 ] as const satisfies readonly ExecutorModel[];
 
@@ -228,7 +229,13 @@ export function getPhaseDescriptor(phase: ResolvedPhaseModel): ResolvedPhaseDesc
 }
 
 function asExecutorModel(value: string | null | undefined): ExecutorModel | null {
-  if (value === 'claude' || value === 'codex' || value === 'gemini' || value === 'openrouter') {
+  if (
+    value === 'claude' ||
+    value === 'codex' ||
+    value === 'gemini' ||
+    value === 'cursor' ||
+    value === 'openrouter'
+  ) {
     return value;
   }
   return null;

@@ -1,6 +1,7 @@
 import {
   CLAUDE_MODEL_OPTIONS,
   CODEX_FALLBACK_MODEL_OPTIONS,
+  CURSOR_FALLBACK_MODEL_OPTIONS,
   GEMINI_FALLBACK_MODEL_OPTIONS,
   type KnownModelOption,
 } from './model-catalog';
@@ -41,7 +42,9 @@ export function fallbackCliModelCapabilities(
       ? CLAUDE_MODEL_OPTIONS
       : provider === 'codex'
         ? CODEX_FALLBACK_MODEL_OPTIONS
-        : GEMINI_FALLBACK_MODEL_OPTIONS;
+        : provider === 'gemini'
+          ? GEMINI_FALLBACK_MODEL_OPTIONS
+          : CURSOR_FALLBACK_MODEL_OPTIONS;
   return {
     provider,
     source: 'fallback',
@@ -51,7 +54,9 @@ export function fallbackCliModelCapabilities(
         ? null
         : provider === 'codex'
           ? 'Codex model catalog could not be read; using conservative ShipCode presets.'
-          : 'Gemini model catalog could not be read; using conservative ShipCode presets.',
+          : provider === 'gemini'
+            ? 'Gemini model catalog could not be read; using conservative ShipCode presets.'
+            : null,
     checkedAt,
   };
 }
@@ -119,7 +124,13 @@ export function assessCliModelAvailabilityFromCapabilities(
   }
 
   const providerLabel =
-    provider === 'claude' ? 'Claude CLI' : provider === 'codex' ? 'Codex CLI' : 'Gemini CLI';
+    provider === 'claude'
+      ? 'Claude CLI'
+      : provider === 'codex'
+        ? 'Codex CLI'
+        : provider === 'gemini'
+          ? 'Gemini CLI'
+          : 'Cursor CLI';
   const sourceDetail =
     capabilities.source === 'catalog'
       ? 'installed CLI catalog'
@@ -163,7 +174,15 @@ export function assessCliReasoningEffortAvailabilityFromCapabilities(
   const modelLabel = modelId ? ` for ${modelId}` : '';
   return {
     available: false,
-    message: `${provider === 'claude' ? 'Claude CLI' : provider === 'codex' ? 'Codex CLI' : 'Gemini CLI'} does not report ${effort} effort${modelLabel}. Choose a supported effort or update the CLI.`,
+    message: `${
+      provider === 'claude'
+        ? 'Claude CLI'
+        : provider === 'codex'
+          ? 'Codex CLI'
+          : provider === 'gemini'
+            ? 'Gemini CLI'
+            : 'Cursor CLI'
+    } does not report ${effort} effort${modelLabel}. Choose a supported effort or update the CLI.`,
   };
 }
 

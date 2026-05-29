@@ -176,6 +176,7 @@ function installMocks() {
     createClaudeCliProvider: vi.fn(() => ({ key: 'claude' })),
     createCodexCliProvider: vi.fn(() => ({ key: 'codex' })),
     createGeminiCliProvider: vi.fn(() => ({ key: 'gemini' })),
+    createCursorCliProvider: vi.fn(() => ({ key: 'cursor' })),
     createOpenRouterProvider: createOpenRouterProviderMock,
     createProviderRegistry: vi.fn((providers) => providers),
     GhCli: vi.fn(function GhCliMock() {

@@ -52,6 +52,7 @@ import path from 'node:path';
 import {
   createClaudeCliProvider,
   createCodexCliProvider,
+  createCursorCliProvider,
   createGeminiCliProvider,
   createOpenRouterProvider,
   createProviderRegistry,
@@ -280,6 +281,7 @@ function createWindow() {
     claude: createClaudeCliProvider(processManager),
     codex: createCodexCliProvider(processManager),
     gemini: createGeminiCliProvider(processManager),
+    cursor: createCursorCliProvider(processManager),
     openrouter: createOpenRouterProvider({
       getApiKey: () => process.env.OPENROUTER_API_KEY,
       getSettings: () => queries.settings.get(),

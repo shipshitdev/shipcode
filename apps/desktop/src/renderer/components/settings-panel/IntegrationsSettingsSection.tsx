@@ -270,6 +270,7 @@ function useIntegrationsSettingsSectionView({
               { key: 'claude', label: 'Claude CLI' },
               { key: 'codex', label: 'Codex CLI' },
               { key: 'gemini', label: 'Gemini CLI' },
+              { key: 'cursor', label: 'Cursor CLI' },
               { key: 'gh', label: 'GitHub CLI' },
             ].map(({ key, label }) => {
               const cli =
@@ -279,7 +280,9 @@ function useIntegrationsSettingsSectionView({
                     ? integrationStatus.system.codex
                     : key === 'gemini'
                       ? (integrationStatus.system.gemini ?? missingCli)
-                      : integrationStatus.system.gh;
+                      : key === 'cursor'
+                        ? (integrationStatus.system.cursor ?? missingCli)
+                        : integrationStatus.system.gh;
               const ghScope =
                 key === 'gh'
                   ? integrationStatus.ghAuth.hasProjectScope === true
@@ -290,13 +293,13 @@ function useIntegrationsSettingsSectionView({
                   : null;
               const versionLine = getCliVersionLine(cli.version);
               const Icon =
-                key === 'claude' || key === 'gemini'
+                key === 'claude' || key === 'gemini' || key === 'cursor'
                   ? Sparkles
                   : key === 'codex'
                     ? Terminal
                     : FolderGit;
               const modelCapabilities =
-                key === 'claude' || key === 'codex' || key === 'gemini'
+                key === 'claude' || key === 'codex' || key === 'gemini' || key === 'cursor'
                   ? integrationStatus.modelCapabilities?.[key]
                   : null;
 

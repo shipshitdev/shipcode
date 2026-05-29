@@ -705,7 +705,7 @@ export interface PipelineCheckpoint {
 
 // === Pipeline Types ===
 
-export type AgentType = 'claude' | 'codex' | 'gemini' | 'gh' | 'openrouter' | 'shell';
+export type AgentType = 'claude' | 'codex' | 'gemini' | 'cursor' | 'gh' | 'openrouter' | 'shell';
 
 /**
  * The subset of AgentType that can drive a pipeline phase. Excludes
@@ -722,11 +722,11 @@ export type AgentType = 'claude' | 'codex' | 'gemini' | 'gh' | 'openrouter' | 's
  *  - SQLite stores strings; no enum ⇄ ordinal round-trip needed.
  *  - GitHub label values are already strings (`shipcode:agent:claude`, etc).
  */
-export type ExecutorModel = 'claude' | 'codex' | 'gemini' | 'openrouter';
-export type TriageModel = Exclude<ExecutorModel, 'gemini'>;
+export type ExecutorModel = 'claude' | 'codex' | 'gemini' | 'cursor' | 'openrouter';
+export type TriageModel = Exclude<ExecutorModel, 'gemini' | 'cursor'>;
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 export type GeneratorCli = 'claude' | 'codex';
-export type PhaseCliProvider = Extract<ExecutorModel, 'claude' | 'codex' | 'gemini'>;
+export type PhaseCliProvider = Extract<ExecutorModel, 'claude' | 'codex' | 'gemini' | 'cursor'>;
 export type ContextGeneratorCli = GeneratorCli;
 export type RevisionCount = 0 | 1 | 2 | 3 | 4 | 5;
 export type PipelineSpeedProfile = 'smart_fast' | 'thorough';
@@ -1372,6 +1372,7 @@ export interface SystemHealth {
   claude: CliHealth;
   codex: CliHealth;
   gemini?: CliHealth;
+  cursor?: CliHealth;
   git: CliHealth;
   gh: CliHealth;
 }

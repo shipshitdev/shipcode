@@ -357,10 +357,16 @@ export function registerSupportHandlers({
             ? '\x1b[33m'
             : type === 'gemini'
               ? '\x1b[32m'
-              : '\x1b[35m';
+              : type === 'cursor'
+                ? '\x1b[34m'
+                : '\x1b[35m';
       const exitColor = state === 'exited' ? '\x1b[2m' : '';
       const typeLabel =
-        type === 'claude' || type === 'codex' || type === 'gemini' || type === 'openrouter'
+        type === 'claude' ||
+        type === 'codex' ||
+        type === 'gemini' ||
+        type === 'cursor' ||
+        type === 'openrouter'
           ? `${providerDisplay(type as ExecutorModel)}${type === 'openrouter' ? '' : ' CLI'}`
           : type;
       emitTerminalEvent(proc.threadId, {

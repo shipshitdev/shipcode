@@ -24,6 +24,9 @@ describe('model-catalog', () => {
       gemini: {
         phase: 'gemini-2.5-pro',
       },
+      cursor: {
+        phase: 'auto',
+      },
       openrouter: {
         paid: 'openrouter/auto',
         free: 'openrouter/free',

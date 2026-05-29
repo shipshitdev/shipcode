@@ -124,6 +124,7 @@ export function decodePhaseOption(value: string): {
     providerRaw === 'claude' ||
     providerRaw === 'codex' ||
     providerRaw === 'gemini' ||
+    providerRaw === 'cursor' ||
     providerRaw === 'openrouter'
       ? providerRaw
       : 'claude';
