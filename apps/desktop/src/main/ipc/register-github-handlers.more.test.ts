@@ -70,7 +70,12 @@ const {
     alreadyPresent: [],
     failed: [],
   })),
-  applyTriageRulesOnceMock: vi.fn(async () => ({ status: 'skipped' as const })),
+  applyTriageRulesOnceMock: vi.fn<
+    (opts: { recordFailure?: unknown; onWarn?: unknown; [key: string]: unknown }) => Promise<{
+      status: string;
+      refreshedIssue?: unknown;
+    }>
+  >(async () => ({ status: 'skipped' })),
 }));
 
 vi.mock('@shipcode/agents', async () => {
@@ -593,6 +598,7 @@ describe('registerGitHubHandlers – branch coverage supplement', () => {
         assignee: null,
         state: 'open',
         updatedAt: '2026-05-01T00:00:00.000Z',
+        url: 'https://github.com/acme/repo/issues/99',
       };
 
       applyTriageRulesOnceMock.mockResolvedValue({
@@ -656,19 +662,15 @@ describe('registerGitHubHandlers – branch coverage supplement', () => {
     it('invokes recordFailure and onWarn callbacks when applyTriageRulesOnce calls them', async () => {
       // Simulate applyTriageRulesOnce calling the recordFailure and onWarn callbacks
       // by capturing them from the arguments and invoking them directly.
-      applyTriageRulesOnceMock.mockImplementationOnce(
-        async ({
-          recordFailure,
-          onWarn,
-        }: {
+      applyTriageRulesOnceMock.mockImplementationOnce(async (opts) => {
+        const { recordFailure, onWarn } = opts as {
           recordFailure: (issueId: string, reason: string) => void;
           onWarn: (message: string, err: unknown) => void;
-        }) => {
-          recordFailure('new-issue', 'triage failed');
-          onWarn('triage warning', new Error('warn'));
-          return { status: 'failed' as const };
-        },
-      );
+        };
+        recordFailure('new-issue', 'triage failed');
+        onWarn('triage warning', new Error('warn'));
+        return { status: 'failed' as const };
+      });
 
       const newRecord = {
         ...baseIssue,
@@ -743,8 +745,9 @@ describe('registerGitHubHandlers – branch coverage supplement', () => {
           body: 'Body',
           labels: [],
           assignee: null,
-          state: 'open',
-          updatedAt: undefined, // undefined → right side of ?? → null
+          state: 'open' as const,
+          updatedAt: null, // null → right side of ?? → null
+          url: 'https://github.com/acme/repo/issues/55',
         },
       }));
 
