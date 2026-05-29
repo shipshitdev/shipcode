@@ -61,6 +61,8 @@ export {
   checkCliProviderUsage,
   checkCodexAuth,
   checkCodexModelCapabilities,
+  checkCursorAuth,
+  checkCursorModelCapabilities,
   checkDesktopApps,
   checkGeminiAuth,
   checkGeminiModelCapabilities,

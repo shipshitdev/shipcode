@@ -179,10 +179,10 @@ let systemHealthInFlight: Promise<SystemHealth> | null = null;
 let systemHealthWithAuthCache: TimedCacheEntry<SystemHealth> | null = null;
 let systemHealthWithAuthInFlight: Promise<SystemHealth> | null = null;
 let cliModelCapabilitiesCache: TimedCacheEntry<
-  Record<'claude' | 'codex' | 'gemini', CliModelCapabilities>
+  Record<'claude' | 'codex' | 'gemini' | 'cursor', CliModelCapabilities>
 > | null = null;
 let cliModelCapabilitiesInFlight: Promise<
-  Record<'claude' | 'codex' | 'gemini', CliModelCapabilities>
+  Record<'claude' | 'codex' | 'gemini' | 'cursor', CliModelCapabilities>
 > | null = null;
 const providerUsageCache = new Map<
   CliProviderUsageProvider,
@@ -1160,6 +1160,21 @@ export async function checkGeminiAuth(): Promise<boolean> {
   }
 }
 
+export async function checkCursorAuth(): Promise<boolean> {
+  // Headless fallback: an API key authenticates without an interactive login.
+  if (await readEnvVar('CURSOR_API_KEY')) {
+    return true;
+  }
+
+  // Otherwise rely on the CLI's own stored credentials (`cursor-agent login`).
+  try {
+    await execAsync('cursor-agent status', { timeout: 10_000, env: shellExecEnv() });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export type OpenRouterAuthStatus =
   | { ok: true; label?: string }
   | {
@@ -1481,15 +1496,16 @@ export async function checkSystemHealth(options: CacheOptions = {}): Promise<Sys
   }
 
   systemHealthInFlight = (async () => {
-    const [claude, codex, gemini, git, gh] = await Promise.all([
+    const [claude, codex, gemini, cursor, git, gh] = await Promise.all([
       checkCli('claude', '--version'),
       checkCli('codex', '--version'),
       checkCli('gemini', '--version'),
+      checkCli('cursor-agent', '--version'),
       checkCli('git', '--version'),
       checkCli('gh', '--version'),
     ]);
 
-    const result = { claude, codex, gemini, git, gh };
+    const result = { claude, codex, gemini, cursor, git, gh };
     systemHealthCache = createTimedCacheEntry(result);
     return result;
   })();
@@ -1512,19 +1528,22 @@ export async function checkSystemHealthWithAuth(options: CacheOptions = {}): Pro
   }
 
   systemHealthWithAuthInFlight = (async () => {
-    const [health, claudeAuth, codexAuth, geminiAuth] = await Promise.all([
+    const [health, claudeAuth, codexAuth, geminiAuth, cursorAuth] = await Promise.all([
       checkSystemHealth(options),
       checkClaudeAuth(),
       checkCodexAuth(),
       checkGeminiAuth(),
+      checkCursorAuth(),
     ]);
 
     const gemini = health.gemini;
+    const cursor = health.cursor;
     const result: SystemHealth = {
       ...health,
       claude: { ...health.claude, authenticated: health.claude.available && claudeAuth },
       codex: { ...health.codex, authenticated: health.codex.available && codexAuth },
       ...(gemini ? { gemini: { ...gemini, authenticated: gemini.available && geminiAuth } } : {}),
+      ...(cursor ? { cursor: { ...cursor, authenticated: cursor.available && cursorAuth } } : {}),
     };
     systemHealthWithAuthCache = createTimedCacheEntry(result);
     return result;
@@ -1657,20 +1676,42 @@ export async function checkGeminiModelCapabilities(): Promise<CliModelCapabiliti
   }
 }
 
+export async function checkCursorModelCapabilities(): Promise<CliModelCapabilities> {
+  const checkedAt = new Date().toISOString();
+  try {
+    await execAsync('cursor-agent --help', {
+      timeout: CLI_MODEL_CATALOG_TIMEOUT_MS,
+      maxBuffer: 512_000,
+      env: shellExecEnv(),
+    });
+    // Cursor has no queryable model catalog; ShipCode exposes only `auto`.
+    return fallbackCliModelCapabilities('cursor', checkedAt);
+  } catch (error) {
+    return {
+      provider: 'cursor',
+      source: 'unavailable',
+      models: [],
+      error: `Cursor CLI unavailable: ${summarizeExecFailure(error)}`,
+      checkedAt,
+    };
+  }
+}
+
 export async function checkCliModelCapabilities(
   options: CacheOptions = {},
-): Promise<Record<'claude' | 'codex' | 'gemini', CliModelCapabilities>> {
+): Promise<Record<'claude' | 'codex' | 'gemini' | 'cursor', CliModelCapabilities>> {
   const cached = getFreshCachedValue(cliModelCapabilitiesCache, CLI_MODEL_CAPABILITIES_TTL_MS);
   if (!options.force && cached) return cached;
   if (cliModelCapabilitiesInFlight) return cliModelCapabilitiesInFlight;
 
   cliModelCapabilitiesInFlight = (async () => {
-    const [claude, codex, gemini] = await Promise.all([
+    const [claude, codex, gemini, cursor] = await Promise.all([
       checkClaudeModelCapabilities(),
       checkCodexModelCapabilities(),
       checkGeminiModelCapabilities(),
+      checkCursorModelCapabilities(),
     ]);
-    const result = { claude, codex, gemini };
+    const result = { claude, codex, gemini, cursor };
     cliModelCapabilitiesCache = createTimedCacheEntry(result);
     return result;
   })();

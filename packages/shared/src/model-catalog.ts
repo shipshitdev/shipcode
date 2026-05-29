@@ -29,6 +29,15 @@ export const GEMINI_FALLBACK_MODEL_IDS = {
 export type GeminiFallbackModelId =
   (typeof GEMINI_FALLBACK_MODEL_IDS)[keyof typeof GEMINI_FALLBACK_MODEL_IDS];
 
+// Cursor routes to an underlying model; ShipCode exposes only `auto` and lets
+// Cursor pick. Kept as a single-entry catalog to mirror the other providers.
+export const CURSOR_FALLBACK_MODEL_IDS = {
+  auto: 'auto',
+} as const;
+
+export type CursorFallbackModelId =
+  (typeof CURSOR_FALLBACK_MODEL_IDS)[keyof typeof CURSOR_FALLBACK_MODEL_IDS];
+
 export const OPENROUTER_MODEL_IDS = {
   autoPaid: 'openrouter/auto',
   autoFree: 'openrouter/free',
@@ -60,6 +69,10 @@ export const GEMINI_FALLBACK_MODEL_OPTIONS = [
   { value: GEMINI_FALLBACK_MODEL_IDS.flash, label: 'Gemini 2.5 Flash' },
 ] as const satisfies readonly KnownModelOption<GeminiFallbackModelId>[];
 
+export const CURSOR_FALLBACK_MODEL_OPTIONS = [
+  { value: CURSOR_FALLBACK_MODEL_IDS.auto, label: 'Auto' },
+] as const satisfies readonly KnownModelOption<CursorFallbackModelId>[];
+
 export const OPENROUTER_MODEL_OPTIONS = [
   { value: OPENROUTER_MODEL_IDS.autoPaid, label: 'Auto (paid)' },
   { value: OPENROUTER_MODEL_IDS.autoFree, label: 'Auto (free)' },
@@ -72,6 +85,7 @@ export type CuratedModelId =
   | (typeof CLAUDE_MODEL_OPTIONS)[number]['value']
   | (typeof CODEX_FALLBACK_MODEL_OPTIONS)[number]['value']
   | (typeof GEMINI_FALLBACK_MODEL_OPTIONS)[number]['value']
+  | (typeof CURSOR_FALLBACK_MODEL_OPTIONS)[number]['value']
   | (typeof OPENROUTER_MODEL_OPTIONS)[number]['value'];
 
 const CURATED_MODEL_LABELS = Object.fromEntries(
@@ -79,6 +93,7 @@ const CURATED_MODEL_LABELS = Object.fromEntries(
     ...CLAUDE_MODEL_OPTIONS,
     ...CODEX_FALLBACK_MODEL_OPTIONS,
     ...GEMINI_FALLBACK_MODEL_OPTIONS,
+    ...CURSOR_FALLBACK_MODEL_OPTIONS,
     ...OPENROUTER_MODEL_OPTIONS,
   ].map((option) => [option.value, option.label]),
 ) as Record<CuratedModelId, string>;
@@ -97,6 +112,9 @@ export const PINNED_MODEL_DEFAULTS = {
   gemini: {
     phase: GEMINI_FALLBACK_MODEL_IDS.pro,
   },
+  cursor: {
+    phase: CURSOR_FALLBACK_MODEL_IDS.auto,
+  },
   openrouter: {
     paid: OPENROUTER_MODEL_IDS.autoPaid,
     free: OPENROUTER_MODEL_IDS.autoFree,
@@ -108,6 +126,7 @@ export const KNOWN_MODEL_LABELS: Record<string, string> = {
   claude: CURATED_MODEL_LABELS[PINNED_MODEL_DEFAULTS.claude.phase],
   codex: CURATED_MODEL_LABELS[PINNED_MODEL_DEFAULTS.codex.phase],
   gemini: CURATED_MODEL_LABELS[PINNED_MODEL_DEFAULTS.gemini.phase],
+  cursor: CURATED_MODEL_LABELS[PINNED_MODEL_DEFAULTS.cursor.phase],
   openrouter: 'OpenRouter',
   ...CURATED_MODEL_LABELS,
   'anthropic/claude-sonnet-4-6': CURATED_MODEL_LABELS[OPENROUTER_MODEL_IDS.claudeSonnet46],

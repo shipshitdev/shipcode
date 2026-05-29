@@ -11,6 +11,7 @@
  * - agent 'claude' → claude-cli provider (all phases)
  * - agent 'codex'  → codex-cli provider (all phases)
  * - agent 'gemini' → gemini-cli provider (all phases)
+ * - agent 'cursor' → cursor-cli provider (all phases)
  * - agent 'openrouter' → openrouter provider (plan/review/revision/verify only)
  * - agent 'gh' is not an LLM agent and is not handled here
  *
@@ -26,6 +27,7 @@ export interface RegistryProviders {
   claude: AgentProvider;
   codex: AgentProvider;
   gemini?: AgentProvider;
+  cursor?: AgentProvider;
   openrouter: AgentProvider;
 }
 
@@ -36,6 +38,7 @@ export function createProviderRegistry(providers: RegistryProviders): ProviderRe
     [providers.openrouter.id, providers.openrouter],
   ]);
   if (providers.gemini) byId.set(providers.gemini.id, providers.gemini);
+  if (providers.cursor) byId.set(providers.cursor.id, providers.cursor);
 
   function forAgent(agent: AgentType): AgentProvider {
     switch (agent) {
@@ -48,6 +51,11 @@ export function createProviderRegistry(providers: RegistryProviders): ProviderRe
           throw new Error("ProviderRegistry: provider for agent 'gemini' is not registered");
         }
         return providers.gemini;
+      case 'cursor':
+        if (!providers.cursor) {
+          throw new Error("ProviderRegistry: provider for agent 'cursor' is not registered");
+        }
+        return providers.cursor;
       case 'openrouter':
         return providers.openrouter;
       case 'gh':

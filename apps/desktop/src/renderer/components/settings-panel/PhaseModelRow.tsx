@@ -92,6 +92,11 @@ export function PhaseModelRow({
                 Google{disabledProviders?.gemini ? ` (${disabledProviders.gemini})` : ''}
               </SelectItem>
             )}
+            {validProviders.includes('cursor') && (
+              <SelectItem value="cursor" disabled={!!disabledProviders?.cursor}>
+                Cursor{disabledProviders?.cursor ? ` (${disabledProviders.cursor})` : ''}
+              </SelectItem>
+            )}
             {validProviders.includes('openrouter') && (
               <SelectItem value="openrouter" disabled={!!disabledProviders?.openrouter}>
                 OpenRouter
