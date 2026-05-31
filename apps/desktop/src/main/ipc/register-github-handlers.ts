@@ -27,6 +27,7 @@ import {
   isAgentRoutingLabel,
   isRealGithubIssueNumber,
   PIPELINE_PHASE,
+  PRD_METADATA_LABELS,
   parseGithubProjectUrl,
   parseGithubRemote,
   pipelineStatusFromLabels,
@@ -950,6 +951,19 @@ export function registerGitHubHandlers({
       const metadataLabels = prdMetadata
         ? buildPrdMetadataLabels(prdMetadata.estimatedComplexity, prdMetadata.blastRadius)
         : [];
+      if (metadataLabels.length > 0) {
+        const requiredMetadataLabels = PRD_METADATA_LABELS.filter((label) =>
+          metadataLabels.includes(label.name),
+        );
+        const labelSync = await ghCli.ensureLabels(requiredMetadataLabels);
+        if (labelSync.failed.length > 0) {
+          throw new Error(
+            `Failed to create PRD metadata labels: ${labelSync.failed
+              .map((failure) => `${failure.name}: ${failure.error}`)
+              .join('; ')}`,
+          );
+        }
+      }
       const issueLabels = [...new Set([...(labels ?? []), ...metadataLabels])];
       const issue = await ghCli.createIssue({ title, body, labels: issueLabels });
       let projectAttachWarning: string | null = null;

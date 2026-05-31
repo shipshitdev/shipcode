@@ -9,6 +9,44 @@ export type PrdEstimatedComplexity = (typeof PRD_ESTIMATED_COMPLEXITIES)[number]
 export const PRD_BLAST_RADII = ['contained', 'cross-package', 'cross-app', 'infra'] as const;
 export type PrdBlastRadius = (typeof PRD_BLAST_RADII)[number];
 
+export const PRD_METADATA_LABELS = [
+  {
+    name: 'complexity:low',
+    color: '0e8a16',
+    description: 'PRD estimated complexity: low.',
+  },
+  {
+    name: 'complexity:medium',
+    color: 'fbca04',
+    description: 'PRD estimated complexity: medium.',
+  },
+  {
+    name: 'complexity:high',
+    color: 'd93f0b',
+    description: 'PRD estimated complexity: high.',
+  },
+  {
+    name: 'blast:contained',
+    color: '1f883d',
+    description: 'PRD blast radius: contained.',
+  },
+  {
+    name: 'blast:cross-package',
+    color: '0969da',
+    description: 'PRD blast radius: cross-package.',
+  },
+  {
+    name: 'blast:cross-app',
+    color: '8250df',
+    description: 'PRD blast radius: cross-app.',
+  },
+  {
+    name: 'blast:infra',
+    color: 'cf222e',
+    description: 'PRD blast radius: infrastructure.',
+  },
+] as const;
+
 export const PRD_MANAGED_LABEL_PREFIXES = [
   PRD_COMPLEXITY_LABEL_PREFIX,
   PRD_BLAST_LABEL_PREFIX,
