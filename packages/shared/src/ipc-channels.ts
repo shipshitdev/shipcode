@@ -731,6 +731,39 @@ export interface IpcInvokeChannels {
   'instant:list': { args: undefined; result: Thread[] };
   'instant:cleanup': { args: undefined; result: { deleted: number } };
 
+  // Issue-scoped resumable chat sessions
+  'issue-chat:start': {
+    args: {
+      threadId: string;
+      provider: 'claude' | 'codex';
+      modelId?: string | null;
+      reasoningEffort?: ReasoningEffort;
+    };
+    result: {
+      threadId: string;
+      provider: 'claude' | 'codex';
+      modelId: string | null;
+      worktreePath: string;
+      reattached: boolean;
+      activeProcessId: string | null;
+    };
+  };
+  'issue-chat:turn': {
+    args: { threadId: string; text: string };
+    result: {
+      threadId: string;
+      promptId: string;
+      responseId: string;
+      round: number;
+      exitCode: number;
+      content: string;
+    };
+  };
+  'issue-chat:stop': {
+    args: { threadId: string };
+    result: { threadId: string; stopped: boolean };
+  };
+
   // Issue-linked interactive terminal sessions
   'issue-terminal:start': {
     args: {

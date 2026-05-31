@@ -34,6 +34,7 @@ import {
   SHIPCODE_DEFAULT_LABELS,
 } from '@shipcode/shared';
 import { syncIssuePipelineLabelSoon } from '../github-pipeline-label-sync';
+import { stopIssueChatSessionIfLive } from '../issue-chat-session';
 import log, { logEvent } from '../logger.service';
 import { PipelineScheduler } from '../pipeline-scheduler';
 import {
@@ -176,6 +177,7 @@ export function registerGitHubHandlers({
   queries,
   pipeline,
   emitter,
+  processManager,
   notificationService,
   chatNotificationService,
 }: IpcHandlerDeps): void {
@@ -185,6 +187,10 @@ export function registerGitHubHandlers({
     emitter,
     getMainWindow: () => mainWindow,
   });
+  const stopLinkedIssueChat = (issue: GitHubIssueCacheRecord) => {
+    if (!issue.threadId) return;
+    stopIssueChatSessionIfLive(issue.threadId, processManager);
+  };
 
   ipcMain.handle(
     'github:get-issue',
@@ -643,6 +649,7 @@ export function registerGitHubHandlers({
           'github:archive-issue',
         );
         queries.githubIssues.archiveIssues([issue.id]);
+        stopLinkedIssueChat(issue);
       } catch (err) {
         log.error('[github:archive-issue] DB archive failed:', err);
         throw new Error(
@@ -696,6 +703,7 @@ export function registerGitHubHandlers({
         ISSUE_PIPELINE_STATUS.closed,
         'issue:mark-done',
       );
+      stopLinkedIssueChat(issue);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );
@@ -722,6 +730,7 @@ export function registerGitHubHandlers({
           ISSUE_PIPELINE_STATUS.closed,
           'github:mark-done',
         );
+        stopLinkedIssueChat(issue);
       } else if (hasCompletionEvidence) {
         queries.githubIssues.updateState(issue.id, 'open');
         updateIssuePipelineStatus(
@@ -742,6 +751,7 @@ export function registerGitHubHandlers({
           ISSUE_PIPELINE_STATUS.closed,
           'github:mark-done',
         );
+        stopLinkedIssueChat(issue);
       }
 
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
@@ -771,6 +781,7 @@ export function registerGitHubHandlers({
         ISSUE_PIPELINE_STATUS.closed,
         'github:close-issue',
       );
+      stopLinkedIssueChat(issue);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );
