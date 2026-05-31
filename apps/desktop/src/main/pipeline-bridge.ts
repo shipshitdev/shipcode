@@ -17,7 +17,7 @@ import type { BrowserWindow } from 'electron';
 import type { ChatNotificationService } from './chat-notification-service';
 import log, { logEvent } from './logger.service';
 import type { NotificationService } from './notification-service';
-import { capturePipelineFailure, recordBreadcrumb, type TelemetryBreadcrumb } from './telemetry';
+import { capturePipelineFailure, type TelemetryBreadcrumb } from './telemetry';
 
 interface EmitterDeps {
   activity: ActivityQueries;
@@ -111,6 +111,7 @@ const TERMINAL_PHASES = new Set<PipelinePhase>([
   PIPELINE_PHASE.paused,
   PIPELINE_PHASE.idle,
 ]);
+const MAX_THREAD_BREADCRUMBS = 25;
 
 /**
  * Map a pipeline event to a Sentry breadcrumb for the lifecycle trail, or null
@@ -171,6 +172,20 @@ export function createElectronEmitter(
   mainWindow: BrowserWindow,
   deps: EmitterDeps,
 ): PipelineEmitter {
+  const breadcrumbsByThreadId = new Map<string, TelemetryBreadcrumb[]>();
+
+  function recordThreadBreadcrumb(event: PipelineEvent): void {
+    const crumb = breadcrumbForEvent(event);
+    if (!crumb) return;
+
+    const trail = breadcrumbsByThreadId.get(event.threadId) ?? [];
+    trail.push(crumb);
+    if (trail.length > MAX_THREAD_BREADCRUMBS) {
+      trail.splice(0, trail.length - MAX_THREAD_BREADCRUMBS);
+    }
+    breadcrumbsByThreadId.set(event.threadId, trail);
+  }
+
   function emitCanonicalTerminalEvent(
     threadId: string,
     event: import('@shipcode/shared').CanonicalTerminalEvent,
@@ -386,6 +401,7 @@ export function createElectronEmitter(
       failureCount: thread.failureCount,
       verificationRetries: thread.verificationRetries,
       message: thread.lastError,
+      breadcrumbs: [...(breadcrumbsByThreadId.get(event.threadId) ?? [])],
     });
   }
 
@@ -439,8 +455,7 @@ export function createElectronEmitter(
       }
 
       try {
-        const crumb = breadcrumbForEvent(event);
-        if (crumb) recordBreadcrumb(crumb);
+        recordThreadBreadcrumb(event);
       } catch (err) {
         log.error('[pipeline-bridge] breadcrumb record failed:', err);
       }
@@ -595,6 +610,13 @@ export function createElectronEmitter(
           _dashboardThrottleTimer = null;
         }
         invalidateDashboardImmediate();
+        if (
+          event.phase === PIPELINE_PHASE.completed ||
+          event.phase === PIPELINE_PHASE.failed ||
+          event.phase === PIPELINE_PHASE.idle
+        ) {
+          breadcrumbsByThreadId.delete(event.threadId);
+        }
       } else {
         invalidateDashboard();
       }

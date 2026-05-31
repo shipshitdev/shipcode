@@ -18,6 +18,13 @@ export interface TelemetryContext {
   extra?: Record<string, unknown>;
 }
 
+export interface TelemetryBreadcrumb {
+  category: string;
+  message: string;
+  level?: 'debug' | 'info' | 'warning' | 'error';
+  data?: Record<string, unknown>;
+}
+
 export interface PipelineFailureTelemetry {
   threadId: string;
   projectId: string | null;
@@ -30,6 +37,7 @@ export interface PipelineFailureTelemetry {
   failureCount: number;
   verificationRetries: number;
   message: string | null;
+  breadcrumbs?: TelemetryBreadcrumb[];
 }
 
 function readEnv(name: string, env: EnvLike): string | null {
@@ -235,13 +243,6 @@ export function captureIpcFailure(
   });
 }
 
-export interface TelemetryBreadcrumb {
-  category: string;
-  message: string;
-  level?: 'debug' | 'info' | 'warning' | 'error';
-  data?: Record<string, unknown>;
-}
-
 /**
  * Record a Sentry breadcrumb on the main-process telemetry client. Breadcrumbs
  * are buffered by the SDK and attached to the next captured exception/message,
@@ -276,6 +277,7 @@ export function capturePipelineFailure(context: PipelineFailureTelemetry): void 
       failureCount: context.failureCount,
       verificationRetries: context.verificationRetries,
       message: context.message,
+      pipelineBreadcrumbs: context.breadcrumbs ?? [],
     },
   });
 }

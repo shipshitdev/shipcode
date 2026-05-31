@@ -14,12 +14,11 @@ vi.mock('./logger.service', () => ({
 
 vi.mock('./telemetry', () => ({
   capturePipelineFailure: vi.fn(),
-  recordBreadcrumb: vi.fn(),
 }));
 
 import { logEvent } from './logger.service';
 import { breadcrumbForEvent, createElectronEmitter } from './pipeline-bridge';
-import { capturePipelineFailure, recordBreadcrumb } from './telemetry';
+import { capturePipelineFailure } from './telemetry';
 
 function makeMainWindow() {
   return {
@@ -93,7 +92,7 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
       })),
     },
     threads: {
-      getById: vi.fn(() => makeThread()),
+      getById: vi.fn((threadId = 'thread-1') => makeThread({ id: threadId })),
     },
     notifications: {
       dismissByThread: vi.fn(),
@@ -269,7 +268,7 @@ describe('breadcrumbForEvent', () => {
   });
 });
 
-describe('createElectronEmitter breadcrumb recording', () => {
+describe('createElectronEmitter thread-scoped breadcrumb trail', () => {
   let mainWindow: ReturnType<typeof makeMainWindow>;
   let deps: ReturnType<typeof makeDeps>;
 
@@ -279,26 +278,88 @@ describe('createElectronEmitter breadcrumb recording', () => {
     deps = makeDeps();
   });
 
-  it('records a Sentry breadcrumb for lifecycle phase events', () => {
+  it('attaches only the failed thread breadcrumb trail to pipeline failure capture', () => {
+    deps.threads.getById.mockImplementation((threadId = 'thread-1') =>
+      makeThread({
+        id: threadId,
+        projectId: `project-${threadId}`,
+        githubIssueNumber: threadId === 'thread-1' ? 1 : 2,
+        lastError: `${threadId} failed`,
+      }),
+    );
     const emitter = createElectronEmitter(mainWindow as never, deps as never);
+
+    emitter.emit({
+      type: 'pipeline:start-context',
+      threadId: 'thread-1',
+      source: 'github:start-issue',
+      projectPath: '/repo',
+      githubIssueNumber: 1,
+      autonomous: true,
+      requireApproval: false,
+      reviewRound: 0,
+    } as never);
+    emitter.emit({
+      type: 'pipeline:phase',
+      threadId: 'thread-2',
+      phase: 'executing',
+    } as PipelineEvent);
     emitter.emit({
       type: 'pipeline:phase',
       threadId: 'thread-1',
-      phase: 'executing',
+      phase: 'failed',
     } as PipelineEvent);
-    expect(recordBreadcrumb).toHaveBeenCalledWith(
-      expect.objectContaining({ category: 'pipeline.phase', message: 'phase: executing' }),
+
+    expect(capturePipelineFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: 'thread-1',
+        breadcrumbs: [
+          expect.objectContaining({
+            category: 'pipeline.lifecycle',
+            data: expect.objectContaining({ threadId: 'thread-1' }),
+          }),
+          expect.objectContaining({
+            category: 'pipeline.phase',
+            data: expect.objectContaining({ threadId: 'thread-1', phase: 'failed' }),
+          }),
+        ],
+      }),
+    );
+    expect(capturePipelineFailure).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: 'thread-1',
+        breadcrumbs: expect.arrayContaining([
+          expect.objectContaining({
+            data: expect.objectContaining({ threadId: 'thread-2' }),
+          }),
+        ]),
+      }),
     );
   });
 
-  it('does not record a breadcrumb for raw output events', () => {
+  it('does not attach raw output events to the failure breadcrumb trail', () => {
     const emitter = createElectronEmitter(mainWindow as never, deps as never);
     emitter.emit({
       type: 'pipeline:output',
       threadId: 'thread-1',
       chunk: 'noise',
     } as PipelineEvent);
-    expect(recordBreadcrumb).not.toHaveBeenCalled();
+    emitter.emit({
+      type: 'pipeline:phase',
+      threadId: 'thread-1',
+      phase: 'failed',
+    } as PipelineEvent);
+
+    expect(capturePipelineFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        breadcrumbs: [
+          expect.objectContaining({
+            category: 'pipeline.phase',
+            data: expect.objectContaining({ phase: 'failed' }),
+          }),
+        ],
+      }),
+    );
   });
 });
 
@@ -519,7 +580,7 @@ describe('createElectronEmitter event forwarding and terminal bookkeeping', () =
   });
 
   it('skips activity and failure capture when no thread is found', () => {
-    (deps.threads.getById as any).mockReturnValue(null);
+    deps.threads.getById.mockReturnValue(null as never);
     const emitter = createElectronEmitter(mainWindow as never, deps as never);
 
     emitter.emit({
