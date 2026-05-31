@@ -132,4 +132,59 @@ describe('ReviewFindingQueries', () => {
     expect(findings.listOpenByThread(threadId)).toEqual([]);
     expect(findings.listByThread(threadId, { includeClosed: true })).toHaveLength(1);
   });
+
+  it('syncs PR feedback without duplicating unchanged open findings', () => {
+    const [first] = findings.syncOpenForPullRequestFeedback({
+      threadId,
+      findings: [
+        {
+          projectId,
+          threadId,
+          planId,
+          phase: 'ci',
+          source: 'ci',
+          severity: 'blocker',
+          title: 'CI failed',
+          description: 'Tests failed',
+          fingerprint: 'ci-test',
+          prNumber: 12,
+        },
+        {
+          projectId,
+          threadId,
+          planId,
+          phase: 'pr_review',
+          source: 'pr_review',
+          severity: 'major',
+          title: 'Review comment',
+          description: 'Please add coverage',
+          fingerprint: 'comment-1',
+          prNumber: 12,
+        },
+      ],
+    });
+
+    findings.syncOpenForPullRequestFeedback({
+      threadId,
+      findings: [
+        {
+          projectId,
+          threadId,
+          planId,
+          phase: 'ci',
+          source: 'ci',
+          severity: 'blocker',
+          title: 'CI still failed',
+          description: 'Tests still failed',
+          fingerprint: 'ci-test',
+          prNumber: 12,
+        },
+      ],
+    });
+
+    const all = findings.listByThread(threadId, { includeClosed: true });
+    expect(all.filter((finding) => finding.fingerprint === 'ci-test')).toHaveLength(1);
+    expect(findings.getById(first.id)?.title).toBe('CI still failed');
+    expect(all.find((finding) => finding.fingerprint === 'comment-1')?.status).toBe('superseded');
+  });
 });

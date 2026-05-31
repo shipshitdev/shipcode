@@ -110,6 +110,29 @@ export class ReviewFindingQueries {
     );
   }
 
+  syncOpenForPullRequestFeedback(input: {
+    threadId: string;
+    findings: ReviewFindingCreateInput[];
+  }): ReviewFindingRecord[] {
+    const incoming = new Set(
+      input.findings.map((finding) =>
+        [finding.source, finding.phase, finding.fingerprint].join('\0'),
+      ),
+    );
+    const current = this.listOpenByThread(input.threadId).filter(
+      (finding) => finding.source === 'ci' || finding.source === 'pr_review',
+    );
+
+    for (const finding of current) {
+      const key = [finding.source, finding.phase, finding.fingerprint].join('\0');
+      if (!incoming.has(key)) {
+        this.updateStatus(finding.id, 'superseded');
+      }
+    }
+
+    return input.findings.map((finding) => this.createOrUpdateOpen(finding));
+  }
+
   createOrUpdateOpen(input: ReviewFindingCreateInput): ReviewFindingRecord {
     const existing = this.db
       .prepare(

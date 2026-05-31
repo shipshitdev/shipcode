@@ -7,6 +7,7 @@ import {
   buildPRBody,
   buildVerificationPrompt,
   discoverRuntimeTests,
+  GhCli,
   getRuntimeTestsDir,
   loadRepoContext,
   loadStructuredRepoContext,
@@ -20,6 +21,7 @@ import {
 } from '@shipcode/agents/source';
 import { WorktreeManager } from '@shipcode/git';
 import {
+  clampError,
   EXECUTION_PHASES,
   type FeatureQaResult,
   type GitHubPrCheckSummary,
@@ -44,7 +46,12 @@ import type { ExecutePhaseCarry, PipelineContext, VerifyPhaseCarry } from '../ty
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { buildPhasePayload, resetPhaseState } from './context';
 import { extractQaFlowResults } from './qa-result-parser';
-import { buildVerificationFindingInputs, formatOpenFindingsForPrompt } from './review-findings';
+import {
+  buildVerificationFindingInputs,
+  formatOpenFindingsForPrompt,
+  formatReviewFindingsPrComment,
+  REVIEW_FINDINGS_PR_COMMENT_MARKER,
+} from './review-findings';
 import type { PhaseOutcome, PipelineHelperEnv } from './shared';
 import {
   collectQaEvidencePaths,
@@ -408,6 +415,27 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
   function formatOpenReviewFindingsFeedback(threadId: string): string {
     if (!deps.reviewFindings) return '';
     return formatOpenFindingsForPrompt(deps.reviewFindings.listOpenByThread(threadId));
+  }
+
+  async function publishReviewFindingsComment(
+    context: NonNullable<ReturnType<typeof activePipelines.get>>,
+    prNumber: number,
+  ): Promise<void> {
+    if (!deps.reviewFindings) return;
+
+    const findings = deps.reviewFindings.listByThread(context.threadId, { includeClosed: true });
+    try {
+      const ghCli = new GhCli(context.worktreePath ?? context.projectPath);
+      await ghCli.upsertIssueCommentByMarker(
+        prNumber,
+        REVIEW_FINDINGS_PR_COMMENT_MARKER,
+        formatReviewFindingsPrComment(findings),
+      );
+    } catch (error) {
+      console.warn(
+        `[pipeline] Failed to publish review findings to PR #${prNumber}: ${clampError(error)}`,
+      );
+    }
   }
 
   function ensureRepoPromptMaterials(
@@ -2021,6 +2049,8 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             });
           }
         }
+
+        await publishReviewFindingsComment(context, prNumber);
 
         if (created) {
           try {

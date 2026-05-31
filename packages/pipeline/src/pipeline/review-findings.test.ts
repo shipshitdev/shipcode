@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildPullRequestFeedbackFindingInputs,
   buildReviewFindingInputs,
   buildVerificationFindingInputs,
   formatOpenFindingsForPrompt,
+  formatReviewFindingsPrComment,
+  REVIEW_FINDINGS_PR_COMMENT_MARKER,
 } from './review-findings';
 
 describe('review finding helpers', () => {
@@ -104,5 +107,89 @@ describe('review finding helpers', () => {
 
     expect(prompt).toContain('<open_review_findings>');
     expect(prompt).toContain('[blocker/verification] src/app.ts: Typecheck failed');
+  });
+
+  it('normalizes CI and PR review feedback into durable finding inputs', () => {
+    const result = buildPullRequestFeedbackFindingInputs({
+      projectId: 'project-1',
+      threadId: 'thread-1',
+      planId: 'plan-1',
+      runId: 'run-1',
+      prNumber: 12,
+      worktreePath: '/tmp/worktree',
+      branch: 'shipcode/154',
+      commitSha: 'abc123',
+      failingChecks: [
+        {
+          name: 'test',
+          workflowName: 'CI',
+          status: 'failed',
+          conclusion: 'failure',
+          detailsUrl: 'https://github.com/check',
+        },
+      ],
+      unresolvedReviewComments: [
+        {
+          author: 'reviewer',
+          body: 'Please add a regression test',
+          url: 'https://github.com/comment',
+          createdAt: '2026-05-31T00:00:00Z',
+          path: 'src/app.ts',
+          line: 42,
+        },
+      ],
+    });
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({
+      source: 'ci',
+      phase: 'ci',
+      severity: 'blocker',
+      prNumber: 12,
+      title: 'CI / test failed',
+    });
+    expect(result[1]).toMatchObject({
+      source: 'pr_review',
+      phase: 'pr_review',
+      severity: 'major',
+      filePath: 'src/app.ts',
+    });
+  });
+
+  it('formats a marker-based PR findings comment', () => {
+    const comment = formatReviewFindingsPrComment([
+      {
+        id: 'finding-1',
+        projectId: 'project-1',
+        threadId: 'thread-1',
+        planId: 'plan-1',
+        reviewId: null,
+        verificationId: null,
+        runId: null,
+        phase: 'ci',
+        source: 'ci',
+        severity: 'blocker',
+        status: 'open',
+        title: 'CI failed',
+        description: 'Tests failed',
+        suggestion: null,
+        filePath: null,
+        fingerprint: 'abc',
+        sourceModel: null,
+        commitSha: null,
+        prNumber: 12,
+        worktreePath: null,
+        branch: null,
+        metadata: null,
+        resolvedByRunId: null,
+        resolvedAt: null,
+        createdAt: '2026-05-31T00:00:00.000Z',
+        updatedAt: '2026-05-31T00:00:00.000Z',
+      },
+    ]);
+
+    expect(comment.startsWith(REVIEW_FINDINGS_PR_COMMENT_MARKER)).toBe(true);
+    expect(comment).toContain('1 open ShipCode review finding remains');
+    expect(comment).toContain('**blocker / ci**: CI failed');
   });
 });
