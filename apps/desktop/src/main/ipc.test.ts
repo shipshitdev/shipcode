@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => {
     registerSkillsHandlers: vi.fn(),
     registerSupportHandlers: vi.fn(),
     registerInstantHandlers: vi.fn(),
+    registerIssueChatHandlers: vi.fn(),
     registerIssueTerminalHandlers: vi.fn(),
     registerPullRequestHandlers: vi.fn(),
     registerAgentConversationHandlers: vi.fn(),
@@ -70,6 +71,9 @@ vi.mock('./ipc/register-support-handlers', () => ({
 }));
 vi.mock('./ipc/register-instant-handlers', () => ({
   registerInstantHandlers: mocks.registerInstantHandlers,
+}));
+vi.mock('./ipc/register-issue-chat-handlers', () => ({
+  registerIssueChatHandlers: mocks.registerIssueChatHandlers,
 }));
 vi.mock('./ipc/register-issue-terminal-handlers', () => ({
   registerIssueTerminalHandlers: mocks.registerIssueTerminalHandlers,
@@ -154,6 +158,7 @@ describe('registerIpcHandlers', () => {
     expect(mocks.registerSkillsHandlers).toHaveBeenCalledTimes(1);
     expect(mocks.registerSupportHandlers).toHaveBeenCalledTimes(1);
     expect(mocks.registerInstantHandlers).toHaveBeenCalledTimes(1);
+    expect(mocks.registerIssueChatHandlers).toHaveBeenCalledTimes(1);
     expect(mocks.registerIssueTerminalHandlers).toHaveBeenCalledTimes(1);
     expect(mocks.registerPullRequestHandlers).toHaveBeenCalledTimes(1);
     expect(mocks.registerAgentConversationHandlers).toHaveBeenCalledTimes(1);
