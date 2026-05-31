@@ -260,6 +260,33 @@ export function registerPipelineHandlers({
     return queries.verifications.getLatest(threadId);
   });
 
+  ipcMain.handle(
+    'review-findings:list-thread',
+    (_event, { threadId, includeClosed }: { threadId: string; includeClosed?: boolean }) => {
+      return queries.reviewFindings.listByThread(threadId, { includeClosed });
+    },
+  );
+
+  ipcMain.handle('review-findings:list-open', (_event, { threadId }: { threadId: string }) => {
+    return queries.reviewFindings.listOpenByThread(threadId);
+  });
+
+  ipcMain.handle(
+    'review-findings:update-status',
+    (
+      _event,
+      {
+        findingId,
+        status,
+      }: {
+        findingId: string;
+        status: 'fixed' | 'ignored' | 'superseded' | 'closed';
+      },
+    ) => {
+      return queries.reviewFindings.updateStatus(findingId, status);
+    },
+  );
+
   ipcMain.handle('task-graph:get-latest', (_event, { threadId }: { threadId: string }) => {
     return queries.taskGraphs?.getLatestByThread(threadId) ?? null;
   });

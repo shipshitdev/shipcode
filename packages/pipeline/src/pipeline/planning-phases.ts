@@ -34,6 +34,7 @@ import { computeRetryDelayMs } from '../retry-scheduler';
 import type { PipelineContext, PlanPhaseCarry } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { buildPhasePayload, resetPhaseState } from './context';
+import { buildReviewFindingInputs } from './review-findings';
 import type { PhaseOutcome, PipelineHelperEnv } from './shared';
 
 const NO_VALID_PLAN_REASON = 'Plan generation failed — no valid shipcode-plan block was produced.';
@@ -606,7 +607,26 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
         activePipelines.delete(threadId);
         return { next: 'failed' };
       }
-      deps.reviews.create(latestPlan.id, result.raw, result.data);
+      const reviewRecord = deps.reviews.create(latestPlan.id, result.raw, result.data);
+      if (context.projectId && deps.reviewFindings) {
+        const thread = deps.threads.getById(threadId);
+        deps.reviewFindings.replaceOpenForReview({
+          threadId,
+          planId: latestPlan.id,
+          reviewId: reviewRecord.id,
+          findings: buildReviewFindingInputs({
+            projectId: context.projectId,
+            threadId,
+            planId: latestPlan.id,
+            reviewId: reviewRecord.id,
+            runId: context.runId,
+            sourceModel: context.reviewerModelIdOverride ?? resolveAgentForPhase(context, 'review'),
+            worktreePath: context.worktreePath,
+            branch: thread?.worktreeBranch ?? null,
+            review: result.data,
+          }),
+        });
+      }
       deps.plans.updateStatus(
         latestPlan.id,
         result.data.decision === 'approve' ? 'approved' : 'rejected',
@@ -838,6 +858,7 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
       const result = parser.extractPlan();
       if (result.success && result.data) {
         deps.plans.supersedeAll(threadId);
+        deps.reviewFindings?.supersedeOpen({ threadId, source: 'review', runId: context.runId });
         const newPlan = deps.plans.create(threadId, result.raw, result.data, plan.version + 1);
         deps.plans.updateStatus(newPlan.id, 'pending_review');
         deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data });

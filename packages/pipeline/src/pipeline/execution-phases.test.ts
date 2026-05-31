@@ -32,13 +32,19 @@ type ExecutionHarnessDeps = {
   };
 };
 
-const { mockExecFileSync, mockServerLifecycleStart, mockServerLifecycleStop, mockShellExecEnv } =
-  vi.hoisted(() => ({
-    mockExecFileSync: vi.fn(),
-    mockServerLifecycleStart: vi.fn(),
-    mockServerLifecycleStop: vi.fn(),
-    mockShellExecEnv: vi.fn(),
-  }));
+const {
+  mockExecFileSync,
+  mockGhUpsertIssueCommentByMarker,
+  mockServerLifecycleStart,
+  mockServerLifecycleStop,
+  mockShellExecEnv,
+} = vi.hoisted(() => ({
+  mockExecFileSync: vi.fn(),
+  mockGhUpsertIssueCommentByMarker: vi.fn(async () => undefined),
+  mockServerLifecycleStart: vi.fn(),
+  mockServerLifecycleStop: vi.fn(),
+  mockShellExecEnv: vi.fn(),
+}));
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
@@ -52,6 +58,11 @@ vi.mock('@shipcode/agents/source', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shipcode/agents/source')>();
   return {
     ...actual,
+    GhCli: vi.fn(function GhCli() {
+      return {
+        upsertIssueCommentByMarker: mockGhUpsertIssueCommentByMarker,
+      };
+    }),
     shellExecEnv: mockShellExecEnv,
     ServerLifecycleManager: vi.fn(function ServerLifecycleManager(
       _processManager: unknown,
@@ -203,6 +214,10 @@ function makeExecutionHarness(context = makeContext()) {
     },
     taskGraphs: null,
     diffs: { replaceForThread: vi.fn() },
+    githubIssues: {
+      getByNumber: vi.fn(() => null),
+      updatePullRequestFeedback: vi.fn(),
+    },
     reviews: { getByPlanId: vi.fn(() => null) },
     featureQaResults: {
       insert: vi.fn(),
@@ -545,6 +560,8 @@ describe('execution phase handlers', () => {
   beforeEach(() => {
     vi.useRealTimers();
     mockExecFileSync.mockReset();
+    mockGhUpsertIssueCommentByMarker.mockReset();
+    mockGhUpsertIssueCommentByMarker.mockResolvedValue(undefined);
     mockServerLifecycleStart.mockReset();
     mockServerLifecycleStop.mockReset();
     mockShellExecEnv.mockReset();
@@ -1906,6 +1923,72 @@ describe('execution phase handlers', () => {
       andThen: { next: 'execute', plan },
     });
     expect(harness.runtime.runProviderPhase).toHaveBeenCalledTimes(1);
+  });
+
+  it('publishes the durable findings summary to a linked PR during shipping', async () => {
+    const context = makeContext({ baseBranch: 'develop' });
+    const harness = makeExecutionHarness(context);
+    (harness.deps as never as { reviewFindings: unknown }).reviewFindings = {
+      listByThread: vi.fn(() => [
+        {
+          id: 'finding-1',
+          projectId: 'project-1',
+          threadId: 'thread-1',
+          planId: 'plan-record-1',
+          reviewId: null,
+          verificationId: null,
+          runId: null,
+          phase: 'ci',
+          source: 'ci',
+          severity: 'blocker',
+          status: 'open',
+          title: 'CI failed',
+          description: 'Tests failed',
+          suggestion: null,
+          filePath: null,
+          fingerprint: 'ci',
+          sourceModel: null,
+          commitSha: null,
+          prNumber: 17,
+          worktreePath: null,
+          branch: null,
+          metadata: null,
+          resolvedByRunId: null,
+          resolvedAt: null,
+          createdAt: '2026-05-31T00:00:00.000Z',
+          updatedAt: '2026-05-31T00:00:00.000Z',
+        },
+      ]),
+    };
+    (
+      harness.deps as never as { threads: { setGithubPr: ReturnType<typeof vi.fn> } }
+    ).threads.setGithubPr = vi.fn();
+    vi.mocked(
+      (harness.deps as never as { githubIssues: { getByNumber: ReturnType<typeof vi.fn> } })
+        .githubIssues.getByNumber,
+    ).mockReturnValue({
+      id: 'issue-42',
+      ciBlocked: false,
+      failingChecks: [],
+      unresolvedReviewComments: [],
+    });
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
+      if (args[0] === 'pr' && args[1] === 'list') {
+        return JSON.stringify([
+          { number: 17, url: 'https://github.com/acme/repo/pull/17', isDraft: true },
+        ]);
+      }
+      return '';
+    });
+
+    await harness.handlers.startShipping('thread-1');
+
+    expect(mockGhUpsertIssueCommentByMarker).toHaveBeenCalledWith(
+      17,
+      '<!-- shipcode:review-findings -->',
+      expect.stringContaining('CI failed'),
+    );
   });
 
   describe('typed phase-result carry (#139)', () => {

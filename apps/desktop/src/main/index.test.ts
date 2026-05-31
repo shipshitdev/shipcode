@@ -208,6 +208,7 @@ function installMocks() {
     ProjectFailureQueries: QueryMock,
     ProjectQueries: QueryMock,
     PromptTelemetryQueries: QueryMock,
+    ReviewFindingQueries: QueryMock,
     ReviewQueries: QueryMock,
     SettingsQueries: QueryMock,
     SkillResolutionLogQueries: QueryMock,

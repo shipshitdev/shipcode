@@ -6,6 +6,7 @@ export type IssueDetailTab =
   | 'console'
   | 'comments'
   | 'history'
+  | 'findings'
   | 'diff'
   | 'runs'
   | 'activity'

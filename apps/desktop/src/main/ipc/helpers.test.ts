@@ -363,16 +363,23 @@ describe('syncLinkedPullRequestFeedback', () => {
   const notificationService = { fire: vi.fn() };
   const chatNotificationService = { fire: vi.fn() };
 
-  function makeFeedbackQueries(thread: Record<string, unknown> | null) {
+  function makeFeedbackQueries(
+    thread: Record<string, unknown> | null,
+    overrides: Record<string, unknown> = {},
+  ) {
     return {
       threads: {
         getById: vi.fn(() => thread),
+      },
+      plans: {
+        getLatest: vi.fn(() => null),
       },
       githubIssues: {
         updatePullRequestFeedback: vi.fn(),
         setCachedLabelPresence: vi.fn(),
         reconcileCompletedFromEvidence: vi.fn(),
       },
+      ...overrides,
     } as unknown as Queries;
   }
 
@@ -467,6 +474,67 @@ describe('syncLinkedPullRequestFeedback', () => {
       'ci_blocked',
       expect.objectContaining({ id: 'thread-1' }),
     );
+  });
+
+  it('persists linked PR CI and review blockers as open findings', async () => {
+    const reviewFindings = { syncOpenForPullRequestFeedback: vi.fn() };
+    const queries = makeFeedbackQueries(
+      {
+        id: 'thread-1',
+        githubPrNumber: 17,
+        worktreePath: '/tmp/worktree',
+      },
+      {
+        plans: { getLatest: vi.fn(() => ({ id: 'plan-1' })) },
+        reviewFindings,
+      },
+    );
+    ghCliGetPullRequestFeedbackMock.mockResolvedValueOnce({
+      number: 17,
+      url: 'https://github.com/acme/repo/pull/17',
+      isDraft: false,
+      ciBlocked: true,
+      failingChecks: [
+        {
+          name: 'test',
+          workflowName: 'CI',
+          status: 'failed',
+          conclusion: 'failure',
+          detailsUrl: 'https://github.com/check',
+        },
+      ],
+      unresolvedReviewComments: [
+        {
+          author: 'reviewer',
+          body: 'Please add a regression test',
+          url: 'https://github.com/comment',
+          createdAt: '2026-05-31T00:00:00Z',
+          path: 'src/app.ts',
+          line: 42,
+        },
+      ],
+    });
+
+    await syncLinkedPullRequestFeedback(
+      makeProject() as never,
+      makeIssue({ ciBlocked: false }) as never,
+      queries,
+      notificationService as never,
+      chatNotificationService as never,
+    );
+
+    expect(reviewFindings.syncOpenForPullRequestFeedback).toHaveBeenCalledWith({
+      threadId: 'thread-1',
+      findings: [
+        expect.objectContaining({ source: 'ci', phase: 'ci', prNumber: 17 }),
+        expect.objectContaining({
+          source: 'pr_review',
+          phase: 'pr_review',
+          filePath: 'src/app.ts',
+          prNumber: 17,
+        }),
+      ],
+    });
   });
 
   it('keeps the cached CI label when CI remains blocked', async () => {
