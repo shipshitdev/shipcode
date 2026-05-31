@@ -19,6 +19,7 @@ import type {
   PlanQueries,
   ProjectQueries,
   PromptTelemetryQueries,
+  ReviewFindingQueries,
   ReviewQueries,
   SettingsQueries,
   SkillResolutionLogQueries,
@@ -506,6 +507,8 @@ export interface PipelineDeps {
   /** Internal task graph persistence for decomposed plan execution contracts. */
   taskGraphs?: PipelineTaskGraphQueries;
   promptTelemetry?: PromptTelemetryQueries;
+  /** Durable reviewer/verifier/CI findings surfaced in the review lane. */
+  reviewFindings?: ReviewFindingQueries;
   /** Closed phase durations across non-provider work such as testing and shipping. */
   phaseLogs?: PhaseLogQueries;
   /** Durable per-attempt run ledger tying phases, provider calls, and issue locks together. */

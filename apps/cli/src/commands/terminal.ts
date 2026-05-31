@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { WorktreeManager } from '@shipcode/git';
 import {
+  buildShipCodeRunContract,
   PIPELINE_PHASE,
   resolveProviderReasoningEffort,
   THREAD_KIND,
@@ -102,9 +103,15 @@ export async function terminalCommand(
   await fs.mkdir(runDir, { recursive: true });
   const prompt = `# ShipCode Issue Terminal Session
 
+${buildShipCodeRunContract({
+  projectPath: ctx.project.path,
+  worktreePath,
+  baseBranch: ctx.project.defaultBranch,
+  currentBranch: thread.worktreeBranch,
+  githubIssueNumber: issue.issueNumber,
+})}
+
 Issue: #${issue.issueNumber} ${issue.title}
-Worktree: ${worktreePath}
-Branch: ${thread.worktreeBranch ?? ''}
 Summary artifact: ${summaryPath}
 
 ## Issue Body

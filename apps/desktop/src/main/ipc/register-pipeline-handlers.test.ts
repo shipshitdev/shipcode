@@ -163,6 +163,11 @@ describe('registerPipelineHandlers', () => {
     reviews: {
       getByPlanId: ReturnType<typeof vi.fn>;
     };
+    reviewFindings: {
+      listByThread: ReturnType<typeof vi.fn>;
+      listOpenByThread: ReturnType<typeof vi.fn>;
+      updateStatus: ReturnType<typeof vi.fn>;
+    };
     activity: {
       listRecent: ReturnType<typeof vi.fn>;
       countRecent: ReturnType<typeof vi.fn>;
@@ -306,6 +311,11 @@ describe('registerPipelineHandlers', () => {
       reviews: {
         getByPlanId: vi.fn(() => null),
       },
+      reviewFindings: {
+        listByThread: vi.fn(() => []),
+        listOpenByThread: vi.fn(() => []),
+        updateStatus: vi.fn(() => null),
+      },
       activity: {
         listRecent: vi.fn(() => []),
         countRecent: vi.fn(() => 0),
@@ -425,7 +435,11 @@ describe('registerPipelineHandlers', () => {
     it('returns verification and latest task graph records through simple read handlers', () => {
       const verification = { id: 'verification-1', threadId: 'thread-1' };
       const taskGraph = { id: 'graph-1', threadId: 'thread-1' };
+      const finding = { id: 'finding-1', threadId: 'thread-1', status: 'open' };
       queries.verifications.getLatest.mockReturnValue(verification);
+      queries.reviewFindings.listByThread.mockReturnValue([finding]);
+      queries.reviewFindings.listOpenByThread.mockReturnValue([finding]);
+      queries.reviewFindings.updateStatus.mockReturnValue({ ...finding, status: 'ignored' });
       (
         queries as typeof queries & {
           taskGraphs: { getLatestByThread: ReturnType<typeof vi.fn> };
@@ -435,14 +449,35 @@ describe('registerPipelineHandlers', () => {
       };
 
       const verificationHandler = handlers.get('verification:get');
+      const findingsHandler = handlers.get('review-findings:list-thread');
+      const openFindingsHandler = handlers.get('review-findings:list-open');
+      const updateFindingHandler = handlers.get('review-findings:update-status');
       const taskGraphHandler = handlers.get('task-graph:get-latest');
-      if (!verificationHandler || !taskGraphHandler) {
+      if (
+        !verificationHandler ||
+        !findingsHandler ||
+        !openFindingsHandler ||
+        !updateFindingHandler ||
+        !taskGraphHandler
+      ) {
         throw new Error('read handlers not registered');
       }
 
       expect(verificationHandler(undefined, { threadId: 'thread-1' })).toBe(verification);
+      expect(findingsHandler(undefined, { threadId: 'thread-1', includeClosed: true })).toEqual([
+        finding,
+      ]);
+      expect(openFindingsHandler(undefined, { threadId: 'thread-1' })).toEqual([finding]);
+      expect(
+        updateFindingHandler(undefined, { findingId: 'finding-1', status: 'ignored' }),
+      ).toEqual({ ...finding, status: 'ignored' });
       expect(taskGraphHandler(undefined, { threadId: 'thread-1' })).toBe(taskGraph);
       expect(queries.verifications.getLatest).toHaveBeenCalledWith('thread-1');
+      expect(queries.reviewFindings.listByThread).toHaveBeenCalledWith('thread-1', {
+        includeClosed: true,
+      });
+      expect(queries.reviewFindings.listOpenByThread).toHaveBeenCalledWith('thread-1');
+      expect(queries.reviewFindings.updateStatus).toHaveBeenCalledWith('finding-1', 'ignored');
       expect(
         (
           queries as typeof queries & {

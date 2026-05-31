@@ -176,6 +176,7 @@ export function useIpc() {
           invalidatePlanQueriesForThread(data.threadId);
           queryClient.invalidateQueries({ queryKey: ['checkpoints', data.threadId] });
           queryClient.invalidateQueries({ queryKey: ['diffs', data.threadId] });
+          queryClient.invalidateQueries({ queryKey: ['review-findings', data.threadId] });
           queryClient.invalidateQueries({ queryKey: ['thread', data.threadId] });
         }
         if (data.phase !== PIPELINE_PHASE.idle && data.phase !== PIPELINE_PHASE.planning) {
@@ -221,6 +222,7 @@ export function useIpc() {
         if (data.threadId === useAppStore.getState().activeThreadId) {
           applyReview(data.review);
         }
+        queryClient.invalidateQueries({ queryKey: ['review-findings', data.threadId] });
       }),
     );
 
@@ -230,6 +232,7 @@ export function useIpc() {
         if (store.activeThreadId === data.threadId) {
           store.setVerification(data.verification);
         }
+        queryClient.invalidateQueries({ queryKey: ['review-findings', data.threadId] });
       }),
     );
 

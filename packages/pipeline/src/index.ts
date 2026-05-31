@@ -7,6 +7,11 @@ export {
 export { mapPhaseToIssuePipelineStatus, syncThreadAndIssuePhase } from './phase-sync';
 export { createPipeline } from './pipeline';
 export { resetPhaseState, snapshotPhaseInput } from './pipeline/context';
+export {
+  buildPullRequestFeedbackFindingInputs,
+  formatReviewFindingsPrComment,
+  REVIEW_FINDINGS_PR_COMMENT_MARKER,
+} from './pipeline/review-findings';
 export type {
   IssueStateProvider,
   ReconciliationLoop,

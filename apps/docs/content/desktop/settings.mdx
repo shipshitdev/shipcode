@@ -15,11 +15,20 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 | `fontSize` | 13 | Base renderer font size |
 | `projectSortOrder` | `recent` | Sidebar project ordering — alpha / recent / added |
 | `projectOpenTarget` | `cursor` | Default app for opening project folders |
+| `telemetryEnabled` | `null` | Error-reporting consent: `null` waits for explicit first-launch consent, `true` allows Sentry, `false` disables it |
 | `terminalOpenTarget` | `terminal` | Default app for opening terminal sessions |
 | `terminalScrollback` | 10000 | Max lines retained in the Terminal drawer per thread |
 | `worktreeRoot` | `~/.shipcode/worktrees` | Where isolated pipeline worktrees live — set to a blank string for legacy project-local behavior |
 | `worktreeBranchFormat` | `ship/{id}-{slug}` | Branch template for generated worktree branches |
 | `addProjectStartsIn` | — | Optional starting folder for the add-project file browser |
+
+## Privacy and Error Reporting
+
+ShipCode does not send crash or pipeline failure reports until you explicitly choose **Allow** in the first-launch error reporting dialog. Choosing **Decline** stores `telemetryEnabled: false`; choosing **Allow** stores `telemetryEnabled: true`. You can change the same setting later from **Settings -> General -> Privacy**.
+
+When enabled and a Sentry DSN is configured, reports include failure metadata such as thread id, project id, GitHub issue number, pipeline phase, retry counts, and sanitized exception context. Reports do not include prompts, terminal output, raw agent logs, tokens, secrets, or local file contents.
+
+Set `SHIPCODE_TELEMETRY_ENABLED=false` before launching the desktop app to disable reporting before runtime initialization. The environment override is authoritative: Sentry is not initialized, and the Settings toggle is shown as disabled by environment until the app is relaunched without that override.
 
 ### Pipeline
 

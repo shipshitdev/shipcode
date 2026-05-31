@@ -61,6 +61,7 @@ import {
   migrateV58,
   migrateV59,
   migrateV60,
+  migrateV61,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -159,6 +160,7 @@ const migrations = [
   migrateV58,
   migrateV59,
   migrateV60,
+  migrateV61,
 ] as const;
 
 function migrateThrough(db: DatabaseSync, target: (db: DatabaseSync) => void): void {
@@ -1533,6 +1535,40 @@ describe('migrateV60', () => {
 
     const columns = getColumns(db, 'github_issue_cache').filter(
       (column) => column.name === 'author',
+    );
+    expect(columns).toHaveLength(1);
+  });
+});
+
+describe('migrateV61', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('creates the review findings ledger', () => {
+    migrateThrough(db, migrateV60);
+    expect(tableExists(db, 'review_findings')).toBe(false);
+
+    migrateV61(db);
+
+    expect(tableExists(db, 'review_findings')).toBe(true);
+    expect(indexExists(db, 'idx_review_findings_thread_status')).toBe(true);
+    expect(columnExists(db, 'review_findings', 'fingerprint')).toBe(true);
+    expect(columnExists(db, 'review_findings', 'metadata_json')).toBe(true);
+  });
+
+  it('is idempotent', () => {
+    migrateThrough(db, migrateV61);
+    expect(() => migrateV61(db)).not.toThrow();
+
+    const columns = getColumns(db, 'review_findings').filter(
+      (column) => column.name === 'fingerprint',
     );
     expect(columns).toHaveLength(1);
   });
