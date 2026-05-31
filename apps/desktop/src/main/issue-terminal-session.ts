@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { WorktreeManager } from '@shipcode/git';
 import {
+  buildShipCodeRunContract,
   type GitHubIssueCacheRecord,
   PIPELINE_PHASE,
   type Project,
@@ -82,6 +83,14 @@ function buildPromptArtifact(input: {
   const labels = input.issue.labels.length > 0 ? input.issue.labels.join(', ') : '(none)';
   return `# ShipCode Issue Terminal Session
 
+${buildShipCodeRunContract({
+  projectPath: input.project.path,
+  worktreePath: input.worktreePath,
+  baseBranch: input.project.defaultBranch,
+  currentBranch: input.thread.worktreeBranch,
+  githubIssueNumber: input.issue.issueNumber,
+})}
+
 ## GitHub Issue
 
 - Project: ${input.project.name}
@@ -93,8 +102,6 @@ function buildPromptArtifact(input: {
 
 ## Assigned Worktree
 
-- Worktree path: ${input.worktreePath}
-- Branch: ${input.thread.worktreeBranch ?? '(new session branch)'}
 - Summary artifact: ${input.summaryPath}
 
 ## Issue Body

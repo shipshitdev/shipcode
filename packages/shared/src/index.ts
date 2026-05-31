@@ -29,6 +29,7 @@ export * from './prd-template';
 export * from './provider-usage';
 export * from './reasoning-effort';
 export * from './schemas';
+export * from './shipcode-run-contract';
 export * from './skills-types';
 export * from './sqlite-time';
 export * from './staleness';
