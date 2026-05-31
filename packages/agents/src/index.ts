@@ -142,6 +142,8 @@ export {
   EXECUTION_NOTES_FILE,
   EXECUTION_NOTES_PROTOCOL,
 } from './prompts/execute-prompt';
+export type { IssueRunPromptContext } from './prompts/issue-run-prompt';
+export { buildIssueRunPrompt } from './prompts/issue-run-prompt';
 export type {
   PhasePromptContextSlice,
   PhasePromptPolicy,

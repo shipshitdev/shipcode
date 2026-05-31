@@ -5386,6 +5386,40 @@ Custom prompt`,
       expect(ctx?.executorModel).toBe('codex');
     });
 
+    it('wraps normal GitHub issues in the ShipCode run contract before planning', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.includes('symbolic-ref')) return 'origin/develop';
+        if (cmd === 'git rev-parse develop') return 'forksha';
+        if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'shipcode/7-bug';
+        return '';
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      const issue = {
+        number: 7,
+        title: 'Bug',
+        body: '---\nstatus: planned\n---\n# PRD: bug\n\n## Goals\n- Fix it',
+        labels: [],
+      };
+
+      await pipeline.startFromGitHubIssue('t1', '/proj', issue, 'claude', {
+        worktreePath: '/worktree/issue-7',
+      });
+      await flush();
+
+      const args = vi.mocked(mock.deps.processManager.spawn).mock.calls[0][2] as string[];
+      const prompt = args[1];
+      expect(prompt).toContain('You are working inside ShipCode');
+      expect(prompt).toContain('- Repo: /proj');
+      expect(prompt).toContain('- Worktree: /worktree/issue-7');
+      expect(prompt).toContain('- Target branch: develop');
+      expect(prompt).toContain('- Current branch: shipcode/7-bug');
+      expect(prompt).toContain('- Do not rename the current branch.');
+      expect(prompt).toContain('Treat the GitHub issue/PRD below as the source of truth.');
+      expect(prompt).toContain('# PRD: bug');
+      expect(prompt).not.toContain('status: planned');
+    });
+
     it('defaults baseBranch to main on failure', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('symbolic-ref')) throw new Error('no remote HEAD');

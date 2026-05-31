@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { buildWorkpadProtocol } from '@shipcode/agents/source';
+import { buildIssueRunPrompt, buildWorkpadProtocol } from '@shipcode/agents/source';
 import {
   type PipelinePhase,
   resolvePipelineSpeedProfile,
@@ -191,6 +191,17 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     }
   }
 
+  function resolveCurrentBranch(projectPath: string, worktreePath: string | null | undefined) {
+    try {
+      return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: worktreePath ?? projectPath,
+        encoding: 'utf-8',
+      }).trim();
+    } catch {
+      return null;
+    }
+  }
+
   async function startFromGitHubIssue(
     threadId: string,
     projectPath: string,
@@ -326,8 +337,15 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     // clean PRD prose, not duplicated metadata that now lives in native
     // labels / project fields (#45).
     const prompt =
-      `GitHub Issue #${issue.number}: ${issue.title}\n\n${stripPrdFrontmatter(issue.body ?? '')}` +
-      buildWorkpadProtocol({ issueNumber: issue.number });
+      buildIssueRunPrompt({
+        issueNumber: issue.number,
+        issueTitle: issue.title,
+        issueBody: stripPrdFrontmatter(issue.body ?? ''),
+        projectPath,
+        worktreePath: options?.worktreePath ?? null,
+        baseBranch,
+        currentBranch: resolveCurrentBranch(projectPath, options?.worktreePath ?? null),
+      }) + buildWorkpadProtocol({ issueNumber: issue.number });
     launch(threadId, () =>
       planning.startPlanGeneration(threadId, prompt, projectPath, options?.worktreePath ?? null),
     );
