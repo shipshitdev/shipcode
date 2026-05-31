@@ -44,6 +44,7 @@ import type { ExecutePhaseCarry, PipelineContext, VerifyPhaseCarry } from '../ty
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { buildPhasePayload, resetPhaseState } from './context';
 import { extractQaFlowResults } from './qa-result-parser';
+import { buildVerificationFindingInputs, formatOpenFindingsForPrompt } from './review-findings';
 import type { PhaseOutcome, PipelineHelperEnv } from './shared';
 import {
   collectQaEvidencePaths,
@@ -337,6 +338,7 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
     getVerifyCommands,
     prepareWorktree,
     postTaskGraphComment,
+    resolveAgentForPhase,
     runProviderPhase,
     runShellCommand,
   } = runtime;
@@ -401,6 +403,11 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
 
     lines.push('</previous_verification_failure>');
     return lines.join('\n');
+  }
+
+  function formatOpenReviewFindingsFeedback(threadId: string): string {
+    if (!deps.reviewFindings) return '';
+    return formatOpenFindingsForPrompt(deps.reviewFindings.listOpenByThread(threadId));
   }
 
   function ensureRepoPromptMaterials(
@@ -967,6 +974,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       threadId,
       latestPlanRecord?.id ?? null,
     );
+    const openReviewFindingsFeedback = formatOpenReviewFindingsFeedback(threadId);
     // The execute carry is the typed hand-off from the producing phase (test-fix,
     // node-verification, stabilization, plan→execute) or the desktop resume/retry
     // IPC's seed carry. Threaded into this invocation's PhasePayload below and read
@@ -1026,6 +1034,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       appendExecutionNotesProtocol(baseExecutionPrompt) +
       formatTaskGraphExecutionContract(executionTaskGraph, { activeNode: activeTaskNode }) +
       verificationFeedback +
+      openReviewFindingsFeedback +
       testFeedback +
       (payload.carry.stabilizationFeedback ?? '') +
       (payload.carry.executionResumeContext ?? '');
@@ -1526,6 +1535,15 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
 
     const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim();
+    let branch: string | null = null;
+    try {
+      branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd,
+        encoding: 'utf-8',
+      }).trim();
+    } catch {
+      branch = null;
+    }
     context.verifiedSha = headSha;
     deps.projectFailures?.resolveOwnedByThread(threadId, headSha);
 
@@ -1650,7 +1668,41 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         return { next: 'failed' };
       }
 
-      deps.verifications.create(threadId, latestPlan.id, result.raw, result.data);
+      const verificationRecord = deps.verifications.create(
+        threadId,
+        latestPlan.id,
+        result.raw,
+        result.data,
+      );
+      if (context.projectId && deps.reviewFindings) {
+        if (result.data.result === 'passed') {
+          deps.reviewFindings.markOpenFixed({
+            threadId,
+            planId: latestPlan.id,
+            runId: context.runId,
+            commitSha: headSha,
+          });
+        } else {
+          deps.reviewFindings.replaceOpenForVerification({
+            threadId,
+            planId: latestPlan.id,
+            verificationId: verificationRecord.id,
+            findings: buildVerificationFindingInputs({
+              projectId: context.projectId,
+              threadId,
+              planId: latestPlan.id,
+              verificationId: verificationRecord.id,
+              runId: context.runId,
+              sourceModel:
+                context.verifierModelIdOverride ?? resolveAgentForPhase(context, 'verify'),
+              worktreePath: context.worktreePath,
+              branch,
+              commitSha: headSha,
+              verification: result.data,
+            }),
+          });
+        }
+      }
       deps.emitter.emit({ type: 'verification:parsed', threadId, verification: result.data });
 
       if (context.featureQaState) {

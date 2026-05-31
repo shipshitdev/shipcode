@@ -21,6 +21,7 @@ import type {
   ProjectFailureQueries,
   ProjectQueries,
   PromptTelemetryQueries,
+  ReviewFindingQueries,
   ReviewQueries,
   SettingsQueries,
   SkillResolutionLogQueries,
@@ -62,6 +63,7 @@ export interface Queries {
   pipelineSteps: PipelineStepQueries;
   wakeRequests: PipelineWakeRequestQueries;
   promptTelemetry: PromptTelemetryQueries;
+  reviewFindings: ReviewFindingQueries;
   agentConversations: AgentConversationQueries;
   skillResolutionLogs: SkillResolutionLogQueries;
   featureQaResults: FeatureQaResultQueries;

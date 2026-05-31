@@ -60,6 +60,8 @@ import type {
   RecentTask,
   RepoMemoryStatus,
   RepoSetupContract,
+  ReviewFindingRecord,
+  ReviewFindingStatus,
   ReviewRecord,
   ShipCodePlan,
   SystemHealth,
@@ -227,6 +229,18 @@ export interface IpcInvokeChannels {
   'plan:update': { args: { planId: string; structured: ShipCodePlan }; result: undefined };
 
   'review:get': { args: { planId: string }; result: ReviewRecord | null };
+  'review-findings:list-thread': {
+    args: { threadId: string; includeClosed?: boolean };
+    result: ReviewFindingRecord[];
+  };
+  'review-findings:list-open': {
+    args: { threadId: string };
+    result: ReviewFindingRecord[];
+  };
+  'review-findings:update-status': {
+    args: { findingId: string; status: Exclude<ReviewFindingStatus, 'open'> };
+    result: ReviewFindingRecord | null;
+  };
 
   'task-graph:get-latest': { args: { threadId: string }; result: TaskGraphWithNodes | null };
 
