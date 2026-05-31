@@ -20,12 +20,14 @@ import type {
 } from '@shipcode/shared';
 import {
   agentLabelForExecutor,
+  buildPrdMetadataLabels,
   clampError,
   deriveGithubIssueUrl,
   ISSUE_PIPELINE_STATUS,
   isAgentRoutingLabel,
   isRealGithubIssueNumber,
   PIPELINE_PHASE,
+  PRD_METADATA_LABELS,
   parseGithubProjectUrl,
   parseGithubRemote,
   pipelineStatusFromLabels,
@@ -943,7 +945,27 @@ export function registerGitHubHandlers({
       if (!project) throw new Error(`Project ${projectId} not found`);
 
       const ghCli = new GhCli(project.path);
-      const issue = await ghCli.createIssue({ title, body, labels });
+      // Project complexity + blast radius onto native issue labels (#45) so the
+      // metadata lives on the issue itself, not just the Projects v2 board (and
+      // survives for repos with no board configured).
+      const metadataLabels = prdMetadata
+        ? buildPrdMetadataLabels(prdMetadata.estimatedComplexity, prdMetadata.blastRadius)
+        : [];
+      if (metadataLabels.length > 0) {
+        const requiredMetadataLabels = PRD_METADATA_LABELS.filter((label) =>
+          metadataLabels.includes(label.name),
+        );
+        const labelSync = await ghCli.ensureLabels(requiredMetadataLabels);
+        if (labelSync.failed.length > 0) {
+          throw new Error(
+            `Failed to create PRD metadata labels: ${labelSync.failed
+              .map((failure) => `${failure.name}: ${failure.error}`)
+              .join('; ')}`,
+          );
+        }
+      }
+      const issueLabels = [...new Set([...(labels ?? []), ...metadataLabels])];
+      const issue = await ghCli.createIssue({ title, body, labels: issueLabels });
       let projectAttachWarning: string | null = null;
 
       queries.githubIssues.upsert({
@@ -1041,7 +1063,14 @@ export function registerGitHubHandlers({
       assertRealGithubIssue(cachedIssue, 'edit on GitHub');
 
       const ghCli = new GhCli(project.path);
-      await ghCli.editIssue({ issueNumber, title, body, labels });
+      // Keep complexity + blast radius projected onto native labels on edit too;
+      // syncIssueLabels adds/removes only PRD-managed prefixes, so user labels
+      // are untouched (#45).
+      const metadataLabels = prdMetadata
+        ? buildPrdMetadataLabels(prdMetadata.estimatedComplexity, prdMetadata.blastRadius)
+        : [];
+      const issueLabels = [...new Set([...(labels ?? []), ...metadataLabels])];
+      await ghCli.editIssue({ issueNumber, title, body, labels: issueLabels });
       if (prdMetadata) {
         await attachIssueToConfiguredProjectBoard(
           project,
@@ -1060,6 +1089,12 @@ export function registerGitHubHandlers({
               blastRadius: prdMetadata.blastRadius,
             },
           });
+          // Mirror the create path: reflect the written issue type in the local
+          // cache so it isn't stale until the next full refresh (#45 AC4).
+          const editedRecord = queries.githubIssues.getByNumber(projectId, issueNumber);
+          if (editedRecord) {
+            queries.githubIssues.setIssueType({ id: editedRecord.id, issueType: 'Feature' });
+          }
         } catch (err) {
           log.warn(`[github:edit-issue-body] project metadata failed for #${issueNumber}:`, err);
         }

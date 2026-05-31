@@ -786,6 +786,43 @@ describe('GhCli', () => {
   });
 
   describe('editIssue', () => {
+    it('writes native milestone and assignees on edit (#45)', async () => {
+      const fake = createFakeProc();
+      mockSpawn.mockReturnValueOnce(fake.proc);
+      // syncIssueLabels runs after the edit spawn; fail its label discovery so
+      // the assertion can focus on the edit spawn args.
+      mockExecFileAsync.mockRejectedValueOnce(new Error('gh label list failed'));
+
+      const promise = gh.editIssue({
+        issueNumber: 42,
+        title: 'T',
+        body: 'B',
+        labels: ['complexity:high'],
+        milestone: 'v2.0',
+        assignees: ['octocat'],
+      });
+      fake.complete(0);
+
+      await expect(promise).rejects.toThrow('gh label list failed');
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'gh',
+        [
+          'issue',
+          'edit',
+          '42',
+          '--title',
+          'T',
+          '--body-file',
+          '-',
+          '--milestone',
+          'v2.0',
+          '--add-assignee',
+          'octocat',
+        ],
+        ghSpawnOptions,
+      );
+    });
+
     it('surfaces label discovery failures instead of clearing managed labels', async () => {
       const fake = createFakeProc();
       mockSpawn.mockReturnValueOnce(fake.proc);
@@ -842,6 +879,56 @@ describe('GhCli', () => {
   });
 
   describe('createIssue', () => {
+    it('writes native milestone and assignees on creation (#45)', async () => {
+      success(JSON.stringify([{ name: 'enhancement' }]));
+      const fake = createFakeProc();
+      mockSpawn.mockReturnValueOnce(fake.proc);
+      success(
+        JSON.stringify({
+          number: 77,
+          title: 'Native meta',
+          body: 'b',
+          labels: [{ name: 'enhancement' }],
+          assignees: [{ login: 'octocat' }],
+          state: 'OPEN',
+          url: 'https://github.com/o/r/issues/77',
+        }),
+      );
+
+      const promise = gh.createIssue({
+        title: 'Native meta',
+        body: 'b',
+        labels: ['enhancement'],
+        milestone: 'v1.0',
+        assignees: ['octocat', 'hubot'],
+      });
+      await waitForSpawnCall();
+      fake.proc.stdout.emit('data', 'https://github.com/o/r/issues/77\n');
+      fake.complete(0);
+
+      await promise;
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'gh',
+        [
+          'issue',
+          'create',
+          '--title',
+          'Native meta',
+          '--body-file',
+          '-',
+          '--label',
+          'enhancement',
+          '--milestone',
+          'v1.0',
+          '--assignee',
+          'octocat',
+          '--assignee',
+          'hubot',
+        ],
+        ghSpawnOptions,
+      );
+    });
+
     it('filters labels, pipes issue body through stdin, and returns the created issue', async () => {
       success(JSON.stringify([{ name: 'enhancement' }, { name: 'bug' }]));
       const fake = createFakeProc();

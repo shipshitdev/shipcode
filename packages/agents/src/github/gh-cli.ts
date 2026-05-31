@@ -462,12 +462,18 @@ export class GhCli {
     title: string;
     body: string;
     labels?: string[];
+    milestone?: string;
+    assignees?: string[];
   }): Promise<GitHubIssue> {
     // Body is piped via stdin (`--body-file -`) to avoid argv length limits
     // and shell-escaping issues for multi-KB PRDs.
     const args = ['issue', 'create', '--title', options.title, '--body-file', '-'];
     const labels = await this.filterExistingLabels(options.labels ?? []);
     if (labels.length) args.push('--label', labels.join(','));
+    // Native metadata fields (#45): set milestone + assignees at creation so
+    // the data lives in GitHub's first-class fields, not body frontmatter.
+    if (options.milestone) args.push('--milestone', options.milestone);
+    for (const assignee of options.assignees ?? []) args.push('--assignee', assignee);
 
     const stdout = await this.spawnWithStdin('gh', args, options.body);
     // gh issue create outputs the issue URL, e.g. https://github.com/owner/repo/issues/42
@@ -720,12 +726,23 @@ export class GhCli {
     title: string;
     body: string;
     labels?: string[];
+    milestone?: string;
+    assignees?: string[];
   }): Promise<void> {
-    await this.spawnWithStdin(
-      'gh',
-      ['issue', 'edit', String(options.issueNumber), '--title', options.title, '--body-file', '-'],
-      options.body,
-    );
+    const args = [
+      'issue',
+      'edit',
+      String(options.issueNumber),
+      '--title',
+      options.title,
+      '--body-file',
+      '-',
+    ];
+    // Native metadata fields (#45). `gh issue edit` uses `--add-assignee`
+    // (additive) rather than the `--assignee` flag used by `gh issue create`.
+    if (options.milestone) args.push('--milestone', options.milestone);
+    for (const assignee of options.assignees ?? []) args.push('--add-assignee', assignee);
+    await this.spawnWithStdin('gh', args, options.body);
     await this.syncIssueLabels(options.issueNumber, options.labels ?? []);
   }
 

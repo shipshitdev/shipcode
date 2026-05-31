@@ -64,11 +64,17 @@ const {
   setIssueLabelPresenceMock: vi.fn(async () => undefined),
   setIssueProjectMetadataMock: vi.fn(async () => [] as string[]),
   syncIssueLabelsMock: vi.fn(async () => undefined),
-  ensureLabelsMock: vi.fn(async () => ({
-    created: [],
-    alreadyPresent: [],
-    failed: [],
-  })),
+  ensureLabelsMock: vi.fn(
+    async (): Promise<{
+      created: string[];
+      alreadyPresent: string[];
+      failed: Array<{ name: string; error: string }>;
+    }> => ({
+      created: [],
+      alreadyPresent: [],
+      failed: [],
+    }),
+  ),
 }));
 
 vi.mock('@shipcode/agents', async () => {
@@ -2873,6 +2879,135 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
+  it('projects complexity + blast radius onto native labels even without a project board (#45)', async () => {
+    const createdRecord = {
+      ...baseIssue,
+      id: 'issue-77',
+      issueNumber: 77,
+      title: 'New issue',
+      body: 'Body',
+      labels: ['enhancement', 'complexity:medium', 'blast:contained'],
+    };
+    createIssueMock.mockResolvedValue({
+      number: 77,
+      title: 'New issue',
+      body: 'Body',
+      labels: ['enhancement', 'complexity:medium', 'blast:contained'],
+      assignee: null,
+      state: 'open',
+      url: 'https://github.com/acme/repo/issues/77',
+    });
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: {
+        upsert: vi.fn(),
+        list: vi.fn(() => [createdRecord]),
+        getByNumber: vi.fn(() => createdRecord),
+        setIssueType: vi.fn(),
+        setPriority: vi.fn(),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const createIssue = handlers.get('github:create-issue');
+    if (!createIssue) throw new Error('github:create-issue handler not registered');
+
+    await createIssue(undefined, {
+      projectId: 'project-1',
+      title: 'New issue',
+      body: 'Body',
+      labels: ['enhancement'],
+      prdMetadata: {
+        estimatedComplexity: 'medium',
+        blastRadius: 'contained',
+      },
+    });
+
+    // complexity:* / blast:* are written as native issue labels regardless of
+    // whether a Projects v2 board is configured.
+    expect(ensureLabelsMock).toHaveBeenCalledWith([
+      {
+        name: 'complexity:medium',
+        color: 'fbca04',
+        description: 'PRD estimated complexity: medium.',
+      },
+      {
+        name: 'blast:contained',
+        color: '1f883d',
+        description: 'PRD blast radius: contained.',
+      },
+    ]);
+    expect(createIssueMock).toHaveBeenCalledWith({
+      title: 'New issue',
+      body: 'Body',
+      labels: ['enhancement', 'complexity:medium', 'blast:contained'],
+    });
+    // baseProject has no board URL, so the project-field path never runs.
+    expect(setIssueProjectMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it('fails before creating a PRD issue when metadata labels cannot be ensured (#45)', async () => {
+    ensureLabelsMock.mockResolvedValueOnce({
+      created: [],
+      alreadyPresent: ['complexity:medium'],
+      failed: [{ name: 'blast:contained', error: 'missing permission' }],
+    });
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: {
+        upsert: vi.fn(),
+        list: vi.fn(),
+        getByNumber: vi.fn(),
+        setIssueType: vi.fn(),
+        setPriority: vi.fn(),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const createIssue = handlers.get('github:create-issue');
+    if (!createIssue) throw new Error('github:create-issue handler not registered');
+
+    await expect(
+      createIssue(undefined, {
+        projectId: 'project-1',
+        title: 'New issue',
+        body: 'Body',
+        labels: ['enhancement'],
+        prdMetadata: {
+          estimatedComplexity: 'medium',
+          blastRadius: 'contained',
+        },
+      }),
+    ).rejects.toThrow('Failed to create PRD metadata labels: blast:contained: missing permission');
+
+    expect(createIssueMock).not.toHaveBeenCalled();
+    expect(queries.githubIssues.upsert).not.toHaveBeenCalled();
+  });
+
   it('creates a PRD issue on the configured project board and returns metadata warnings', async () => {
     const projectWithBoard = {
       ...baseProject,
@@ -3134,6 +3269,79 @@ describe('registerGitHubHandlers', () => {
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
       projectId: 'project-1',
       issues: [updatedRecord],
+    });
+  });
+
+  it('refreshes the cached issue type after editing PRD metadata on the board (#45)', async () => {
+    const projectWithBoard = {
+      ...baseProject,
+      githubProjectUrl: 'https://github.com/orgs/acme/projects/1',
+    };
+    const editedRecord = {
+      ...baseIssue,
+      id: 'issue-42',
+      title: 'Edited',
+      body: 'Edited body',
+      labels: ['enhancement', 'complexity:high', 'blast:infra'],
+    };
+    getIssueMock.mockResolvedValue({
+      number: 42,
+      title: 'Edited',
+      body: 'Edited body',
+      labels: ['enhancement', 'complexity:high', 'blast:infra'],
+      assignee: null,
+      state: 'open',
+      author: null,
+    });
+    setIssueProjectMetadataMock.mockResolvedValue([]);
+    const queries = {
+      projects: {
+        getById: vi.fn(() => projectWithBoard),
+      },
+      githubIssues: {
+        getByNumber: vi.fn(() => editedRecord),
+        upsert: vi.fn(),
+        list: vi.fn(() => [editedRecord]),
+        setIssueType: vi.fn(),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const editIssue = handlers.get('github:edit-issue-body');
+    if (!editIssue) throw new Error('github:edit-issue-body handler not registered');
+
+    await editIssue(undefined, {
+      projectId: 'project-1',
+      issueNumber: 42,
+      title: 'Edited',
+      body: 'Edited body',
+      labels: ['enhancement'],
+      prdMetadata: {
+        estimatedComplexity: 'high',
+        blastRadius: 'infra',
+      },
+    });
+
+    // native labels projected onto the edit too
+    expect(editIssueMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: expect.arrayContaining(['enhancement', 'complexity:high', 'blast:infra']),
+      }),
+    );
+    // local cache issue type refreshed so it isn't stale until next sync (AC4)
+    expect(queries.githubIssues.setIssueType).toHaveBeenCalledWith({
+      id: 'issue-42',
+      issueType: 'Feature',
     });
   });
 

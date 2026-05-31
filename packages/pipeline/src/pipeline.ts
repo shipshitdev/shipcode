@@ -6,6 +6,7 @@ import {
   resolveRequireApproval,
   resolveRequireApprovalForIssue,
   type ShipCodePlan,
+  stripPrdFrontmatter,
 } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { createPipelineContextHelpers } from './pipeline/context';
@@ -321,8 +322,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       reviewRound: 0,
     });
 
+    // Strip any legacy YAML frontmatter from the body so the planner sees the
+    // clean PRD prose, not duplicated metadata that now lives in native
+    // labels / project fields (#45).
     const prompt =
-      `GitHub Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ''}` +
+      `GitHub Issue #${issue.number}: ${issue.title}\n\n${stripPrdFrontmatter(issue.body ?? '')}` +
       buildWorkpadProtocol({ issueNumber: issue.number });
     launch(threadId, () =>
       planning.startPlanGeneration(threadId, prompt, projectPath, options?.worktreePath ?? null),
