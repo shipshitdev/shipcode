@@ -12,6 +12,7 @@ import type {
   PipelinePhase,
   PlanRecord,
   Project,
+  ReviewFindingRecord,
   ReviewRecord,
   TaskGraphWithNodes,
   Thread,
@@ -386,6 +387,16 @@ function useIssueDetailView() {
     // Push-invalidated by pipeline:phase in useIpc.
   });
 
+  const { data: reviewFindings = [] } = useQuery<ReviewFindingRecord[]>({
+    queryKey: ['review-findings', activeThreadId],
+    queryFn: () =>
+      window.shipcode.invoke('review-findings:list-thread', {
+        threadId: activeThreadId as string,
+        includeClosed: true,
+      }),
+    enabled: !!activeThreadId,
+  });
+
   // Fetch latest verification for the thread
   const { data: latestVerification } = useQuery<VerificationRecord | null>({
     queryKey: ['verification', activeThreadId],
@@ -644,6 +655,7 @@ function useIssueDetailView() {
         queryKey: ['issue-activity', activeProjectId, activeIssue?.issueNumber],
       }),
       queryClient.invalidateQueries({ queryKey: ['checkpoints', activeThreadId] }),
+      queryClient.invalidateQueries({ queryKey: ['review-findings', activeThreadId] }),
     ]);
   };
 
@@ -1672,6 +1684,7 @@ function useIssueDetailView() {
       normalizedIssueActivity={normalizedIssueActivity}
       loadingPlanDetailIds={loadingPlanDetailIds}
       normalizedPlanHistory={resolvedPlanHistory}
+      reviewFindings={reviewFindings}
       normalizedReviewsByPlanId={normalizedReviewsByPlanId}
       normalizedThreadPlanHistory={normalizedThreadPlanHistory}
       isPlanHistoryLoading={isPlanHistoryLoading}

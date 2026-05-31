@@ -82,6 +82,7 @@ import {
   migrateV58,
   migrateV59,
   migrateV60,
+  migrateV61,
 } from './schema';
 
 export { ActivityQueries } from './queries/activity';
@@ -112,6 +113,7 @@ export { PlanQueries } from './queries/plans';
 export { ProjectFailureQueries } from './queries/project-failures';
 export { ProjectQueries } from './queries/projects';
 export { PromptTelemetryQueries } from './queries/prompt-telemetry';
+export { ReviewFindingQueries } from './queries/review-findings';
 export { ReviewQueries } from './queries/reviews';
 export { SettingsQueries } from './queries/settings';
 export { SkillResolutionLogQueries } from './queries/skill-resolution-log';
@@ -201,6 +203,7 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV58(db);
   migrateV59(db);
   migrateV60(db);
+  migrateV61(db);
 
   // Startup cleanup: reset unclaimed queued issues to todo on every launch.
   // An unclaimed queued issue has no active worker holding it — it's stale state

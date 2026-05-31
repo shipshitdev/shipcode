@@ -1807,3 +1807,61 @@ export function migrateV60(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (60)`);
   });
 }
+
+export function migrateV61(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 61) return;
+
+  transaction(db, () => {
+    // Durable CI/review lane findings. Reviewer, verifier, CI, and PR review
+    // signals are normalized here so the UI and retry prompts can reason over
+    // unresolved findings without scraping raw provider output.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS review_findings (
+        id                 TEXT PRIMARY KEY,
+        project_id         TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        thread_id          TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        plan_id            TEXT REFERENCES plans(id) ON DELETE SET NULL,
+        review_id          TEXT REFERENCES reviews(id) ON DELETE SET NULL,
+        verification_id    TEXT REFERENCES verifications(id) ON DELETE SET NULL,
+        run_id             TEXT REFERENCES pipeline_runs(id) ON DELETE SET NULL,
+        phase              TEXT NOT NULL,
+        source             TEXT NOT NULL CHECK(source IN ('review', 'verification', 'ci', 'pr_review')),
+        severity           TEXT NOT NULL,
+        status             TEXT NOT NULL CHECK(status IN ('open', 'fixed', 'ignored', 'superseded', 'closed')) DEFAULT 'open',
+        title              TEXT NOT NULL,
+        description        TEXT NOT NULL,
+        suggestion         TEXT,
+        file_path          TEXT,
+        fingerprint        TEXT NOT NULL,
+        source_model       TEXT,
+        commit_sha         TEXT,
+        pr_number          INTEGER,
+        worktree_path      TEXT,
+        branch             TEXT,
+        metadata_json      TEXT,
+        resolved_by_run_id TEXT REFERENCES pipeline_runs(id) ON DELETE SET NULL,
+        resolved_at        TEXT,
+        created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_review_findings_thread_status
+        ON review_findings(thread_id, status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_review_findings_project_status
+        ON review_findings(project_id, status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_review_findings_plan
+        ON review_findings(plan_id, source, status);
+      CREATE INDEX IF NOT EXISTS idx_review_findings_review
+        ON review_findings(review_id);
+      CREATE INDEX IF NOT EXISTS idx_review_findings_verification
+        ON review_findings(verification_id);
+      CREATE INDEX IF NOT EXISTS idx_review_findings_fingerprint
+        ON review_findings(thread_id, source, phase, fingerprint, status);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (61)`);
+  });
+}
