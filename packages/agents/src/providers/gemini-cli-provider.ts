@@ -1,5 +1,6 @@
 import type { ProcessManager } from '../process-manager';
 import { measurePromptPayload } from '../prompt-scope';
+import { clampProviderFailure, firstString, stripAnsi } from './output-summary';
 import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
 
 interface GeminiCommand {
@@ -36,10 +37,6 @@ type ProcessManagerWithStdin = ProcessManager & {
     options?: Parameters<ProcessManager['spawn']>[5],
   ) => ReturnType<ProcessManager['spawn']>;
 };
-
-function stripAnsi(value: string): string {
-  return value.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g'), '');
-}
 
 function buildGeminiCommand(req: ProviderRequest): GeminiCommand {
   const args = ['-p', '-', '--output-format', 'json'];
@@ -135,13 +132,6 @@ async function runGeminiCli(
   });
 }
 
-function firstString(...values: unknown[]): string | null {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return null;
-}
-
 function parseGeminiOutput(rawOutput: string): { text: string; resolvedModel?: string } {
   const cleaned = stripAnsi(rawOutput).trim();
   if (!cleaned) return { text: '' };
@@ -172,16 +162,7 @@ function parseGeminiOutput(rawOutput: string): { text: string; resolvedModel?: s
 }
 
 function clampGeminiFailure(rawOutput: string, prompt: string): string {
-  const promptText = stripAnsi(prompt).trim();
-  const lines = stripAnsi(rawOutput)
-    .split('\n')
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .filter((entry) => !promptText || (!promptText.includes(entry) && !entry.includes(promptText)));
-  const line =
-    lines.find((entry) => /\b(error|failed|unauthorized|auth|permission|denied)\b/i.test(entry)) ??
-    lines[0];
-  return (line ?? 'Gemini CLI failed').slice(0, 280);
+  return clampProviderFailure(rawOutput, prompt, 'Gemini CLI failed');
 }
 
 export function createGeminiCliProvider(processManager: ProcessManager): AgentProvider {

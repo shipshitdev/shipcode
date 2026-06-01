@@ -1,5 +1,6 @@
 import type { ProcessManager } from '../process-manager';
 import { measurePromptPayload } from '../prompt-scope';
+import { clampProviderFailure, firstString, stripAnsi } from './output-summary';
 import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
 
 interface CursorCommand {
@@ -38,10 +39,6 @@ type ProcessManagerWithStdin = ProcessManager & {
     options?: Parameters<ProcessManager['spawn']>[5],
   ) => ReturnType<ProcessManager['spawn']>;
 };
-
-function stripAnsi(value: string): string {
-  return value.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g'), '');
-}
 
 function buildCursorCommand(req: ProviderRequest): CursorCommand {
   // `-p` (print) makes cursor-agent non-interactive; the prompt is piped on
@@ -140,13 +137,6 @@ async function runCursorCli(
   });
 }
 
-function firstString(...values: unknown[]): string | null {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return null;
-}
-
 function extractFromResultObject(
   parsed: Record<string, unknown>,
 ): { text: string; resolvedModel?: string } | null {
@@ -200,16 +190,7 @@ function parseCursorOutput(rawOutput: string): { text: string; resolvedModel?: s
 }
 
 function clampCursorFailure(rawOutput: string, prompt: string): string {
-  const promptText = stripAnsi(prompt).trim();
-  const lines = stripAnsi(rawOutput)
-    .split('\n')
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .filter((entry) => !promptText || (!promptText.includes(entry) && !entry.includes(promptText)));
-  const line =
-    lines.find((entry) => /\b(error|failed|unauthorized|auth|permission|denied)\b/i.test(entry)) ??
-    lines[0];
-  return (line ?? 'Cursor CLI failed').slice(0, 280);
+  return clampProviderFailure(rawOutput, prompt, 'Cursor CLI failed');
 }
 
 export function createCursorCliProvider(processManager: ProcessManager): AgentProvider {

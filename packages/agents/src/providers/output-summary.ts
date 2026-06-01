@@ -2,6 +2,30 @@ import { clampTextBlock, stripAnsi } from '@shipcode/shared';
 
 export { stripAnsi };
 
+const PROVIDER_FAILURE_PATTERN = /\b(error|failed|unauthorized|auth|permission|denied)\b/i;
+
+export function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+export function clampProviderFailure(
+  rawOutput: string,
+  prompt: string,
+  fallbackMessage: string,
+): string {
+  const promptText = stripAnsi(prompt).trim();
+  const lines = stripAnsi(rawOutput)
+    .split('\n')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .filter((entry) => !promptText || (!promptText.includes(entry) && !entry.includes(promptText)));
+  const line = lines.find((entry) => PROVIDER_FAILURE_PATTERN.test(entry)) ?? lines[0];
+  return (line ?? fallbackMessage).slice(0, 280);
+}
+
 export function summarizeTerminalText(
   raw: string | null | undefined,
   options: { maxLines?: number; maxChars?: number } = {},
