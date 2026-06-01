@@ -78,6 +78,7 @@ async function runCli(
   threadId?: string,
   workspaceRoot?: string | null,
   options?: Parameters<ProcessManager['spawn']>[5],
+  onProcessStart?: (processId: string) => void,
 ): Promise<CliRunResult> {
   if (signal.aborted) {
     return { rawOutput: '', exitCode: 130 };
@@ -118,6 +119,7 @@ async function runCli(
       exitCode: 127,
     };
   }
+  onProcessStart?.(process.id);
 
   return new Promise<CliRunResult>((resolve) => {
     let rawOutput = '';
@@ -227,7 +229,7 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
       if (disallowedTools) execArgs.push('--disallowedTools', disallowedTools.join(','));
       execArgs.push('--dangerously-skip-permissions');
       injectThinkingTokens(execArgs, req);
-      return { args: execArgs, stdin: req.prompt };
+      return { args: execArgs, stdin: req.prompt, options: { keepStdinOpen: true } };
     }
     case 'review': // Claude does not review in the current pipeline (codex does).
       // Kept for symmetry; always 1 turn (structural, not configurable).
@@ -436,6 +438,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
         req.threadId,
         req.workspaceRoot,
         { ...(command.options ?? {}), envKeyAllowlist: [...CLAUDE_ENV_KEYS] },
+        req.onProcessStart,
       );
       const parser = new StreamParser();
       parser.feed(result.rawOutput);
@@ -503,6 +506,7 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
         req.threadId,
         req.workspaceRoot,
         { ...(command.options ?? {}), envKeyAllowlist: [...CODEX_ENV_KEYS] },
+        req.onProcessStart,
       );
       const rawOutput = stripCodexProtocol(result.rawOutput, {
         includeCommandOutput: req.phase === 'execute',

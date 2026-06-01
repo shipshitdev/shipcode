@@ -598,6 +598,20 @@ describe('createClaudeCliProvider', () => {
     expect(result.resolvedModel).toBe('claude');
   });
 
+  it('notifies callers when the managed Claude process starts', async () => {
+    const { trigger, pm } = createMockProcessManager();
+    const provider = createClaudeCliProvider(pm);
+    const onProcessStart = vi.fn();
+
+    const promise = provider.generate(req({ phase: 'plan', onProcessStart }));
+    await new Promise((r) => setImmediate(r));
+
+    expect(onProcessStart).toHaveBeenCalledWith('proc-1');
+
+    await trigger('exit', 'proc-1', 0);
+    await promise;
+  });
+
   it('ignores output and exit events for other process IDs', async () => {
     const { trigger, spawnCalls, pm } = createMockProcessManager();
     const provider = createClaudeCliProvider(pm);
