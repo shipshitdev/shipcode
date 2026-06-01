@@ -31,7 +31,7 @@
     "postinstall": "node -e \"try{require('node-pty')}catch(e){console.warn('[shipcode] node-pty not loadable; terminal features disabled')}\""
   },
   "dependencies": {
-    "commander": "14.0.3",
+    "commander": "15.0.0",
     "node-pty": "1.1.0",
     "simple-git": "3.36.0",
     "yaml": "2.9.0",
@@ -43,7 +43,7 @@
     "@shipcode/git": "workspace:*",
     "@shipcode/pipeline": "workspace:*",
     "@shipcode/shared": "workspace:*",
-    "@types/node": "25.8.0",
+    "@types/node": "25.9.1",
     "tsup": "8.5.1",
     "typescript": "6.0.3"
   }

@@ -35,8 +35,8 @@
     "@radix-ui/react-tooltip": "1.2.8",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "lucide-react": "1.16.0",
-    "shiki": "4.0.2",
+    "lucide-react": "1.17.0",
+    "shiki": "4.1.0",
     "tailwind-merge": "3.6.0"
   },
   "peerDependencies": {
@@ -45,7 +45,7 @@
   },
   "devDependencies": {
     "@shipcode/shared": "workspace:*",
-    "@types/react": "19.2.14",
+    "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
     "jsdom": "29.1.1",
     "react": "19.2.6",
