@@ -1,5 +1,6 @@
 import type { ProcessManager } from '../process-manager';
 import { measurePromptPayload } from '../prompt-scope';
+import { firstString } from './output-summary';
 import { clampCliFailure, runStdinCli, type StdinCliCommand, stripAnsi } from './stdin-cli-runner';
 import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
 
@@ -25,13 +26,6 @@ function buildGeminiCommand(req: ProviderRequest): StdinCliCommand {
     args.push('--approval-mode', 'never', '--sandbox', 'workspace-write');
   }
   return { args, stdin: req.prompt };
-}
-
-function firstString(...values: unknown[]): string | null {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return null;
 }
 
 function parseGeminiOutput(rawOutput: string): { text: string; resolvedModel?: string } {

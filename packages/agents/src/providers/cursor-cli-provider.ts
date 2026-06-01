@@ -1,5 +1,6 @@
 import type { ProcessManager } from '../process-manager';
 import { measurePromptPayload } from '../prompt-scope';
+import { firstString } from './output-summary';
 import { clampCliFailure, runStdinCli, type StdinCliCommand, stripAnsi } from './stdin-cli-runner';
 import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
 
@@ -30,13 +31,6 @@ function buildCursorCommand(req: ProviderRequest): StdinCliCommand {
   // receive auto-apply.
   if (req.phase === 'execute') args.push('--force');
   return { args, stdin: req.prompt };
-}
-
-function firstString(...values: unknown[]): string | null {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return null;
 }
 
 function extractFromResultObject(
