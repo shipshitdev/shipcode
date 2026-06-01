@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { GeneratorCli, MemoryFileInfo, RepoMemoryStatus } from '@shipcode/shared';
 import { unwrapCliResultEnvelope } from './cli-result';
 import { runCliWithStdin } from './cli-stdin-runner';
+import { extractFencedJson } from './fenced-json';
 
 const MEMORY_DIR = '.agents/memory';
 const OBSOLETE_CONTEXT_DIR = '.agents/context';
@@ -231,44 +232,12 @@ END_${delimiter}`;
 }
 
 function extractGeneratedMemoryFiles(text: string): Record<string, string> {
-  const openTag = `\`\`\`${MEMORY_FENCE_TAG}`;
-  const lines = text.split('\n');
-  let collecting = false;
-  const captured: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!collecting) {
-      if (trimmed === openTag || trimmed.startsWith(`${openTag} `)) {
-        collecting = true;
-      }
-      continue;
-    }
-    if (trimmed === '```') break;
-    captured.push(line);
-  }
-
-  if (!captured.length) {
-    throw new Error(`No \`${MEMORY_FENCE_TAG}\` fenced block found in AI response`);
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(captured.join('\n').trim());
-  } catch (err) {
-    throw new Error(
-      `Failed to parse memory JSON inside \`${MEMORY_FENCE_TAG}\` block: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    );
-  }
+  const parsed = extractFencedJson({ text, tag: MEMORY_FENCE_TAG, label: 'memory' });
 
   for (const key of ['goal', 'architecture', 'constraints', 'doDont']) {
-    if (
-      !parsed ||
-      typeof (parsed as Record<string, unknown>)[key] !== 'string' ||
-      !(parsed as Record<string, string>)[key].trim()
-    ) {
+    const value =
+      parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>)[key] : null;
+    if (typeof value !== 'string' || !value.trim()) {
       throw new Error(`Memory JSON is missing or has empty \`${key}\` key`);
     }
   }
