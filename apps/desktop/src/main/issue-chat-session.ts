@@ -27,9 +27,20 @@ export interface StartIssueChatResult {
   threadId: string;
   provider: IssueChatProvider;
   modelId: string | null;
+  sessionId: string | null;
+  reasoningEffort: ReasoningEffort | null;
   worktreePath: string;
   reattached: boolean;
   activeProcessId: string | null;
+}
+
+export interface IssueChatSessionMetadataResult {
+  threadId: string;
+  provider: IssueChatProvider;
+  sessionId: string | null;
+  modelId: string | null;
+  reasoningEffort: ReasoningEffort | null;
+  worktreePath: string;
 }
 
 export interface SendIssueChatTurnArgs {
@@ -78,6 +89,11 @@ function ensureIssueChatProvider(provider: string): IssueChatProvider {
 function normalizeSpeaker(input: string | undefined): string {
   const trimmed = input?.trim();
   return trimmed ? trimmed.slice(0, 80) : 'user';
+}
+
+function normalizeReasoningEffort(input: string | null | undefined): ReasoningEffort | undefined {
+  if (input === 'low' || input === 'medium' || input === 'high') return input;
+  return undefined;
 }
 
 function buildClaudeThinkingArgs(
@@ -141,11 +157,21 @@ function buildTurnPrompt(input: {
   thread: Thread;
   worktreePath: string;
   text: string;
-  isFirstTurn: boolean;
+  includeContext: boolean;
+  previousTurns: Array<{ speaker: string; role: 'prompt' | 'response'; content: string }>;
 }): string {
-  if (!input.isFirstTurn) return input.text;
+  if (!input.includeContext) return input.text;
 
   const issue = input.issue;
+  const previousTranscript = input.previousTurns
+    .slice(-20)
+    .map((turn) => {
+      const label = turn.role === 'prompt' ? turn.speaker : 'assistant';
+      return `### ${label}\n${turn.content.trim() || '(empty)'}`;
+    })
+    .join('\n\n')
+    .slice(-8_000);
+
   return `# ShipCode Issue Chat Session
 
 You are continuing a multi-turn agent conversation scoped to this issue thread and worktree.
@@ -163,6 +189,17 @@ ${issue ? `- Issue title: ${issue.title}` : `- Thread title: ${input.thread.titl
 ## Issue Body
 
 ${issue?.body?.trim() || input.thread.prompt?.trim() || '(empty)'}
+
+${
+  previousTranscript
+    ? `## Previous Issue Chat Transcript
+
+The visible audit transcript below may be more complete than the provider-owned session window. Treat it as bounded context for this fresh provider session.
+
+${previousTranscript}
+`
+    : ''
+}
 
 ## User Turn
 
@@ -262,6 +299,8 @@ export async function startIssueChatSession({
       threadId: existing.threadId,
       provider: existing.provider,
       modelId: existing.modelId,
+      sessionId: existing.sessionId,
+      reasoningEffort: existing.reasoningEffort ?? null,
       worktreePath: existing.cwd,
       reattached: true,
       activeProcessId: existing.activeProcessId,
@@ -276,25 +315,76 @@ export async function startIssueChatSession({
   if (!materializedThread.worktreePath) {
     throw new Error(`Thread ${thread.id} has no worktree path after setup`);
   }
+  const persisted = queries.issueChatSessions.getByThread(args.threadId);
+  if (persisted && persisted.provider !== provider) {
+    throw new Error(
+      `Issue chat was previously started with ${persisted.provider}; choose ${persisted.provider} to resume`,
+    );
+  }
+  const modelId = args.modelId ?? persisted?.model ?? null;
+  const reasoningEffort =
+    args.reasoningEffort ?? normalizeReasoningEffort(persisted?.reasoningEffort) ?? null;
+  const sessionId = persisted?.sessionId ?? null;
 
   sessions.set(args.threadId, {
     threadId: args.threadId,
     provider,
-    modelId: args.modelId ?? null,
-    reasoningEffort: args.reasoningEffort,
+    modelId,
+    reasoningEffort: reasoningEffort ?? undefined,
     cwd: materializedThread.worktreePath,
-    sessionId: null,
+    sessionId,
     activeProcessId: null,
     isProcessingTurn: false,
+  });
+  queries.issueChatSessions.upsert({
+    threadId: args.threadId,
+    provider,
+    sessionId,
+    cwd: materializedThread.worktreePath,
+    model: modelId,
+    reasoningEffort,
   });
 
   return {
     threadId: args.threadId,
     provider,
-    modelId: args.modelId ?? null,
+    modelId,
+    sessionId,
+    reasoningEffort,
     worktreePath: materializedThread.worktreePath,
-    reattached: false,
+    reattached: sessionId != null,
     activeProcessId: null,
+  };
+}
+
+export function getIssueChatSessionMetadata({
+  threadId,
+  queries,
+}: {
+  threadId: string;
+  queries: Queries;
+}): IssueChatSessionMetadataResult | null {
+  const live = sessions.get(threadId);
+  if (live) {
+    return {
+      threadId,
+      provider: live.provider,
+      sessionId: live.sessionId,
+      modelId: live.modelId,
+      reasoningEffort: live.reasoningEffort ?? null,
+      worktreePath: live.cwd,
+    };
+  }
+
+  const persisted = queries.issueChatSessions.getByThread(threadId);
+  if (!persisted) return null;
+  return {
+    threadId,
+    provider: persisted.provider,
+    sessionId: persisted.sessionId,
+    modelId: persisted.model,
+    reasoningEffort: normalizeReasoningEffort(persisted.reasoningEffort) ?? null,
+    worktreePath: persisted.cwd,
   };
 }
 
@@ -326,6 +416,9 @@ export async function sendIssueChatTurn({
     thread.githubIssueNumber != null
       ? queries.githubIssues.getByNumber(project.id, thread.githubIssueNumber)
       : null;
+  const previousTurns = queries.agentConversations.listByThread(args.threadId, {
+    phase: ISSUE_CHAT_PHASE,
+  });
   const round = nextRound(queries, args.threadId);
   const promptRow = queries.agentConversations.insert({
     threadId: args.threadId,
@@ -344,7 +437,8 @@ export async function sendIssueChatTurn({
     thread,
     worktreePath: session.cwd,
     text,
-    isFirstTurn: round === 1,
+    includeContext: session.sessionId == null,
+    previousTurns,
   });
   const command =
     session.provider === 'claude'
@@ -398,6 +492,13 @@ export async function sendIssueChatTurn({
     session.sessionId = extractCodexThreadId(rawOutput) ?? session.sessionId;
   } else if (command.pendingSessionId && exitCode === 0) {
     session.sessionId = command.pendingSessionId;
+  }
+  if (session.sessionId) {
+    try {
+      queries.issueChatSessions.updateSessionId(args.threadId, session.sessionId);
+    } catch (error) {
+      log.error('[issue-chat] session metadata persistence failed:', error);
+    }
   }
 
   const responseContent = resolveResponseContent(rawOutput, exitCode, session.provider);

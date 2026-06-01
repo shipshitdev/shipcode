@@ -10,6 +10,7 @@ import type {
   FeatureQaResultQueries,
   GitHubIssueQueries,
   HeatmapQueries,
+  IssueChatSessionQueries,
   IssueEdgeQueries,
   NotificationsQueries,
   PhaseLogQueries,
@@ -48,6 +49,7 @@ export interface Queries {
   verifications: VerificationQueries;
   githubIssues: GitHubIssueQueries;
   heatmap: HeatmapQueries;
+  issueChatSessions: IssueChatSessionQueries;
   issueEdges: IssueEdgeQueries;
   checkpoints: CheckpointQueries;
   activity: ActivityQueries;

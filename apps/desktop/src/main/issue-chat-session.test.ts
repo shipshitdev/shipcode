@@ -41,6 +41,7 @@ function makeProject() {
 
 function makeHarness() {
   const conversations: Array<Record<string, unknown>> = [];
+  const issueChatSessions = new Map<string, Record<string, unknown>>();
   const terminalEvents: Array<Record<string, unknown>> = [];
   const emitter = new EventEmitter();
   const processManager = Object.assign(emitter, {
@@ -83,6 +84,28 @@ function makeHarness() {
         return row;
       }),
     },
+    issueChatSessions: {
+      getByThread: vi.fn((threadId: string) => issueChatSessions.get(threadId) ?? null),
+      upsert: vi.fn((input: Record<string, unknown>) => {
+        const row = {
+          threadId: input.threadId,
+          provider: input.provider,
+          sessionId: input.sessionId ?? null,
+          cwd: input.cwd,
+          model: input.model ?? null,
+          reasoningEffort: input.reasoningEffort ?? null,
+        };
+        issueChatSessions.set(input.threadId as string, row);
+        return row;
+      }),
+      updateSessionId: vi.fn((threadId: string, sessionId: string) => {
+        const previous = issueChatSessions.get(threadId);
+        const row = { ...previous, threadId, sessionId };
+        issueChatSessions.set(threadId, row);
+        return row;
+      }),
+      delete: vi.fn((threadId: string) => issueChatSessions.delete(threadId)),
+    },
     terminalEvents: {
       create: vi.fn((threadId: string, event: Record<string, unknown>) => {
         const row = { id: `terminal-${terminalEvents.length + 1}`, threadId, event };
@@ -92,7 +115,7 @@ function makeHarness() {
     },
   };
 
-  return { conversations, mainWindow, processManager, queries, terminalEvents };
+  return { conversations, issueChatSessions, mainWindow, processManager, queries, terminalEvents };
 }
 
 describe('issue chat session', () => {
@@ -126,6 +149,114 @@ describe('issue chat session', () => {
 
     expect(h.processManager.spawnWithStdin).not.toHaveBeenCalled();
     expect(h.conversations).toEqual([]);
+    expect(h.queries.issueChatSessions.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: 'thread-1',
+        provider: 'claude',
+        cwd: '/tmp/shipcode-worktree',
+        model: 'claude-sonnet-4-6',
+      }),
+    );
+  });
+
+  it('reattaches a persisted Claude provider session on reopen', async () => {
+    const h = makeHarness();
+    h.issueChatSessions.set('thread-1', {
+      threadId: 'thread-1',
+      provider: 'claude',
+      sessionId: 'claude-session-1',
+      cwd: '/tmp/shipcode-worktree',
+      model: 'claude-sonnet-4-6',
+      reasoningEffort: 'medium',
+    });
+
+    await expect(
+      startIssueChatSession({
+        args: { threadId: 'thread-1', provider: 'claude' },
+        queries: h.queries as never,
+      }),
+    ).resolves.toMatchObject({
+      reattached: true,
+      sessionId: 'claude-session-1',
+      modelId: 'claude-sonnet-4-6',
+      reasoningEffort: 'medium',
+    });
+
+    const resultPromise = sendIssueChatTurn({
+      args: { threadId: 'thread-1', text: 'Continue the prior plan' },
+      queries: h.queries as never,
+      processManager: h.processManager as never,
+      mainWindow: h.mainWindow as never,
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    h.processManager.emit(
+      'output',
+      'proc-1',
+      `${JSON.stringify({ type: 'result', result: 'ok' })}\n`,
+    );
+    h.processManager.emit('exit', 'proc-1', 0);
+    await expect(resultPromise).resolves.toMatchObject({ content: 'ok' });
+
+    expect(h.processManager.spawnWithStdin).toHaveBeenCalledWith(
+      'claude',
+      'claude',
+      expect.arrayContaining(['--resume', 'claude-session-1']),
+      '/tmp/shipcode-worktree',
+      'Continue the prior plan',
+      'thread-1',
+    );
+  });
+
+  it('starts fresh with bounded visible chat context when no provider session is resumable', async () => {
+    const h = makeHarness();
+    h.conversations.push(
+      {
+        id: 'old-prompt',
+        threadId: 'thread-1',
+        phase: 'issue_chat',
+        round: 1,
+        speaker: 'user',
+        role: 'prompt',
+        content: 'Earlier question',
+      },
+      {
+        id: 'old-response',
+        threadId: 'thread-1',
+        phase: 'issue_chat',
+        round: 1,
+        speaker: 'claude',
+        role: 'response',
+        content: 'Earlier answer',
+      },
+    );
+    await startIssueChatSession({
+      args: { threadId: 'thread-1', provider: 'claude' },
+      queries: h.queries as never,
+    });
+
+    const resultPromise = sendIssueChatTurn({
+      args: { threadId: 'thread-1', text: 'Resume from here' },
+      queries: h.queries as never,
+      processManager: h.processManager as never,
+      mainWindow: h.mainWindow as never,
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    h.processManager.emit(
+      'output',
+      'proc-1',
+      `${JSON.stringify({ type: 'result', result: 'ok' })}\n`,
+    );
+    h.processManager.emit('exit', 'proc-1', 0);
+    await expect(resultPromise).resolves.toMatchObject({ content: 'ok' });
+
+    const spawnCalls = h.processManager.spawnWithStdin.mock.calls as unknown[][];
+    const prompt = spawnCalls[0][4] as string;
+    expect(prompt).toContain('Previous Issue Chat Transcript');
+    expect(prompt).toContain('Earlier question');
+    expect(prompt).toContain('Earlier answer');
+    expect(prompt).toContain('Resume from here');
   });
 
   it('persists a prompt and response with usage for a successful turn', async () => {

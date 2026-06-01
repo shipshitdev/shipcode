@@ -83,6 +83,7 @@ import {
   migrateV59,
   migrateV60,
   migrateV61,
+  migrateV62,
 } from './schema';
 
 export { ActivityQueries } from './queries/activity';
@@ -101,6 +102,11 @@ export type { FeatureQaResultRecord, InsertFeatureQaResult } from './queries/fea
 export { FeatureQaResultQueries } from './queries/feature-qa-results';
 export { GitHubIssueQueries } from './queries/github-issues';
 export { HeatmapQueries } from './queries/heatmap';
+export type {
+  IssueChatSessionRecord,
+  UpsertIssueChatSession,
+} from './queries/issue-chat-sessions';
+export { IssueChatSessionQueries } from './queries/issue-chat-sessions';
 // Issue graph persistence backs the project-level dependency view.
 export { IssueEdgeQueries } from './queries/issue-edges';
 export { NotificationsQueries } from './queries/notifications';
@@ -204,6 +210,7 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV59(db);
   migrateV60(db);
   migrateV61(db);
+  migrateV62(db);
 
   // Startup cleanup: reset unclaimed queued issues to todo on every launch.
   // An unclaimed queued issue has no active worker holding it — it's stale state
