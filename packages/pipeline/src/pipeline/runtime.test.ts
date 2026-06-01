@@ -982,6 +982,31 @@ describe('createPipelineRuntime', () => {
     );
   });
 
+  it('sets activeProcessId only while a provider phase is running', async () => {
+    let activeDuringProvider: string | null = null;
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan']),
+      generate: vi.fn(async (request) => {
+        request.onProcessStart?.('proc-1');
+        activeDuringProvider = context.activeProcessId;
+        return {
+          rawOutput: 'done',
+          exitCode: 0,
+        };
+      }),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+
+    await runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {});
+
+    expect(activeDuringProvider).toBe('proc-1');
+    expect(context.activeProcessId).toBeNull();
+  });
+
   it('passes executor model overrides and omits workspace roots outside worktrees', async () => {
     const provider: AgentProvider = {
       id: 'claude-cli',

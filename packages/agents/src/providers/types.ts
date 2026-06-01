@@ -185,6 +185,8 @@ export interface ProviderRequest {
    * Providers may log against this ID but must not read thread state.
    */
   threadId: string;
+  /** Notifies the orchestrator which managed process owns this provider run. */
+  onProcessStart?: (processId: string) => void;
   /**
    * Optional callback for streaming canonical terminal events.
    * Providers emit TerminalEvents through this so the terminal drawer

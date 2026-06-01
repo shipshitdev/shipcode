@@ -570,6 +570,7 @@ export function createPipelineRuntime(
     prompt: string,
     promptMaterials: PromptMaterial[],
     phaseHints: ProviderRequest['phaseHints'],
+    lifecycle?: { onProcessStart?: (processId: string) => void },
   ): Promise<{
     rawOutput: string;
     exitCode: number;
@@ -658,6 +659,7 @@ export function createPipelineRuntime(
         promptMaterialSummary: input.promptMaterialSummary,
         modelHint: modelHint ?? undefined,
         threadId: input.threadId,
+        onProcessStart: lifecycle?.onProcessStart,
         ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
         githubGraphql: {
           // Token read happens at tool-call time, not now — captures
@@ -864,17 +866,30 @@ export function createPipelineRuntime(
     promptTelemetry?: import('@shipcode/agents/source').PhasePromptTelemetry;
     clarificationRequest?: import('@shipcode/shared').ClarificationRequest;
   }> {
-    const { deltas, ...response } = await runProviderPhaseCore(
-      payload,
-      prompt,
-      promptMaterials,
-      phaseHints,
-    );
-    context.promptTelemetry.push(deltas.promptTelemetry);
-    if (deltas.diagnosticEntry !== null) {
-      context.promptTelemetryDiagnostics.push(deltas.diagnosticEntry);
+    let phaseProcessId: string | null = null;
+    try {
+      const { deltas, ...response } = await runProviderPhaseCore(
+        payload,
+        prompt,
+        promptMaterials,
+        phaseHints,
+        {
+          onProcessStart: (processId) => {
+            phaseProcessId = processId;
+            context.activeProcessId = processId;
+          },
+        },
+      );
+      context.promptTelemetry.push(deltas.promptTelemetry);
+      if (deltas.diagnosticEntry !== null) {
+        context.promptTelemetryDiagnostics.push(deltas.diagnosticEntry);
+      }
+      return response;
+    } finally {
+      if (phaseProcessId !== null && context.activeProcessId === phaseProcessId) {
+        context.activeProcessId = null;
+      }
     }
-    return response;
   }
 
   /** Perform the actual GH write for a single state snapshot. */

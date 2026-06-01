@@ -39,6 +39,7 @@ const EXECUTION_RESUME_PROMPT_MAX = 24_000;
 const EXECUTION_RESUME_GIT_OUTPUT_MAX = 12_000;
 const EXECUTION_RESUME_TERMINAL_LIMIT = 120;
 const RUN_TIMELINE_TERMINAL_LIMIT = 40;
+const STEERING_INSTRUCTION_MAX = 4_000;
 const INTERRUPTED_EXECUTION_MARKERS = [
   'interrupted while ShipCode was closed',
   'interrupted by an app refresh',
@@ -81,6 +82,8 @@ function isInterruptedExecutionThread(thread: Thread): boolean {
 function formatTerminalResumeLine(record: TerminalEventRecord): string | null {
   const event = record.event;
   switch (event.kind) {
+    case 'user_input':
+      return `[user] ${event.content}`;
     case 'text':
     case 'raw':
     case 'thinking':
@@ -202,6 +205,7 @@ export function registerPipelineHandlers({
   ipcMain,
   mainWindow,
   queries,
+  processManager,
   pipeline,
   emitter,
   notificationService,
@@ -648,6 +652,82 @@ export function registerPipelineHandlers({
     }
     return record;
   };
+
+  ipcMain.handle(
+    'pipeline:steer-execution',
+    (
+      _event,
+      { threadId, instruction }: { threadId: string; instruction: string },
+    ): {
+      threadId: string;
+      status: 'delivered' | 'stale' | 'rejected';
+      message: string;
+      processId: string | null;
+    } => {
+      const text = clampResumeText(instruction, STEERING_INSTRUCTION_MAX, 'steering instruction');
+      if (!text) {
+        return {
+          threadId,
+          status: 'rejected',
+          message: 'Instruction text is required.',
+          processId: null,
+        };
+      }
+
+      const thread = queries.threads.getById(threadId);
+      if (!thread) throw new Error(`Thread ${threadId} not found`);
+
+      const active = pipeline.listActive().find((summary) => summary.threadId === threadId);
+      if (!active || active.phase !== PIPELINE_PHASE.executing) {
+        return {
+          threadId,
+          status: 'stale',
+          message: `Task is not currently executing. Current phase: ${thread.status}.`,
+          processId: null,
+        };
+      }
+
+      const liveProcess =
+        (active.activeProcessId ? processManager.get(active.activeProcessId) : undefined) ??
+        processManager.listActive().find((process) => process.threadId === threadId);
+
+      if (!liveProcess || liveProcess.state !== 'running') {
+        return {
+          threadId,
+          status: 'stale',
+          message: 'Executor process is no longer running.',
+          processId: liveProcess?.id ?? active.activeProcessId ?? null,
+        };
+      }
+
+      if (liveProcess.type !== 'claude') {
+        return {
+          threadId,
+          status: 'rejected',
+          message: 'Mid-execution steering currently supports Claude executor sessions only.',
+          processId: liveProcess.id,
+        };
+      }
+
+      const delivered = processManager.write(liveProcess.id, `\n\n[USER INSTRUCTION]: ${text}\n\n`);
+      if (!delivered) {
+        return {
+          threadId,
+          status: 'rejected',
+          message: 'Executor stdin is no longer writable.',
+          processId: liveProcess.id,
+        };
+      }
+
+      emitTerminalEvent(threadId, { kind: 'user_input', content: text });
+      return {
+        threadId,
+        status: 'delivered',
+        message: 'Instruction delivered to the running executor transport.',
+        processId: liveProcess.id,
+      };
+    },
+  );
 
   ipcMain.handle('pipeline:pause', (_event, { threadId }: { threadId: string }) => {
     const thread = queries.threads.getById(threadId);

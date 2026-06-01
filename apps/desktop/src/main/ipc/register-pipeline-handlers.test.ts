@@ -232,6 +232,11 @@ describe('registerPipelineHandlers', () => {
   let emitter: {
     emit: ReturnType<typeof vi.fn>;
   };
+  let processManager: {
+    get: ReturnType<typeof vi.fn>;
+    listActive: ReturnType<typeof vi.fn>;
+    write: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     handlers.clear();
@@ -402,6 +407,11 @@ describe('registerPipelineHandlers', () => {
     emitter = {
       emit: vi.fn(),
     };
+    processManager = {
+      get: vi.fn(() => null),
+      listActive: vi.fn(() => []),
+      write: vi.fn(() => true),
+    };
 
     registerPipelineHandlers({
       ipcMain,
@@ -411,7 +421,7 @@ describe('registerPipelineHandlers', () => {
       emitter: emitter as never,
       notificationService: notificationService as never,
       chatNotificationService: {} as never,
-      processManager: {} as never,
+      processManager: processManager as never,
       resourceMonitor: {} as never,
     });
   });
@@ -2008,6 +2018,102 @@ describe('registerPipelineHandlers', () => {
           reasoningEffort: 'none',
         }),
       ]);
+    });
+  });
+
+  describe('pipeline:steer-execution', () => {
+    it('delivers steering input to the live Claude executor and emits a USER event', () => {
+      const createdEvent = {
+        id: 'terminal-event-1',
+        threadId: 'thread-1',
+        event: { kind: 'user_input' as const, content: 'Use the shared helper.' },
+        createdAt: new Date().toISOString(),
+      };
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'executing' }));
+      queries.terminalEvents.create.mockReturnValue(createdEvent);
+      pipeline.listActive.mockReturnValue([
+        {
+          threadId: 'thread-1',
+          projectPath: '/tmp/project',
+          phase: 'executing',
+          startedAt: Date.now(),
+          activeProcessId: 'proc-1',
+        },
+      ]);
+      processManager.get.mockReturnValue({
+        id: 'proc-1',
+        type: 'claude',
+        state: 'running',
+        threadId: 'thread-1',
+      });
+
+      const handler = handlers.get('pipeline:steer-execution');
+      if (!handler) throw new Error('pipeline:steer-execution handler not registered');
+
+      expect(
+        handler(undefined, { threadId: 'thread-1', instruction: 'Use the shared helper.' }),
+      ).toEqual({
+        threadId: 'thread-1',
+        status: 'delivered',
+        message: 'Instruction delivered to the running executor transport.',
+        processId: 'proc-1',
+      });
+      expect(processManager.write).toHaveBeenCalledWith(
+        'proc-1',
+        '\n\n[USER INSTRUCTION]: Use the shared helper.\n\n',
+      );
+      expect(queries.terminalEvents.create).toHaveBeenCalledWith('thread-1', {
+        kind: 'user_input',
+        content: 'Use the shared helper.',
+      });
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('terminal:event', createdEvent);
+    });
+
+    it('returns stale when the thread is no longer executing', () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'reviewing' }));
+      pipeline.listActive.mockReturnValue([]);
+
+      const handler = handlers.get('pipeline:steer-execution');
+      if (!handler) throw new Error('pipeline:steer-execution handler not registered');
+
+      expect(handler(undefined, { threadId: 'thread-1', instruction: 'Try this' })).toEqual({
+        threadId: 'thread-1',
+        status: 'stale',
+        message: 'Task is not currently executing. Current phase: reviewing.',
+        processId: null,
+      });
+      expect(processManager.write).not.toHaveBeenCalled();
+      expect(queries.terminalEvents.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects steering for non-Claude executor transports', () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'executing' }));
+      pipeline.listActive.mockReturnValue([
+        {
+          threadId: 'thread-1',
+          projectPath: '/tmp/project',
+          phase: 'executing',
+          startedAt: Date.now(),
+          activeProcessId: 'proc-1',
+        },
+      ]);
+      processManager.get.mockReturnValue({
+        id: 'proc-1',
+        type: 'codex',
+        state: 'running',
+        threadId: 'thread-1',
+      });
+
+      const handler = handlers.get('pipeline:steer-execution');
+      if (!handler) throw new Error('pipeline:steer-execution handler not registered');
+
+      expect(handler(undefined, { threadId: 'thread-1', instruction: 'Try this' })).toEqual({
+        threadId: 'thread-1',
+        status: 'rejected',
+        message: 'Mid-execution steering currently supports Claude executor sessions only.',
+        processId: 'proc-1',
+      });
+      expect(processManager.write).not.toHaveBeenCalled();
     });
   });
 

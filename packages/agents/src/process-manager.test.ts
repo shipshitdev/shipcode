@@ -198,6 +198,20 @@ describe('ProcessManager registry hygiene', () => {
     expect(manager.get(proc.id)).toBeUndefined();
   });
 
+  it('keeps piped stdin open when requested for steerable processes', () => {
+    const child = createMockChild();
+    mockChildSpawn.mockReturnValueOnce(child);
+
+    const proc = manager.spawnWithStdin('claude', 'claude', ['-p', '-'], '/tmp', 'PROMPT', 't1', {
+      keepStdinOpen: true,
+    });
+
+    expect(child.stdin.write).toHaveBeenCalledWith('PROMPT');
+    expect(child.stdin.end).not.toHaveBeenCalled();
+    expect(manager.write(proc.id, 'next')).toBe(true);
+    expect(child.stdin.write).toHaveBeenCalledWith('next');
+  });
+
   it('sanitizes extra environment and resolves agent commands through trusted shells', () => {
     const previousShell = process.env.SHELL;
     process.env.SHELL = '/bin/zsh';
@@ -437,7 +451,7 @@ describe('ProcessManager registry hygiene', () => {
     mockChildSpawn.mockReturnValueOnce(child);
     const proc = manager.spawnWithStdin('codex', 'codex', ['exec', '-'], '/tmp', '');
 
-    manager.write(proc.id, 'next');
+    expect(manager.write(proc.id, 'next')).toBe(true);
 
     expect(child.stdin.write).toHaveBeenCalledWith('next');
   });
@@ -449,12 +463,12 @@ describe('ProcessManager registry hygiene', () => {
     const proc = manager.spawnWithStdin('codex', 'codex', ['exec', '-'], '/tmp', '');
     child.stdin.write.mockClear();
 
-    manager.write(proc.id, 'next');
+    expect(manager.write(proc.id, 'next')).toBe(false);
     expect(child.stdin.write).not.toHaveBeenCalled();
 
     child.stdin.writable = true;
     proc.state = 'exited';
-    manager.write(proc.id, 'after-exit');
+    expect(manager.write(proc.id, 'after-exit')).toBe(false);
     expect(child.stdin.write).not.toHaveBeenCalled();
   });
 

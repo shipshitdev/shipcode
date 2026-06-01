@@ -212,6 +212,15 @@ export interface IpcInvokeChannels {
   'pipeline:reject': { args: { threadId: string; feedback: string }; result: undefined };
   'pipeline:stabilize-pr': { args: { threadId: string }; result: undefined };
   'pipeline:pause': { args: { threadId: string }; result: undefined };
+  'pipeline:steer-execution': {
+    args: { threadId: string; instruction: string };
+    result: {
+      threadId: string;
+      status: 'delivered' | 'stale' | 'rejected';
+      message: string;
+      processId: string | null;
+    };
+  };
   'pipeline:resume': { args: { threadId: string }; result: undefined };
   'pipeline:cancel': { args: { threadId: string }; result: undefined };
   'pipeline:skip-review': { args: { threadId: string }; result: undefined };

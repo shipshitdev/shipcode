@@ -639,6 +639,7 @@ export interface AnsweredClarification {
 
 export type CanonicalTerminalEvent =
   | { kind: 'text'; content: string }
+  | { kind: 'user_input'; content: string }
   | { kind: 'thinking'; content: string }
   | {
       kind: 'tool_start';

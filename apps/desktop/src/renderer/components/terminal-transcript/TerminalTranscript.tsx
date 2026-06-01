@@ -501,6 +501,24 @@ function transcriptRow({
           <div className="h-px flex-1 bg-border/50" />
         </div>
       );
+    case 'user_input': {
+      const textContent = stripAnsi(event.content);
+      return (
+        <div className="group/msg mb-3 rounded-lg border border-agent/35 bg-agent/10 px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.16)]">
+          <TranscriptMeta createdAt={record.createdAt} compact={compact}>
+            <span className="tracking-normal text-agent normal-case font-medium">User</span>
+          </TranscriptMeta>
+          <pre
+            className={cn(
+              'mt-2 whitespace-pre-wrap break-words font-mono text-primary',
+              compact ? 'text-[12px] leading-[1.6]' : 'text-[13px] leading-[1.65]',
+            )}
+          >
+            {textContent}
+          </pre>
+        </div>
+      );
+    }
     case 'turn_end': {
       const summary = formatTokens(event.tokensUsed, event.costUsd);
       if (!summary) return null;
