@@ -16,7 +16,7 @@ function renderWithClient(threadId = 'thread-1') {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <ConversationsTab threadId={threadId} />
+      <ConversationsTab threadId={threadId} projectId="project-1" issueNumber={42} />
     </QueryClientProvider>,
   );
 }
@@ -49,6 +49,7 @@ describe('ConversationsTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke;
+    window.confirm = vi.fn(() => true);
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: {
@@ -149,5 +150,36 @@ describe('ConversationsTab', () => {
     });
     vi.advanceTimersByTime(1500);
     vi.useRealTimers();
+  });
+
+  it('posts issue chat response turns to GitHub after confirmation', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'agent-conversations:list-by-thread') {
+        return [
+          makeConversation({
+            id: 'chat-response-1',
+            phase: 'issue_chat',
+            speaker: 'claude',
+            role: 'response',
+            content: 'Here is the answer.',
+          }),
+        ];
+      }
+      if (channel === 'github:add-comment') return { ok: true };
+      return null;
+    });
+
+    renderWithClient();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Post/i }));
+
+    await waitFor(() => {
+      expect(window.confirm).toHaveBeenCalledWith('Post this issue chat reply to GitHub?');
+      expect(invokeMock).toHaveBeenCalledWith('github:add-comment', {
+        projectId: 'project-1',
+        issueNumber: 42,
+        body: '### ShipCode issue chat reply\n\nHere is the answer.',
+      });
+    });
   });
 });

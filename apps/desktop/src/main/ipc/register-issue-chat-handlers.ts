@@ -1,3 +1,4 @@
+import { startIssueChatCommentSync, stopIssueChatCommentSync } from '../issue-chat-comment-sync';
 import {
   sendIssueChatTurn,
   startIssueChatSession,
@@ -11,13 +12,23 @@ export function registerIssueChatHandlers({
   processManager,
   queries,
 }: IpcHandlerDeps): void {
-  ipcMain.handle('issue-chat:start', (_event, args) => startIssueChatSession({ args, queries }));
+  ipcMain.handle('issue-chat:start', async (_event, args) => {
+    const result = await startIssueChatSession({ args, queries });
+    startIssueChatCommentSync({
+      threadId: result.threadId,
+      queries,
+      processManager,
+      mainWindow,
+    });
+    return result;
+  });
 
   ipcMain.handle('issue-chat:turn', (_event, args) =>
     sendIssueChatTurn({ args, queries, processManager, mainWindow }),
   );
 
-  ipcMain.handle('issue-chat:stop', (_event, { threadId }: { threadId: string }) =>
-    stopIssueChatSession({ threadId, queries, processManager, mainWindow }),
-  );
+  ipcMain.handle('issue-chat:stop', (_event, { threadId }: { threadId: string }) => {
+    stopIssueChatCommentSync(threadId);
+    return stopIssueChatSession({ threadId, queries, processManager, mainWindow });
+  });
 }
