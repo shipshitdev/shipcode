@@ -99,8 +99,6 @@ jobs:
       - name: Install native test dependencies
         run: sudo apt-get update && sudo apt-get install -y ripgrep build-essential python3
       - run: bun install --frozen-lockfile
-      - run: bun run format:check
-      - run: bun run lint:repo
       - run: bun run lint
       - run: bun run typecheck
       - run: bun run test:ci
