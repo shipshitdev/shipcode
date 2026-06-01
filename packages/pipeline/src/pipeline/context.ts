@@ -45,9 +45,7 @@ export function snapshotPhaseInput(context: PipelineContext): PhaseInput {
   });
 }
 
-/** Fields `buildPhasePayload` needs that live on `PipelineContext`, not `OrchestratorState`. */
-type PhasePayloadSource = OrchestratorState &
-  Pick<PipelineContext, 'repoContext' | 'repoPromptMaterials' | 'promptMaterialSummaries'>;
+type PhasePayloadSource = OrchestratorState;
 
 /**
  * Resolve the executor model for a phase. Mirrors `resolveAgentForPhase` in
@@ -128,6 +126,11 @@ export function buildPhasePayload(
   phase: PipelinePromptPhase,
   prevOutput?: PhaseCarryOutput,
 ): PhasePayload {
+  const repoPromptMaterials = Object.freeze(
+    (state.repoPromptMaterials ?? []).map((material) => Object.freeze({ ...material })),
+  );
+  const promptMaterialSummary = state.promptMaterialSummaries[phase];
+
   return Object.freeze({
     threadId: state.threadId,
     projectPath: state.projectPath,
@@ -148,8 +151,10 @@ export function buildPhasePayload(
     modelIdOverride: resolveModelIdOverrideForPhase(state, phase),
     reasoningEffort: state.phaseReasoningEfforts[phase],
     repoContext: state.repoContext,
-    repoPromptMaterials: state.repoPromptMaterials ?? [],
-    promptMaterialSummary: state.promptMaterialSummaries[phase],
+    repoPromptMaterials,
+    promptMaterialSummary: promptMaterialSummary
+      ? Object.freeze({ ...promptMaterialSummary })
+      : undefined,
     carry: prevOutput ?? {},
   });
 }

@@ -5495,6 +5495,35 @@ describe('registerGitHubHandlers', () => {
       expect(queries.githubIssues.markTriageRulesApplied).not.toHaveBeenCalled();
     });
 
+    it('records an outer triage sync failure after rules were marked applied', async () => {
+      const upsertRecord = { ...baseIssue, id: 'issue-1', issueNumber: 42, labels: [] };
+      const queries = buildTriageQueries(upsertRecord);
+      queries.githubIssues.upsert = vi
+        .fn()
+        .mockReturnValueOnce(upsertRecord)
+        .mockImplementationOnce(() => {
+          throw new Error('sqlite write failed');
+        });
+      listAllIssuesMock.mockResolvedValue([ghIssue]);
+      applyIssueLabelActionsMock.mockResolvedValueOnce({
+        added: ['agent:claude'],
+        removed: [],
+        skipped: [],
+      });
+      getIssueMock.mockResolvedValueOnce({ ...ghIssue, labels: ['agent:claude'] });
+
+      const refresh = registerWith(queries);
+      await expect(
+        refresh(undefined, { projectId: 'project-1', force: true }),
+      ).resolves.toBeDefined();
+
+      expect(queries.githubIssues.markTriageRulesApplied).toHaveBeenCalledWith('issue-1');
+      expect(queries.githubIssues.recordTriageRulesFailure).toHaveBeenCalledWith(
+        'issue-1',
+        expect.stringContaining('sqlite write failed'),
+      );
+    });
+
     it('skips issues whose rules were already applied', async () => {
       const upsertRecord = {
         ...baseIssue,

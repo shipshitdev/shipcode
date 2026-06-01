@@ -319,16 +319,6 @@ export interface OrchestratorState {
    * is the source of truth and the executor must discover files itself.
    */
   isAutomationRun: boolean;
-}
-
-/**
- * Live, mutable per-run context. Extends `OrchestratorState` with the
- * phase-local fields cleared by `resetPhaseState` (see `PHASE_LOCAL_FIELDS`) and
- * the lazily materialized prompt-material cache. The split is naming-only:
- * `PipelineContext` still carries every field it always has, so all existing
- * reads, writes, construction, and persistence are unchanged.
- */
-export interface PipelineContext extends OrchestratorState {
   /**
    * Pre-loaded repo context string for injection into phase prompts.
    * Read once from `<projectPath>/.agents/memory/` at pipeline start.
@@ -336,6 +326,13 @@ export interface PipelineContext extends OrchestratorState {
   repoContext: string | null;
   repoPromptMaterials: PromptMaterial[] | null;
   promptMaterialSummaries: Partial<Record<PipelinePromptPhase, PromptMaterialSummary>>;
+}
+
+/**
+ * Live, mutable per-run context. Extends `OrchestratorState` with only the
+ * phase-local fields cleared by `resetPhaseState` (see `PHASE_LOCAL_FIELDS`).
+ */
+export interface PipelineContext extends OrchestratorState {
   /** Cleanup function for a running runtime QA server. Called on cancel. */
   runtimeQaCleanup: (() => Promise<void>) | null;
   /** Timestamp when this thread started waiting for a CPU-heavy local command slot. */

@@ -83,7 +83,10 @@ jobs:
         env:
           COVERAGE_MIN: '80'
           COVERAGE_BRANCH_MIN: '80'
-        run: bun run coverage | tee coverage-summary.txt
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun run coverage | tee coverage-summary.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:

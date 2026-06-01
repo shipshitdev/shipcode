@@ -147,6 +147,20 @@ describe('buildPhasePayload', () => {
     expect(Object.isFrozen(payload)).toBe(true);
   });
 
+  it('clones and freezes nested prompt material payload fields', () => {
+    const context = makeContext();
+    const payload = buildPhasePayload(context, 'plan');
+
+    expect(payload.repoPromptMaterials).toEqual(context.repoPromptMaterials);
+    expect(payload.repoPromptMaterials).not.toBe(context.repoPromptMaterials);
+    expect(payload.repoPromptMaterials[0]).not.toBe(context.repoPromptMaterials?.[0]);
+    expect(payload.promptMaterialSummary).toEqual(context.promptMaterialSummaries.plan);
+    expect(payload.promptMaterialSummary).not.toBe(context.promptMaterialSummaries.plan);
+    expect(Object.isFrozen(payload.repoPromptMaterials)).toBe(true);
+    expect(Object.isFrozen(payload.repoPromptMaterials[0])).toBe(true);
+    expect(Object.isFrozen(payload.promptMaterialSummary)).toBe(true);
+  });
+
   it('captures promptTelemetry.length as the telemetry counter', () => {
     const context = makeContext();
     context.promptTelemetry = [{}, {}, {}] as PipelineContext['promptTelemetry'];

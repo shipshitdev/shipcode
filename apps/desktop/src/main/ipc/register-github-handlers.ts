@@ -334,6 +334,14 @@ export function registerGitHubHandlers({
                 updatedAt: refreshedIssue.updatedAt ?? null,
               });
             } catch (err) {
+              try {
+                queries.githubIssues.recordTriageRulesFailure(record.id, clampError(err));
+              } catch (recordErr) {
+                log.warn(
+                  `[github:refresh-issues] failed to record triage failure for #${record.issueNumber}`,
+                  recordErr,
+                );
+              }
               log.warn(
                 `[github:refresh-issues] triage rules failed for #${record.issueNumber}`,
                 err,
