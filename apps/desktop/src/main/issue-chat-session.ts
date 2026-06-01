@@ -35,6 +35,7 @@ export interface StartIssueChatResult {
 export interface SendIssueChatTurnArgs {
   threadId: string;
   text: string;
+  speaker?: string;
 }
 
 export interface SendIssueChatTurnResult {
@@ -72,6 +73,11 @@ function providerLabel(provider: IssueChatProvider): 'claude-cli' | 'codex-cli' 
 function ensureIssueChatProvider(provider: string): IssueChatProvider {
   if (provider === 'claude' || provider === 'codex') return provider;
   throw new Error(`Issue chat provider must be claude or codex, got ${provider}`);
+}
+
+function normalizeSpeaker(input: string | undefined): string {
+  const trimmed = input?.trim();
+  return trimmed ? trimmed.slice(0, 80) : 'user';
 }
 
 function buildClaudeThinkingArgs(
@@ -325,7 +331,7 @@ export async function sendIssueChatTurn({
     threadId: args.threadId,
     phase: ISSUE_CHAT_PHASE,
     round,
-    speaker: 'user',
+    speaker: normalizeSpeaker(args.speaker),
     role: 'prompt',
     provider: providerLabel(session.provider),
     model: session.modelId,
@@ -477,4 +483,8 @@ export function stopIssueChatSessionIfLive(
   if (session.activeProcessId) processManager.kill(session.activeProcessId);
   sessions.delete(threadId);
   return true;
+}
+
+export function isIssueChatSessionLive(threadId: string): boolean {
+  return sessions.has(threadId);
 }
