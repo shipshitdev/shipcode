@@ -1,17 +1,8 @@
 import type { ProcessManager } from '../process-manager';
 import { measurePromptPayload } from '../prompt-scope';
-import { clampProviderFailure, firstString, stripAnsi } from './output-summary';
+import { firstString } from './output-summary';
+import { clampCliFailure, runStdinCli, type StdinCliCommand, stripAnsi } from './stdin-cli-runner';
 import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
-
-interface CursorCommand {
-  args: string[];
-  stdin: string;
-}
-
-interface CursorRunResult {
-  rawOutput: string;
-  exitCode: number;
-}
 
 const CURSOR_ENV_KEYS = [
   'PATH',
@@ -28,19 +19,7 @@ const CURSOR_ENV_KEYS = [
   'CURSOR_API_KEY',
 ] as const;
 
-type ProcessManagerWithStdin = ProcessManager & {
-  spawnWithStdin?: (
-    type: 'cursor',
-    command: string,
-    args: string[],
-    cwd: string,
-    input: string,
-    threadId?: string,
-    options?: Parameters<ProcessManager['spawn']>[5],
-  ) => ReturnType<ProcessManager['spawn']>;
-};
-
-function buildCursorCommand(req: ProviderRequest): CursorCommand {
+function buildCursorCommand(req: ProviderRequest): StdinCliCommand {
   // `-p` (print) makes cursor-agent non-interactive; the prompt is piped on
   // stdin. `--output-format json` emits a single result object we can parse.
   const args = ['-p', '--output-format', 'json'];
@@ -52,89 +31,6 @@ function buildCursorCommand(req: ProviderRequest): CursorCommand {
   // receive auto-apply.
   if (req.phase === 'execute') args.push('--force');
   return { args, stdin: req.prompt };
-}
-
-async function runCursorCli(
-  processManager: ProcessManager,
-  command: CursorCommand,
-  req: ProviderRequest,
-): Promise<CursorRunResult> {
-  if (req.signal.aborted) return { rawOutput: '', exitCode: 130 };
-
-  let process: ReturnType<ProcessManager['spawn']>;
-  try {
-    const options = {
-      ...(req.workspaceRoot !== undefined ? { workspaceRoot: req.workspaceRoot } : {}),
-      envKeyAllowlist: [...CURSOR_ENV_KEYS],
-    };
-    const processManagerWithStdin = processManager as ProcessManagerWithStdin;
-    if (processManagerWithStdin.spawnWithStdin) {
-      process = processManagerWithStdin.spawnWithStdin(
-        'cursor',
-        'cursor-agent',
-        command.args,
-        req.cwd,
-        command.stdin,
-        req.threadId,
-        options,
-      );
-    } else {
-      return {
-        rawOutput: 'Cursor CLI stdin execution is unavailable',
-        exitCode: 1,
-      };
-    }
-  } catch (err) {
-    return { rawOutput: err instanceof Error ? err.message : String(err), exitCode: 127 };
-  }
-
-  req.onTerminalEvent?.({ kind: 'lifecycle', message: 'Cursor CLI started' });
-
-  return new Promise<CursorRunResult>((resolve) => {
-    let rawOutput = '';
-    let settled = false;
-
-    const cleanup = () => {
-      processManager.removeListener('output', outputHandler);
-      processManager.removeListener('exit', exitHandler);
-      req.signal.removeEventListener('abort', abortHandler);
-    };
-
-    const settle = (result: CursorRunResult) => {
-      /* v8 ignore next -- listeners are removed during cleanup; guard is for event races */
-      if (settled) return;
-      settled = true;
-      cleanup();
-      resolve(result);
-    };
-
-    const outputHandler = (processId: string, data: string) => {
-      if (processId !== process.id) return;
-      rawOutput += data;
-      req.onTerminalEvent?.({ kind: 'raw', content: data });
-    };
-
-    const exitHandler = (processId: string, exitCode: number) => {
-      if (processId !== process.id) return;
-      req.onTerminalEvent?.({ kind: 'done' });
-      settle({ rawOutput, exitCode });
-    };
-
-    const abortHandler = () => {
-      try {
-        processManager.kill(process.id);
-      } catch {
-        // Exit handler owns settlement when the process is already gone.
-      }
-      setTimeout(() => {
-        if (!settled) settle({ rawOutput, exitCode: 130 });
-      }, 2000);
-    };
-
-    processManager.on('output', outputHandler);
-    processManager.on('exit', exitHandler);
-    req.signal.addEventListener('abort', abortHandler, { once: true });
-  });
 }
 
 function extractFromResultObject(
@@ -190,7 +86,7 @@ function parseCursorOutput(rawOutput: string): { text: string; resolvedModel?: s
 }
 
 function clampCursorFailure(rawOutput: string, prompt: string): string {
-  return clampProviderFailure(rawOutput, prompt, 'Cursor CLI failed');
+  return clampCliFailure(rawOutput, prompt, 'Cursor CLI failed');
 }
 
 export function createCursorCliProvider(processManager: ProcessManager): AgentProvider {
@@ -203,7 +99,14 @@ export function createCursorCliProvider(processManager: ProcessManager): AgentPr
     supports: new Set<ProviderPhase>(['execute']),
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
       const command = buildCursorCommand(req);
-      const result = await runCursorCli(processManager, command, req);
+      const result = await runStdinCli(processManager, req, {
+        type: 'cursor',
+        command: 'cursor-agent',
+        commandInput: command,
+        envKeys: CURSOR_ENV_KEYS,
+        lifecycleMessage: 'Cursor CLI started',
+        unavailableMessage: 'Cursor CLI stdin execution is unavailable',
+      });
       const parsed = parseCursorOutput(result.rawOutput);
       const promptTelemetry = {
         phase: req.phase,
