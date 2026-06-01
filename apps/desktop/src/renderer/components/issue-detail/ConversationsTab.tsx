@@ -1,7 +1,8 @@
 import type { AgentConversationRecord } from '@shipcode/shared';
 import { Badge, Button, Skeleton } from '@shipshitdev/ui';
-import { useQuery } from '@tanstack/react-query';
-import { CheckIcon, CopyIcon } from 'lucide-react';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { CheckIcon, CopyIcon, MessageSquarePlusIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 const PHASE_COLORS: Record<string, string> = {
@@ -10,6 +11,7 @@ const PHASE_COLORS: Record<string, string> = {
   revision: 'bg-purple-500/15 text-purple-400',
   execute: 'bg-green-500/15 text-green-400',
   verify: 'bg-cyan-500/15 text-cyan-400',
+  issue_chat: 'bg-sky-500/15 text-sky-400',
 };
 
 const SPEAKER_COLORS: Record<string, string> = {
@@ -19,17 +21,20 @@ const SPEAKER_COLORS: Record<string, string> = {
   openrouter: 'bg-violet-500/15 text-violet-400',
 };
 
-const ALL_PHASES = ['plan', 'review', 'revision', 'execute', 'verify'] as const;
+const ALL_PHASES = ['plan', 'review', 'revision', 'execute', 'verify', 'issue_chat'] as const;
 const COLLAPSE_LINE_THRESHOLD = 30;
 
 interface ConversationsTabProps {
   threadId: string;
+  projectId: string;
+  issueNumber: number;
 }
 
-export function ConversationsTab({ threadId }: ConversationsTabProps) {
+export function ConversationsTab({ threadId, projectId, issueNumber }: ConversationsTabProps) {
   const [selectedPhases, setSelectedPhases] = useState<Set<string>>(new Set(ALL_PHASES));
   const [expandedTurns, setExpandedTurns] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [postedId, setPostedId] = useState<string | null>(null);
 
   const { data: conversations = [], isLoading } = useQuery<AgentConversationRecord[]>({
     queryKey: ['agent-conversations', threadId],
@@ -92,6 +97,28 @@ export function ConversationsTab({ threadId }: ConversationsTabProps) {
     setTimeout(() => setCopiedId(null), 1500);
   }, [filtered]);
 
+  const postTurn = useMutation({
+    mutationFn: (conv: AgentConversationRecord) =>
+      window.shipcode.invoke('github:add-comment', {
+        projectId,
+        issueNumber,
+        body: `### ShipCode issue chat reply\n\n${conv.content}`,
+      }),
+    onSuccess: (_result, conv) => {
+      setPostedId(conv.id);
+      setTimeout(() => setPostedId(null), 1500);
+    },
+  });
+
+  const confirmAndPostTurn = useCallback(
+    (conv: AgentConversationRecord) => {
+      const confirmed = window.confirm('Post this issue chat reply to GitHub?');
+      if (!confirmed) return;
+      postTurn.mutate(conv);
+    },
+    [postTurn],
+  );
+
   if (isLoading) {
     return (
       <div className="space-y-3 p-1">
@@ -153,6 +180,13 @@ export function ConversationsTab({ threadId }: ConversationsTabProps) {
               isCopied={copiedId === conv.id}
               onToggleExpand={() => toggleExpand(conv.id)}
               onCopy={() => copyTurn(conv)}
+              onPostToGithub={
+                conv.phase === 'issue_chat' && conv.role === 'response'
+                  ? () => confirmAndPostTurn(conv)
+                  : undefined
+              }
+              isPostingToGithub={postTurn.isPending && postTurn.variables?.id === conv.id}
+              isPostedToGithub={postedId === conv.id}
             />
           ))}
         </div>
@@ -167,12 +201,18 @@ function ConversationTurn({
   isCopied,
   onToggleExpand,
   onCopy,
+  onPostToGithub,
+  isPostingToGithub,
+  isPostedToGithub,
 }: {
   conv: AgentConversationRecord;
   isExpanded: boolean;
   isCopied: boolean;
   onToggleExpand: () => void;
   onCopy: () => void;
+  onPostToGithub?: () => void;
+  isPostingToGithub?: boolean;
+  isPostedToGithub?: boolean;
 }) {
   const lines = conv.content.split('\n');
   const isLong = lines.length > COLLAPSE_LINE_THRESHOLD;
@@ -185,7 +225,7 @@ function ConversationTurn({
     SPEAKER_COLORS[conv.speaker] ??
     SPEAKER_COLORS[conv.provider ?? ''] ??
     'bg-zinc-500/15 text-zinc-400';
-  const phaseColor = PHASE_COLORS[conv.phase];
+  const phaseColor = PHASE_COLORS[conv.phase] ?? 'bg-zinc-500/15 text-zinc-400';
 
   return (
     <div className="border-border/50 rounded-lg border p-3 space-y-2">
@@ -205,6 +245,21 @@ function ConversationTurn({
           )}
           {conv.costUsd != null && conv.costUsd > 0 && (
             <span className="text-muted-foreground text-[10px]">${conv.costUsd.toFixed(4)}</span>
+          )}
+          {onPostToGithub && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onPostToGithub}
+              disabled={isPostingToGithub}
+              className="h-6 gap-1 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+            >
+              <MessageSquarePlusIcon className="size-3" />
+              <LoadingButtonContent loading={!!isPostingToGithub}>
+                {isPostedToGithub ? 'Posted' : 'Post'}
+              </LoadingButtonContent>
+            </Button>
           )}
           <Button
             type="button"

@@ -243,7 +243,11 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
 
       {activeThreadId && (
         <TabsContent value="conversations" className={'mt-0'}>
-          <ConversationsTab threadId={activeThreadId} />
+          <ConversationsTab
+            threadId={activeThreadId}
+            projectId={projectId}
+            issueNumber={activeIssue.issueNumber}
+          />
         </TabsContent>
       )}
 

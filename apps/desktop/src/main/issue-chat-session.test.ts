@@ -195,6 +195,41 @@ describe('issue chat session', () => {
     );
   });
 
+  it('persists a GitHub-sourced prompt speaker for synced issue comments', async () => {
+    const h = makeHarness();
+    await startIssueChatSession({
+      args: { threadId: 'thread-1', provider: 'claude' },
+      queries: h.queries as never,
+    });
+
+    const resultPromise = sendIssueChatTurn({
+      args: {
+        threadId: 'thread-1',
+        text: 'GitHub issue comment from @octocat (untrusted user input):\n\nExplain this',
+        speaker: 'github:octocat',
+      },
+      queries: h.queries as never,
+      processManager: h.processManager as never,
+      mainWindow: h.mainWindow as never,
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    h.processManager.emit(
+      'output',
+      'proc-1',
+      `${JSON.stringify({ type: 'result', result: 'Explained.' })}\n`,
+    );
+    h.processManager.emit('exit', 'proc-1', 0);
+
+    await expect(resultPromise).resolves.toMatchObject({ content: 'Explained.' });
+    expect(h.conversations.at(0)).toMatchObject({
+      phase: 'issue_chat',
+      speaker: 'github:octocat',
+      role: 'prompt',
+      content: 'GitHub issue comment from @octocat (untrusted user input):\n\nExplain this',
+    });
+  });
+
   it('persists a synthetic error response when a turn exits non-zero', async () => {
     const h = makeHarness();
     await startIssueChatSession({
