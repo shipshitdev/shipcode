@@ -296,15 +296,30 @@ function createPromptThenUsagePty(promptText: string, usageText: string) {
   };
 }
 
+function withEnv(overrides: Partial<NodeJS.ProcessEnv>, fn: () => void) {
+  const previous = Object.fromEntries(
+    Object.keys(overrides).map((key) => [key, process.env[key]]),
+  ) as Partial<NodeJS.ProcessEnv>;
+
+  try {
+    Object.assign(process.env, overrides);
+    fn();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
 describe('shellExecEnv', () => {
   it('hydrates PATH from the login shell and keeps standard tool locations available', () => {
-    const previousBunInstall = process.env.BUN_INSTALL;
-    const previousShell = process.env.SHELL;
-    process.env.BUN_INSTALL = '';
-    process.env.SHELL = '/bin/zsh';
-    mockExecFileSync.mockReturnValue('/shell/bin:/usr/bin\n');
+    withEnv({ BUN_INSTALL: '', SHELL: '/bin/zsh' }, () => {
+      mockExecFileSync.mockReturnValue('/shell/bin:/usr/bin\n');
 
-    try {
       const env = shellExecEnv();
 
       expect(env.PATH.split(':')).toEqual(
@@ -321,88 +336,32 @@ describe('shellExecEnv', () => {
         encoding: 'utf-8',
         timeout: 5000,
       });
-    } finally {
-      if (previousBunInstall === undefined) {
-        delete process.env.BUN_INSTALL;
-      } else {
-        process.env.BUN_INSTALL = previousBunInstall;
-      }
-      if (previousShell === undefined) {
-        delete process.env.SHELL;
-      } else {
-        process.env.SHELL = previousShell;
-      }
-    }
+    });
   });
 
   it('falls back to conservative executable paths for untrusted shells', () => {
-    const previousBunInstall = process.env.BUN_INSTALL;
-    const previousShell = process.env.SHELL;
-    const previousPath = process.env.PATH;
-    process.env.BUN_INSTALL = '';
-    process.env.SHELL = '/tmp/fake-shell';
-    process.env.PATH = '/custom/bin:/usr/bin';
-
-    try {
+    withEnv({ BUN_INSTALL: '', SHELL: '/tmp/fake-shell', PATH: '/custom/bin:/usr/bin' }, () => {
       const env = shellExecEnv();
 
       expect(env.PATH.split(':')).toEqual(
         expect.arrayContaining(['/custom/bin', '/mock/home/.bun/bin', '/opt/homebrew/bin']),
       );
       expect(mockExecFileSync).not.toHaveBeenCalled();
-    } finally {
-      if (previousBunInstall === undefined) {
-        delete process.env.BUN_INSTALL;
-      } else {
-        process.env.BUN_INSTALL = previousBunInstall;
-      }
-      if (previousShell === undefined) {
-        delete process.env.SHELL;
-      } else {
-        process.env.SHELL = previousShell;
-      }
-      if (previousPath === undefined) {
-        delete process.env.PATH;
-      } else {
-        process.env.PATH = previousPath;
-      }
-    }
+    });
   });
 
   it('falls back to process PATH when a trusted login shell probe fails', () => {
-    const previousBunInstall = process.env.BUN_INSTALL;
-    const previousShell = process.env.SHELL;
-    const previousPath = process.env.PATH;
-    process.env.BUN_INSTALL = '';
-    process.env.SHELL = '/bin/zsh';
-    process.env.PATH = '/custom/bin';
-    mockExecFileSync.mockImplementation(() => {
-      throw new Error('shell failed');
-    });
+    withEnv({ BUN_INSTALL: '', SHELL: '/bin/zsh', PATH: '/custom/bin' }, () => {
+      mockExecFileSync.mockImplementation(() => {
+        throw new Error('shell failed');
+      });
 
-    try {
       const env = shellExecEnv();
 
       expect(env.PATH.split(':')).toEqual(
         expect.arrayContaining(['/custom/bin', '/mock/home/.bun/bin', '/usr/bin']),
       );
-    } finally {
-      if (previousBunInstall === undefined) {
-        delete process.env.BUN_INSTALL;
-      } else {
-        process.env.BUN_INSTALL = previousBunInstall;
-      }
-      if (previousShell === undefined) {
-        delete process.env.SHELL;
-      } else {
-        process.env.SHELL = previousShell;
-      }
-      if (previousPath === undefined) {
-        delete process.env.PATH;
-      } else {
-        process.env.PATH = previousPath;
-      }
-    }
+    });
   });
 });
 
