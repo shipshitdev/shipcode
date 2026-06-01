@@ -1,4 +1,8 @@
-import type { AgentConversationRecord, TerminalEventRecord } from '@shipcode/shared';
+import type {
+  AgentConversationRecord,
+  ReasoningEffort,
+  TerminalEventRecord,
+} from '@shipcode/shared';
 import {
   Badge,
   Button,
@@ -11,8 +15,8 @@ import {
   Textarea,
 } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, Send, Square } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { Bot, RefreshCw, Send, Square } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from '../../stores/toast-store';
 import {
   AssistantTimeline,
@@ -22,6 +26,20 @@ import {
 } from '../assistant/AssistantTimeline';
 
 type IssueChatProvider = 'claude' | 'codex';
+
+interface IssueChatSessionMetadata {
+  threadId: string;
+  provider: IssueChatProvider;
+  sessionId: string | null;
+  modelId: string | null;
+  reasoningEffort: ReasoningEffort | null;
+  worktreePath: string;
+}
+
+interface IssueChatStartResult extends IssueChatSessionMetadata {
+  reattached: boolean;
+  activeProcessId: string | null;
+}
 
 interface IssueChatTabProps {
   threadId: string;
@@ -76,6 +94,11 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
       }),
     enabled: !!threadId,
   });
+  const { data: issueChatSession = null } = useQuery<IssueChatSessionMetadata | null>({
+    queryKey: ['issue-chat-session', threadId],
+    queryFn: () => window.shipcode.invoke('issue-chat:get-session', { threadId }),
+    enabled: !!threadId,
+  });
   const [draft, setDraft] = useState('');
   const [provider, setProvider] = useState<IssueChatProvider>('claude');
   const [sessionStarted, setSessionStarted] = useState(false);
@@ -113,6 +136,27 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
   const visibleEvents = persistedMessages.length > 0 && !isRunning ? [] : transcript;
   const hasVisibleConversation =
     persistedMessages.length > 0 || pendingUserMessages.length > 0 || visibleEvents.length > 0;
+  const canResume = issueChatSession != null && !sessionStarted && !isRunning;
+
+  useEffect(() => {
+    if (!issueChatSession) return;
+    setProvider(issueChatSession.provider);
+  }, [issueChatSession]);
+
+  const startOrResumeSession = useCallback(async () => {
+    const selectedProvider = issueChatSession?.provider ?? provider;
+    const result = await window.shipcode.invoke<IssueChatStartResult>('issue-chat:start', {
+      threadId,
+      provider: selectedProvider,
+      modelId: issueChatSession?.modelId ?? undefined,
+      reasoningEffort: issueChatSession?.reasoningEffort ?? 'medium',
+    });
+    setProvider(result.provider);
+    setSessionStarted(true);
+    await queryClient.invalidateQueries({
+      queryKey: ['issue-chat-session', threadId],
+    });
+  }, [issueChatSession, provider, queryClient, threadId]);
 
   const submitTurn = useCallback(
     async (text: string) => {
@@ -121,12 +165,7 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
       setIsSubmitting(true);
       try {
         if (!sessionStarted) {
-          await window.shipcode.invoke('issue-chat:start', {
-            threadId,
-            provider,
-            reasoningEffort: 'medium',
-          });
-          setSessionStarted(true);
+          await startOrResumeSession();
         }
 
         setUserMessages((previous) => [
@@ -142,13 +181,16 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
         await queryClient.invalidateQueries({
           queryKey: ['agent-conversations', threadId, 'issue_chat'],
         });
+        await queryClient.invalidateQueries({
+          queryKey: ['issue-chat-session', threadId],
+        });
       } catch (error) {
         toast.error('Issue chat failed', error instanceof Error ? error.message : undefined);
       } finally {
         setIsSubmitting(false);
       }
     },
-    [isRunning, isSubmitting, provider, queryClient, sessionStarted, threadId],
+    [isRunning, isSubmitting, queryClient, sessionStarted, startOrResumeSession, threadId],
   );
 
   const handleSubmit = useCallback(() => {
@@ -163,6 +205,14 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
       toast.error('Issue chat stop failed', error instanceof Error ? error.message : undefined);
     }
   }, [threadId]);
+
+  const handleResume = useCallback(async () => {
+    try {
+      await startOrResumeSession();
+    } catch (error) {
+      toast.error('Issue chat resume failed', error instanceof Error ? error.message : undefined);
+    }
+  }, [startOrResumeSession]);
 
   const setSuggestedPrompt = useCallback((prompt: string) => {
     setDraft(prompt);
@@ -181,7 +231,13 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
           </div>
         </div>
         <Badge variant={isRunning ? 'default' : sessionStarted ? 'done' : 'info'}>
-          {isRunning ? 'Running' : sessionStarted ? 'Ready' : 'Idle'}
+          {isRunning
+            ? 'Running'
+            : sessionStarted
+              ? 'Ready'
+              : issueChatSession
+                ? 'Resumable'
+                : 'Idle'}
         </Badge>
       </div>
 
@@ -252,7 +308,7 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
             <Select
               value={provider}
               onValueChange={(next) => setProvider(next as IssueChatProvider)}
-              disabled={sessionStarted || isRunning}
+              disabled={sessionStarted || isRunning || issueChatSession != null}
             >
               <SelectTrigger
                 aria-label="Issue chat provider"
@@ -266,7 +322,19 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
               </SelectContent>
             </Select>
             <div className="flex-1" />
-            {isRunning ? (
+            {canResume ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleResume()}
+                className="h-6 gap-1.5 text-[10px]"
+                title="Resume"
+              >
+                <RefreshCw size={10} />
+                Resume
+              </Button>
+            ) : isRunning ? (
               <Button
                 type="button"
                 variant="secondary"

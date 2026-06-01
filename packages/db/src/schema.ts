@@ -1865,3 +1865,30 @@ export function migrateV61(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (61)`);
   });
 }
+
+export function migrateV62(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 62) return;
+
+  transaction(db, () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS issue_chat_sessions (
+        thread_id        TEXT PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
+        provider         TEXT NOT NULL CHECK(provider IN ('claude', 'codex')),
+        session_id       TEXT,
+        cwd              TEXT NOT NULL,
+        model            TEXT,
+        reasoning_effort TEXT,
+        created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_issue_chat_sessions_updated
+        ON issue_chat_sessions(updated_at DESC);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (62)`);
+  });
+}

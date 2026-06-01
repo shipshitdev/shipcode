@@ -10,6 +10,7 @@ import { IssueChatTab } from './IssueChatTab';
 
 const invokeMock = vi.fn<(channel: string, args?: unknown) => Promise<unknown>>();
 let conversations: unknown[] = [];
+let issueChatSession: unknown = null;
 
 function renderWithClient() {
   const queryClient = new QueryClient({
@@ -40,15 +41,27 @@ describe('IssueChatTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     conversations = [];
+    issueChatSession = null;
     window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke;
     invokeMock.mockImplementation(async (channel: string) => {
       if (channel === 'terminal:list') return [];
       if (channel === 'agent-conversations:list-by-thread') return conversations;
+      if (channel === 'issue-chat:get-session') return issueChatSession;
       if (channel === 'issue-chat:start') {
+        issueChatSession = {
+          threadId: 'thread-1',
+          provider: 'claude',
+          sessionId: 'claude-session-1',
+          modelId: null,
+          reasoningEffort: 'medium',
+          worktreePath: '/tmp/worktree',
+        };
         return {
           threadId: 'thread-1',
           provider: 'claude',
           modelId: null,
+          sessionId: 'claude-session-1',
+          reasoningEffort: 'medium',
           worktreePath: '/tmp/worktree',
           reattached: false,
           activeProcessId: null,
@@ -177,5 +190,31 @@ describe('IssueChatTab', () => {
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('issue-chat:stop', { threadId: 'thread-1' });
     });
+  });
+
+  it('hydrates a resumable provider session and starts it without sending a turn', async () => {
+    issueChatSession = {
+      threadId: 'thread-1',
+      provider: 'codex',
+      sessionId: 'codex-thread-1',
+      modelId: 'gpt-5.5',
+      reasoningEffort: 'high',
+      worktreePath: '/tmp/worktree',
+    };
+
+    renderWithClient();
+
+    expect(await screen.findByText('Resumable')).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('Resume'));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('issue-chat:start', {
+        threadId: 'thread-1',
+        provider: 'codex',
+        modelId: 'gpt-5.5',
+        reasoningEffort: 'high',
+      });
+    });
+    expect(invokeMock).not.toHaveBeenCalledWith('issue-chat:turn', expect.anything());
   });
 });

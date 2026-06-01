@@ -741,6 +741,17 @@ export interface IpcInvokeChannels {
   'instant:cleanup': { args: undefined; result: { deleted: number } };
 
   // Issue-scoped resumable chat sessions
+  'issue-chat:get-session': {
+    args: { threadId: string };
+    result: {
+      threadId: string;
+      provider: 'claude' | 'codex';
+      sessionId: string | null;
+      modelId: string | null;
+      reasoningEffort: ReasoningEffort | null;
+      worktreePath: string;
+    } | null;
+  };
   'issue-chat:start': {
     args: {
       threadId: string;
@@ -752,6 +763,8 @@ export interface IpcInvokeChannels {
       threadId: string;
       provider: 'claude' | 'codex';
       modelId: string | null;
+      sessionId: string | null;
+      reasoningEffort: ReasoningEffort | null;
       worktreePath: string;
       reattached: boolean;
       activeProcessId: string | null;

@@ -62,6 +62,7 @@ import {
   migrateV59,
   migrateV60,
   migrateV61,
+  migrateV62,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -161,6 +162,7 @@ const migrations = [
   migrateV59,
   migrateV60,
   migrateV61,
+  migrateV62,
 ] as const;
 
 function migrateThrough(db: DatabaseSync, target: (db: DatabaseSync) => void): void {
@@ -1571,5 +1573,62 @@ describe('migrateV61', () => {
       (column) => column.name === 'fingerprint',
     );
     expect(columns).toHaveLength(1);
+  });
+});
+
+describe('migrateV62', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = createTestDb();
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('creates issue_chat_sessions table with provider session metadata', () => {
+    migrateThrough(db, migrateV61);
+    migrateV62(db);
+
+    const cols = db.prepare("PRAGMA table_info('issue_chat_sessions')").all() as {
+      name: string;
+    }[];
+    const colNames = cols.map((c) => c.name);
+
+    expect(colNames).toContain('thread_id');
+    expect(colNames).toContain('provider');
+    expect(colNames).toContain('session_id');
+    expect(colNames).toContain('cwd');
+    expect(colNames).toContain('model');
+    expect(colNames).toContain('reasoning_effort');
+    expect(colNames).toContain('created_at');
+    expect(colNames).toContain('updated_at');
+    expect(indexExists(db, 'idx_issue_chat_sessions_updated')).toBe(true);
+  });
+
+  it('cascades delete when thread is deleted', () => {
+    migrateThrough(db, migrateV62);
+    db.prepare(
+      "INSERT INTO projects (id, name, path, git_remote, default_branch, created_at, updated_at) VALUES ('proj-1', 'test', '/tmp', 'git@x', 'main', datetime('now'), datetime('now'))",
+    ).run();
+    db.prepare(
+      "INSERT INTO threads (id, project_id, prompt, title, status, created_at, updated_at) VALUES ('t1', 'proj-1', 'go', 'Test', 'idle', datetime('now'), datetime('now'))",
+    ).run();
+    db.prepare(
+      "INSERT INTO issue_chat_sessions (thread_id, provider, session_id, cwd) VALUES ('t1', 'claude', 'session-1', '/tmp/worktree')",
+    ).run();
+
+    db.prepare("DELETE FROM threads WHERE id = 't1'").run();
+
+    const count = db
+      .prepare("SELECT COUNT(*) as count FROM issue_chat_sessions WHERE thread_id = 't1'")
+      .get() as { count: number };
+    expect(count.count).toBe(0);
+  });
+
+  it('is idempotent', () => {
+    migrateThrough(db, migrateV62);
+    expect(() => migrateV62(db)).not.toThrow();
   });
 });

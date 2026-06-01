@@ -1,5 +1,6 @@
 import { startIssueChatCommentSync, stopIssueChatCommentSync } from '../issue-chat-comment-sync';
 import {
+  getIssueChatSessionMetadata,
   sendIssueChatTurn,
   startIssueChatSession,
   stopIssueChatSession,
@@ -12,6 +13,10 @@ export function registerIssueChatHandlers({
   processManager,
   queries,
 }: IpcHandlerDeps): void {
+  ipcMain.handle('issue-chat:get-session', (_event, { threadId }: { threadId: string }) =>
+    getIssueChatSessionMetadata({ threadId, queries }),
+  );
+
   ipcMain.handle('issue-chat:start', async (_event, args) => {
     const result = await startIssueChatSession({ args, queries });
     startIssueChatCommentSync({
