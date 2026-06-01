@@ -32,6 +32,7 @@ interface GithubCommentTurn {
 }
 
 const syncStates = new Map<string, IssueChatCommentSyncState>();
+const TRUSTED_AUTHOR_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 
 function sortComments(comments: GitHubIssueComment[]): GitHubIssueComment[] {
   return [...comments].sort((a, b) => {
@@ -56,6 +57,7 @@ function stripMarker(body: string): string | null {
 }
 
 export function buildGithubIssueChatTurn(comment: GitHubIssueComment): GithubCommentTurn | null {
+  if (!TRUSTED_AUTHOR_ASSOCIATIONS.has(comment.authorAssociation ?? '')) return null;
   const body = stripMarker(comment.body);
   if (!body) return null;
   const author = comment.author?.trim() || 'unknown';

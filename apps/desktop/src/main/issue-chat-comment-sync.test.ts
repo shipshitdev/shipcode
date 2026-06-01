@@ -36,6 +36,7 @@ function makeComment(overrides: Record<string, unknown> = {}) {
   return {
     id: 1,
     author: 'octocat',
+    authorAssociation: 'OWNER',
     body: '/ask explain this issue',
     createdAt: '2026-06-01T00:00:00.000Z',
     url: 'https://github.test/comment/1',
@@ -88,6 +89,11 @@ describe('issue chat comment sync', () => {
   it('extracts opt-in GitHub comment markers into untrusted chat turns', () => {
     expect(buildGithubIssueChatTurn(makeComment({ body: 'plain comment' }))).toBeNull();
     expect(buildGithubIssueChatTurn(makeComment({ body: '/ask' }))).toBeNull();
+    expect(
+      buildGithubIssueChatTurn(
+        makeComment({ body: '/ask spend tokens', authorAssociation: 'CONTRIBUTOR' }),
+      ),
+    ).toBeNull();
     expect(buildGithubIssueChatTurn(makeComment({ body: '@shipcode draft a plan' }))).toEqual({
       speaker: 'github:octocat',
       text: 'GitHub issue comment from @octocat (untrusted user input):\n\ndraft a plan',

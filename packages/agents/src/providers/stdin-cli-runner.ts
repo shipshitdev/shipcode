@@ -10,6 +10,7 @@ export interface StdinCliCommand {
 export interface StdinCliRunResult {
   rawOutput: string;
   exitCode: number;
+  unavailable?: boolean;
 }
 
 type ProcessManagerWithStdin = ProcessManager & {
@@ -50,7 +51,7 @@ export async function runStdinCli(
     };
     const processManagerWithStdin = processManager as ProcessManagerWithStdin;
     if (!processManagerWithStdin.spawnWithStdin) {
-      return { rawOutput: config.unavailableMessage, exitCode: 1 };
+      return { rawOutput: config.unavailableMessage, exitCode: 1, unavailable: true };
     }
     process = processManagerWithStdin.spawnWithStdin(
       config.type,
@@ -111,6 +112,7 @@ export async function runStdinCli(
     processManager.on('output', outputHandler);
     processManager.on('exit', exitHandler);
     req.signal.addEventListener('abort', abortHandler, { once: true });
+    if (req.signal.aborted) abortHandler();
   });
 }
 

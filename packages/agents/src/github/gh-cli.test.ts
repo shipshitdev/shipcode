@@ -1912,67 +1912,58 @@ describe('GhCli', () => {
   });
 
   describe('listIssueComments', () => {
-    it('parses database ids from numeric ids or issuecomment urls', async () => {
+    function repoCoordinates() {
+      success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
+    }
+
+    it('maps REST comment fields and author associations', async () => {
+      repoCoordinates();
       success(
-        JSON.stringify({
-          comments: [
+        JSON.stringify([
+          [
             {
-              id: '123',
-              author: { login: 'alice' },
+              id: 123,
+              user: { login: 'alice' },
               body: 'one',
-              createdAt: '2026-01-01T00:00:00Z',
-              url: 'https://github.com/o/r/issues/1#issuecomment-123',
+              created_at: '2026-01-01T00:00:00Z',
+              html_url: 'https://github.com/o/r/issues/1#issuecomment-123',
+              author_association: 'OWNER',
             },
             {
-              id: 'IC_kwDOExample',
-              author: null,
+              id: 456,
+              user: null,
               body: 'two',
-              createdAt: '2026-01-01T00:00:00Z',
-              url: 'https://github.com/o/r/issues/1#issuecomment-456',
+              created_at: '2026-01-01T00:00:00Z',
+              html_url: 'https://github.com/o/r/issues/1#issuecomment-456',
+              author_association: 'CONTRIBUTOR',
             },
           ],
-        }),
+        ]),
       );
 
       const comments = await gh.listIssueComments(1);
 
       expect(comments.map((comment) => comment.id)).toEqual([123, 456]);
-    });
-
-    it('returns NaN when neither the GraphQL id nor URL contains a database id', async () => {
-      success(
-        JSON.stringify({
-          comments: [
-            {
-              id: 'IC_kwDOExample',
-              author: { login: 'alice' },
-              body: 'one',
-              createdAt: '2026-01-01T00:00:00Z',
-              url: 'https://github.com/o/r/issues/1#discussion',
-            },
-          ],
-        }),
-      );
-
-      const comments = await gh.listIssueComments(1);
-
-      expect(Number.isNaN(comments[0].id)).toBe(true);
       expect(comments[0].author).toBe('alice');
+      expect(comments[0].authorAssociation).toBe('OWNER');
+      expect(comments[1].author).toBeNull();
+      expect(comments[1].authorAssociation).toBe('CONTRIBUTOR');
     });
 
     it('maps missing issue comment authors to null', async () => {
+      repoCoordinates();
       success(
-        JSON.stringify({
-          comments: [
+        JSON.stringify([
+          [
             {
-              id: '123',
-              author: {},
+              id: 123,
+              user: {},
               body: 'one',
-              createdAt: '2026-01-01T00:00:00Z',
-              url: 'https://github.com/o/r/issues/1#issuecomment-123',
+              created_at: '2026-01-01T00:00:00Z',
+              html_url: 'https://github.com/o/r/issues/1#issuecomment-123',
             },
           ],
-        }),
+        ]),
       );
 
       const comments = await gh.listIssueComments(1);
@@ -1981,7 +1972,8 @@ describe('GhCli', () => {
     });
 
     it('maps missing issue comment arrays to empty results', async () => {
-      success(JSON.stringify({}));
+      repoCoordinates();
+      success(JSON.stringify([]));
 
       const comments = await gh.listIssueComments(1);
 
@@ -2279,18 +2271,19 @@ describe('GhCli', () => {
     });
 
     it('upserts issue comments by marker, editing finite database ids and adding otherwise', async () => {
+      success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
       success(
-        JSON.stringify({
-          comments: [
+        JSON.stringify([
+          [
             {
-              id: '123',
-              author: null,
+              id: 123,
+              user: null,
               body: '  <!-- shipcode:plan -->\nold',
-              createdAt: '2026-01-01T00:00:00Z',
-              url: 'https://github.com/o/r/issues/1#issuecomment-123',
+              created_at: '2026-01-01T00:00:00Z',
+              html_url: 'https://github.com/o/r/issues/1#issuecomment-123',
             },
           ],
-        }),
+        ]),
       );
       success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
       const editProc = createFakeProc();
@@ -2309,18 +2302,19 @@ describe('GhCli', () => {
 
       mockExecFileAsync.mockClear();
       mockSpawn.mockClear();
+      success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
       success(
-        JSON.stringify({
-          comments: [
+        JSON.stringify([
+          [
             {
-              id: 'IC_kwDOExample',
-              author: null,
-              body: '<!-- shipcode:plan -->\nold',
-              createdAt: '2026-01-01T00:00:00Z',
-              url: 'https://github.com/o/r/issues/1#discussion',
+              id: 456,
+              user: null,
+              body: 'no marker here',
+              created_at: '2026-01-01T00:00:00Z',
+              html_url: 'https://github.com/o/r/issues/1#issuecomment-456',
             },
           ],
-        }),
+        ]),
       );
       const addProc = createFakeProc();
       mockSpawn.mockReturnValueOnce(addProc.proc);

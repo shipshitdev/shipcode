@@ -1437,26 +1437,37 @@ export class GhCli {
   }
 
   async listIssueComments(issueNumber: number): Promise<GitHubIssueComment[]> {
+    const { owner, repo } = await this.getRepoCoordinates();
     const { stdout } = await execFileAsync(
       'gh',
-      ['issue', 'view', String(issueNumber), '--json', 'comments'],
+      ['api', '--paginate', '--slurp', `repos/${owner}/${repo}/issues/${issueNumber}/comments`],
       { cwd: this.cwd, env: this.env },
     );
-    const parsed = JSON.parse(stdout) as {
-      comments: Array<{
-        id: string;
-        author: { login: string } | null;
-        body: string;
-        createdAt: string;
-        url: string;
-      }>;
-    };
-    return (parsed.comments ?? []).map((c) => ({
-      id: parseIssueCommentDatabaseId(c.id, c.url),
-      author: c.author?.login ?? null,
-      body: c.body,
-      createdAt: c.createdAt,
-      url: c.url,
+    const parsed = JSON.parse(stdout) as Array<
+      Array<{
+        id: number;
+        user: { login?: string } | null;
+        body?: string;
+        created_at?: string;
+        html_url?: string;
+        author_association?: string | null;
+      }>
+    >;
+    const comments = parsed.flat() as Array<{
+      id: number;
+      user: { login?: string } | null;
+      body?: string;
+      created_at?: string;
+      html_url?: string;
+      author_association?: string | null;
+    }>;
+    return comments.map((c) => ({
+      id: c.id,
+      author: c.user?.login ?? null,
+      authorAssociation: c.author_association ?? null,
+      body: c.body ?? '',
+      createdAt: c.created_at ?? '',
+      url: c.html_url ?? '',
     }));
   }
 
@@ -1564,18 +1575,4 @@ export class GhCli {
     );
     return stdout.trim();
   }
-}
-
-function parseIssueCommentDatabaseId(id: string, url: string): number {
-  const numericId = Number(id);
-  if (Number.isFinite(numericId)) return numericId;
-
-  const match = url.match(/issuecomment-(\d+)/);
-  if (match?.[1]) {
-    const urlId = Number(match[1]);
-    /* v8 ignore next -- regex captures only decimal digits */
-    if (Number.isFinite(urlId)) return urlId;
-  }
-
-  return Number.NaN;
 }

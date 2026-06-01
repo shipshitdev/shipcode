@@ -1992,6 +1992,7 @@ export interface ThreadPanelData {
 export interface GitHubIssueComment {
   id: number;
   author: string | null;
+  authorAssociation?: string | null;
   body: string;
   createdAt: string;
   url: string;

@@ -229,7 +229,7 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
       if (disallowedTools) execArgs.push('--disallowedTools', disallowedTools.join(','));
       execArgs.push('--dangerously-skip-permissions');
       injectThinkingTokens(execArgs, req);
-      return { args: execArgs, stdin: req.prompt, options: { keepStdinOpen: true } };
+      return { args: execArgs, stdin: req.prompt };
     }
     case 'review': // Claude does not review in the current pipeline (codex does).
       // Kept for symmetry; always 1 turn (structural, not configurable).

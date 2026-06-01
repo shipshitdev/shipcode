@@ -9,6 +9,7 @@ import { useAppStore } from '../../stores/app-store';
 import { IssueChatTab } from './IssueChatTab';
 
 const invokeMock = vi.fn<(channel: string, args?: unknown) => Promise<unknown>>();
+let conversations: unknown[] = [];
 
 function renderWithClient() {
   const queryClient = new QueryClient({
@@ -38,9 +39,11 @@ function makeTerminalEvent(overrides: Partial<TerminalEventRecord> = {}): Termin
 describe('IssueChatTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    conversations = [];
     window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke;
     invokeMock.mockImplementation(async (channel: string) => {
       if (channel === 'terminal:list') return [];
+      if (channel === 'agent-conversations:list-by-thread') return conversations;
       if (channel === 'issue-chat:start') {
         return {
           threadId: 'thread-1',
@@ -52,6 +55,40 @@ describe('IssueChatTab', () => {
         };
       }
       if (channel === 'issue-chat:turn') {
+        conversations = [
+          {
+            id: 'prompt-1',
+            threadId: 'thread-1',
+            phase: 'issue_chat',
+            round: 1,
+            speaker: 'user',
+            role: 'prompt',
+            parentId: null,
+            provider: 'claude-cli',
+            model: null,
+            content: 'Draft a plan',
+            tokensIn: null,
+            tokensOut: null,
+            costUsd: null,
+            createdAt: '2026-06-01T00:00:00.000Z',
+          },
+          {
+            id: 'response-1',
+            threadId: 'thread-1',
+            phase: 'issue_chat',
+            round: 1,
+            speaker: 'claude',
+            role: 'response',
+            parentId: 'prompt-1',
+            provider: 'claude-cli',
+            model: null,
+            content: 'done',
+            tokensIn: null,
+            tokensOut: null,
+            costUsd: null,
+            createdAt: '2026-06-01T00:00:01.000Z',
+          },
+        ];
         return {
           threadId: 'thread-1',
           promptId: 'prompt-1',
@@ -93,6 +130,7 @@ describe('IssueChatTab', () => {
       });
     });
     expect(await screen.findByText('Draft a plan')).toBeInTheDocument();
+    expect(await screen.findByText('done')).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText('Ask the issue agent...'), {
       target: { value: 'Now list files' },

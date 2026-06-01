@@ -23,6 +23,14 @@ export interface AssistantTimelineUserMessage {
   createdAt: string;
 }
 
+export interface AssistantTimelineMessage {
+  id: string;
+  kind: 'user' | 'assistant';
+  threadId: string;
+  content: string;
+  createdAt: string;
+}
+
 type ConversationItem =
   | { id: string; kind: 'user'; content: string; createdAt: string }
   | { id: string; kind: 'assistant'; content: string; createdAt: string }
@@ -236,11 +244,13 @@ export function AssistantTimeline({
   threadId,
   events,
   userMessages,
+  messages = [],
   isRunning,
 }: {
   threadId: string | null;
   events: TerminalEventRecord[];
   userMessages: AssistantTimelineUserMessage[];
+  messages?: AssistantTimelineMessage[];
   isRunning: boolean;
 }) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -258,13 +268,25 @@ export function AssistantTimeline({
           ]
         : [],
     );
+    const persistedItems: ConversationItem[] = messages.flatMap((message) =>
+      message.threadId === threadId
+        ? [
+            {
+              id: message.id,
+              kind: message.kind,
+              content: message.content,
+              createdAt: message.createdAt,
+            },
+          ]
+        : [],
+    );
     const eventItems = buildConversationItems(events);
-    return [...userItems, ...eventItems].sort((a, b) =>
+    return [...persistedItems, ...userItems, ...eventItems].sort((a, b) =>
       a.createdAt === b.createdAt
         ? a.id.localeCompare(b.id)
         : a.createdAt.localeCompare(b.createdAt),
     );
-  }, [events, threadId, userMessages]);
+  }, [events, messages, threadId, userMessages]);
 
   useEffect(() => {
     if (typeof bottomRef.current?.scrollIntoView !== 'function') return;

@@ -1,4 +1,4 @@
-import type { TerminalEventRecord } from '@shipcode/shared';
+import type { AgentConversationRecord, TerminalEventRecord } from '@shipcode/shared';
 import {
   Badge,
   Button,
@@ -10,12 +10,13 @@ import {
   SelectValue,
   Textarea,
 } from '@shipshitdev/ui';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bot, Send, Square } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from '../../stores/toast-store';
 import {
   AssistantTimeline,
+  type AssistantTimelineMessage,
   type AssistantTimelineUserMessage,
   useAssistantTranscript,
 } from '../assistant/AssistantTimeline';
@@ -66,6 +67,15 @@ function appendLocalUserMessage(
 export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTabProps) {
   const queryClient = useQueryClient();
   const transcript = useAssistantTranscript(threadId);
+  const { data: issueChatConversations = [] } = useQuery<AgentConversationRecord[]>({
+    queryKey: ['agent-conversations', threadId, 'issue_chat'],
+    queryFn: () =>
+      window.shipcode.invoke('agent-conversations:list-by-thread', {
+        threadId,
+        phase: 'issue_chat',
+      }),
+    enabled: !!threadId,
+  });
   const [draft, setDraft] = useState('');
   const [provider, setProvider] = useState<IssueChatProvider>('claude');
   const [sessionStarted, setSessionStarted] = useState(false);
@@ -76,7 +86,33 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
     () => isIssueChatTurnRunning({ events: transcript, isSubmitting }),
     [isSubmitting, transcript],
   );
-  const hasVisibleConversation = userMessages.length > 0 || transcript.length > 0;
+  const persistedMessages = useMemo<AssistantTimelineMessage[]>(
+    () =>
+      issueChatConversations.map((turn) => ({
+        id: turn.id,
+        kind: turn.role === 'prompt' ? 'user' : 'assistant',
+        threadId: turn.threadId,
+        content: turn.content,
+        createdAt: turn.createdAt,
+      })),
+    [issueChatConversations],
+  );
+  const persistedPromptContents = useMemo(
+    () =>
+      new Set(
+        issueChatConversations
+          .filter((turn) => turn.role === 'prompt')
+          .map((turn) => turn.content.trim()),
+      ),
+    [issueChatConversations],
+  );
+  const pendingUserMessages = useMemo(
+    () => userMessages.filter((message) => !persistedPromptContents.has(message.content.trim())),
+    [persistedPromptContents, userMessages],
+  );
+  const visibleEvents = persistedMessages.length > 0 && !isRunning ? [] : transcript;
+  const hasVisibleConversation =
+    persistedMessages.length > 0 || pendingUserMessages.length > 0 || visibleEvents.length > 0;
 
   const submitTurn = useCallback(
     async (text: string) => {
@@ -102,6 +138,9 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
         await window.shipcode.invoke('issue-chat:turn', { threadId, text: trimmed });
         await queryClient.invalidateQueries({
           queryKey: ['agent-conversations', threadId],
+        });
+        await queryClient.invalidateQueries({
+          queryKey: ['agent-conversations', threadId, 'issue_chat'],
         });
       } catch (error) {
         toast.error('Issue chat failed', error instanceof Error ? error.message : undefined);
@@ -150,8 +189,9 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
         {hasVisibleConversation ? (
           <AssistantTimeline
             threadId={threadId}
-            events={transcript}
-            userMessages={userMessages}
+            events={visibleEvents}
+            messages={persistedMessages}
+            userMessages={pendingUserMessages}
             isRunning={isRunning}
           />
         ) : (

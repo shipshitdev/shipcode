@@ -97,15 +97,23 @@ export function createGeminiCliProvider(processManager: ProcessManager): AgentPr
             }
           : result.exitCode === 130
             ? { providerError: { kind: 'aborted' as const, message: 'aborted', retryable: false } }
-            : result.exitCode !== 0
+            : result.unavailable
               ? {
                   providerError: {
                     kind: 'unknown' as const,
                     message: clampGeminiFailure(result.rawOutput, req.prompt),
-                    retryable: true,
+                    retryable: false,
                   },
                 }
-              : {}),
+              : result.exitCode !== 0
+                ? {
+                    providerError: {
+                      kind: 'unknown' as const,
+                      message: clampGeminiFailure(result.rawOutput, req.prompt),
+                      retryable: true,
+                    },
+                  }
+                : {}),
       };
     },
     async healthCheck() {

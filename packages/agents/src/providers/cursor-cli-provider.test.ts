@@ -178,6 +178,7 @@ describe('cursor-cli-provider', () => {
     expect(processManager.spawn).not.toHaveBeenCalled();
     expect(result.exitCode).toBe(1);
     expect(result.providerError?.message).not.toContain('PROMPT');
+    expect(result.providerError?.retryable).toBe(false);
   });
 
   it('reports binary-missing when process spawn throws', async () => {

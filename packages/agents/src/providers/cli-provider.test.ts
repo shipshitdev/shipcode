@@ -587,6 +587,7 @@ describe('createClaudeCliProvider', () => {
     expect(spawnCalls[0].stdin).toBe('PROMPT');
     expect(spawnCalls[0].args).toContain('--disallowedTools');
     expect(spawnCalls[0].cwd).toBe('/tmp/wt');
+    expect(spawnCalls[0].options).not.toEqual(expect.objectContaining({ keepStdinOpen: true }));
 
     await trigger('output', 'proc-1', 'partial ');
     await trigger('output', 'proc-1', 'output');
