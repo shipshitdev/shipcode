@@ -2,6 +2,13 @@ import { clampTextBlock, stripAnsi } from '@shipcode/shared';
 
 export { stripAnsi };
 
+export function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+}
+
 export function summarizeTerminalText(
   raw: string | null | undefined,
   options: { maxLines?: number; maxChars?: number } = {},
