@@ -10,7 +10,8 @@ export type IssueDetailTab =
   | 'diff'
   | 'runs'
   | 'activity'
-  | 'conversations';
+  | 'conversations'
+  | 'chat';
 
 export type PhaseSelection = {
   provider: ExecutorModel;
