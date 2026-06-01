@@ -48,6 +48,49 @@ describe('review finding helpers', () => {
     expect(finding.fingerprint).toHaveLength(32);
   });
 
+  it('keeps finding fingerprints case-sensitive', () => {
+    const [upper] = buildVerificationFindingInputs({
+      projectId: 'project-1',
+      threadId: 'thread-1',
+      planId: 'plan-1',
+      verificationId: 'verification-1',
+      runId: null,
+      sourceModel: 'claude',
+      worktreePath: '/tmp/worktree',
+      branch: 'shipcode/154',
+      commitSha: null,
+      verification: {
+        threadId: 'thread-1',
+        planId: 'plan-1',
+        result: 'failed',
+        summary: 'Case-sensitive path',
+        criteriaResults: [],
+        issues: [{ severity: 'warning', filePath: 'src/Foo.ts', description: 'No coverage' }],
+      },
+    });
+    const [lower] = buildVerificationFindingInputs({
+      projectId: 'project-1',
+      threadId: 'thread-1',
+      planId: 'plan-1',
+      verificationId: 'verification-1',
+      runId: null,
+      sourceModel: 'claude',
+      worktreePath: '/tmp/worktree',
+      branch: 'shipcode/154',
+      commitSha: null,
+      verification: {
+        threadId: 'thread-1',
+        planId: 'plan-1',
+        result: 'failed',
+        summary: 'Case-sensitive path',
+        criteriaResults: [],
+        issues: [{ severity: 'warning', filePath: 'src/foo.ts', description: 'No coverage' }],
+      },
+    });
+
+    expect(upper?.fingerprint).not.toBe(lower?.fingerprint);
+  });
+
   it('turns verifier issues and failed criteria into execution findings', () => {
     const result = buildVerificationFindingInputs({
       projectId: 'project-1',
@@ -107,6 +150,43 @@ describe('review finding helpers', () => {
 
     expect(prompt).toContain('<open_review_findings>');
     expect(prompt).toContain('[blocker/verification] src/app.ts: Typecheck failed');
+  });
+
+  it('bounds long finding text in executor prompts', () => {
+    const prompt = formatOpenFindingsForPrompt([
+      {
+        id: 'finding-1',
+        projectId: 'project-1',
+        threadId: 'thread-1',
+        planId: 'plan-1',
+        reviewId: null,
+        verificationId: null,
+        runId: null,
+        phase: 'pr_review',
+        source: 'pr_review',
+        severity: 'major',
+        status: 'open',
+        title: 'Long comment',
+        description: 'd'.repeat(500),
+        suggestion: 's'.repeat(500),
+        filePath: 'src/app.ts',
+        fingerprint: 'abc',
+        sourceModel: null,
+        commitSha: null,
+        prNumber: 12,
+        worktreePath: null,
+        branch: null,
+        metadata: null,
+        resolvedByRunId: null,
+        resolvedAt: null,
+        createdAt: '2026-05-31T00:00:00.000Z',
+        updatedAt: '2026-05-31T00:00:00.000Z',
+      },
+    ]);
+
+    expect(prompt).toContain(`${'d'.repeat(279)}…`);
+    expect(prompt).toContain(`${'s'.repeat(279)}…`);
+    expect(prompt).not.toContain('d'.repeat(300));
   });
 
   it('normalizes CI and PR review feedback into durable finding inputs', () => {

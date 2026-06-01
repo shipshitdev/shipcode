@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import {
   checkCliModelCapabilities,
@@ -7,13 +6,12 @@ import {
   inspectProjectSetup,
   StreamParser,
 } from '@shipcode/agents';
-import { type PipelineEmitter, syncThreadAndIssuePhase } from '@shipcode/pipeline';
-import type {
-  GitHubPrCheckSummary,
-  GitHubPrReviewCommentSummary,
-  ReviewFindingCreateInput,
-  ShipCodePlan,
-} from '@shipcode/shared';
+import {
+  buildPullRequestFeedbackFindingInputs,
+  type PipelineEmitter,
+  syncThreadAndIssuePhase,
+} from '@shipcode/pipeline';
+import type { ShipCodePlan } from '@shipcode/shared';
 import {
   assessCliSelectionAvailabilityFromCapabilities,
   clampError,
@@ -36,97 +34,6 @@ import type { ChatNotificationService } from '../chat-notification-service';
 import log from '../logger.service';
 import type { NotificationService } from '../notification-service';
 import type { Queries } from './types';
-
-function compact(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
-}
-
-function findingFingerprint(parts: Array<string | number | null | undefined>): string {
-  return createHash('sha256')
-    .update(
-      parts
-        .map((part) => compact(String(part ?? '')))
-        .join('\n')
-        .toLowerCase(),
-    )
-    .digest('hex')
-    .slice(0, 32);
-}
-
-function buildPullRequestFeedbackFindingInputs(input: {
-  projectId: string;
-  threadId: string;
-  planId: string | null;
-  prNumber: number;
-  worktreePath: string | null;
-  failingChecks: GitHubPrCheckSummary[];
-  unresolvedReviewComments: GitHubPrReviewCommentSummary[];
-}): ReviewFindingCreateInput[] {
-  const ciFindings = input.failingChecks.map((check) => {
-    const checkName = [check.workflowName, check.name].filter(Boolean).join(' / ');
-    const title = `${checkName || 'CI check'} failed`;
-    const detail = [check.conclusion, check.detailsUrl].filter(Boolean).join(' - ');
-    return {
-      projectId: input.projectId,
-      threadId: input.threadId,
-      planId: input.planId,
-      phase: 'ci',
-      source: 'ci' as const,
-      severity: 'blocker' as const,
-      title,
-      description: detail ? `${title}: ${detail}` : title,
-      suggestion: check.detailsUrl ? `Inspect CI logs: ${check.detailsUrl}` : null,
-      filePath: null,
-      fingerprint: findingFingerprint([
-        'ci',
-        input.threadId,
-        input.prNumber,
-        check.workflowName,
-        check.name,
-      ]),
-      prNumber: input.prNumber,
-      worktreePath: input.worktreePath,
-      metadata: {
-        workflowName: check.workflowName,
-        name: check.name,
-        conclusion: check.conclusion,
-        detailsUrl: check.detailsUrl,
-      },
-    };
-  });
-
-  const reviewFindings = input.unresolvedReviewComments.map((comment) => ({
-    projectId: input.projectId,
-    threadId: input.threadId,
-    planId: input.planId,
-    phase: 'pr_review',
-    source: 'pr_review' as const,
-    severity: 'major' as const,
-    title: compact(comment.body).slice(0, 120) || 'Unresolved PR review comment',
-    description: comment.body,
-    suggestion: comment.url ? `Resolve PR review comment: ${comment.url}` : null,
-    filePath: comment.path ?? null,
-    fingerprint: findingFingerprint([
-      'pr_review',
-      input.threadId,
-      input.prNumber,
-      comment.url,
-      comment.path,
-      comment.line,
-      comment.body,
-    ]),
-    prNumber: input.prNumber,
-    worktreePath: input.worktreePath,
-    metadata: {
-      author: comment.author,
-      url: comment.url,
-      createdAt: comment.createdAt,
-      line: comment.line,
-    },
-  }));
-
-  return [...ciFindings, ...reviewFindings];
-}
 
 export function enrichProjectPath(project: import('@shipcode/shared').Project | null) {
   if (!project) return null;
@@ -339,8 +246,11 @@ export async function syncLinkedPullRequestFeedback(
       projectId: project.id,
       threadId: thread.id,
       planId: latestPlan?.id ?? null,
+      runId: thread.currentRunId ?? null,
       prNumber: feedback.number,
       worktreePath: thread.worktreePath ?? null,
+      branch: thread.worktreeBranch ?? null,
+      commitSha: null,
       failingChecks: feedback.failingChecks,
       unresolvedReviewComments: feedback.unresolvedReviewComments,
     });

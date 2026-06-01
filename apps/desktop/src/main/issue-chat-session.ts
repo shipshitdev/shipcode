@@ -376,7 +376,6 @@ export async function sendIssueChatTurn({
       const onOutput = (processId: string, chunk: string) => {
         if (!managed || processId !== managed.id) return;
         rawOutput += chunk;
-        emitTerminalEvent(mainWindow, queries, args.threadId, { kind: 'raw', content: chunk });
       };
       const onExit = (processId: string, code: number) => {
         if (!managed || processId !== managed.id) return;

@@ -497,6 +497,24 @@ describe('registerPipelineHandlers', () => {
       ).toHaveBeenCalledWith('thread-1');
     });
 
+    it('clamps review finding handler errors before throwing to renderer', () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const findingsHandler = handlers.get('review-findings:list-thread');
+      if (!findingsHandler) throw new Error('review-findings:list-thread handler not registered');
+      queries.reviewFindings.listByThread.mockImplementationOnce(() => {
+        throw new Error(`${'x'.repeat(400)}\nstack trace`);
+      });
+
+      expect(() => findingsHandler(undefined, { threadId: 'thread-1' })).toThrow(
+        `${'x'.repeat(279)}…`,
+      );
+      expect(consoleError).toHaveBeenCalledWith(
+        '[ipc] review-findings:list-thread failed',
+        expect.any(Error),
+      );
+      consoleError.mockRestore();
+    });
+
     it('returns null for latest task graph when the optional query surface is absent', () => {
       const taskGraphHandler = handlers.get('task-graph:get-latest');
       if (!taskGraphHandler) throw new Error('task-graph:get-latest handler not registered');

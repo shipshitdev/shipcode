@@ -482,6 +482,8 @@ describe('syncLinkedPullRequestFeedback', () => {
       {
         id: 'thread-1',
         githubPrNumber: 17,
+        currentRunId: 'run-1',
+        worktreeBranch: 'shipcode/17-review',
         worktreePath: '/tmp/worktree',
       },
       {
@@ -526,12 +528,20 @@ describe('syncLinkedPullRequestFeedback', () => {
     expect(reviewFindings.syncOpenForPullRequestFeedback).toHaveBeenCalledWith({
       threadId: 'thread-1',
       findings: [
-        expect.objectContaining({ source: 'ci', phase: 'ci', prNumber: 17 }),
+        expect.objectContaining({
+          source: 'ci',
+          phase: 'ci',
+          prNumber: 17,
+          runId: 'run-1',
+          branch: 'shipcode/17-review',
+        }),
         expect.objectContaining({
           source: 'pr_review',
           phase: 'pr_review',
           filePath: 'src/app.ts',
           prNumber: 17,
+          runId: 'run-1',
+          branch: 'shipcode/17-review',
         }),
       ],
     });

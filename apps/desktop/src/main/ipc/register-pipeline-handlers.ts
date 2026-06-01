@@ -79,6 +79,11 @@ function isInterruptedExecutionThread(thread: Thread): boolean {
   return INTERRUPTED_EXECUTION_MARKERS.some((marker) => thread.lastError?.includes(marker));
 }
 
+function throwClampedIpcError(scope: string, error: unknown): never {
+  console.error(`[ipc] ${scope} failed`, error);
+  throw new Error(clampError(error));
+}
+
 function formatTerminalResumeLine(record: TerminalEventRecord): string | null {
   const event = record.event;
   switch (event.kind) {
@@ -267,12 +272,20 @@ export function registerPipelineHandlers({
   ipcMain.handle(
     'review-findings:list-thread',
     (_event, { threadId, includeClosed }: { threadId: string; includeClosed?: boolean }) => {
-      return queries.reviewFindings.listByThread(threadId, { includeClosed });
+      try {
+        return queries.reviewFindings.listByThread(threadId, { includeClosed });
+      } catch (error) {
+        throwClampedIpcError('review-findings:list-thread', error);
+      }
     },
   );
 
   ipcMain.handle('review-findings:list-open', (_event, { threadId }: { threadId: string }) => {
-    return queries.reviewFindings.listOpenByThread(threadId);
+    try {
+      return queries.reviewFindings.listOpenByThread(threadId);
+    } catch (error) {
+      throwClampedIpcError('review-findings:list-open', error);
+    }
   });
 
   ipcMain.handle(
@@ -287,7 +300,11 @@ export function registerPipelineHandlers({
         status: 'fixed' | 'ignored' | 'superseded' | 'closed';
       },
     ) => {
-      return queries.reviewFindings.updateStatus(findingId, status);
+      try {
+        return queries.reviewFindings.updateStatus(findingId, status);
+      } catch (error) {
+        throwClampedIpcError('review-findings:update-status', error);
+      }
     },
   );
 

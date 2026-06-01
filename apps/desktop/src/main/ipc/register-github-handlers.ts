@@ -968,11 +968,11 @@ export function registerGitHubHandlers({
         );
         const labelSync = await ghCli.ensureLabels(requiredMetadataLabels);
         if (labelSync.failed.length > 0) {
-          throw new Error(
-            `Failed to create PRD metadata labels: ${labelSync.failed
-              .map((failure) => `${failure.name}: ${failure.error}`)
-              .join('; ')}`,
-          );
+          const fullError = `Failed to create PRD metadata labels: ${labelSync.failed
+            .map((failure) => `${failure.name}: ${failure.error}`)
+            .join('; ')}`;
+          log.error('[github:create-issue] PRD metadata label creation failed:', fullError);
+          throw new Error(clampError(fullError));
         }
       }
       const issueLabels = [...new Set([...(labels ?? []), ...metadataLabels])];

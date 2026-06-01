@@ -344,7 +344,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         projectPath,
         worktreePath: options?.worktreePath ?? null,
         baseBranch,
-        currentBranch: resolveCurrentBranch(projectPath, options?.worktreePath ?? null),
+        currentBranch: options?.worktreePath
+          ? resolveCurrentBranch(projectPath, options.worktreePath)
+          : null,
       }) + buildWorkpadProtocol({ issueNumber: issue.number });
     launch(threadId, () =>
       planning.startPlanGeneration(threadId, prompt, projectPath, options?.worktreePath ?? null),

@@ -14,14 +14,15 @@ function compact(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
+function truncateCompact(value: string, max = 280): string {
+  const cleaned = compact(value);
+  if (cleaned.length <= max) return cleaned;
+  return `${cleaned.slice(0, max - 1)}…`;
+}
+
 function fingerprint(parts: Array<string | number | null | undefined>): string {
   return createHash('sha256')
-    .update(
-      parts
-        .map((part) => compact(String(part ?? '')))
-        .join('\n')
-        .toLowerCase(),
-    )
+    .update(parts.map((part) => compact(String(part ?? ''))).join('\n'))
     .digest('hex')
     .slice(0, 32);
 }
@@ -240,8 +241,9 @@ export function formatOpenFindingsForPrompt(findings: ReviewFindingRecord[]): st
 
   const lines = actionable.map((finding) => {
     const file = finding.filePath ? `${finding.filePath}: ` : '';
-    const suggestion = finding.suggestion ? ` Fix: ${compact(finding.suggestion)}` : '';
-    return `- [${finding.severity}/${finding.source}] ${file}${compact(finding.description)}${suggestion}`;
+    const description = truncateCompact(finding.description);
+    const suggestion = finding.suggestion ? ` Fix: ${truncateCompact(finding.suggestion)}` : '';
+    return `- [${finding.severity}/${finding.source}] ${file}${description}${suggestion}`;
   });
 
   return [

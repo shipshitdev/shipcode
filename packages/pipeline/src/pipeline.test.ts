@@ -5420,6 +5420,32 @@ Custom prompt`,
       expect(prompt).not.toContain('status: planned');
     });
 
+    it('does not resolve the project checkout branch before a worktree exists', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.includes('symbolic-ref')) return 'origin/develop';
+        if (cmd === 'git rev-parse develop') return 'forksha';
+        if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'develop';
+        return '';
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      const issue = {
+        number: 7,
+        title: 'Bug',
+        body: 'Fix it',
+        labels: [],
+      };
+
+      await pipeline.startFromGitHubIssue('t1', '/proj', issue, 'claude');
+      await flush();
+
+      const args = vi.mocked(mock.deps.processManager.spawn).mock.calls[0][2] as string[];
+      const prompt = args[1];
+      expect(prompt).toContain('- Target branch: develop');
+      expect(prompt).toContain('- Current branch: (current worktree branch)');
+      expect(prompt).not.toContain('- Current branch: develop');
+    });
+
     it('defaults baseBranch to main on failure', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('symbolic-ref')) throw new Error('no remote HEAD');

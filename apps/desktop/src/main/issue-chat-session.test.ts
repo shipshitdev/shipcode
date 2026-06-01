@@ -189,6 +189,10 @@ describe('issue chat session', () => {
       },
     ]);
     expect(h.queries.threads.addTokenUsage).toHaveBeenCalledWith('thread-1', 12, 5, 0.01);
+    expect(h.terminalEvents.map((record) => record.event)).not.toContainEqual({
+      kind: 'raw',
+      content: expect.any(String),
+    });
     expect(h.mainWindow.webContents.send).toHaveBeenCalledWith(
       'terminal:event',
       expect.objectContaining({ threadId: 'thread-1' }),

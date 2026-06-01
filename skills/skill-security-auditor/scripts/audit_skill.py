@@ -136,7 +136,7 @@ RULES = [
     Rule(
         "critical",
         "credential-access",
-        re.compile(r"((?<!\w)\.(ssh|aws|gnupg|npmrc)\b|id_rsa|id_ed25519|keychain|(?<!\w)\.config/gh|(?<!\w)\.docker/config|ANTHROPIC_API_KEY|OPENAI_API_KEY|GITHUB_TOKEN)"),  # shipcode-audit: allow-pattern-example
+        re.compile(r"((?<!\w)\.(ssh|aws|gnupg|npmrc|env)\b|id_rsa|id_ed25519|keychain|(?<!\w)\.config/gh|(?<!\w)\.docker/config|ANTHROPIC_API_KEY|OPENAI_API_KEY|GITHUB_TOKEN)"),  # shipcode-audit: allow-pattern-example
         "Credential or token access pattern detected.",
         "Remove credential reads. Ask the user for scoped configuration instead.",
         frozenset({"code", "markdown"}),
@@ -160,7 +160,7 @@ RULES = [
     Rule(
         "high",
         "network",
-        re.compile(r"(requests\.(post|put|patch)|urllib\.request|httpx\.|aiohttp\.|socket\.connect|fetch\s*\(|curl\s+)"),  # shipcode-audit: allow-pattern-example
+        re.compile(r"(requests\.(get|post|put|patch|delete|head|options)|urllib\.request|httpx\.|aiohttp\.|socket\.connect|fetch\s*\(|curl\s+)"),  # shipcode-audit: allow-pattern-example
         "Outbound network capability detected.",
         "Justify the destination and make network access user-controlled.",
         frozenset({"code"}),
