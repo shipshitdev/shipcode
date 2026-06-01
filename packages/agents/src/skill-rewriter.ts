@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { GeneratorCli, PhaseSkillKey, ReasoningEffort } from '@shipcode/shared';
 import { unwrapCliResultEnvelope } from './cli-result';
 import { runCliWithStdin } from './cli-stdin-runner';
+import { extractFencedJson } from './fenced-json';
 import { mapReasoningEffortToClaudeThinkingTokens } from './providers/reasoning';
 import { validateSkill } from './skills';
 
@@ -205,37 +206,7 @@ function runSkillCliWithStdin(
 }
 
 export function extractRewrittenSkill(text: string): RewrittenSkill {
-  const openTag = `\`\`\`${SKILL_FENCE_TAG}`;
-  const lines = text.split('\n');
-  let collecting = false;
-  const captured: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!collecting) {
-      if (trimmed === openTag || trimmed.startsWith(`${openTag} `)) {
-        collecting = true;
-      }
-      continue;
-    }
-    if (trimmed === '```') break;
-    captured.push(line);
-  }
-
-  if (!captured.length) {
-    throw new Error(`No \`${SKILL_FENCE_TAG}\` fenced block found in AI response`);
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(captured.join('\n').trim());
-  } catch (err) {
-    throw new Error(
-      `Failed to parse skill JSON inside \`${SKILL_FENCE_TAG}\` block: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    );
-  }
+  const parsed = extractFencedJson({ text, tag: SKILL_FENCE_TAG, label: 'skill' });
 
   if (
     !parsed ||

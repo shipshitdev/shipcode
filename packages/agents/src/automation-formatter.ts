@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { AgentType, ReasoningEffort } from '@shipcode/shared';
 import { unwrapCliResultEnvelope } from './cli-result';
 import { runCliWithStdin } from './cli-stdin-runner';
+import { extractFencedJson } from './fenced-json';
 import { OpenRouterClient } from './providers/openrouter-http';
 import {
   mapReasoningEffortToClaudeThinkingTokens,
@@ -246,37 +247,11 @@ async function formatAutomationPromptViaOpenRouter(options: {
 }
 
 export function extractFormattedAutomation(text: string): FormattedAutomation {
-  const openTag = `\`\`\`${AUTOMATION_FENCE_TAG}`;
-  const lines = text.split('\n');
-  let collecting = false;
-  const captured: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!collecting) {
-      if (trimmed === openTag || trimmed.startsWith(`${openTag} `)) {
-        collecting = true;
-      }
-      continue;
-    }
-    if (trimmed === '```') break;
-    captured.push(line);
-  }
-
-  if (!captured.length) {
-    throw new Error(`No \`${AUTOMATION_FENCE_TAG}\` fenced block found in AI response`);
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(captured.join('\n').trim());
-  } catch (err) {
-    throw new Error(
-      `Failed to parse automation JSON inside \`${AUTOMATION_FENCE_TAG}\` block: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    );
-  }
+  const parsed = extractFencedJson({
+    text,
+    tag: AUTOMATION_FENCE_TAG,
+    label: 'automation',
+  });
 
   if (
     !parsed ||

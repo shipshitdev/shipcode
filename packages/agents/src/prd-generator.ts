@@ -1,6 +1,7 @@
 import type { GeneratorCli, ReasoningEffort } from '@shipcode/shared';
 import { unwrapCliResultEnvelope } from './cli-result';
 import { runCliWithStdin } from './cli-stdin-runner';
+import { extractFencedJson } from './fenced-json';
 import { mapReasoningEffortToClaudeThinkingTokens } from './providers/reasoning';
 
 const PRD_FENCE_TAG = 'shipcode-prd';
@@ -172,37 +173,7 @@ function runPrdCliWithStdin(
  * appear as standalone lines.
  */
 export function extractPrd(text: string): GeneratedPrd {
-  const openTag = `\`\`\`${PRD_FENCE_TAG}`;
-  const lines = text.split('\n');
-  let collecting = false;
-  const captured: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!collecting) {
-      // Match opening fence with optional trailing whitespace/indentation
-      if (trimmed === openTag || trimmed.startsWith(`${openTag} `)) {
-        collecting = true;
-      }
-      continue;
-    }
-    // Match closing fence (may be indented)
-    if (trimmed === '```') break;
-    captured.push(line);
-  }
-
-  if (!captured.length) {
-    throw new Error(`No \`${PRD_FENCE_TAG}\` fenced block found in AI response`);
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(captured.join('\n').trim());
-  } catch (err) {
-    throw new Error(
-      `Failed to parse PRD JSON inside \`${PRD_FENCE_TAG}\` block: ${(err as Error).message}`,
-    );
-  }
+  const parsed = extractFencedJson({ text, tag: PRD_FENCE_TAG, label: 'PRD' });
 
   if (
     !parsed ||
