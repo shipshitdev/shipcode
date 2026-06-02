@@ -53,3 +53,11 @@ export {
   parseWorkflowPolicy,
   resolveWorkflowPath,
 } from './workflow-loader';
+export type {
+  CreateWorkflowWatcherOptions,
+  WorkflowReloadEvent,
+  WorkflowWatcher,
+  WorkflowWatchFactory,
+  WorkflowWatchHandle,
+} from './workflow-watcher';
+export { createWorkflowWatcher, DEFAULT_WORKFLOW_RELOAD_DEBOUNCE_MS } from './workflow-watcher';
