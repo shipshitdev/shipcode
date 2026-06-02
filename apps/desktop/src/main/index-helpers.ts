@@ -193,6 +193,47 @@ export function buildRendererLoadTarget(
     : { kind: 'file', filePath: rendererHtml, openDevTools: false };
 }
 
+/**
+ * Decide whether an in-window navigation to `target` may proceed.
+ *
+ * The renderer holds the privileged `window.shipcode` preload bridge (IPC →
+ * shell spawn, settings, process control). Navigating the main window to an
+ * attacker origin would carry that bridge into untrusted JavaScript — and the
+ * production CSP (`script-src 'self'`) still permits same-origin scripts on
+ * that page. So only the bundled renderer is allowed to load: the Vite
+ * dev-server origin in development, or `file:` URLs in a packaged build. Every
+ * other navigation must be blocked; external web links open in the OS browser.
+ */
+export function isAllowedNavigationTarget(
+  target: string,
+  rendererUrl: string | undefined,
+): boolean {
+  let url: URL;
+  try {
+    url = new URL(target);
+  } catch {
+    return false;
+  }
+  if (rendererUrl) {
+    try {
+      return url.origin === new URL(rendererUrl).origin;
+    } catch {
+      return false;
+    }
+  }
+  return url.protocol === 'file:';
+}
+
+/** True when `target` is an http(s) URL safe to hand to `shell.openExternal`. */
+export function isExternalWebUrl(target: string): boolean {
+  try {
+    const { protocol } = new URL(target);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export function shouldQuitWhenAllWindowsClosed(platform = process.platform): boolean {
   return platform !== 'darwin';
 }

@@ -112,6 +112,8 @@ import {
   buildRendererLoadTarget,
   formatActivePipelineNames,
   formatStalledProcessMessage,
+  isAllowedNavigationTarget,
+  isExternalWebUrl,
   loadLocalEnvFiles,
   shouldQuitWhenAllWindowsClosed,
 } from './index-helpers';
@@ -480,6 +482,22 @@ function createWindow() {
         'Content-Security-Policy': [buildContentSecurityPolicy(RENDERER_URL)],
       },
     });
+  });
+
+  // Lock down navigation before any content loads. The renderer exposes the
+  // privileged `window.shipcode` IPC bridge, so the window must never navigate
+  // away from the bundled renderer (e.g. via a markdown link in an untrusted
+  // GitHub issue body) to an attacker origin that would inherit that bridge,
+  // and must never spawn child windows. External web links open in the OS
+  // browser instead.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (isAllowedNavigationTarget(url, RENDERER_URL)) return;
+    event.preventDefault();
+    if (isExternalWebUrl(url)) void shell.openExternal(url);
+  });
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isExternalWebUrl(url)) void shell.openExternal(url);
+    return { action: 'deny' };
   });
 
   // Load renderer
