@@ -2,6 +2,7 @@ import type { AppSettings } from '@shipcode/shared';
 import { Button } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ExternalLink } from 'lucide-react';
 
 const TELEMETRY_DOCS_URL =
   'https://shipcode.shipshit.dev/docs/desktop/settings#privacy-and-error-reporting';
@@ -36,18 +37,17 @@ export function TelemetryConsentDialog({ open }: TelemetryConsentDialogProps) {
           <p className="text-sm leading-6 text-secondary">
             You can change this later in Settings / General. Local events stay in events.log either
             way. Read the{' '}
-            <a
-              href={TELEMETRY_DOCS_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-accent hover:underline"
-              onClick={(event) => {
-                event.preventDefault();
-                void window.shipcode.invoke('shell:open-external', { url: TELEMETRY_DOCS_URL });
-              }}
+            <Button
+              type="button"
+              variant="link"
+              className="inline h-auto p-0 align-baseline font-medium text-accent"
+              onClick={() =>
+                void window.shipcode.invoke('shell:open-external', { url: TELEMETRY_DOCS_URL })
+              }
             >
               telemetry docs
-            </a>
+              <ExternalLink className="ml-1 inline size-3 align-[-1px]" aria-hidden="true" />
+            </Button>
             .
           </p>
         </div>
