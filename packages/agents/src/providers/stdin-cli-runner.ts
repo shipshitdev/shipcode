@@ -1,6 +1,7 @@
 import type { AgentType } from '@shipcode/shared';
 import type { ProcessManager } from '../process-manager';
-import type { ProviderRequest } from './types';
+import { measurePromptPayload } from '../prompt-scope';
+import type { ProviderRequest, ProviderResponse } from './types';
 
 export interface StdinCliCommand {
   args: string[];
@@ -127,4 +128,65 @@ export function clampCliFailure(rawOutput: string, prompt: string, fallback: str
     lines.find((entry) => /\b(error|failed|unauthorized|auth|permission|denied)\b/i.test(entry)) ??
     lines[0];
   return (line ?? fallback).slice(0, 280);
+}
+
+/**
+ * Assemble the canonical `ProviderResponse` shared by stdin-based CLI providers
+ * (gemini, cursor). They run identically through {@link runStdinCli} and differ
+ * only in how output is parsed plus their binary name / failure label, so the
+ * telemetry block, parsed-text/resolvedModel forwarding, and the exit-code →
+ * `providerError` cascade are factored out here:
+ *   - 127 → `binary_missing` (non-retryable)
+ *   - 130 → `aborted` (non-retryable)
+ *   - unavailable (no stdin spawn support) → `unknown` (non-retryable)
+ *   - any other non-zero → `unknown` (retryable)
+ */
+export function buildStdinCliResponse(
+  req: ProviderRequest,
+  result: StdinCliRunResult,
+  parsed: { text: string; resolvedModel?: string },
+  config: {
+    binaryMissingMessage: string;
+    clampFailure: (rawOutput: string, prompt: string) => string;
+  },
+): ProviderResponse {
+  const promptTelemetry = {
+    phase: req.phase,
+    promptSize: measurePromptPayload(req.prompt),
+    ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
+  };
+
+  return {
+    rawOutput: parsed.text,
+    exitCode: result.exitCode,
+    promptTelemetry,
+    ...(parsed.resolvedModel ? { resolvedModel: parsed.resolvedModel } : {}),
+    ...(result.exitCode === 127
+      ? {
+          providerError: {
+            kind: 'binary_missing' as const,
+            message: config.binaryMissingMessage,
+            retryable: false,
+          },
+        }
+      : result.exitCode === 130
+        ? { providerError: { kind: 'aborted' as const, message: 'aborted', retryable: false } }
+        : result.unavailable
+          ? {
+              providerError: {
+                kind: 'unknown' as const,
+                message: config.clampFailure(result.rawOutput, req.prompt),
+                retryable: false,
+              },
+            }
+          : result.exitCode !== 0
+            ? {
+                providerError: {
+                  kind: 'unknown' as const,
+                  message: config.clampFailure(result.rawOutput, req.prompt),
+                  retryable: true,
+                },
+              }
+            : {}),
+  };
 }
