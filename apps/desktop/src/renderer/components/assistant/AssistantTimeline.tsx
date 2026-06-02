@@ -5,6 +5,7 @@ import { type CSSProperties, useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../../stores/app-store';
 
 const EMPTY_STREAM: TerminalEventRecord[] = [];
+const EMPTY_MESSAGES: AssistantTimelineMessage[] = [];
 const THINKING_LETTERS = [
   { id: 't', letter: 'T', delay: 0 },
   { id: 'h', letter: 'h', delay: 1 },
@@ -92,7 +93,7 @@ function rawActivityLines(content: string): string[] {
   return lines.slice(-6);
 }
 
-export function buildConversationItems(records: TerminalEventRecord[]): ConversationItem[] {
+function buildConversationItems(records: TerminalEventRecord[]): ConversationItem[] {
   const items: ConversationItem[] = [];
   const pendingTools = new Map<string, ConversationItem & { kind: 'tool' }>();
   let previousRawLine: string | null = null;
@@ -180,8 +181,7 @@ function latestActivity(events: TerminalEventRecord[]) {
 
 function AnimatedThinkingWord({ className }: { className?: string }) {
   return (
-    <span
-      role="status"
+    <output
       aria-label="Thinking"
       className={cn('inline-flex font-medium text-[11px] tracking-wide uppercase', className)}
     >
@@ -195,7 +195,7 @@ function AnimatedThinkingWord({ className }: { className?: string }) {
           {letter}
         </span>
       ))}
-    </span>
+    </output>
   );
 }
 
@@ -244,7 +244,7 @@ export function AssistantTimeline({
   threadId,
   events,
   userMessages,
-  messages = [],
+  messages = EMPTY_MESSAGES,
   isRunning,
 }: {
   threadId: string | null;
