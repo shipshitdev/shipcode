@@ -72,6 +72,8 @@ export const COLUMNS: BoardColumn[] = [
     statuses: [
       ISSUE_PIPELINE_STATUS.clarifying,
       ISSUE_PIPELINE_STATUS.approval,
+      ISSUE_PIPELINE_STATUS.needsReview,
+      ISSUE_PIPELINE_STATUS.readyToMerge,
       ISSUE_PIPELINE_STATUS.paused,
       ISSUE_PIPELINE_STATUS.failed,
     ],
@@ -86,6 +88,12 @@ export const COLUMNS: BoardColumn[] = [
         key: 'approval',
         label: 'Approval',
         statuses: [ISSUE_PIPELINE_STATUS.approval],
+        droppable: false,
+      },
+      {
+        key: 'pr_review',
+        label: 'PR Review',
+        statuses: [ISSUE_PIPELINE_STATUS.needsReview, ISSUE_PIPELINE_STATUS.readyToMerge],
         droppable: false,
       },
       {

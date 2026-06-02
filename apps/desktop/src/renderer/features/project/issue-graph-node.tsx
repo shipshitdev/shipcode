@@ -12,6 +12,8 @@ const STATUS_STYLES: Record<IssuePipelineStatus, string> = {
   reviewing: 'border-agent/60 bg-elevated',
   revising: 'border-agent/60 bg-elevated',
   approval: 'border-warning/60 bg-elevated',
+  needs_review: 'border-warning/60 bg-elevated',
+  ready_to_merge: 'border-warning/60 bg-elevated',
   paused: 'border-warning/60 bg-elevated',
   executing: 'border-success/60 bg-elevated',
   testing: 'border-success/60 bg-elevated',

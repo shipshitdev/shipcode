@@ -1674,6 +1674,8 @@ export const ISSUE_PIPELINE_STATUS = {
   testing: PIPELINE_PHASE.testing,
   verifying: PIPELINE_PHASE.verifying,
   shipping: PIPELINE_PHASE.shipping,
+  needsReview: 'needs_review',
+  readyToMerge: 'ready_to_merge',
   paused: PIPELINE_PHASE.paused,
   completed: PIPELINE_PHASE.completed,
   closed: 'closed',

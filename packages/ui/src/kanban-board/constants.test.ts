@@ -22,6 +22,20 @@ describe('kanban board phase constants', () => {
     expect(PHASE_ELAPSED_STATUSES).toContain('testing');
   });
 
+  it('groups PR review statuses under the attention column', () => {
+    const humanColumn = COLUMNS.find((column) => column.key === 'human');
+
+    expect(humanColumn?.statuses).toEqual(
+      expect.arrayContaining(['needs_review', 'ready_to_merge']),
+    );
+    expect(humanColumn?.sections).toContainEqual({
+      key: 'pr_review',
+      label: 'PR Review',
+      statuses: ['needs_review', 'ready_to_merge'],
+      droppable: false,
+    });
+  });
+
   it('only shows elapsed timers for agent-loop phases', () => {
     expect(PHASE_ELAPSED_STATUSES).toEqual(ACTIVE_STATUSES);
     expect(PHASE_ELAPSED_STATUSES).not.toContain('approval');

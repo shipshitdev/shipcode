@@ -18,8 +18,12 @@ import {
   DEFAULT_SETTINGS,
   type ExecutorModel,
   type GeneratorCli,
+  type GitHubIssueCacheRecord,
+  ISSUE_PIPELINE_STATUS,
+  isPipelineStateLabel,
   type PipelinePhase,
   parseGithubProjectUrl,
+  pipelineLabelForStatus,
   type ReasoningEffort,
   resolveEffectivePhaseReasoningEffort,
   resolveEffectivePhaseReasoningEffortForIssue,
@@ -195,6 +199,55 @@ export function tryParsePlan(rawOutput: string): ShipCodePlan | null {
   return result.success ? result.data : null;
 }
 
+type LinkedPullRequestFeedback = Awaited<ReturnType<GhCli['getPullRequestFeedback']>>;
+const PR_REVIEW_PIPELINE_STATUSES = new Set<import('@shipcode/shared').IssuePipelineStatus>([
+  ISSUE_PIPELINE_STATUS.needsReview,
+  ISSUE_PIPELINE_STATUS.readyToMerge,
+]);
+
+export function resolveLinkedPullRequestPipelineStatus(
+  feedback: Pick<
+    LinkedPullRequestFeedback,
+    'isDraft' | 'state' | 'reviewDecision' | 'reviewRequestCount'
+  >,
+) {
+  if (feedback.state === 'MERGED') return ISSUE_PIPELINE_STATUS.completed;
+  if (feedback.state === 'CLOSED') return ISSUE_PIPELINE_STATUS.executing;
+  if (feedback.isDraft) return ISSUE_PIPELINE_STATUS.executing;
+  if (
+    feedback.reviewDecision === 'CHANGES_REQUESTED' ||
+    feedback.reviewDecision === 'REVIEW_REQUIRED' ||
+    feedback.reviewRequestCount > 0
+  ) {
+    return ISSUE_PIPELINE_STATUS.needsReview;
+  }
+  if (feedback.reviewDecision === 'APPROVED') return ISSUE_PIPELINE_STATUS.readyToMerge;
+  return ISSUE_PIPELINE_STATUS.completed;
+}
+
+async function syncCachedIssuePipelineLabel(
+  ghCli: GhCli,
+  issue: GitHubIssueCacheRecord,
+  queries: Queries,
+  status: import('@shipcode/shared').IssuePipelineStatus,
+): Promise<void> {
+  const targetLabel = pipelineLabelForStatus(status);
+  const staleLabels = new Set(issue.labels.filter(isPipelineStateLabel));
+  const currentStatusLabel = pipelineLabelForStatus(issue.pipelineStatus);
+  if (currentStatusLabel) staleLabels.add(currentStatusLabel);
+
+  for (const label of staleLabels) {
+    if (label === targetLabel) continue;
+    queries.githubIssues.setCachedLabelPresence(issue.id, label, false);
+    await ghCli.setIssueLabelPresence(issue.issueNumber, label, false);
+  }
+
+  if (targetLabel) {
+    queries.githubIssues.setCachedLabelPresence(issue.id, targetLabel, true);
+    await ghCli.setIssueLabelPresence(issue.issueNumber, targetLabel, true);
+  }
+}
+
 export async function syncLinkedPullRequestFeedback(
   project: import('@shipcode/shared').Project,
   issue: import('@shipcode/shared').GitHubIssueCacheRecord,
@@ -227,6 +280,10 @@ export async function syncLinkedPullRequestFeedback(
       queries.reviewFindings.supersedeOpen({ threadId: thread.id, source: 'pr_review' });
     }
     queries.githubIssues.reconcileCompletedFromEvidence(issue.id);
+    if (PR_REVIEW_PIPELINE_STATUSES.has(issue.pipelineStatus)) {
+      queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.completed);
+      await syncCachedIssuePipelineLabel(ghCli, issue, queries, ISSUE_PIPELINE_STATUS.completed);
+    }
     return;
   }
 
@@ -240,6 +297,11 @@ export async function syncLinkedPullRequestFeedback(
     unresolvedReviewComments: feedback.unresolvedReviewComments,
   });
   queries.githubIssues.reconcileCompletedFromEvidence(issue.id);
+  const reviewStatus = resolveLinkedPullRequestPipelineStatus(feedback);
+  if (issue.pipelineStatus !== reviewStatus) {
+    queries.githubIssues.updatePipelineStatus(issue.id, reviewStatus);
+  }
+  await syncCachedIssuePipelineLabel(ghCli, issue, queries, reviewStatus);
   if (queries.reviewFindings) {
     const latestPlan = queries.plans.getLatest(thread.id);
     const findings = buildPullRequestFeedbackFindingInputs({
