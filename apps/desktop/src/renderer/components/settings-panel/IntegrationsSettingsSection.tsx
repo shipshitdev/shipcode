@@ -49,6 +49,27 @@ function StatusPill({
   );
 }
 
+function DesktopAppHealthCard({ app }: { app: DesktopAppHealth }) {
+  return (
+    <div className="rounded-md border border-border bg-primary/40 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-[140px] text-[13px] font-medium text-primary">{app.label}</div>
+        <StatusPill tone={app.available ? 'success' : 'neutral'}>
+          {app.available ? 'Available' : 'Unavailable'}
+        </StatusPill>
+      </div>
+      <div className="mt-2 space-y-1 text-[12px] text-secondary">
+        {app.path ? (
+          <div>
+            Path: <code>{app.path}</code>
+          </div>
+        ) : null}
+        {app.error ? <div className="text-amber-300">{app.error}</div> : null}
+      </div>
+    </div>
+  );
+}
+
 function useIntegrationsSettingsSectionView({
   integrationStatus,
   integrationsFetching,
@@ -156,26 +177,7 @@ function useIntegrationsSettingsSectionView({
       <div className="space-y-2">
         {terminalOpenTargets.map((target) => {
           const app = getDesktopApp(target);
-          return (
-            <div key={target} className="rounded-md border border-border bg-primary/40 p-3">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-[140px] text-[13px] font-medium text-primary">
-                  {app.label}
-                </div>
-                <StatusPill tone={app.available ? 'success' : 'neutral'}>
-                  {app.available ? 'Available' : 'Unavailable'}
-                </StatusPill>
-              </div>
-              <div className="mt-2 space-y-1 text-[12px] text-secondary">
-                {app.path ? (
-                  <div>
-                    Path: <code>{app.path}</code>
-                  </div>
-                ) : null}
-                {app.error ? <div className="text-amber-300">{app.error}</div> : null}
-              </div>
-            </div>
-          );
+          return <DesktopAppHealthCard key={target} app={app} />;
         })}
       </div>
     </SettingsSection>
@@ -216,26 +218,7 @@ function useIntegrationsSettingsSectionView({
       <div className="space-y-2">
         {projectOpenTargets.map((target) => {
           const app = getDesktopApp(target);
-          return (
-            <div key={target} className="rounded-md border border-border bg-primary/40 p-3">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-[140px] text-[13px] font-medium text-primary">
-                  {app.label}
-                </div>
-                <StatusPill tone={app.available ? 'success' : 'neutral'}>
-                  {app.available ? 'Available' : 'Unavailable'}
-                </StatusPill>
-              </div>
-              <div className="mt-2 space-y-1 text-[12px] text-secondary">
-                {app.path ? (
-                  <div>
-                    Path: <code>{app.path}</code>
-                  </div>
-                ) : null}
-                {app.error ? <div className="text-amber-300">{app.error}</div> : null}
-              </div>
-            </div>
-          );
+          return <DesktopAppHealthCard key={target} app={app} />;
         })}
       </div>
     </SettingsSection>
