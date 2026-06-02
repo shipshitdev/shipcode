@@ -12,6 +12,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./second-ticker": {
+      "types": "./dist/second-ticker.d.ts",
+      "import": "./dist/second-ticker.js",
+      "require": "./dist/second-ticker.cjs"
     }
   },
   "files": [
