@@ -95,8 +95,8 @@ export function createWorkflowWatcher(options: CreateWorkflowWatcherOptions): Wo
     loadUncached = loadWorkflowPolicyUncached,
     peekCache = peekWorkflowPolicyCache,
     setCache = setWorkflowPolicyCache,
-    setTimeoutFn = setTimeout,
-    clearTimeoutFn = clearTimeout,
+    setTimeoutFn = setTimeout as NonNullable<CreateWorkflowWatcherOptions['setTimeoutFn']>,
+    clearTimeoutFn = clearTimeout as NonNullable<CreateWorkflowWatcherOptions['clearTimeoutFn']>,
   } = options;
 
   // Watch both candidate locations: the repo root catches a top-level
