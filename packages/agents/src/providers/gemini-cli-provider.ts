@@ -1,7 +1,12 @@
 import type { ProcessManager } from '../process-manager';
-import { measurePromptPayload } from '../prompt-scope';
 import { firstString } from './output-summary';
-import { clampCliFailure, runStdinCli, type StdinCliCommand, stripAnsi } from './stdin-cli-runner';
+import {
+  buildStdinCliResponse,
+  clampCliFailure,
+  runStdinCli,
+  type StdinCliCommand,
+  stripAnsi,
+} from './stdin-cli-runner';
 import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
 
 const GEMINI_ENV_KEYS = [
@@ -75,46 +80,10 @@ export function createGeminiCliProvider(processManager: ProcessManager): AgentPr
         lifecycleMessage: 'Gemini CLI started',
         unavailableMessage: 'Gemini CLI stdin execution is unavailable',
       });
-      const parsed = parseGeminiOutput(result.rawOutput);
-      const promptTelemetry = {
-        phase: req.phase,
-        promptSize: measurePromptPayload(req.prompt),
-        ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
-      };
-
-      return {
-        rawOutput: parsed.text,
-        exitCode: result.exitCode,
-        promptTelemetry,
-        ...(parsed.resolvedModel ? { resolvedModel: parsed.resolvedModel } : {}),
-        ...(result.exitCode === 127
-          ? {
-              providerError: {
-                kind: 'binary_missing' as const,
-                message: 'gemini CLI not found on PATH',
-                retryable: false,
-              },
-            }
-          : result.exitCode === 130
-            ? { providerError: { kind: 'aborted' as const, message: 'aborted', retryable: false } }
-            : result.unavailable
-              ? {
-                  providerError: {
-                    kind: 'unknown' as const,
-                    message: clampGeminiFailure(result.rawOutput, req.prompt),
-                    retryable: false,
-                  },
-                }
-              : result.exitCode !== 0
-                ? {
-                    providerError: {
-                      kind: 'unknown' as const,
-                      message: clampGeminiFailure(result.rawOutput, req.prompt),
-                      retryable: true,
-                    },
-                  }
-                : {}),
-      };
+      return buildStdinCliResponse(req, result, parseGeminiOutput(result.rawOutput), {
+        binaryMissingMessage: 'gemini CLI not found on PATH',
+        clampFailure: clampGeminiFailure,
+      });
     },
     async healthCheck() {
       return { ok: true };
