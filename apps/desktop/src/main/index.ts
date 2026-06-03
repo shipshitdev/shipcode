@@ -126,6 +126,7 @@ import { PipelineScheduler } from './pipeline-scheduler';
 import { ResourceMonitor } from './resource-monitor';
 import { SplashScreen } from './splash-screen';
 import { UpdateService } from './update-service';
+import { WorkflowWatchManager } from './workflow-watch-manager';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
@@ -359,6 +360,25 @@ function createWindow() {
   });
   reconciliationLoop.start();
 
+  // Hot-reload WORKFLOW.md: watch each project's workflow file and refresh the
+  // shared policy cache on change so prompt/concurrency edits apply to the next
+  // pipeline without an app restart. In-flight pipelines keep their snapshot.
+  const workflowWatchManager = new WorkflowWatchManager({
+    onReload: (event) => {
+      if (event.ok) {
+        log.info(`[workflow-watch] reloaded ${event.path ?? '(none)'}`);
+      } else {
+        log.warn(`[workflow-watch] reload failed: ${event.warning?.message ?? 'unknown error'}`);
+      }
+      mainWindow?.webContents.send('workflow:reloaded', {
+        path: event.path,
+        ok: event.ok,
+        warning: event.warning?.message ?? null,
+      });
+    },
+  });
+  workflowWatchManager.sync(queries.projects.listVisible().map((project) => project.path));
+
   // Queue promotion: start the next queued issue when a pipeline slot opens.
   onPipelineTerminal = (event) => {
     try {
@@ -530,6 +550,7 @@ function createWindow() {
   mainWindow.on('closed', () => {
     clearInterval(watchdogTimer);
     reconciliationLoop.stop();
+    workflowWatchManager.dispose();
     updateService?.stop();
     updateService = null;
     mainWindow = null;

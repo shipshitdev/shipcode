@@ -880,6 +880,7 @@ export interface IpcStreamChannels {
   'activity:appended': ActivityEntry;
   'dashboard:invalidate': { kinds: Array<'stats' | 'activity' | 'running' | 'recent'> };
   'update:status-changed': UpdateStatus;
+  'workflow:reloaded': { path: string | null; ok: boolean; warning: string | null };
 }
 
 export type IpcInvokeChannel = keyof IpcInvokeChannels;
