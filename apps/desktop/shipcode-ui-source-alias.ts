@@ -16,6 +16,10 @@ export function shipcodeUiSourceAlias({
         return path.join(uiSrc, 'index.ts');
       }
 
+      if (source === '@shipcode/ui/second-ticker') {
+        return path.join(uiSrc, 'second-ticker.ts');
+      }
+
       if (!source.startsWith('@/')) return null;
 
       const importerPath = importer ? path.resolve(importer) : '';
