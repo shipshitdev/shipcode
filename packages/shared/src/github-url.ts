@@ -45,6 +45,24 @@ function githubPathParts(url: URL, options: { stripGitSuffix?: boolean } = {}): 
   return (options.stripGitSuffix ? path.replace(/\.git$/i, '') : path).split('/');
 }
 
+/**
+ * GitHub login grammar: alphanumeric or single internal hyphens, no leading or
+ * trailing hyphen, 1–39 characters.
+ *
+ * Owner segments parsed out of a Projects URL are later passed to
+ * `gh api graphql -F login=<owner>` / `-F projectOwner=<owner>`. The GitHub
+ * CLI reads `-F key=@path` values from the local filesystem, so an owner like
+ * `@.env` (which the shape-only checks below would otherwise accept) becomes a
+ * file-disclosure primitive that leaks files from the project working dir.
+ * Validating the owner against this grammar rejects every such value at parse
+ * time, before it can reach the CLI.
+ */
+const GITHUB_LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+
+export function isValidGithubLogin(login: string | null | undefined): boolean {
+  return typeof login === 'string' && GITHUB_LOGIN_RE.test(login);
+}
+
 export function parseGithubRemote(remote: string | null | undefined): GithubRepoRef | null {
   if (!remote) return null;
   const trimmed = remote.trim();
@@ -136,6 +154,9 @@ export function validateGithubProjectUrl(
     (parts[0] === 'orgs' || parts[0] === 'users') &&
     parts[2] === 'projects'
   ) {
+    if (!isValidGithubLogin(parts[1])) {
+      return { ok: false, reason: 'Invalid GitHub owner in project URL' };
+    }
     if (!/^\d+$/.test(parts[3])) {
       return { ok: false, reason: 'Project number must be numeric' };
     }
@@ -222,6 +243,7 @@ export function parseGithubProjectUrl(raw: string | null | undefined): ParsedGit
     parts.length >= 4 &&
     (parts[0] === 'orgs' || parts[0] === 'users') &&
     parts[2] === 'projects' &&
+    isValidGithubLogin(parts[1]) &&
     /^\d+$/.test(parts[3])
   ) {
     return {

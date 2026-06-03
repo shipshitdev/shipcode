@@ -575,7 +575,12 @@ export class GhCli {
         `repoName=${repoName}`,
         '-F',
         `issueNumber=${opts.issueNumber}`,
-        '-F',
+        // `-f` (raw string) not `-F`: issueType is a GraphQL `String!` and is
+        // renderer-supplied. `-F` reads `@path` values from disk (file
+        // disclosure) and coerces numeric/boolean-looking strings to the wrong
+        // GraphQL type. projectOwner stays `-F` — parseGithubProjectUrl
+        // validates it as a GitHub login, so it can never start with `@`.
+        '-f',
         `issueType=${opts.metadata.issueType ?? ''}`,
         '-F',
         `projectOwner=${parsedProject.owner}`,
