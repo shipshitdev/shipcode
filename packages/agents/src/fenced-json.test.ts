@@ -27,6 +27,13 @@ describe('extractFencedJson', () => {
     );
   });
 
+  it('treats a whitespace-only fenced block as empty', () => {
+    const text = '```shipcode-prd\n   \n```';
+    expect(() => extractFencedJson({ text, tag: 'shipcode-prd', label: 'PRD' })).toThrow(
+      'Empty `shipcode-prd` fenced block in AI response',
+    );
+  });
+
   it('wraps JSON parse failures with the label and tag', () => {
     const text = '```shipcode-prd\nnot json\n```';
     expect(() => extractFencedJson({ text, tag: 'shipcode-prd', label: 'PRD' })).toThrow(

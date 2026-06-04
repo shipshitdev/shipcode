@@ -773,6 +773,8 @@ export function registerProjectHandlers({
 
   ipcMain.handle('project:unarchive', (_event, { projectId }: { projectId: string }) => {
     queries.projects.unarchive(projectId);
+    // Unarchived projects re-enter listVisible(); attach their watcher again.
+    onProjectsChanged?.();
   });
 
   ipcMain.handle(

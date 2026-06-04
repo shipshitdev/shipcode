@@ -3,12 +3,15 @@ export function extractFencedJson(options: { text: string; tag: string; label: s
   if (captured === null) {
     throw new Error(`No \`${options.tag}\` fenced block found in AI response`);
   }
-  if (captured.length === 0) {
+  // Trim before the empty check so a whitespace-only fence is reported as empty
+  // rather than falling through to a confusing JSON parse error.
+  const payload = captured.join('\n').trim();
+  if (payload.length === 0) {
     throw new Error(`Empty \`${options.tag}\` fenced block in AI response`);
   }
 
   try {
-    return JSON.parse(captured.join('\n').trim()) as unknown;
+    return JSON.parse(payload) as unknown;
   } catch (err) {
     throw new Error(
       `Failed to parse ${options.label} JSON inside \`${options.tag}\` block: ${formatCaughtError(

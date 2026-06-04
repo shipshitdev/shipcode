@@ -212,6 +212,7 @@ describe('createWorkflowWatcher', () => {
       repoPath: REPO,
       onReload,
       watchFactory: watch.factory,
+      pathExists: () => true,
       loadUncached: vi.fn(() => validPolicy()),
       peekCache: vi.fn(() => null),
       setCache: vi.fn(),
@@ -255,6 +256,7 @@ describe('createWorkflowWatcher', () => {
       repoPath: REPO,
       onReload,
       watchFactory: factory,
+      pathExists: () => true,
       loadUncached,
       peekCache: vi.fn(() => null),
       setCache: vi.fn(),
@@ -276,6 +278,53 @@ describe('createWorkflowWatcher', () => {
     expect(watchedDirs).toEqual([REPO, shipcodeDir, shipcodeDir]);
     timers.flush();
     expect(loadUncached).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops a stale .shipcode handle and re-attaches after the dir is recreated', () => {
+    const timers = fakeTimers();
+    const shipcodeDir = path.join(REPO, '.shipcode');
+    let shipcodeExists = true;
+    let shipcodeAttaches = 0;
+    const root: { change: (() => void) | null } = { change: null };
+
+    const factory: WorkflowWatchFactory = (dir, onChange) => {
+      if (dir === shipcodeDir) {
+        if (!shipcodeExists) return null;
+        shipcodeAttaches += 1;
+        return { close: () => {} };
+      }
+      root.change = onChange;
+      return { close: () => {} };
+    };
+
+    createWorkflowWatcher({
+      repoPath: REPO,
+      onReload: vi.fn(),
+      watchFactory: factory,
+      pathExists: (dir) => (dir === shipcodeDir ? shipcodeExists : true),
+      loadUncached: vi.fn(() => validPolicy()),
+      peekCache: vi.fn(() => null),
+      setCache: vi.fn(),
+      setTimeoutFn: timers.setTimeoutFn,
+      clearTimeoutFn: timers.clearTimeoutFn,
+    });
+
+    // Startup attaches the .shipcode watcher once.
+    expect(shipcodeAttaches).toBe(1);
+
+    // .shipcode removed: the next root event drops the stale handle; the attach
+    // retry returns null while the dir is absent, so no new handle is held.
+    shipcodeExists = false;
+    root.change?.();
+    timers.flush();
+    expect(shipcodeAttaches).toBe(1);
+
+    // .shipcode recreated: because the stale handle was cleared, the next root
+    // event re-attaches (without the drop, the !shipcodeHandle gate would skip).
+    shipcodeExists = true;
+    root.change?.();
+    timers.flush();
+    expect(shipcodeAttaches).toBe(2);
   });
 
   it('close() is idempotent', () => {

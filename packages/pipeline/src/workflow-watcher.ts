@@ -1,4 +1,4 @@
-import { watch as fsWatch } from 'node:fs';
+import { existsSync, watch as fsWatch } from 'node:fs';
 import path from 'node:path';
 import {
   loadWorkflowPolicyUncached,
@@ -58,6 +58,8 @@ export interface CreateWorkflowWatcherOptions {
   debounceMs?: number;
   // --- Injectable seams (tests) ---
   watchFactory?: WorkflowWatchFactory;
+  /** Existence check for the `.shipcode` dir; defaults to `fs.existsSync`. */
+  pathExists?: (dir: string) => boolean;
   loadUncached?: (repoPath: string) => WorkflowPolicy;
   peekCache?: (repoPath: string) => WorkflowPolicy | null;
   setCache?: (repoPath: string, policy: WorkflowPolicy) => void;
@@ -92,6 +94,7 @@ export function createWorkflowWatcher(options: CreateWorkflowWatcherOptions): Wo
     onReload,
     debounceMs = DEFAULT_WORKFLOW_RELOAD_DEBOUNCE_MS,
     watchFactory = defaultWatchFactory,
+    pathExists = existsSync,
     loadUncached = loadWorkflowPolicyUncached,
     peekCache = peekWorkflowPolicyCache,
     setCache = setWorkflowPolicyCache,
@@ -137,6 +140,19 @@ export function createWorkflowWatcher(options: CreateWorkflowWatcherOptions): Wo
 
   const onChange = (): void => {
     if (closed) return;
+    // If `.shipcode` was removed, drop the now-stale handle (and stop tracking
+    // it) so a later recreation can re-attach on the next root-watcher event —
+    // otherwise the `!shipcodeHandle` gate below would skip the re-attach.
+    if (shipcodeHandle && !pathExists(shipcodeDir)) {
+      try {
+        shipcodeHandle.close();
+      } catch {
+        // Best-effort — the underlying watch may already be invalid.
+      }
+      const index = handles.indexOf(shipcodeHandle);
+      if (index !== -1) handles.splice(index, 1);
+      shipcodeHandle = null;
+    }
     // Lazily attach the `.shipcode` watcher once the directory appears. The
     // root watcher fires when `.shipcode` is first created; without this retry
     // the non-recursive watch would never observe later edits to

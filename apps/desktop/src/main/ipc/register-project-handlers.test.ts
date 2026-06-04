@@ -460,6 +460,31 @@ describe('registerProjectHandlers', () => {
     expect(onProjectsChanged).toHaveBeenCalledTimes(1);
   });
 
+  it('re-syncs WORKFLOW.md watchers after a project unarchive', () => {
+    const onProjectsChanged = vi.fn();
+    const queries = { projects: { unarchive: vi.fn() } };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+      onProjectsChanged,
+    });
+
+    const unarchive = handlers.get('project:unarchive');
+    if (!unarchive) throw new Error('project:unarchive handler not registered');
+
+    unarchive(undefined, { projectId: 'project-1' });
+
+    expect(queries.projects.unarchive).toHaveBeenCalledWith('project-1');
+    expect(onProjectsChanged).toHaveBeenCalledTimes(1);
+  });
+
   it('clears managed worktree paths that are missing after a project relink', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-relink-missing-'));
     const oldProjectPath = path.join(tmp, 'old-repo');
