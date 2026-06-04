@@ -39,6 +39,7 @@ export function registerIpcHandlers(
   updateService: UpdateService,
   automationScheduler: AutomationSchedulerLike,
   resourceMonitor: ResourceMonitor,
+  onProjectsChanged: () => void = () => {},
 ): void {
   for (const thread of queries.threads.getOrphaned()) {
     transitionThreadPhase(mainWindow, queries, emitter, {
@@ -90,6 +91,7 @@ export function registerIpcHandlers(
     notificationService,
     chatNotificationService,
     resourceMonitor,
+    onProjectsChanged,
   } as const;
 
   ipcMain.on('diagnostics:renderer-ipc', (_event, payload: unknown) => {

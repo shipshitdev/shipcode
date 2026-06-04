@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type {
   AboutPanelOptionsOptions,
   BrowserWindowConstructorOptions,
@@ -201,12 +202,16 @@ export function buildRendererLoadTarget(
  * attacker origin would carry that bridge into untrusted JavaScript — and the
  * production CSP (`script-src 'self'`) still permits same-origin scripts on
  * that page. So only the bundled renderer is allowed to load: the Vite
- * dev-server origin in development, or `file:` URLs in a packaged build. Every
- * other navigation must be blocked; external web links open in the OS browser.
+ * dev-server origin in development, or the exact bundled `index.html` file in a
+ * packaged build. Allowing the whole `file:` scheme would let any local HTML
+ * file (a dropped/opened artifact, a `file://` link) carry the preload bridge,
+ * so packaged builds compare against `rendererHtml` by path. Every other
+ * navigation must be blocked; external web links open in the OS browser.
  */
 export function isAllowedNavigationTarget(
   target: string,
   rendererUrl: string | undefined,
+  rendererHtml?: string,
 ): boolean {
   let url: URL;
   try {
@@ -221,7 +226,17 @@ export function isAllowedNavigationTarget(
       return false;
     }
   }
-  return url.protocol === 'file:';
+  // Packaged build: permit only the exact bundled index.html. Compare by
+  // pathname so SPA hash/query suffixes on the same file still match, while a
+  // different local file (e.g. file:///tmp/evil.html) is rejected.
+  if (rendererHtml && url.protocol === 'file:') {
+    try {
+      return url.pathname === pathToFileURL(rendererHtml).pathname;
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
 
 /** True when `target` is an http(s) URL safe to hand to `shell.openExternal`. */

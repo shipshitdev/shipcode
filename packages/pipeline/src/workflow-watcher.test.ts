@@ -212,6 +212,7 @@ describe('createWorkflowWatcher', () => {
       repoPath: REPO,
       onReload,
       watchFactory: watch.factory,
+      pathExists: () => true,
       loadUncached: vi.fn(() => validPolicy()),
       peekCache: vi.fn(() => null),
       setCache: vi.fn(),
@@ -227,6 +228,103 @@ describe('createWorkflowWatcher', () => {
 
     timers.flush(); // nothing should run
     expect(onReload).not.toHaveBeenCalled();
+  });
+
+  it('lazily attaches the .shipcode watcher once the directory appears', () => {
+    const timers = fakeTimers();
+    const onReload = vi.fn();
+    const loadUncached = vi.fn(() => validPolicy());
+    const shipcodeDir = path.join(REPO, '.shipcode');
+    const watchedDirs: string[] = [];
+    let shipcodeAttempts = 0;
+    // Held in an object so TS doesn't narrow it to `null` across the callback.
+    const root: { change: (() => void) | null } = { change: null };
+
+    // `.shipcode` is missing at startup (factory returns null), then present on
+    // the retry triggered by the root watcher firing.
+    const factory: WorkflowWatchFactory = (dir, onChange) => {
+      watchedDirs.push(dir);
+      if (dir === shipcodeDir) {
+        shipcodeAttempts += 1;
+        return shipcodeAttempts === 1 ? null : { close: () => {} };
+      }
+      root.change = onChange;
+      return { close: () => {} };
+    };
+
+    createWorkflowWatcher({
+      repoPath: REPO,
+      onReload,
+      watchFactory: factory,
+      pathExists: () => true,
+      loadUncached,
+      peekCache: vi.fn(() => null),
+      setCache: vi.fn(),
+      setTimeoutFn: timers.setTimeoutFn,
+      clearTimeoutFn: timers.clearTimeoutFn,
+    });
+
+    // Startup: root watched, .shipcode attempted but absent.
+    expect(watchedDirs).toEqual([REPO, shipcodeDir]);
+
+    // Root watcher fires (e.g. .shipcode was just created) → lazy re-attach.
+    root.change?.();
+    expect(watchedDirs).toEqual([REPO, shipcodeDir, shipcodeDir]);
+    timers.flush();
+    expect(loadUncached).toHaveBeenCalledTimes(1);
+
+    // A later edit reloads without attempting yet another attach (already held).
+    root.change?.();
+    expect(watchedDirs).toEqual([REPO, shipcodeDir, shipcodeDir]);
+    timers.flush();
+    expect(loadUncached).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops a stale .shipcode handle and re-attaches after the dir is recreated', () => {
+    const timers = fakeTimers();
+    const shipcodeDir = path.join(REPO, '.shipcode');
+    let shipcodeExists = true;
+    let shipcodeAttaches = 0;
+    const root: { change: (() => void) | null } = { change: null };
+
+    const factory: WorkflowWatchFactory = (dir, onChange) => {
+      if (dir === shipcodeDir) {
+        if (!shipcodeExists) return null;
+        shipcodeAttaches += 1;
+        return { close: () => {} };
+      }
+      root.change = onChange;
+      return { close: () => {} };
+    };
+
+    createWorkflowWatcher({
+      repoPath: REPO,
+      onReload: vi.fn(),
+      watchFactory: factory,
+      pathExists: (dir) => (dir === shipcodeDir ? shipcodeExists : true),
+      loadUncached: vi.fn(() => validPolicy()),
+      peekCache: vi.fn(() => null),
+      setCache: vi.fn(),
+      setTimeoutFn: timers.setTimeoutFn,
+      clearTimeoutFn: timers.clearTimeoutFn,
+    });
+
+    // Startup attaches the .shipcode watcher once.
+    expect(shipcodeAttaches).toBe(1);
+
+    // .shipcode removed: the next root event drops the stale handle; the attach
+    // retry returns null while the dir is absent, so no new handle is held.
+    shipcodeExists = false;
+    root.change?.();
+    timers.flush();
+    expect(shipcodeAttaches).toBe(1);
+
+    // .shipcode recreated: because the stale handle was cleared, the next root
+    // event re-attaches (without the drop, the !shipcodeHandle gate would skip).
+    shipcodeExists = true;
+    root.change?.();
+    timers.flush();
+    expect(shipcodeAttaches).toBe(2);
   });
 
   it('close() is idempotent', () => {

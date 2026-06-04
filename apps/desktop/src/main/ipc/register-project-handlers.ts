@@ -523,6 +523,7 @@ export function registerProjectHandlers({
   queries,
   pipeline,
   chatNotificationService,
+  onProjectsChanged,
 }: IpcHandlerDeps): void {
   const cleanupTrackedWorktrees = async (project: Project): Promise<void> => {
     const appSettings = queries.settings.get();
@@ -579,6 +580,8 @@ export function registerProjectHandlers({
         githubRepoId: repo?.id ?? null,
         githubRepoFullName: repo?.name ?? null,
       });
+      // The new project may carry a WORKFLOW.md; attach its watcher now.
+      onProjectsChanged?.();
 
       try {
         const git = new GitService(projectPath);
@@ -665,6 +668,8 @@ export function registerProjectHandlers({
 
       await repairProjectWorktreesAfterRelink(project, projectPath, queries);
       queries.projects.updatePath(projectId, projectPath);
+      // Watch the relinked path and drop the watcher on the stale one.
+      onProjectsChanged?.();
 
       try {
         const git = new GitService(projectPath);
@@ -716,6 +721,8 @@ export function registerProjectHandlers({
           : 'New work appeared during cleanup. Project not removed. Retry after stopping pipelines.',
       );
     }
+    // Stop watching the removed project's WORKFLOW.md.
+    onProjectsChanged?.();
   });
 
   ipcMain.handle(
@@ -761,10 +768,14 @@ export function registerProjectHandlers({
           : 'Cannot archive a project with active work. Stop running pipelines and dismiss notifications first.',
       );
     }
+    // Archived projects drop out of listVisible(); stop watching this one.
+    onProjectsChanged?.();
   });
 
   ipcMain.handle('project:unarchive', (_event, { projectId }: { projectId: string }) => {
     queries.projects.unarchive(projectId);
+    // Unarchived projects re-enter listVisible(); attach their watcher again.
+    onProjectsChanged?.();
   });
 
   ipcMain.handle(
