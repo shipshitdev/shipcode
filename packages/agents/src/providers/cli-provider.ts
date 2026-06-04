@@ -10,8 +10,11 @@
  * pipeline's phase-specific completion logic.
  */
 
+import { watch as fsWatch } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { PLAN_FENCE_TAG, REVIEW_FENCE_TAG, VERIFICATION_FENCE_TAG } from '@shipcode/shared';
+import { classifyPoolExhaustion, markPoolExhausted } from '../agent-sdk-pool-state';
 import type { ProcessManager } from '../process-manager';
 import { measurePromptPayload } from '../prompt-scope';
 import { StreamParser } from '../stream-parser';
@@ -400,6 +403,194 @@ function buildCodexPrompt(req: ProviderRequest): string {
   return lines.join('\n');
 }
 
+/**
+ * Path the agent writes its structured `shipcode-*` block to when a structured
+ * phase runs interactively (no stream-json to parse). Lives in the gitignored
+ * `.shipcode/runs/` scratch dir next to the prompt artifact.
+ */
+function phaseOutputArtifactPath(req: ProviderRequest): string {
+  return path.join(req.cwd, '.shipcode', 'runs', req.threadId, `${req.phase}-output.md`);
+}
+
+/** The fenced tag a given structured phase is expected to emit. */
+const PHASE_FENCE_TAG: Partial<Record<ProviderPhase, string>> = {
+  plan: PLAN_FENCE_TAG,
+  revision: PLAN_FENCE_TAG,
+  review: REVIEW_FENCE_TAG,
+  verify: VERIFICATION_FENCE_TAG,
+};
+
+const INTERACTIVE_STRUCTURED_PHASES: ReadonlySet<ProviderPhase> = new Set([
+  'plan',
+  'review',
+  'revision',
+  'verify',
+]);
+
+/** True when a structured phase is configured to run via the interactive CLI. */
+function isInteractiveStructured(req: ProviderRequest): boolean {
+  return req.phaseHints?.runMode === 'interactive' && INTERACTIVE_STRUCTURED_PHASES.has(req.phase);
+}
+
+/**
+ * Instruction appended as the trailing CLI arg for interactive structured runs.
+ * Imperative + last-sentence so the agent reliably (a) reads the prompt, (b)
+ * writes ONLY the fenced block to the output file, (c) exits the REPL.
+ */
+function buildStructuredInstruction(
+  promptPath: string,
+  outputPath: string,
+  fenceTag: string,
+): string {
+  return [
+    `Read ${promptPath} and follow its instructions for the ShipCode task.`,
+    `When you have your final answer, write ONLY the \`\`\`${fenceTag} fenced JSON block to ${outputPath} (no prose before or after it).`,
+    `If you must ask a clarifying question instead, write the \`\`\`shipcode-clarification block to that same file.`,
+    `After the file is written, run the command \`exit\` to end this session.`,
+  ].join(' ');
+}
+
+async function buildClaudeInteractiveStructuredCommand(req: ProviderRequest): Promise<CliCommand> {
+  const promptArtifactPath = await writeExecutePromptArtifact(req);
+  const outputPath = phaseOutputArtifactPath(req);
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+  const modelArgs = req.modelHint ? ['--model', req.modelHint] : [];
+  const fenceTag = PHASE_FENCE_TAG[req.phase] ?? PLAN_FENCE_TAG;
+  // plan/revision may inspect the repo to ground their output; review/verify
+  // only need to read the prompt and write the result.
+  const tools =
+    req.phase === 'plan' || req.phase === 'revision' ? 'Read,Write,Glob,Grep' : 'Read,Write';
+  return {
+    args: [
+      '--permission-mode',
+      'acceptEdits',
+      '--tools',
+      tools,
+      '--name',
+      sanitizeProcessName(`shipcode-${req.threadId}-${req.phase}`),
+      ...modelArgs,
+      buildStructuredInstruction(promptArtifactPath, outputPath, fenceTag),
+    ],
+    options: { outputMode: 'raw' },
+  };
+}
+
+async function buildCodexInteractiveStructuredCommand(req: ProviderRequest): Promise<CliCommand> {
+  const promptArtifactPath = await writeExecutePromptArtifact(req);
+  const outputPath = phaseOutputArtifactPath(req);
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+  const fenceTag = PHASE_FENCE_TAG[req.phase] ?? PLAN_FENCE_TAG;
+  // workspace-write is required so the agent can write the output artifact —
+  // read-only would block the write. Mirrors the interactive execute posture.
+  const args = ['-s', 'workspace-write', '-a', 'on-request', '--no-alt-screen'];
+  if (req.modelHint) args.push('-m', req.modelHint);
+  const effort = mapReasoningEffortToCodex(req.phaseHints?.reasoningEffort, req.modelHint);
+  args.push('-c', `model_reasoning_effort=${effort}`);
+  args.push(buildStructuredInstruction(promptArtifactPath, outputPath, fenceTag));
+  return { args, options: { outputMode: 'raw' } };
+}
+
+/**
+ * Read the structured output artifact after an interactive run, with a short
+ * grace window for filesystem flush. Returns null if nothing is written
+ * (caller falls back to the raw PTY transcript).
+ */
+async function readPhaseOutputArtifact(
+  outputPath: string,
+  signal: AbortSignal,
+): Promise<string | null> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    if (signal.aborted) return null;
+    try {
+      const content = await fs.readFile(outputPath, 'utf8');
+      if (content.trim()) return content;
+    } catch {
+      // not written yet
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return null;
+}
+
+/**
+ * Run an interactive structured command: spawn via runCli, and in parallel
+ * watch for the output artifact. Once it appears, nudge the REPL to exit (the
+ * agent is also told to `exit`, so this is a backstop). Completion is still the
+ * process exit; the stall watchdog remains the final timeout backstop.
+ */
+async function runInteractiveStructured(
+  processManager: ProcessManager,
+  agentId: 'claude' | 'codex',
+  command: CliCommand,
+  req: ProviderRequest,
+  outputPath: string,
+  envKeys: readonly string[],
+): Promise<CliRunResult> {
+  let watcher: ReturnType<typeof fsWatch> | undefined;
+  let nudgeTimer: ReturnType<typeof setTimeout> | undefined;
+  let finished = false;
+  let capturedId: string | undefined;
+
+  const tryNudgeExit = async (): Promise<void> => {
+    if (finished || nudgeTimer || !capturedId) return;
+    try {
+      const content = await fs.readFile(outputPath, 'utf8');
+      if (!content.trim()) return;
+    } catch {
+      return; // not written yet
+    }
+    const processId = capturedId;
+    nudgeTimer = setTimeout(() => {
+      const pm = processManager as ProcessManager & { write?: (id: string, data: string) => void };
+      try {
+        pm.write?.(processId, '/exit\n');
+      } catch {
+        // process may already be exiting
+      }
+    }, 600);
+  };
+
+  const composedOnStart = (processId: string) => {
+    capturedId = processId;
+    req.onProcessStart?.(processId);
+    const dir = path.dirname(outputPath);
+    const base = path.basename(outputPath);
+    try {
+      watcher = fsWatch(dir, { persistent: false }, (_event, filename) => {
+        if (filename && filename.toString() !== base) return;
+        void tryNudgeExit();
+      });
+    } catch {
+      // directory missing briefly — the post-exit read still covers it
+    }
+    void tryNudgeExit();
+  };
+
+  try {
+    return await runCli(
+      processManager,
+      agentId,
+      command.args,
+      command.stdin,
+      req.cwd,
+      req.signal,
+      req.threadId,
+      req.workspaceRoot,
+      { ...(command.options ?? {}), envKeyAllowlist: [...envKeys] },
+      composedOnStart,
+    );
+  } finally {
+    finished = true;
+    if (nudgeTimer) clearTimeout(nudgeTimer);
+    try {
+      watcher?.close();
+    } catch {
+      // already closed
+    }
+  }
+}
+
 export function createClaudeCliProvider(processManager: ProcessManager): AgentProvider {
   return {
     id: 'claude-cli',
@@ -424,10 +615,62 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
           },
         };
       }
-      const command =
-        req.phase === 'execute' && req.phaseHints?.runMode === 'interactive'
-          ? await buildClaudeInteractiveExecuteCommand(req)
-          : buildClaudeCommand(req);
+      // Interactive structured phases (plan/review/revision/verify) bridge
+      // their machine-readable output through a written file artifact instead
+      // of stream-json, so they avoid the rationed `claude -p` pool while
+      // staying parseable downstream. rawOutput carries the artifact contents
+      // (or the raw transcript as a fallback) so the pipeline's existing
+      // StreamParser path needs no changes.
+      if (isInteractiveStructured(req)) {
+        const structuredCommand = await buildClaudeInteractiveStructuredCommand(req);
+        const outputPath = phaseOutputArtifactPath(req);
+        const structuredResult = await runInteractiveStructured(
+          processManager,
+          'claude',
+          structuredCommand,
+          req,
+          outputPath,
+          CLAUDE_ENV_KEYS,
+        );
+        const artifact = await readPhaseOutputArtifact(outputPath, req.signal);
+        const raw = artifact ?? StreamParser.stripSystemEvents(structuredResult.rawOutput);
+        const structuredParser = new StreamParser();
+        structuredParser.feed(raw);
+        const structuredClarification = structuredParser.extractClarificationRequest();
+        return {
+          rawOutput: raw,
+          exitCode: structuredResult.exitCode,
+          resolvedModel: structuredParser.extractModel() ?? req.modelHint ?? 'claude',
+          promptTelemetry,
+          ...(structuredClarification.success && structuredClarification.data
+            ? { clarificationRequest: structuredClarification.data }
+            : {}),
+          ...(structuredResult.exitCode === 127
+            ? {
+                providerError: {
+                  kind: 'binary_missing' as const,
+                  message: 'claude CLI not found on PATH',
+                  retryable: false,
+                },
+              }
+            : structuredResult.exitCode === 130
+              ? {
+                  providerError: {
+                    kind: 'aborted' as const,
+                    message: 'aborted',
+                    retryable: false,
+                  },
+                }
+              : {}),
+        };
+      }
+      // `interactive` is true only when this run avoids the `claude -p`
+      // path entirely (so it draws from the interactive subscription seat,
+      // not the rationed Agent-SDK credit pool).
+      const interactive = req.phaseHints?.runMode === 'interactive' && req.phase === 'execute';
+      const command = interactive
+        ? await buildClaudeInteractiveExecuteCommand(req)
+        : buildClaudeCommand(req);
       const result = await runCli(
         processManager,
         'claude',
@@ -444,6 +687,30 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
       parser.feed(result.rawOutput);
       const usage = parser.extractUsage();
       const clarification = parser.extractClarificationRequest();
+      // Detect Agent-SDK credit-pool exhaustion on the programmatic (`-p`)
+      // path. There is no balance API, so we infer it from the failure and
+      // flag it process-wide; the pipeline then falls back to interactive.
+      const poolExhausted =
+        !interactive && classifyPoolExhaustion(result.rawOutput, '', result.exitCode);
+      if (poolExhausted) {
+        markPoolExhausted('Claude Agent-SDK credit pool exhausted');
+      }
+      const providerError = poolExhausted
+        ? {
+            kind: 'agent_sdk_pool_exhausted' as const,
+            message:
+              'Claude Agent-SDK credit pool exhausted — switch this phase to interactive run mode.',
+            retryable: false,
+          }
+        : result.exitCode === 127
+          ? {
+              kind: 'binary_missing' as const,
+              message: 'claude CLI not found on PATH',
+              retryable: false,
+            }
+          : result.exitCode === 130
+            ? { kind: 'aborted' as const, message: 'aborted', retryable: false }
+            : undefined;
       return {
         rawOutput: StreamParser.stripSystemEvents(result.rawOutput),
         exitCode: result.exitCode,
@@ -460,17 +727,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
           ? { clarificationRequest: clarification.data }
           : {}),
         /* v8 ignore stop */
-        ...(result.exitCode === 127
-          ? {
-              providerError: {
-                kind: 'binary_missing' as const,
-                message: 'claude CLI not found on PATH',
-                retryable: false,
-              },
-            }
-          : result.exitCode === 130
-            ? { providerError: { kind: 'aborted' as const, message: 'aborted', retryable: false } }
-            : {}),
+        ...(providerError ? { providerError } : {}),
       };
     },
     async healthCheck() {
@@ -492,6 +749,55 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
         promptSize: measurePromptPayload(req.prompt),
         selectedMaterials: req.promptMaterialSummary,
       };
+      // Interactive structured phases bridge output through a written file
+      // artifact (see the claude provider for the rationale). Codex has no
+      // rationed pool, but this keeps run-mode behavior symmetric so a project
+      // can run the whole pipeline through the interactive CLI.
+      if (isInteractiveStructured(req)) {
+        const structuredCommand = await buildCodexInteractiveStructuredCommand(req);
+        const outputPath = phaseOutputArtifactPath(req);
+        const structuredResult = await runInteractiveStructured(
+          processManager,
+          'codex',
+          structuredCommand,
+          req,
+          outputPath,
+          CODEX_ENV_KEYS,
+        );
+        const artifact = await readPhaseOutputArtifact(outputPath, req.signal);
+        const raw =
+          artifact ??
+          stripCodexProtocol(structuredResult.rawOutput, { includeCommandOutput: false });
+        const structuredParser = new StreamParser();
+        structuredParser.feed(raw);
+        const structuredClarification = structuredParser.extractClarificationRequest();
+        return {
+          rawOutput: raw,
+          exitCode: structuredResult.exitCode,
+          resolvedModel: req.modelHint ?? 'codex',
+          promptTelemetry,
+          ...(structuredClarification.success && structuredClarification.data
+            ? { clarificationRequest: structuredClarification.data }
+            : {}),
+          ...(structuredResult.exitCode === 127
+            ? {
+                providerError: {
+                  kind: 'binary_missing' as const,
+                  message: 'codex CLI not found on PATH',
+                  retryable: false,
+                },
+              }
+            : structuredResult.exitCode === 130
+              ? {
+                  providerError: {
+                    kind: 'aborted' as const,
+                    message: 'aborted',
+                    retryable: false,
+                  },
+                }
+              : {}),
+        };
+      }
       const command =
         req.phase === 'execute' && req.phaseHints?.runMode === 'interactive'
           ? await buildCodexInteractiveExecuteCommand(req)
@@ -611,6 +917,12 @@ export const _internals = {
   buildCodexArgs,
   buildCodexStdin,
   buildCodexPrompt,
+  buildClaudeInteractiveStructuredCommand,
+  buildCodexInteractiveStructuredCommand,
+  buildStructuredInstruction,
+  phaseOutputArtifactPath,
+  isInteractiveStructured,
+  readPhaseOutputArtifact,
   materializeStdinArgsForLegacySpawn,
   stripCodexProtocol,
 };

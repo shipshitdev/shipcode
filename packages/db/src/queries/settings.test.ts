@@ -27,6 +27,9 @@ describe('SettingsQueries', () => {
     expect(s.terminalScrollback).toBe(10000);
     expect(s.agentRunModes.claude.execute).toBe('interactive');
     expect(s.agentRunModes.codex.execute).toBe('interactive');
+    expect(s.agentRunModes.claude.plan).toBe('interactive');
+    expect(s.agentRunModes.claude.verify).toBe('interactive');
+    expect(s.forceInteractiveClaude).toBe(false);
     expect(s.plannerModel).toBe('codex');
     expect(s.reviewerModel).toBe('codex');
     expect(s.executorModel).toBe('codex');
@@ -81,6 +84,58 @@ describe('SettingsQueries', () => {
         instant: 'programmatic',
       },
     });
+  });
+
+  it('backfills missing per-phase run modes for pre-per-phase records', () => {
+    // A record persisted before plan/review/revision/verify run modes existed.
+    db.prepare("INSERT INTO settings (key, value) VALUES ('agentRunModes', ?)").run(
+      JSON.stringify({
+        claude: {
+          issueTerminal: 'interactive',
+          execute: 'programmatic',
+          terminalFix: 'interactive',
+          instant: 'interactive',
+        },
+        codex: {
+          issueTerminal: 'interactive',
+          execute: 'interactive',
+          terminalFix: 'interactive',
+          instant: 'interactive',
+        },
+      }),
+    );
+
+    const modes = settings.get().agentRunModes;
+    // Pre-existing key preserved.
+    expect(modes.claude.execute).toBe('programmatic');
+    // New per-phase keys backfilled from defaults.
+    expect(modes.claude.plan).toBe('interactive');
+    expect(modes.claude.review).toBe('interactive');
+    expect(modes.claude.revision).toBe('interactive');
+    expect(modes.claude.verify).toBe('interactive');
+    expect(modes.codex.plan).toBe('interactive');
+  });
+
+  it('rejects an invalid run-mode value and falls back to the default', () => {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('agentRunModes', ?)").run(
+      JSON.stringify({
+        claude: {
+          issueTerminal: 'interactive',
+          plan: 'bogus',
+          execute: 'interactive',
+          terminalFix: 'interactive',
+          instant: 'interactive',
+        },
+        codex: {
+          issueTerminal: 'interactive',
+          execute: 'interactive',
+          terminalFix: 'interactive',
+          instant: 'interactive',
+        },
+      }),
+    );
+
+    expect(settings.get().agentRunModes.claude.plan).toBe('interactive');
   });
 
   describe('worktreeRoot', () => {

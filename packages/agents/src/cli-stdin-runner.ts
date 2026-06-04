@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { GeneratorCli } from '@shipcode/shared';
+import { classifyPoolExhaustion, markPoolExhausted } from './agent-sdk-pool-state';
 import { extractCliFailureMessage, formatCliSpawnFailure } from './cli-error';
 
 const SAFE_CLI_ENV_KEYS = new Set([
@@ -77,6 +78,16 @@ export function runCliWithStdin(options: {
         return;
       }
       const tidy = extractCliFailureMessage(stdout, stderr);
+      // These one-shot generators run `claude -p`, so they draw from the
+      // rationed Agent-SDK credit pool. Flag exhaustion so the UI alerts and
+      // the pipeline falls back to interactive; the one-shot itself still fails.
+      if (options.cli === 'claude' && classifyPoolExhaustion(stdout, stderr, code ?? 1)) {
+        markPoolExhausted('Claude Agent-SDK credit pool exhausted');
+        reject(
+          new Error(`${label} exited ${code}: Agent-SDK credit pool exhausted. ${tidy}`.trim()),
+        );
+        return;
+      }
       reject(new Error(`${label} exited ${code}: ${tidy}`));
     });
 

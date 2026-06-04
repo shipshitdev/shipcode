@@ -197,19 +197,27 @@ export type ThreadKind = (typeof THREAD_KIND)[keyof typeof THREAD_KIND];
 export type InstantFixScope = 'user' | 'project' | 'custom';
 export type ProviderRunMode = 'programmatic' | 'interactive';
 
+/**
+ * Per-agent run-mode selection. Each pipeline phase (plan/review/revision/
+ * verify/execute) carries its own transport: `interactive` drives the official
+ * CLI in a PTY (billed against the interactive subscription seat), while
+ * `programmatic` uses `claude -p` / `codex exec --json` (claude draws from the
+ * rationed Agent-SDK credit pool). `issueTerminal` is always interactive.
+ */
+export interface AgentRunModeConfig {
+  issueTerminal: 'interactive';
+  plan: ProviderRunMode;
+  review: ProviderRunMode;
+  revision: ProviderRunMode;
+  verify: ProviderRunMode;
+  execute: ProviderRunMode;
+  terminalFix: ProviderRunMode;
+  instant: ProviderRunMode;
+}
+
 export interface AgentRunModeSettings {
-  claude: {
-    issueTerminal: 'interactive';
-    execute: ProviderRunMode;
-    terminalFix: ProviderRunMode;
-    instant: ProviderRunMode;
-  };
-  codex: {
-    issueTerminal: 'interactive';
-    execute: ProviderRunMode;
-    terminalFix: ProviderRunMode;
-    instant: ProviderRunMode;
-  };
+  claude: AgentRunModeConfig;
+  codex: AgentRunModeConfig;
 }
 
 export interface Thread {
@@ -944,6 +952,12 @@ export interface AppSettings {
   defaultWorktreeEnabled: boolean;
   terminalScrollback: number;
   agentRunModes: AgentRunModeSettings;
+  /**
+   * When true, every programmatic (`claude -p`) phase is forced to the
+   * interactive CLI regardless of per-phase run-mode settings. Escape hatch
+   * for users who never want to touch the rationed Agent-SDK credit pool.
+   */
+  forceInteractiveClaude: boolean;
   localPreview: LocalPreviewSettings;
   projectOpenTarget: ProjectOpenTarget;
   terminalOpenTarget: TerminalOpenTarget;

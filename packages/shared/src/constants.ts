@@ -35,17 +35,26 @@ export const DEFAULT_SETTINGS: AppSettings = {
   agentRunModes: {
     claude: {
       issueTerminal: 'interactive',
+      plan: 'interactive',
+      review: 'interactive',
+      revision: 'interactive',
+      verify: 'interactive',
       execute: 'interactive',
       terminalFix: 'interactive',
       instant: 'interactive',
     },
     codex: {
       issueTerminal: 'interactive',
+      plan: 'interactive',
+      review: 'interactive',
+      revision: 'interactive',
+      verify: 'interactive',
       execute: 'interactive',
       terminalFix: 'interactive',
       instant: 'interactive',
     },
   },
+  forceInteractiveClaude: false,
   localPreview: {
     enabled: true,
     hostMode: 'localhost-subdomain',

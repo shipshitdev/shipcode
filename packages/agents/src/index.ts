@@ -1,3 +1,12 @@
+export type { PoolExhaustionMatcher, PoolExhaustionState } from './agent-sdk-pool-state';
+export {
+  __resetPoolStateForTests,
+  classifyPoolExhaustion,
+  clearPoolExhausted,
+  getPoolState,
+  isPoolExhausted,
+  markPoolExhausted,
+} from './agent-sdk-pool-state';
 export type {
   AutoCommitGenerateInput,
   AutoCommitGenerateResult,

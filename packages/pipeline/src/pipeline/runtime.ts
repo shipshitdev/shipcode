@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import {
   formatPlanComment,
   GhCli,
+  isPoolExhausted,
   loadRepoSetupContract,
   measurePhasePromptTelemetry,
   type PromptMaterial,
@@ -13,9 +14,11 @@ import {
   toPersistedPromptTelemetryMaterials,
 } from '@shipcode/agents/source';
 import {
+  type AppSettings,
   isPipelineStateLabel,
   isRealGithubIssueNumber,
   macroColumnForStatus,
+  type ProviderRunMode,
   pipelineLabelForStatus,
 } from '@shipcode/shared';
 import {
@@ -37,6 +40,20 @@ import type {
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Resolve the configured run mode (interactive vs programmatic) for a given
+ * agent + pipeline phase from settings. Every provider phase now carries its
+ * own selectable run mode (defaults to interactive so phases avoid the
+ * rationed `claude -p` Agent-SDK credit pool); programmatic remains opt-in.
+ */
+function getAgentPhaseRunMode(
+  settings: AppSettings,
+  agent: 'claude' | 'codex',
+  phase: ProviderPhase,
+): ProviderRunMode {
+  return settings.agentRunModes[agent][phase];
+}
 
 /**
  * Build a fallback install command when a frozen-lockfile install fails
@@ -590,14 +607,25 @@ export function createPipelineRuntime(
     // project root.
     const cwd = input.worktreePath ?? input.projectPath;
 
-    const plannerPhases: ProviderPhase[] = ['plan', 'revision', 'verify'];
-    const configuredRunMode =
-      phase === 'execute' && (agent === 'claude' || agent === 'codex')
-        ? deps.settings.get().agentRunModes[agent].execute
+    // Structured phases parse machine-readable fenced JSON and cap turns at 1.
+    const structuredPhases: ProviderPhase[] = ['plan', 'review', 'revision', 'verify'];
+    const configuredRunMode: ProviderRunMode | undefined =
+      agent === 'claude' || agent === 'codex'
+        ? getAgentPhaseRunMode(deps.settings.get(), agent, phase)
         : undefined;
-    const mergedHints: ProviderRequest['phaseHints'] = plannerPhases.includes(phase)
-      ? { maxTurns: 1, ...phaseHints }
-      : { ...phaseHints, ...(configuredRunMode ? { runMode: configuredRunMode } : {}) };
+    // Auto-fallback: when the rationed `claude -p` Agent-SDK credit pool is
+    // exhausted, route programmatic claude phases through the interactive CLI
+    // (which is unaffected by the pool) instead of failing. Codex has no such
+    // pool, so it is never rerouted here.
+    const effectiveRunMode: ProviderRunMode | undefined =
+      agent === 'claude' && configuredRunMode === 'programmatic' && isPoolExhausted()
+        ? 'interactive'
+        : configuredRunMode;
+    const mergedHints: ProviderRequest['phaseHints'] = {
+      ...(structuredPhases.includes(phase) ? { maxTurns: 1 } : {}),
+      ...phaseHints,
+      ...(effectiveRunMode ? { runMode: effectiveRunMode } : {}),
+    };
 
     // Lifecycle envelope: start a pipeline_step_log row before generation so
     // a crashed run still leaves a 'started' breadcrumb. The completion path

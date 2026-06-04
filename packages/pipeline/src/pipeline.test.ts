@@ -229,12 +229,34 @@ const VERIFICATION_FAILED_JSON = JSON.stringify({
   issues: [{ severity: 'blocker', description: 'broke' }],
 });
 
+// These integration tests drive the programmatic stream-json contract via
+// `spawnWithStdin`. The production default for the structured phases is now
+// interactive (Track 2); pin them back to programmatic here so the existing
+// programmatic-path assertions stay meaningful. The interactive structured
+// path is covered by the cli-provider unit tests and the dedicated interactive
+// pipeline test below.
 const TEST_DEFAULT_SETTINGS = {
   ...DEFAULT_SETTINGS,
   plannerModel: 'claude' as const,
   reviewerModel: 'codex' as const,
   executorModel: 'claude' as const,
   verifierModel: 'claude' as const,
+  agentRunModes: {
+    claude: {
+      ...DEFAULT_SETTINGS.agentRunModes.claude,
+      plan: 'programmatic' as const,
+      review: 'programmatic' as const,
+      revision: 'programmatic' as const,
+      verify: 'programmatic' as const,
+    },
+    codex: {
+      ...DEFAULT_SETTINGS.agentRunModes.codex,
+      plan: 'programmatic' as const,
+      review: 'programmatic' as const,
+      revision: 'programmatic' as const,
+      verify: 'programmatic' as const,
+    },
+  },
 };
 
 /** Flush the microtask queue so async handlers (await import) settle */
