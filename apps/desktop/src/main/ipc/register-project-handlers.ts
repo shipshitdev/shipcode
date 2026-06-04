@@ -9,6 +9,7 @@ import {
   checkDesktopApps,
   checkIntegrationStatus,
   checkSystemHealthWithAuth,
+  clearPoolExhausted,
   detectProjectSetup,
   GhCli,
   inspectProjectSetup,
@@ -1005,6 +1006,11 @@ export function registerProjectHandlers({
       return checkCliProviderUsage({ force });
     },
   );
+
+  ipcMain.handle('provider-usage:reset-claude-pool', async () => {
+    clearPoolExhausted();
+    return { ok: true };
+  });
 
   ipcMain.handle(
     'integrations:check',

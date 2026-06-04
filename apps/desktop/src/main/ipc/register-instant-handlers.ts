@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { extractCodexThreadId } from '@shipcode/agents';
+import { extractCodexThreadId, isPoolExhausted } from '@shipcode/agents';
 import {
   type InstantFixScope,
   type ProviderRunMode,
@@ -54,7 +54,19 @@ function getRunMode(
   cli: InstantCli,
   action: 'instant' | 'terminalFix',
 ): ProviderRunMode {
-  return queries.settings.get().agentRunModes[cli][action];
+  const settings = queries.settings.get();
+  const configured = settings.agentRunModes[cli][action];
+  // Claude programmatic draws from the rationed Agent-SDK credit pool. Coerce
+  // to interactive when the user forces it or the pool is exhausted so the run
+  // succeeds against the interactive seat instead of failing.
+  if (
+    cli === 'claude' &&
+    configured === 'programmatic' &&
+    (settings.forceInteractiveClaude || isPoolExhausted())
+  ) {
+    return 'interactive';
+  }
+  return configured;
 }
 
 function assertProgrammaticRunAllowed(cli: InstantCli): void {

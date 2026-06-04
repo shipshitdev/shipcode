@@ -58,14 +58,35 @@ function parseJsonSetting<T>(raw: string | undefined, defaults: T): T {
   }
 }
 
+const AGENT_RUN_MODE_ACTIONS = [
+  'plan',
+  'review',
+  'revision',
+  'verify',
+  'execute',
+  'terminalFix',
+  'instant',
+] as const;
+
 function normalizeAgentRunModes(raw: string | undefined): AppSettings['agentRunModes'] {
   const parsed = parseJsonSetting(raw, DEFAULT_SETTINGS.agentRunModes);
   for (const provider of ['claude', 'codex'] as const) {
-    for (const action of ['execute', 'terminalFix', 'instant'] as const) {
-      if ((parsed[provider][action] as string) === 'afk') {
-        parsed[provider][action] = 'programmatic';
+    const defaults = DEFAULT_SETTINGS.agentRunModes[provider];
+    // `parseJsonSetting` only merges the top-level provider keys, so a stored
+    // record that predates per-phase run modes replaces the whole provider
+    // object and is missing plan/review/revision/verify. Backfill any missing
+    // key from defaults, migrate the obsolete 'afk' value, and reject garbage.
+    const merged = { ...defaults, ...(parsed[provider] ?? {}) };
+    merged.issueTerminal = 'interactive';
+    for (const action of AGENT_RUN_MODE_ACTIONS) {
+      const value = merged[action] as string;
+      if (value === 'afk') {
+        merged[action] = 'programmatic';
+      } else if (value !== 'interactive' && value !== 'programmatic') {
+        merged[action] = defaults[action];
       }
     }
+    parsed[provider] = merged;
   }
   return parsed;
 }
@@ -184,6 +205,10 @@ export class SettingsQueries {
         ? parseInt(stored.terminalScrollback, 10)
         : DEFAULT_SETTINGS.terminalScrollback,
       agentRunModes: normalizeAgentRunModes(stored.agentRunModes),
+      forceInteractiveClaude: parseBool(
+        stored.forceInteractiveClaude,
+        DEFAULT_SETTINGS.forceInteractiveClaude,
+      ),
       localPreview: parseJsonSetting(stored.localPreview, DEFAULT_SETTINGS.localPreview),
       projectOpenTarget: isProjectOpenTarget(stored.projectOpenTarget)
         ? stored.projectOpenTarget

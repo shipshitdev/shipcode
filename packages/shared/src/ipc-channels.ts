@@ -296,6 +296,7 @@ export interface IpcInvokeChannels {
 
   'health:check': { args: undefined; result: SystemHealth };
   'provider-usage:check': { args: undefined; result: CliProviderUsageMap };
+  'provider-usage:reset-claude-pool': { args: undefined; result: { ok: boolean } };
   'integrations:check': { args: undefined; result: IntegrationStatus };
   'integrations:validate-openrouter-model': {
     args: { modelId: string };

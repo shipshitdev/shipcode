@@ -211,6 +211,7 @@ export type ProviderErrorKind =
   | 'tool_loop_overflow'
   | 'unexpected_stop'
   | 'binary_missing'
+  | 'agent_sdk_pool_exhausted'
   | 'unknown';
 
 export interface ProviderError {

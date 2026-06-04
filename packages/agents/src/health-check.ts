@@ -34,6 +34,7 @@ import {
   stripAnsi,
 } from '@shipcode/shared';
 import * as pty from 'node-pty';
+import { clearPoolExhausted, isPoolExhausted } from './agent-sdk-pool-state';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -1730,7 +1731,23 @@ export async function checkCliProviderUsage(
     checkProviderUsage('claude', options),
     checkProviderUsage('codex', options),
   ]);
-  return { claude, codex };
+  return { claude: overlayClaudePoolState(claude), codex };
+}
+
+/**
+ * Agent-SDK (`claude -p`) credit-pool exhaustion is detected by failure and
+ * held in process memory, not in the `/usage` panel (which never surfaces the
+ * pool). Overlay the live usage status with that signal at the return boundary
+ * so the existing provider-usage UI renders it — without contaminating the 60s
+ * usage cache with this ephemeral state.
+ */
+function overlayClaudePoolState(status: CliProviderUsageStatus): CliProviderUsageStatus {
+  if (!isPoolExhausted()) return status;
+  return {
+    ...status,
+    state: 'blocked',
+    message: 'Agent-SDK credit pool exhausted — claude -p falls back to interactive CLI',
+  };
 }
 
 export async function checkIntegrationStatus(
@@ -1797,4 +1814,5 @@ export function __resetHealthCheckCachesForTests(): void {
   providerUsageInFlight.clear();
   integrationStatusCache.clear();
   integrationStatusInFlight.clear();
+  clearPoolExhausted();
 }

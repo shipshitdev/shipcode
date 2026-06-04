@@ -12,6 +12,12 @@ const {
   buildCodexArgs,
   buildCodexStdin,
   buildCodexPrompt,
+  buildClaudeInteractiveStructuredCommand,
+  buildCodexInteractiveStructuredCommand,
+  buildStructuredInstruction,
+  phaseOutputArtifactPath,
+  isInteractiveStructured,
+  readPhaseOutputArtifact,
   materializeStdinArgsForLegacySpawn,
   stripCodexProtocol,
 } = _internals;
@@ -1071,5 +1077,156 @@ describe('createCodexCliProvider', () => {
     expect(result.clarificationRequest?.summary).toBe('Need input');
 
     await expect(provider.healthCheck()).resolves.toEqual({ ok: true });
+  });
+});
+
+// ─── Track 2: interactive structured bridge ───────────────────────────
+
+describe('interactive structured bridge', () => {
+  it('isInteractiveStructured gates on runMode + phase', () => {
+    for (const phase of ['plan', 'review', 'revision', 'verify'] as const) {
+      expect(isInteractiveStructured(req({ phase, phaseHints: { runMode: 'interactive' } }))).toBe(
+        true,
+      );
+    }
+    // execute uses the dedicated interactive-execute path, not the structured one
+    expect(
+      isInteractiveStructured(req({ phase: 'execute', phaseHints: { runMode: 'interactive' } })),
+    ).toBe(false);
+    // programmatic stays programmatic
+    expect(
+      isInteractiveStructured(req({ phase: 'plan', phaseHints: { runMode: 'programmatic' } })),
+    ).toBe(false);
+    expect(isInteractiveStructured(req({ phase: 'plan' }))).toBe(false);
+  });
+
+  it('phaseOutputArtifactPath lives in the gitignored run scratch dir', () => {
+    expect(phaseOutputArtifactPath(req({ phase: 'plan', cwd: '/tmp/wt', threadId: 'abc' }))).toBe(
+      path.join('/tmp/wt', '.shipcode', 'runs', 'abc', 'plan-output.md'),
+    );
+  });
+
+  it('buildStructuredInstruction names the prompt, output, fence tag, and exit', () => {
+    const text = buildStructuredInstruction('/p/in.md', '/p/out.md', 'shipcode-plan');
+    expect(text).toContain('/p/in.md');
+    expect(text).toContain('/p/out.md');
+    expect(text).toContain('```shipcode-plan');
+    expect(text).toContain('shipcode-clarification');
+    expect(text).toMatch(/\bexit\b/);
+  });
+
+  it('claude structured command: plan gets repo read tools, instruction last, raw output', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-struct-'));
+    const cmd = await buildClaudeInteractiveStructuredCommand(
+      req({ phase: 'plan', cwd, threadId: 'tid' }),
+    );
+    expect(cmd.args).toContain('--permission-mode');
+    expect(cmd.args).toContain('acceptEdits');
+    const toolsIdx = cmd.args.indexOf('--tools');
+    expect(cmd.args[toolsIdx + 1]).toBe('Read,Write,Glob,Grep');
+    expect(cmd.options).toEqual({ outputMode: 'raw' });
+    expect(cmd.stdin).toBeUndefined();
+    const last = cmd.args[cmd.args.length - 1];
+    expect(last).toContain(path.join(cwd, '.shipcode', 'runs', 'tid', 'plan-prompt.md'));
+    expect(last).toContain(path.join(cwd, '.shipcode', 'runs', 'tid', 'plan-output.md'));
+    expect(fs.existsSync(path.join(cwd, '.shipcode', 'runs', 'tid', 'plan-prompt.md'))).toBe(true);
+  });
+
+  it('claude structured command: verify is read+write only', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-struct-'));
+    const cmd = await buildClaudeInteractiveStructuredCommand(
+      req({ phase: 'verify', cwd, threadId: 'tid' }),
+    );
+    const toolsIdx = cmd.args.indexOf('--tools');
+    expect(cmd.args[toolsIdx + 1]).toBe('Read,Write');
+  });
+
+  it('codex structured command: workspace-write sandbox, no-alt-screen, raw output', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-struct-'));
+    const cmd = await buildCodexInteractiveStructuredCommand(
+      req({ phase: 'plan', cwd, threadId: 'tid' }),
+    );
+    expect(cmd.args.slice(0, 5)).toEqual([
+      '-s',
+      'workspace-write',
+      '-a',
+      'on-request',
+      '--no-alt-screen',
+    ]);
+    expect(cmd.args.some((a: string) => a.startsWith('model_reasoning_effort='))).toBe(true);
+    expect(cmd.options).toEqual({ outputMode: 'raw' });
+    const last = cmd.args[cmd.args.length - 1];
+    expect(last).toContain(path.join(cwd, '.shipcode', 'runs', 'tid', 'plan-output.md'));
+  });
+
+  it('readPhaseOutputArtifact returns file content when present', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-struct-'));
+    const dir = path.join(cwd, '.shipcode', 'runs', 'tid');
+    fs.mkdirSync(dir, { recursive: true });
+    const out = path.join(dir, 'plan-output.md');
+    fs.writeFileSync(out, '```shipcode-plan\n{"summary":"ok"}\n```');
+    const content = await readPhaseOutputArtifact(out, new AbortController().signal);
+    expect(content).toContain('shipcode-plan');
+  });
+
+  it('readPhaseOutputArtifact returns null when the signal is already aborted', async () => {
+    const ac = new AbortController();
+    ac.abort();
+    const content = await readPhaseOutputArtifact('/nonexistent/missing.md', ac.signal);
+    expect(content).toBeNull();
+  });
+
+  it('claude interactive structured plan: reads the artifact, uses no -p, parses clarification', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-struct-gen-'));
+    const { pm, trigger, spawnCalls } = createMockProcessManager();
+    const provider = createClaudeCliProvider(pm);
+
+    const promise = provider.generate(
+      req({ phase: 'plan', cwd, threadId: 'tid', phaseHints: { runMode: 'interactive' } }),
+    );
+    // Spawn happens only after the builder's prompt/output dirs are created.
+    await waitForSpawn(spawnCalls);
+
+    // The agent writes its structured block to the output artifact, then exits.
+    const outDir = path.join(cwd, '.shipcode', 'runs', 'tid');
+    fs.mkdirSync(outDir, { recursive: true });
+    const outPath = path.join(outDir, 'plan-output.md');
+    fs.writeFileSync(
+      outPath,
+      [
+        '```shipcode-clarification',
+        JSON.stringify({
+          id: 'c1',
+          threadId: 'tid',
+          phase: 'plan',
+          summary: 'Need input',
+          questions: [
+            {
+              id: 'scope',
+              title: 'Scope',
+              prompt: 'Pick a scope.',
+              description: null,
+              choices: [
+                { id: 'n', label: 'Narrow', description: 'narrow' },
+                { id: 'w', label: 'Wide', description: 'wide' },
+              ],
+              allowFreeform: false,
+              freeformPlaceholder: null,
+            },
+          ],
+        }),
+        '```',
+      ].join('\n'),
+    );
+    await trigger('exit', 'proc-1', 0);
+
+    const result = await promise;
+    // Interactive path never touches `-p`: stays on the subscription seat.
+    expect(spawnCalls[0]?.args).not.toContain('-p');
+    expect(spawnCalls[0]?.args).toContain('--permission-mode');
+    // rawOutput carries the artifact contents so downstream parsers are unchanged.
+    expect(result.rawOutput).toContain('shipcode-clarification');
+    expect(result.clarificationRequest?.summary).toBe('Need input');
+    expect(result.exitCode).toBe(0);
   });
 });
