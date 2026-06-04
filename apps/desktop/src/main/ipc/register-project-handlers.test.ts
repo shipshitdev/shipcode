@@ -417,6 +417,74 @@ describe('registerProjectHandlers', () => {
     expect(queries.projects.updatePath).toHaveBeenCalledWith('project-1', nextProjectPath);
   });
 
+  it('re-syncs WORKFLOW.md watchers after a project relink', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-relink-resync-'));
+    const nextProjectPath = path.join(tmp, 'new-repo');
+    fs.mkdirSync(nextProjectPath, { recursive: true });
+
+    let project = { ...baseProject, path: path.join(tmp, 'old-repo') };
+    const onProjectsChanged = vi.fn();
+    const queries = {
+      projects: {
+        getById: vi.fn(() => project),
+        getByPath: vi.fn(() => null),
+        updatePath: vi.fn((_id: string, projectPath: string) => {
+          project = { ...project, path: projectPath };
+        }),
+        updateGitInfo: vi.fn(),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor', worktreeRoot: path.join(tmp, 'wt') })),
+      },
+      threads: { list: vi.fn(() => []), setWorktree: vi.fn(), clearWorktree: vi.fn() },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+      onProjectsChanged,
+    });
+
+    const relinkPath = handlers.get('project:relink-path');
+    if (!relinkPath) throw new Error('project:relink-path handler not registered');
+
+    await relinkPath(undefined, { projectId: 'project-1', path: nextProjectPath });
+
+    expect(queries.projects.updatePath).toHaveBeenCalledWith('project-1', nextProjectPath);
+    expect(onProjectsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-syncs WORKFLOW.md watchers after a project unarchive', () => {
+    const onProjectsChanged = vi.fn();
+    const queries = { projects: { unarchive: vi.fn() } };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+      onProjectsChanged,
+    });
+
+    const unarchive = handlers.get('project:unarchive');
+    if (!unarchive) throw new Error('project:unarchive handler not registered');
+
+    unarchive(undefined, { projectId: 'project-1' });
+
+    expect(queries.projects.unarchive).toHaveBeenCalledWith('project-1');
+    expect(onProjectsChanged).toHaveBeenCalledTimes(1);
+  });
+
   it('clears managed worktree paths that are missing after a project relink', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-relink-missing-'));
     const oldProjectPath = path.join(tmp, 'old-repo');

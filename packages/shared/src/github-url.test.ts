@@ -246,6 +246,18 @@ describe('validateGithubProjectUrl', () => {
       false,
     );
   });
+
+  it('rejects project URLs with extra trailing segments (e.g. /settings)', () => {
+    // A loose `>= 4` length check previously accepted these and stored them
+    // verbatim, so the quick-link button opened the settings sub-page instead
+    // of the board. Only the exact `/projects/<n>` shape is accepted.
+    expect(validateGithubProjectUrl('https://github.com/orgs/acme/projects/3/settings').ok).toBe(
+      false,
+    );
+    expect(validateGithubProjectUrl('https://github.com/acme/repo/projects/1/views/2').ok).toBe(
+      false,
+    );
+  });
 });
 
 describe('parseGithubProjectUrl', () => {
@@ -299,6 +311,10 @@ describe('parseGithubProjectUrl', () => {
 
   it('returns null when the trailing /<n> segment is missing', () => {
     expect(parseGithubProjectUrl('https://github.com/orgs/acme/projects')).toBeNull();
+  });
+
+  it('returns null for extra trailing segments after the project number', () => {
+    expect(parseGithubProjectUrl('https://github.com/orgs/acme/projects/3/settings')).toBeNull();
   });
 
   it('returns null for http (non-https)', () => {

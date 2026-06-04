@@ -150,7 +150,7 @@ export function validateGithubProjectUrl(
   const parts = githubPathParts(u);
   // orgs/<org>/projects/<n>
   if (
-    parts.length >= 4 &&
+    parts.length === 4 &&
     (parts[0] === 'orgs' || parts[0] === 'users') &&
     parts[2] === 'projects'
   ) {
@@ -163,7 +163,7 @@ export function validateGithubProjectUrl(
     return { ok: true, value: trimmed };
   }
   // <owner>/<repo>/projects/<n> (classic repo-scoped project)
-  if (parts.length >= 4 && parts[2] === 'projects') {
+  if (parts.length === 4 && parts[2] === 'projects') {
     if (!/^\d+$/.test(parts[3])) {
       return { ok: false, reason: 'Project number must be numeric' };
     }
@@ -240,7 +240,7 @@ export function parseGithubProjectUrl(raw: string | null | undefined): ParsedGit
   const parts = githubPathParts(u);
   // orgs/<org>/projects/<n>  or  users/<user>/projects/<n>
   if (
-    parts.length >= 4 &&
+    parts.length === 4 &&
     (parts[0] === 'orgs' || parts[0] === 'users') &&
     parts[2] === 'projects' &&
     isValidGithubLogin(parts[1]) &&
