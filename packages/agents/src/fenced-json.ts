@@ -1,7 +1,10 @@
 export function extractFencedJson(options: { text: string; tag: string; label: string }): unknown {
   const captured = extractFencedBlock(options.text, options.tag);
-  if (!captured.length) {
+  if (captured === null) {
     throw new Error(`No \`${options.tag}\` fenced block found in AI response`);
+  }
+  if (captured.length === 0) {
+    throw new Error(`Empty \`${options.tag}\` fenced block in AI response`);
   }
 
   try {
@@ -15,7 +18,12 @@ export function extractFencedJson(options: { text: string; tag: string; label: s
   }
 }
 
-function extractFencedBlock(text: string, tag: string): string[] {
+/**
+ * Returns the lines inside the first ```<tag> fence, or `null` when no such
+ * fence is present. A present-but-empty fence returns `[]` — distinct from
+ * `null` so callers can tell a missing envelope from an empty one.
+ */
+function extractFencedBlock(text: string, tag: string): string[] | null {
   const openTag = `\`\`\`${tag}`;
   const lines = text.split('\n');
   let collecting = false;
@@ -33,7 +41,7 @@ function extractFencedBlock(text: string, tag: string): string[] {
     captured.push(line);
   }
 
-  return captured;
+  return collecting ? captured : null;
 }
 
 function formatCaughtError(err: unknown): string {

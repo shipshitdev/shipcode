@@ -24,6 +24,39 @@ import { FolderGit, Sparkles, Terminal } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
+// Render-invariant statics — hoisted to module scope so they are not recreated
+// on every render of the settings view.
+const getCliVersionLine = (version: string | null): string | null =>
+  version?.split('\n')[0]?.trim() ?? null;
+
+const missingCli = {
+  available: false,
+  version: null,
+  path: null,
+  error: null,
+  authenticated: false,
+};
+
+const projectOpenTargets: ProjectOpenTarget[] = [
+  'cursor',
+  'finder',
+  'terminal',
+  'ghostty',
+  'vscode',
+  't3code',
+];
+
+const projectOpenTargetLabels: Record<ProjectOpenTarget, string> = {
+  cursor: 'Cursor',
+  finder: 'Finder',
+  terminal: 'Terminal',
+  ghostty: 'Ghostty',
+  vscode: 'Visual Studio Code',
+  t3code: 'T3 Code',
+};
+
+const terminalOpenTargets: AppSettings['terminalOpenTarget'][] = ['terminal', 'ghostty'];
+
 function StatusPill({
   tone,
   children,
@@ -108,31 +141,6 @@ function useIntegrationsSettingsSectionView({
     } as const;
   };
 
-  const getCliVersionLine = (version: string | null) => version?.split('\n')[0]?.trim() ?? null;
-  const missingCli = {
-    available: false,
-    version: null,
-    path: null,
-    error: null,
-    authenticated: false,
-  };
-  const projectOpenTargets: ProjectOpenTarget[] = [
-    'cursor',
-    'finder',
-    'terminal',
-    'ghostty',
-    'vscode',
-    't3code',
-  ];
-  const projectOpenTargetLabels: Record<ProjectOpenTarget, string> = {
-    cursor: 'Cursor',
-    finder: 'Finder',
-    terminal: 'Terminal',
-    ghostty: 'Ghostty',
-    vscode: 'Visual Studio Code',
-    t3code: 'T3 Code',
-  };
-  const terminalOpenTargets: AppSettings['terminalOpenTarget'][] = ['terminal', 'ghostty'];
   const getDesktopApp = (target: ProjectOpenTarget): DesktopAppHealth =>
     integrationStatus?.desktopApps?.[target] ?? {
       key: target,

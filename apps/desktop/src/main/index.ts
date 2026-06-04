@@ -377,7 +377,15 @@ function createWindow() {
       });
     },
   });
-  workflowWatchManager.sync(queries.projects.listVisible().map((project) => project.path));
+  // Sync watchers to the current project set: once now at startup, and again
+  // whenever a project is added/relinked/removed/archived (wired through the IPC
+  // handlers below). Without the re-sync, hot reload silently breaks for any
+  // project list change made during the session and removed projects leak a
+  // watcher until restart.
+  const resyncWorkflowWatchers = (): void => {
+    workflowWatchManager.sync(queries.projects.listVisible().map((project) => project.path));
+  };
+  resyncWorkflowWatchers();
 
   // Queue promotion: start the next queued issue when a pipeline slot opens.
   onPipelineTerminal = (event) => {
@@ -454,6 +462,7 @@ function createWindow() {
     updateService,
     automationScheduler,
     resourceMonitor,
+    resyncWorkflowWatchers,
   );
 
   // Watchdog: reset threads stuck in active phases (handles renderer refresh + crash scenarios).
@@ -511,7 +520,7 @@ function createWindow() {
   // and must never spawn child windows. External web links open in the OS
   // browser instead.
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (isAllowedNavigationTarget(url, RENDERER_URL)) return;
+    if (isAllowedNavigationTarget(url, RENDERER_URL, RENDERER_HTML)) return;
     event.preventDefault();
     if (isExternalWebUrl(url)) void shell.openExternal(url);
   });

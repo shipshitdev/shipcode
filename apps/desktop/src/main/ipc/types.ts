@@ -84,4 +84,10 @@ export interface IpcHandlerDeps {
   notificationService: NotificationService;
   chatNotificationService: ChatNotificationService;
   resourceMonitor?: ResourceMonitor;
+  /**
+   * Invoked after a project is added, relinked, removed, or archived so the
+   * main process can re-sync per-project resources (e.g. WORKFLOW.md watchers)
+   * to the new project set. Optional: defaults to a no-op in tests.
+   */
+  onProjectsChanged?: () => void;
 }

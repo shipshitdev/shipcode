@@ -229,6 +229,55 @@ describe('createWorkflowWatcher', () => {
     expect(onReload).not.toHaveBeenCalled();
   });
 
+  it('lazily attaches the .shipcode watcher once the directory appears', () => {
+    const timers = fakeTimers();
+    const onReload = vi.fn();
+    const loadUncached = vi.fn(() => validPolicy());
+    const shipcodeDir = path.join(REPO, '.shipcode');
+    const watchedDirs: string[] = [];
+    let shipcodeAttempts = 0;
+    // Held in an object so TS doesn't narrow it to `null` across the callback.
+    const root: { change: (() => void) | null } = { change: null };
+
+    // `.shipcode` is missing at startup (factory returns null), then present on
+    // the retry triggered by the root watcher firing.
+    const factory: WorkflowWatchFactory = (dir, onChange) => {
+      watchedDirs.push(dir);
+      if (dir === shipcodeDir) {
+        shipcodeAttempts += 1;
+        return shipcodeAttempts === 1 ? null : { close: () => {} };
+      }
+      root.change = onChange;
+      return { close: () => {} };
+    };
+
+    createWorkflowWatcher({
+      repoPath: REPO,
+      onReload,
+      watchFactory: factory,
+      loadUncached,
+      peekCache: vi.fn(() => null),
+      setCache: vi.fn(),
+      setTimeoutFn: timers.setTimeoutFn,
+      clearTimeoutFn: timers.clearTimeoutFn,
+    });
+
+    // Startup: root watched, .shipcode attempted but absent.
+    expect(watchedDirs).toEqual([REPO, shipcodeDir]);
+
+    // Root watcher fires (e.g. .shipcode was just created) → lazy re-attach.
+    root.change?.();
+    expect(watchedDirs).toEqual([REPO, shipcodeDir, shipcodeDir]);
+    timers.flush();
+    expect(loadUncached).toHaveBeenCalledTimes(1);
+
+    // A later edit reloads without attempting yet another attach (already held).
+    root.change?.();
+    expect(watchedDirs).toEqual([REPO, shipcodeDir, shipcodeDir]);
+    timers.flush();
+    expect(loadUncached).toHaveBeenCalledTimes(2);
+  });
+
   it('close() is idempotent', () => {
     const watch = fakeWatch();
     const timers = fakeTimers();

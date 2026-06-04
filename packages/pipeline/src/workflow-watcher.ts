@@ -102,8 +102,12 @@ export function createWorkflowWatcher(options: CreateWorkflowWatcherOptions): Wo
   // Watch both candidate locations: the repo root catches a top-level
   // `WORKFLOW.md` (and creation/removal of `.shipcode`), while the `.shipcode`
   // dir catches the preferred `.shipcode/WORKFLOW.md` (fs.watch is not recursive).
-  const watchDirs = [repoPath, path.join(repoPath, '.shipcode')];
+  const shipcodeDir = path.join(repoPath, '.shipcode');
   const handles: WorkflowWatchHandle[] = [];
+  // Tracked separately so it can be lazily attached: when `.shipcode` does not
+  // exist at startup the factory returns null, and without this the directory
+  // would never be watched even after the user later creates it.
+  let shipcodeHandle: WorkflowWatchHandle | null = null;
   let pending: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
 
@@ -133,14 +137,25 @@ export function createWorkflowWatcher(options: CreateWorkflowWatcherOptions): Wo
 
   const onChange = (): void => {
     if (closed) return;
+    // Lazily attach the `.shipcode` watcher once the directory appears. The
+    // root watcher fires when `.shipcode` is first created; without this retry
+    // the non-recursive watch would never observe later edits to
+    // `.shipcode/WORKFLOW.md` until the app restarts.
+    if (!shipcodeHandle) {
+      const handle = watchFactory(shipcodeDir, onChange);
+      if (handle) {
+        shipcodeHandle = handle;
+        handles.push(handle);
+      }
+    }
     if (pending) clearTimeoutFn(pending);
     pending = setTimeoutFn(runReload, debounceMs);
   };
 
-  for (const dir of watchDirs) {
-    const handle = watchFactory(dir, onChange);
-    if (handle) handles.push(handle);
-  }
+  const rootHandle = watchFactory(repoPath, onChange);
+  if (rootHandle) handles.push(rootHandle);
+  shipcodeHandle = watchFactory(shipcodeDir, onChange);
+  if (shipcodeHandle) handles.push(shipcodeHandle);
 
   return {
     close(): void {
@@ -158,6 +173,7 @@ export function createWorkflowWatcher(options: CreateWorkflowWatcherOptions): Wo
         }
       }
       handles.length = 0;
+      shipcodeHandle = null;
     },
   };
 }
