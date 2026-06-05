@@ -127,12 +127,21 @@ export async function launchApp(seedOptions: SeedOptions = {}): Promise<Harness>
     );
 
   const cleanup: Harness['cleanup'] = async () => {
+    // app.close() can occasionally hang on macOS teardown; race it with a
+    // timeout and then force-kill the Electron process so a slow shutdown
+    // never blows the test timeout.
     try {
-      await app.close();
-    } finally {
-      fs.rmSync(userData, { recursive: true, force: true });
-      if (seed.projectPath) fs.rmSync(seed.projectPath, { recursive: true, force: true });
+      await Promise.race([app.close(), new Promise<void>((resolve) => setTimeout(resolve, 8_000))]);
+    } catch {
+      /* ignore close errors — force-kill below */
     }
+    try {
+      app.process()?.kill('SIGKILL');
+    } catch {
+      /* process already exited */
+    }
+    fs.rmSync(userData, { recursive: true, force: true });
+    if (seed.projectPath) fs.rmSync(seed.projectPath, { recursive: true, force: true });
   };
 
   return { app, page, seed, fire, getState, setState, callStore, cleanup };

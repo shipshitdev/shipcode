@@ -62,10 +62,11 @@ test.describe('onboarding wizard', () => {
 
     await expect(page.getByTestId('onboarding-wizard')).toBeVisible();
 
-    // Three step labels are present (AI Auth, Models, GitHub)
-    await expect(page.getByText(/AI Auth/i)).toBeVisible();
-    await expect(page.getByText(/Models/i)).toBeVisible();
-    await expect(page.getByText(/GitHub/i)).toBeVisible();
+    // The three step labels are present. Use exact text: /GitHub/i would also
+    // match step-0 body copy like "Check GitHub CLI login" (strict-mode clash).
+    await expect(page.getByText('AI Auth', { exact: true })).toBeVisible();
+    await expect(page.getByText('Models', { exact: true })).toBeVisible();
+    await expect(page.getByText('GitHub', { exact: true })).toBeVisible();
   });
 
   test('step 0 shows auth check content and navigation buttons', async ({ harness }) => {

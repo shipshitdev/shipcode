@@ -1,16 +1,19 @@
 /**
  * Flow 4 — Pipeline lifecycle
  *
- * Seeds one issue, opens its detail, navigates to the Pipeline tab sidebar, and
- * fires pipeline:phase push events for each phase transition. Asserts the
- * issue-detail header's PhaseChip reflects each new phase.
+ * Seeds one issue, clicks its card to open IssueDetail, then drives phase
+ * transitions via harness.fire() to verify the sidebar PipelineTab provider
+ * selects are present and the header PhaseChip updates on each transition.
  *
  * Determinism: no real gh / no network. Phase transitions are driven entirely
  * by harness.fire() which replicates what the main process sends over IPC.
+ *
+ * Navigation pattern (mirrors project-board.e2e.ts which passes):
+ *   selectProject → wait for kanban board → click issue card → IssueDetail
+ *   opens → inject activeThreadId via setState so pipeline:phase events match.
  */
 import { expect, test } from '../../fixtures/electron-app';
 
-// A minimal issue with a threadId so the store can associate phase events.
 const THREAD_ID = 'e2e-thread-pipeline-lifecycle';
 const ISSUE_NUMBER = 42;
 
@@ -29,163 +32,85 @@ test.describe('Pipeline lifecycle — phase transitions', () => {
   });
 
   test('phase-provider selects are visible in the Pipeline sidebar', async ({ harness }) => {
-    const { page, seed } = harness;
+    const { page } = harness;
 
-    // Select the project and navigate to the issue.
-    await harness.callStore('selectProject', seed.projectId);
+    // 1. Select the project — sets viewMode:'project', projectTab:'issues'.
+    await harness.callStore('selectProject', harness.seed.projectId);
 
-    // The seeded issue does not have a threadId pre-set; inject one via the store
-    // so the pipeline:phase handler can match it.
-    const issues = seed.issues;
-    const issue = issues.find((i) => i.issueNumber === ISSUE_NUMBER);
-    expect(issue).toBeDefined();
-
-    // Open the issue via setState (build a minimal GitHubIssueCacheRecord shape).
-    await harness.setState({
-      activeProjectId: seed.projectId,
-      viewMode: 'project',
-      activeIssue: {
-        id: `${seed.projectId}-issue-${ISSUE_NUMBER}`,
-        projectId: seed.projectId,
-        issueNumber: ISSUE_NUMBER,
-        title: issue?.title ?? 'Add dark mode support',
-        body: issue?.body ?? '',
-        labels: [],
-        assignee: null,
-        state: 'open',
-        pipelineStatus: 'todo',
-        threadId: THREAD_ID,
-        claimedAt: null,
-        claimedBy: null,
-        lastPhaseUpdate: null,
-        lastStatusLabel: null,
-        plannerModelOverride: null,
-        reviewerModelOverride: null,
-        executorModelOverride: null,
-        verifierModelOverride: null,
-        plannerModelIdOverride: null,
-        reviewerModelIdOverride: null,
-        executorModelIdOverride: null,
-        verifierModelIdOverride: null,
-        plannerReasoningEffortOverride: null,
-        reviewerReasoningEffortOverride: null,
-        executorReasoningEffortOverride: null,
-        verifierReasoningEffortOverride: null,
-        revisionCountOverride: null,
-        requireApprovalOverride: null,
-        linkedPrNumber: null,
-        linkedPrUrl: null,
-        linkedPrIsDraft: false,
-        ciBlocked: false,
-        failingChecks: [],
-        unresolvedReviewComments: [],
-        unresolvedReviewCommentCount: 0,
-        prLastSyncAt: null,
-        fetchedAt: new Date().toISOString(),
-        priorityRank: null,
-        priorityRaw: null,
-        priorityFetchedAt: null,
-        issueType: null,
-        isQuickMode: false,
-        syncState: undefined,
-        triageFailureReason: null,
-      },
-      activeThreadId: THREAD_ID,
+    // 2. Wait for the kanban board to render the seeded issue card.
+    await expect(page.getByTestId(`issue-card-${ISSUE_NUMBER}`)).toBeVisible({
+      timeout: 15_000,
     });
 
-    // Wait for IssueDetail to render — it shows the issue title in the header.
-    await expect(page.getByRole('heading', { name: /add dark mode/i })).toBeVisible();
+    // 3. Click the issue card → IssueDetail opens (selectIssue in the store).
+    await page.getByTestId(`issue-card-${ISSUE_NUMBER}`).click();
 
-    // The PipelineTab sidebar always renders the provider selects for each phase.
-    await expect(page.getByTestId('phase-provider-select-planner')).toBeVisible();
+    // 4. IssueDetail mounts when activeIssue !== null. Wait for the heading.
+    await expect(page.getByRole('heading', { name: /add dark mode/i })).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // 5. Inject the test threadId so pipeline:phase events are routed correctly.
+    //    The seeded DB record has no threadId; we set it in-memory only.
+    await harness.setState({ activeThreadId: THREAD_ID });
+
+    // 6. The PipelineTab sidebar is always rendered when IssueDetail is open —
+    //    it lives in the right-hand sidebar, not inside any tab panel.
+    //    Assert all four phase-provider SelectTrigger elements are in the DOM.
+    await expect(page.getByTestId('phase-provider-select-planner')).toBeVisible({
+      timeout: 5_000,
+    });
     await expect(page.getByTestId('phase-provider-select-reviewer')).toBeVisible();
     await expect(page.getByTestId('phase-provider-select-executor')).toBeVisible();
     await expect(page.getByTestId('phase-provider-select-verifier')).toBeVisible();
   });
 
   test('pipeline:phase events update the status indicator', async ({ harness }) => {
-    const { page, seed } = harness;
+    const { page } = harness;
 
-    await harness.callStore('selectProject', seed.projectId);
-
-    const issue = seed.issues.find((i) => i.issueNumber === ISSUE_NUMBER);
-
-    // Set up the issue in the store with the thread id.
-    await harness.setState({
-      activeProjectId: seed.projectId,
-      viewMode: 'project',
-      activeIssue: {
-        id: `${seed.projectId}-issue-${ISSUE_NUMBER}`,
-        projectId: seed.projectId,
-        issueNumber: ISSUE_NUMBER,
-        title: issue?.title ?? 'Add dark mode support',
-        body: issue?.body ?? '',
-        labels: [],
-        assignee: null,
-        state: 'open',
-        pipelineStatus: 'todo',
-        threadId: THREAD_ID,
-        claimedAt: null,
-        claimedBy: null,
-        lastPhaseUpdate: null,
-        lastStatusLabel: null,
-        plannerModelOverride: null,
-        reviewerModelOverride: null,
-        executorModelOverride: null,
-        verifierModelOverride: null,
-        plannerModelIdOverride: null,
-        reviewerModelIdOverride: null,
-        executorModelIdOverride: null,
-        verifierModelIdOverride: null,
-        plannerReasoningEffortOverride: null,
-        reviewerReasoningEffortOverride: null,
-        executorReasoningEffortOverride: null,
-        verifierReasoningEffortOverride: null,
-        revisionCountOverride: null,
-        requireApprovalOverride: null,
-        linkedPrNumber: null,
-        linkedPrUrl: null,
-        linkedPrIsDraft: false,
-        ciBlocked: false,
-        failingChecks: [],
-        unresolvedReviewComments: [],
-        unresolvedReviewCommentCount: 0,
-        prLastSyncAt: null,
-        fetchedAt: new Date().toISOString(),
-        priorityRank: null,
-        priorityRaw: null,
-        priorityFetchedAt: null,
-        issueType: null,
-        isQuickMode: false,
-        syncState: undefined,
-        triageFailureReason: null,
-      },
-      activeThreadId: THREAD_ID,
-      githubIssues: [],
+    // ── Setup: open IssueDetail via real card click ───────────────────────────
+    await harness.callStore('selectProject', harness.seed.projectId);
+    await expect(page.getByTestId(`issue-card-${ISSUE_NUMBER}`)).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByTestId(`issue-card-${ISSUE_NUMBER}`).click();
+    await expect(page.getByRole('heading', { name: /add dark mode/i })).toBeVisible({
+      timeout: 10_000,
     });
 
-    await expect(page.getByRole('heading', { name: /add dark mode/i })).toBeVisible();
+    // Inject the threadId so the pipeline:phase IPC handler matches.
+    // useIpc.ts: `if (data.threadId === store.activeThreadId)` → applyPipelinePhase.
+    await harness.setState({ activeThreadId: THREAD_ID });
+
+    // The initial status chip is visible (shows "todo" from the seeded record).
+    await expect(page.getByTestId('issue-phase-chip')).toBeVisible({ timeout: 5_000 });
 
     // ── planning ──────────────────────────────────────────────────────────────
+    // pipeline:phase fires → store.pipelinePhase = 'planning'
+    // IssueDetail: headerStatus = threadPhase = 'planning' (activeThreadId is set)
+    // PhaseChip renders "PLANNING" (uppercase via CSS).
     await harness.fire('pipeline:phase', { threadId: THREAD_ID, phase: 'planning' });
-
-    // The PhaseChip should reflect "planning". The chip text is set by pipelineStatus or
-    // pipelinePhase — after the IPC event, the store's pipelinePhase becomes 'planning'
-    // and the activeIssue.pipelineStatus gets mapped too.
-    // We match the chip generically: it renders "planning" or similar label.
-    await expect(page.getByText(/planning/i).first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('issue-phase-chip')).toContainText(/planning/i, {
+      timeout: 5_000,
+    });
 
     // ── reviewing ─────────────────────────────────────────────────────────────
     await harness.fire('pipeline:phase', { threadId: THREAD_ID, phase: 'reviewing' });
-    await expect(page.getByText(/reviewing/i).first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('issue-phase-chip')).toContainText(/reviewing/i, {
+      timeout: 5_000,
+    });
 
     // ── executing ─────────────────────────────────────────────────────────────
     await harness.fire('pipeline:phase', { threadId: THREAD_ID, phase: 'executing' });
-    await expect(page.getByText(/executing/i).first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('issue-phase-chip')).toContainText(/executing/i, {
+      timeout: 5_000,
+    });
 
     // ── verifying ─────────────────────────────────────────────────────────────
     await harness.fire('pipeline:phase', { threadId: THREAD_ID, phase: 'verifying' });
-    await expect(page.getByText(/verifying/i).first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('issue-phase-chip')).toContainText(/verifying/i, {
+      timeout: 5_000,
+    });
 
     // Verify the store reflects the final phase.
     const state = await harness.getState();

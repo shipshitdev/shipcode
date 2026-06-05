@@ -23,7 +23,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpDown, Ban, Loader2, Maximize2 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 
@@ -97,8 +97,10 @@ function useInboxView() {
   };
   const navTokenRef = useRef<string | null>(null);
 
+  const storeNotifications = useAppStore((state) => state.notifications);
+
   const {
-    data: notifications = [],
+    data: queryNotifications = [],
     isLoading,
     isError,
     refetch,
@@ -107,6 +109,19 @@ function useInboxView() {
     queryFn: () => window.shipcode.invoke<NotificationRecord[]>('notification:list'),
     staleTime: NOTIFICATIONS_STALE_TIME,
   });
+
+  // Merge store notifications (live-pushed via notification:fire) with the
+  // DB-backed query results. Store entries take precedence when IDs collide so
+  // that optimistically-dismissed items are immediately hidden.
+  const notifications = useMemo(() => {
+    const merged = new Map<string, NotificationRecord>();
+    for (const n of queryNotifications) merged.set(n.id, n);
+    // Store notifications overlay / supplement the query (live push path).
+    for (const n of storeNotifications) merged.set(n.id, n);
+    return Array.from(merged.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }, [queryNotifications, storeNotifications]);
 
   const removeNotificationFromInbox = useCallback(
     (id: string) => {

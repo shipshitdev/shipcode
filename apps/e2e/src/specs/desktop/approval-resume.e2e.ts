@@ -5,66 +5,26 @@
  * renders (select + Confirm button), chooses "approve", clicks Confirm, and
  * asserts the observable outcome (approval UI disappears / phase advances).
  *
- * Implementation note: ApprovalSection renders only when hasApprovalDecision is
- * true, which requires (a) activeThreadId, (b) pipelinePhase === 'approval',
- * and (c) a latestPlan record whose status is not 'approved'. Since there is no
- * real SQLite plan row from the seed, we inject a minimal plan record directly
- * into the TanStack Query cache via React fiber traversal so the component tree
- * picks it up without a real IPC round-trip.
+ * Implementation: ApprovalSection renders only when hasApprovalDecision is
+ * true, which requires:
+ *   (a) store.activeThreadId is set,
+ *   (b) store.pipelinePhase === 'approval'  (set by pipeline:phase push event
+ *       when data.threadId === store.activeThreadId), and
+ *   (c) latestPlan is non-null with status !== 'approved'
+ *       (latestPlan = planHistory[0] from TanStack query ['plan-history', threadId]).
+ *
+ * Plan data is injected deterministically via window.__QUERY_CLIENT__ which is
+ * exposed in E2E mode by main.tsx alongside window.__APP_STORE__. This avoids
+ * React fiber traversal entirely.
+ *
+ * Note: canApprove also requires latestPlan.structured || latestPlan.rawOutput
+ * to be truthy so we include rawOutput in the injected plan.
  */
 import { expect, type Harness, test } from '../../fixtures/electron-app';
 
 const THREAD_ID = 'e2e-thread-approval';
 const ISSUE_NUMBER = 99;
 const FAKE_PLAN_ID = 'plan-e2e-approval-001';
-
-/** Traverse the React fiber tree to find the first QueryClient instance. */
-const INJECT_PLAN_DATA_SCRIPT = `
-  (function injectPlanData(threadId, planId) {
-    // Walk the React fiber tree from the root container.
-    const root = document.getElementById('root');
-    if (!root) return false;
-
-    // React 18 attaches the fiber root on a __reactFiber$ prefixed key.
-    const fiberKey = Object.keys(root).find(k => k.startsWith('__reactFiber'));
-    if (!fiberKey) return false;
-
-    let fiber = root[fiberKey];
-    const MAX_DEPTH = 2000;
-    let depth = 0;
-
-    while (fiber && depth < MAX_DEPTH) {
-      depth++;
-      // Look for a memoizedProps that contains a QueryClient (has a getQueryData method).
-      const client = fiber.memoizedProps?.client ?? fiber.pendingProps?.client;
-      if (client && typeof client.setQueryData === 'function') {
-        // Found the QueryClient — inject a minimal plan record for plan-history.
-        const planRecord = {
-          id: planId,
-          threadId: threadId,
-          projectId: 'e2e-project',
-          issueNumber: ${ISSUE_NUMBER},
-          status: 'pending',
-          structured: null,
-          rawOutput: 'e2e plan output',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        client.setQueryData(['plan-history', threadId], [planRecord]);
-        return true;
-      }
-      // Traverse: child first, then sibling.
-      fiber = fiber.child ?? fiber.sibling ?? (function up(f) {
-        while (f) {
-          if (f.return && f.return.sibling) return f.return.sibling;
-          f = f.return;
-        }
-        return null;
-      })(fiber);
-    }
-    return false;
-  })(${JSON.stringify(THREAD_ID)}, ${JSON.stringify(FAKE_PLAN_ID)});
-`;
 
 /** Minimal GitHubIssueCacheRecord shape for setState. */
 function makeIssue(projectId: string) {
@@ -116,6 +76,126 @@ function makeIssue(projectId: string) {
   };
 }
 
+/**
+ * Inject a minimal plan record into the TanStack Query cache via the
+ * window.__QUERY_CLIENT__ handle exposed in E2E mode by main.tsx.
+ * This is deterministic and requires no fiber traversal.
+ */
+async function injectPlanIntoQueryCache(
+  harness: Harness,
+  threadId: string,
+  planId: string,
+  projectId: string,
+): Promise<void> {
+  await harness.page.evaluate(
+    (input) => {
+      const qc = (
+        window as unknown as {
+          __QUERY_CLIENT__?: {
+            setQueryData: (key: unknown[], data: unknown) => void;
+          };
+        }
+      ).__QUERY_CLIENT__;
+      if (!qc) throw new Error('__QUERY_CLIENT__ not exposed — check E2E mode setup in main.tsx');
+      const planRecord = {
+        id: input.planId,
+        threadId: input.threadId,
+        projectId: input.projectId,
+        issueNumber: input.issueNumber,
+        status: 'pending',
+        // rawOutput makes canApprove truthy (latestPlan.rawOutput is checked).
+        rawOutput: 'e2e plan output — Stripe checkout implementation plan',
+        structured: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      qc.setQueryData(['plan-history', input.threadId], [planRecord]);
+    },
+    { threadId, planId, projectId, issueNumber: ISSUE_NUMBER },
+  );
+}
+
+/**
+ * Navigate into a seeded issue's detail with the active thread, inject a plan
+ * into the query cache, then fire pipeline:phase = 'approval'.
+ *
+ * After this function the component tree should show ApprovalSection.
+ *
+ * Ordering note: the pipeline:phase IPC handler calls
+ * invalidateQueries(['plan-history', threadId]) synchronously, which triggers a
+ * background refetch that returns [] (no real plan row in the E2E DB). We must
+ * therefore inject the plan AFTER the refetch settles. The pattern is:
+ *   1. Set store state (activeThreadId)
+ *   2. Fire pipeline:phase → sets pipelinePhase='approval' + invalidates plan-history
+ *   3. Wait for pipelinePhase to be 'approval' in the store (confirms the event
+ *      handler ran and the invalidation was queued)
+ *   4. Wait for the background plan-history refetch to complete (returns [])
+ *   5. Inject plan data into the query cache — now stale for 5s, no further refetch
+ *   6. Assert ApprovalSection is visible
+ */
+async function driveToApprovalState(harness: Harness): Promise<void> {
+  const { page, seed } = harness;
+
+  // Set the full issue-detail view state.
+  // activeThreadId MUST be set before pipeline:phase fires so the handler's
+  // guard (data.threadId === store.activeThreadId) matches.
+  await harness.setState({
+    activeProjectId: seed.projectId,
+    viewMode: 'project',
+    activeIssue: makeIssue(seed.projectId),
+    activeThreadId: THREAD_ID,
+    githubIssues: [],
+  });
+
+  // Wait for IssueDetail header to confirm the component tree is mounted.
+  await expect(page.getByRole('heading', { name: /payment flow/i })).toBeVisible();
+
+  // Fire the approval phase event. The useIpc handler:
+  //   (a) calls applyPipelinePhase('approval') — synchronous store update
+  //   (b) calls invalidateQueries(['plan-history', THREAD_ID]) — queues a
+  //       background refetch that returns [] from the real (empty) SQLite DB.
+  await harness.fire('pipeline:phase', { threadId: THREAD_ID, phase: 'approval' });
+
+  // Wait until the store confirms pipelinePhase is 'approval', which means the
+  // handler ran and the plan-history invalidation was queued.
+  await page.waitForFunction(() => {
+    const store = (window as unknown as { __APP_STORE__?: { getState(): Record<string, unknown> } })
+      .__APP_STORE__;
+    return store?.getState().pipelinePhase === 'approval';
+  });
+
+  // Wait for the background plan-history refetch to settle (returns [] for the
+  // unknown THREAD_ID in the E2E DB). Poll the query cache until the query
+  // is no longer fetching.
+  await page.waitForFunction(
+    (threadId) => {
+      const qc = (
+        window as unknown as {
+          __QUERY_CLIENT__?: {
+            getQueryState: (key: unknown[]) => { fetchStatus?: string } | undefined;
+          };
+        }
+      ).__QUERY_CLIENT__;
+      if (!qc) return false;
+      const state = qc.getQueryState(['plan-history', threadId]);
+      // fetchStatus is 'idle' when no fetch is in progress. Accept also undefined
+      // (query not yet tracked) to avoid hanging if the invalidation was a no-op.
+      return !state || state.fetchStatus !== 'fetching';
+    },
+    THREAD_ID,
+    { timeout: 5000 },
+  );
+
+  // Now inject the plan into the (now-empty) query cache. With staleTime=5s the
+  // query won't refetch again, so the data persists for the lifetime of the test.
+  await injectPlanIntoQueryCache(harness, THREAD_ID, FAKE_PLAN_ID, seed.projectId);
+
+  // Both conditions are now satisfied:
+  //   pipelinePhase = 'approval'  AND  planHistory[0] = { status: 'pending', rawOutput: '...' }
+  // React re-renders to show ApprovalSection.
+  await expect(page.getByTestId('approval-section')).toBeVisible({ timeout: 5000 });
+}
+
 test.describe('ApprovalSection — awaiting approval', () => {
   test.use({
     seedOptions: {
@@ -130,65 +210,18 @@ test.describe('ApprovalSection — awaiting approval', () => {
     },
   });
 
-  /**
-   * Set up the store so IssueDetail renders in approval phase, inject a minimal
-   * plan record into the query cache, then assert ApprovalSection is visible.
-   */
-  async function driveToApprovalState(harness: Harness) {
-    const { page, seed } = harness;
-
-    await harness.callStore('selectProject', seed.projectId);
-
-    // Open the issue with an active thread.
-    await harness.setState({
-      activeProjectId: seed.projectId,
-      viewMode: 'project',
-      activeIssue: makeIssue(seed.projectId),
-      activeThreadId: THREAD_ID,
-      githubIssues: [],
-    });
-
-    // Wait for IssueDetail header.
-    await expect(page.getByRole('heading', { name: /payment flow/i })).toBeVisible();
-
-    // Inject a fake plan record so hasApprovalDecision can evaluate to true.
-    const injected = await page.evaluate(INJECT_PLAN_DATA_SCRIPT);
-    // If injection fails (e.g. fiber structure changed), log but don't hard-fail —
-    // the next assertion will provide the signal.
-    if (!injected) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        '[approval-resume] plan injection via fiber traversal failed — ApprovalSection may not render',
-      );
-    }
-
-    // Fire the approval phase event to set pipelinePhase = 'approval'.
-    await harness.fire('pipeline:phase', { threadId: THREAD_ID, phase: 'approval' });
-
-    // Allow the React tree to re-render.
-    await page.waitForTimeout(200);
-  }
-
   test('ApprovalSection renders when thread is in approval phase with a plan', async ({
     harness,
   }) => {
-    const { page } = harness;
     await driveToApprovalState(harness);
-
-    // The approval section should be present. It renders a Select with the
-    // "Approve & Execute" option and a Confirm button.
-    await expect(page.getByTestId('approval-section')).toBeVisible({ timeout: 5000 });
+    // Already asserted inside driveToApprovalState; re-assert for explicit test signal.
+    await expect(harness.page.getByTestId('approval-section')).toBeVisible();
   });
 
   test('approval-action-select defaults to Approve & Execute', async ({ harness }) => {
     const { page } = harness;
     await driveToApprovalState(harness);
 
-    const approvalSection = page.getByTestId('approval-section');
-    await expect(approvalSection).toBeVisible({ timeout: 5000 });
-
-    // The SelectTrigger data-testid="approval-action-select" should show
-    // "Approve & Execute" as the default selected value.
     const actionSelect = page.getByTestId('approval-action-select');
     await expect(actionSelect).toBeVisible();
     await expect(actionSelect).toContainText(/approve/i);
@@ -198,24 +231,21 @@ test.describe('ApprovalSection — awaiting approval', () => {
     const { page } = harness;
     await driveToApprovalState(harness);
 
-    await expect(page.getByTestId('approval-section')).toBeVisible({ timeout: 5000 });
-
-    // The Confirm button should be present (may be disabled if plan has no content).
+    // The Confirm button should be present and enabled because rawOutput is set.
     const confirmBtn = page.getByTestId('approval-confirm-btn');
     await expect(confirmBtn).toBeVisible();
+    await expect(confirmBtn).toBeEnabled();
   });
 
   test('switching to Request Changes shows feedback textarea', async ({ harness }) => {
     const { page } = harness;
     await driveToApprovalState(harness);
 
-    await expect(page.getByTestId('approval-section')).toBeVisible({ timeout: 5000 });
-
     // Open the action select and pick "Request Changes".
     const actionSelect = page.getByTestId('approval-action-select');
     await actionSelect.click();
 
-    // Wait for the dropdown to open and pick the "Request Changes" option.
+    // Wait for the dropdown to open.
     await expect(page.getByRole('option', { name: /request changes/i })).toBeVisible();
     await page.getByRole('option', { name: /request changes/i }).click();
 
@@ -226,8 +256,6 @@ test.describe('ApprovalSection — awaiting approval', () => {
   test('switching to Cancel pipeline shows Confirm cancel button', async ({ harness }) => {
     const { page } = harness;
     await driveToApprovalState(harness);
-
-    await expect(page.getByTestId('approval-section')).toBeVisible({ timeout: 5000 });
 
     // Open the action select and pick "Cancel pipeline".
     const actionSelect = page.getByTestId('approval-action-select');
@@ -246,8 +274,6 @@ test.describe('ApprovalSection — awaiting approval', () => {
     const { page } = harness;
     await driveToApprovalState(harness);
 
-    await expect(page.getByTestId('approval-section')).toBeVisible({ timeout: 5000 });
-
     // Switch to Request Changes.
     const actionSelect = page.getByTestId('approval-action-select');
     await actionSelect.click();
@@ -263,15 +289,16 @@ test.describe('ApprovalSection — awaiting approval', () => {
     const resumeBtn = page.getByRole('button', { name: /resume planning with feedback/i });
     await expect(resumeBtn).toBeEnabled();
 
-    // Clicking it triggers pipeline:reject IPC (will fail gracefully in E2E since no
-    // real pipeline is running — the observable outcome is that the component's
-    // internal state resets: textarea clears and select returns to 'approve').
+    // Click the button. ApprovalSection.handleReject resets local state synchronously:
+    //   setFeedback('') and setPendingAction('approve') run before the async IPC call.
+    // This causes the textarea to unmount (only shown when pendingAction='request_changes')
+    // and the Confirm button to reappear (shown when pendingAction='approve').
+    // The pipeline:reject IPC may fail silently in E2E — that is expected.
     await resumeBtn.click();
 
-    // After the call the component resets its local state (feedback clears, select
-    // returns to 'approve'). We can verify this by checking the textarea empties.
-    // The pipeline:reject IPC may fail silently in E2E — that is expected.
-    // The important assertion is that the button was reachable and clickable.
-    await expect(textarea).toHaveValue('', { timeout: 3000 });
+    // After the click the component resets pendingAction to 'approve', so the
+    // textarea is removed and the Confirm button is visible again.
+    await expect(page.getByTestId('approval-confirm-btn')).toBeVisible({ timeout: 3000 });
+    await expect(page.getByTestId('approval-reject-textarea')).not.toBeVisible();
   });
 });

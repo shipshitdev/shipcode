@@ -83,71 +83,9 @@ test.describe('pull request panel — flow 8', () => {
     }
   });
 
-  test('populated list: PR items render with data-testid when list is seeded via invoke intercept', async ({
-    harness,
-  }) => {
-    const { page, seed } = harness;
-
-    await harness.callStore('selectProject', seed.projectId);
-    await harness.callStore('setProjectTab', 'pull-requests');
-
-    await expect(page.getByTestId('pr-panel')).toBeVisible();
-
-    // Attempt to intercept window.shipcode.invoke for list-prs.
-    // If the bridge is frozen this evaluate resolves to false and we skip.
-    const intercepted = await page.evaluate(() => {
-      const w = window as unknown as {
-        shipcode?: { invoke?: (...args: unknown[]) => Promise<unknown> };
-        __E2E_ORIGINAL_INVOKE__?: (...args: unknown[]) => Promise<unknown>;
-      };
-      if (!w.shipcode?.invoke) return false;
-
-      // Guard: only wrap once.
-      if (w.__E2E_ORIGINAL_INVOKE__) return true;
-
-      const original = w.shipcode.invoke.bind(w.shipcode);
-      w.__E2E_ORIGINAL_INVOKE__ = original;
-
-      try {
-        w.shipcode.invoke = (channel: unknown, ...rest: unknown[]) => {
-          if (channel === 'github:list-prs') {
-            return Promise.resolve([
-              {
-                number: 42,
-                title: 'E2E fixture PR',
-                state: 'OPEN',
-                isDraft: false,
-                author: 'e2e-bot',
-                headRefName: 'feat/e2e',
-                baseRefName: 'main',
-                reviewDecision: null,
-                updatedAt: new Date().toISOString(),
-              },
-            ]);
-          }
-          return original(channel as string, ...rest);
-        };
-        return true;
-      } catch {
-        // Bridge is non-configurable; fall back gracefully.
-        return false;
-      }
-    });
-
-    if (intercepted) {
-      // Trigger a re-fetch by switching filters (invalidates the query).
-      await page.getByTestId('pr-filter-closed').click();
-      await page.getByTestId('pr-filter-open').click();
-
-      // Wait for the PR list item to appear.
-      await expect(page.getByTestId('pr-list-item-42')).toBeVisible({ timeout: 10_000 });
-      // Clicking a PR list item should show the detail placeholder or start a
-      // detail fetch — the item itself must remain visible.
-      await page.getByTestId('pr-list-item-42').click();
-      await expect(page.getByTestId('pr-list-item-42')).toBeVisible();
-    } else {
-      // Intercept not possible; assert the structural empty state instead.
-      await expect(page.getByText(/no pull requests found/i)).toBeVisible({ timeout: 15_000 });
-    }
-  });
+  // Note: a populated-list test was intentionally dropped — the renderer's
+  // window.shipcode bridge is a frozen contextBridge object, so github:list-prs
+  // cannot be deterministically stubbed from the renderer. The panel chrome,
+  // filter controls, and empty state (driven by the fake `gh` returning []) are
+  // covered above; populated PR detail is left to unit/integration coverage.
 });

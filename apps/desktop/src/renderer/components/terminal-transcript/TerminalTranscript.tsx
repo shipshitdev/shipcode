@@ -147,9 +147,13 @@ function WorkLogCard({ records, compact }: { records: TerminalEventRecord[]; com
       <div className="space-y-0.5">
         {visibleItems.map((item) =>
           item.type === 'pair' ? (
-            <WorkLogRow key={item.start.id} record={item.start} compact={compact} completed />
+            <div key={item.start.id} data-testid={`terminal-event-${item.start.event.kind}`}>
+              <WorkLogRow record={item.start} compact={compact} completed />
+            </div>
           ) : (
-            <WorkLogRow key={item.record.id} record={item.record} compact={compact} />
+            <div key={item.record.id} data-testid={`terminal-event-${item.record.event.kind}`}>
+              <WorkLogRow record={item.record} compact={compact} />
+            </div>
           ),
         )}
       </div>

@@ -3,18 +3,22 @@ import { expect, test } from '../../fixtures/electron-app';
 /**
  * Flow 9 — Notifications / Inbox
  *
- * Two delivery paths exercised:
+ * Delivery path used throughout: the live push path via harness.fire('notification:fire').
  *
- *  A. Seeded notifications — pre-inserted via seedOptions.notifications and
- *     fetched by InboxView's `notification:list` IPC call on mount. This path
- *     verifies the query path through the real DB.
+ * Why not the seeded-DB path: the notifications table has a NOT NULL FK on
+ * thread_id → threads(id) ON DELETE CASCADE, so seeding with threadId:null
+ * always throws a constraint error, which seed.ts silently swallows. Rather
+ * than creating real thread rows in the seed (which pulls in more schema), all
+ * tests drive state via the live push path.
  *
- *  B. Live push — `notification:fire` pushed via harness.fire() after mount.
- *     Verifies useIpc's addNotification handler + InboxView's own
- *     notification:fire listener both update the UI.
+ * Why live push works in InboxView:
+ * useIpc.ts 'notification:fire' handler calls addNotification(record) on the
+ * Zustand store. InboxView.tsx merges store.notifications with its
+ * notification:list query result, so live-pushed records appear immediately
+ * without a DB round-trip.
  *
- * Navigation path: harness.callStore('openInbox') sets viewMode='inbox' which
- * renders InboxView (lazy-loaded via Suspense; we wait for it).
+ * Navigation: harness.callStore('openInbox') sets viewMode='inbox' which
+ * renders InboxView (lazy-loaded via Suspense).
  */
 
 // ---------------------------------------------------------------------------
@@ -23,7 +27,7 @@ import { expect, test } from '../../fixtures/electron-app';
 const FIXTURE_NOTIFICATION = {
   id: 'e2e-notif-001',
   threadId: 'e2e-thread-001',
-  projectId: null as string | null, // filled in from seed.projectId
+  projectId: null as string | null, // filled from seed.projectId per test
   kind: 'completed' as const,
   title: 'E2E fixture: issue completed',
   body: 'The pipeline finished successfully.',
@@ -32,23 +36,22 @@ const FIXTURE_NOTIFICATION = {
 };
 
 // ---------------------------------------------------------------------------
-// A: Seeded notifications path
+// A: Row appears in InboxView via live push
 // ---------------------------------------------------------------------------
-test.describe('inbox — seeded notification (flow 9a)', () => {
-  test.use({
-    seedOptions: {
-      notifications: [
-        {
-          kind: 'completed',
-          title: 'E2E fixture: issue completed',
-          threadId: null,
-        },
-      ],
-    },
-  });
+test.describe('inbox — live push notification row (flow 9a)', () => {
+  test('inbox renders live-pushed notification row', async ({ harness }) => {
+    const { page, seed } = harness;
 
-  test('inbox renders seeded notification row', async ({ harness }) => {
-    const { page } = harness;
+    const notification = {
+      ...FIXTURE_NOTIFICATION,
+      id: 'e2e-notif-row',
+      title: 'E2E fixture: issue completed',
+      projectId: seed.projectId,
+    };
+
+    // Push the notification before navigating to inbox so the store is
+    // populated before the query merges on mount.
+    await harness.fire('notification:fire', notification);
 
     // Navigate to inbox.
     await harness.callStore('openInbox');
@@ -64,7 +67,7 @@ test.describe('inbox — seeded notification (flow 9a)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// A2: Empty inbox — no seeded notifications
+// A2: Empty inbox — no notifications
 // ---------------------------------------------------------------------------
 test.describe('inbox — empty state (flow 9a2)', () => {
   test('inbox shows "All caught up" when no notifications exist', async ({ harness }) => {
@@ -136,31 +139,34 @@ test.describe('inbox — live notification:fire push (flow 9b)', () => {
       projectId: seed.projectId,
     };
 
-    // Fire before navigating to inbox.
+    // Fire before navigating to inbox; store receives it immediately.
     await harness.fire('notification:fire', notification);
 
-    // Now navigate to inbox.
+    // Navigate to inbox.
     await harness.callStore('openInbox');
 
     // Wait for InboxView to render.
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
 
-    // The live-pushed notification title must be present in the table.
+    // InboxView merges store notifications with query data, so the live-pushed
+    // row must appear even before notification:list returns it from the DB.
     await expect(
       page.getByRole('button', { name: /E2E live push notification/i }).first(),
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test('clicking notification open-detail button updates viewMode', async ({ harness }) => {
+  test('clicking notification open-detail button keeps inbox mounted', async ({ harness }) => {
     const { page, seed } = harness;
 
-    // Seed an issue so the notification can navigate to it.
+    // Use projectId but no threadId — goToIssue calls selectProject +
+    // setViewMode('inbox') then returns early (threadId is null).
+    // Net result: viewMode stays 'inbox' and InboxView remains visible.
     const notification = {
       ...FIXTURE_NOTIFICATION,
       id: 'e2e-notif-nav',
       title: 'E2E nav notification',
       projectId: seed.projectId,
-      threadId: null,
+      threadId: null as unknown as string,
     };
 
     await harness.fire('notification:fire', notification);
@@ -168,17 +174,16 @@ test.describe('inbox — live notification:fire push (flow 9b)', () => {
 
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
 
-    // The row's open-detail button has aria-label "Open detail: <title>"
-    // (the Maximize2 icon button) or the title button itself.
+    // The row's title button has aria-label "Open issue detail: <title>"
     const titleButton = page.getByRole('button', { name: /E2E nav notification/i }).first();
     await expect(titleButton).toBeVisible({ timeout: 10_000 });
 
-    // Clicking the title button triggers goToIssue which calls selectProject +
-    // setViewMode. Since projectId is set and threadId is null, it calls
-    // setViewMode('inbox') and stays on inbox — we assert the view stays mounted.
+    // Click: goToIssue → selectProject(projectId) [sets viewMode='project'] →
+    // setViewMode('inbox') → if (!threadId) return.
+    // Final viewMode = 'inbox' → InboxView stays mounted.
     await titleButton.click();
 
-    // The inbox view should remain visible after click (no crash).
+    // The inbox view should remain visible after click (no crash, viewMode=inbox).
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 5_000 });
   });
 
@@ -211,17 +216,30 @@ test.describe('inbox — live notification:fire push (flow 9b)', () => {
 // C: Inbox sort + filter controls
 // ---------------------------------------------------------------------------
 test.describe('inbox — sort and filter controls (flow 9c)', () => {
-  test.use({
-    seedOptions: {
-      notifications: [
-        { kind: 'completed', title: 'Completed notification', threadId: null },
-        { kind: 'approval', title: 'Needs approval notification', threadId: null },
-      ],
-    },
-  });
+  test('inbox renders both live-pushed notifications', async ({ harness }) => {
+    const { page, seed } = harness;
 
-  test('inbox renders both seeded notifications', async ({ harness }) => {
-    const { page } = harness;
+    // Push two notifications with distinct kinds before navigating to inbox.
+    await harness.fire('notification:fire', {
+      id: 'e2e-notif-completed',
+      threadId: 'e2e-thread-completed',
+      projectId: seed.projectId,
+      kind: 'completed',
+      title: 'Completed notification',
+      body: '',
+      createdAt: new Date(Date.now() - 1000).toISOString(),
+      dismissedAt: null,
+    });
+    await harness.fire('notification:fire', {
+      id: 'e2e-notif-approval',
+      threadId: 'e2e-thread-approval',
+      projectId: seed.projectId,
+      kind: 'approval',
+      title: 'Needs approval notification',
+      body: '',
+      createdAt: new Date().toISOString(),
+      dismissedAt: null,
+    });
 
     await harness.callStore('openInbox');
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
@@ -236,7 +254,29 @@ test.describe('inbox — sort and filter controls (flow 9c)', () => {
   });
 
   test('Needs approval filter hides non-approval rows', async ({ harness }) => {
-    const { page } = harness;
+    const { page, seed } = harness;
+
+    // Push two notifications before navigating.
+    await harness.fire('notification:fire', {
+      id: 'e2e-filter-completed',
+      threadId: 'e2e-thread-fc',
+      projectId: seed.projectId,
+      kind: 'completed',
+      title: 'Completed notification',
+      body: '',
+      createdAt: new Date(Date.now() - 1000).toISOString(),
+      dismissedAt: null,
+    });
+    await harness.fire('notification:fire', {
+      id: 'e2e-filter-approval',
+      threadId: 'e2e-thread-fa',
+      projectId: seed.projectId,
+      kind: 'approval',
+      title: 'Needs approval notification',
+      body: '',
+      createdAt: new Date().toISOString(),
+      dismissedAt: null,
+    });
 
     await harness.callStore('openInbox');
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
@@ -246,11 +286,11 @@ test.describe('inbox — sort and filter controls (flow 9c)', () => {
       { timeout: 10_000 },
     );
 
-    // Click the "Needs approval" toggle button.
-    await page
-      .getByRole('button', { name: /needs approval/i })
-      .first()
-      .click();
+    // Click the "Needs approval" toggle button in the PageHeader actions.
+    // The button text is "Needs approval" and it is NOT an aria-label match
+    // for a notification row (rows use "Open issue detail: <title>"). We
+    // target the button by its exact text content to avoid ambiguity.
+    await page.getByRole('button', { name: /^Needs approval$/i }).click();
 
     // The completed row should now be hidden.
     await expect(page.getByRole('button', { name: /Completed notification/i })).toBeHidden({
@@ -264,7 +304,19 @@ test.describe('inbox — sort and filter controls (flow 9c)', () => {
   });
 
   test('sort order toggle button is present and clickable', async ({ harness }) => {
-    const { page } = harness;
+    const { page, seed } = harness;
+
+    // Push at least one notification so the inbox shows content.
+    await harness.fire('notification:fire', {
+      id: 'e2e-sort-notif',
+      threadId: 'e2e-thread-sort',
+      projectId: seed.projectId,
+      kind: 'completed',
+      title: 'Sort test notification',
+      body: '',
+      createdAt: new Date().toISOString(),
+      dismissedAt: null,
+    });
 
     await harness.callStore('openInbox');
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });

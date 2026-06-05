@@ -4,7 +4,7 @@
  * Seeds 3 issues with distinct titles, labels, and states, then navigates to
  * the project Issues board. Verifies:
  *  - All 3 seeded issue titles appear on the kanban board
- *  - Filtering via store narrows visible cards (simulates search)
+ *  - Filtering via the React Query cache narrows visible cards
  *  - Clicking an issue card opens the IssueDetail view with the correct title
  */
 import { expect, test } from '../../fixtures/electron-app';
@@ -85,7 +85,7 @@ test.describe('project board', () => {
     await expect(page.getByTestId(`issue-card-${ISSUE_GAMMA.issueNumber}`)).toBeVisible();
   });
 
-  test('filtering issues by patching store narrows visible cards', async ({ harness }) => {
+  test('filtering issues via query cache narrows visible cards', async ({ harness }) => {
     const { page } = harness;
 
     await harness.callStore('selectProject', harness.seed.projectId);
@@ -94,31 +94,38 @@ test.describe('project board', () => {
       timeout: 15_000,
     });
 
-    // Simulate a search/filter: patch githubIssues to only include ISSUE_ALPHA
-    // This exercises the same narrowing that a search filter would produce.
-    const alphaIssue = await page.evaluate((issueNumber: number) => {
-      const store = (
+    // Narrow the board to only ISSUE_ALPHA by patching the React Query cache.
+    // IssuesPanel reads from useQuery(['github-issues', projectId]) — so we must
+    // update the query cache (not the store's githubIssues field) to make the
+    // board actually re-render with fewer cards.
+    const projectId = harness.seed.projectId;
+    await page.evaluate((pid) => {
+      const qc = (
         window as unknown as {
-          __APP_STORE__?: { getState(): { githubIssues: unknown[] } };
+          __QUERY_CLIENT__?: {
+            getQueryData(key: unknown[]): unknown;
+            setQueryData(key: unknown[], data: unknown): void;
+          };
         }
-      ).__APP_STORE__;
-      const state = store?.getState();
-      return state?.githubIssues.find(
-        (i) => (i as { issueNumber: number }).issueNumber === issueNumber,
-      );
-    }, ISSUE_ALPHA.issueNumber);
+      ).__QUERY_CLIENT__;
+      if (!qc) throw new Error('__QUERY_CLIENT__ not exposed');
+      const issues = qc.getQueryData(['github-issues', pid]) as
+        | Array<{ issueNumber: number }>
+        | undefined;
+      if (!issues) return; // board data not yet cached — test continues gracefully
+      const alpha = issues.find((i) => i.issueNumber === 101);
+      if (!alpha) return;
+      qc.setQueryData(['github-issues', pid], [alpha]);
+    }, projectId);
 
-    // Only patch if the issue is in the store (it should be after the board loaded)
-    if (alphaIssue) {
-      await harness.setState({ githubIssues: [alphaIssue] });
+    // Alpha is still visible
+    await expect(page.getByTestId(`issue-card-${ISSUE_ALPHA.issueNumber}`)).toBeVisible({
+      timeout: 5_000,
+    });
 
-      // Alpha is still visible
-      await expect(page.getByTestId(`issue-card-${ISSUE_ALPHA.issueNumber}`)).toBeVisible();
-
-      // Beta and Gamma are no longer in the filtered set
-      await expect(page.getByTestId(`issue-card-${ISSUE_BETA.issueNumber}`)).not.toBeVisible();
-      await expect(page.getByTestId(`issue-card-${ISSUE_GAMMA.issueNumber}`)).not.toBeVisible();
-    }
+    // Beta and Gamma are no longer in the filtered set
+    await expect(page.getByTestId(`issue-card-${ISSUE_BETA.issueNumber}`)).not.toBeVisible();
+    await expect(page.getByTestId(`issue-card-${ISSUE_GAMMA.issueNumber}`)).not.toBeVisible();
   });
 
   test('clicking an issue card opens the IssueDetail view with the correct title', async ({
@@ -161,8 +168,9 @@ test.describe('project board', () => {
       timeout: 10_000,
     });
 
-    // Use store to close the issue detail (selectIssue(null))
-    await harness.callStore('selectIssue', null);
+    // Click the "Back to board" button rendered by IssueDetail.
+    // This calls selectIssue(null) which clears activeIssue and returns to the board.
+    await page.getByRole('button', { name: 'Back to board' }).click();
 
     // Board returns: kanban-column-todo is visible again
     await expect(page.getByTestId('kanban-column-todo')).toBeVisible({ timeout: 10_000 });
