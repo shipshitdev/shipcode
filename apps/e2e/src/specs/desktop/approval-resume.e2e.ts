@@ -297,11 +297,10 @@ test.describe('ApprovalSection — awaiting approval', () => {
     // The pipeline:reject IPC may fail silently in E2E — that is expected.
     await resumeBtn.click();
 
-    // The reject submission ran (button was enabled + clicked). The pipeline:reject
-    // IPC may resolve or fail silently in E2E; either way the ApprovalSection must
-    // remain coherent (no crash / unmount). Asserting on the exact post-click
-    // local-state reset would couple to implementation detail, so we assert the
-    // observable: the approval UI is still present.
-    await expect(page.getByTestId('approval-section')).toBeVisible();
+    // Submitting "resume planning with feedback" sends the request-changes
+    // decision, which moves the pipeline out of the approval gate — so the
+    // ApprovalSection deterministically unmounts. That disappearance is the
+    // observable proof the reject path was invoked.
+    await expect(page.getByTestId('approval-section')).not.toBeVisible({ timeout: 15_000 });
   });
 });
