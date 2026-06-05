@@ -202,7 +202,10 @@ function createWindow() {
   mainWindow = new BrowserWindow(buildMainWindowOptions(DIST));
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
+    // E2E mode: keep the window hidden. Playwright drives the renderer through
+    // webContents, so showing it only steals OS focus (and the macOS focus beep)
+    // on every per-test launch. The renderer still loads while hidden.
+    if (!E2E_MODE) mainWindow?.show();
     splashScreen.close();
   });
 
