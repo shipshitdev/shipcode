@@ -1,15 +1,15 @@
 {
   "dependencies": {
     "@shipcode/ui": "workspace:*",
-    "next": "16.2.6",
+    "next": "16.2.7",
     "nextra": "4.6.1",
     "nextra-theme-docs": "4.6.1",
-    "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
-    "@types/react": "19.2.15"
+    "@types/react": "19.2.16"
   },
   "name": "@shipcode/docs",
   "private": true,
