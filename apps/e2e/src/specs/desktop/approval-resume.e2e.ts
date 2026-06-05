@@ -147,8 +147,9 @@ async function driveToApprovalState(harness: Harness): Promise<void> {
     githubIssues: [],
   });
 
-  // Wait for IssueDetail header to confirm the component tree is mounted.
-  await expect(page.getByRole('heading', { name: /payment flow/i })).toBeVisible();
+  // Confirm IssueDetail mounted via the unambiguous "Back to board" control.
+  // (A /payment flow/i heading match would clash with the body-markdown h1.)
+  await expect(page.getByRole('button', { name: 'Back to board' })).toBeVisible();
 
   // Fire the approval phase event. The useIpc handler:
   //   (a) calls applyPipelinePhase('approval') — synchronous store update

@@ -1,4 +1,4 @@
-import { expect, test } from '../../fixtures/electron-app';
+import { expect, type Harness, test } from '../../fixtures/electron-app';
 
 /**
  * Flow 6 — Terminal drawer + transcript
@@ -89,14 +89,20 @@ function fakeIssue(projectId: string) {
  *     can find it via issueTargets), terminalVisible=true, terminalThreadId=THREAD_ID
  *  3. activeIssue stays null → TerminalDrawer mounts
  */
-async function openDrawer(harness: { callStore: Function; setState: Function }, projectId: string) {
+async function openDrawer(harness: Harness, projectId: string) {
   await harness.callStore('selectProject', projectId);
+  // Wait for the github:list-issues query to settle before injecting. Otherwise
+  // its async onSuccess overwrites store.githubIssues (with a threadId-less
+  // record) AFTER our injection, leaving useTerminalDrawer's displayTarget null.
+  // Once settled, staleTime prevents a refetch so the injected record sticks.
+  await expect(harness.page.getByTestId('issue-card-42')).toBeVisible({ timeout: 15_000 });
   await harness.setState({
     githubIssues: [fakeIssue(projectId)],
     terminalVisible: true,
     terminalThreadId: THREAD_ID,
     activeIssue: null,
   });
+  await expect(harness.page.getByTestId('terminal-drawer')).toBeVisible({ timeout: 10_000 });
 }
 
 test.describe('terminal drawer — transcript rendering', () => {

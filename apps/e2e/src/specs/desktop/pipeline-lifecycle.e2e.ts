@@ -46,7 +46,9 @@ test.describe('Pipeline lifecycle — phase transitions', () => {
     await page.getByTestId(`issue-card-${ISSUE_NUMBER}`).click();
 
     // 4. IssueDetail mounts when activeIssue !== null. Wait for the heading.
-    await expect(page.getByRole('heading', { name: /add dark mode/i })).toBeVisible({
+    // Confirm IssueDetail mounted via the unambiguous "Back to board" control.
+    // (A /add dark mode/i heading match would clash with the body-markdown h1.)
+    await expect(page.getByRole('button', { name: 'Back to board' })).toBeVisible({
       timeout: 10_000,
     });
 
@@ -74,7 +76,9 @@ test.describe('Pipeline lifecycle — phase transitions', () => {
       timeout: 15_000,
     });
     await page.getByTestId(`issue-card-${ISSUE_NUMBER}`).click();
-    await expect(page.getByRole('heading', { name: /add dark mode/i })).toBeVisible({
+    // Confirm IssueDetail mounted via the unambiguous "Back to board" control.
+    // (A /add dark mode/i heading match would clash with the body-markdown h1.)
+    await expect(page.getByRole('button', { name: 'Back to board' })).toBeVisible({
       timeout: 10_000,
     });
 
