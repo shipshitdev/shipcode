@@ -33,6 +33,8 @@ export interface Harness {
   getState(): Promise<Record<string, unknown>>;
   /** Patch the renderer Zustand store directly to drive view state. */
   setState(patch: Record<string, unknown>): Promise<void>;
+  /** Invoke a Zustand store action by name (e.g. selectProject, openIssue). */
+  callStore(action: string, ...args: unknown[]): Promise<void>;
   cleanup(): Promise<void>;
 }
 
@@ -106,6 +108,24 @@ export async function launchApp(seedOptions: SeedOptions = {}): Promise<Harness>
       ).__APP_STORE__?.setState(next);
     }, patch);
 
+  const callStore: Harness['callStore'] = (action, ...args) =>
+    page.evaluate(
+      (input) => {
+        const store = (
+          window as unknown as {
+            __APP_STORE__?: { getState(): Record<string, (...a: unknown[]) => unknown> };
+          }
+        ).__APP_STORE__;
+        const state = store?.getState();
+        const fn = state?.[input.action];
+        if (typeof fn !== 'function') {
+          throw new Error(`store action not found: ${input.action}`);
+        }
+        fn(...input.args);
+      },
+      { action, args },
+    );
+
   const cleanup: Harness['cleanup'] = async () => {
     try {
       await app.close();
@@ -115,7 +135,7 @@ export async function launchApp(seedOptions: SeedOptions = {}): Promise<Harness>
     }
   };
 
-  return { app, page, seed, fire, getState, setState, cleanup };
+  return { app, page, seed, fire, getState, setState, callStore, cleanup };
 }
 
 interface HarnessFixtures {

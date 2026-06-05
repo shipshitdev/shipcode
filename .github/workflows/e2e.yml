@@ -1,0 +1,96 @@
+name: E2E
+
+on:
+  schedule:
+    # Weekly, Sundays 07:00 UTC — 1h after the CI coverage cron (0 6 * * 0)
+    # so the two never queue on macOS runners at the same instant.
+    - cron: '0 7 * * 0'
+  workflow_dispatch:
+  pull_request:
+    # Cheap HTTP-only web/docs smoke on PRs that touch E2E or the surfaces it covers.
+    paths:
+      - 'apps/e2e/**'
+      - 'apps/desktop/**'
+      - 'apps/web/**'
+      - 'apps/docs/**'
+      - 'packages/pipeline/**'
+      - 'packages/ui/**'
+      - '.github/workflows/e2e.yml'
+
+env:
+  BUN_VERSION: "1.3.13"
+  NODE_VERSION: "22"
+  E2E_FLOW_COVERAGE_MIN: "90"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Full E2E suite (Electron desktop journeys + web/docs smoke) + flow-coverage
+  # gate. Runs on macOS because the desktop project launches the real Electron
+  # app. Scheduled + manual only — too heavy for every PR.
+  desktop-e2e:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: bun install --frozen-lockfile
+      - name: Build desktop bundle
+        run: bun --filter @shipcode/desktop build:code
+      - name: Run E2E suite + flow-coverage gate
+        env:
+          E2E_FLOW_COVERAGE_MIN: ${{ env.E2E_FLOW_COVERAGE_MIN }}
+        run: bun run e2e:ci
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-artifacts-${{ github.run_id }}
+          retention-days: 7
+          path: |
+            apps/e2e/playwright-report/**
+            apps/e2e/test-results/**
+            apps/e2e/e2e-flow-coverage.json
+
+  # PR guard: web/docs smoke is HTTP-only (no Electron) so it runs fast on Linux.
+  web-smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: bun install --frozen-lockfile
+      - name: Run web/docs smoke
+        run: bun run e2e:smoke
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-web-smoke-${{ github.run_id }}
+          retention-days: 7
+          path: |
+            apps/e2e/playwright-report/**
+            apps/e2e/test-results/**

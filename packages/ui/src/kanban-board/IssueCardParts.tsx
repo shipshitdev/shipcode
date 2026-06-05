@@ -336,6 +336,7 @@ function useDraggableCardView({
           isDragging && 'opacity-50',
         )}
         data-issue-card-id={issue.id}
+        data-testid={`issue-card-${issue.issueNumber}`}
         data-flashing={isFlashing ? 'true' : undefined}
         data-keyboard-focused={isKeyboardFocused ? 'true' : undefined}
         onClick={(event) => {

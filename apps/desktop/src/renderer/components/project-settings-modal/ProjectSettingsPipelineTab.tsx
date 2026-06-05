@@ -80,7 +80,7 @@ export function ProjectSettingsPipelineTab({
               }))
             }
           >
-            <SelectTrigger className="w-[220px]">
+            <SelectTrigger className="w-[220px]" data-testid="pipeline-speed-profile-select">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

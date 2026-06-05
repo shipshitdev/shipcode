@@ -323,7 +323,7 @@ function useInboxView() {
   );
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div data-testid="inbox-view" className="flex flex-1 flex-col overflow-hidden">
       <PageHeader
         title="Inbox"
         subtitle="Notifications and items that need your attention."

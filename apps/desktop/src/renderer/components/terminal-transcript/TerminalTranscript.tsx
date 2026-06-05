@@ -16,7 +16,7 @@ import {
   Wand2,
   Wrench,
 } from 'lucide-react';
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type ConsoleSeverity,
   classifyConsoleLine,
@@ -767,7 +767,7 @@ export function TerminalTranscript({
           return <WorkLogCard key={key} records={segment.records} compact={compact} />;
         }
         return (
-          <Fragment key={segment.record.id}>
+          <div key={segment.record.id} data-testid={`terminal-event-${segment.record.event.kind}`}>
             {transcriptRow({
               record: segment.record,
               compact,
@@ -779,7 +779,7 @@ export function TerminalTranscript({
               sendingToTerminalEventId,
               copiedEventId,
             })}
-          </Fragment>
+          </div>
         );
       }),
     [
@@ -892,7 +892,7 @@ export function TerminalTranscript({
     ) : null;
 
   return (
-    <div className={cn('relative h-full', className)}>
+    <div className={cn('relative h-full', className)} data-testid="terminal-transcript">
       <div
         ref={scrollRef}
         className="h-full overflow-y-auto overscroll-contain"
