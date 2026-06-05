@@ -174,6 +174,38 @@ const makeVerification = (overrides: Partial<VerificationRecord> = {}): Verifica
   ...overrides,
 });
 
+const emptyListChannels = new Set([
+  'activity:list-for-issue',
+  'agent-conversations:list-thread',
+  'checkpoint:list',
+  'costs:list-for-issue',
+  'diff:list',
+  'feature-qa:list-by-thread',
+  'github:list-issues',
+  'plan:list',
+  'plan:list-for-issue',
+  'review-findings:list-thread',
+  'terminal:list',
+  'thread:list',
+]);
+
+function defaultIssueDetailInvoke(channel: string): unknown {
+  if (emptyListChannels.has(channel)) return [];
+  if (channel === 'review:list-by-plans') return {};
+  if (
+    channel === 'feature-qa:get-server' ||
+    channel === 'integrations:check' ||
+    channel === 'project:get' ||
+    channel === 'settings:get' ||
+    channel === 'task-graph:get-latest' ||
+    channel === 'thread:get' ||
+    channel === 'verification:get'
+  ) {
+    return null;
+  }
+  return undefined;
+}
+
 const makeProject = () => ({
   id: 'project-1',
   name: 'Project',
@@ -232,6 +264,7 @@ describe('IssueDetail', () => {
   beforeEach(() => {
     cleanup();
     invokeMock.mockReset();
+    invokeMock.mockImplementation(async (channel) => defaultIssueDetailInvoke(channel));
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
       configurable: true,
       value: vi.fn(),
@@ -418,7 +451,7 @@ describe('IssueDetail', () => {
       if (channel === 'github:list-issues')
         return [makeIssue({ threadId: thread.id, pipelineStatus: 'failed' })];
       if (channel === 'thread:list') return [thread];
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -448,7 +481,7 @@ describe('IssueDetail', () => {
       if (channel === 'plan:list') return [];
       if (channel === 'review:list-by-plans') return {};
       if (channel === 'pipeline:pause') return undefined;
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -474,7 +507,7 @@ describe('IssueDetail', () => {
       if (channel === 'plan:list') return [];
       if (channel === 'review:list-by-plans') return {};
       if (channel === 'pipeline:resume') return undefined;
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -510,7 +543,7 @@ describe('IssueDetail', () => {
       if (channel === 'github:list-issues')
         return [makeIssue({ threadId: thread.id, pipelineStatus: 'failed' })];
       if (channel === 'thread:list') return [thread];
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -558,7 +591,7 @@ describe('IssueDetail', () => {
       if (channel === 'plan:list') return [];
       if (channel === 'review:list-by-plans') return {};
       if (channel === 'pipeline:answer-clarification') return undefined;
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -615,7 +648,7 @@ describe('IssueDetail', () => {
       if (channel === 'thread:get') return thread;
       if (channel === 'plan:list') return [];
       if (channel === 'review:list-by-plans') return {};
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     const { container } = renderWithProviders();
@@ -672,7 +705,7 @@ describe('IssueDetail', () => {
       if (channel === 'thread:get') return thread;
       if (channel === 'plan:list') return [];
       if (channel === 'review:list-by-plans') return {};
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -777,7 +810,7 @@ describe('IssueDetail', () => {
       if (channel === 'github:list-issues')
         return [makeIssue({ threadId: thread.id, pipelineStatus: 'reviewing' })];
       if (channel === 'thread:list') return [thread];
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -807,7 +840,7 @@ describe('IssueDetail', () => {
       if (channel === 'plan:list') return [plan];
       if (channel === 'review:list-by-plans') return {};
       if (channel === 'pipeline:cancel') return undefined;
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -833,7 +866,7 @@ describe('IssueDetail', () => {
       if (channel === 'plan:list') return [plan];
       if (channel === 'review:list-by-plans') return {};
       if (channel === 'pipeline:cancel') return undefined;
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -863,7 +896,7 @@ describe('IssueDetail', () => {
       if (channel === 'pipeline:approve') {
         throw new Error(rawError);
       }
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -889,7 +922,7 @@ describe('IssueDetail', () => {
       if (channel === 'plan:list') return [plan];
       if (channel === 'review:list-by-plans') return {};
       if (channel === 'pipeline:cancel') return undefined;
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -918,7 +951,7 @@ describe('IssueDetail', () => {
       if (channel === 'thread:get') return thread;
       if (channel === 'plan:list') return [latestPlan, oldPlan];
       if (channel === 'review:list-by-plans') return {};
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -954,7 +987,7 @@ describe('IssueDetail', () => {
       if (channel === 'plan:list') return [currentPlan];
       if (channel === 'plan:list-for-issue') return [currentPlan, olderPlan];
       if (channel === 'review:list-by-plans') return {};
-      return args ?? [];
+      return defaultIssueDetailInvoke(channel) ?? args ?? [];
     });
 
     renderWithProviders();
@@ -1005,7 +1038,7 @@ describe('IssueDetail', () => {
       if (channel === 'thread:get') return thread;
       if (channel === 'plan:list') return [plan];
       if (channel === 'review:list-by-plans') return { [plan.id]: review };
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -1036,7 +1069,7 @@ describe('IssueDetail', () => {
       if (channel === 'thread:get') return thread;
       if (channel === 'plan:list') return [plan];
       if (channel === 'review:list-by-plans') return { [plan.id]: review };
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -1083,7 +1116,7 @@ describe('IssueDetail', () => {
       if (channel === 'plan:list') return [currentThreadPlan];
       if (channel === 'plan:get-by-id') return malformedPlan;
       if (channel === 'review:list-by-plans') return {};
-      return args ?? null;
+      return defaultIssueDetailInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -1199,7 +1232,7 @@ describe('IssueDetail', () => {
         };
       if (channel === 'github:set-phase-model-override') return undefined;
       if (channel === 'github:set-phase-model-id-override') return undefined;
-      return args ?? [];
+      return defaultIssueDetailInvoke(channel) ?? args ?? [];
     });
 
     renderWithProviders();
@@ -1261,7 +1294,7 @@ describe('IssueDetail', () => {
       if (channel === 'thread:get') return thread;
       if (channel === 'plan:list') return [plan];
       if (channel === 'review:list-by-plans') return {};
-      return args ?? [];
+      return defaultIssueDetailInvoke(channel) ?? args ?? [];
     });
 
     renderWithProviders();
@@ -1276,10 +1309,12 @@ describe('IssueDetail', () => {
       'Console',
       'Comments',
       'Plans',
+      'Findings',
       'Diff',
       'Runs',
       'Activity',
       'Conversations',
+      'Chat',
     ]);
   });
 
@@ -1301,7 +1336,7 @@ describe('IssueDetail', () => {
     invokeMock.mockImplementation(async (channel, args) => {
       if (channel === 'thread:get') return thread;
       if (channel === 'terminal:list') return [event];
-      return args ?? [];
+      return defaultIssueDetailInvoke(channel) ?? args ?? [];
     });
 
     renderWithProviders();

@@ -51,6 +51,15 @@ vi.mock('@shipcode/agents', async (importOriginal) => {
   };
 });
 
+vi.mock('../logger.service', () => ({
+  default: {
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+  logProcessOutput: vi.fn(),
+}));
+
 import { parseOnboardingRepoList, registerSupportHandlers } from './register-support-handlers';
 
 // ---------------------------------------------------------------------------

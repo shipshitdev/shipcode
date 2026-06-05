@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest';
-import type { GitHubIssueCacheRecord } from '@shipcode/shared';
+import type { GitHubIssueCacheRecord, ReviewFindingRecord } from '@shipcode/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IssueDetailTabs } from './IssueDetailTabs';
@@ -69,7 +69,42 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   };
 }
 
-function renderTabs(activeThreadId: string | null = 'thread-1') {
+function makeFinding(overrides: Partial<ReviewFindingRecord> = {}): ReviewFindingRecord {
+  return {
+    id: 'finding-1',
+    projectId: 'project-1',
+    threadId: 'thread-1',
+    planId: 'plan-1',
+    reviewId: 'review-1',
+    verificationId: null,
+    runId: null,
+    phase: 'review',
+    source: 'review',
+    severity: 'major',
+    status: 'open',
+    title: 'Missing regression test',
+    description: 'Add coverage for the retry path.',
+    suggestion: null,
+    filePath: null,
+    fingerprint: 'finding-1',
+    sourceModel: 'claude',
+    commitSha: null,
+    prNumber: null,
+    worktreePath: null,
+    branch: null,
+    metadata: null,
+    resolvedByRunId: null,
+    createdAt: '2026-06-01T00:00:00.000Z',
+    updatedAt: '2026-06-01T00:00:00.000Z',
+    resolvedAt: null,
+    ...overrides,
+  };
+}
+
+function renderTabs(
+  activeThreadId: string | null = 'thread-1',
+  reviewFindings: ReviewFindingRecord[] = [],
+) {
   return render(
     <IssueDetailTabs
       activeIssue={makeIssue({ threadId: activeThreadId })}
@@ -92,7 +127,7 @@ function renderTabs(activeThreadId: string | null = 'thread-1') {
       loadingPlanDetailIds={[]}
       normalizedIssueActivity={[]}
       normalizedPlanHistory={[]}
-      reviewFindings={[]}
+      reviewFindings={reviewFindings}
       normalizedReviewsByPlanId={{}}
       normalizedThreadPlanHistory={[]}
       isPlanHistoryLoading={false}
@@ -143,5 +178,14 @@ describe('IssueDetailTabs', () => {
     renderTabs(null);
 
     expect(screen.queryByRole('tab', { name: 'Chat' })).not.toBeInTheDocument();
+  });
+
+  it('shows the open review finding count in the Findings tab label', () => {
+    renderTabs('thread-1', [
+      makeFinding(),
+      makeFinding({ id: 'finding-2', fingerprint: 'finding-2', status: 'fixed' }),
+    ]);
+
+    expect(screen.getByRole('tab', { name: 'Findings (1)' })).toBeInTheDocument();
   });
 });
