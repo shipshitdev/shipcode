@@ -25,6 +25,18 @@
       "inputs": ["$TURBO_DEFAULT$"],
       "outputs": ["coverage/**"]
     },
+    "e2e": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "e2e:ci": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "e2e:smoke": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
     "lint": {},
     "clean": {
       "cache": false
