@@ -570,6 +570,36 @@ function renderWithProviders() {
   );
 }
 
+const emptyListChannels = new Set([
+  'activity:list-for-issue',
+  'agent-conversations:list-thread',
+  'checkpoint:list',
+  'costs:list-for-issue',
+  'diff:list',
+  'feature-qa:list-by-thread',
+  'plan:list',
+  'plan:list-for-issue',
+  'review-findings:list-thread',
+  'terminal:list',
+]);
+
+function defaultIssueDetailCallbackInvoke(channel: string): unknown {
+  if (emptyListChannels.has(channel)) return [];
+  if (channel === 'review:list-by-plans') return {};
+  if (
+    channel === 'feature-qa:get-server' ||
+    channel === 'integrations:check' ||
+    channel === 'project:get' ||
+    channel === 'settings:get' ||
+    channel === 'task-graph:get-latest' ||
+    channel === 'thread:get' ||
+    channel === 'verification:get'
+  ) {
+    return null;
+  }
+  return undefined;
+}
+
 describe('IssueDetail callback harness', () => {
   const invokeMock = vi.fn<(channel: string, args?: unknown) => Promise<unknown>>();
 
@@ -603,6 +633,7 @@ describe('IssueDetail callback harness', () => {
       if (channel === 'plan:get') return makePlan();
       if (channel === 'plan:get-by-id') return makePlan();
       if (channel === 'review:list-by-plans') return {};
+      if (channel === 'review-findings:list-thread') return [];
       if (channel === 'diff:list') return [];
       if (channel === 'feature-qa:list-by-thread') return [];
       if (channel === 'settings:get') return {};
@@ -616,7 +647,7 @@ describe('IssueDetail callback harness', () => {
         return { prNumber: 7, prUrl: 'https://github.com/acme/repo/pull/7' };
       }
       if (channel === 'integrations:validate-openrouter-model') return { ok: true };
-      return undefined;
+      return defaultIssueDetailCallbackInvoke(channel);
     });
   });
 
@@ -717,7 +748,7 @@ describe('IssueDetail callback harness', () => {
       if (channel === 'github:list-issues') return [makeIssue()];
       if (channel === 'github:refresh-issues') return [makeIssue()];
       if (channel === 'checkpoint:list') return [];
-      return undefined;
+      return defaultIssueDetailCallbackInvoke(channel);
     });
 
     renderWithProviders();
@@ -862,7 +893,7 @@ describe('IssueDetail callback harness', () => {
       if (channel === 'settings:get') return {};
       if (channel === 'integrations:check') return {};
       if (channel === 'checkpoint:list') return [];
-      return undefined;
+      return defaultIssueDetailCallbackInvoke(channel);
     });
 
     renderWithProviders();
@@ -889,7 +920,7 @@ describe('IssueDetail callback harness', () => {
       if (channel === 'settings:get') return {};
       if (channel === 'integrations:check') return {};
       if (channel === 'checkpoint:list') return [];
-      return undefined;
+      return defaultIssueDetailCallbackInvoke(channel);
     });
 
     renderWithProviders();
@@ -1036,7 +1067,7 @@ describe('IssueDetail callback harness', () => {
       if (channel === 'github:list-issues') return [makeIssue({ pipelineStatus: 'executing' })];
       if (channel === 'github:refresh-issues') return [makeIssue({ pipelineStatus: 'executing' })];
       if (channel === 'checkpoint:list') return [];
-      return undefined;
+      return defaultIssueDetailCallbackInvoke(channel);
     });
 
     renderWithProviders();
@@ -1069,7 +1100,7 @@ describe('IssueDetail callback harness', () => {
       if (channel === 'github:list-issues') return [makeIssue({ pipelineStatus: 'paused' })];
       if (channel === 'github:refresh-issues') return [makeIssue({ pipelineStatus: 'paused' })];
       if (channel === 'checkpoint:list') return [];
-      return undefined;
+      return defaultIssueDetailCallbackInvoke(channel);
     });
 
     renderWithProviders();
@@ -1109,7 +1140,7 @@ describe('IssueDetail callback harness', () => {
       if (channel === 'github:list-issues') return [];
       if (channel === 'github:refresh-issues') return [];
       if (channel === 'checkpoint:list') return [];
-      return undefined;
+      return defaultIssueDetailCallbackInvoke(channel);
     });
 
     renderWithProviders();
@@ -1171,7 +1202,7 @@ describe('IssueDetail callback harness', () => {
       if (channel === 'github:list-issues') return [makeIssue()];
       if (channel === 'github:refresh-issues') return [makeIssue()];
       if (channel === 'checkpoint:list') return [];
-      return args ?? null;
+      return defaultIssueDetailCallbackInvoke(channel) ?? args ?? null;
     });
 
     renderWithProviders();
@@ -1261,7 +1292,7 @@ describe('IssueDetail callback harness', () => {
           },
         ];
       }
-      return undefined;
+      return defaultIssueDetailCallbackInvoke(channel);
     });
 
     renderWithProviders();
@@ -1289,7 +1320,7 @@ describe('IssueDetail callback harness', () => {
       if (channel === 'integrations:check') return {};
       if (channel === 'checkpoint:list') return [];
       if (channel === 'task-graph:get-latest') return { nodes: [], edges: [] };
-      return undefined;
+      return defaultIssueDetailCallbackInvoke(channel);
     });
 
     renderWithProviders();
@@ -1310,7 +1341,7 @@ describe('IssueDetail callback harness', () => {
       if (channel === 'settings:get') return null;
       if (channel === 'integrations:check') return {};
       if (channel === 'checkpoint:list') return [];
-      return undefined;
+      return defaultIssueDetailCallbackInvoke(channel);
     });
 
     renderWithProviders();
@@ -1364,7 +1395,7 @@ describe('IssueDetail callback harness', () => {
       if (channel === 'settings:get') return {};
       if (channel === 'integrations:check') return {};
       if (channel === 'checkpoint:list') return [];
-      return args ?? undefined;
+      return defaultIssueDetailCallbackInvoke(channel) ?? args ?? undefined;
     });
 
     renderWithProviders();

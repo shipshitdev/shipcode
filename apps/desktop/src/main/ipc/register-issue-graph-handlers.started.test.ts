@@ -7,6 +7,14 @@ const { startOrQueueMock } = vi.hoisted(() => ({
   startOrQueueMock: vi.fn(async () => undefined),
 }));
 
+vi.mock('../logger.service', () => ({
+  default: {
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
 vi.mock('@shipcode/pipeline', () => ({
   buildIssueGroupExecutionPreview: vi.fn(({ selectedIssueIds }) => ({
     issueOrder: selectedIssueIds,

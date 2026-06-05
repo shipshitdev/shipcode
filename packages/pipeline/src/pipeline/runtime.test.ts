@@ -299,13 +299,13 @@ describe('createPipelineRuntime', () => {
     expect(runtime.buildRepoSetupPlannerNote(context)).toContain('.env.test');
   });
 
-  it('falls back to settings when repo setup contract is absent', () => {
+  it('falls back to settings when repo setup contract is absent', async () => {
     mockLoadRepoSetupContract.mockReturnValue(null);
     const { deps } = makeDeps();
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
 
-    expect(runtime.prepareWorktree(context, 'execute')).resolves.toEqual({ ok: true });
+    await expect(runtime.prepareWorktree(context, 'execute')).resolves.toEqual({ ok: true });
     expect(runtime.getTestingContext(context)).toBe('unit');
     expect(runtime.getVerifyCommands(context)).toEqual(['bun test']);
     expect(runtime.buildRepoSetupPlannerNote(context)).toBe('');

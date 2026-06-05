@@ -43,6 +43,10 @@ const {
   streamParserFeedMock: vi.fn(),
 }));
 
+vi.mock('../logger.service', () => ({
+  default: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}));
+
 vi.mock('@shipcode/agents', () => {
   const defaultSkill = {
     content: 'bundled skill',
