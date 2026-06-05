@@ -1,13 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { existsSync, rmSync } from 'node:fs';
 import {
   appendExecutionNotesProtocol,
   buildExecutionPrompt,
-  buildPRBody,
   buildVerificationPrompt,
   discoverRuntimeTests,
-  GhCli,
   getRuntimeTestsDir,
   loadRepoContext,
   loadStructuredRepoContext,
@@ -21,11 +18,7 @@ import {
 } from '@shipcode/agents/source';
 import { WorktreeManager } from '@shipcode/git';
 import {
-  clampError,
   EXECUTION_PHASES,
-  type FeatureQaResult,
-  type GitHubPrCheckSummary,
-  type GitHubPrReviewCommentSummary,
   isRealGithubIssueNumber,
   MAX_NODE_VERIFICATION_RETRIES,
   MAX_TEST_RETRIES,
@@ -33,7 +26,6 @@ import {
   PIPELINE_PHASE,
   parseUnifiedDiff,
   type ShipCodePlan,
-  stripAnsi,
   VERIFICATION_FENCE_TAG,
 } from '@shipcode/shared';
 import {
@@ -45,13 +37,31 @@ import { computeRetryDelayMs } from '../retry-scheduler';
 import type { ExecutePhaseCarry, PipelineContext, VerifyPhaseCarry } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { buildPhasePayload, resetPhaseState } from './context';
-import { extractQaFlowResults } from './qa-result-parser';
 import {
-  buildVerificationFindingInputs,
-  formatOpenFindingsForPrompt,
-  formatReviewFindingsPrComment,
-  REVIEW_FINDINGS_PR_COMMENT_MARKER,
-} from './review-findings';
+  buildContinuationPrompt,
+  buildTestFailureFingerprint,
+  CPU_QUEUE_NOTICE_INTERVAL_MS,
+  DEFAULT_CPU_QUEUE_RETRY_MS,
+  extractExecutionErrorSnippet,
+  extractTestFailureSummary,
+  resolveWorktreeDiffBase,
+  worktreeHasChanges,
+} from './execution-phase-utils';
+import { createShippingPhaseHandlers } from './execution-shipping-phases';
+
+export {
+  buildContinuationPrompt,
+  buildTestFailureFingerprint,
+  extractExecutionErrorSnippet,
+  extractImplicatedFiles,
+  extractTestFailureSummary,
+  normalizeFeatureQaResults,
+  resolveWorktreeDiffBase,
+  worktreeHasChanges,
+} from './execution-phase-utils';
+
+import { extractQaFlowResults } from './qa-result-parser';
+import { buildVerificationFindingInputs, formatOpenFindingsForPrompt } from './review-findings';
 import type { PhaseOutcome, PipelineHelperEnv } from './shared';
 import {
   collectQaEvidencePaths,
@@ -63,275 +73,6 @@ import {
   writeVisualQaRuntimeTest,
 } from './visual-qa';
 
-const DEFAULT_CONTINUATION_PROMPT_TEMPLATE = `The previous turn failed verification. Address the remaining gaps and fix the issues.
-
-Prior failure reason: {{ prior_failure_reason }}
-
-Do NOT re-read the original PRD — you already have it in context. Focus only on fixing the verification failures above.`;
-const CPU_QUEUE_NOTICE_INTERVAL_MS = 30_000;
-const DEFAULT_CPU_QUEUE_RETRY_MS = 5_000;
-
-/**
- * Build a continuation prompt for a new turn after verify failure.
- * Uses the WORKFLOW.md continuation_prompt template if available,
- * otherwise falls back to the built-in default.
- */
-/**
- * @knipignore
- */
-export function buildContinuationPrompt(context: PipelineContext, failureReason: string): string {
-  const template =
-    context.workflowPolicy.continuationPromptTemplate ?? DEFAULT_CONTINUATION_PROMPT_TEMPLATE;
-
-  // Simple variable replacement — the template is short and doesn't
-  // need the full Liquid engine unless the user provides a custom one.
-  // For custom templates the workflow-prompt renderer handles it.
-  return template
-    .replace(/\{\{\s*prior_failure_reason\s*\}\}/g, failureReason)
-    .replace(/\{\{\s*turn_count\s*\}\}/g, String(context.turnCount))
-    .trim();
-}
-
-/**
- * @knipignore
- */
-export function normalizeFeatureQaResults(
-  results: Array<Omit<FeatureQaResult, 'evidencePaths'> & { evidencePaths?: string[] | null }>,
-): FeatureQaResult[] {
-  return results.map((result) => ({
-    ...result,
-    evidencePaths: result.evidencePaths ?? undefined,
-  }));
-}
-
-// Extract a short, human-readable error from an executor transcript.
-// The previous heuristic only dropped the snippet when the joined last
-// 3 lines started with `{`, which let backtick-fenced shipcode-plan
-// blocks leak into `lastError` and dump the plan JSON onto the failure
-// panel.
-/**
- * Exported for focused transcript parsing regression tests.
- *
- * @knipignore
- */
-export function extractExecutionErrorSnippet(rawOutput: string): string {
-  const lines = rawOutput.split('\n');
-  const tail = lines.slice(-30);
-
-  // 1) Reverse-scan for a structured streaming error event from claude/codex.
-  for (let i = tail.length - 1; i >= 0; i--) {
-    const trimmed = tail[i].trim();
-    if (!trimmed.startsWith('{')) continue;
-    try {
-      const obj = JSON.parse(trimmed) as Record<string, unknown>;
-      if (typeof obj.error === 'string' && obj.error.trim()) {
-        return obj.error.trim().slice(0, 280);
-      }
-      if (
-        obj.type === 'result' &&
-        (obj.is_error === true || obj.subtype === 'error') &&
-        typeof obj.result === 'string' &&
-        obj.result.trim()
-      ) {
-        return obj.result.trim().slice(0, 280);
-      }
-    } catch {
-      /* skip */
-    }
-  }
-
-  // 2) Reverse-scan for a plain-text error line. Skip JSON objects, code
-  // fences, shipcode-plan markers, and bare structural punctuation.
-  for (let i = tail.length - 1; i >= 0; i--) {
-    const trimmed = tail[i].trim();
-    if (!trimmed) continue;
-    if (trimmed.startsWith('{') || trimmed.startsWith('}')) continue;
-    if (trimmed.startsWith('[') || trimmed.startsWith(']')) continue;
-    if (trimmed.startsWith('```')) continue;
-    if (/^["'][a-zA-Z_]+["']\s*:/.test(trimmed)) continue; // looks like a JSON field
-    return trimmed.slice(0, 280);
-  }
-
-  return '';
-}
-
-/**
- * Extract a short summary from raw test command output for use in
- * last_error and notification bodies. Looks for common test failure
- * patterns across Jest, Vitest, Go test, pytest, and plain exit output.
- */
-/**
- * @knipignore
- */
-export function extractTestFailureSummary(testOutput: string): string {
-  if (!testOutput.trim()) return 'Tests failed (no output captured)';
-
-  const lines = testOutput.split('\n');
-
-  // Pattern 1: FAIL <path> (Jest/Vitest)
-  const failLine = lines.find((l) => /^\s*(FAIL|✗|×)\s+\S/.test(l));
-  if (failLine) return failLine.trim().slice(0, 280);
-
-  // Pattern 2: "X failed" summary line (pytest, Vitest)
-  const summaryLine = lines
-    .slice()
-    .reverse()
-    .find((l) => /\d+\s+(failed|error|failing)/i.test(l));
-  if (summaryLine) return summaryLine.trim().slice(0, 280);
-
-  // Pattern 3: "--- FAIL" (Go)
-  const goFail = lines.find((l) => l.startsWith('--- FAIL'));
-  if (goFail) return goFail.trim().slice(0, 280);
-
-  // Pattern 4: "Error:" lines
-  const errorLine = lines.find((l) => /^\s*Error:/i.test(l));
-  if (errorLine) return errorLine.trim().slice(0, 280);
-
-  // Fallback: last non-empty line, capped
-  const lastMeaningful = lines
-    .slice()
-    .reverse()
-    .find((l) => l.trim().length > 0);
-  return lastMeaningful?.trim().slice(0, 280) ?? '';
-}
-
-interface TestFailureFingerprint {
-  fingerprint: string;
-  summary: string;
-  outputExcerpt: string;
-  implicatedFiles: string[];
-}
-
-/**
- * @knipignore
- */
-export function buildTestFailureFingerprint(
-  command: string,
-  output: string,
-): TestFailureFingerprint {
-  const summary = extractTestFailureSummary(output);
-  const implicatedFiles = extractImplicatedFiles(`${command}\n${output}`);
-  const normalizedOutput = output
-    .split('\n')
-    .map((line) =>
-      stripAnsi(line)
-        .replace(/\b\d+(?:\.\d+)?\s?(ms|s)\b/gi, '<duration>')
-        .replace(/:\d+:\d+\b/g, ':<line>:<col>')
-        .replace(/\s+/g, ' ')
-        .trim(),
-    )
-    .filter(Boolean)
-    .slice(-40)
-    .join('\n')
-    .toLowerCase();
-  const source = [
-    command.trim(),
-    summary.toLowerCase(),
-    implicatedFiles.join(','),
-    normalizedOutput,
-  ]
-    .filter(Boolean)
-    .join('\n');
-  return {
-    fingerprint: createHash('sha256').update(source).digest('hex').slice(0, 32),
-    summary,
-    outputExcerpt: output.trim().slice(-8192),
-    implicatedFiles,
-  };
-}
-
-/**
- * @knipignore
- */
-export function extractImplicatedFiles(value: string): string[] {
-  const matches = value.match(/[A-Za-z0-9_./-]+\.(?:test|spec)\.[cm]?[jt]sx?/g) ?? [];
-  return Array.from(new Set(matches.map((file) => file.replace(/^\.\//, '')))).slice(0, 20);
-}
-
-/**
- * @knipignore
- */
-export function worktreeHasChanges(context: PipelineContext): boolean {
-  const cwd = context.worktreePath ?? context.projectPath;
-  try {
-    const status = execFileSync('git', ['status', '--porcelain'], {
-      cwd,
-      encoding: 'utf-8',
-      maxBuffer: 1024 * 1024,
-    }).trim();
-    if (status.length > 0) return true;
-
-    const baseRef = resolveWorktreeDiffBase(context);
-    if (baseRef) {
-      const diff = execFileSync('git', ['diff', '--name-only', `${baseRef}..HEAD`], {
-        cwd,
-        encoding: 'utf-8',
-        maxBuffer: 1024 * 1024,
-      }).trim();
-      if (diff.length > 0) return true;
-    }
-
-    return false;
-  } catch {
-    return true;
-  }
-}
-
-/**
- * Resolve the git ref that represents "before this pipeline changed files".
- * Older/quick-task contexts can have an empty forkPointSha, so fall back to the
- * branch merge-base and finally the previous commit instead of diffing `..HEAD`.
- *
- * @knipignore
- */
-export function resolveWorktreeDiffBase(context: PipelineContext): string | null {
-  const cwd = context.worktreePath ?? context.projectPath;
-  const forkPointSha = context.forkPointSha?.trim();
-  if (forkPointSha) {
-    try {
-      return execFileSync('git', ['rev-parse', '--verify', `${forkPointSha}^{commit}`], {
-        cwd,
-        encoding: 'utf-8',
-        maxBuffer: 1024 * 1024,
-      }).trim();
-    } catch {
-      // Fall back below; persisted fork points can be missing in older records.
-    }
-  }
-
-  const baseBranch = context.baseBranch?.trim();
-  const baseCandidates = baseBranch
-    ? Array.from(
-        new Set([
-          baseBranch,
-          baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`,
-        ]),
-      )
-    : [];
-
-  for (const baseRef of baseCandidates) {
-    try {
-      return execFileSync('git', ['merge-base', baseRef, 'HEAD'], {
-        cwd,
-        encoding: 'utf-8',
-        maxBuffer: 1024 * 1024,
-      }).trim();
-    } catch {
-      // Try the next available base ref.
-    }
-  }
-
-  try {
-    return execFileSync('git', ['rev-parse', 'HEAD~1'], {
-      cwd,
-      encoding: 'utf-8',
-      maxBuffer: 1024 * 1024,
-    }).trim();
-  } catch {
-    return null;
-  }
-}
-
 export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: PipelineHelperEnv) {
   const { activePipelines, skillCallSite } = contextHelpers;
   const {
@@ -339,7 +80,6 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
     emitTerminalLifecycle,
     emitTerminalRaw,
     ensureRepoSetupContract,
-    formatStabilizationFeedback,
     formatTestFixFeedback,
     getTestingContext,
     getVerifyCommands,
@@ -349,6 +89,12 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
     runProviderPhase,
     runShellCommand,
   } = runtime;
+
+  const { startCommitAndPush, startShipping, startStabilization } = createShippingPhaseHandlers({
+    deps,
+    contextHelpers,
+    runtime,
+  });
 
   function isSameProject(
     summary: ReturnType<typeof contextHelpers.listActive>[number],
@@ -415,27 +161,6 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
   function formatOpenReviewFindingsFeedback(threadId: string): string {
     if (!deps.reviewFindings) return '';
     return formatOpenFindingsForPrompt(deps.reviewFindings.listOpenByThread(threadId));
-  }
-
-  async function publishReviewFindingsComment(
-    context: NonNullable<ReturnType<typeof activePipelines.get>>,
-    prNumber: number,
-  ): Promise<void> {
-    if (!deps.reviewFindings) return;
-
-    const findings = deps.reviewFindings.listByThread(context.threadId, { includeClosed: true });
-    try {
-      const ghCli = new GhCli(context.worktreePath ?? context.projectPath);
-      await ghCli.upsertIssueCommentByMarker(
-        prNumber,
-        REVIEW_FINDINGS_PR_COMMENT_MARKER,
-        formatReviewFindingsPrComment(findings),
-      );
-    } catch (error) {
-      console.warn(
-        `[pipeline] Failed to publish review findings to PR #${prNumber}: ${clampError(error)}`,
-      );
-    }
   }
 
   function ensureRepoPromptMaterials(
@@ -1836,277 +1561,6 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       }
       return { next: 'paused' };
     }
-  }
-
-  async function startCommitAndPush(threadId: string): Promise<PhaseOutcome> {
-    const context = activePipelines.get(threadId);
-    if (!context) return { next: 'paused' };
-
-    const cwd = context.worktreePath ?? context.projectPath;
-
-    try {
-      const currentHead = execFileSync('git', ['rev-parse', 'HEAD'], {
-        cwd,
-        encoding: 'utf-8',
-      }).trim();
-      if (context.verifiedSha && context.verifiedSha !== currentHead) {
-        emitPhase(
-          threadId,
-          'failed',
-          'Commit aborted: HEAD moved after verification (verifiedSha mismatch).',
-        );
-        activePipelines.delete(threadId);
-        return { next: 'failed' };
-      }
-
-      const diffBase = resolveWorktreeDiffBase(context);
-      const ahead = diffBase
-        ? execFileSync('git', ['log', `${diffBase}..HEAD`, '--oneline'], {
-            cwd,
-            encoding: 'utf-8',
-          })
-        : '';
-      if (!ahead.trim()) {
-        emitPhase(
-          threadId,
-          'failed',
-          'Commit aborted: no commits ahead of worktree base — nothing to push.',
-        );
-        activePipelines.delete(threadId);
-        return { next: 'failed' };
-      }
-
-      const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd,
-        encoding: 'utf-8',
-      }).trim();
-      execFileSync('git', ['push', 'origin', branch, '--set-upstream'], { cwd, encoding: 'utf-8' });
-
-      resetPhaseState(context);
-      return { next: 'shipping' };
-    } catch (firstErr) {
-      try {
-        const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-          cwd,
-          encoding: 'utf-8',
-        }).trim();
-        execFileSync('git', ['push', 'origin', branch, '--set-upstream'], {
-          cwd,
-          encoding: 'utf-8',
-        });
-        resetPhaseState(context);
-        return { next: 'shipping' };
-      } catch (secondErr) {
-        const message = secondErr instanceof Error ? secondErr.message : String(secondErr);
-        const firstMessage = firstErr instanceof Error ? firstErr.message : String(firstErr);
-        emitPhase(
-          threadId,
-          'failed',
-          `Commit and push failed (both attempts). first=${firstMessage.slice(0, 120)} retry=${message.slice(0, 120)}`,
-        );
-        activePipelines.delete(threadId);
-        return { next: 'failed' };
-      }
-    }
-  }
-
-  async function startShipping(threadId: string): Promise<PhaseOutcome> {
-    const context = activePipelines.get(threadId);
-    if (!context) return { next: 'paused' };
-
-    emitPhase(threadId, 'shipping');
-
-    if (!isRealGithubIssueNumber(context.githubIssueNumber)) {
-      // Quick tasks (negative sentinel) and pipelines without an issue
-      // skip PR shipping. Branch is left on disk for manual follow-up.
-      emitPhase(threadId, 'completed');
-      activePipelines.delete(threadId);
-      return { next: 'done' };
-    }
-    const issueNumber = context.githubIssueNumber;
-
-    const cwd = context.worktreePath ?? context.projectPath;
-
-    try {
-      const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd,
-        encoding: 'utf-8',
-      }).trim();
-      const latestPlan = deps.plans.getLatest(threadId);
-      const plan = latestPlan?.structured;
-      const title = plan?.objective ?? `ShipCode: Issue #${context.githubIssueNumber}`;
-
-      // Collect reviews for the latest plan
-      const reviews = latestPlan
-        ? (() => {
-            const review = deps.reviews.getByPlanId(latestPlan.id);
-            return review?.structured ? [review.structured] : [];
-          })()
-        : [];
-
-      // Get latest verification
-      const latestVerification = deps.verifications.getLatest(threadId);
-      const featureQaResults = normalizeFeatureQaResults(
-        deps.featureQaResults?.listByThread(threadId) ?? [],
-      );
-
-      const body = plan
-        ? buildPRBody(plan, reviews, latestVerification?.structured ?? null, issueNumber, {
-            projectId: context.projectId,
-            skills: deps.skills,
-            featureQaResults,
-          })
-        : [
-            '## Summary',
-            `Closes #${issueNumber}`,
-            '',
-            '---',
-            '*Autonomous implementation by ShipCode*',
-          ].join('\n');
-
-      if (!context.baseBranch) {
-        throw new Error(`Thread ${threadId}: missing baseBranch at PR creation`);
-      }
-
-      const existingPrJson = execFileSync(
-        'gh',
-        [
-          'pr',
-          'list',
-          '--state',
-          'all',
-          '--head',
-          branch,
-          '--json',
-          'number,url,isDraft',
-          '--limit',
-          '1',
-        ],
-        { cwd, encoding: 'utf-8' },
-      );
-      const existingPr = (
-        JSON.parse(existingPrJson) as Array<{
-          number: number;
-          url: string;
-          isDraft: boolean;
-        }>
-      )[0];
-
-      let prNumber: number | null = null;
-      let prUrl: string | null = null;
-      let prIsDraft = true;
-      let created = false;
-
-      if (existingPr) {
-        prNumber = existingPr.number;
-        prUrl = existingPr.url;
-        prIsDraft = !!existingPr.isDraft;
-        execFileSync(
-          'gh',
-          ['pr', 'edit', String(existingPr.number), '--title', title, '--body', body],
-          { cwd, encoding: 'utf-8' },
-        );
-      } else {
-        const prOutput = execFileSync(
-          'gh',
-          [
-            'pr',
-            'create',
-            '--draft',
-            '--title',
-            title,
-            '--body',
-            body,
-            '--head',
-            branch,
-            '--base',
-            context.baseBranch,
-          ],
-          { cwd, encoding: 'utf-8' },
-        );
-        const prMatch = prOutput.match(/\/pull\/(\d+)/);
-        if (!prMatch) {
-          throw new Error(`Failed to parse pull request number from: ${prOutput}`);
-        }
-        prNumber = Number.parseInt(prMatch[1], 10);
-        prUrl = prOutput.trim();
-        created = true;
-      }
-
-      if (prNumber) {
-        deps.threads.setGithubPr(threadId, prNumber);
-
-        if (context.projectId && context.githubIssueNumber) {
-          const issue = deps.githubIssues.getByNumber(context.projectId, context.githubIssueNumber);
-          if (issue) {
-            deps.githubIssues.updatePullRequestFeedback(issue.id, {
-              linkedPrNumber: prNumber,
-              linkedPrUrl: prUrl,
-              linkedPrIsDraft: prIsDraft,
-              ciBlocked: issue.ciBlocked,
-              failingChecks: issue.failingChecks,
-              unresolvedReviewComments: issue.unresolvedReviewComments,
-            });
-          }
-        }
-
-        await publishReviewFindingsComment(context, prNumber);
-
-        if (created) {
-          try {
-            execFileSync(
-              'gh',
-              [
-                'issue',
-                'comment',
-                String(context.githubIssueNumber),
-                '--body',
-                `Draft PR #${prNumber} opened by ShipCode.`,
-              ],
-              { cwd, encoding: 'utf-8' },
-            );
-          } catch {
-            // best effort comment
-          }
-        }
-      }
-
-      emitPhase(threadId, 'completed');
-      activePipelines.delete(threadId);
-      return { next: 'done' };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      emitPhase(threadId, 'failed', `Shipping failed: ${message}`);
-      activePipelines.delete(threadId);
-      return { next: 'failed' };
-    }
-  }
-
-  async function startStabilization(
-    threadId: string,
-    inputs: {
-      prNumber: number;
-      prUrl: string | null;
-      failingChecks: GitHubPrCheckSummary[];
-      unresolvedReviewComments: GitHubPrReviewCommentSummary[];
-    },
-  ): Promise<PhaseOutcome> {
-    const context = activePipelines.get(threadId);
-    if (!context) return { next: 'paused' };
-
-    const latestPlan = deps.plans.getLatest(threadId);
-    if (!latestPlan?.structured) {
-      throw new Error(`Thread ${threadId}: missing approved plan for stabilization`);
-    }
-
-    context.cancelled = false;
-    resetPhaseState(context);
-    context.verifiedSha = null;
-    return {
-      next: 'execute',
-      plan: latestPlan.structured,
-      carry: { stabilizationFeedback: formatStabilizationFeedback(inputs) },
-    };
   }
 
   return {
