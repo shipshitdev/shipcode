@@ -272,8 +272,10 @@ test.describe('terminal drawer — transcript rendering', () => {
     await expect(harness.page.getByTestId('terminal-drawer')).toBeVisible();
     await expect(harness.page.getByTestId('terminal-transcript')).toBeVisible();
 
-    // Before any events, the transcript renders the empty message.
-    await expect(harness.page.getByText('No console output yet.')).toBeVisible();
+    // Before any events, no event rows are rendered. (The transcript shows a
+    // pending/empty state whose exact copy depends on the resolved target, so we
+    // assert the absence of event rows rather than a specific message string.)
+    await expect(harness.page.getByTestId('terminal-event-text')).toHaveCount(0);
   });
 
   test('events for a different threadId do not appear in the transcript', async ({ harness }) => {
@@ -296,7 +298,8 @@ test.describe('terminal drawer — transcript rendering', () => {
     // The text from the other thread must NOT be in the transcript.
     await expect(harness.page.getByText('Should not appear')).not.toBeVisible();
 
-    // Empty state should still show.
-    await expect(harness.page.getByText('No console output yet.')).toBeVisible();
+    // The transcript for the selected thread is still mounted and has no rows.
+    await expect(harness.page.getByTestId('terminal-transcript')).toBeVisible();
+    await expect(harness.page.getByTestId('terminal-event-text')).toHaveCount(0);
   });
 });
