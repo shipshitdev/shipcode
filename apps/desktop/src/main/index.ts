@@ -47,6 +47,12 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 
 app.setName('ShipCode');
 
+// E2E mode (SHIPCODE_E2E_MODE=1): the Playwright harness launches the real app
+// against a seeded temp DB + fake `gh`. Suppress background loops, OS update
+// polling, telemetry, and the splash window so the first BrowserWindow is the
+// main window and no live network / timer behaviour makes specs flaky.
+const E2E_MODE = process.env.SHIPCODE_E2E_MODE === '1';
+
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -190,13 +196,16 @@ const RENDERER_URL = process.env.VITE_DEV_SERVER_URL;
 const RENDERER_HTML = path.join(DIST, 'index.html');
 
 function createWindow() {
-  splashScreen.create();
+  if (!E2E_MODE) splashScreen.create();
   splashScreen.update('window', 'active', 'Creating the main desktop window.');
 
   mainWindow = new BrowserWindow(buildMainWindowOptions(DIST));
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
+    // E2E mode: keep the window hidden. Playwright drives the renderer through
+    // webContents, so showing it only steals OS focus (and the macOS focus beep)
+    // on every per-test launch. The renderer still loads while hidden.
+    if (!E2E_MODE) mainWindow?.show();
     splashScreen.close();
   });
 
@@ -247,9 +256,11 @@ function createWindow() {
   };
   threadQueries = queries.threads;
 
-  void configureMainTelemetry(queries.settings.get()).catch((err) => {
-    log.warn('[telemetry] init failed:', err);
-  });
+  if (!E2E_MODE) {
+    void configureMainTelemetry(queries.settings.get()).catch((err) => {
+      log.warn('[telemetry] init failed:', err);
+    });
+  }
 
   // Notification service — reads settings, writes notifications + activity,
   // emits OS notifications and dock badges. Must be constructed before the
@@ -339,7 +350,7 @@ function createWindow() {
     automations: queries.automations,
     pipelineScheduler,
   });
-  automationScheduler.start();
+  if (!E2E_MODE) automationScheduler.start();
 
   // Reconciliation loop: polls running pipelines' GitHub issue state every 30s.
   // Cancels pipelines whose issue was closed or tagged with a terminal label.
@@ -358,7 +369,7 @@ function createWindow() {
     },
     log: (msg) => log.info(msg),
   });
-  reconciliationLoop.start();
+  if (!E2E_MODE) reconciliationLoop.start();
 
   // Hot-reload WORKFLOW.md: watch each project's workflow file and refresh the
   // shared policy cache on change so prompt/concurrency edits apply to the next
@@ -445,7 +456,7 @@ function createWindow() {
   // Update service: poll GitHub releases for newer ShipCode builds.
   // Notify-only — install via `brew upgrade --cask shipcode`.
   updateService = new UpdateService(mainWindow);
-  updateService.start();
+  if (!E2E_MODE) updateService.start();
 
   // Register IPC handlers
   splashScreen.completeThrough('pipeline');
@@ -470,38 +481,41 @@ function createWindow() {
   // Also kills agent ptys whose stdout has gone silent for PROCESS_STALL_TIMEOUT_MS — a hung
   // claude/codex child can outlive its phase and pin a thread in 'executing' indefinitely
   // without tripping the heartbeat watchdog above.
-  const watchdogTimer = setInterval(() => {
-    try {
-      const activeIds = new Set(activePipeline.listActive().map((s) => s.threadId));
-      for (const thread of queries.threads.getStuck(HEARTBEAT_TIMEOUT_MS)) {
-        if (activeIds.has(thread.id)) continue;
-        const errorMsg = 'Pipeline timed out — process was likely interrupted by an app refresh.';
-        transitionThreadPhase(requireMainWindow(), queries, emitter, {
-          threadId: thread.id,
-          phase: PIPELINE_PHASE.failed,
-          errorMessage: errorMsg,
-        });
-        log.info(`[watchdog] reset stuck thread ${thread.id} → failed`);
-      }
+  const watchdogTimer: ReturnType<typeof setInterval> | null = E2E_MODE
+    ? null
+    : setInterval(() => {
+        try {
+          const activeIds = new Set(activePipeline.listActive().map((s) => s.threadId));
+          for (const thread of queries.threads.getStuck(HEARTBEAT_TIMEOUT_MS)) {
+            if (activeIds.has(thread.id)) continue;
+            const errorMsg =
+              'Pipeline timed out — process was likely interrupted by an app refresh.';
+            transitionThreadPhase(requireMainWindow(), queries, emitter, {
+              threadId: thread.id,
+              phase: PIPELINE_PHASE.failed,
+              errorMessage: errorMsg,
+            });
+            log.info(`[watchdog] reset stuck thread ${thread.id} → failed`);
+          }
 
-      const stalledIds = processManager?.killStalled(PROCESS_STALL_TIMEOUT_MS) ?? [];
-      for (const procId of stalledIds) {
-        const proc = processManager?.get(procId);
-        const tid = proc?.threadId;
-        log.warn(
-          `[watchdog] killed stalled ${proc?.type ?? 'process'} ${procId} (thread=${tid ?? 'n/a'})`,
-        );
-        if (!tid) continue;
-        transitionThreadPhase(requireMainWindow(), queries, emitter, {
-          threadId: tid,
-          phase: PIPELINE_PHASE.failed,
-          errorMessage: formatStalledProcessMessage(PROCESS_STALL_TIMEOUT_MS),
-        });
-      }
-    } catch (err) {
-      log.error('[watchdog] error during stuck-thread check:', err);
-    }
-  }, 30_000);
+          const stalledIds = processManager?.killStalled(PROCESS_STALL_TIMEOUT_MS) ?? [];
+          for (const procId of stalledIds) {
+            const proc = processManager?.get(procId);
+            const tid = proc?.threadId;
+            log.warn(
+              `[watchdog] killed stalled ${proc?.type ?? 'process'} ${procId} (thread=${tid ?? 'n/a'})`,
+            );
+            if (!tid) continue;
+            transitionThreadPhase(requireMainWindow(), queries, emitter, {
+              threadId: tid,
+              phase: PIPELINE_PHASE.failed,
+              errorMessage: formatStalledProcessMessage(PROCESS_STALL_TIMEOUT_MS),
+            });
+          }
+        } catch (err) {
+          log.error('[watchdog] error during stuck-thread check:', err);
+        }
+      }, 30_000);
 
   // Content-Security-Policy — set before any content loads.
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
@@ -557,7 +571,7 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
-    clearInterval(watchdogTimer);
+    if (watchdogTimer) clearInterval(watchdogTimer);
     reconciliationLoop.stop();
     workflowWatchManager.dispose();
     updateService?.stop();

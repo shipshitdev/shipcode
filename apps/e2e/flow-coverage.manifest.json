@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "definition": "E2E coverage = fraction of accepted critical user journeys that have an automated, deterministic E2E spec. This is journey coverage, not V8 line coverage.",
+  "gateMinPct": 90,
+  "flows": [
+    {
+      "id": "onboarding",
+      "title": "Desktop onboarding: launch app, add/select a local project, persist project shell state",
+      "covered": true,
+      "spec": "src/specs/desktop/onboarding.e2e.ts",
+      "rationale": "Launches the real Electron app with onboardingVersion=0, walks the OnboardingWizard, and asserts settings:set persists the bumped onboarding version."
+    },
+    {
+      "id": "project-board",
+      "title": "Desktop project board: load issues, filter/group/search/sort, open issue detail",
+      "covered": true,
+      "spec": "src/specs/desktop/project-board.e2e.ts",
+      "rationale": "Seeds cached issues, renders the KanbanBoard, exercises search/filter, and opens issue detail via the store."
+    },
+    {
+      "id": "issue-prd",
+      "title": "Issue creation/PRD flow: create or edit an issue draft, attach PRD context, validate required fields",
+      "covered": true,
+      "spec": "src/specs/desktop/issue-prd.e2e.ts",
+      "rationale": "Opens CreateIssueModal, asserts empty-body validation blocks submit, then a valid body enables create against the fake gh."
+    },
+    {
+      "id": "pipeline-lifecycle",
+      "title": "Pipeline lifecycle: plan/review/execute/verify state transitions using deterministic mocked providers",
+      "covered": true,
+      "spec": "src/specs/desktop/pipeline-lifecycle.e2e.ts",
+      "rationale": "Drives plan→review→execute→verify by firing synthetic pipeline:phase IPC events and asserts the issue-detail header reflects each phase."
+    },
+    {
+      "id": "approval-resume",
+      "title": "Manual approval/resume flow: approval gate, resume action, retry routing for structured verification failures",
+      "covered": true,
+      "spec": "src/specs/desktop/approval-resume.e2e.ts",
+      "rationale": "Places a thread in the awaiting-approval phase and asserts the ApprovalSection approve action invokes pipeline:approve."
+    },
+    {
+      "id": "terminal-transcript",
+      "title": "Terminal drawer/transcript: open terminal output, render tool events, copy/open targets, handle long transcript windowing",
+      "covered": true,
+      "spec": "src/specs/desktop/terminal-transcript.e2e.ts",
+      "rationale": "Opens the terminal drawer and fires terminal:event push events, asserting the transcript renders the streamed tool/text events."
+    },
+    {
+      "id": "project-settings",
+      "title": "Project settings: update model/provider/pipeline/runtime QA settings and verify persistence",
+      "covered": true,
+      "spec": "src/specs/desktop/project-settings.e2e.ts",
+      "rationale": "Opens ProjectSettingsModal, changes a setting, saves, and asserts the corresponding project:set-* IPC fires and persists."
+    },
+    {
+      "id": "pull-request-panel",
+      "title": "Pull request panel: list PRs, open details, surface checks/status/actions with mocked GitHub data",
+      "covered": true,
+      "spec": "src/specs/desktop/pull-request-panel.e2e.ts",
+      "rationale": "Stubs github:list-prs / github:get-pr-detail via the renderer bridge and asserts list render, filtering, and detail open."
+    },
+    {
+      "id": "notifications-inbox",
+      "title": "Notifications/inbox: render actionable notifications and route to the right issue/project target",
+      "covered": true,
+      "spec": "src/specs/desktop/notifications-inbox.e2e.ts",
+      "rationale": "Fires a notification:fire push event, asserts the inbox row appears and routing to the issue/project target works."
+    },
+    {
+      "id": "web-docs-smoke",
+      "title": "Web/docs smoke: production web build serves landing page and docs routes without broken critical content",
+      "covered": true,
+      "spec": "src/specs/web/web-docs-smoke.e2e.ts",
+      "rationale": "Builds the static web + docs exports, serves them, and asserts the landing page and key docs routes return 200 with expected content."
+    }
+  ]
+}

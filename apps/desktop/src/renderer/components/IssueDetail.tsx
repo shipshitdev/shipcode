@@ -1171,14 +1171,16 @@ function useIssueDetailView() {
     ACTIVE_PHASES.includes(threadPhase as PipelinePhase) || threadPhase === PIPELINE_PHASE.approval;
 
   const issueStatusChip = (
-    <PhaseChip
-      status={headerStatus}
-      className={cn(
-        'text-[11px] font-semibold',
-        headerStatusAnimated &&
-          'relative pl-4 before:absolute before:left-1.5 before:top-1/2 before:h-1.5 before:w-1.5 before:-translate-y-1/2 before:rounded-full before:bg-current before:animate-pulse',
-      )}
-    />
+    <span data-testid="issue-phase-chip">
+      <PhaseChip
+        status={headerStatus}
+        className={cn(
+          'text-[11px] font-semibold',
+          headerStatusAnimated &&
+            'relative pl-4 before:absolute before:left-1.5 before:top-1/2 before:h-1.5 before:w-1.5 before:-translate-y-1/2 before:rounded-full before:bg-current before:animate-pulse',
+        )}
+      />
+    </span>
   );
 
   const canUseStatusActions = !isAutomationIssue(activeIssue) && (canRerun || !canStartPipeline);

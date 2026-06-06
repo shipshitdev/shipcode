@@ -148,7 +148,10 @@ export function OnboardingWizard({ onComplete }: Props) {
   const isLastStep = step === 2;
 
   return (
-    <div className="flex items-center justify-center h-screen bg-primary [app-region:drag]">
+    <div
+      data-testid="onboarding-wizard"
+      className="flex items-center justify-center h-screen bg-primary [app-region:drag]"
+    >
       <Card className="w-[520px] max-h-[80vh] flex flex-col overflow-hidden [app-region:no-drag]">
         <div className="px-6 pt-6 pb-4 border-b border-border">
           <h2 className="mb-4 text-lg font-semibold">Welcome to ShipCode</h2>
@@ -194,17 +197,17 @@ export function OnboardingWizard({ onComplete }: Props) {
 
         <div className="flex items-center gap-2 px-6 py-4 border-t border-border">
           {step > 0 && (
-            <Button variant="secondary" onClick={handleBack}>
+            <Button data-testid="onboarding-back-btn" variant="secondary" onClick={handleBack}>
               Back
             </Button>
           )}
           <div className="flex-1" />
           {isLastStep ? (
-            <Button onClick={handleFinish} disabled={saving}>
+            <Button data-testid="onboarding-finish-btn" onClick={handleFinish} disabled={saving}>
               <LoadingButtonContent loading={saving}>Finish Setup</LoadingButtonContent>
             </Button>
           ) : (
-            <Button onClick={handleNext} disabled={!canNext}>
+            <Button data-testid="onboarding-next-btn" onClick={handleNext} disabled={!canNext}>
               Next
             </Button>
           )}

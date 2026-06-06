@@ -749,7 +749,7 @@ function useProjectSettingsModalView() {
       {!project || !settings || !projectDraft ? (
         <div className="px-6 py-4 text-xs text-muted-foreground">Loading project…</div>
       ) : (
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1" data-testid="project-settings-modal">
           <SettingsNavigation
             items={PROJECT_SETTINGS_SECTIONS}
             activeKey={activeTab}
@@ -944,6 +944,7 @@ function useProjectSettingsModalView() {
           Cancel
         </Button>
         <Button
+          data-testid="project-settings-save-btn"
           onClick={() => {
             void handleSave();
           }}

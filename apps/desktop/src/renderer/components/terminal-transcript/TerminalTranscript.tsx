@@ -16,7 +16,7 @@ import {
   Wand2,
   Wrench,
 } from 'lucide-react';
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type ConsoleSeverity,
   classifyConsoleLine,
@@ -147,9 +147,13 @@ function WorkLogCard({ records, compact }: { records: TerminalEventRecord[]; com
       <div className="space-y-0.5">
         {visibleItems.map((item) =>
           item.type === 'pair' ? (
-            <WorkLogRow key={item.start.id} record={item.start} compact={compact} completed />
+            <div key={item.start.id} data-testid={`terminal-event-${item.start.event.kind}`}>
+              <WorkLogRow record={item.start} compact={compact} completed />
+            </div>
           ) : (
-            <WorkLogRow key={item.record.id} record={item.record} compact={compact} />
+            <div key={item.record.id} data-testid={`terminal-event-${item.record.event.kind}`}>
+              <WorkLogRow record={item.record} compact={compact} />
+            </div>
           ),
         )}
       </div>
@@ -767,7 +771,7 @@ export function TerminalTranscript({
           return <WorkLogCard key={key} records={segment.records} compact={compact} />;
         }
         return (
-          <Fragment key={segment.record.id}>
+          <div key={segment.record.id} data-testid={`terminal-event-${segment.record.event.kind}`}>
             {transcriptRow({
               record: segment.record,
               compact,
@@ -779,7 +783,7 @@ export function TerminalTranscript({
               sendingToTerminalEventId,
               copiedEventId,
             })}
-          </Fragment>
+          </div>
         );
       }),
     [
@@ -892,7 +896,7 @@ export function TerminalTranscript({
     ) : null;
 
   return (
-    <div className={cn('relative h-full', className)}>
+    <div className={cn('relative h-full', className)} data-testid="terminal-transcript">
       <div
         ref={scrollRef}
         className="h-full overflow-y-auto overscroll-contain"
