@@ -112,9 +112,9 @@ test.describe('project board', () => {
       const issues = qc.getQueryData(['github-issues', pid]) as
         | Array<{ issueNumber: number }>
         | undefined;
-      if (!issues) return; // board data not yet cached — test continues gracefully
+      if (!issues) throw new Error(`[e2e] github-issues cache not populated for ${pid}`);
       const alpha = issues.find((i) => i.issueNumber === 101);
-      if (!alpha) return;
+      if (!alpha) throw new Error('[e2e] issue 101 (alpha) not found in github-issues cache');
       qc.setQueryData(['github-issues', pid], [alpha]);
     }, projectId);
 

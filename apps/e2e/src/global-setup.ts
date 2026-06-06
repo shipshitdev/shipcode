@@ -20,7 +20,17 @@ const DESKTOP_MAIN = path.join(DESKTOP_DIR, 'dist', 'main', 'index.js');
  * here.
  */
 export default async function globalSetup(config: FullConfig): Promise<void> {
-  const runsDesktop = config.projects.some((project) => project.name === 'desktop');
+  // Playwright passes the FULL project list here regardless of any `--project`
+  // filter, so detect the actually-selected projects from argv. Without this the
+  // web-smoke-only run (`--project=web-smoke`) would still build the desktop
+  // bundle — which fails on non-macOS CI runners.
+  const selected = [...process.argv.join(' ').matchAll(/--project(?:=|\s+)(\S+)/g)].map(
+    (match) => match[1],
+  );
+  const runsDesktop =
+    selected.length === 0
+      ? config.projects.some((project) => project.name === 'desktop')
+      : selected.includes('desktop');
   if (!runsDesktop) return;
 
   if (existsSync(DESKTOP_MAIN)) {

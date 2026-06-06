@@ -87,7 +87,10 @@ export async function launchApp(seedOptions: SeedOptions = {}): Promise<Harness>
     await app.evaluate(
       ({ BrowserWindow }, payload) => {
         const win = BrowserWindow.getAllWindows()[0];
-        win?.webContents.send(payload.channel, ...payload.args);
+        if (!win) {
+          throw new Error(`[e2e] fire('${payload.channel}'): no BrowserWindow found`);
+        }
+        win.webContents.send(payload.channel, ...payload.args);
       },
       { channel, args },
     );

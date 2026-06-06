@@ -81,9 +81,11 @@ export function seedDatabase(dataDir: string, options: SeedOptions = {}): SeedRe
 
     if (options.notifications?.length) {
       const notifications = new NotificationsQueries(db);
+      const createFn = (notifications as { create?: (input: unknown) => unknown }).create;
       for (const note of options.notifications) {
+        if (typeof createFn !== 'function') break;
         try {
-          (notifications as unknown as { create: (input: unknown) => unknown }).create({
+          createFn.call(notifications, {
             projectId: project.id,
             kind: note.kind,
             title: note.title,
