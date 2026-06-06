@@ -54,7 +54,11 @@ export async function serveStatic(appName: StaticApp, port: number): Promise<Sta
   if (!existsSync(outDir)) {
     // eslint-disable-next-line no-console
     console.log(`[e2e] building @shipcode/${appName} static export…`);
-    execFileSync('bun', ['--filter', `@shipcode/${appName}`, 'build'], {
+    // Build via turbo (not `bun --filter`) so the app's workspace dependencies
+    // — notably @shipcode/ui — are built first via dependsOn ^build. A bare
+    // `bun --filter <app> build` skips them and the Next build fails with
+    // "Can't resolve '@shipcode/ui'".
+    execFileSync('bun', ['x', 'turbo', 'run', 'build', `--filter=@shipcode/${appName}`], {
       cwd: REPO_ROOT,
       stdio: 'inherit',
       env: { ...process.env, DOCS_BASE_PATH: '' },
