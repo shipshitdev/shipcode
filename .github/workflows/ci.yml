@@ -42,6 +42,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+      # Bun module store — avoids re-downloading deps every run.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      # Turbo cache — persists per-task build/lint/typecheck/test outputs across
+      # runs. After a fix, only the changed packages re-run; everything green
+      # before restores from cache (turbo validates content hashes, not the key).
+      # sha key + prefix restore-keys is Turborepo's official CI pattern: each run
+      # saves a fresh snapshot, restores the most recent one.
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-quality-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-quality-
+            turbo-${{ runner.os }}-
       - name: Install ripgrep
         run: sudo apt-get update && sudo apt-get install -y ripgrep
       - run: bun install --frozen-lockfile
@@ -60,6 +78,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-fast-qa-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-fast-qa-
+            turbo-${{ runner.os }}-
       - name: Install ripgrep
         run: sudo apt-get update && sudo apt-get install -y ripgrep
       - run: bun install --frozen-lockfile
@@ -77,6 +107,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-coverage-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-coverage-
+            turbo-${{ runner.os }}-
       - name: Install ripgrep
         run: sudo apt-get update && sudo apt-get install -y ripgrep
       - run: bun install --frozen-lockfile

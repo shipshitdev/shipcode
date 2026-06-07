@@ -77,6 +77,65 @@ lights up (and the ref dropdown lets you target any branch) the moment it's
 promoted to master, exactly like the weekly cron. Until then it's verified
 statically via actionlint; its two children are proven by direct dispatch.
 
+## Caching — "only redo the parts that changed" (best-practice, 2026-06-07)
+
+Goal (Vincent): after a fix, don't re-run everything green — only the updated
+parts. Industry-standard answer, three sound layers + one explicit reject:
+
+**1. Turbo cache persistence (the real "incremental" win).** Every job that runs
+a turbo task persists `.turbo` across runs via `actions/cache`:
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: .turbo
+    key: turbo-${{ runner.os }}-<job>-${{ github.sha }}
+    restore-keys: |
+      turbo-${{ runner.os }}-<job>-
+      turbo-${{ runner.os }}-
+```
+
+`sha` key + prefix `restore-keys` is Turborepo's official CI pattern: each run
+saves a fresh snapshot and restores the most recent one; **turbo decides hit/miss
+by content hash, not the cache key**. So unchanged packages' `build` / `typecheck`
+/ `test` / `lint` / `coverage` restore instantly; only changed packages re-run.
+Per-job key prefix avoids save collisions (`runner.os` separates Linux vs macOS).
+Cache dir is `.turbo/cache` (no `cacheDir` override; gitignored via `.turbo/`).
+Applied to: ci.yml `quality`/`fast-qa`/`coverage`; e2e.yml `lint-typecheck`/
+`desktop-e2e`/`web-smoke`. **E2E specs themselves are `cache: false` in turbo.json
+(non-hermetic — launch real Electron / serve files) so turbo never caches them;
+the cache only accelerates their `^build` deps.** Correct by design.
+
+**2. Dep + binary caches (speed, not correctness).** Bun module store
+(`~/.bun/install/cache`, key `bun-<os>-<hash bun.lock>`) added to the ci.yml jobs
+(they lacked it; e2e jobs already had it). Electron binary
+(`~/Library/Caches/electron`, key `electron-<os>-<hash apps/desktop/package.json>`)
+on `desktop-e2e` so install.js doesn't re-pull ~100 MB from the CDN each run
+(install.js is idempotent — skips download on a cache hit).
+
+**3. `--last-failed` opt-in (post-fix loop for E2E, NOT the gate).** Dispatch
+input `only_failed` (default **false**) on e2e.yml + full.yml. When true,
+`desktop-e2e` runs `playwright test --last-failed` and **skips the flow-coverage
+gate** (emits a `::notice` saying the run is not authoritative). The failed-test
+list (`apps/e2e/test-results/.last-run.json`) is persisted with
+`actions/cache/save` (`if: always()`, per-branch key `pw-lastrun-<ref>-<run_id>`)
+and restored (`restore-keys: pw-lastrun-<ref>-`) only in `only_failed` mode. This
+gives "re-run only what broke after a fix" for E2E **without** weakening the
+default full run, which stays the authoritative gate (schedule + plain dispatch).
+
+**4. Rejected: `--only-changed`.** Playwright's `--only-changed` detects changes
+via the **static import graph**. This suite exercises **runtime-served
+artifacts** — the desktop project launches the built Electron binary
+(`executablePath`), web-smoke serves static files over HTTP — none of which are
+statically imported into the specs. So `--only-changed` would silently miss
+app-source changes and skip tests that should run. Unsound here; not used.
+
+Future speedup (not implemented): Playwright sharding
+(`--shard=k/n` + `blob` reporter + `merge-reports`) and/or Vercel Remote Cache
+(`TURBO_TOKEN`/`TURBO_TEAM`) to share the turbo cache across machines.
+
+Validate any change with `actionlint .github/workflows/*.yml`.
+
 ## Build ordering (the #227 bug, fixed 2026-06-07)
 
 `@shipcode/shared`, `@shipcode/db`, etc. expose their public API via `exports → ./dist/*`

@@ -17,6 +17,11 @@ run-name: "Full CI→E2E · ${{ github.ref_name }}"
 
 on:
   workflow_dispatch:
+    inputs:
+      only_failed:
+        description: 'E2E: re-run only previously-failed tests (--last-failed). Skips the flow-coverage gate. CI still runs in full.'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,3 +43,4 @@ jobs:
       contents: read
     with:
       target_ref: ${{ github.ref_name }}
+      only_failed: ${{ inputs.only_failed }}

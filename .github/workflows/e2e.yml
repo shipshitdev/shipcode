@@ -30,17 +30,26 @@ on:
           - develop
           - staging
           - master
+      only_failed:
+        description: 'Re-run only previously-failed E2E tests (--last-failed). Faster after a fix, but SKIPS the flow-coverage gate — not authoritative. Default: full run.'
+        type: boolean
+        default: false
   # Reusable entry point for the `full` orchestrator (.github/workflows/full.yml),
-  # which runs CI then E2E in one dispatch. Mirrors the dispatch `target_ref`
-  # (string here — workflow_call inputs can't be `choice`). The orchestrator
-  # forwards its branch so checkout `inputs.target_ref || github.ref` is correct.
-  # Caller event is workflow_dispatch, so lint-typecheck + desktop-e2e both run.
+  # which runs CI then E2E in one dispatch. Mirrors the dispatch inputs
+  # (target_ref is `string` here — workflow_call inputs can't be `choice`). The
+  # orchestrator forwards its branch so checkout `inputs.target_ref || github.ref`
+  # is correct. Caller event is workflow_dispatch, so lint-typecheck + desktop-e2e
+  # both run.
   workflow_call:
     inputs:
       target_ref:
         description: 'Branch to run the full desktop E2E suite against'
         type: string
         default: ''
+      only_failed:
+        description: 'Re-run only previously-failed E2E tests (--last-failed); skips the flow-coverage gate.'
+        type: boolean
+        default: false
   pull_request:
     # Cheap HTTP-only web/docs smoke on PRs that touch E2E or the surfaces it covers.
     paths:
@@ -84,6 +93,15 @@ jobs:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
+      # Turbo cache — typecheck dependsOn ^build, so unchanged packages restore
+      # their dist/*.d.ts + tsc result instead of rebuilding after every fix.
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-lint-typecheck-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-lint-typecheck-
+            turbo-${{ runner.os }}-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -117,6 +135,23 @@ jobs:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
+      # Turbo cache — the workspace-package build below (turbo run build) restores
+      # unchanged packages' dist instead of recompiling after every fix.
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-desktop-e2e-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-desktop-e2e-
+            turbo-${{ runner.os }}-
+      # Electron binary (~100MB) lives in @electron/get's macOS cache, keyed by
+      # the pinned electron version. Without this it re-downloads from the CDN on
+      # every run. install.js below is idempotent and skips download on a hit.
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('apps/desktop/package.json') }}
+          restore-keys: electron-${{ runner.os }}-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -142,10 +177,38 @@ jobs:
         run: bunx turbo run build --filter='./packages/*'
       - name: Build desktop bundle (main + renderer)
         run: bun --filter @shipcode/desktop build:code
+      # Restore the prior run's failed-test list so a `--last-failed` dispatch
+      # knows what to re-run. Per-branch key with a run-id suffix (always unique →
+      # always saves); restore-keys grabs the latest copy for this branch.
+      - name: Restore last Playwright run (for --last-failed)
+        if: ${{ inputs.only_failed }}
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/e2e/test-results/.last-run.json
+          key: pw-lastrun-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: pw-lastrun-${{ github.ref_name }}-
+      # Default: full suite + flow-coverage gate (authoritative). Opt-in
+      # only_failed: re-run just the previously-failed specs and SKIP the gate —
+      # a fast post-fix loop, never the gate. Both write the same .last-run.json.
       - name: Run E2E suite + flow-coverage gate
         env:
           E2E_FLOW_COVERAGE_MIN: ${{ env.E2E_FLOW_COVERAGE_MIN }}
-        run: bun run e2e:ci
+        run: |
+          if [ "${{ inputs.only_failed }}" = "true" ]; then
+            echo "::notice title=Partial E2E run::--last-failed re-runs only previously-failed tests. Flow-coverage gate SKIPPED — this run is NOT authoritative."
+            cd apps/e2e
+            bunx playwright test --last-failed --reporter=list,html,json
+          else
+            bun run e2e:ci
+          fi
+      # Persist the failed-test list for the next --last-failed dispatch. always()
+      # so it's saved even when the suite fails — that's exactly when it's useful.
+      - name: Save last Playwright run
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: apps/e2e/test-results/.last-run.json
+          key: pw-lastrun-${{ github.ref_name }}-${{ github.run_id }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -172,6 +235,15 @@ jobs:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
+      # Turbo cache — e2e:smoke dependsOn ^build, so unchanged app/package builds
+      # restore from cache instead of rebuilding on every PR.
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-web-smoke-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-web-smoke-
+            turbo-${{ runner.os }}-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
