@@ -30,6 +30,17 @@ on:
           - develop
           - staging
           - master
+  # Reusable entry point for the `full` orchestrator (.github/workflows/full.yml),
+  # which runs CI then E2E in one dispatch. Mirrors the dispatch `target_ref`
+  # (string here — workflow_call inputs can't be `choice`). The orchestrator
+  # forwards its branch so checkout `inputs.target_ref || github.ref` is correct.
+  # Caller event is workflow_dispatch, so lint-typecheck + desktop-e2e both run.
+  workflow_call:
+    inputs:
+      target_ref:
+        description: 'Branch to run the full desktop E2E suite against'
+        type: string
+        default: ''
   pull_request:
     # Cheap HTTP-only web/docs smoke on PRs that touch E2E or the surfaces it covers.
     paths:

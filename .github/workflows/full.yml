@@ -1,0 +1,40 @@
+name: Full (CI → E2E)
+
+# One-button orchestrator: runs the CI workflow first, then — only if CI is
+# green — the full E2E suite, in a single manual dispatch. Dispatchable on any
+# branch that has this file (develop today; staging/master once promoted).
+#
+# It does NOT duplicate any job logic: it `uses:` the existing ci.yml and
+# e2e.yml as reusable workflows (they gained an additive `workflow_call:`
+# trigger). `needs: ci` enforces the ordering. Both children run against the
+# branch this workflow is dispatched on (github.ref); that branch is forwarded
+# to e2e as target_ref so its checkout resolves correctly.
+#
+# Pick the branch in the "Run workflow" dropdown, or:
+#   gh workflow run full.yml --ref develop
+
+run-name: "Full CI→E2E · ${{ github.ref_name }}"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  e2e:
+    needs: ci
+    uses: ./.github/workflows/e2e.yml
+    permissions:
+      contents: read
+    with:
+      target_ref: ${{ github.ref_name }}

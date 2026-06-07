@@ -36,6 +36,36 @@ once promoted.
 - **`pull_request` (paths-filtered):** cheap HTTP-only `web-smoke` on Linux. The heavy
   `desktop-e2e` job is gated to `schedule || workflow_dispatch` — never per-PR.
 
+## Orchestrator: full.yml (CI → E2E in one dispatch)
+
+`.github/workflows/full.yml` runs **CI first, then E2E** in a single manual
+dispatch, sequenced by `needs: ci`. It adds **no job logic** — it `uses:` the
+existing `ci.yml` and `e2e.yml` as **reusable workflows**. Each of those gained
+one additive `workflow_call:` trigger in its `on:` block (job bodies untouched):
+
+- `ci.yml`: bare `workflow_call:` (no inputs).
+- `e2e.yml`: `workflow_call:` with a `target_ref` **string** input (workflow_call
+  inputs can't be `type: choice`, unlike the dispatch input). full.yml forwards
+  `github.ref_name`, so e2e's `checkout ref: ${{ inputs.target_ref || github.ref }}`
+  resolves to the dispatched branch.
+
+Key behaviours:
+
+- **Event propagation:** inside a `workflow_call`-invoked file, `github.event_name`
+  is the **caller's** event = `workflow_dispatch`. So `ci.yml`'s `quality` +
+  `coverage` run (full CI) and `e2e.yml`'s `lint-typecheck` + `desktop-e2e` run.
+  `fast-qa` (PR-only) and `web-smoke` (PR-only) stay skipped — correct.
+- **Branch = dispatch ref.** Both children run against the branch full.yml is
+  dispatched on (`gh workflow run full.yml --ref develop`, or the UI dropdown).
+  Works on any branch that has all three files (develop today; staging/master
+  once promoted — same model as e2e.yml).
+- **Ordering:** if CI fails, `needs: ci` blocks E2E (no wasted macOS minutes).
+- **Permissions:** orchestrator + each called job declare `contents: read`.
+
+Validate edits with `actionlint .github/workflows/*.yml` (checks the `uses:`
+graph + input types, not just YAML). Direct `workflow_dispatch` on ci.yml or
+e2e.yml individually still works unchanged.
+
 ## Build ordering (the #227 bug, fixed 2026-06-07)
 
 `@shipcode/shared`, `@shipcode/db`, etc. expose their public API via `exports → ./dist/*`
