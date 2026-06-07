@@ -12,6 +12,15 @@ name: Full (CI → E2E)
 #
 # Pick the branch in the "Run workflow" dropdown, or:
 #   gh workflow run full.yml --ref develop
+#
+# Registration note: GitHub indexes workflow_dispatch-only workflows ONLY from
+# the default branch (master). To make this dispatchable on develop *without*
+# promoting to master, it carries a paths-filtered `pull_request` trigger
+# (below) — that forces GitHub to index the file from develop. It is filtered to
+# this file alone, so it auto-runs only as a self-test when full.yml itself
+# changes in a PR; on that PR event the children run their light PR-path jobs
+# (ci → fast-qa, e2e → web-smoke), never the heavy macOS suite. Same trick e2e.yml
+# uses. Remove the pull_request trigger once the suite is promoted to master.
 
 run-name: "Full CI→E2E · ${{ github.ref_name }}"
 
@@ -22,6 +31,11 @@ on:
         description: 'E2E: re-run only previously-failed tests (--last-failed). Skips the flow-coverage gate. CI still runs in full.'
         type: boolean
         default: false
+  # Indexing-only trigger (see registration note above). NOT meant to run the
+  # orchestrator on normal PRs — paths-filtered to full.yml itself.
+  pull_request:
+    paths:
+      - '.github/workflows/full.yml'
 
 permissions:
   contents: read
@@ -43,4 +57,6 @@ jobs:
       contents: read
     with:
       target_ref: ${{ github.ref_name }}
-      only_failed: ${{ inputs.only_failed }}
+      # `|| false` so the pull_request event (where inputs.only_failed is empty)
+      # still passes a valid boolean to e2e.yml's workflow_call input.
+      only_failed: ${{ inputs.only_failed || false }}

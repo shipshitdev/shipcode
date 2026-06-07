@@ -66,16 +66,29 @@ Validate edits with `actionlint .github/workflows/*.yml` (checks the `uses:`
 graph + input types, not just YAML). Direct `workflow_dispatch` on ci.yml or
 e2e.yml individually still works unchanged.
 
-**Dispatchability gate (important):** full.yml is **dispatch-only**, so GitHub
-will not register it (no workflow id, `gh workflow run full.yml` → 404) until it
-lives on the **default branch (master)**. This is the same default-branch rule
-that gates the weekly cron. e2e.yml is dispatchable on develop *today* only
-because its `pull_request` trigger forced GitHub to index it; full.yml has no
-such trigger by design (auto-running a CI→E2E orchestrator on every push/PR is
-undesirable). So full.yml cannot be live-dispatched from develop alone — it
-lights up (and the ref dropdown lets you target any branch) the moment it's
-promoted to master, exactly like the weekly cron. Until then it's verified
-statically via actionlint; its two children are proven by direct dispatch.
+**Dispatchability gate + how full.yml is dispatchable on develop:** GitHub
+indexes `workflow_dispatch`-only (and `schedule`) workflows **only from the
+default branch (master)**. A pure dispatch-only full.yml would therefore 404 on
+develop (`gh workflow run full.yml` → "not found on the default branch") — the
+same default-branch rule that gates the weekly cron. `pull_request`/`push`
+triggers, by contrast, are indexed from **any** branch (that's why e2e.yml is
+dispatchable on develop — its `pull_request` trigger forces indexing).
+
+Chosen fix (2026-06-07): full.yml carries a **paths-filtered `pull_request`
+trigger** (`paths: ['.github/workflows/full.yml']`) purely to get indexed from
+develop → it's now dispatchable there (`gh workflow run full.yml --ref develop`)
+**without promoting to master**. Filtered to its own file so it never auto-runs
+the orchestrator on normal PRs; it self-tests only when full.yml itself changes,
+and on that `pull_request` event the children run their light PR-path jobs
+(ci → `fast-qa`, e2e → `web-smoke`) — `github.event_name` inside a
+`workflow_call` is the caller's event = `pull_request`, so the heavy
+`desktop-e2e`/`quality` jobs stay skipped. The e2e `only_failed` passthrough is
+`${{ inputs.only_failed || false }}` so the empty pull_request value still
+type-checks as a boolean `workflow_call` input. **Remove the `pull_request`
+trigger once the suite is promoted to master** (dispatch-from-master then needs
+no trick). Dispatch ref ≠ registration: once indexed, the ref dropdown / `--ref`
+selects which branch's copy executes (local `uses: ./...` resolve from that same
+ref).
 
 ## Caching — "only redo the parts that changed" (best-practice, 2026-06-07)
 
