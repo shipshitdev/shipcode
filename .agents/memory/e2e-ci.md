@@ -66,6 +66,17 @@ Validate edits with `actionlint .github/workflows/*.yml` (checks the `uses:`
 graph + input types, not just YAML). Direct `workflow_dispatch` on ci.yml or
 e2e.yml individually still works unchanged.
 
+**Dispatchability gate (important):** full.yml is **dispatch-only**, so GitHub
+will not register it (no workflow id, `gh workflow run full.yml` → 404) until it
+lives on the **default branch (master)**. This is the same default-branch rule
+that gates the weekly cron. e2e.yml is dispatchable on develop *today* only
+because its `pull_request` trigger forced GitHub to index it; full.yml has no
+such trigger by design (auto-running a CI→E2E orchestrator on every push/PR is
+undesirable). So full.yml cannot be live-dispatched from develop alone — it
+lights up (and the ref dropdown lets you target any branch) the moment it's
+promoted to master, exactly like the weekly cron. Until then it's verified
+statically via actionlint; its two children are proven by direct dispatch.
+
 ## Build ordering (the #227 bug, fixed 2026-06-07)
 
 `@shipcode/shared`, `@shipcode/db`, etc. expose their public API via `exports → ./dist/*`
