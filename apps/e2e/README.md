@@ -46,8 +46,11 @@ mocked environment so specs never touch the network or a real model:
 
 - **Isolated data** — a fresh temp `--user-data-dir`; the SQLite DB is pre-seeded
   by `src/fixtures/seed.ts` (real migrations + `@shipcode/db` query classes).
-- **No live GitHub** — a fake `gh` binary (`fixtures/bin/gh`) is prepended to
-  `PATH` and returns benign fixtures; authoritative state lives in the seeded DB.
+- **No live GitHub / no real CLIs** — fake `gh`, `claude`, and `codex` binaries
+  (`fixtures/bin/`) are prepended to `PATH` so health checks resolve them as
+  installed + authenticated without real logins (`claude auth status` exits 0,
+  `OPENAI_API_KEY` is set for Codex); authoritative GitHub state lives in the
+  seeded DB.
 - **`SHIPCODE_E2E_MODE=1`** — a guard in the desktop main process that disables
   the reconciliation loop, watchdog timer, update poll, automation scheduler,
   telemetry, and the splash window, and (via the preload) exposes the renderer
@@ -66,6 +69,8 @@ seed/`callStore`/`setState`, then perform the real user journey through the UI.
 | Location                          | Purpose                                                        |
 | --------------------------------- | ------------------------------------------------------------- |
 | `fixtures/bin/gh`                 | Deterministic fake GitHub CLI on `PATH`                        |
+| `fixtures/bin/claude`             | Fake Claude CLI on `PATH` (`--version`, `auth status` → exit 0)|
+| `fixtures/bin/codex`              | Fake Codex CLI on `PATH` (`--version` → exit 0)                |
 | `src/fixtures/seed.ts`            | Seeds project / settings / issues / notifications into SQLite |
 | `src/fixtures/electron-app.ts`    | Electron launch fixture + IPC/store helpers (`test`, `expect`)|
 | `src/fixtures/static-server.ts`   | Builds + serves the static web/docs exports for the smoke     |

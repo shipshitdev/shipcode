@@ -286,11 +286,22 @@ test.describe('inbox — sort and filter controls (flow 9c)', () => {
       { timeout: 10_000 },
     );
 
-    // Click the "Needs approval" toggle button in the PageHeader actions.
-    // The button text is "Needs approval" and it is NOT an aria-label match
-    // for a notification row (rows use "Open issue detail: <title>"). We
-    // target the button by its exact text content to avoid ambiguity.
-    await page.getByRole('button', { name: /^Needs approval$/i }).click();
+    // Activate the "Needs approval" toggle in the PageHeader actions. The button
+    // text is "Needs approval" and is NOT an aria-label match for a notification
+    // row (rows use "Open issue detail: <title>"), so the anchored regex targets
+    // only the filter toggle.
+    //
+    // We activate via keyboard (focus + Enter) rather than .click(): the
+    // `approval` kind is a STICKY toast (NotificationToaster never auto-dismisses
+    // it) that renders in the fixed top-right overlay directly over these header
+    // actions and intercepts pointer events on the button. The fired
+    // notifications live only in the renderer store, which feeds BOTH the toaster
+    // and the inbox rows, so we cannot clear the overlay without also removing
+    // the approval row we need to assert on. Keyboard activation skips the
+    // pointer hit-test while still firing the button's onClick.
+    const approvalFilterBtn = page.getByRole('button', { name: /^Needs approval$/i });
+    await approvalFilterBtn.focus();
+    await approvalFilterBtn.press('Enter');
 
     // The completed row should now be hidden.
     await expect(page.getByRole('button', { name: /Completed notification/i })).toBeHidden({

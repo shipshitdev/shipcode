@@ -40,9 +40,11 @@ export interface Harness {
 
 /**
  * Launch the built Electron app against a fresh, fully-mocked environment:
- * temp userData (isolated SQLite seeded by `seedDatabase`), a fake `gh` on
- * PATH, and SHIPCODE_E2E_MODE to suppress reconciliation/watchdog/telemetry/
- * splash. Returns a harness with the main window and IPC/store helpers.
+ * temp userData (isolated SQLite seeded by `seedDatabase`), fake `gh`/`claude`/
+ * `codex` CLIs on PATH (so health checks resolve installed + authenticated
+ * without real logins), and SHIPCODE_E2E_MODE to suppress reconciliation/
+ * watchdog/telemetry/splash. Returns a harness with the main window and IPC/
+ * store helpers.
  */
 export async function launchApp(seedOptions: SeedOptions = {}): Promise<Harness> {
   if (!fs.existsSync(DESKTOP_MAIN)) {
@@ -65,6 +67,10 @@ export async function launchApp(seedOptions: SeedOptions = {}): Promise<Harness>
       SHIPCODE_TELEMETRY_ENABLED: 'false',
       SHIPCODE_SENTRY_DSN: '',
       OPENROUTER_API_KEY: 'test-key',
+      // Satisfies checkCodexAuth() (reads the env var, no codex shell-out) so the
+      // onboarding wizard sees Codex authenticated. Paired with the fake `codex`
+      // on PATH (availability) it marks Codex authenticated end-to-end.
+      OPENAI_API_KEY: 'test-key',
       VITE_DEV_SERVER_URL: '',
       PATH: `${FAKE_BIN}${path.delimiter}${process.env.PATH ?? ''}`,
     },

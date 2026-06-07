@@ -5,56 +5,16 @@
  * so the OnboardingWizard renders instead of the main workspace.
  * Verifies that the wizard shows its 3 steps, that Back/Next navigate through
  * them, and that Finish calls settings:set then auto-navigates to the workspace.
+ *
+ * Auth is deterministic: the harness puts fake `claude`/`codex` CLIs on PATH and
+ * sets OPENAI_API_KEY, so the wizard's on-mount `onboarding:check-auth` resolves
+ * both agents as authenticated at the main-process boundary. The Next button
+ * therefore enables on its own — no renderer-side invoke patching (which can't
+ * work anyway: the contextBridge `window.shipcode` object is frozen).
  */
 import { expect, test } from '../../fixtures/electron-app';
 
 test.use({ seedOptions: { onboarded: false } });
-
-/**
- * Inject a fake successful auth response for the next `onboarding:check-auth`
- * invocation. This overrides `window.shipcode.invoke` in the renderer so that
- * when the wizard calls `invoke('onboarding:check-auth')` it gets a mock result
- * where both `claude` and `codex` report as authenticated. The override is
- * one-shot: after the first matching call, the original invoke is restored.
- *
- * This is necessary because in the E2E sandbox neither `claude auth status` nor
- * a real Codex OPENAI_API_KEY are present.
- */
-async function injectFakeAuthSuccess(page: import('@playwright/test').Page) {
-  await page.evaluate(() => {
-    type Invoke = (channel: string, ...args: unknown[]) => Promise<unknown>;
-    const api = (window as unknown as { shipcode: { invoke: Invoke } }).shipcode;
-    const original = api.invoke.bind(api);
-    let patched = true;
-    const override: Invoke = async (channel, ...args) => {
-      if (patched && channel === 'onboarding:check-auth') {
-        patched = false;
-        try {
-          Object.defineProperty(api, 'invoke', { value: original, configurable: true });
-        } catch {
-          /* contextBridge object may be frozen; best-effort restore */
-        }
-        return {
-          claude: { available: true, authenticated: true, version: '1.0.0-e2e' },
-          codex: { available: true, authenticated: true, version: '1.0.0-e2e' },
-          gemini: null,
-          cursor: null,
-          openrouter: null,
-          ghAuth: { installed: true, authenticated: true, username: 'e2e-bot', version: '2.0.0' },
-        };
-      }
-      return original(channel, ...args);
-    };
-    // contextBridge-exposed objects are frozen; defineProperty can still
-    // succeed where assignment throws. If both fail the spec falls back to
-    // asserting only the auth-independent wizard behaviour.
-    try {
-      Object.defineProperty(api, 'invoke', { value: override, configurable: true });
-    } catch {
-      /* frozen bridge — override not applied */
-    }
-  });
-}
 
 test.describe('onboarding wizard', () => {
   test('renders with 3-step progress indicators', async ({ harness }) => {
@@ -80,7 +40,7 @@ test.describe('onboarding wizard', () => {
     // Back button is not shown on first step
     await expect(page.getByTestId('onboarding-back-btn')).not.toBeVisible();
 
-    // Next button is rendered (may be disabled until auth resolves)
+    // Next button is rendered (enables once the on-mount auth check resolves)
     await expect(page.getByTestId('onboarding-next-btn')).toBeVisible();
   });
 
@@ -89,15 +49,8 @@ test.describe('onboarding wizard', () => {
 
     await expect(page.getByTestId('onboarding-wizard')).toBeVisible();
 
-    // Inject fake auth so the Re-check call returns authenticated CLIs
-    await injectFakeAuthSuccess(page);
-
-    // Click Re-check to trigger the auth mutation which will now get fake data
-    const recheckBtn = page.getByRole('button', { name: /re-check/i });
-    await expect(recheckBtn).toBeVisible({ timeout: 10_000 });
-    await recheckBtn.click();
-
-    // Wait for the Next button to become enabled after auth resolves
+    // The on-mount auth check resolves both fake CLIs as authenticated, so Next
+    // enables without a Re-check click.
     const nextBtn = page.getByTestId('onboarding-next-btn');
     await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
 
@@ -112,7 +65,7 @@ test.describe('onboarding wizard', () => {
     await page.getByTestId('onboarding-back-btn').click();
     await expect(page.getByTestId('onboarding-back-btn')).not.toBeVisible();
 
-    // Advance again through step 0 (Next should still be enabled from cached auth)
+    // Advance again through step 0 (Next stays enabled from cached auth)
     await expect(page.getByTestId('onboarding-next-btn')).toBeEnabled({ timeout: 5_000 });
     await page.getByTestId('onboarding-next-btn').click();
 
@@ -135,12 +88,7 @@ test.describe('onboarding wizard', () => {
 
     await expect(page.getByTestId('onboarding-wizard')).toBeVisible();
 
-    // Inject fake auth and trigger re-check to enable the Next button
-    await injectFakeAuthSuccess(page);
-    const recheckBtn = page.getByRole('button', { name: /re-check/i });
-    await expect(recheckBtn).toBeVisible({ timeout: 10_000 });
-    await recheckBtn.click();
-
+    // Auth resolves on mount → Next enabled. Walk to the last step.
     await expect(page.getByTestId('onboarding-next-btn')).toBeEnabled({ timeout: 10_000 });
     await page.getByTestId('onboarding-next-btn').click(); // step 0 → 1
     await page.getByTestId('onboarding-next-btn').click(); // step 1 → 2
