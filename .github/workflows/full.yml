@@ -21,6 +21,11 @@ name: Full (CI → E2E)
 # changes in a PR; on that PR event the children run their light PR-path jobs
 # (ci → fast-qa, e2e → web-smoke), never the heavy macOS suite. Same trick e2e.yml
 # uses. Remove the pull_request trigger once the suite is promoted to master.
+#
+# (A workflow with only a pull_request/push trigger is registered the first time
+# that trigger actually FIRES — pushing the file is not enough. This PR, which
+# edits full.yml, is that first firing event and registers the workflow on the
+# repo so `gh workflow run full.yml --ref develop` works thereafter.)
 
 run-name: "Full CI→E2E · ${{ github.ref_name }}"
 
