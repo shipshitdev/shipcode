@@ -87,9 +87,14 @@ Gate precedence: `E2E_FLOW_COVERAGE_MIN` env → `manifest.gateMinPct` (90) → 
 [`.github/workflows/e2e.yml`](../../.github/workflows/e2e.yml):
 
 - **`desktop-e2e`** — weekly (`0 7 * * 0`) + `workflow_dispatch`, on `macos-15`.
-  Builds the desktop bundle, runs `bun run e2e:ci` (both projects + gate at
-  `E2E_FLOW_COVERAGE_MIN=90`), uploads the Playwright report / traces /
-  `e2e-flow-coverage.json` on failure.
+  Builds the workspace packages first (`turbo run build --filter='./packages/*'`,
+  so `@shipcode/shared` et al. emit the `.d.ts` the desktop `tsc` build resolves),
+  then the desktop bundle, then runs `bun run e2e:ci` (both projects + gate at
+  `E2E_FLOW_COVERAGE_MIN=90`), uploading the Playwright report / traces /
+  `e2e-flow-coverage.json` on failure. `workflow_dispatch` takes a `target_ref`
+  input (`develop`/`staging`/`master`) to choose the branch under test.
+  Note: the weekly **cron only fires from the default branch (master)** — see
+  `.agents/memory/e2e-ci.md` for the branch model.
 - **`web-smoke`** — on PRs touching E2E/desktop/web/docs/pipeline/ui surfaces,
   on `ubuntu-latest` (HTTP-only, no Electron).
 

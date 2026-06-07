@@ -1,11 +1,35 @@
 name: E2E
 
+# Branch model: develop (integration) → staging → master (default + release).
+# - Weekly cron fires ONLY from the default branch's copy of this file, so the
+#   scheduled review always runs against master. (It stays dormant on develop/
+#   staging — GitHub ignores cron on non-default branches.)
+# - workflow_dispatch is available on any branch that has this file; pick the
+#   branch to test via the `target_ref` input below. The suite currently lives
+#   on develop only; once promoted, master/staging dispatch + weekly cron light
+#   up with no further changes.
+run-name: >-
+  E2E ·
+  ${{ github.event_name == 'workflow_dispatch' && format('{0} (manual)', inputs.target_ref)
+   || github.event_name == 'schedule' && 'master (weekly)'
+   || 'PR smoke' }}
+
 on:
   schedule:
     # Weekly, Sundays 07:00 UTC — 1h after the CI coverage cron (0 6 * * 0)
-    # so the two never queue on macOS runners at the same instant.
+    # so the two never queue on macOS runners at the same instant. Runs against
+    # master (default branch); see the branch-model note above.
     - cron: '0 7 * * 0'
   workflow_dispatch:
+    inputs:
+      target_ref:
+        description: 'Branch to run the full desktop E2E suite against'
+        type: choice
+        default: develop
+        options:
+          - develop
+          - staging
+          - master
   pull_request:
     # Cheap HTTP-only web/docs smoke on PRs that touch E2E or the surfaces it covers.
     paths:
@@ -39,6 +63,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # schedule → default branch (master); workflow_dispatch → chosen branch.
+          ref: ${{ inputs.target_ref || github.ref }}
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         with:
@@ -52,7 +78,13 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: bun install --frozen-lockfile
-      - name: Build desktop bundle
+      # Build workspace packages first: @shipcode/shared, @shipcode/db, etc. emit
+      # their dist/*.d.ts, which the desktop tsc build resolves via package exports.
+      # Without this, `desktop build:code` fails with TS2307 "Cannot find module
+      # '@shipcode/shared'". Mirrors the repo's `coverage` script idiom.
+      - name: Build workspace packages (deps for desktop + e2e)
+        run: bunx turbo run build --filter='./packages/*'
+      - name: Build desktop bundle (main + renderer)
         run: bun --filter @shipcode/desktop build:code
       - name: Run E2E suite + flow-coverage gate
         env:
