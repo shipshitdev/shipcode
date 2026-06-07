@@ -71,13 +71,21 @@ indexes `workflow_dispatch`-only (and `schedule`) workflows **only from the
 default branch (master)**. A pure dispatch-only full.yml would therefore 404 on
 develop (`gh workflow run full.yml` → "not found on the default branch") — the
 same default-branch rule that gates the weekly cron. `pull_request`/`push`
-triggers, by contrast, are indexed from **any** branch (that's why e2e.yml is
-dispatchable on develop — its `pull_request` trigger forces indexing).
+triggers, by contrast, get a workflow indexed from **any** branch — **but only
+once that trigger actually FIRES**. Pushing a file that carries a `pull_request`
+trigger to a non-default branch does **not** register it; the workflow stays 404
+(`gh api .../actions/workflows/full.yml` → Not Found) until a real event fires
+it. e2e.yml was registered because PR #227 fired its `pull_request`; full.yml
+stayed 404 after 3f26a36f pushed the bare trigger, and only registered when
+PR #229 edited full.yml and fired its paths-filtered self-test (gotcha proven
+2026-06-07).
 
 Chosen fix (2026-06-07): full.yml carries a **paths-filtered `pull_request`
-trigger** (`paths: ['.github/workflows/full.yml']`) purely to get indexed from
-develop → it's now dispatchable there (`gh workflow run full.yml --ref develop`)
-**without promoting to master**. Filtered to its own file so it never auto-runs
+trigger** (`paths: ['.github/workflows/full.yml']`) so editing the file in a PR
+fires it. That first firing (PR #229) registered the workflow (id 290778929) →
+it's now dispatchable on develop (`gh workflow run full.yml --ref develop`)
+**without promoting to master**. Registration persists after the PR closes;
+re-firing is not needed. Filtered to its own file so it never auto-runs
 the orchestrator on normal PRs; it self-tests only when full.yml itself changes,
 and on that `pull_request` event the children run their light PR-path jobs
 (ci → `fast-qa`, e2e → `web-smoke`) — `github.event_name` inside a
