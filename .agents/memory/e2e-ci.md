@@ -55,6 +55,50 @@ Fix: build workspace packages first, mirroring the repo's `coverage` script idio
 Verified locally: clearing `packages/*/dist` reproduces the failure; the two-step
 sequence builds clean (exit 0). The TS errors were 100% cascade — no source bug.
 
+## Job graph: lint-typecheck → desktop-e2e
+
+A fast **Linux prerequisite gate** runs before the macOS suite so a bad commit fails
+cheap (≈1 min) instead of burning scarce macOS minutes:
+
+```
+lint-typecheck (ubuntu-latest)  →  desktop-e2e (macos-15, needs: lint-typecheck)
+```
+
+`lint-typecheck` runs `bun run lint` (Biome) + `bun run typecheck` (turbo `tsc --noEmit`,
+`dependsOn: ^build` so it builds the package `.d.ts` first). Both gates are `schedule ||
+workflow_dispatch` (mirror desktop-e2e). `web-smoke` stays independent on `pull_request`.
+
+## Electron binary on CI (the second #227 blocker, fixed 2026-06-07)
+
+Two distinct electron artifacts, two distinct sources — don't conflate them:
+
+- **Types (`electron.d.ts`)** ship **inside the npm tarball** (`package/electron.d.ts`,
+  ~1.1 MB). A normal `bun install` extracts them, so the **typecheck gate needs nothing
+  extra**. (If they're ever missing locally the bun store is corrupt — restore by copying
+  `electron.d.ts` from the tarball; do *not* expect install.js to produce them for v42.)
+- **Binary (`Electron.app`)** is downloaded by electron's **postinstall** (`install.js`
+  → `@electron/get` → CDN zip → `extract-zip` → writes `dist/` + `path.txt`). **Bun does
+  NOT run postinstall scripts** unless the package is a `trustedDependencies` entry — and
+  adding electron there churns `bun.lock`, breaking `--frozen-lockfile`. So after
+  `bun install` the binary is absent and `require('electron')` throws *"Electron failed to
+  install correctly"* (run 27088478619 died here at `electron-app.ts:24`).
+
+Fix: an explicit step in `desktop-e2e` after `bun install` that runs install.js
+version-agnostically and verifies the path resolves (throws loudly if not):
+
+```yaml
+- name: Ensure Electron binary is installed
+  working-directory: apps/desktop
+  run: |
+    ELECTRON_DIR="$(node -p "require('path').dirname(require.resolve('electron/package.json'))")"
+    node "$ELECTRON_DIR/install.js"
+    node -e "console.log(require('electron'))"   # verify: throws if binary missing
+```
+
+`path.txt` must have **no trailing newline** (`getElectronPath` does
+`join(__dirname,'dist', readFileSync(path.txt))`); install.js writes it correctly. The
+lint-typecheck gate does **not** need this step (types come from the tarball).
+
 ## macstudio (still authoritative for now)
 
 The weekly E2E currently runs on Vincent's Mac Studio (manual / local — **no launchd

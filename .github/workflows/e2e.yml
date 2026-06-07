@@ -54,11 +54,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Fast Linux prerequisite gate. Biome lint + tsc typecheck on Ubuntu so a bad
+  # commit fails in ~1min before we spend (slow, scarce) macOS minutes on the
+  # full Electron suite. desktop-e2e `needs:` this — green here is required first.
+  lint-typecheck:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref || github.ref }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: bun install --frozen-lockfile
+      - name: Lint (Biome)
+        run: bun run lint
+      # turbo `typecheck` dependsOn ^build, so this builds @shipcode/shared et al.
+      # first and resolves their dist/*.d.ts — no separate package-build step needed.
+      - name: Typecheck (tsc, all workspaces)
+        run: bun run typecheck
+
   # Full E2E suite (Electron desktop journeys + web/docs smoke) + flow-coverage
   # gate. Runs on macOS because the desktop project launches the real Electron
-  # app. Scheduled + manual only — too heavy for every PR.
+  # app. Scheduled + manual only — too heavy for every PR. Gated behind the fast
+  # Linux lint+typecheck job above.
   desktop-e2e:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: lint-typecheck
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +110,19 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: bun install --frozen-lockfile
+      # Bun does not run electron's postinstall (it's not a trustedDependency and
+      # adding it would churn bun.lock → break --frozen-lockfile). So the binary is
+      # absent after install and `require('electron')` throws "Electron failed to
+      # install correctly", failing electron-app.ts at launch. Run electron's own
+      # install.js explicitly (version-agnostic via require.resolve), then verify
+      # the binary path resolves. Idempotent: skips download if already cached.
+      - name: Ensure Electron binary is installed
+        working-directory: apps/desktop
+        run: |
+          ELECTRON_DIR="$(node -p "require('path').dirname(require.resolve('electron/package.json'))")"
+          echo "Electron package dir: $ELECTRON_DIR"
+          node "$ELECTRON_DIR/install.js"
+          node -e "console.log('Electron binary resolved at:', require('electron'))"
       # Build workspace packages first: @shipcode/shared, @shipcode/db, etc. emit
       # their dist/*.d.ts, which the desktop tsc build resolves via package exports.
       # Without this, `desktop build:code` fails with TS2307 "Cannot find module
