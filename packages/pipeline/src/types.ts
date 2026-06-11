@@ -19,6 +19,7 @@ import type {
   PlanQueries,
   ProjectQueries,
   PromptTelemetryQueries,
+  ReviewFindingQueries,
   ReviewQueries,
   SettingsQueries,
   SkillResolutionLogQueries,
@@ -224,7 +225,19 @@ export interface PipelineEmitter {
   emit(event: PipelineEvent): void;
 }
 
-export interface PipelineContext {
+/**
+ * Persistent pipeline state owned by the orchestrator for the lifetime of a
+ * single run. Every field here survives across all phases and is never cleared
+ * by `resetPhaseState` (contrast `PHASE_LOCAL_FIELDS`). `PipelineContext`
+ * extends this, so existing context access is unchanged; the #137 dispatch loop
+ * will own an `OrchestratorState` directly and derive a `PhasePayload` per phase
+ * from it via `buildPhasePayload`.
+ *
+ * Intentionally mutable (no `readonly`): external callers write some fields
+ * after `getContext()` (e.g. the desktop IPC handler updates `clarification*`).
+ * The frozen, read-only view is `PhasePayload`, not this.
+ */
+export interface OrchestratorState {
   threadId: string;
   projectPath: string;
   runId: string | null;
@@ -241,7 +254,6 @@ export interface PipelineContext {
   clarificationHistory: AnsweredClarification[];
   verificationRetries: number;
   testRetries: number;
-  testOutput: string | null;
   githubIssueNumber: number | null;
   githubIssueTitle: string | null;
   githubRepo: string | null;
@@ -265,16 +277,9 @@ export interface PipelineContext {
   cancelled: boolean;
   verifiedSha: string | null;
   startedAt: number;
-  /**
-   * Pre-loaded repo context string for injection into phase prompts.
-   * Read once from `<projectPath>/.agents/memory/` at pipeline start.
-   */
-  repoContext: string | null;
-  repoPromptMaterials: PromptMaterial[] | null;
   phasePromptScopes: Record<PipelinePromptPhase, PipelinePromptScope>;
   phaseReasoningOverrides: Partial<Record<PipelinePromptPhase, ReasoningEffort>>;
   phaseReasoningEfforts: Record<PipelinePromptPhase, ReasoningEffort>;
-  promptMaterialSummaries: Partial<Record<PipelinePromptPhase, PromptMaterialSummary>>;
   promptTelemetry: PhasePromptTelemetry[];
   promptTelemetryDiagnostics: PromptTelemetryPersistenceDiagnostic[];
   /**
@@ -291,23 +296,6 @@ export interface PipelineContext {
    * calls abort() in addition to killing any active process.
    */
   abort: AbortController;
-  /**
-   * Optional follow-up inputs from a linked draft PR. When set, the next
-   * execute pass appends them to the prompt and then clears the field.
-   */
-  stabilizationFeedback: string | null;
-  /**
-   * Optional context for semantic resume after an interrupted execution.
-   * When set, the next execute pass appends it to the prompt and then clears it.
-   */
-  executionResumeContext: string | null;
-  /**
-   * Raw output from a previous failed plan attempt. When set,
-   * `startPlanGeneration` appends format-correction context so the
-   * model can fix its output format instead of starting from scratch.
-   * Consumed (cleared) after use.
-   */
-  previousPlanRawOutput: string | null;
   /** Per-node verification retry counter. Reset to 0 when active node advances. */
   nodeVerificationRetries: number;
   /** Git SHA before current node's execution. Used to compute node-scoped diff. */
@@ -324,14 +312,6 @@ export interface PipelineContext {
    * persists per-flow pass/fail results.
    */
   featureQaState: FeatureQaState | null;
-  /** Cleanup function for a running runtime QA server. Called on cancel. */
-  runtimeQaCleanup: (() => Promise<void>) | null;
-  /** Captured output from runtime QA test commands. Fed to verifier. */
-  runtimeQaOutput: string | null;
-  /** Timestamp when this thread started waiting for a CPU-heavy local command slot. */
-  cpuQueueStartedAt: number | null;
-  /** Last terminal notice emitted while waiting for a CPU-heavy local command slot. */
-  cpuQueueLastNotifiedAt: number | null;
   /**
    * True when this run was started via startFromAutomation (cron tick).
    * The executor prompt drops file-restriction language because the
@@ -339,6 +319,26 @@ export interface PipelineContext {
    * is the source of truth and the executor must discover files itself.
    */
   isAutomationRun: boolean;
+  /**
+   * Pre-loaded repo context string for injection into phase prompts.
+   * Read once from `<projectPath>/.agents/memory/` at pipeline start.
+   */
+  repoContext: string | null;
+  repoPromptMaterials: PromptMaterial[] | null;
+  promptMaterialSummaries: Partial<Record<PipelinePromptPhase, PromptMaterialSummary>>;
+}
+
+/**
+ * Live, mutable per-run context. Extends `OrchestratorState` with only the
+ * phase-local fields cleared by `resetPhaseState` (see `PHASE_LOCAL_FIELDS`).
+ */
+export interface PipelineContext extends OrchestratorState {
+  /** Cleanup function for a running runtime QA server. Called on cancel. */
+  runtimeQaCleanup: (() => Promise<void>) | null;
+  /** Timestamp when this thread started waiting for a CPU-heavy local command slot. */
+  cpuQueueStartedAt: number | null;
+  /** Last terminal notice emitted while waiting for a CPU-heavy local command slot. */
+  cpuQueueLastNotifiedAt: number | null;
 }
 
 /**
@@ -361,26 +361,112 @@ export interface PhaseInput {
 }
 
 /**
- * Fields on PipelineContext that are scoped to a single phase and should be
- * cleared between transitions. `resetPhaseState` nulls these before handing
- * control to the next phase handler.
+ * Typed, consumed-once carry threaded from the previous phase into the next via
+ * the `carry` field on its `PhaseOutcome` transition, then surfaced on
+ * `PhasePayload.carry` (built by `buildPhasePayload`). Each field is read once by
+ * the receiving phase when building its prompt. This is the typed hand-off that
+ * replaces the old mutate-`PipelineContext`-then-`resetPhaseState` round-trip (#139).
+ *
+ * How the issue's named phase-result types map onto the as-built state machine
+ * (#137): a phase's *decision* already rides a `PhaseOutcome` variant — a
+ * PlanPhaseResult's plan is `{ next: 'review', plan }`; a ReviewPhaseResult's
+ * decision is the revision-vs-execute variant; Execute/Verify/Test
+ * exit-code/passed/fingerprint are consumed internally to pick the next variant.
+ * What previously crossed phases only as loose `PipelineContext` fields — and is
+ * now typed here and carried on the outcome — is the data below.
  */
-export type PhaseLocalField =
-  | 'stabilizationFeedback'
-  | 'executionResumeContext'
-  | 'previousPlanRawOutput'
-  | 'testOutput'
-  | 'runtimeQaOutput'
-  | 'runtimeQaCleanup'
-  | 'cpuQueueStartedAt'
-  | 'cpuQueueLastNotifiedAt';
+export interface PlanPhaseCarry {
+  /** Raw output of a previous failed plan attempt, for format-correction context. */
+  readonly previousPlanRawOutput?: string | null;
+}
+
+export interface ExecutePhaseCarry {
+  /** Accumulated test / runtime-QA failure output to fold into the executor prompt. */
+  readonly testOutput?: string | null;
+  /** Focused fix feedback (test-fix, node-verification, or PR stabilization). */
+  readonly stabilizationFeedback?: string | null;
+  /** Resume context appended after an interrupted execution. */
+  readonly executionResumeContext?: string | null;
+}
+
+export interface VerifyPhaseCarry {
+  /** Passing test/verify output, shown to the verifier as evidence. */
+  readonly testOutput?: string | null;
+  /** Accumulated runtime-QA output, shown to the verifier as evidence. */
+  readonly runtimeQaOutput?: string | null;
+}
+
+/**
+ * Carry accepted by `buildPhasePayload`'s `prevOutput` arg — plan + execute only.
+ * Verification carry (`VerifyPhaseCarry`) flows directly into `startVerification`
+ * and is not threaded through `buildPhasePayload`, so it is intentionally excluded.
+ */
+export type PhaseCarryOutput = PlanPhaseCarry & ExecutePhaseCarry;
+
+/**
+ * Context mutations produced by a `runProviderPhaseCore` call, returned instead
+ * of being applied directly. The orchestrator appends `promptTelemetry` to
+ * `context.promptTelemetry`, and — only when telemetry persistence failed —
+ * appends `diagnosticEntry` to `context.promptTelemetryDiagnostics`.
+ */
+export interface ProviderPhaseDeltas {
+  promptTelemetry: PhasePromptTelemetry;
+  diagnosticEntry: PromptTelemetryPersistenceDiagnostic | null;
+}
+
+/**
+ * Frozen, per-phase input built by `buildPhasePayload` before a phase runs.
+ * Carries identity, the phase-resolved model + model-id override + reasoning
+ * effort, the phase's prompt materials, the prompt-telemetry counter, and the
+ * consumed-once `carry` from the previous phase — everything a single phase
+ * reads, and nothing it mutates. Read-only by design; the live `PipelineContext`
+ * remains the orchestrator's mutable store.
+ *
+ * The single per-phase snapshot (#138): `runProviderPhaseCore` reads this
+ * directly. The `runProviderPhase` wrapper builds one per invocation via
+ * `buildPhasePayload` and threads it to the provider call.
+ */
+export interface PhasePayload {
+  readonly threadId: string;
+  readonly projectPath: string;
+  readonly projectId: string | null;
+  readonly worktreePath: string | null;
+  readonly baseBranch: string;
+  readonly forkPointSha: string;
+  readonly githubIssueNumber: number | null;
+  readonly githubIssueTitle: string | null;
+  readonly githubRepo: string | null;
+  readonly autonomous: boolean;
+  readonly runId: string | null;
+  readonly isAutomationRun: boolean;
+  /** The live abort signal (not the controller) so the core can read `.aborted`. */
+  readonly abort: AbortSignal;
+  /** `promptTelemetry.length` at build time; the next attempt is this + 1. */
+  readonly promptTelemetryCount: number;
+  readonly phase: PipelinePromptPhase;
+  /** Model resolved for this phase (mirrors `resolveAgentForPhase`). */
+  readonly model: PipelineExecutorModel;
+  /** Model-id override resolved for this phase, or null. */
+  readonly modelIdOverride: string | null;
+  readonly reasoningEffort: ReasoningEffort;
+  readonly repoContext: string | null;
+  readonly repoPromptMaterials: readonly PromptMaterial[];
+  readonly promptMaterialSummary: PromptMaterialSummary | undefined;
+  /** Consumed-once carry from the previous phase; `{}` when none. */
+  readonly carry: PhaseCarryOutput;
+}
+
+/**
+ * Live runtime/queue state on PipelineContext that is scoped to a single phase
+ * and should be cleared between transitions. `resetPhaseState` nulls these
+ * before handing control to the next phase handler. Cross-phase *data* no
+ * longer lives here — it travels typed on the `PhaseOutcome` carry (#139 and
+ * its follow-up); only genuine live state (the QA-server cleanup handle and the
+ * CPU-queue timestamps) remains.
+ */
+export type PhaseLocalField = 'runtimeQaCleanup' | 'cpuQueueStartedAt' | 'cpuQueueLastNotifiedAt';
 
 export const PHASE_LOCAL_FIELDS: readonly PhaseLocalField[] = [
-  'stabilizationFeedback',
-  'executionResumeContext',
-  'previousPlanRawOutput',
-  'testOutput',
-  'runtimeQaOutput',
   'runtimeQaCleanup',
   'cpuQueueStartedAt',
   'cpuQueueLastNotifiedAt',
@@ -418,6 +504,8 @@ export interface PipelineDeps {
   /** Internal task graph persistence for decomposed plan execution contracts. */
   taskGraphs?: PipelineTaskGraphQueries;
   promptTelemetry?: PromptTelemetryQueries;
+  /** Durable reviewer/verifier/CI findings surfaced in the review lane. */
+  reviewFindings?: ReviewFindingQueries;
   /** Closed phase durations across non-provider work such as testing and shipping. */
   phaseLogs?: PhaseLogQueries;
   /** Durable per-attempt run ledger tying phases, provider calls, and issue locks together. */
@@ -453,10 +541,17 @@ export interface Pipeline {
     prompt: string,
     projectPath: string,
     worktreePath: string | null,
+    /** Typed seed carried into the (re)entered plan phase, e.g. a desktop retry's previous raw output. */
+    carry?: PlanPhaseCarry,
   ) => Promise<void>;
   startReview: (threadId: string, plan: ShipCodePlan) => Promise<void>;
   startRevision: (threadId: string, plan: ShipCodePlan, reviewFeedback: string) => Promise<void>;
-  startExecution: (threadId: string, plan: ShipCodePlan) => Promise<void>;
+  /** `carry` seeds the execute phase, e.g. a desktop resume/retry's `executionResumeContext`. */
+  startExecution: (
+    threadId: string,
+    plan: ShipCodePlan,
+    carry?: ExecutePhaseCarry,
+  ) => Promise<void>;
   startTesting: (threadId: string) => Promise<void>;
   startVerification: (threadId: string) => Promise<void>;
   startCommitAndPush: (threadId: string) => Promise<void>;

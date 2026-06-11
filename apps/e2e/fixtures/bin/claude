@@ -1,0 +1,32 @@
+#!/usr/bin/env node
+/*
+ * Deterministic fake `claude` CLI for ShipCode E2E.
+ *
+ * Prepended to PATH when launching the Electron app so the desktop health check
+ * resolves Claude as installed + authenticated without a real CLI or login.
+ * `checkSystemHealth` shells out to `claude --version` (availability) and
+ * `checkClaudeAuth` shells out to `claude auth status` (auth) — both must exit 0.
+ *
+ * On the CI runner no real `claude` exists, so this fake wins the PATH lookup.
+ * Locally a real `claude` earlier on the login-shell PATH shadows it (harmless —
+ * the real CLI is already authenticated on the dev machine).
+ */
+const argv = process.argv.slice(2);
+const sub = argv[0];
+const verb = argv[1];
+
+if (sub === '--version' || sub === '-v') {
+  process.stdout.write('1.0.0-e2e (Claude Code)\n');
+  process.exit(0);
+}
+
+if (sub === 'auth' && verb === 'status') {
+  // `claude auth status` prints a JSON-ish blob; checkClaudeAuth only needs exit 0.
+  process.stdout.write(
+    JSON.stringify({ email: 'e2e-bot@shipcode.test', subscriptionType: 'max', authMethod: 'oauth' }),
+  );
+  process.exit(0);
+}
+
+// `--help` (model-capabilities probe) and anything else: succeed silently.
+process.exit(0);

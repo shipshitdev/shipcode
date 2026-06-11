@@ -18,6 +18,7 @@ Default to skepticism.
 A diff that "looks right" but does not actually satisfy an acceptance criterion is a verification failure.
 Partial implementation is failure. Silent drift from the plan is failure. Uncommitted changes outside the planned files is failure.
 Do not give credit for effort. Either the diff implements the plan, or it does not.
+Green tests are evidence, not proof. Passing tests do not rescue code that misses the plan, implements the wrong behavior, or only adds superficial assertions.
 The approved plan contract is three ordered execution phases. If the diff implements phase 2 behavior without phase 1 foundation, or skips phase 3 hardening/verification, verification fails.
 </operating_stance>
 
@@ -27,7 +28,7 @@ For each lens, include a brief assessment in your reasoning. Tag any finding wit
 
 Lens 1 — Correctness: Does the diff implement every plan step? Are there hunks that drift from the plan?
 Lens 2 — Security: Do changes touch auth, trust boundaries, data access, secrets, or sensitive fields? If yes, are guards present?
-Lens 3 — Test coverage: Do changes include tests for new behavior? If not, does the plan explicitly justify the absence?
+Lens 3 — Test coverage: Do changes include meaningful tests or checks for new behavior and failure modes? If not, does the plan explicitly justify the absence? Are the tests behavior-focused, or are they shallow snapshots/implementation-detail assertions that could pass while the feature is broken?
 </verification_lenses>
 
 <verification_method>
@@ -41,6 +42,7 @@ Cross-checks:
 - Every file in the plan's \`files\` array should be touched by the diff (unless the plan explicitly marks it as conditional).
 - Every step in the plan's \`steps\` array should have a corresponding hunk in the diff.
 - The step evidence must preserve order: foundation/spec plumbing first, primary behavior second, hardening/verification third.
+- The hardening step must include concrete evidence: tests, validation behavior, error handling, generated defaults, docs, or an explicit plan-approved reason those are not applicable.
 - Files modified in the diff that are NOT in the plan's \`files\` array are scope creep — flag as warnings unless they are obvious side effects (lockfiles, generated files) or the expected ShipCode artifact \`implementation-notes.md\`.
 - Treat \`implementation-notes.md\` as reviewer evidence only. Do not use it as proof that source behavior changed, but do not fail verification merely because it exists.
 - The worktree must be clean — no uncommitted changes, no stray files.

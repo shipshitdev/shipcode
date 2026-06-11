@@ -15,7 +15,7 @@ import {
   resolveWorktreeDiffBase,
   worktreeHasChanges,
 } from './execution-phases';
-import type { PipelineContextHelpers, PipelinePhaseHandlers, PipelineRuntime } from './shared';
+import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
 type ExecutionHarnessDeps = {
   plans: { getLatest: ReturnType<typeof vi.fn> };
@@ -32,13 +32,19 @@ type ExecutionHarnessDeps = {
   };
 };
 
-const { mockExecFileSync, mockServerLifecycleStart, mockServerLifecycleStop, mockShellExecEnv } =
-  vi.hoisted(() => ({
-    mockExecFileSync: vi.fn(),
-    mockServerLifecycleStart: vi.fn(),
-    mockServerLifecycleStop: vi.fn(),
-    mockShellExecEnv: vi.fn(),
-  }));
+const {
+  mockExecFileSync,
+  mockGhUpsertIssueCommentByMarker,
+  mockServerLifecycleStart,
+  mockServerLifecycleStop,
+  mockShellExecEnv,
+} = vi.hoisted(() => ({
+  mockExecFileSync: vi.fn(),
+  mockGhUpsertIssueCommentByMarker: vi.fn(async () => undefined),
+  mockServerLifecycleStart: vi.fn(),
+  mockServerLifecycleStop: vi.fn(),
+  mockShellExecEnv: vi.fn(),
+}));
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
@@ -52,6 +58,11 @@ vi.mock('@shipcode/agents/source', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shipcode/agents/source')>();
   return {
     ...actual,
+    GhCli: vi.fn(function GhCli() {
+      return {
+        upsertIssueCommentByMarker: mockGhUpsertIssueCommentByMarker,
+      };
+    }),
     shellExecEnv: mockShellExecEnv,
     ServerLifecycleManager: vi.fn(function ServerLifecycleManager(
       _processManager: unknown,
@@ -97,7 +108,6 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
     nodeVerificationRetries: 0,
     nodeAnchorSha: null,
     testRetries: 0,
-    testOutput: null,
     githubIssueNumber: 42,
     githubIssueTitle: 'Issue',
     githubRepo: null,
@@ -157,13 +167,9 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
     },
     workflowWarningEmitted: false,
     abort: new AbortController(),
-    stabilizationFeedback: null,
-    executionResumeContext: null,
-    previousPlanRawOutput: null,
     turnCount: 0,
     featureQaState: null,
     runtimeQaCleanup: null,
-    runtimeQaOutput: null,
     cpuQueueStartedAt: null,
     cpuQueueLastNotifiedAt: null,
     ...overrides,
@@ -208,6 +214,10 @@ function makeExecutionHarness(context = makeContext()) {
     },
     taskGraphs: null,
     diffs: { replaceForThread: vi.fn() },
+    githubIssues: {
+      getByNumber: vi.fn(() => null),
+      updatePullRequestFeedback: vi.fn(),
+    },
     reviews: { getByPlanId: vi.fn(() => null) },
     featureQaResults: {
       insert: vi.fn(),
@@ -238,25 +248,16 @@ function makeExecutionHarness(context = makeContext()) {
     formatTestFixFeedback: vi.fn(
       (testOutput: string, attempt: number) => `Tests failed on attempt ${attempt}\n${testOutput}`,
     ),
+    formatStabilizationFeedback: vi.fn(() => 'stabilization feedback'),
     runShellCommand: vi.fn(),
     runProviderPhase: vi.fn(async () => ({ rawOutput: 'done', exitCode: 0 })),
     postTaskGraphComment: vi.fn(),
   } as unknown as PipelineRuntime;
-  const handlers = {
-    startExecution: vi.fn(),
-    startTesting: vi.fn(),
-    startVerification: vi.fn(),
-    startPlanGeneration: vi.fn(),
-    startCommitAndPush: vi.fn(),
-    startShipping: vi.fn(),
-  } as unknown as PipelinePhaseHandlers;
-  const phaseHandlers = createExecutionPhaseHandlers({
+  const handlers = createExecutionPhaseHandlers({
     deps: deps as never,
     contextHelpers,
     runtime,
-    handlers,
   });
-  Object.assign(handlers, phaseHandlers);
   return { activePipelines, context, contextHelpers, deps, handlers, runtime };
 }
 
@@ -559,6 +560,8 @@ describe('execution phase handlers', () => {
   beforeEach(() => {
     vi.useRealTimers();
     mockExecFileSync.mockReset();
+    mockGhUpsertIssueCommentByMarker.mockReset();
+    mockGhUpsertIssueCommentByMarker.mockResolvedValue(undefined);
     mockServerLifecycleStart.mockReset();
     mockServerLifecycleStop.mockReset();
     mockShellExecEnv.mockReset();
@@ -574,8 +577,7 @@ describe('execution phase handlers', () => {
     }
   });
 
-  it('queues testing when CPU slots are busy and cancellation suppresses the retry callback', async () => {
-    vi.useFakeTimers();
+  it('queues testing as a retry outcome when CPU slots are busy', async () => {
     const context = makeContext();
     const harness = makeExecutionHarness(context);
     vi.mocked(harness.contextHelpers.listActiveInPhases).mockReturnValue([
@@ -588,22 +590,23 @@ describe('execution phase handlers', () => {
     ] as never);
     vi.mocked(harness.runtime.getVerifyCommands).mockReturnValue(['bun test']);
 
-    await harness.handlers.startTesting('thread-1');
+    const outcome = await harness.handlers.startTesting('thread-1');
 
     expect(harness.runtime.emitTerminalLifecycle).toHaveBeenCalledWith(
       'thread-1',
       expect.stringContaining('CPU-heavy task slots are busy'),
     );
-    expect(context.retryTimer).not.toBeNull();
-
-    context.cancelled = true;
-    await vi.runOnlyPendingTimersAsync();
-
-    expect(harness.runtime.emitPhase).not.toHaveBeenCalledWith('thread-1', 'testing');
+    // CPU backpressure is now a retry outcome; the dispatch loop owns the delay,
+    // so the phase no longer arms context.retryTimer.
+    expect(outcome).toEqual({
+      next: 'retry',
+      delayMs: expect.any(Number),
+      andThen: { next: 'testing' },
+    });
+    expect(context.retryTimer).toBeNull();
   });
 
   it('queues testing on CPU gate pressure without repeating recent queue notices', async () => {
-    vi.useFakeTimers();
     const context = makeContext({
       cpuQueueLastNotifiedAt: Date.now(),
     });
@@ -618,22 +621,16 @@ describe('execution phase handlers', () => {
     } as never;
     vi.mocked(harness.runtime.getVerifyCommands).mockReturnValue(['bun test']);
 
-    await harness.handlers.startTesting('thread-1');
+    const outcome = await harness.handlers.startTesting('thread-1');
 
-    expect(context.retryTimer).not.toBeNull();
+    expect(outcome).toEqual({ next: 'retry', delayMs: 123, andThen: { next: 'testing' } });
     expect(harness.runtime.emitTerminalLifecycle).not.toHaveBeenCalledWith(
       'thread-1',
       expect.stringContaining('[cpu-queue]'),
     );
-
-    await vi.advanceTimersByTimeAsync(123);
-
-    expect(gateCheck).toHaveBeenCalledTimes(2);
-    expect(harness.runtime.emitPhase).toHaveBeenCalledWith('thread-1', 'testing');
   });
 
   it('routes selector-readiness feature QA failures through coordinated test-fix retry', async () => {
-    vi.useFakeTimers();
     const context = makeContext({
       featureQaState: {
         featureId: 'feature-1',
@@ -669,16 +666,22 @@ describe('execution phase handlers', () => {
       return context.repoSetupContract;
     });
 
-    await harness.handlers.startTesting('thread-1');
+    const outcome = await harness.handlers.startTesting('thread-1');
 
     expect(context.testRetries).toBe(1);
-    expect(context.testOutput).toContain('Visual QA requires stable selectors');
-    expect(context.stabilizationFeedback).toContain('failed on attempt 1');
-    expect(context.retryTimer).not.toBeNull();
+    // The accumulated failure output is carried into the re-execution as fix feedback.
+    expect(outcome).toMatchObject({
+      next: 'retry',
+      delayMs: expect.any(Number),
+      andThen: { next: 'execute', plan: expect.anything() },
+    });
+    const fixFeedback = (outcome as { andThen?: { carry?: { stabilizationFeedback?: string } } })
+      .andThen?.carry?.stabilizationFeedback;
+    expect(fixFeedback).toContain('Visual QA requires stable selectors');
+    expect(fixFeedback).toContain('failed on attempt 1');
   });
 
-  it('drops a scheduled test-fix retry when the context disappears before callback entry', async () => {
-    vi.useFakeTimers();
+  it('emits a failure when the test-fix retry cannot find a structured plan', async () => {
     const context = makeContext({
       featureQaState: {
         featureId: 'feature-1',
@@ -713,14 +716,12 @@ describe('execution phase handlers', () => {
       };
       return context.repoSetupContract;
     });
+    // No structured plan available when the test-fix outcome is built.
+    harness.deps.plans.getLatest.mockReturnValue(null);
 
     await harness.handlers.startTesting('thread-1');
-    harness.activePipelines.get = vi.fn(() => undefined) as never;
-    harness.activePipelines.has = vi.fn(() => true) as never;
 
-    await vi.runOnlyPendingTimersAsync();
-
-    expect(harness.runtime.emitPhase).not.toHaveBeenCalledWith(
+    expect(harness.runtime.emitPhase).toHaveBeenCalledWith(
       'thread-1',
       'failed',
       'Test fix cannot start: structured plan missing for this thread.',
@@ -816,7 +817,7 @@ describe('execution phase handlers', () => {
   });
 
   it('blocks duplicate shared test failures owned by another active thread', async () => {
-    const context = makeContext({ testOutput: 'FAIL packages/foo.test.ts\nAssertionError: no' });
+    const context = makeContext();
     const harness = makeExecutionHarness(context);
     harness.deps.projectFailures = {
       claimOrCreate: vi.fn(() => ({
@@ -841,7 +842,7 @@ describe('execution phase handlers', () => {
   });
 
   it('blocks shared test failures already resolved by another thread', async () => {
-    const context = makeContext({ testOutput: 'FAIL packages/foo.test.ts\nAssertionError: no' });
+    const context = makeContext();
     const harness = makeExecutionHarness(context);
     harness.deps.projectFailures = {
       claimOrCreate: vi.fn(() => ({
@@ -955,12 +956,14 @@ describe('execution phase handlers', () => {
       return '';
     });
 
-    await harness.handlers.startExecution('thread-1', plan as never);
+    const outcome = await harness.handlers.startExecution('thread-1', plan as never);
     await Promise.resolve();
     await Promise.resolve();
 
     expect(context.nodeVerificationRetries).toBe(1);
-    expect(context.stabilizationFeedback).toContain('failed verification on attempt 1');
+    const nodeFeedback = (outcome as { andThen?: { carry?: { stabilizationFeedback?: string } } })
+      .andThen?.carry?.stabilizationFeedback;
+    expect(nodeFeedback).toContain('failed verification on attempt 1');
     expect(
       (harness.deps as never as { taskGraphs: { updateNodeStatus: ReturnType<typeof vi.fn> } })
         .taskGraphs.updateNodeStatus,
@@ -1161,8 +1164,8 @@ describe('execution phase handlers', () => {
       markNodeCompletedAndPromote: vi.fn(() => graph),
       markNodeFailed: vi.fn(() => graph),
     } as never;
-    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, phase) => {
-      if (phase === 'verify') throw new Error('verifier offline');
+    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, payload) => {
+      if (payload.phase === 'verify') throw new Error('verifier offline');
       return { rawOutput: 'done', exitCode: 0 };
     });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
@@ -1173,12 +1176,14 @@ describe('execution phase handlers', () => {
       return '';
     });
 
-    await harness.handlers.startExecution('thread-1', plan as never);
+    const outcome = await harness.handlers.startExecution('thread-1', plan as never);
     await Promise.resolve();
     await Promise.resolve();
 
     expect(context.nodeVerificationRetries).toBe(1);
-    expect(context.stabilizationFeedback).toContain('failed verification on attempt 1');
+    const nodeFeedback = (outcome as { andThen?: { carry?: { stabilizationFeedback?: string } } })
+      .andThen?.carry?.stabilizationFeedback;
+    expect(nodeFeedback).toContain('failed verification on attempt 1');
   });
 
   it('fails cancelled scoped node verification without scheduling another retry', async () => {
@@ -1212,8 +1217,8 @@ describe('execution phase handlers', () => {
       markNodeCompletedAndPromote: vi.fn(() => graph),
       markNodeFailed: vi.fn(() => graph),
     } as never;
-    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, phase) => {
-      if (phase === 'verify') context.cancelled = true;
+    vi.mocked(harness.runtime.runProviderPhase).mockImplementation(async (_context, payload) => {
+      if (payload.phase === 'verify') context.cancelled = true;
       return { rawOutput: verificationFailed, exitCode: 0 };
     });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
@@ -1620,13 +1625,14 @@ describe('execution phase handlers', () => {
       return context.repoSetupContract;
     });
 
-    await harness.handlers.startTesting('thread-1');
+    const outcome = await harness.handlers.startTesting('thread-1');
 
     expect(context.testRetries).toBe(1);
-    expect(context.testOutput).toContain('Server startup failed: readiness timeout');
+    const fixFeedback = (outcome as { andThen?: { carry?: { stabilizationFeedback?: string } } })
+      .andThen?.carry?.stabilizationFeedback;
+    expect(fixFeedback).toContain('Server startup failed: readiness timeout');
 
     context.testRetries = 3;
-    context.testOutput = null;
     mockServerLifecycleStart.mockRejectedValueOnce('offline');
 
     await harness.handlers.startTesting('thread-1');
@@ -1846,8 +1852,43 @@ describe('execution phase handlers', () => {
     );
   });
 
-  it('schedules execution retry after failed verification and honors cancelled timers', async () => {
-    vi.useFakeTimers();
+  it('threads runtime QA output onto the verification carry', async () => {
+    const context = makeContext({ worktreePath: tempDir('runtime-qa-carry') });
+    const harness = makeExecutionHarness(context);
+    vi.mocked(harness.runtime.ensureRepoSetupContract).mockImplementation(() => {
+      context.repoSetupContract = {
+        path: '/repo/.shipcode/setup.json',
+        contract: {
+          version: 1,
+          setupCommands: [],
+          verifyCommands: [],
+          envFiles: [],
+          setupBeforeVerify: false,
+          testingContext: null,
+          runtimeQa: { testCommands: ['runtime-pass'], discoverAgentTests: false },
+        },
+      };
+      return context.repoSetupContract;
+    });
+    vi.mocked(harness.runtime.runShellCommand).mockResolvedValue({
+      exitCode: 0,
+      output: 'runtime smoke ok',
+    });
+
+    const outcome = await harness.handlers.startTesting('thread-1');
+
+    // Runtime QA output now rides the verification carry, not context.runtimeQaOutput.
+    expect(outcome).toEqual(
+      expect.objectContaining({
+        next: 'verification',
+        carry: expect.objectContaining({
+          runtimeQaOutput: expect.stringContaining('runtime smoke ok'),
+        }),
+      }),
+    );
+  });
+
+  it('returns an execution retry outcome after failed verification', async () => {
     const context = makeContext({ verificationRetries: 0 });
     const harness = makeExecutionHarness(context);
     harness.deps.plans.getLatest.mockReturnValue({
@@ -1871,44 +1912,144 @@ describe('execution phase handlers', () => {
       return '';
     });
 
-    await harness.handlers.startVerification('thread-1');
-    await Promise.resolve();
-    await Promise.resolve();
+    const outcome = await harness.handlers.startVerification('thread-1');
 
     expect(context.verificationRetries).toBe(1);
-    expect(context.retryTimer).not.toBeNull();
-
-    context.cancelled = true;
-    await vi.runOnlyPendingTimersAsync();
-
+    // The phase returns the retry outcome; the dispatch loop owns the delay and
+    // the cancellable timer (no context.retryTimer armed here).
+    expect(outcome).toEqual({
+      next: 'retry',
+      delayMs: expect.any(Number),
+      andThen: { next: 'execute', plan },
+    });
     expect(harness.runtime.runProviderPhase).toHaveBeenCalledTimes(1);
   });
 
-  it('replaces existing verification retry timers before scheduling continuation', async () => {
-    vi.useFakeTimers();
-    const oldTimerCallback = vi.fn();
-    const context = makeContext({
-      verificationRetries: 0,
-      retryTimer: setTimeout(oldTimerCallback, 1) as unknown as PipelineContext['retryTimer'],
-    });
+  it('publishes the durable findings summary to a linked PR during shipping', async () => {
+    const context = makeContext({ baseBranch: 'develop' });
     const harness = makeExecutionHarness(context);
-    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
-      rawOutput: verificationFailed,
-      exitCode: 0,
+    (harness.deps as never as { reviewFindings: unknown }).reviewFindings = {
+      listByThread: vi.fn(() => [
+        {
+          id: 'finding-1',
+          projectId: 'project-1',
+          threadId: 'thread-1',
+          planId: 'plan-record-1',
+          reviewId: null,
+          verificationId: null,
+          runId: null,
+          phase: 'ci',
+          source: 'ci',
+          severity: 'blocker',
+          status: 'open',
+          title: 'CI failed',
+          description: 'Tests failed',
+          suggestion: null,
+          filePath: null,
+          fingerprint: 'ci',
+          sourceModel: null,
+          commitSha: null,
+          prNumber: 17,
+          worktreePath: null,
+          branch: null,
+          metadata: null,
+          resolvedByRunId: null,
+          resolvedAt: null,
+          createdAt: '2026-05-31T00:00:00.000Z',
+          updatedAt: '2026-05-31T00:00:00.000Z',
+        },
+      ]),
+    };
+    (
+      harness.deps as never as { threads: { setGithubPr: ReturnType<typeof vi.fn> } }
+    ).threads.setGithubPr = vi.fn();
+    vi.mocked(
+      (harness.deps as never as { githubIssues: { getByNumber: ReturnType<typeof vi.fn> } })
+        .githubIssues.getByNumber,
+    ).mockReturnValue({
+      id: 'issue-42',
+      ciBlocked: false,
+      failingChecks: [],
+      unresolvedReviewComments: [],
     });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'status') return '';
-      if (args[0] === 'rev-parse') return 'head-sha\n';
-      if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
+      if (args[0] === 'pr' && args[1] === 'list') {
+        return JSON.stringify([
+          { number: 17, url: 'https://github.com/acme/repo/pull/17', isDraft: true },
+        ]);
+      }
       return '';
     });
 
-    await harness.handlers.startVerification('thread-1');
-    await Promise.resolve();
-    await Promise.resolve();
-    context.cancelled = true;
-    await vi.runOnlyPendingTimersAsync();
+    await harness.handlers.startShipping('thread-1');
 
-    expect(oldTimerCallback).not.toHaveBeenCalled();
+    expect(mockGhUpsertIssueCommentByMarker).toHaveBeenCalledWith(
+      17,
+      '<!-- shipcode:review-findings -->',
+      expect.stringContaining('CI failed'),
+    );
+  });
+
+  describe('typed phase-result carry (#139)', () => {
+    it('carries passing test output to verification as typed carry', async () => {
+      const context = makeContext();
+      const harness = makeExecutionHarness(context);
+      vi.mocked(harness.runtime.getVerifyCommands).mockReturnValue(['bun test']);
+      vi.mocked(harness.runtime.runShellCommand).mockResolvedValue({
+        exitCode: 0,
+        output: 'PASS all green',
+      });
+
+      const outcome = await harness.handlers.startTesting('thread-1');
+
+      expect(outcome).toEqual({
+        next: 'verification',
+        carry: { testOutput: expect.stringContaining('PASS all green') },
+      });
+    });
+
+    it('folds carry.testOutput into the verifier prompt materials', async () => {
+      const context = makeContext({ worktreePath: tempDir('verify-carry') });
+      const harness = makeExecutionHarness(context);
+      vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+        rawOutput: verificationPassed,
+        exitCode: 0,
+      });
+      mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+        if (args[0] === 'status') return '';
+        if (args[0] === 'rev-parse') return 'head-sha\n';
+        if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
+        return '';
+      });
+
+      await harness.handlers.startVerification('thread-1', { testOutput: 'COVERAGE 100% green' });
+
+      const materials = vi.mocked(harness.runtime.runProviderPhase).mock.calls[0][3];
+      expect(materials).toContainEqual(
+        expect.objectContaining({ label: 'test output', content: 'COVERAGE 100% green' }),
+      );
+    });
+
+    it('carries stabilization feedback on the execute outcome instead of mutating context', async () => {
+      const context = makeContext();
+      const harness = makeExecutionHarness(context);
+      vi.mocked(harness.runtime.formatStabilizationFeedback).mockReturnValue(
+        'STABILIZE: fix failing CI',
+      );
+
+      const outcome = await harness.handlers.startStabilization('thread-1', {
+        prNumber: 7,
+        prUrl: null,
+        failingChecks: [],
+        unresolvedReviewComments: [],
+      });
+
+      expect(outcome).toEqual({
+        next: 'execute',
+        plan,
+        carry: { stabilizationFeedback: 'STABILIZE: fix failing CI' },
+      });
+    });
   });
 });

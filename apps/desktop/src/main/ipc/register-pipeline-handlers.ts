@@ -4,14 +4,10 @@ import type {
   ActivePipelineSummary,
   HeatmapQueryArgs,
   PipelineRunTimelineEntry,
-  TerminalEventRecord,
-  Thread,
 } from '@shipcode/shared';
 import {
   clampError,
   clarificationAnswerSchema,
-  EXECUTION_PHASES,
-  PAUSABLE_PIPELINE_PHASES,
   PIPELINE_PHASE,
   resolveExecutorModelForIssue,
   resolveRequireApproval,
@@ -19,7 +15,6 @@ import {
   resolveRevisionCount,
   resolveRevisionCountForIssue,
   resolveThreadPhasePresentation,
-  stripAnsi,
 } from '@shipcode/shared';
 
 import { logEvent } from '../logger.service';
@@ -30,178 +25,28 @@ import {
   transitionThreadPhase,
   tryParsePlan,
 } from './helpers';
+import {
+  buildExecutionResumeContext,
+  clampAutoFixFailureOutput,
+  clampResumeText,
+  PAUSABLE_PHASE_SET,
+  RUN_TIMELINE_TERMINAL_LIMIT,
+  STEERING_INSTRUCTION_MAX,
+} from './register-pipeline-handlers.utils';
 import { getRetryAction } from './retry-phase';
 import type { IpcHandlerDeps } from './types';
 
 const execFileAsync = promisify(execFile);
-const AUTO_FIX_FAILURE_OUTPUT_MAX = 8_000;
-const EXECUTION_RESUME_PROMPT_MAX = 24_000;
-const EXECUTION_RESUME_GIT_OUTPUT_MAX = 12_000;
-const EXECUTION_RESUME_TERMINAL_LIMIT = 120;
-const RUN_TIMELINE_TERMINAL_LIMIT = 40;
-const INTERRUPTED_EXECUTION_MARKERS = [
-  'interrupted while ShipCode was closed',
-  'interrupted by an app refresh',
-  'Agent process stalled',
-] as const;
-const PAUSABLE_PHASE_SET = new Set<string>(PAUSABLE_PIPELINE_PHASES);
-const EXECUTION_PHASE_SET = new Set<string>(EXECUTION_PHASES);
-
-function clampAutoFixFailureOutput(output: string): string {
-  const cleaned = stripAnsi(output).trim();
-  if (cleaned.length <= AUTO_FIX_FAILURE_OUTPUT_MAX) return cleaned;
-
-  const truncated = cleaned.slice(-AUTO_FIX_FAILURE_OUTPUT_MAX);
-  return `[Earlier terminal output truncated for Auto Fix]\n\n${truncated}`;
-}
-
-function clampResumeText(value: string, max: number, label: string): string {
-  const cleaned = stripAnsi(value).trim();
-  if (cleaned.length <= max) return cleaned;
-  return `${cleaned.slice(0, max)}\n\n[${label} truncated after ${max} chars]`;
-}
-
-function isInterruptedExecutionThread(thread: Thread): boolean {
-  if (
-    thread.status === PIPELINE_PHASE.paused &&
-    thread.pausedPhase &&
-    EXECUTION_PHASE_SET.has(thread.pausedPhase)
-  ) {
-    return true;
-  }
-  if (
-    thread.failurePhase !== PIPELINE_PHASE.executing &&
-    thread.status !== PIPELINE_PHASE.executing
-  ) {
-    return false;
-  }
-  return INTERRUPTED_EXECUTION_MARKERS.some((marker) => thread.lastError?.includes(marker));
-}
-
-function formatTerminalResumeLine(record: TerminalEventRecord): string | null {
-  const event = record.event;
-  switch (event.kind) {
-    case 'text':
-    case 'raw':
-    case 'thinking':
-      return event.content;
-    case 'error':
-      return `[error] ${event.message}`;
-    case 'lifecycle':
-      return `[lifecycle] ${event.message}`;
-    case 'tool_start':
-      return `[tool:start] ${event.name}: ${event.summary}`;
-    case 'tool_end':
-      return `[tool:end] ${event.name}${event.exitCode === undefined ? '' : ` exit=${event.exitCode}`}${
-        event.outputSummary ? ` ${event.outputSummary}` : ''
-      }`;
-    case 'turn_start':
-      return `[turn:start] ${event.turn}`;
-    case 'turn_end':
-      return `[turn:end] ${event.turn}`;
-    case 'action':
-      return `[action] ${event.label}`;
-    case 'clarification_requested':
-      return `[clarification_requested] ${event.summary}`;
-    case 'clarification_answered':
-      return `[clarification_answered] ${event.questionCount} answers`;
-    case 'done':
-      return '[done]';
-    default:
-      return null;
-  }
-}
-
-async function readGitResumeOutput(cwd: string, args: string[], label: string): Promise<string> {
-  try {
-    const { stdout } = await execFileAsync('git', args, {
-      cwd,
-      encoding: 'utf8',
-      maxBuffer: EXECUTION_RESUME_GIT_OUTPUT_MAX * 4,
-    });
-    return clampResumeText(String(stdout), EXECUTION_RESUME_GIT_OUTPUT_MAX, label);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return `[Unable to read ${label}: ${message}]`;
-  }
-}
-
-async function buildExecutionResumeContext(
-  thread: Thread,
-  queries: IpcHandlerDeps['queries'],
-): Promise<string | null> {
-  if (!isInterruptedExecutionThread(thread) || !thread.worktreePath) return null;
-
-  const isPaused = thread.status === PIPELINE_PHASE.paused;
-  const interruptedPhase = isPaused ? thread.pausedPhase : (thread.failurePhase ?? thread.status);
-  const checkpoint = queries.checkpoints.getLatest(thread.id);
-  const diffBase = checkpoint?.commitSha ?? 'HEAD';
-  const [status, changedFiles, diffStat, diffExcerpt] = await Promise.all([
-    readGitResumeOutput(thread.worktreePath, ['status', '--short'], 'git status'),
-    readGitResumeOutput(
-      thread.worktreePath,
-      ['diff', '--name-only', diffBase, '--'],
-      'changed files',
-    ),
-    readGitResumeOutput(thread.worktreePath, ['diff', '--stat', diffBase, '--'], 'diff stat'),
-    readGitResumeOutput(thread.worktreePath, ['diff', diffBase, '--'], 'diff excerpt'),
-  ]);
-  const terminalTail = queries.terminalEvents
-    .listByThread(thread.id, EXECUTION_RESUME_TERMINAL_LIMIT)
-    .flatMap((event) => {
-      const line = formatTerminalResumeLine(event);
-      return line?.trim() ? [line] : [];
-    })
-    .join('\n');
-
-  const sections = [
-    '<interrupted_run_context>',
-    isPaused
-      ? 'The previous execution was paused by the user. This is a semantic resume, not a clean restart.'
-      : 'The previous execution was interrupted. This is a semantic resume, not a clean restart.',
-    '',
-    `Interrupted phase: ${interruptedPhase ?? thread.status}`,
-    `Last error: ${thread.lastError ?? (isPaused ? 'Paused by user' : 'Unknown interruption')}`,
-    `Worktree: ${thread.worktreePath}`,
-    checkpoint
-      ? `Checkpoint before execution: ${checkpoint.label} (${checkpoint.commitSha.slice(0, 12)})`
-      : 'Checkpoint before execution: none recorded; using HEAD as the diff base.',
-    '',
-    '<current_git_status>',
-    status || 'Clean',
-    '</current_git_status>',
-    '',
-    '<changed_files_since_checkpoint>',
-    changedFiles || 'No changed files detected',
-    '</changed_files_since_checkpoint>',
-    '',
-    '<diff_stat_since_checkpoint>',
-    diffStat || 'No diff stat available',
-    '</diff_stat_since_checkpoint>',
-    '',
-    '<diff_excerpt_since_checkpoint>',
-    diffExcerpt || 'No diff available',
-    '</diff_excerpt_since_checkpoint>',
-    '',
-    '<terminal_tail>',
-    clampResumeText(terminalTail || 'No terminal events recorded', 8_000, 'terminal tail'),
-    '</terminal_tail>',
-    '',
-    'Resume instructions:',
-    '- Treat the current worktree as WIP from the interrupted agent.',
-    '- Inspect and preserve useful changes before continuing.',
-    '- Continue the approved plan from remaining work; fix incomplete or broken edits.',
-    '- Do not reset or recreate the worktree unless the WIP is clearly wrong.',
-    '</interrupted_run_context>',
-  ].join('\n');
-
-  return `\n\n${clampResumeText(sections, EXECUTION_RESUME_PROMPT_MAX, 'resume context')}`;
+function throwClampedIpcError(scope: string, error: unknown): never {
+  console.error(`[ipc] ${scope} failed`, error);
+  throw new Error(clampError(error));
 }
 
 export function registerPipelineHandlers({
   ipcMain,
   mainWindow,
   queries,
+  processManager,
   pipeline,
   emitter,
   notificationService,
@@ -259,6 +104,45 @@ export function registerPipelineHandlers({
   ipcMain.handle('verification:get', (_event, { threadId }: { threadId: string }) => {
     return queries.verifications.getLatest(threadId);
   });
+
+  ipcMain.handle(
+    'review-findings:list-thread',
+    (_event, { threadId, includeClosed }: { threadId: string; includeClosed?: boolean }) => {
+      try {
+        return queries.reviewFindings.listByThread(threadId, { includeClosed });
+      } catch (error) {
+        throwClampedIpcError('review-findings:list-thread', error);
+      }
+    },
+  );
+
+  ipcMain.handle('review-findings:list-open', (_event, { threadId }: { threadId: string }) => {
+    try {
+      return queries.reviewFindings.listOpenByThread(threadId);
+    } catch (error) {
+      throwClampedIpcError('review-findings:list-open', error);
+    }
+  });
+
+  ipcMain.handle(
+    'review-findings:update-status',
+    (
+      _event,
+      {
+        findingId,
+        status,
+      }: {
+        findingId: string;
+        status: 'fixed' | 'ignored' | 'superseded' | 'closed';
+      },
+    ) => {
+      try {
+        return queries.reviewFindings.updateStatus(findingId, status);
+      } catch (error) {
+        throwClampedIpcError('review-findings:update-status', error);
+      }
+    },
+  );
 
   ipcMain.handle('task-graph:get-latest', (_event, { threadId }: { threadId: string }) => {
     return queries.taskGraphs?.getLatestByThread(threadId) ?? null;
@@ -622,6 +506,82 @@ export function registerPipelineHandlers({
     return record;
   };
 
+  ipcMain.handle(
+    'pipeline:steer-execution',
+    (
+      _event,
+      { threadId, instruction }: { threadId: string; instruction: string },
+    ): {
+      threadId: string;
+      status: 'delivered' | 'stale' | 'rejected';
+      message: string;
+      processId: string | null;
+    } => {
+      const text = clampResumeText(instruction, STEERING_INSTRUCTION_MAX, 'steering instruction');
+      if (!text) {
+        return {
+          threadId,
+          status: 'rejected',
+          message: 'Instruction text is required.',
+          processId: null,
+        };
+      }
+
+      const thread = queries.threads.getById(threadId);
+      if (!thread) throw new Error(`Thread ${threadId} not found`);
+
+      const active = pipeline.listActive().find((summary) => summary.threadId === threadId);
+      if (!active || active.phase !== PIPELINE_PHASE.executing) {
+        return {
+          threadId,
+          status: 'stale',
+          message: `Task is not currently executing. Current phase: ${thread.status}.`,
+          processId: null,
+        };
+      }
+
+      const liveProcess =
+        (active.activeProcessId ? processManager.get(active.activeProcessId) : undefined) ??
+        processManager.listActive().find((process) => process.threadId === threadId);
+
+      if (liveProcess?.state !== 'running') {
+        return {
+          threadId,
+          status: 'stale',
+          message: 'Executor process is no longer running.',
+          processId: liveProcess?.id ?? active.activeProcessId ?? null,
+        };
+      }
+
+      if (liveProcess.type !== 'claude') {
+        return {
+          threadId,
+          status: 'rejected',
+          message: 'Mid-execution steering currently supports Claude executor sessions only.',
+          processId: liveProcess.id,
+        };
+      }
+
+      const delivered = processManager.write(liveProcess.id, `\n\n[USER INSTRUCTION]: ${text}\n\n`);
+      if (!delivered) {
+        return {
+          threadId,
+          status: 'rejected',
+          message: 'Executor stdin is no longer writable.',
+          processId: liveProcess.id,
+        };
+      }
+
+      emitTerminalEvent(threadId, { kind: 'user_input', content: text });
+      return {
+        threadId,
+        status: 'delivered',
+        message: 'Instruction delivered to the running executor transport.',
+        processId: liveProcess.id,
+      };
+    },
+  );
+
   ipcMain.handle('pipeline:pause', (_event, { threadId }: { threadId: string }) => {
     const thread = queries.threads.getById(threadId);
     if (!thread) throw new Error(`Thread ${threadId} not found`);
@@ -730,12 +690,12 @@ export function registerPipelineHandlers({
     }
 
     if (thread.pausedPhase === PIPELINE_PHASE.executing) {
-      const context = pipeline.getContext(threadId);
       const resumeContext = await buildExecutionResumeContext(thread, queries);
-      if (context && resumeContext) {
-        context.executionResumeContext = resumeContext;
-      }
-      await pipeline.startExecution(threadId, structuredPlan);
+      await pipeline.startExecution(
+        threadId,
+        structuredPlan,
+        ...(resumeContext ? ([{ executionResumeContext: resumeContext }] as const) : ([] as const)),
+      );
       return;
     }
 
@@ -821,16 +781,14 @@ export function registerPipelineHandlers({
       }
       const latestVerification = queries.verifications.getLatest(threadId);
       const retryAction = getRetryAction(thread, latestPlan, latestVerification);
-      const attachExecutionResumeContext = async () => {
-        const context = pipeline.getContext(threadId);
-        if (!context) return;
+      const resolveExecutionResumeContext = async (): Promise<string | null> => {
         const resumeContext = await buildExecutionResumeContext(thread, queries);
-        if (!resumeContext) return;
-        context.executionResumeContext = resumeContext;
+        if (!resumeContext) return null;
         emitTerminalEvent(threadId, {
           kind: 'lifecycle',
           message: 'Retry is resuming from interrupted worktree state.',
         });
+        return resumeContext;
       };
       if (retryAction === 'review') {
         if (latestPlan) queries.plans.updateStatus(latestPlan.id, 'pending_review');
@@ -839,23 +797,28 @@ export function registerPipelineHandlers({
         if (latestPlan?.status === 'superseded') {
           queries.plans.updateStatus(latestPlan.id, 'approved');
         }
-        await attachExecutionResumeContext();
-        await pipeline.startExecution(threadId, structured);
+        const resumeContext = await resolveExecutionResumeContext();
+        await pipeline.startExecution(
+          threadId,
+          structured,
+          ...(resumeContext
+            ? ([{ executionResumeContext: resumeContext }] as const)
+            : ([] as const)),
+        );
       } else if (retryAction === 'verify') {
         await pipeline.startVerification(threadId);
       } else if (retryAction === 'commit_and_push') {
         await pipeline.startCommitAndPush(threadId);
       } else {
-        const retryCtx = pipeline.getContext(threadId);
-        if (retryCtx && latestPlan?.rawOutput) {
-          retryCtx.previousPlanRawOutput = latestPlan.rawOutput;
-        }
         queries.plans.supersedeAll(threadId);
         await pipeline.startPlanGeneration(
           threadId,
           thread.prompt,
           project.path,
           thread.worktreePath,
+          ...(latestPlan?.rawOutput
+            ? ([{ previousPlanRawOutput: latestPlan.rawOutput }] as const)
+            : ([] as const)),
         );
       }
       return;
@@ -894,13 +857,17 @@ export function registerPipelineHandlers({
 
     // No structured plan exists anywhere — restart planning from scratch.
     const failedPlan = queries.plans.getLatest(threadId);
-    const ctx = pipeline.getContext(threadId);
-    if (ctx && failedPlan?.rawOutput) {
-      ctx.previousPlanRawOutput = failedPlan.rawOutput;
-    }
 
     queries.plans.supersedeAll(threadId);
-    await pipeline.startPlanGeneration(threadId, thread.prompt, project.path, thread.worktreePath);
+    await pipeline.startPlanGeneration(
+      threadId,
+      thread.prompt,
+      project.path,
+      thread.worktreePath,
+      ...(failedPlan?.rawOutput
+        ? ([{ previousPlanRawOutput: failedPlan.rawOutput }] as const)
+        : ([] as const)),
+    );
   };
 
   ipcMain.handle('pipeline:retry', async (_event, { threadId }: { threadId: string }) => {
@@ -1252,14 +1219,15 @@ export function registerPipelineHandlers({
       const stepsByRun = new Map(
         runs.map((run) => [run.id, steps.filter((step) => step.runId === run.id)]),
       );
+      const runById = new Map(runs.map((run) => [run.id, run]));
       const retryDepth = (runId: string): number => {
         let depth = 0;
-        let cursor = runs.find((run) => run.id === runId)?.retryOfRunId ?? null;
+        let cursor = runById.get(runId)?.retryOfRunId ?? null;
         const seen = new Set<string>([runId]);
         while (cursor && runIds.has(cursor) && !seen.has(cursor)) {
           seen.add(cursor);
           depth += 1;
-          cursor = runs.find((run) => run.id === cursor)?.retryOfRunId ?? null;
+          cursor = runById.get(cursor)?.retryOfRunId ?? null;
         }
         return depth;
       };

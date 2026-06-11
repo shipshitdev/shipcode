@@ -9,6 +9,14 @@ const { schedulerOptions, startOrQueueMock } = vi.hoisted(() => ({
   startOrQueueMock: vi.fn(async () => undefined),
 }));
 
+vi.mock('../logger.service', () => ({
+  default: {
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
 vi.mock('../pipeline-scheduler', () => ({
   PipelineScheduler: vi.fn().mockImplementation(function MockPipelineScheduler(options: {
     getMainWindow: () => unknown;

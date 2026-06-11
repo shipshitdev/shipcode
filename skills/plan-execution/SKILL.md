@@ -24,6 +24,7 @@ ShipCode decomposes approved three-step plans into task nodes when needed; if yo
 The plan is the contract.
 Do not redesign, do not refactor adjacent code, do not "improve" what was not asked for, do not add features the plan does not list.
 Match the existing codebase patterns — find 3+ similar examples before writing new code, and reuse existing helpers (`spawnWithStdin`, `runClaudeWithStdin`, existing query builders, existing error clampers) instead of reinventing them.
+Treat your final diff as the handoff file for the verifier. The verifier should be able to connect each plan step to concrete source hunks, tests, generated artifacts, migrations, or `implementation-notes.md` entries without guessing.
 If the plan is wrong, do the minimum to make it work and surface the discrepancy in your final output. Do not silently expand scope.
 Preserve ordering. Step 1 must create the foundation before step 2 behavior depends on it; step 3 must harden and verify what steps 1 and 2 shipped.
 Keep the worktree clean. Do not create scratch folders, temporary files, dead files, alternate implementations, or compatibility shims. If runtime QA needs `.shipcode/runtime-tests/`, keep those files focused and let ShipCode clean them before commit.
@@ -54,7 +55,8 @@ For each step in the plan:
 2. Identify which existing helpers apply. Reuse before reinvent.
 3. Make the change atomically. Each step should leave the worktree in a consistent state.
 4. Verify the step's rationale still holds after the change.
-5. Update your checklist and do not start the next step until the current step's files and local checks are coherent.
+5. Record any reviewer-relevant evidence in `implementation-notes.md`: pattern references used, plan discrepancies, verification commands, and any acceptance criterion that depends on generated output or runtime behavior.
+6. Update your checklist and do not start the next step until the current step's files and local checks are coherent.
 
 Throughout execution:
 - Stay inside the worktree directory. Do not edit files outside the planned `files` list without strong justification.
@@ -63,6 +65,8 @@ Throughout execution:
 - Remove any obsolete files made dead by your change when they are in the plan. Do not leave duplicate old/new implementations behind.
 - Before committing, run `git status --short` and inspect every changed path. The final diff must contain only planned work plus explicitly justified plan discrepancies.
 - Keep `implementation-notes.md` current while you work. Use the GitHub issue content as the source request, and record decisions that were not specified, plan discrepancies, tradeoffs, constraints, verification commands, and anything the reviewer should know.
+- If a required test or verification command fails twice for the same reason, stop changing unrelated code. Capture the exact failing command and concise failure summary in `implementation-notes.md`, then either fix the root cause within the plan scope or surface the blocker clearly.
+- Do not rely on "tests passed" as your only handoff. The diff should show behavior changes and tests or checks that exercise them; `implementation-notes.md` should explain what was verified and what could not be verified.
 - Commit your changes when all steps are complete. Use `git add -A && git commit -m "<concise summary of what was done>"`. Write a meaningful commit message that describes the change, not the process. Do not skip hooks.
 - Do not skip hooks, do not bypass validation, do not weaken type safety to make code compile.
 - If you encounter a real blocker (missing file, broken dep, bad assumption in the plan), surface it clearly and stop — do not paper over it.

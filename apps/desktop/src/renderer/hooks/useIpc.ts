@@ -11,6 +11,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useAppStore } from '../stores/app-store';
+import { toast } from '../stores/toast-store';
 
 const TERMINAL_EVENT_BATCH_MS = 50;
 const LAST_ACTIVITY_THROTTLE_MS = 500;
@@ -176,6 +177,7 @@ export function useIpc() {
           invalidatePlanQueriesForThread(data.threadId);
           queryClient.invalidateQueries({ queryKey: ['checkpoints', data.threadId] });
           queryClient.invalidateQueries({ queryKey: ['diffs', data.threadId] });
+          queryClient.invalidateQueries({ queryKey: ['review-findings', data.threadId] });
           queryClient.invalidateQueries({ queryKey: ['thread', data.threadId] });
         }
         if (data.phase !== PIPELINE_PHASE.idle && data.phase !== PIPELINE_PHASE.planning) {
@@ -221,6 +223,7 @@ export function useIpc() {
         if (data.threadId === useAppStore.getState().activeThreadId) {
           applyReview(data.review);
         }
+        queryClient.invalidateQueries({ queryKey: ['review-findings', data.threadId] });
       }),
     );
 
@@ -230,6 +233,7 @@ export function useIpc() {
         if (store.activeThreadId === data.threadId) {
           store.setVerification(data.verification);
         }
+        queryClient.invalidateQueries({ queryKey: ['review-findings', data.threadId] });
       }),
     );
 
@@ -250,6 +254,16 @@ export function useIpc() {
             activeIssue: refreshed,
             activeThreadId: refreshed?.threadId ?? state.activeThreadId,
           }));
+        }
+      }),
+    );
+
+    unsubscribers.push(
+      window.shipcode.on('workflow:reloaded', (data) => {
+        if (data.ok) {
+          toast.info('WORKFLOW.md reloaded', 'New config applies to the next pipeline.');
+        } else {
+          toast.error('WORKFLOW.md reload failed', data.warning ?? 'Kept the previous config.');
         }
       }),
     );

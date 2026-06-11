@@ -15,10 +15,11 @@
 import type { TerminalEvent } from '../../terminal-events';
 import { stripAnsi, summarizeTerminalText } from '../output-summary';
 import { FenceStateMachine } from './fence-suppression';
+import { LineBufferedJsonNormalizer } from './line-buffered-json-normalizer';
 
 export class CodexNormalizer {
-  private lineBuffer = '';
   private readonly fence: FenceStateMachine;
+  private readonly lines: LineBufferedJsonNormalizer;
   /** Track item IDs that received delta events (for dedup). */
   private deltaItemIds = new Set<string>();
   private readonly onEvent: (event: TerminalEvent) => void;
@@ -26,38 +27,19 @@ export class CodexNormalizer {
   constructor(onEvent: (event: TerminalEvent) => void) {
     this.onEvent = onEvent;
     this.fence = new FenceStateMachine(onEvent);
+    this.lines = new LineBufferedJsonNormalizer(
+      onEvent,
+      this.fence,
+      (line) => JSON.parse(stripAnsi(line)),
+      (event) => this.processEvent(event),
+    );
   }
 
   /**
    * Feed a raw PTY chunk. Lines may be split across chunks.
    */
   feed(chunk: string): void {
-    this.lineBuffer += chunk;
-
-    let newlineIdx = this.lineBuffer.indexOf('\n');
-    while (newlineIdx !== -1) {
-      const line = this.lineBuffer.slice(0, newlineIdx).trim();
-      this.lineBuffer = this.lineBuffer.slice(newlineIdx + 1);
-
-      if (!line) {
-        newlineIdx = this.lineBuffer.indexOf('\n');
-        continue;
-      }
-
-      let event: Record<string, unknown>;
-      try {
-        event = JSON.parse(stripAnsi(line));
-      } catch {
-        if (!this.fence.isSuppressing) {
-          this.onEvent({ kind: 'raw', content: line });
-        }
-        newlineIdx = this.lineBuffer.indexOf('\n');
-        continue;
-      }
-
-      this.processEvent(event);
-      newlineIdx = this.lineBuffer.indexOf('\n');
-    }
+    this.lines.feed(chunk);
   }
 
   private processEvent(event: Record<string, unknown>): void {

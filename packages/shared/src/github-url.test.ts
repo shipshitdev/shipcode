@@ -5,6 +5,7 @@ import {
   githubIssuesUrl,
   githubProjectsUrl,
   githubRepoUrl,
+  isValidGithubLogin,
   parseGithubProjectUrl,
   parseGithubRemote,
   validateGithubProjectUrl,
@@ -233,6 +234,30 @@ describe('validateGithubProjectUrl', () => {
     const r = validateGithubProjectUrl('not a url');
     expect(r.ok).toBe(false);
   });
+
+  it('rejects owners that are not valid GitHub logins (gh @file disclosure)', () => {
+    // `gh api -F login=@.env` reads .env from the project cwd; the owner must
+    // be a real GitHub login so it can never start with `@`.
+    expect(validateGithubProjectUrl('https://github.com/orgs/@.env/projects/1')).toEqual({
+      ok: false,
+      reason: 'Invalid GitHub owner in project URL',
+    });
+    expect(validateGithubProjectUrl('https://github.com/users/..%2F..%2Fetc/projects/1').ok).toBe(
+      false,
+    );
+  });
+
+  it('rejects project URLs with extra trailing segments (e.g. /settings)', () => {
+    // A loose `>= 4` length check previously accepted these and stored them
+    // verbatim, so the quick-link button opened the settings sub-page instead
+    // of the board. Only the exact `/projects/<n>` shape is accepted.
+    expect(validateGithubProjectUrl('https://github.com/orgs/acme/projects/3/settings').ok).toBe(
+      false,
+    );
+    expect(validateGithubProjectUrl('https://github.com/acme/repo/projects/1/views/2').ok).toBe(
+      false,
+    );
+  });
 });
 
 describe('parseGithubProjectUrl', () => {
@@ -288,6 +313,10 @@ describe('parseGithubProjectUrl', () => {
     expect(parseGithubProjectUrl('https://github.com/orgs/acme/projects')).toBeNull();
   });
 
+  it('returns null for extra trailing segments after the project number', () => {
+    expect(parseGithubProjectUrl('https://github.com/orgs/acme/projects/3/settings')).toBeNull();
+  });
+
   it('returns null for http (non-https)', () => {
     expect(parseGithubProjectUrl('http://github.com/orgs/acme/projects/3')).toBeNull();
   });
@@ -301,5 +330,35 @@ describe('parseGithubProjectUrl', () => {
     expect(parseGithubProjectUrl(undefined)).toBeNull();
     expect(parseGithubProjectUrl('')).toBeNull();
     expect(parseGithubProjectUrl('   ')).toBeNull();
+  });
+
+  it('returns null when the owner is not a valid GitHub login (gh @file disclosure)', () => {
+    // A stored URL like this would otherwise reach `gh api -F login=@.env`,
+    // which the GitHub CLI expands into a read of `.env` from the project cwd.
+    expect(parseGithubProjectUrl('https://github.com/orgs/@.env/projects/1')).toBeNull();
+    expect(parseGithubProjectUrl('https://github.com/users/@-/projects/1')).toBeNull();
+    expect(parseGithubProjectUrl('https://github.com/orgs/a.b/projects/1')).toBeNull();
+  });
+});
+
+describe('isValidGithubLogin', () => {
+  it('accepts valid GitHub logins', () => {
+    expect(isValidGithubLogin('acme')).toBe(true);
+    expect(isValidGithubLogin('Acme-Co')).toBe(true);
+    expect(isValidGithubLogin('a')).toBe(true);
+    expect(isValidGithubLogin('a1b2c3')).toBe(true);
+  });
+
+  it('rejects logins that could trigger gh @file expansion or path traversal', () => {
+    expect(isValidGithubLogin('@.env')).toBe(false);
+    expect(isValidGithubLogin('@/etc/passwd')).toBe(false);
+    expect(isValidGithubLogin('a.b')).toBe(false);
+    expect(isValidGithubLogin('-acme')).toBe(false);
+    expect(isValidGithubLogin('acme-')).toBe(false);
+    expect(isValidGithubLogin('ac--me')).toBe(false);
+    expect(isValidGithubLogin('')).toBe(false);
+    expect(isValidGithubLogin(null)).toBe(false);
+    expect(isValidGithubLogin(undefined)).toBe(false);
+    expect(isValidGithubLogin('a'.repeat(40))).toBe(false);
   });
 });

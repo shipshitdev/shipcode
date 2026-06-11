@@ -47,21 +47,26 @@ describe('CreateIssueModal — image drop / attachment management', () => {
       on: vi.fn(() => () => {}),
     };
 
-    invokeMock.mockImplementation(async (channel: string) => {
+    invokeMock.mockImplementation(async (channel: string, args?: unknown) => {
       if (channel === 'prd-attachments:create-session') {
         return { sessionId: 'test-session-id' };
       }
       if (channel === 'prd-attachments:stage') {
+        const filePaths =
+          args && typeof args === 'object' && 'filePaths' in args && Array.isArray(args.filePaths)
+            ? args.filePaths
+            : ['/tmp/test.png'];
         return {
-          staged: [
-            {
-              originalPath: '/tmp/test.png',
-              stagedPath: '/tmp/staged/test.png',
-              fileName: 'test.png',
+          staged: filePaths.map((filePath: string) => {
+            const fileName = filePath.split('/').pop() ?? 'test.png';
+            return {
+              originalPath: filePath,
+              stagedPath: `/tmp/staged/${fileName}`,
+              fileName,
               mimeType: 'image/png',
               sizeBytes: 1024,
-            },
-          ],
+            };
+          }),
           errors: [],
         };
       }

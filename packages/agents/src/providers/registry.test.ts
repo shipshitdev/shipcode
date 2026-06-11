@@ -15,6 +15,9 @@ describe('createProviderRegistry', () => {
   const claude = makeProvider('claude-cli', ['plan', 'review', 'revision', 'verify', 'execute']);
   const codex = makeProvider('codex-cli', ['plan', 'review', 'revision', 'verify', 'execute']);
   const gemini = makeProvider('gemini-cli', ['plan', 'review', 'revision', 'verify', 'execute']);
+  // Cursor is execute-only: it has no read-only mode, so it must not drive the
+  // pipeline's read-only phases.
+  const cursor = makeProvider('cursor-cli', ['execute']);
   const openrouter = makeProvider('openrouter', [
     'plan',
     'review',
@@ -22,7 +25,7 @@ describe('createProviderRegistry', () => {
     'verify',
     'execute',
   ]);
-  const registry = createProviderRegistry({ claude, codex, gemini, openrouter });
+  const registry = createProviderRegistry({ claude, codex, gemini, cursor, openrouter });
 
   it('dispatches claude agent to claude-cli provider', () => {
     expect(registry.for('claude', 'plan')).toBe(claude);
@@ -49,6 +52,22 @@ describe('createProviderRegistry', () => {
     expect(registry.for('openrouter', 'plan')).toBe(openrouter);
     expect(registry.for('openrouter', 'verify')).toBe(openrouter);
     expect(registry.for('openrouter', 'execute')).toBe(openrouter);
+  });
+
+  it('dispatches cursor agent to cursor-cli provider for execute only', () => {
+    expect(registry.for('cursor', 'execute')).toBe(cursor);
+    expect(() => registry.for('cursor', 'plan')).toThrow(/does not support phase 'plan'/);
+    expect(() => registry.for('cursor', 'review')).toThrow(/does not support phase 'review'/);
+    expect(() => registry.for('cursor', 'verify')).toThrow(/does not support phase 'verify'/);
+  });
+
+  it('throws when cursor is requested but no cursor provider is registered', () => {
+    const withoutCursor = createProviderRegistry({ claude, codex, gemini, openrouter });
+
+    expect(() => withoutCursor.for('cursor', 'execute')).toThrow(
+      /provider for agent 'cursor' is not registered/,
+    );
+    expect(withoutCursor.all().has('cursor-cli')).toBe(false);
   });
 
   it('throws for gh agent (not an LLM)', () => {
@@ -84,7 +103,8 @@ describe('createProviderRegistry', () => {
     expect(all.get('claude-cli')).toBe(claude);
     expect(all.get('codex-cli')).toBe(codex);
     expect(all.get('gemini-cli')).toBe(gemini);
+    expect(all.get('cursor-cli')).toBe(cursor);
     expect(all.get('openrouter')).toBe(openrouter);
-    expect(all.size).toBe(4);
+    expect(all.size).toBe(5);
   });
 });

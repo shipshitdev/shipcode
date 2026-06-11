@@ -40,6 +40,7 @@ class BrowserWindowMock extends EventEmitter {
         onHeadersReceived: vi.fn(),
       },
     },
+    setWindowOpenHandler: vi.fn(),
   });
 
   constructor(options: unknown) {
@@ -118,6 +119,7 @@ const splashScreenMock = {
 const createOpenRouterProviderMock = vi.fn(() => ({ key: 'openrouter' }));
 const createPipelineMock = vi.fn(() => pipelineMock);
 const createReconciliationLoopMock = vi.fn(() => reconciliationLoopMock);
+const createWorkflowWatcherMock = vi.fn(() => ({ close: vi.fn() }));
 const createElectronEmitterMock = vi.fn(() => ({ emit: vi.fn() }));
 const notifyIssueGraphPipelinePhaseChangeMock = vi.fn();
 const transitionThreadPhaseMock = vi.fn();
@@ -148,6 +150,7 @@ class QueryMock {
     if (throwOnGetStuck) throw new Error('watchdog database failed');
     return stuckThreads;
   });
+  listVisible = vi.fn(() => [{ id: 'project-1', path: '/tmp/shipcode-project' }]);
   create = vi.fn((_threadId: string, record: unknown) => ({
     id: 'terminal-1',
     ...(record as Record<string, unknown>),
@@ -168,6 +171,9 @@ function installMocks() {
   }));
 
   vi.doMock('./logger.service', () => ({ default: logMock }));
+  vi.doMock('./path-fix', () => ({
+    fixMainProcessPath: vi.fn(() => ({ applied: false, reason: 'not_packaged' })),
+  }));
   vi.doMock('./telemetry', () => telemetryMock);
   vi.doMock('./splash-screen', () => ({
     SplashScreen: construct(splashScreenMock),
@@ -176,6 +182,7 @@ function installMocks() {
     createClaudeCliProvider: vi.fn(() => ({ key: 'claude' })),
     createCodexCliProvider: vi.fn(() => ({ key: 'codex' })),
     createGeminiCliProvider: vi.fn(() => ({ key: 'gemini' })),
+    createCursorCliProvider: vi.fn(() => ({ key: 'cursor' })),
     createOpenRouterProvider: createOpenRouterProviderMock,
     createProviderRegistry: vi.fn((providers) => providers),
     GhCli: vi.fn(function GhCliMock() {
@@ -196,6 +203,7 @@ function installMocks() {
     GitHubIssueQueries: QueryMock,
     getDatabase: vi.fn(() => ({ id: 'db' })),
     HeatmapQueries: QueryMock,
+    IssueChatSessionQueries: QueryMock,
     IssueEdgeQueries: QueryMock,
     NotificationsQueries: QueryMock,
     PhaseLogQueries: QueryMock,
@@ -207,6 +215,7 @@ function installMocks() {
     ProjectFailureQueries: QueryMock,
     ProjectQueries: QueryMock,
     PromptTelemetryQueries: QueryMock,
+    ReviewFindingQueries: QueryMock,
     ReviewQueries: QueryMock,
     SettingsQueries: QueryMock,
     SkillResolutionLogQueries: QueryMock,
@@ -222,6 +231,7 @@ function installMocks() {
   vi.doMock('@shipcode/pipeline', () => ({
     createPipeline: createPipelineMock,
     createReconciliationLoop: createReconciliationLoopMock,
+    createWorkflowWatcher: createWorkflowWatcherMock,
   }));
   vi.doMock('./automation-scheduler', () => ({
     AutomationScheduler: construct(automationSchedulerMock),
@@ -308,6 +318,13 @@ describe('main index bootstrap', () => {
     expect(automationSchedulerMock.start).toHaveBeenCalled();
     expect(reconciliationLoopMock.start).toHaveBeenCalled();
     expect(updateServiceMock.start).toHaveBeenCalled();
+    expect(createWorkflowWatcherMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: '/tmp/shipcode-project',
+        onReload: expect.any(Function),
+      }),
+    );
+    expect(windows[0]?.webContents.setWindowOpenHandler).toHaveBeenCalledWith(expect.any(Function));
     expect(windows[0]?.loadFile).toHaveBeenCalledWith(expect.stringContaining('index.html'));
 
     windows[0]?.emit('ready-to-show');

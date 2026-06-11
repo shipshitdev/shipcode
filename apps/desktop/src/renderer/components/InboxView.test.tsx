@@ -149,6 +149,9 @@ describe('InboxView', () => {
   });
 
   it('shows empty, error, and filter-empty states', async () => {
+    // InboxView merges live-pushed store notifications with the query results,
+    // so these source-controlled state assertions must start from an empty store.
+    useAppStore.setState({ notifications: [] });
     vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {
       if (channel === 'notification:list') return [notifications[1]];
       return null;
@@ -346,6 +349,9 @@ describe('InboxView', () => {
   });
 
   it('handles notifications that cannot navigate to an issue', async () => {
+    // Start from an empty store so only the query-mocked notification renders
+    // (InboxView merges store + query notifications).
+    useAppStore.setState({ notifications: [] });
     const localNotification: NotificationRecord = {
       id: 'local-only',
       projectId: null,

@@ -1,0 +1,58 @@
+#!/usr/bin/env node
+/*
+ * Deterministic fake `gh` for ShipCode E2E.
+ *
+ * Prepended to PATH when launching the Electron app so any boot-time or
+ * refresh-time shell-out to the GitHub CLI resolves instantly with benign
+ * fixtures instead of hitting the network. Authoritative test state lives in
+ * the pre-seeded SQLite DB, not here — this binary only has to keep the app
+ * from blocking or erroring when it reaches for `gh`.
+ */
+const argv = process.argv.slice(2);
+const sub = argv[0];
+const verb = argv[1];
+
+function write(value) {
+  process.stdout.write(typeof value === 'string' ? value : JSON.stringify(value));
+}
+
+try {
+  if (sub === 'auth') {
+    // `gh auth status` writes to stderr and exits 0 when authenticated.
+    process.stderr.write('github.com\n  ✓ Logged in to github.com account e2e-bot\n');
+    process.exit(0);
+  }
+
+  if (sub === 'repo' && verb === 'view') {
+    write({
+      id: 'R_e2e',
+      nameWithOwner: 'shipshitdev/shipcode-e2e',
+      owner: { login: 'shipshitdev' },
+      name: 'shipcode-e2e',
+    });
+    process.exit(0);
+  }
+
+  if (sub === 'issue' && verb === 'create') {
+    write('https://github.com/shipshitdev/shipcode-e2e/issues/999\n');
+    process.exit(0);
+  }
+
+  // List/read subcommands that ask for JSON → empty collection.
+  if (sub === 'label' && verb === 'list') return done('[]');
+  if (sub === 'issue' && verb === 'list') return done('[]');
+  if (sub === 'pr' && verb === 'list') return done('[]');
+  if (sub === 'api') return done('[]');
+  if (argv.includes('--json')) return done('[]');
+
+  // Writes (issue edit/close/comment, label create, pr edit, …): succeed silently.
+  done('');
+} catch (err) {
+  process.stderr.write(String(err && err.stack ? err.stack : err));
+  process.exit(0);
+}
+
+function done(value) {
+  write(value);
+  process.exit(0);
+}

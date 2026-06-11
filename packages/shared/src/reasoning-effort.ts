@@ -22,6 +22,10 @@ const GEMINI_REASONING_EFFORTS = [
   'high',
 ] as const satisfies readonly ReasoningEffort[];
 
+// Cursor's CLI does not expose a reasoning-effort control; the underlying
+// model decides. ShipCode therefore offers only `none` (send nothing).
+const CURSOR_REASONING_EFFORTS = ['none'] as const satisfies readonly ReasoningEffort[];
+
 const CLAUDE_REASONING_EFFORTS = [
   'none',
   'medium',
@@ -95,6 +99,10 @@ export function getSupportedReasoningEfforts(
 
   if (provider === 'gemini') {
     return GEMINI_REASONING_EFFORTS;
+  }
+
+  if (provider === 'cursor') {
+    return CURSOR_REASONING_EFFORTS;
   }
 
   if (normalizedModelId && OPENROUTER_ADAPTIVE_CLAUDE_MODELS.has(normalizedModelId)) {
@@ -173,6 +181,19 @@ export function resolveProviderReasoningEffort(
       };
     }
     return { configured, effective: configured, exact: true, message: null };
+  }
+
+  if (provider === 'cursor') {
+    if (configured === 'none') {
+      return { configured, effective: 'none', exact: true, message: null };
+    }
+    return {
+      configured,
+      effective: 'none',
+      exact: false,
+      message:
+        'Cursor selects reasoning automatically per model; ShipCode does not send a reasoning effort.',
+    };
   }
 
   if (normalizedModelId && OPENROUTER_NO_REASONING_MODELS.has(normalizedModelId)) {

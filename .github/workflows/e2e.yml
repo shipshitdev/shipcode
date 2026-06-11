@@ -1,0 +1,260 @@
+name: E2E
+
+# Branch model: develop (integration) → staging → master (default + release).
+# - Weekly cron fires ONLY from the default branch's copy of this file, so the
+#   scheduled review always runs against master. (It stays dormant on develop/
+#   staging — GitHub ignores cron on non-default branches.)
+# - workflow_dispatch is available on any branch that has this file; pick the
+#   branch to test via the `target_ref` input below. The suite currently lives
+#   on develop only; once promoted, master/staging dispatch + weekly cron light
+#   up with no further changes.
+run-name: >-
+  E2E ·
+  ${{ github.event_name == 'workflow_dispatch' && format('{0} (manual)', inputs.target_ref)
+   || github.event_name == 'schedule' && 'master (weekly)'
+   || 'PR smoke' }}
+
+on:
+  schedule:
+    # Weekly, Sundays 07:00 UTC — 1h after the CI coverage cron (0 6 * * 0)
+    # so the two never queue on macOS runners at the same instant. Runs against
+    # master (default branch); see the branch-model note above.
+    - cron: '0 7 * * 0'
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: 'Branch to run the full desktop E2E suite against'
+        type: choice
+        default: develop
+        options:
+          - develop
+          - staging
+          - master
+      only_failed:
+        description: 'Re-run only previously-failed E2E tests (--last-failed). Faster after a fix, but SKIPS the flow-coverage gate — not authoritative. Default: full run.'
+        type: boolean
+        default: false
+  # Reusable entry point for the `full` orchestrator (.github/workflows/full.yml),
+  # which runs CI then E2E in one dispatch. Mirrors the dispatch inputs
+  # (target_ref is `string` here — workflow_call inputs can't be `choice`). The
+  # orchestrator forwards its branch so checkout `inputs.target_ref || github.ref`
+  # is correct. Caller event is workflow_dispatch, so lint-typecheck + desktop-e2e
+  # both run.
+  workflow_call:
+    inputs:
+      target_ref:
+        description: 'Branch to run the full desktop E2E suite against'
+        type: string
+        default: ''
+      only_failed:
+        description: 'Re-run only previously-failed E2E tests (--last-failed); skips the flow-coverage gate.'
+        type: boolean
+        default: false
+  pull_request:
+    # Cheap HTTP-only web/docs smoke on PRs that touch E2E or the surfaces it covers.
+    paths:
+      - 'apps/e2e/**'
+      - 'apps/desktop/**'
+      - 'apps/web/**'
+      - 'apps/docs/**'
+      - 'packages/pipeline/**'
+      - 'packages/ui/**'
+      - '.github/workflows/e2e.yml'
+
+env:
+  BUN_VERSION: "1.3.13"
+  NODE_VERSION: "22"
+  E2E_FLOW_COVERAGE_MIN: "90"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Fast Linux prerequisite gate. Biome lint + tsc typecheck on Ubuntu so a bad
+  # commit fails in ~1min before we spend (slow, scarce) macOS minutes on the
+  # full Electron suite. desktop-e2e `needs:` this — green here is required first.
+  lint-typecheck:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref || github.ref }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      # Turbo cache — typecheck dependsOn ^build, so unchanged packages restore
+      # their dist/*.d.ts + tsc result instead of rebuilding after every fix.
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-lint-typecheck-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-lint-typecheck-
+            turbo-${{ runner.os }}-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: bun install --frozen-lockfile
+      - name: Lint (Biome)
+        run: bun run lint
+      # turbo `typecheck` dependsOn ^build, so this builds @shipcode/shared et al.
+      # first and resolves their dist/*.d.ts — no separate package-build step needed.
+      - name: Typecheck (tsc, all workspaces)
+        run: bun run typecheck
+
+  # Full E2E suite (Electron desktop journeys + web/docs smoke) + flow-coverage
+  # gate. Runs on macOS because the desktop project launches the real Electron
+  # app. Scheduled + manual only — too heavy for every PR. Gated behind the fast
+  # Linux lint+typecheck job above.
+  desktop-e2e:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: lint-typecheck
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # schedule → default branch (master); workflow_dispatch → chosen branch.
+          ref: ${{ inputs.target_ref || github.ref }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      # Turbo cache — the workspace-package build below (turbo run build) restores
+      # unchanged packages' dist instead of recompiling after every fix.
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-desktop-e2e-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-desktop-e2e-
+            turbo-${{ runner.os }}-
+      # Electron binary (~100MB) lives in @electron/get's macOS cache, keyed by
+      # the pinned electron version. Without this it re-downloads from the CDN on
+      # every run. install.js below is idempotent and skips download on a hit.
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('apps/desktop/package.json') }}
+          restore-keys: electron-${{ runner.os }}-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: bun install --frozen-lockfile
+      # Bun does not run electron's postinstall (it's not a trustedDependency and
+      # adding it would churn bun.lock → break --frozen-lockfile). So the binary is
+      # absent after install and `require('electron')` throws "Electron failed to
+      # install correctly", failing electron-app.ts at launch. Run electron's own
+      # install.js explicitly (version-agnostic via require.resolve), then verify
+      # the binary path resolves. Idempotent: skips download if already cached.
+      - name: Ensure Electron binary is installed
+        working-directory: apps/desktop
+        run: |
+          ELECTRON_DIR="$(node -p "require('path').dirname(require.resolve('electron/package.json'))")"
+          echo "Electron package dir: $ELECTRON_DIR"
+          node "$ELECTRON_DIR/install.js"
+          node -e "console.log('Electron binary resolved at:', require('electron'))"
+      # Build workspace packages first: @shipcode/shared, @shipcode/db, etc. emit
+      # their dist/*.d.ts, which the desktop tsc build resolves via package exports.
+      # Without this, `desktop build:code` fails with TS2307 "Cannot find module
+      # '@shipcode/shared'". Mirrors the repo's `coverage` script idiom.
+      - name: Build workspace packages (deps for desktop + e2e)
+        run: bunx turbo run build --filter='./packages/*'
+      - name: Build desktop bundle (main + renderer)
+        run: bun --filter @shipcode/desktop build:code
+      # Restore the prior run's failed-test list so a `--last-failed` dispatch
+      # knows what to re-run. Per-branch key with a run-id suffix (always unique →
+      # always saves); restore-keys grabs the latest copy for this branch.
+      - name: Restore last Playwright run (for --last-failed)
+        if: ${{ inputs.only_failed }}
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/e2e/test-results/.last-run.json
+          key: pw-lastrun-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: pw-lastrun-${{ github.ref_name }}-
+      # Default: full suite + flow-coverage gate (authoritative). Opt-in
+      # only_failed: re-run just the previously-failed specs and SKIP the gate —
+      # a fast post-fix loop, never the gate. Both write the same .last-run.json.
+      - name: Run E2E suite + flow-coverage gate
+        env:
+          E2E_FLOW_COVERAGE_MIN: ${{ env.E2E_FLOW_COVERAGE_MIN }}
+        run: |
+          if [ "${{ inputs.only_failed }}" = "true" ]; then
+            echo "::notice title=Partial E2E run::--last-failed re-runs only previously-failed tests. Flow-coverage gate SKIPPED — this run is NOT authoritative."
+            cd apps/e2e
+            bunx playwright test --last-failed --reporter=list,html,json
+          else
+            bun run e2e:ci
+          fi
+      # Persist the failed-test list for the next --last-failed dispatch. always()
+      # so it's saved even when the suite fails — that's exactly when it's useful.
+      - name: Save last Playwright run
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: apps/e2e/test-results/.last-run.json
+          key: pw-lastrun-${{ github.ref_name }}-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-artifacts-${{ github.run_id }}
+          retention-days: 7
+          path: |
+            apps/e2e/playwright-report/**
+            apps/e2e/test-results/**
+            apps/e2e/e2e-flow-coverage.json
+
+  # PR guard: web/docs smoke is HTTP-only (no Electron) so it runs fast on Linux.
+  web-smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      # Turbo cache — e2e:smoke dependsOn ^build, so unchanged app/package builds
+      # restore from cache instead of rebuilding on every PR.
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-web-smoke-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-web-smoke-
+            turbo-${{ runner.os }}-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: bun install --frozen-lockfile
+      - name: Run web/docs smoke
+        run: bun run e2e:smoke
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-web-smoke-${{ github.run_id }}
+          retention-days: 7
+          path: |
+            apps/e2e/playwright-report/**
+            apps/e2e/test-results/**

@@ -10,7 +10,7 @@ import {
   createPlanningPhaseHandlers,
   formatPlanParseFailure,
 } from './planning-phases';
-import type { PipelineContextHelpers, PipelinePhaseHandlers, PipelineRuntime } from './shared';
+import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
 function clarificationRequest(id: string, questionId: string, title: string) {
   return {
@@ -152,12 +152,9 @@ function makePlanningContext(overrides: Partial<PipelineContext> = {}): Pipeline
     workflowWarningEmitted: false,
     abort: new AbortController(),
     stabilizationFeedback: null,
-    executionResumeContext: null,
-    previousPlanRawOutput: null,
     turnCount: 0,
     featureQaState: null,
     runtimeQaCleanup: null,
-    runtimeQaOutput: null,
     cpuQueueStartedAt: null,
     cpuQueueLastNotifiedAt: null,
     ...overrides,
@@ -215,18 +212,11 @@ function makePlanningHarness(context = makePlanningContext()) {
     resolveAgentForPhase: vi.fn(() => context.plannerModel),
     runProviderPhase: vi.fn(async () => ({ rawOutput: planBlock, exitCode: 0 })),
   } as unknown as PipelineRuntime;
-  const handlers = {
-    startExecution: vi.fn(),
-    startReview: vi.fn(),
-    startRevision: vi.fn(),
-  } as unknown as PipelinePhaseHandlers;
-  const phaseHandlers = createPlanningPhaseHandlers({
+  const handlers = createPlanningPhaseHandlers({
     deps: deps as never,
     contextHelpers,
     runtime,
-    handlers,
   });
-  Object.assign(handlers, phaseHandlers);
   return { activePipelines, context, deps, handlers, runtime };
 }
 
@@ -453,7 +443,7 @@ describe('planning phase helpers', () => {
     expect(context.repoContext).toContain('Repo memory note');
     expect(harness.runtime.runProviderPhase).toHaveBeenCalledWith(
       context,
-      'plan',
+      expect.objectContaining({ phase: 'plan' }),
       expect.any(String),
       expect.arrayContaining([expect.objectContaining({ label: '.agents/memory/goal.md' })]),
       expect.any(Object),
@@ -515,6 +505,67 @@ describe('planning phase helpers', () => {
     );
   });
 
+  it('carries previousPlanRawOutput on the plan retry outcome instead of mutating context', async () => {
+    const context = makePlanningContext({ retryCount: 0 });
+    const harness = makePlanningHarness(context);
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: 'garbled plan output',
+      exitCode: 1,
+    });
+
+    const outcome = await harness.handlers.startPlanGeneration(
+      'thread-1',
+      'do stuff',
+      process.cwd(),
+      null,
+    );
+
+    expect(outcome).toEqual({
+      next: 'retry',
+      delayMs: expect.any(Number),
+      andThen: {
+        next: 'plan',
+        prompt: 'do stuff',
+        projectPath: expect.any(String),
+        worktreePath: null,
+        carry: { previousPlanRawOutput: 'garbled plan output' },
+      },
+    });
+  });
+
+  it('reads the carry previousPlanRawOutput into the plan prompt', async () => {
+    const context = makePlanningContext({});
+    const harness = makePlanningHarness(context);
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: 'no plan',
+      exitCode: 1,
+    });
+
+    await harness.handlers.startPlanGeneration('thread-1', 'do stuff', process.cwd(), null, {
+      previousPlanRawOutput: 'carried attempt output',
+    });
+    await Promise.resolve();
+
+    const prompt = vi.mocked(harness.runtime.runProviderPhase).mock.calls[0][2];
+    expect(prompt).toContain('<previous_attempt_failed>');
+    expect(prompt).toContain('carried attempt output');
+  });
+
+  it('omits previous-attempt context when no carry is given', async () => {
+    const context = makePlanningContext({});
+    const harness = makePlanningHarness(context);
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: 'no plan',
+      exitCode: 1,
+    });
+
+    await harness.handlers.startPlanGeneration('thread-1', 'do stuff', process.cwd(), null);
+    await Promise.resolve();
+
+    const prompt = vi.mocked(harness.runtime.runProviderPhase).mock.calls[0][2];
+    expect(prompt).not.toContain('<previous_attempt_failed>');
+  });
+
   it('routes review CLI missing failures and request-changes revisions', async () => {
     const context = makePlanningContext({ reviewerModel: 'openrouter' });
     const missing = makePlanningHarness(context);
@@ -541,19 +592,16 @@ describe('planning phase helpers', () => {
       exitCode: 0,
     });
 
-    await revision.handlers.startReview('thread-1', plan as never);
-    await Promise.resolve();
-    await Promise.resolve();
+    const revisionOutcome = await revision.handlers.startReview('thread-1', plan as never);
 
     expect(revision.deps.threads.incrementReviewRound).toHaveBeenCalledWith('thread-1');
-    expect(revision.runtime.emitPhase).toHaveBeenCalledWith('thread-1', 'revising');
-    expect(revision.runtime.runProviderPhase).toHaveBeenCalledWith(
-      revision.context,
-      'revision',
-      expect.stringContaining('[minor] Missing test'),
-      expect.any(Array),
-      expect.any(Object),
-    );
+    // request_changes within the revision budget returns a revision outcome for
+    // the dispatch loop (it no longer calls startRevision directly).
+    expect(revisionOutcome).toEqual({
+      next: 'revision',
+      plan,
+      reviewFeedback: expect.stringContaining('[minor] Missing test'),
+    });
   });
 
   it('fails review on parser-impossible decisions and ignores cancelled review errors', async () => {

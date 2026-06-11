@@ -6,10 +6,12 @@ export type IssueDetailTab =
   | 'console'
   | 'comments'
   | 'history'
+  | 'findings'
   | 'diff'
   | 'runs'
   | 'activity'
-  | 'conversations';
+  | 'conversations'
+  | 'chat';
 
 export type PhaseSelection = {
   provider: ExecutorModel;

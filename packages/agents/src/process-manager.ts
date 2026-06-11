@@ -7,7 +7,11 @@ import { assertWorkspaceSafe } from '@shipcode/shared/worktree-path';
 import { nanoid } from 'nanoid';
 import * as pty from 'node-pty';
 
-export type ProcessManagerAgentCommand = Extract<AgentType, 'claude' | 'codex' | 'gemini' | 'gh'>;
+export type ProcessManagerAgentCommand =
+  | Extract<AgentType, 'claude' | 'codex' | 'gemini' | 'gh'>
+  // Cursor's binary is `cursor-agent`, not `cursor`, so the allowlisted command
+  // string diverges from its AgentType tag (unlike the other CLIs).
+  | 'cursor-agent';
 export type ProcessManagerShellCommand = (typeof TRUSTED_SHELL_COMMANDS)[number];
 export type ProcessManagerPackageCommand = (typeof TRUSTED_PACKAGE_COMMANDS)[number];
 export type ProcessManagerCommand =
@@ -19,6 +23,7 @@ const ALLOWED_AGENT_COMMANDS = new Set<ProcessManagerAgentCommand>([
   'claude',
   'codex',
   'gemini',
+  'cursor-agent',
   'gh',
 ]);
 const TRUSTED_SHELL_COMMANDS = [
@@ -53,6 +58,7 @@ const SAFE_ENV_KEYS = new Set([
   'GEMINI_API_KEY',
   'GOOGLE_API_KEY',
   'GOOGLE_APPLICATION_CREDENTIALS',
+  'CURSOR_API_KEY',
 ]);
 
 function filterEnv(env: Record<string, string>): Record<string, string> {
@@ -157,6 +163,11 @@ export type ManagedProcessOutputMode = 'normalized' | 'raw';
 
 export interface ManagedProcessSpawnOptions {
   outputMode?: ManagedProcessOutputMode;
+  /**
+   * Keep piped stdin writable after the initial prompt is written. Used by
+   * long-running executor transports that can accept explicit steering input.
+   */
+  keepStdinOpen?: boolean;
   /**
    * When provided, the spawn site asserts `cwd` is a safe agent workspace
    * (absolute, basename matches `[A-Za-z0-9._-]+`, lives under the configured
@@ -507,7 +518,10 @@ export class ProcessManager extends EventEmitter {
       // The close/error handlers above own the final lifecycle event.
     });
 
-    const finishStdin = () => child.stdin.end();
+    const shouldKeepStdinOpen = options.keepStdinOpen === true;
+    const finishStdin = () => {
+      if (!shouldKeepStdinOpen) child.stdin.end();
+    };
     const handleStdinError = (err: Error) => {
       child.stdin.off('drain', finishStdin);
       emitOutput(`\x1b[31mError writing prompt to ${command}: ${err.message}\x1b[0m\r\n`);
@@ -517,6 +531,10 @@ export class ProcessManager extends EventEmitter {
     child.stdin.once('error', handleStdinError);
     try {
       if (child.stdin.write(input) !== false) {
+        if (shouldKeepStdinOpen) {
+          child.stdin.off('error', handleStdinError);
+          return managed;
+        }
         child.stdin.end();
       } else {
         child.stdin.once('drain', finishStdin);
@@ -536,15 +554,22 @@ export class ProcessManager extends EventEmitter {
     }
   }
 
-  write(processId: string, data: string): void {
+  write(processId: string, data: string): boolean {
     const process = this.processes.get(processId);
     if (process && process.state === 'running') {
       if (process.pty) {
         process.pty.write(data);
+        return true;
       } else if (process.child?.stdin.writable) {
-        process.child.stdin.write(data);
+        try {
+          process.child.stdin.write(data);
+          return true;
+        } catch {
+          return false;
+        }
       }
     }
+    return false;
   }
 
   resize(processId: string, cols: number, rows: number): void {

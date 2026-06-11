@@ -239,6 +239,41 @@ function _loadWorkflowPolicyUncached(repoPath: string): WorkflowPolicy {
 }
 
 /**
+ * Reload a repo's WORKFLOW policy from disk WITHOUT touching the cache.
+ *
+ * The workflow watcher uses this to compute a *candidate* policy on a file
+ * change so it can decide whether to commit it (valid) or preserve the
+ * last-known-good (invalid) — a plain `loadWorkflowPolicy` would otherwise
+ * cache an invalid result.
+ */
+export function loadWorkflowPolicyUncached(repoPath: string): WorkflowPolicy {
+  return _loadWorkflowPolicyUncached(repoPath);
+}
+
+/**
+ * Return the currently cached policy for a repo without extending its TTL, or
+ * null when nothing is cached. The watcher captures this as the last-known-good
+ * policy before attempting a reload.
+ */
+export function peekWorkflowPolicyCache(repoPath: string): WorkflowPolicy | null {
+  return _policyCache.get(repoPath)?.policy ?? null;
+}
+
+/**
+ * Overwrite the cached policy for a repo and reset its TTL. The watcher uses
+ * this to apply a fresh policy immediately — so the next dispatch/reconcile tick
+ * sees the edit without waiting out the 30s TTL — or to re-assert the prior
+ * policy after a failed reload.
+ */
+export function setWorkflowPolicyCache(
+  repoPath: string,
+  policy: WorkflowPolicy,
+  now: number = Date.now(),
+): void {
+  _policyCache.set(repoPath, { policy, expiresAt: now + POLICY_CACHE_TTL_MS });
+}
+
+/**
  * Exported for cache eviction tests.
  *
  * @knipignore

@@ -1,4 +1,5 @@
 export { createClaudeCliProvider, createCodexCliProvider } from './cli-provider';
+export { createCursorCliProvider } from './cursor-cli-provider';
 export { createGeminiCliProvider } from './gemini-cli-provider';
 export type {
   OpenRouterChatMessage,

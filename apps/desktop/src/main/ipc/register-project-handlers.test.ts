@@ -10,7 +10,8 @@ import {
   detectProjectSetup,
   validateOpenRouterModel,
 } from '@shipcode/agents';
-import type { AppSettings, Project } from '@shipcode/shared';
+import type { AppSettings, Project, TriageRule, TriageRuleDraft } from '@shipcode/shared';
+import { TRIAGE_RULE_LIMIT } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
 import type { IpcMain } from 'electron';
 import { dialog, shell } from 'electron';
@@ -414,6 +415,74 @@ describe('registerProjectHandlers', () => {
     );
     expect(queries.threads.clearWorktree).not.toHaveBeenCalled();
     expect(queries.projects.updatePath).toHaveBeenCalledWith('project-1', nextProjectPath);
+  });
+
+  it('re-syncs WORKFLOW.md watchers after a project relink', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-relink-resync-'));
+    const nextProjectPath = path.join(tmp, 'new-repo');
+    fs.mkdirSync(nextProjectPath, { recursive: true });
+
+    let project = { ...baseProject, path: path.join(tmp, 'old-repo') };
+    const onProjectsChanged = vi.fn();
+    const queries = {
+      projects: {
+        getById: vi.fn(() => project),
+        getByPath: vi.fn(() => null),
+        updatePath: vi.fn((_id: string, projectPath: string) => {
+          project = { ...project, path: projectPath };
+        }),
+        updateGitInfo: vi.fn(),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor', worktreeRoot: path.join(tmp, 'wt') })),
+      },
+      threads: { list: vi.fn(() => []), setWorktree: vi.fn(), clearWorktree: vi.fn() },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+      onProjectsChanged,
+    });
+
+    const relinkPath = handlers.get('project:relink-path');
+    if (!relinkPath) throw new Error('project:relink-path handler not registered');
+
+    await relinkPath(undefined, { projectId: 'project-1', path: nextProjectPath });
+
+    expect(queries.projects.updatePath).toHaveBeenCalledWith('project-1', nextProjectPath);
+    expect(onProjectsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-syncs WORKFLOW.md watchers after a project unarchive', () => {
+    const onProjectsChanged = vi.fn();
+    const queries = { projects: { unarchive: vi.fn() } };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+      onProjectsChanged,
+    });
+
+    const unarchive = handlers.get('project:unarchive');
+    if (!unarchive) throw new Error('project:unarchive handler not registered');
+
+    unarchive(undefined, { projectId: 'project-1' });
+
+    expect(queries.projects.unarchive).toHaveBeenCalledWith('project-1');
+    expect(onProjectsChanged).toHaveBeenCalledTimes(1);
   });
 
   it('clears managed worktree paths that are missing after a project relink', async () => {
@@ -3951,5 +4020,90 @@ describe('registerProjectHandlers', () => {
     expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/shipshitdev/shipcode');
 
     existsSpy.mockRestore();
+  });
+
+  describe('triage rule handlers', () => {
+    const rule: TriageRule = {
+      id: 'r1',
+      projectId: 'project-1',
+      orderIndex: 0,
+      name: 'bug rule',
+      enabled: true,
+      conditions: { operator: 'any', items: [{ kind: 'title_contains', value: 'bug' }] },
+      actions: { addLabels: ['agent:claude'], removeLabels: [] },
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    function registerTriageHandlers(opts: {
+      project?: Project | null;
+      triageRules?: { list: () => TriageRule[]; replaceForProject: () => TriageRule[] };
+    }) {
+      const queries = {
+        projects: { getById: vi.fn(() => ('project' in opts ? opts.project : baseProject)) },
+        triageRules: opts.triageRules,
+      };
+      registerProjectHandlers({
+        ipcMain,
+        mainWindow: mainWindow as never,
+        queries: queries as never,
+        pipeline: {} as never,
+        chatNotificationService: {} as never,
+        processManager: {} as never,
+        emitter: {} as never,
+        notificationService: {} as never,
+      });
+      const list = handlers.get('project:list-triage-rules');
+      const replace = handlers.get('project:replace-triage-rules');
+      if (!list || !replace) throw new Error('triage rule handlers not registered');
+      return { queries, list, replace };
+    }
+
+    function makeDraft(name: string): TriageRuleDraft {
+      return {
+        name,
+        enabled: true,
+        conditions: { operator: 'any', items: [{ kind: 'title_contains', value: 'bug' }] },
+        actions: { addLabels: ['agent:claude'], removeLabels: [] },
+      };
+    }
+
+    it('lists triage rules for a project', () => {
+      const triageRules = { list: vi.fn(() => [rule]), replaceForProject: vi.fn(() => []) };
+      const { list } = registerTriageHandlers({ triageRules });
+      expect(list(undefined, { projectId: 'project-1' })).toEqual([rule]);
+      expect(triageRules.list).toHaveBeenCalledWith('project-1');
+    });
+
+    it('throws when the project is missing', () => {
+      const triageRules = { list: vi.fn(() => []), replaceForProject: vi.fn(() => []) };
+      const { list } = registerTriageHandlers({ project: null, triageRules });
+      expect(() => list(undefined, { projectId: 'missing' })).toThrow('Project missing not found');
+    });
+
+    it('throws when triage rules are unavailable', () => {
+      const { list } = registerTriageHandlers({ triageRules: undefined });
+      expect(() => list(undefined, { projectId: 'project-1' })).toThrow(
+        'Triage rules are unavailable',
+      );
+    });
+
+    it('replaces triage rules for a project', () => {
+      const triageRules = { list: vi.fn(() => []), replaceForProject: vi.fn(() => [rule]) };
+      const { replace } = registerTriageHandlers({ triageRules });
+      const drafts = [makeDraft('one'), makeDraft('two')];
+      expect(replace(undefined, { projectId: 'project-1', rules: drafts })).toEqual([rule]);
+      expect(triageRules.replaceForProject).toHaveBeenCalledWith('project-1', drafts);
+    });
+
+    it('rejects payloads above the rule limit before persisting', () => {
+      const triageRules = { list: vi.fn(() => []), replaceForProject: vi.fn(() => []) };
+      const { replace } = registerTriageHandlers({ triageRules });
+      const drafts = Array.from({ length: TRIAGE_RULE_LIMIT + 1 }, (_, i) => makeDraft(`r-${i}`));
+      expect(() => replace(undefined, { projectId: 'project-1', rules: drafts })).toThrow(
+        'at most 50 triage rules',
+      );
+      expect(triageRules.replaceForProject).not.toHaveBeenCalled();
+    });
   });
 });

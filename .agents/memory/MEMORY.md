@@ -76,3 +76,4 @@ Where things live:
 - `ipc-errors.md` — clamp IPC errors at main-process boundary
 - `skills.md` — skills/memory folder layout, symlink rules
 - `agents.md` — custom sub-agent roster, routing rules, parallel patterns
+- `e2e-ci.md` — E2E workflow: branch triggers, weekly-cron-on-master rule, build ordering, macstudio cutover

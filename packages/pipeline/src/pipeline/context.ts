@@ -13,12 +13,15 @@ import {
   type SkillResolutionSource,
 } from '@shipcode/shared';
 import {
+  type OrchestratorState,
   PHASE_LOCAL_FIELDS,
+  type PhaseCarryOutput,
   type PhaseInput,
-  type PhaseLocalField,
+  type PhasePayload,
   type PipelineContext,
   type PipelineDeps,
   type PipelineExecutorModel,
+  type PipelinePromptPhase,
 } from '../types';
 import { loadWorkflowPolicy } from '../workflow-loader';
 import type { PipelineContextHelpers } from './shared';
@@ -42,19 +45,128 @@ export function snapshotPhaseInput(context: PipelineContext): PhaseInput {
   });
 }
 
+type PhasePayloadSource = OrchestratorState;
+
 /**
- * Clear phase-local fields on PipelineContext before entering the next phase.
- * Fields that were explicitly set for the upcoming phase (e.g. stabilizationFeedback
- * set by startStabilization before entering execute) are preserved by the caller
- * setting them *after* calling resetPhaseState.
+ * Resolve the executor model for a phase. Mirrors `resolveAgentForPhase` in
+ * runtime.ts so `PhasePayload.model` matches what the provider call will use.
  */
-export function resetPhaseState(
-  context: PipelineContext,
-  preserve: readonly PhaseLocalField[] = [],
-): void {
-  const preserved = new Set<PhaseLocalField>(preserve);
+function resolveModelForPhase(
+  state: Pick<
+    OrchestratorState,
+    'plannerModel' | 'reviewerModel' | 'verifierModel' | 'executorModel'
+  >,
+  phase: PipelinePromptPhase,
+): PipelineExecutorModel {
+  switch (phase) {
+    case 'plan':
+    case 'revision':
+      return state.plannerModel;
+    case 'review':
+      return state.reviewerModel;
+    case 'verify':
+      return state.verifierModel;
+    case 'execute':
+      return state.executorModel || 'claude';
+  }
+}
+
+/**
+ * Resolve the model-id override for a phase. Mirrors the `modelHint` logic in
+ * `runProviderPhaseCore`: the executor override wins when the phase resolves to
+ * the executor model, otherwise the phase's own id override applies.
+ */
+function resolveModelIdOverrideForPhase(
+  state: Pick<
+    OrchestratorState,
+    | 'plannerModel'
+    | 'reviewerModel'
+    | 'verifierModel'
+    | 'executorModel'
+    | 'executorModelOverride'
+    | 'plannerModelIdOverride'
+    | 'reviewerModelIdOverride'
+    | 'executorModelIdOverride'
+    | 'verifierModelIdOverride'
+  >,
+  phase: PipelinePromptPhase,
+): string | null {
+  const model = resolveModelForPhase(state, phase);
+  if (model === state.executorModel && state.executorModelOverride) {
+    return state.executorModelOverride;
+  }
+  switch (phase) {
+    case 'plan':
+    case 'revision':
+      return state.plannerModelIdOverride;
+    case 'review':
+      return state.reviewerModelIdOverride;
+    case 'execute':
+      return state.executorModelIdOverride;
+    case 'verify':
+      return state.verifierModelIdOverride;
+  }
+}
+
+/**
+ * Build a frozen `PhasePayload` for a single phase invocation from orchestrator
+ * state plus the previous phase's consumed-once `prevOutput`. Identity + the
+ * phase-resolved model, model-id override, and reasoning effort + the phase's
+ * prompt materials + `promptTelemetryCount` + `carry`. The phase reads this
+ * scoped view; it never mutates orchestrator state.
+ *
+ * `promptTelemetryCount` captures `promptTelemetry.length` at this instant; the
+ * `runProviderPhase` wrapper must apply the returned telemetry delta with no
+ * intervening `await` that could push to `promptTelemetry`, or the count goes
+ * stale. `PipelineContext` satisfies `PhasePayloadSource`, so callers pass the
+ * live context directly.
+ */
+export function buildPhasePayload(
+  state: PhasePayloadSource,
+  phase: PipelinePromptPhase,
+  prevOutput?: PhaseCarryOutput,
+): PhasePayload {
+  const repoPromptMaterials = Object.freeze(
+    (state.repoPromptMaterials ?? []).map((material) => Object.freeze({ ...material })),
+  );
+  const promptMaterialSummary = state.promptMaterialSummaries[phase];
+
+  return Object.freeze({
+    threadId: state.threadId,
+    projectPath: state.projectPath,
+    projectId: state.projectId,
+    worktreePath: state.worktreePath,
+    baseBranch: state.baseBranch,
+    forkPointSha: state.forkPointSha,
+    githubIssueNumber: state.githubIssueNumber,
+    githubIssueTitle: state.githubIssueTitle,
+    githubRepo: state.githubRepo,
+    autonomous: state.autonomous,
+    runId: state.runId,
+    isAutomationRun: state.isAutomationRun,
+    abort: state.abort.signal,
+    promptTelemetryCount: state.promptTelemetry.length,
+    phase,
+    model: resolveModelForPhase(state, phase),
+    modelIdOverride: resolveModelIdOverrideForPhase(state, phase),
+    reasoningEffort: state.phaseReasoningEfforts[phase],
+    repoContext: state.repoContext,
+    repoPromptMaterials,
+    promptMaterialSummary: promptMaterialSummary
+      ? Object.freeze({ ...promptMaterialSummary })
+      : undefined,
+    carry: prevOutput ?? {},
+  });
+}
+
+/**
+ * Clear phase-local runtime state on PipelineContext before entering the next
+ * phase. Only live state remains here (the QA-server cleanup handle and the
+ * CPU-queue timestamps); all cross-phase data — fix/test/QA output, resume and
+ * retry seeds — now travels typed on the `PhaseOutcome` carry, not on context.
+ */
+export function resetPhaseState(context: PipelineContext): void {
   for (const field of PHASE_LOCAL_FIELDS) {
-    if (preserved.has(field)) continue;
     (context as unknown as Record<string, unknown>)[field] = null;
   }
 }
@@ -225,8 +337,6 @@ export function createPipelineContextHelpers(
         workflowPolicy: seed.workflowPolicy ?? existing.workflowPolicy,
         workflowWarningEmitted:
           seed.workflowWarningEmitted ?? existing.workflowWarningEmitted ?? false,
-        executionResumeContext:
-          seed.executionResumeContext ?? existing.executionResumeContext ?? null,
       });
       emitWorkflowWarning(deps, existing);
       return existing;
@@ -317,7 +427,6 @@ export function createPipelineContextHelpers(
       nodeVerificationRetries: seed.nodeVerificationRetries ?? 0,
       nodeAnchorSha: seed.nodeAnchorSha ?? null,
       testRetries: seed.testRetries ?? 0,
-      testOutput: seed.testOutput ?? null,
       githubIssueNumber: seed.githubIssueNumber ?? null,
       githubIssueTitle: seed.githubIssueTitle ?? null,
       githubRepo: seed.githubRepo ?? null,
@@ -353,13 +462,9 @@ export function createPipelineContextHelpers(
       workflowPolicy,
       workflowWarningEmitted: seed.workflowWarningEmitted ?? false,
       abort: seed.abort ?? new AbortController(),
-      stabilizationFeedback: seed.stabilizationFeedback ?? null,
-      executionResumeContext: seed.executionResumeContext ?? null,
-      previousPlanRawOutput: seed.previousPlanRawOutput ?? null,
       turnCount: seed.turnCount ?? 0,
       featureQaState: seed.featureQaState ?? null,
       runtimeQaCleanup: null,
-      runtimeQaOutput: null,
       cpuQueueStartedAt: seed.cpuQueueStartedAt ?? null,
       cpuQueueLastNotifiedAt: seed.cpuQueueLastNotifiedAt ?? null,
       isAutomationRun: seed.isAutomationRun ?? false,
@@ -444,9 +549,6 @@ export function createPipelineContextHelpers(
       activeProcessId: null,
       cancelled: false,
       verifiedSha: null,
-      stabilizationFeedback: null,
-      executionResumeContext: null,
-      previousPlanRawOutput: null,
     });
   }
 

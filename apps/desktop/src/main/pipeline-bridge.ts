@@ -17,7 +17,7 @@ import type { BrowserWindow } from 'electron';
 import type { ChatNotificationService } from './chat-notification-service';
 import log, { logEvent } from './logger.service';
 import type { NotificationService } from './notification-service';
-import { capturePipelineFailure } from './telemetry';
+import { capturePipelineFailure, type TelemetryBreadcrumb } from './telemetry';
 
 interface EmitterDeps {
   activity: ActivityQueries;
@@ -111,11 +111,81 @@ const TERMINAL_PHASES = new Set<PipelinePhase>([
   PIPELINE_PHASE.paused,
   PIPELINE_PHASE.idle,
 ]);
+const MAX_THREAD_BREADCRUMBS = 25;
+
+/**
+ * Map a pipeline event to a Sentry breadcrumb for the lifecycle trail, or null
+ * for events that are too noisy/low-signal to record (per-turn, per-token,
+ * raw output). Pure — exported for focused tests. The trail attached to a
+ * captured failure reads e.g. `run started → phase planning → approval-gate →
+ * phase executing → verification exhausted → phase failed`.
+ */
+export function breadcrumbForEvent(event: PipelineEvent): TelemetryBreadcrumb | null {
+  switch (event.type) {
+    case 'pipeline:start-context':
+      return {
+        category: 'pipeline.lifecycle',
+        message: `run started via ${event.source}`,
+        data: {
+          threadId: event.threadId,
+          source: event.source,
+          githubIssueNumber: event.githubIssueNumber,
+          autonomous: event.autonomous,
+          requireApproval: event.requireApproval,
+          reviewRound: event.reviewRound,
+        },
+      };
+    case 'pipeline:phase':
+      return {
+        category: 'pipeline.phase',
+        level: event.phase === PIPELINE_PHASE.failed ? 'error' : 'info',
+        message: `phase: ${event.phase}`,
+        data: { threadId: event.threadId, phase: event.phase, runId: event.runId ?? null },
+      };
+    case 'pipeline:approval-gate':
+      return {
+        category: 'pipeline.approval',
+        message: `approval-gate: ${event.outcome} (review: ${event.reviewDecision})`,
+        data: {
+          threadId: event.threadId,
+          outcome: event.outcome,
+          reviewDecision: event.reviewDecision,
+          requireApproval: event.requireApproval,
+          autonomous: event.autonomous,
+          reviewRound: event.reviewRound,
+          reasons: event.reasons,
+        },
+      };
+    case 'pipeline:verification-exhausted':
+      return {
+        category: 'pipeline.verification',
+        level: 'warning',
+        message: `verification exhausted after ${event.retries} retries`,
+        data: { threadId: event.threadId, retries: event.retries },
+      };
+    default:
+      return null;
+  }
+}
 
 export function createElectronEmitter(
   mainWindow: BrowserWindow,
   deps: EmitterDeps,
 ): PipelineEmitter {
+  const breadcrumbsByThreadId = new Map<string, TelemetryBreadcrumb[]>();
+
+  function recordThreadBreadcrumb(event: PipelineEvent): void {
+    const crumb = breadcrumbForEvent(event);
+    if (!crumb) return;
+
+    const trail = breadcrumbsByThreadId.get(event.threadId) ?? [];
+    trail.push(crumb);
+    if (trail.length > MAX_THREAD_BREADCRUMBS) {
+      trail.splice(0, trail.length - MAX_THREAD_BREADCRUMBS);
+    }
+    breadcrumbsByThreadId.set(event.threadId, trail);
+  }
+
   function emitCanonicalTerminalEvent(
     threadId: string,
     event: import('@shipcode/shared').CanonicalTerminalEvent,
@@ -331,6 +401,7 @@ export function createElectronEmitter(
       failureCount: thread.failureCount,
       verificationRetries: thread.verificationRetries,
       message: thread.lastError,
+      breadcrumbs: [...(breadcrumbsByThreadId.get(event.threadId) ?? [])],
     });
   }
 
@@ -381,6 +452,12 @@ export function createElectronEmitter(
         writeEventLog(event);
       } catch (err) {
         log.error('[pipeline-bridge] event log write failed:', err);
+      }
+
+      try {
+        recordThreadBreadcrumb(event);
+      } catch (err) {
+        log.error('[pipeline-bridge] breadcrumb record failed:', err);
       }
 
       try {
@@ -533,6 +610,13 @@ export function createElectronEmitter(
           _dashboardThrottleTimer = null;
         }
         invalidateDashboardImmediate();
+        if (
+          event.phase === PIPELINE_PHASE.completed ||
+          event.phase === PIPELINE_PHASE.failed ||
+          event.phase === PIPELINE_PHASE.idle
+        ) {
+          breadcrumbsByThreadId.delete(event.threadId);
+        }
       } else {
         invalidateDashboard();
       }

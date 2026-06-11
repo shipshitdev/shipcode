@@ -1,9 +1,52 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildPrdMetadataLabels,
+  PRD_BLAST_LABEL_PREFIX,
+  PRD_COMPLEXITY_LABEL_PREFIX,
+  PRD_METADATA_MAPPING,
   readPrdIssueMetadata,
   splitPrdFrontmatter,
   stripPrdFrontmatter,
 } from './prd-issue-metadata';
+
+describe('buildPrdMetadataLabels', () => {
+  it('projects complexity and blast radius onto native label strings', () => {
+    expect(buildPrdMetadataLabels('high', 'infra')).toEqual(['complexity:high', 'blast:infra']);
+    expect(buildPrdMetadataLabels('low', 'contained')).toEqual([
+      'complexity:low',
+      'blast:contained',
+    ]);
+  });
+
+  it('round-trips through readPrdIssueMetadata via native labels', () => {
+    const labels = buildPrdMetadataLabels('medium', 'cross-package');
+    const meta = readPrdIssueMetadata('Just the prose.', labels);
+    expect(meta.estimatedComplexity).toBe('medium');
+    expect(meta.blastRadius).toBe('cross-package');
+  });
+});
+
+describe('PRD_METADATA_MAPPING', () => {
+  it('maps complexity and blast radius to native labels with the right prefixes', () => {
+    const byField = new Map(PRD_METADATA_MAPPING.map((m) => [m.field, m]));
+    expect(byField.get('estimatedComplexity')).toMatchObject({
+      target: 'native-label',
+      labelPrefix: PRD_COMPLEXITY_LABEL_PREFIX,
+    });
+    expect(byField.get('blastRadius')).toMatchObject({
+      target: 'native-label',
+      labelPrefix: PRD_BLAST_LABEL_PREFIX,
+    });
+  });
+
+  it('maps milestone and assignees to native fields and project facets to project fields', () => {
+    const byField = new Map(PRD_METADATA_MAPPING.map((m) => [m.field, m.target]));
+    expect(byField.get('milestone')).toBe('native-field');
+    expect(byField.get('assignees')).toBe('native-field');
+    expect(byField.get('issueType')).toBe('project-field');
+    expect(byField.get('priority')).toBe('project-field');
+  });
+});
 
 describe('splitPrdFrontmatter', () => {
   it('extracts frontmatter and strips it from the body', () => {

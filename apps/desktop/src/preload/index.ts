@@ -108,3 +108,10 @@ const on: ShipCodeAPI['on'] = ((channel: string, callback: (...args: unknown[]) 
 
 const api = Object.freeze({ invoke, on }) satisfies ShipCodeAPI;
 contextBridge.exposeInMainWorld('shipcode', api);
+
+// E2E mode: expose a flag so the renderer publishes its Zustand store on
+// window.__APP_STORE__ for Playwright assertions. Guarded by env so it is
+// never present in normal builds.
+if (process.env.SHIPCODE_E2E_MODE === '1') {
+  contextBridge.exposeInMainWorld('__SHIPCODE_E2E__', true);
+}

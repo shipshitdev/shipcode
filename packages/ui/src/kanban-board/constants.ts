@@ -72,6 +72,8 @@ export const COLUMNS: BoardColumn[] = [
     statuses: [
       ISSUE_PIPELINE_STATUS.clarifying,
       ISSUE_PIPELINE_STATUS.approval,
+      ISSUE_PIPELINE_STATUS.needsReview,
+      ISSUE_PIPELINE_STATUS.readyToMerge,
       ISSUE_PIPELINE_STATUS.paused,
       ISSUE_PIPELINE_STATUS.failed,
     ],
@@ -86,6 +88,12 @@ export const COLUMNS: BoardColumn[] = [
         key: 'approval',
         label: 'Approval',
         statuses: [ISSUE_PIPELINE_STATUS.approval],
+        droppable: false,
+      },
+      {
+        key: 'pr_review',
+        label: 'PR Review',
+        statuses: [ISSUE_PIPELINE_STATUS.needsReview, ISSUE_PIPELINE_STATUS.readyToMerge],
         droppable: false,
       },
       {
@@ -129,14 +137,6 @@ export const COLUMNS: BoardColumn[] = [
     statuses: [ISSUE_PIPELINE_STATUS.deferred],
   },
 ];
-
-export const COLUMN_DOT_CLASS: Record<ColumnKey, string> = {
-  todo: 'bg-success',
-  agent: 'bg-agent',
-  human: 'bg-warning',
-  done: 'bg-done',
-  deferred: 'bg-text-muted-foreground',
-};
 
 export const COLUMN_FILL: Record<ColumnKey, number> = {
   todo: 0,

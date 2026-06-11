@@ -111,6 +111,72 @@ describe('GhCli', () => {
     });
   });
 
+  describe('applyIssueLabelActions', () => {
+    it('adds available labels, removes present labels, and reports skipped', async () => {
+      // 1) listRepoLabels (filterExistingLabels), 2) getIssue, 3) add edit, 4) remove edit
+      success(JSON.stringify([{ name: 'agent:claude' }, { name: 'stale' }]));
+      success(
+        JSON.stringify({
+          number: 9,
+          title: 'Bug',
+          labels: [{ name: 'stale' }],
+          assignees: [],
+          state: 'open',
+          url: '',
+        }),
+      );
+      success('');
+      success('');
+
+      const result = await gh.applyIssueLabelActions(9, {
+        addLabels: ['agent:claude', 'ghost'],
+        removeLabels: ['stale'],
+      });
+
+      expect(result).toEqual({
+        added: ['agent:claude'],
+        removed: ['stale'],
+        skipped: ['ghost'],
+      });
+      expect(mockExecFileAsync).toHaveBeenCalledWith(
+        'gh',
+        ['issue', 'edit', '9', '--add-label', 'agent:claude'],
+        ghExecOptions,
+      );
+      expect(mockExecFileAsync).toHaveBeenCalledWith(
+        'gh',
+        ['issue', 'edit', '9', '--remove-label', 'stale'],
+        ghExecOptions,
+      );
+    });
+
+    it('does not re-add labels already present on the issue', async () => {
+      success(JSON.stringify([{ name: 'agent:claude' }]));
+      success(
+        JSON.stringify({
+          number: 4,
+          title: 'x',
+          labels: [{ name: 'agent:claude' }],
+          assignees: [],
+          state: 'open',
+          url: '',
+        }),
+      );
+
+      const result = await gh.applyIssueLabelActions(4, {
+        addLabels: ['agent:claude'],
+        removeLabels: [],
+      });
+
+      expect(result).toEqual({ added: [], removed: [], skipped: [] });
+      expect(mockExecFileAsync).not.toHaveBeenCalledWith(
+        'gh',
+        expect.arrayContaining(['--add-label']),
+        ghExecOptions,
+      );
+    });
+  });
+
   describe('listIssues', () => {
     it('maps JSON response to GitHubIssue[]', async () => {
       const raw = [
@@ -720,6 +786,43 @@ describe('GhCli', () => {
   });
 
   describe('editIssue', () => {
+    it('writes native milestone and assignees on edit (#45)', async () => {
+      const fake = createFakeProc();
+      mockSpawn.mockReturnValueOnce(fake.proc);
+      // syncIssueLabels runs after the edit spawn; fail its label discovery so
+      // the assertion can focus on the edit spawn args.
+      mockExecFileAsync.mockRejectedValueOnce(new Error('gh label list failed'));
+
+      const promise = gh.editIssue({
+        issueNumber: 42,
+        title: 'T',
+        body: 'B',
+        labels: ['complexity:high'],
+        milestone: 'v2.0',
+        assignees: ['octocat'],
+      });
+      fake.complete(0);
+
+      await expect(promise).rejects.toThrow('gh label list failed');
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'gh',
+        [
+          'issue',
+          'edit',
+          '42',
+          '--title',
+          'T',
+          '--body-file',
+          '-',
+          '--milestone',
+          'v2.0',
+          '--add-assignee',
+          'octocat',
+        ],
+        ghSpawnOptions,
+      );
+    });
+
     it('surfaces label discovery failures instead of clearing managed labels', async () => {
       const fake = createFakeProc();
       mockSpawn.mockReturnValueOnce(fake.proc);
@@ -776,6 +879,56 @@ describe('GhCli', () => {
   });
 
   describe('createIssue', () => {
+    it('writes native milestone and assignees on creation (#45)', async () => {
+      success(JSON.stringify([{ name: 'enhancement' }]));
+      const fake = createFakeProc();
+      mockSpawn.mockReturnValueOnce(fake.proc);
+      success(
+        JSON.stringify({
+          number: 77,
+          title: 'Native meta',
+          body: 'b',
+          labels: [{ name: 'enhancement' }],
+          assignees: [{ login: 'octocat' }],
+          state: 'OPEN',
+          url: 'https://github.com/o/r/issues/77',
+        }),
+      );
+
+      const promise = gh.createIssue({
+        title: 'Native meta',
+        body: 'b',
+        labels: ['enhancement'],
+        milestone: 'v1.0',
+        assignees: ['octocat', 'hubot'],
+      });
+      await waitForSpawnCall();
+      fake.proc.stdout.emit('data', 'https://github.com/o/r/issues/77\n');
+      fake.complete(0);
+
+      await promise;
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'gh',
+        [
+          'issue',
+          'create',
+          '--title',
+          'Native meta',
+          '--body-file',
+          '-',
+          '--label',
+          'enhancement',
+          '--milestone',
+          'v1.0',
+          '--assignee',
+          'octocat',
+          '--assignee',
+          'hubot',
+        ],
+        ghSpawnOptions,
+      );
+    });
+
     it('filters labels, pipes issue body through stdin, and returns the created issue', async () => {
       success(JSON.stringify([{ name: 'enhancement' }, { name: 'bug' }]));
       const fake = createFakeProc();
@@ -1759,67 +1912,58 @@ describe('GhCli', () => {
   });
 
   describe('listIssueComments', () => {
-    it('parses database ids from numeric ids or issuecomment urls', async () => {
+    function repoCoordinates() {
+      success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
+    }
+
+    it('maps REST comment fields and author associations', async () => {
+      repoCoordinates();
       success(
-        JSON.stringify({
-          comments: [
+        JSON.stringify([
+          [
             {
-              id: '123',
-              author: { login: 'alice' },
+              id: 123,
+              user: { login: 'alice' },
               body: 'one',
-              createdAt: '2026-01-01T00:00:00Z',
-              url: 'https://github.com/o/r/issues/1#issuecomment-123',
+              created_at: '2026-01-01T00:00:00Z',
+              html_url: 'https://github.com/o/r/issues/1#issuecomment-123',
+              author_association: 'OWNER',
             },
             {
-              id: 'IC_kwDOExample',
-              author: null,
+              id: 456,
+              user: null,
               body: 'two',
-              createdAt: '2026-01-01T00:00:00Z',
-              url: 'https://github.com/o/r/issues/1#issuecomment-456',
+              created_at: '2026-01-01T00:00:00Z',
+              html_url: 'https://github.com/o/r/issues/1#issuecomment-456',
+              author_association: 'CONTRIBUTOR',
             },
           ],
-        }),
+        ]),
       );
 
       const comments = await gh.listIssueComments(1);
 
       expect(comments.map((comment) => comment.id)).toEqual([123, 456]);
-    });
-
-    it('returns NaN when neither the GraphQL id nor URL contains a database id', async () => {
-      success(
-        JSON.stringify({
-          comments: [
-            {
-              id: 'IC_kwDOExample',
-              author: { login: 'alice' },
-              body: 'one',
-              createdAt: '2026-01-01T00:00:00Z',
-              url: 'https://github.com/o/r/issues/1#discussion',
-            },
-          ],
-        }),
-      );
-
-      const comments = await gh.listIssueComments(1);
-
-      expect(Number.isNaN(comments[0].id)).toBe(true);
       expect(comments[0].author).toBe('alice');
+      expect(comments[0].authorAssociation).toBe('OWNER');
+      expect(comments[1].author).toBeNull();
+      expect(comments[1].authorAssociation).toBe('CONTRIBUTOR');
     });
 
     it('maps missing issue comment authors to null', async () => {
+      repoCoordinates();
       success(
-        JSON.stringify({
-          comments: [
+        JSON.stringify([
+          [
             {
-              id: '123',
-              author: {},
+              id: 123,
+              user: {},
               body: 'one',
-              createdAt: '2026-01-01T00:00:00Z',
-              url: 'https://github.com/o/r/issues/1#issuecomment-123',
+              created_at: '2026-01-01T00:00:00Z',
+              html_url: 'https://github.com/o/r/issues/1#issuecomment-123',
             },
           ],
-        }),
+        ]),
       );
 
       const comments = await gh.listIssueComments(1);
@@ -1828,7 +1972,8 @@ describe('GhCli', () => {
     });
 
     it('maps missing issue comment arrays to empty results', async () => {
-      success(JSON.stringify({}));
+      repoCoordinates();
+      success(JSON.stringify([]));
 
       const comments = await gh.listIssueComments(1);
 
@@ -2126,18 +2271,19 @@ describe('GhCli', () => {
     });
 
     it('upserts issue comments by marker, editing finite database ids and adding otherwise', async () => {
+      success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
       success(
-        JSON.stringify({
-          comments: [
+        JSON.stringify([
+          [
             {
-              id: '123',
-              author: null,
+              id: 123,
+              user: null,
               body: '  <!-- shipcode:plan -->\nold',
-              createdAt: '2026-01-01T00:00:00Z',
-              url: 'https://github.com/o/r/issues/1#issuecomment-123',
+              created_at: '2026-01-01T00:00:00Z',
+              html_url: 'https://github.com/o/r/issues/1#issuecomment-123',
             },
           ],
-        }),
+        ]),
       );
       success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
       const editProc = createFakeProc();
@@ -2156,18 +2302,19 @@ describe('GhCli', () => {
 
       mockExecFileAsync.mockClear();
       mockSpawn.mockClear();
+      success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
       success(
-        JSON.stringify({
-          comments: [
+        JSON.stringify([
+          [
             {
-              id: 'IC_kwDOExample',
-              author: null,
-              body: '<!-- shipcode:plan -->\nold',
-              createdAt: '2026-01-01T00:00:00Z',
-              url: 'https://github.com/o/r/issues/1#discussion',
+              id: 456,
+              user: null,
+              body: 'no marker here',
+              created_at: '2026-01-01T00:00:00Z',
+              html_url: 'https://github.com/o/r/issues/1#issuecomment-456',
             },
           ],
-        }),
+        ]),
       );
       const addProc = createFakeProc();
       mockSpawn.mockReturnValueOnce(addProc.proc);

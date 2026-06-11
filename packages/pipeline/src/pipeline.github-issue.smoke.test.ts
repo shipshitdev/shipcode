@@ -138,7 +138,29 @@ function createSmokeDeps() {
   });
 
   const settings = {
-    get: vi.fn(() => ({ ...DEFAULT_SETTINGS, requireApproval: true })),
+    // This smoke test drives the programmatic stream-json planner contract.
+    // Pin the structured phases to programmatic (production default is now
+    // interactive — Track 2) so the existing assertions hold.
+    get: vi.fn(() => ({
+      ...DEFAULT_SETTINGS,
+      requireApproval: true,
+      agentRunModes: {
+        claude: {
+          ...DEFAULT_SETTINGS.agentRunModes.claude,
+          plan: 'programmatic' as const,
+          review: 'programmatic' as const,
+          revision: 'programmatic' as const,
+          verify: 'programmatic' as const,
+        },
+        codex: {
+          ...DEFAULT_SETTINGS.agentRunModes.codex,
+          plan: 'programmatic' as const,
+          review: 'programmatic' as const,
+          revision: 'programmatic' as const,
+          verify: 'programmatic' as const,
+        },
+      },
+    })),
     set: vi.fn(),
   };
 

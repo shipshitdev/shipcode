@@ -1,7 +1,15 @@
 export const TRIAGE_RULE_LIMIT = 50;
 
 export type TriageRuleConditionOperator = 'all' | 'any';
-export type TriageRuleConditionKind = 'label_includes' | 'label_excludes' | 'title_contains';
+export type TriageRuleConditionKind =
+  | 'label_includes'
+  | 'label_excludes'
+  | 'title_contains'
+  | 'body_contains'
+  | 'assignee_is'
+  | 'author_is'
+  | 'title_matches'
+  | 'body_matches';
 
 export interface TriageRuleCondition {
   kind: TriageRuleConditionKind;
@@ -37,6 +45,9 @@ export interface TriageRule extends TriageRuleDraft {
 export interface TriageRuleIssue {
   title: string;
   labels: readonly string[];
+  body?: string | null;
+  assignee?: string | null;
+  author?: string | null;
 }
 
 export function normalizeTriageRuleDraft(draft: TriageRuleDraft): TriageRuleDraft {
@@ -84,14 +95,39 @@ function matchesConditions(issue: TriageRuleIssue, conditions: TriageRuleConditi
 }
 
 function matchesCondition(issue: TriageRuleIssue, condition: TriageRuleCondition): boolean {
-  const labels = new Set(issue.labels);
+  // All matching is case-insensitive so rule authoring stays forgiving and
+  // consistent across kinds. Substring/equality kinds lowercase both sides;
+  // regex kinds use the 'i' flag instead (lowercasing a pattern would corrupt
+  // it). Action label names stay verbatim — they must match real GitHub labels.
+  const value = condition.value.toLowerCase();
   switch (condition.kind) {
     case 'label_includes':
-      return labels.has(condition.value);
-    case 'label_excludes':
-      return !labels.has(condition.value);
+    case 'label_excludes': {
+      const labels = new Set(issue.labels.map((label) => label.toLowerCase()));
+      return condition.kind === 'label_includes' ? labels.has(value) : !labels.has(value);
+    }
     case 'title_contains':
-      return issue.title.toLowerCase().includes(condition.value.toLowerCase());
+      return issue.title.toLowerCase().includes(value);
+    case 'body_contains':
+      return (issue.body ?? '').toLowerCase().includes(value);
+    case 'assignee_is':
+      return (issue.assignee ?? '').toLowerCase() === value;
+    case 'author_is':
+      return (issue.author ?? '').toLowerCase() === value;
+    case 'title_matches':
+      return safeRegexTest(condition.value, issue.title);
+    case 'body_matches':
+      return safeRegexTest(condition.value, issue.body ?? '');
+  }
+}
+
+// A user-authored regex must never crash the (pure, network-free) evaluator.
+// An invalid pattern simply never matches.
+function safeRegexTest(pattern: string, text: string): boolean {
+  try {
+    return new RegExp(pattern, 'i').test(text);
+  } catch {
+    return false;
   }
 }
 

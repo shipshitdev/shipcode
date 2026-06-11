@@ -4,6 +4,8 @@ import type {
   PlanRecord,
   ReviewRecord,
   ShipCodePlan,
+  Thread,
+  VerificationRecord,
 } from '@shipcode/shared';
 import {
   PIPELINE_EXECUTOR_PROVIDERS,
@@ -124,6 +126,7 @@ export function decodePhaseOption(value: string): {
     providerRaw === 'claude' ||
     providerRaw === 'codex' ||
     providerRaw === 'gemini' ||
+    providerRaw === 'cursor' ||
     providerRaw === 'openrouter'
       ? providerRaw
       : 'claude';
@@ -257,6 +260,73 @@ export function resolveFailingPhaseOutput({
   }
 }
 
+export type IssueRetryAction = 'review' | 'execute' | 'verify' | 'commit_and_push' | 'plan';
+
+export function resolveIssueRetryPresentation({
+  thread,
+  latestPlan,
+  latestVerification,
+}: {
+  thread: Thread | null | undefined;
+  latestPlan: PlanRecord | null | undefined;
+  latestVerification: VerificationRecord | null | undefined;
+}): {
+  retryAction: IssueRetryAction | null;
+  retryButtonLabel: string;
+  retrySummary: string | null;
+} {
+  const failedLatestStructuredVerification =
+    latestVerification?.planId === latestPlan?.id &&
+    latestVerification?.result === 'failed' &&
+    !!latestVerification?.structured;
+
+  const retryAction = (() => {
+    if (!thread) return null;
+    if (/no code changes/i.test(thread.lastError ?? '')) return 'plan' as const;
+    const structuredPlan = latestPlan?.structured ?? null;
+    if (!structuredPlan) return 'plan' as const;
+    if (!thread.worktreePath) return 'review' as const;
+    if (latestVerification && latestVerification.planId === latestPlan?.id) {
+      if (latestVerification.result === 'failed' && latestVerification.structured) {
+        return 'execute' as const;
+      }
+      if (latestVerification.result === 'failed') return 'verify' as const;
+      if (latestVerification.result === 'passed') return 'commit_and_push' as const;
+    }
+    return 'execute' as const;
+  })();
+
+  const retryButtonLabel =
+    retryAction === 'review'
+      ? 'Resume review'
+      : retryAction === 'execute'
+        ? 'Resume execution'
+        : retryAction === 'verify'
+          ? 'Resume verification'
+          : retryAction === 'commit_and_push'
+            ? 'Resume shipping'
+            : 'Re-plan';
+
+  const retrySummary =
+    retryAction === 'review'
+      ? 'Retry will resume from review using the latest structured plan.'
+      : retryAction === 'execute'
+        ? failedLatestStructuredVerification
+          ? 'Retry will resume from execution using the current worktree and latest verification feedback.'
+          : 'Retry will resume from execution using the latest structured plan.'
+        : retryAction === 'verify'
+          ? 'Retry will resume from verification using the current worktree.'
+          : retryAction === 'commit_and_push'
+            ? 'Retry will resume from commit and push using the verified worktree.'
+            : retryAction === 'plan'
+              ? /no code changes/i.test(thread?.lastError ?? '')
+                ? 'The executor produced no file changes. Update the issue description with more detail before replanning.'
+                : 'Retry will start a fresh planning pass. This resumes the workflow, not the same live planner session.'
+              : null;
+
+  return { retryAction, retryButtonLabel, retrySummary };
+}
+
 export function safeErrorMessage(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed.startsWith('{')) return trimmed;
@@ -334,6 +404,21 @@ export function getFailurePresentation(
   return {
     label: (phaseLabel ?? 'Pipeline error') + countSuffix,
     detail: null,
+  };
+}
+
+// Triage-rule failures live on the issue cache record (triageFailureReason),
+// independent of pipeline/thread failures. Surface them through the same
+// danger styling used by getFailurePresentation rather than crashing the
+// renderer (PRD triage-rules-engine NFR).
+export function getTriageFailurePresentation(
+  reason: string | null | undefined,
+): { label: string; detail: string } | null {
+  const text = reason?.trim();
+  if (!text) return null;
+  return {
+    label: 'Triage rule failed',
+    detail: stripAnsi(safeErrorMessage(text)),
   };
 }
 

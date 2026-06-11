@@ -9,6 +9,7 @@ import {
   enrichProjectPath,
   enrichProjectPaths,
   resolveIssuePhaseModels,
+  resolveLinkedPullRequestPipelineStatus,
   resolveProjectPhaseModels,
   sendGithubIssuesUpdated,
   syncLinkedPullRequestFeedback,
@@ -40,6 +41,10 @@ const {
   })),
   streamParserExtractPlanMock: vi.fn(),
   streamParserFeedMock: vi.fn(),
+}));
+
+vi.mock('../logger.service', () => ({
+  default: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
 vi.mock('@shipcode/agents', () => {
@@ -363,17 +368,40 @@ describe('syncLinkedPullRequestFeedback', () => {
   const notificationService = { fire: vi.fn() };
   const chatNotificationService = { fire: vi.fn() };
 
-  function makeFeedbackQueries(thread: Record<string, unknown> | null) {
+  function makeFeedbackQueries(
+    thread: Record<string, unknown> | null,
+    overrides: Record<string, unknown> = {},
+  ) {
     return {
       threads: {
         getById: vi.fn(() => thread),
       },
+      plans: {
+        getLatest: vi.fn(() => null),
+      },
       githubIssues: {
         updatePullRequestFeedback: vi.fn(),
+        updatePipelineStatus: vi.fn(),
         setCachedLabelPresence: vi.fn(),
         reconcileCompletedFromEvidence: vi.fn(),
       },
+      ...overrides,
     } as unknown as Queries;
+  }
+
+  function makeFeedback(overrides: Record<string, unknown> = {}) {
+    return {
+      number: 17,
+      url: 'https://github.com/acme/repo/pull/17',
+      isDraft: false,
+      state: 'OPEN',
+      reviewDecision: null,
+      reviewRequestCount: 0,
+      ciBlocked: false,
+      failingChecks: [],
+      unresolvedReviewComments: [],
+      ...overrides,
+    };
   }
 
   beforeEach(() => {
@@ -424,15 +452,45 @@ describe('syncLinkedPullRequestFeedback', () => {
     expect(queries.githubIssues.reconcileCompletedFromEvidence).toHaveBeenCalledWith('issue-1');
   });
 
+  it('clears stale PR review status labels when the linked PR disappears', async () => {
+    const queries = makeFeedbackQueries({
+      id: 'thread-1',
+      githubPrNumber: null,
+    });
+    const issue = makeIssue({
+      pipelineStatus: 'needs_review',
+      labels: ['shipcode:pipeline:needs_review'],
+      linkedPrNumber: 12,
+    });
+
+    await syncLinkedPullRequestFeedback(
+      makeProject() as never,
+      issue as never,
+      queries,
+      notificationService as never,
+      chatNotificationService as never,
+    );
+
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'completed');
+    expect(queries.githubIssues.setCachedLabelPresence).toHaveBeenCalledWith(
+      'issue-1',
+      'shipcode:pipeline:needs_review',
+      false,
+    );
+    expect(ghCliInstances[0]?.setIssueLabelPresence).toHaveBeenCalledWith(
+      42,
+      'shipcode:pipeline:needs_review',
+      false,
+    );
+  });
+
   it('syncs linked PR feedback and fires notifications when CI becomes blocked', async () => {
     const queries = makeFeedbackQueries({
       id: 'thread-1',
       githubPrNumber: 17,
     });
     ghCliGetPullRequestFeedbackMock.mockResolvedValueOnce({
-      number: 17,
-      url: 'https://github.com/acme/repo/pull/17',
-      isDraft: false,
+      ...makeFeedback(),
       ciBlocked: true,
       failingChecks: ['test'],
       unresolvedReviewComments: [{ id: 'comment-1' }],
@@ -469,15 +527,82 @@ describe('syncLinkedPullRequestFeedback', () => {
     );
   });
 
+  it('persists linked PR CI and review blockers as open findings', async () => {
+    const reviewFindings = { syncOpenForPullRequestFeedback: vi.fn() };
+    const queries = makeFeedbackQueries(
+      {
+        id: 'thread-1',
+        githubPrNumber: 17,
+        currentRunId: 'run-1',
+        worktreeBranch: 'shipcode/17-review',
+        worktreePath: '/tmp/worktree',
+      },
+      {
+        plans: { getLatest: vi.fn(() => ({ id: 'plan-1' })) },
+        reviewFindings,
+      },
+    );
+    ghCliGetPullRequestFeedbackMock.mockResolvedValueOnce({
+      ...makeFeedback(),
+      ciBlocked: true,
+      failingChecks: [
+        {
+          name: 'test',
+          workflowName: 'CI',
+          status: 'failed',
+          conclusion: 'failure',
+          detailsUrl: 'https://github.com/check',
+        },
+      ],
+      unresolvedReviewComments: [
+        {
+          author: 'reviewer',
+          body: 'Please add a regression test',
+          url: 'https://github.com/comment',
+          createdAt: '2026-05-31T00:00:00Z',
+          path: 'src/app.ts',
+          line: 42,
+        },
+      ],
+    });
+
+    await syncLinkedPullRequestFeedback(
+      makeProject() as never,
+      makeIssue({ ciBlocked: false }) as never,
+      queries,
+      notificationService as never,
+      chatNotificationService as never,
+    );
+
+    expect(reviewFindings.syncOpenForPullRequestFeedback).toHaveBeenCalledWith({
+      threadId: 'thread-1',
+      findings: [
+        expect.objectContaining({
+          source: 'ci',
+          phase: 'ci',
+          prNumber: 17,
+          runId: 'run-1',
+          branch: 'shipcode/17-review',
+        }),
+        expect.objectContaining({
+          source: 'pr_review',
+          phase: 'pr_review',
+          filePath: 'src/app.ts',
+          prNumber: 17,
+          runId: 'run-1',
+          branch: 'shipcode/17-review',
+        }),
+      ],
+    });
+  });
+
   it('keeps the cached CI label when CI remains blocked', async () => {
     const queries = makeFeedbackQueries({
       id: 'thread-1',
       githubPrNumber: 17,
     });
     ghCliGetPullRequestFeedbackMock.mockResolvedValueOnce({
-      number: 17,
-      url: 'https://github.com/acme/repo/pull/17',
-      isDraft: false,
+      ...makeFeedback(),
       ciBlocked: true,
       failingChecks: [],
       unresolvedReviewComments: [],
@@ -497,6 +622,135 @@ describe('syncLinkedPullRequestFeedback', () => {
       true,
     );
     expect(ghCliInstances[0]?.setIssueLabelPresence).not.toHaveBeenCalled();
+  });
+
+  it('moves linked issues to needs_review when a PR requires review', async () => {
+    const queries = makeFeedbackQueries({
+      id: 'thread-1',
+      githubPrNumber: 17,
+    });
+    ghCliGetPullRequestFeedbackMock.mockResolvedValueOnce(
+      makeFeedback({
+        reviewDecision: 'REVIEW_REQUIRED',
+        reviewRequestCount: 1,
+      }),
+    );
+
+    await syncLinkedPullRequestFeedback(
+      makeProject() as never,
+      makeIssue({ pipelineStatus: 'completed' }) as never,
+      queries,
+      notificationService as never,
+      chatNotificationService as never,
+    );
+
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      'issue-1',
+      'needs_review',
+    );
+    expect(queries.githubIssues.setCachedLabelPresence).toHaveBeenCalledWith(
+      'issue-1',
+      'shipcode:pipeline:needs_review',
+      true,
+    );
+    expect(ghCliInstances[0]?.setIssueLabelPresence).toHaveBeenCalledWith(
+      42,
+      'shipcode:pipeline:needs_review',
+      true,
+    );
+  });
+
+  it('moves approved linked PRs to ready_to_merge and removes stale review labels', async () => {
+    const queries = makeFeedbackQueries({
+      id: 'thread-1',
+      githubPrNumber: 17,
+    });
+    ghCliGetPullRequestFeedbackMock.mockResolvedValueOnce(
+      makeFeedback({
+        reviewDecision: 'APPROVED',
+      }),
+    );
+
+    await syncLinkedPullRequestFeedback(
+      makeProject() as never,
+      makeIssue({
+        pipelineStatus: 'needs_review',
+        labels: ['shipcode:pipeline:needs_review'],
+      }) as never,
+      queries,
+      notificationService as never,
+      chatNotificationService as never,
+    );
+
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      'issue-1',
+      'ready_to_merge',
+    );
+    expect(queries.githubIssues.setCachedLabelPresence).toHaveBeenCalledWith(
+      'issue-1',
+      'shipcode:pipeline:needs_review',
+      false,
+    );
+    expect(queries.githubIssues.setCachedLabelPresence).toHaveBeenCalledWith(
+      'issue-1',
+      'shipcode:pipeline:ready_to_merge',
+      true,
+    );
+    expect(ghCliInstances[0]?.setIssueLabelPresence).toHaveBeenCalledWith(
+      42,
+      'shipcode:pipeline:needs_review',
+      false,
+    );
+    expect(ghCliInstances[0]?.setIssueLabelPresence).toHaveBeenCalledWith(
+      42,
+      'shipcode:pipeline:ready_to_merge',
+      true,
+    );
+  });
+});
+
+describe('resolveLinkedPullRequestPipelineStatus', () => {
+  it('maps pull request review states to ShipCode issue statuses', () => {
+    expect(
+      resolveLinkedPullRequestPipelineStatus({
+        state: 'OPEN',
+        isDraft: true,
+        reviewDecision: null,
+        reviewRequestCount: 0,
+      }),
+    ).toBe('executing');
+    expect(
+      resolveLinkedPullRequestPipelineStatus({
+        state: 'OPEN',
+        isDraft: false,
+        reviewDecision: 'REVIEW_REQUIRED',
+        reviewRequestCount: 0,
+      }),
+    ).toBe('needs_review');
+    expect(
+      resolveLinkedPullRequestPipelineStatus({
+        state: 'OPEN',
+        isDraft: false,
+        reviewDecision: 'APPROVED',
+        reviewRequestCount: 0,
+      }),
+    ).toBe('ready_to_merge');
+    expect(
+      resolveLinkedPullRequestPipelineStatus({
+        state: 'MERGED',
+        isDraft: false,
+        reviewDecision: 'APPROVED',
+        reviewRequestCount: 0,
+      }),
+    ).toBe('completed');
+    expect(
+      resolveLinkedPullRequestPipelineStatus({
+        state: 'CLOSED',
+        isDraft: false,
+        reviewDecision: null,
+        reviewRequestCount: 0,
+      }),
+    ).toBe('executing');
   });
 });
 

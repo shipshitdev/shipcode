@@ -74,6 +74,7 @@ export function TerminalDrawer({ isExiting = false }: { isExiting?: boolean }) {
         'flex shrink-0 flex-col overflow-hidden border-t border-border bg-secondary',
         isExiting ? 'animate-terminal-exit' : 'terminal-drawer-shell',
       )}
+      data-testid="terminal-drawer"
       data-dragging={isDragging ? 'true' : undefined}
       style={{ '--terminal-drawer-height': `${resolvedHeight}px` } as CSSProperties}
     >

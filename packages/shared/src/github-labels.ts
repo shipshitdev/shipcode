@@ -53,6 +53,8 @@ const PIPELINE_LABEL_STATUS_PRIORITY: readonly IssuePipelineStatus[] = [
   ISSUE_PIPELINE_STATUS.executing,
   ISSUE_PIPELINE_STATUS.revising,
   ISSUE_PIPELINE_STATUS.reviewing,
+  ISSUE_PIPELINE_STATUS.readyToMerge,
+  ISSUE_PIPELINE_STATUS.needsReview,
   ISSUE_PIPELINE_STATUS.clarifying,
   ISSUE_PIPELINE_STATUS.planning,
   ISSUE_PIPELINE_STATUS.queued,
@@ -190,6 +192,16 @@ export const SHIPCODE_PIPELINE_LABELS: readonly GitHubLabelDefinition[] = [
     description: 'Pipeline is paused and can be resumed.',
   },
   {
+    name: 'shipcode:pipeline:needs_review',
+    color: 'd4c5f9',
+    description: 'Linked PR is waiting on review attention.',
+  },
+  {
+    name: 'shipcode:pipeline:ready_to_merge',
+    color: '0e8a16',
+    description: 'Linked PR is approved and ready to merge.',
+  },
+  {
     name: 'shipcode:pipeline:failed',
     color: 'b60205',
     description: 'Pipeline encountered an error.',
@@ -226,6 +238,8 @@ const HUMAN_STATUSES = new Set<IssuePipelineStatus>([
   ISSUE_PIPELINE_STATUS.approval,
   ISSUE_PIPELINE_STATUS.paused,
   ISSUE_PIPELINE_STATUS.failed,
+  ISSUE_PIPELINE_STATUS.needsReview,
+  ISSUE_PIPELINE_STATUS.readyToMerge,
 ]);
 
 const DONE_STATUSES = new Set<IssuePipelineStatus>([
@@ -276,6 +290,10 @@ export function pipelineLabelForStatus(
       return 'shipcode:pipeline:shipping';
     case ISSUE_PIPELINE_STATUS.paused:
       return 'shipcode:pipeline:paused';
+    case ISSUE_PIPELINE_STATUS.needsReview:
+      return 'shipcode:pipeline:needs_review';
+    case ISSUE_PIPELINE_STATUS.readyToMerge:
+      return 'shipcode:pipeline:ready_to_merge';
     case ISSUE_PIPELINE_STATUS.failed:
       return 'shipcode:pipeline:failed';
     default:

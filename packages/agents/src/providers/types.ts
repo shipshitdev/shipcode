@@ -185,6 +185,8 @@ export interface ProviderRequest {
    * Providers may log against this ID but must not read thread state.
    */
   threadId: string;
+  /** Notifies the orchestrator which managed process owns this provider run. */
+  onProcessStart?: (processId: string) => void;
   /**
    * Optional callback for streaming canonical terminal events.
    * Providers emit TerminalEvents through this so the terminal drawer
@@ -209,6 +211,7 @@ export type ProviderErrorKind =
   | 'tool_loop_overflow'
   | 'unexpected_stop'
   | 'binary_missing'
+  | 'agent_sdk_pool_exhausted'
   | 'unknown';
 
 export interface ProviderError {
@@ -243,7 +246,7 @@ export interface ProviderResponse {
 }
 
 export interface AgentProvider {
-  readonly id: 'claude-cli' | 'codex-cli' | 'gemini-cli' | 'openrouter';
+  readonly id: 'claude-cli' | 'codex-cli' | 'gemini-cli' | 'cursor-cli' | 'openrouter';
   readonly supports: ReadonlySet<ProviderPhase>;
   generate(req: ProviderRequest): Promise<ProviderResponse>;
   healthCheck(): Promise<{ ok: boolean; reason?: string }>;

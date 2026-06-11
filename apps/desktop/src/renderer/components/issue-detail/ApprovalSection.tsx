@@ -41,7 +41,10 @@ export function ApprovalSection({
   };
 
   return (
-    <div className="rounded-md border border-border bg-secondary p-3">
+    <div
+      className="rounded-md border border-border bg-secondary p-3"
+      data-testid="approval-section"
+    >
       <div
         className={
           pendingAction === 'request_changes'
@@ -56,7 +59,7 @@ export function ApprovalSection({
           }
           disabled={isSubmitting}
         >
-          <SelectTrigger className="h-8 w-48 text-[12px]">
+          <SelectTrigger className="h-8 w-48 text-[12px]" data-testid="approval-action-select">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -73,6 +76,7 @@ export function ApprovalSection({
             title={
               !canApprove ? 'No plan content found - use Request Changes or Cancel' : undefined
             }
+            data-testid="approval-confirm-btn"
           >
             <LoadingButtonContent loading={isSubmitting}>Confirm</LoadingButtonContent>
           </Button>
@@ -90,6 +94,7 @@ export function ApprovalSection({
             onChange={(event) => setFeedback(event.target.value)}
             placeholder="Tell the planner what to change before the next pass..."
             rows={4}
+            data-testid="approval-reject-textarea"
           />
           <div className="flex justify-end">
             <Button

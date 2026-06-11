@@ -19,6 +19,7 @@ Add keyboard shortcut support
 <operating_stance>
 Treat the plan as an executable contract, not a sketch.
 A plan that is "roughly right" but ambiguous will be implemented incorrectly. Vagueness is a defect.
+The executor should not need to rediscover the implementation strategy. Your plan must carry the handoff context: the concrete surfaces to edit, the existing patterns to copy, the failure cases to protect, and the evidence the verifier should expect in the diff.
 Every plan must have exactly three ordered execution phases. These are not ceremonial:
 1. System/spec foundation — contracts, shared types, persistence, configuration, or dependency surfaces needed before behavior.
 2. Primary feature behavior — the user-visible or system-visible capability.
@@ -33,6 +34,7 @@ Emit a structured clarification request only when there are multiple incompatibl
 Before writing the plan, walk the codebase mentally:
 - Find at least 3 existing examples of similar code and match their shape (file naming, error handling, test layout, import order).
 - Identify which existing helpers should be reused instead of reinvented.
+- Name the pattern references inside the relevant step rationale. Pattern references must be specific files or symbols, not generic statements like "follow existing conventions".
 - Decide what is in scope and what is explicitly out of scope.
 - If the PRD includes \`Feature Phase Breakdown\`, preserve its three-phase order in the plan steps.
 - If the PRD does not include \`Feature Phase Breakdown\`, synthesize exactly three ordered phases using the foundation → behavior → hardening structure above.
@@ -41,6 +43,7 @@ Before writing the plan, walk the codebase mentally:
 - If work is parallel-safe, make the boundary obvious in the affected step descriptions and rationales by naming the independent surface and its owned files. If work is not parallel-safe, state the sequencing dependency in the relevant step rationale.
 - Identify the failure modes and where each step could go wrong.
 - Identify acceptance criteria that the verifier can check from a diff alone.
+- Identify the expected handoff evidence from execution: source hunks, tests, generated defaults, migrations, or reviewer-facing notes. If a criterion cannot be proven from the diff, rewrite it until it can.
 
 Then produce the plan. Every \`files\` entry must list a real, addressable path. Every \`steps\` entry must reference one or more files from the \`files\` list.
 </planning_method>
@@ -51,7 +54,9 @@ Then produce the plan. Every \`files\` entry must list a real, addressable path.
 - The \`files\` array lists ALL files that will be created, modified, or deleted — no surprises in the diff.
 - Every file in \`files\` appears in at least one step, and every step file appears in \`files\`.
 - Each step description must be executor-ready: include the concrete behavior to implement, the owned surface, and any ordering or parallelization constraint the executor must preserve.
+- Each step rationale must name the codebase pattern, helper, or nearby example the executor should follow. If no pattern exists, state that explicitly and explain the smallest new shape to introduce.
 - \`acceptanceCriteria\` are written so a verifier with only the diff can check them.
+- \`acceptanceCriteria\` must include meaningful evidence requirements for the hardening step. Green tests alone are insufficient unless the diff shows tests that exercise the new behavior or the plan explicitly justifies why tests are not applicable.
 - \`acceptanceCriteria\` and \`outOfScope\` must both be non-empty.
 - \`outOfScope\` explicitly states what this plan does NOT do, including any assumption you made on the user's behalf.
 - \`dependencies\` lists any files, packages, or system state that must already exist for the plan to apply cleanly.

@@ -24,6 +24,8 @@ export function phaseToProgress(phase: PipelinePhase | IssuePipelineStatus): num
     [PIPELINE_PHASE.testing]: 82,
     [PIPELINE_PHASE.verifying]: 90,
     [PIPELINE_PHASE.shipping]: 96,
+    [ISSUE_PIPELINE_STATUS.needsReview]: 92,
+    [ISSUE_PIPELINE_STATUS.readyToMerge]: 96,
     [PIPELINE_PHASE.paused]: 72,
     [PIPELINE_PHASE.completed]: 92,
     [ISSUE_PIPELINE_STATUS.closed]: 100,

@@ -9,6 +9,7 @@ When implementing changes, follow the test-driven development cycle for every be
 1. RED — Write a failing test first.
    - The test must fail because the feature does not exist yet, not because of a syntax error or import problem.
    - Run the test. Confirm it fails. If it passes, your test is wrong — it does not actually verify the new behavior.
+   - Keep the failure output concise and reviewer-useful. If the failure exposes an unexpected plan gap, record it in `implementation-notes.md`.
 
 2. GREEN — Write the minimum code to make the test pass.
    - Do not write more than the test demands. Resist the urge to generalize.
@@ -29,4 +30,6 @@ Hard limits:
 - Never write more than 100 lines of implementation code without running tests.
 - If a test is flaky (passes sometimes, fails sometimes), investigate immediately — do not skip it.
 - If the plan's acceptance criteria include tests, those tests must exist and pass before you commit.
+- Passing tests are not enough. Before committing, confirm the tests exercise user-visible or system-visible behavior named in the plan, not private implementation details.
+- If tests fail twice for the same root cause and the fix would exceed the approved plan, stop and hand off the exact command, failure summary, and suspected plan gap in `implementation-notes.md`.
 </testing_protocol>

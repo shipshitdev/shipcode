@@ -8,6 +8,7 @@ import type {
   PipelinePhase,
   PlanRecord,
   ReasoningEffort,
+  ReviewFindingRecord,
   ReviewRecord,
   TaskGraphWithNodes,
   Thread,
@@ -17,6 +18,8 @@ import { CommentsTab } from './CommentsTab';
 import { ConsoleTab } from './ConsoleTab';
 import { ConversationsTab } from './ConversationsTab';
 import { DiffTab } from './DiffTab';
+import { FindingsTab } from './FindingsTab';
+import { IssueChatTab } from './IssueChatTab';
 import { IssueHistoryTab } from './IssueHistoryTab';
 import { PlanHistoryTab } from './PlanHistoryTab';
 import { PrdTab } from './PrdTab';
@@ -45,6 +48,7 @@ interface IssueDetailTabsProps {
   loadingPlanDetailIds: string[];
   normalizedIssueActivity: import('@shipcode/shared').ActivityEntry[];
   normalizedPlanHistory: PlanRecord[];
+  reviewFindings: ReviewFindingRecord[];
   normalizedReviewsByPlanId: Record<string, ReviewRecord>;
   normalizedThreadPlanHistory: PlanRecord[];
   isPlanHistoryLoading: boolean;
@@ -96,6 +100,7 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
     loadingPlanDetailIds,
     normalizedIssueActivity,
     normalizedPlanHistory,
+    reviewFindings,
     normalizedReviewsByPlanId,
     normalizedThreadPlanHistory,
     isPlanHistoryLoading,
@@ -125,6 +130,17 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
       label: `Plans${normalizedPlanHistory.length > 0 ? ` (${normalizedPlanHistory.length})` : ''}`,
     },
     ...(activeThreadId
+      ? [
+          {
+            value: 'findings' as const,
+            label:
+              reviewFindings.filter((finding) => finding.status === 'open').length > 0
+                ? `Findings (${reviewFindings.filter((finding) => finding.status === 'open').length})`
+                : 'Findings',
+          },
+        ]
+      : []),
+    ...(activeThreadId
       ? [{ value: 'diff' as const, label: diffs.length > 0 ? `Diff (${diffs.length})` : 'Diff' }]
       : []),
     ...(activeThreadId ? [{ value: 'runs' as const, label: 'Runs' }] : []),
@@ -133,6 +149,7 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
       label: `Activity${normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}`,
     },
     ...(activeThreadId ? [{ value: 'conversations' as const, label: 'Conversations' }] : []),
+    ...(activeThreadId ? [{ value: 'chat' as const, label: 'Chat' }] : []),
   ];
 
   return (
@@ -201,6 +218,12 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
         />
       </TabsContent>
 
+      {activeThreadId && (
+        <TabsContent value="findings" className={'mt-0'}>
+          <FindingsTab threadId={activeThreadId} findings={reviewFindings} />
+        </TabsContent>
+      )}
+
       <TabsContent value="diff" className={'mt-0'}>
         <DiffTab diffs={diffs} threadStatus={props.thread?.status} />
       </TabsContent>
@@ -220,7 +243,21 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
 
       {activeThreadId && (
         <TabsContent value="conversations" className={'mt-0'}>
-          <ConversationsTab threadId={activeThreadId} />
+          <ConversationsTab
+            threadId={activeThreadId}
+            projectId={projectId}
+            issueNumber={activeIssue.issueNumber}
+          />
+        </TabsContent>
+      )}
+
+      {activeThreadId && (
+        <TabsContent value="chat" className="mt-0 overflow-hidden">
+          <IssueChatTab
+            threadId={activeThreadId}
+            issueNumber={activeIssue.issueNumber}
+            issueTitle={activeIssue.title}
+          />
         </TabsContent>
       )}
     </Tabs>
