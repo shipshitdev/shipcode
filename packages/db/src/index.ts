@@ -81,6 +81,9 @@ import {
   migrateV57,
   migrateV58,
   migrateV59,
+  migrateV60,
+  migrateV61,
+  migrateV62,
 } from './schema';
 
 export { ActivityQueries } from './queries/activity';
@@ -99,6 +102,11 @@ export type { FeatureQaResultRecord, InsertFeatureQaResult } from './queries/fea
 export { FeatureQaResultQueries } from './queries/feature-qa-results';
 export { GitHubIssueQueries } from './queries/github-issues';
 export { HeatmapQueries } from './queries/heatmap';
+export type {
+  IssueChatSessionRecord,
+  UpsertIssueChatSession,
+} from './queries/issue-chat-sessions';
+export { IssueChatSessionQueries } from './queries/issue-chat-sessions';
 // Issue graph persistence backs the project-level dependency view.
 export { IssueEdgeQueries } from './queries/issue-edges';
 export { NotificationsQueries } from './queries/notifications';
@@ -111,6 +119,7 @@ export { PlanQueries } from './queries/plans';
 export { ProjectFailureQueries } from './queries/project-failures';
 export { ProjectQueries } from './queries/projects';
 export { PromptTelemetryQueries } from './queries/prompt-telemetry';
+export { ReviewFindingQueries } from './queries/review-findings';
 export { ReviewQueries } from './queries/reviews';
 export { SettingsQueries } from './queries/settings';
 export { SkillResolutionLogQueries } from './queries/skill-resolution-log';
@@ -199,6 +208,9 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV57(db);
   migrateV58(db);
   migrateV59(db);
+  migrateV60(db);
+  migrateV61(db);
+  migrateV62(db);
 
   // Startup cleanup: reset unclaimed queued issues to todo on every launch.
   // An unclaimed queued issue has no active worker holding it — it's stale state

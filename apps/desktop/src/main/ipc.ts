@@ -11,6 +11,7 @@ import { registerDeveloperHandlers } from './ipc/register-developer-handlers';
 import { registerFeatureQaHandlers } from './ipc/register-feature-qa-handlers';
 import { registerGitHubHandlers } from './ipc/register-github-handlers';
 import { registerInstantHandlers } from './ipc/register-instant-handlers';
+import { registerIssueChatHandlers } from './ipc/register-issue-chat-handlers';
 import { registerIssueGraphHandlers } from './ipc/register-issue-graph-handlers';
 import { registerIssueTerminalHandlers } from './ipc/register-issue-terminal-handlers';
 import { registerPipelineHandlers } from './ipc/register-pipeline-handlers';
@@ -38,6 +39,7 @@ export function registerIpcHandlers(
   updateService: UpdateService,
   automationScheduler: AutomationSchedulerLike,
   resourceMonitor: ResourceMonitor,
+  onProjectsChanged: () => void = () => {},
 ): void {
   for (const thread of queries.threads.getOrphaned()) {
     transitionThreadPhase(mainWindow, queries, emitter, {
@@ -89,6 +91,7 @@ export function registerIpcHandlers(
     notificationService,
     chatNotificationService,
     resourceMonitor,
+    onProjectsChanged,
   } as const;
 
   ipcMain.on('diagnostics:renderer-ipc', (_event, payload: unknown) => {
@@ -104,6 +107,7 @@ export function registerIpcHandlers(
   registerSkillsHandlers(deps);
   registerSupportHandlers(deps);
   registerInstantHandlers(deps);
+  registerIssueChatHandlers(deps);
   registerIssueTerminalHandlers(deps);
   registerPullRequestHandlers(deps);
   registerAgentConversationHandlers(deps);

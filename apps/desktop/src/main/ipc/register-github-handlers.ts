@@ -12,26 +12,27 @@ import {
   triageGitHubIssues,
 } from '@shipcode/agents';
 import type {
-  ExecutorModel,
   GitHubIssueCacheRecord,
   GitHubIssueComment,
   IssuePipelineStatus,
-  ReasoningEffort,
 } from '@shipcode/shared';
 import {
   agentLabelForExecutor,
+  buildPrdMetadataLabels,
   clampError,
   deriveGithubIssueUrl,
   ISSUE_PIPELINE_STATUS,
   isAgentRoutingLabel,
   isRealGithubIssueNumber,
   PIPELINE_PHASE,
+  PRD_METADATA_LABELS,
   parseGithubProjectUrl,
   parseGithubRemote,
   pipelineStatusFromLabels,
   SHIPCODE_DEFAULT_LABELS,
 } from '@shipcode/shared';
 import { syncIssuePipelineLabelSoon } from '../github-pipeline-label-sync';
+import { stopIssueChatSessionIfLive } from '../issue-chat-session';
 import log, { logEvent } from '../logger.service';
 import { PipelineScheduler } from '../pipeline-scheduler';
 import {
@@ -40,6 +41,7 @@ import {
   sendGithubIssuesUpdated,
   syncLinkedPullRequestFeedback,
 } from './helpers';
+import { registerGitHubIssueOverrideHandlers } from './register-github-issue-override-handlers';
 import { refreshIssueBodyEdges } from './register-issue-graph-handlers';
 import type { IpcHandlerDeps } from './types';
 
@@ -174,6 +176,7 @@ export function registerGitHubHandlers({
   queries,
   pipeline,
   emitter,
+  processManager,
   notificationService,
   chatNotificationService,
 }: IpcHandlerDeps): void {
@@ -183,6 +186,12 @@ export function registerGitHubHandlers({
     emitter,
     getMainWindow: () => mainWindow,
   });
+  const stopLinkedIssueChat = (issue: GitHubIssueCacheRecord) => {
+    if (!issue.threadId) return;
+    stopIssueChatSessionIfLive(issue.threadId, processManager);
+  };
+
+  registerGitHubIssueOverrideHandlers({ ipcMain, mainWindow, queries });
 
   ipcMain.handle(
     'github:get-issue',
@@ -267,6 +276,7 @@ export function registerGitHubHandlers({
               body: issue.body,
               labels: issue.labels,
               assignee: issue.assignee,
+              author: issue.author?.login ?? null,
               state: issue.state,
               updatedAt: issue.updatedAt ?? null,
             });
@@ -295,29 +305,49 @@ export function registerGitHubHandlers({
 
         await Promise.all(
           newIssues.map(async ({ record }) => {
-            const result = await applyTriageRulesOnce({
-              issue: record,
-              rules: triageRules,
-              ghCli,
-              markApplied: (issueId) => queries.githubIssues.markTriageRulesApplied(issueId),
-              recordFailure: (issueId, reason) =>
-                queries.githubIssues.recordTriageRulesFailure(issueId, reason),
-              onWarn: (message, err) => log.warn(message, err),
-            });
+            // Triage is best-effort per issue: a DB/network error for one issue
+            // (including the markApplied/recordFailure writes inside
+            // applyTriageRulesOnce, or the label-sync upsert below) must never
+            // reject the whole refresh.
+            try {
+              const result = await applyTriageRulesOnce({
+                issue: record,
+                rules: triageRules,
+                ghCli,
+                markApplied: (issueId) => queries.githubIssues.markTriageRulesApplied(issueId),
+                recordFailure: (issueId, reason) =>
+                  queries.githubIssues.recordTriageRulesFailure(issueId, reason),
+                onWarn: (message, err) => log.warn(message, err),
+              });
 
-            if (result.status !== 'applied') return;
+              if (result.status !== 'applied') return;
 
-            const refreshedIssue = result.refreshedIssue;
-            queries.githubIssues.upsert({
-              projectId,
-              issueNumber: refreshedIssue.number,
-              title: refreshedIssue.title,
-              body: refreshedIssue.body,
-              labels: refreshedIssue.labels,
-              assignee: refreshedIssue.assignee,
-              state: refreshedIssue.state,
-              updatedAt: refreshedIssue.updatedAt ?? null,
-            });
+              const refreshedIssue = result.refreshedIssue;
+              queries.githubIssues.upsert({
+                projectId,
+                issueNumber: refreshedIssue.number,
+                title: refreshedIssue.title,
+                body: refreshedIssue.body,
+                labels: refreshedIssue.labels,
+                assignee: refreshedIssue.assignee,
+                author: refreshedIssue.author?.login ?? null,
+                state: refreshedIssue.state,
+                updatedAt: refreshedIssue.updatedAt ?? null,
+              });
+            } catch (err) {
+              try {
+                queries.githubIssues.recordTriageRulesFailure(record.id, clampError(err));
+              } catch (recordErr) {
+                log.warn(
+                  `[github:refresh-issues] failed to record triage failure for #${record.issueNumber}`,
+                  recordErr,
+                );
+              }
+              log.warn(
+                `[github:refresh-issues] triage rules failed for #${record.issueNumber}`,
+                err,
+              );
+            }
           }),
         );
 
@@ -628,6 +658,7 @@ export function registerGitHubHandlers({
           'github:archive-issue',
         );
         queries.githubIssues.archiveIssues([issue.id]);
+        stopLinkedIssueChat(issue);
       } catch (err) {
         log.error('[github:archive-issue] DB archive failed:', err);
         throw new Error(
@@ -681,6 +712,7 @@ export function registerGitHubHandlers({
         ISSUE_PIPELINE_STATUS.closed,
         'issue:mark-done',
       );
+      stopLinkedIssueChat(issue);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );
@@ -707,6 +739,7 @@ export function registerGitHubHandlers({
           ISSUE_PIPELINE_STATUS.closed,
           'github:mark-done',
         );
+        stopLinkedIssueChat(issue);
       } else if (hasCompletionEvidence) {
         queries.githubIssues.updateState(issue.id, 'open');
         updateIssuePipelineStatus(
@@ -727,6 +760,7 @@ export function registerGitHubHandlers({
           ISSUE_PIPELINE_STATUS.closed,
           'github:mark-done',
         );
+        stopLinkedIssueChat(issue);
       }
 
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
@@ -756,6 +790,7 @@ export function registerGitHubHandlers({
         ISSUE_PIPELINE_STATUS.closed,
         'github:close-issue',
       );
+      stopLinkedIssueChat(issue);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );
@@ -930,7 +965,27 @@ export function registerGitHubHandlers({
       if (!project) throw new Error(`Project ${projectId} not found`);
 
       const ghCli = new GhCli(project.path);
-      const issue = await ghCli.createIssue({ title, body, labels });
+      // Project complexity + blast radius onto native issue labels (#45) so the
+      // metadata lives on the issue itself, not just the Projects v2 board (and
+      // survives for repos with no board configured).
+      const metadataLabels = prdMetadata
+        ? buildPrdMetadataLabels(prdMetadata.estimatedComplexity, prdMetadata.blastRadius)
+        : [];
+      if (metadataLabels.length > 0) {
+        const requiredMetadataLabels = PRD_METADATA_LABELS.filter((label) =>
+          metadataLabels.includes(label.name),
+        );
+        const labelSync = await ghCli.ensureLabels(requiredMetadataLabels);
+        if (labelSync.failed.length > 0) {
+          const fullError = `Failed to create PRD metadata labels: ${labelSync.failed
+            .map((failure) => `${failure.name}: ${failure.error}`)
+            .join('; ')}`;
+          log.error('[github:create-issue] PRD metadata label creation failed:', fullError);
+          throw new Error(clampError(fullError));
+        }
+      }
+      const issueLabels = [...new Set([...(labels ?? []), ...metadataLabels])];
+      const issue = await ghCli.createIssue({ title, body, labels: issueLabels });
       let projectAttachWarning: string | null = null;
 
       queries.githubIssues.upsert({
@@ -1028,7 +1083,14 @@ export function registerGitHubHandlers({
       assertRealGithubIssue(cachedIssue, 'edit on GitHub');
 
       const ghCli = new GhCli(project.path);
-      await ghCli.editIssue({ issueNumber, title, body, labels });
+      // Keep complexity + blast radius projected onto native labels on edit too;
+      // syncIssueLabels adds/removes only PRD-managed prefixes, so user labels
+      // are untouched (#45).
+      const metadataLabels = prdMetadata
+        ? buildPrdMetadataLabels(prdMetadata.estimatedComplexity, prdMetadata.blastRadius)
+        : [];
+      const issueLabels = [...new Set([...(labels ?? []), ...metadataLabels])];
+      await ghCli.editIssue({ issueNumber, title, body, labels: issueLabels });
       if (prdMetadata) {
         await attachIssueToConfiguredProjectBoard(
           project,
@@ -1047,6 +1109,12 @@ export function registerGitHubHandlers({
               blastRadius: prdMetadata.blastRadius,
             },
           });
+          // Mirror the create path: reflect the written issue type in the local
+          // cache so it isn't stale until the next full refresh (#45 AC4).
+          const editedRecord = queries.githubIssues.getByNumber(projectId, issueNumber);
+          if (editedRecord) {
+            queries.githubIssues.setIssueType({ id: editedRecord.id, issueType: 'Feature' });
+          }
         } catch (err) {
           log.warn(`[github:edit-issue-body] project metadata failed for #${issueNumber}:`, err);
         }
@@ -1354,248 +1422,6 @@ export function registerGitHubHandlers({
         queries.githubIssues.reconcileCompletedFromEvidence(issue.id);
       }
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
-    },
-  );
-
-  const VALID_PHASE_ROLES = new Set(['planner', 'reviewer', 'executor', 'verifier'] as const);
-  type PhaseRole = 'planner' | 'reviewer' | 'executor' | 'verifier';
-  function assertPhaseRole(phase: string): asserts phase is PhaseRole {
-    if (!VALID_PHASE_ROLES.has(phase as PhaseRole)) {
-      throw new Error(`Invalid phase role: ${phase}`);
-    }
-  }
-
-  ipcMain.handle(
-    'github:set-phase-model-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        phase,
-        model,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
-        model: ExecutorModel;
-      },
-    ) => {
-      assertPhaseRole(phase);
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-      if (model !== 'claude' && model !== 'codex' && model !== 'openrouter') {
-        throw new Error(`Invalid ${phase} model: ${model}`);
-      }
-
-      queries.githubIssues.updatePhaseModelOverride(issue.id, phase, model);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
-    },
-  );
-
-  ipcMain.handle(
-    'github:clear-phase-model-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        phase,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
-      },
-    ) => {
-      assertPhaseRole(phase);
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-
-      queries.githubIssues.updatePhaseModelOverride(issue.id, phase, null);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
-    },
-  );
-
-  ipcMain.handle(
-    'github:set-phase-model-id-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        phase,
-        modelId,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
-        modelId: string;
-      },
-    ) => {
-      assertPhaseRole(phase);
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-      const trimmed = modelId.trim();
-      if (trimmed && !/^[a-zA-Z0-9._:/@-]+$/.test(trimmed)) {
-        throw new Error(`Invalid model ID: ${trimmed}`);
-      }
-      queries.githubIssues.updatePhaseModelIdOverride(issue.id, phase, trimmed || null);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
-    },
-  );
-
-  ipcMain.handle(
-    'github:clear-phase-model-id-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        phase,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
-      },
-    ) => {
-      assertPhaseRole(phase);
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-      queries.githubIssues.updatePhaseModelIdOverride(issue.id, phase, null);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
-    },
-  );
-
-  ipcMain.handle(
-    'github:clear-all-phase-overrides-for-project',
-    (_event, { projectId }: { projectId: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
-
-      const clearedCount = queries.githubIssues.clearAllPhaseOverridesForProject(projectId);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return { clearedCount };
-    },
-  );
-
-  ipcMain.handle(
-    'github:set-revision-count-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        revisionCount,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        revisionCount: import('@shipcode/shared').GitHubIssueCacheRecord['revisionCountOverride'];
-      },
-    ) => {
-      if (
-        revisionCount !== null &&
-        revisionCount !== 0 &&
-        revisionCount !== 1 &&
-        revisionCount !== 2 &&
-        revisionCount !== 3 &&
-        revisionCount !== 4 &&
-        revisionCount !== 5
-      ) {
-        throw new Error(`Invalid revision count override: ${revisionCount}`);
-      }
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-      queries.githubIssues.updateRevisionCountOverride(issue.id, revisionCount);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
-    },
-  );
-
-  ipcMain.handle(
-    'github:set-require-approval-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        requireApproval,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        requireApproval: import('@shipcode/shared').GitHubIssueCacheRecord['requireApprovalOverride'];
-      },
-    ) => {
-      if (requireApproval !== null && typeof requireApproval !== 'boolean') {
-        throw new Error(`Invalid requireApproval override: ${String(requireApproval)}`);
-      }
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-      queries.githubIssues.updateRequireApprovalOverride(issue.id, requireApproval);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
-    },
-  );
-
-  ipcMain.handle(
-    'github:set-phase-reasoning-effort-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        phase,
-        effort,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
-        effort: ReasoningEffort;
-      },
-    ) => {
-      assertPhaseRole(phase);
-      const VALID_EFFORTS: readonly string[] = [
-        'none',
-        'minimal',
-        'low',
-        'medium',
-        'high',
-        'xhigh',
-      ];
-      if (!VALID_EFFORTS.includes(effort)) {
-        throw new Error(`Invalid ${phase} reasoning effort: ${effort}`);
-      }
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-      queries.githubIssues.updatePhaseReasoningEffortOverride(issue.id, phase, effort);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
-    },
-  );
-
-  ipcMain.handle(
-    'github:clear-phase-reasoning-effort-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        phase,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
-      },
-    ) => {
-      assertPhaseRole(phase);
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-      queries.githubIssues.updatePhaseReasoningEffortOverride(issue.id, phase, null);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
     },
   );
 

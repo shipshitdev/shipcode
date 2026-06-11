@@ -163,6 +163,11 @@ describe('registerPipelineHandlers', () => {
     reviews: {
       getByPlanId: ReturnType<typeof vi.fn>;
     };
+    reviewFindings: {
+      listByThread: ReturnType<typeof vi.fn>;
+      listOpenByThread: ReturnType<typeof vi.fn>;
+      updateStatus: ReturnType<typeof vi.fn>;
+    };
     activity: {
       listRecent: ReturnType<typeof vi.fn>;
       countRecent: ReturnType<typeof vi.fn>;
@@ -226,6 +231,11 @@ describe('registerPipelineHandlers', () => {
   };
   let emitter: {
     emit: ReturnType<typeof vi.fn>;
+  };
+  let processManager: {
+    get: ReturnType<typeof vi.fn>;
+    listActive: ReturnType<typeof vi.fn>;
+    write: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -305,6 +315,11 @@ describe('registerPipelineHandlers', () => {
       },
       reviews: {
         getByPlanId: vi.fn(() => null),
+      },
+      reviewFindings: {
+        listByThread: vi.fn(() => []),
+        listOpenByThread: vi.fn(() => []),
+        updateStatus: vi.fn(() => null),
       },
       activity: {
         listRecent: vi.fn(() => []),
@@ -392,6 +407,11 @@ describe('registerPipelineHandlers', () => {
     emitter = {
       emit: vi.fn(),
     };
+    processManager = {
+      get: vi.fn(() => null),
+      listActive: vi.fn(() => []),
+      write: vi.fn(() => true),
+    };
 
     registerPipelineHandlers({
       ipcMain,
@@ -401,16 +421,35 @@ describe('registerPipelineHandlers', () => {
       emitter: emitter as never,
       notificationService: notificationService as never,
       chatNotificationService: {} as never,
-      processManager: {} as never,
+      processManager: processManager as never,
       resourceMonitor: {} as never,
     });
   });
+
+  // Resume/retry context now rides the typed start-call carry, not a mutated
+  // PipelineContext. These read the last start call's carry argument.
+  const lastExecutionResumeContext = (): string => {
+    const calls = vi.mocked(pipeline.startExecution).mock.calls as unknown as Array<
+      [string, unknown, { executionResumeContext?: string } | undefined]
+    >;
+    return calls.at(-1)?.[2]?.executionResumeContext ?? '';
+  };
+  const lastPlanPreviousRawOutput = (): string | null => {
+    const calls = vi.mocked(pipeline.startPlanGeneration).mock.calls as unknown as Array<
+      [string, string, string, string | null, { previousPlanRawOutput?: string | null } | undefined]
+    >;
+    return calls.at(-1)?.[4]?.previousPlanRawOutput ?? null;
+  };
 
   describe('terminal:list', () => {
     it('returns verification and latest task graph records through simple read handlers', () => {
       const verification = { id: 'verification-1', threadId: 'thread-1' };
       const taskGraph = { id: 'graph-1', threadId: 'thread-1' };
+      const finding = { id: 'finding-1', threadId: 'thread-1', status: 'open' };
       queries.verifications.getLatest.mockReturnValue(verification);
+      queries.reviewFindings.listByThread.mockReturnValue([finding]);
+      queries.reviewFindings.listOpenByThread.mockReturnValue([finding]);
+      queries.reviewFindings.updateStatus.mockReturnValue({ ...finding, status: 'ignored' });
       (
         queries as typeof queries & {
           taskGraphs: { getLatestByThread: ReturnType<typeof vi.fn> };
@@ -420,14 +459,35 @@ describe('registerPipelineHandlers', () => {
       };
 
       const verificationHandler = handlers.get('verification:get');
+      const findingsHandler = handlers.get('review-findings:list-thread');
+      const openFindingsHandler = handlers.get('review-findings:list-open');
+      const updateFindingHandler = handlers.get('review-findings:update-status');
       const taskGraphHandler = handlers.get('task-graph:get-latest');
-      if (!verificationHandler || !taskGraphHandler) {
+      if (
+        !verificationHandler ||
+        !findingsHandler ||
+        !openFindingsHandler ||
+        !updateFindingHandler ||
+        !taskGraphHandler
+      ) {
         throw new Error('read handlers not registered');
       }
 
       expect(verificationHandler(undefined, { threadId: 'thread-1' })).toBe(verification);
+      expect(findingsHandler(undefined, { threadId: 'thread-1', includeClosed: true })).toEqual([
+        finding,
+      ]);
+      expect(openFindingsHandler(undefined, { threadId: 'thread-1' })).toEqual([finding]);
+      expect(
+        updateFindingHandler(undefined, { findingId: 'finding-1', status: 'ignored' }),
+      ).toEqual({ ...finding, status: 'ignored' });
       expect(taskGraphHandler(undefined, { threadId: 'thread-1' })).toBe(taskGraph);
       expect(queries.verifications.getLatest).toHaveBeenCalledWith('thread-1');
+      expect(queries.reviewFindings.listByThread).toHaveBeenCalledWith('thread-1', {
+        includeClosed: true,
+      });
+      expect(queries.reviewFindings.listOpenByThread).toHaveBeenCalledWith('thread-1');
+      expect(queries.reviewFindings.updateStatus).toHaveBeenCalledWith('finding-1', 'ignored');
       expect(
         (
           queries as typeof queries & {
@@ -435,6 +495,24 @@ describe('registerPipelineHandlers', () => {
           }
         ).taskGraphs.getLatestByThread,
       ).toHaveBeenCalledWith('thread-1');
+    });
+
+    it('clamps review finding handler errors before throwing to renderer', () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const findingsHandler = handlers.get('review-findings:list-thread');
+      if (!findingsHandler) throw new Error('review-findings:list-thread handler not registered');
+      queries.reviewFindings.listByThread.mockImplementationOnce(() => {
+        throw new Error(`${'x'.repeat(400)}\nstack trace`);
+      });
+
+      expect(() => findingsHandler(undefined, { threadId: 'thread-1' })).toThrow(
+        `${'x'.repeat(279)}…`,
+      );
+      expect(consoleError).toHaveBeenCalledWith(
+        '[ipc] review-findings:list-thread failed',
+        expect.any(Error),
+      );
+      consoleError.mockRestore();
     });
 
     it('returns null for latest task graph when the optional query surface is absent', () => {
@@ -1151,10 +1229,11 @@ describe('registerPipelineHandlers', () => {
 
       expect(pipeline.rehydrateContext).toHaveBeenCalledWith('thread-1', '/tmp/project', undefined);
       expect(notificationService.dismissByThread).toHaveBeenCalledWith('thread-1');
-      expect(context.executionResumeContext).toContain('previous execution was paused by the user');
+      expect(lastExecutionResumeContext()).toContain('previous execution was paused by the user');
       expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
+        expect.objectContaining({ executionResumeContext: expect.any(String) }),
       );
     });
 
@@ -1283,28 +1362,27 @@ describe('registerPipelineHandlers', () => {
         expect.objectContaining({ cwd: '/tmp/worktree' }),
         expect.any(Function),
       );
-      expect(context.executionResumeContext).toContain(
+      expect(lastExecutionResumeContext()).toContain(
         'The previous execution was paused by the user',
       );
-      expect(context.executionResumeContext).toContain(
-        'Checkpoint before execution: Before execute',
-      );
-      expect(context.executionResumeContext).toContain('apps/desktop/src/renderer/App.tsx');
-      expect(context.executionResumeContext).toContain('considering the fix');
-      expect(context.executionResumeContext).toContain('[error] command failed');
-      expect(context.executionResumeContext).toContain('[lifecycle] process exited');
-      expect(context.executionResumeContext).toContain('[tool:start] vitest: running tests');
-      expect(context.executionResumeContext).toContain('[tool:end] vitest exit=1 1 failed');
-      expect(context.executionResumeContext).toContain('[tool:end] tsc');
-      expect(context.executionResumeContext).toContain('[turn:start] 2');
-      expect(context.executionResumeContext).toContain('[turn:end] 2');
-      expect(context.executionResumeContext).toContain('[action] Edit App.tsx');
-      expect(context.executionResumeContext).toContain('[clarification_requested] Need env var');
-      expect(context.executionResumeContext).toContain('[clarification_answered] 2 answers');
-      expect(context.executionResumeContext).toContain('[done]');
+      expect(lastExecutionResumeContext()).toContain('Checkpoint before execution: Before execute');
+      expect(lastExecutionResumeContext()).toContain('apps/desktop/src/renderer/App.tsx');
+      expect(lastExecutionResumeContext()).toContain('considering the fix');
+      expect(lastExecutionResumeContext()).toContain('[error] command failed');
+      expect(lastExecutionResumeContext()).toContain('[lifecycle] process exited');
+      expect(lastExecutionResumeContext()).toContain('[tool:start] vitest: running tests');
+      expect(lastExecutionResumeContext()).toContain('[tool:end] vitest exit=1 1 failed');
+      expect(lastExecutionResumeContext()).toContain('[tool:end] tsc');
+      expect(lastExecutionResumeContext()).toContain('[turn:start] 2');
+      expect(lastExecutionResumeContext()).toContain('[turn:end] 2');
+      expect(lastExecutionResumeContext()).toContain('[action] Edit App.tsx');
+      expect(lastExecutionResumeContext()).toContain('[clarification_requested] Need env var');
+      expect(lastExecutionResumeContext()).toContain('[clarification_answered] 2 answers');
+      expect(lastExecutionResumeContext()).toContain('[done]');
       expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
+        expect.objectContaining({ executionResumeContext: expect.any(String) }),
       );
     });
 
@@ -1336,13 +1414,14 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(context.executionResumeContext).toContain(
+      expect(lastExecutionResumeContext()).toContain(
         '[resume context truncated after 24000 chars]',
       );
-      expect(context.executionResumeContext?.length).toBeLessThan(24_200);
+      expect(lastExecutionResumeContext().length).toBeLessThan(24_200);
       expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
+        expect.objectContaining({ executionResumeContext: expect.any(String) }),
       );
     });
 
@@ -1960,6 +2039,102 @@ describe('registerPipelineHandlers', () => {
     });
   });
 
+  describe('pipeline:steer-execution', () => {
+    it('delivers steering input to the live Claude executor and emits a USER event', () => {
+      const createdEvent = {
+        id: 'terminal-event-1',
+        threadId: 'thread-1',
+        event: { kind: 'user_input' as const, content: 'Use the shared helper.' },
+        createdAt: new Date().toISOString(),
+      };
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'executing' }));
+      queries.terminalEvents.create.mockReturnValue(createdEvent);
+      pipeline.listActive.mockReturnValue([
+        {
+          threadId: 'thread-1',
+          projectPath: '/tmp/project',
+          phase: 'executing',
+          startedAt: Date.now(),
+          activeProcessId: 'proc-1',
+        },
+      ]);
+      processManager.get.mockReturnValue({
+        id: 'proc-1',
+        type: 'claude',
+        state: 'running',
+        threadId: 'thread-1',
+      });
+
+      const handler = handlers.get('pipeline:steer-execution');
+      if (!handler) throw new Error('pipeline:steer-execution handler not registered');
+
+      expect(
+        handler(undefined, { threadId: 'thread-1', instruction: 'Use the shared helper.' }),
+      ).toEqual({
+        threadId: 'thread-1',
+        status: 'delivered',
+        message: 'Instruction delivered to the running executor transport.',
+        processId: 'proc-1',
+      });
+      expect(processManager.write).toHaveBeenCalledWith(
+        'proc-1',
+        '\n\n[USER INSTRUCTION]: Use the shared helper.\n\n',
+      );
+      expect(queries.terminalEvents.create).toHaveBeenCalledWith('thread-1', {
+        kind: 'user_input',
+        content: 'Use the shared helper.',
+      });
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('terminal:event', createdEvent);
+    });
+
+    it('returns stale when the thread is no longer executing', () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'reviewing' }));
+      pipeline.listActive.mockReturnValue([]);
+
+      const handler = handlers.get('pipeline:steer-execution');
+      if (!handler) throw new Error('pipeline:steer-execution handler not registered');
+
+      expect(handler(undefined, { threadId: 'thread-1', instruction: 'Try this' })).toEqual({
+        threadId: 'thread-1',
+        status: 'stale',
+        message: 'Task is not currently executing. Current phase: reviewing.',
+        processId: null,
+      });
+      expect(processManager.write).not.toHaveBeenCalled();
+      expect(queries.terminalEvents.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects steering for non-Claude executor transports', () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'executing' }));
+      pipeline.listActive.mockReturnValue([
+        {
+          threadId: 'thread-1',
+          projectPath: '/tmp/project',
+          phase: 'executing',
+          startedAt: Date.now(),
+          activeProcessId: 'proc-1',
+        },
+      ]);
+      processManager.get.mockReturnValue({
+        id: 'proc-1',
+        type: 'codex',
+        state: 'running',
+        threadId: 'thread-1',
+      });
+
+      const handler = handlers.get('pipeline:steer-execution');
+      if (!handler) throw new Error('pipeline:steer-execution handler not registered');
+
+      expect(handler(undefined, { threadId: 'thread-1', instruction: 'Try this' })).toEqual({
+        threadId: 'thread-1',
+        status: 'rejected',
+        message: 'Mid-execution steering currently supports Claude executor sessions only.',
+        processId: 'proc-1',
+      });
+      expect(processManager.write).not.toHaveBeenCalled();
+    });
+  });
+
   describe('pipeline:retry', () => {
     it('rejects retry while the task is already active', async () => {
       pipeline.listActive.mockReturnValue([
@@ -2203,10 +2378,10 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(context.executionResumeContext).toContain(
+      expect(lastExecutionResumeContext()).toContain(
         '[Unable to read git status: git unavailable]',
       );
-      expect(context.executionResumeContext).toContain('<interrupted_run_context>');
+      expect(lastExecutionResumeContext()).toContain('<interrupted_run_context>');
       expect(queries.terminalEvents.create).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({
@@ -2217,10 +2392,11 @@ describe('registerPipelineHandlers', () => {
       expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
+        expect.objectContaining({ executionResumeContext: expect.any(String) }),
       );
     });
 
-    it('continues interrupted execution retry when runtime context is unavailable', async () => {
+    it('attaches resume context on retry even when the in-memory context is gone', async () => {
       queries.threads.getById.mockReturnValue(
         makeThread({
           status: 'failed',
@@ -2236,7 +2412,9 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(queries.terminalEvents.create).not.toHaveBeenCalledWith(
+      // Resume context is built from persisted thread state and threaded on the
+      // start carry, so it no longer depends on an in-memory PipelineContext.
+      expect(queries.terminalEvents.create).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({
           kind: 'lifecycle',
@@ -2246,6 +2424,7 @@ describe('registerPipelineHandlers', () => {
       expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
+        expect.objectContaining({ executionResumeContext: expect.any(String) }),
       );
     });
 
@@ -2308,6 +2487,7 @@ describe('registerPipelineHandlers', () => {
         'Fix it',
         '/tmp/project',
         '/tmp/worktree',
+        expect.objectContaining({ previousPlanRawOutput: expect.any(String) }),
       );
     });
 
@@ -2425,14 +2605,14 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(context.executionResumeContext).toContain('The previous execution was interrupted');
-      expect(context.executionResumeContext).toContain('Agent process stalled');
-      expect(context.executionResumeContext).toContain('plain output');
-      expect(context.executionResumeContext).toContain('[error] vitest timed out');
-      expect(context.executionResumeContext).toContain('[tool:start] Read: Inspect file');
-      expect(context.executionResumeContext).toContain('[tool:end] Read exit=0 done');
-      expect(context.executionResumeContext).toContain('[clarification_answered] 2 answers');
-      expect(context.executionResumeContext).toContain('[done]');
+      expect(lastExecutionResumeContext()).toContain('The previous execution was interrupted');
+      expect(lastExecutionResumeContext()).toContain('Agent process stalled');
+      expect(lastExecutionResumeContext()).toContain('plain output');
+      expect(lastExecutionResumeContext()).toContain('[error] vitest timed out');
+      expect(lastExecutionResumeContext()).toContain('[tool:start] Read: Inspect file');
+      expect(lastExecutionResumeContext()).toContain('[tool:end] Read exit=0 done');
+      expect(lastExecutionResumeContext()).toContain('[clarification_answered] 2 answers');
+      expect(lastExecutionResumeContext()).toContain('[done]');
       expect(queries.terminalEvents.create).toHaveBeenCalledWith('thread-1', {
         kind: 'lifecycle',
         message: 'Retry is resuming from interrupted worktree state.',
@@ -2440,6 +2620,7 @@ describe('registerPipelineHandlers', () => {
       expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
+        expect.objectContaining({ executionResumeContext: expect.any(String) }),
       );
     });
 
@@ -2610,13 +2791,14 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(context.previousPlanRawOutput).toBe('unparseable failed plan');
+      expect(lastPlanPreviousRawOutput()).toBe('unparseable failed plan');
       expect(queries.plans.supersedeAll).toHaveBeenCalledWith('thread-1');
       expect(pipeline.startPlanGeneration).toHaveBeenCalledWith(
         'thread-1',
         'Fix it',
         '/tmp/project',
         '/tmp/worktree',
+        expect.objectContaining({ previousPlanRawOutput: expect.any(String) }),
       );
     });
   });

@@ -48,6 +48,7 @@ User task:
 <operating_stance>
 Treat the plan as an executable contract, not a sketch.
 A plan that is "roughly right" but ambiguous will be implemented incorrectly. Vagueness is a defect.
+The executor should not need to rediscover the implementation strategy. Your plan must carry the handoff context: the concrete surfaces to edit, the existing patterns to copy, the failure cases to protect, and the evidence the verifier should expect in the diff.
 Every plan must have exactly three ordered execution phases. These are not ceremonial:
 1. System/spec foundation — contracts, shared types, persistence, configuration, or dependency surfaces needed before behavior.
 2. Primary feature behavior — the user-visible or system-visible capability.
@@ -62,6 +63,7 @@ Emit a structured clarification request only when there are multiple incompatibl
 Before writing the plan, walk the codebase mentally:
 - Find at least 3 existing examples of similar code and match their shape (file naming, error handling, test layout, import order).
 - Identify which existing helpers should be reused instead of reinvented.
+- Name the pattern references inside the relevant step rationale. Pattern references must be specific files or symbols, not generic statements like "follow existing conventions".
 - Decide what is in scope and what is explicitly out of scope.
 - If the PRD includes \`Feature Phase Breakdown\`, preserve its three-phase order in the plan steps.
 - If the PRD does not include \`Feature Phase Breakdown\`, synthesize exactly three ordered phases using the foundation → behavior → hardening structure above.
@@ -70,6 +72,7 @@ Before writing the plan, walk the codebase mentally:
 - If work is parallel-safe, make the boundary obvious in the affected step descriptions and rationales by naming the independent surface and its owned files. If work is not parallel-safe, state the sequencing dependency in the relevant step rationale.
 - Identify the failure modes and where each step could go wrong.
 - Identify acceptance criteria that the verifier can check from a diff alone.
+- Identify the expected handoff evidence from execution: source hunks, tests, generated defaults, migrations, or reviewer-facing notes. If a criterion cannot be proven from the diff, rewrite it until it can.
 
 Then produce the plan. Every \`files\` entry must list a real, addressable path. Every \`steps\` entry must reference one or more files from the \`files\` list.
 </planning_method>
@@ -80,7 +83,9 @@ Then produce the plan. Every \`files\` entry must list a real, addressable path.
 - The \`files\` array lists ALL files that will be created, modified, or deleted — no surprises in the diff.
 - Every file in \`files\` appears in at least one step, and every step file appears in \`files\`.
 - Each step description must be executor-ready: include the concrete behavior to implement, the owned surface, and any ordering or parallelization constraint the executor must preserve.
+- Each step rationale must name the codebase pattern, helper, or nearby example the executor should follow. If no pattern exists, state that explicitly and explain the smallest new shape to introduce.
 - \`acceptanceCriteria\` are written so a verifier with only the diff can check them.
+- \`acceptanceCriteria\` must include meaningful evidence requirements for the hardening step. Green tests alone are insufficient unless the diff shows tests that exercise the new behavior or the plan explicitly justifies why tests are not applicable.
 - \`acceptanceCriteria\` and \`outOfScope\` must both be non-empty.
 - \`outOfScope\` explicitly states what this plan does NOT do, including any assumption you made on the user's behalf.
 - \`dependencies\` lists any files, packages, or system state that must already exist for the plan to apply cleanly.
@@ -109,7 +114,7 @@ Do not plan scratch files, temporary folders, dead compatibility shims, or clean
 {{CONTEXT_FILES}}
 </repository_context>
 `,
-    version: 'a18735ffab6d0e83',
+    version: '047fda8d4f0d4e50',
     requiredSlots: ['USER_PROMPT', 'THREAD_ID', 'OUTPUT_SCHEMA'] as const,
     schemaVersion: 1,
   },
@@ -364,6 +369,7 @@ ShipCode decomposes approved three-step plans into task nodes when needed; if yo
 The plan is the contract.
 Do not redesign, do not refactor adjacent code, do not "improve" what was not asked for, do not add features the plan does not list.
 Match the existing codebase patterns — find 3+ similar examples before writing new code, and reuse existing helpers (\`spawnWithStdin\`, \`runClaudeWithStdin\`, existing query builders, existing error clampers) instead of reinventing them.
+Treat your final diff as the handoff file for the verifier. The verifier should be able to connect each plan step to concrete source hunks, tests, generated artifacts, migrations, or \`implementation-notes.md\` entries without guessing.
 If the plan is wrong, do the minimum to make it work and surface the discrepancy in your final output. Do not silently expand scope.
 Preserve ordering. Step 1 must create the foundation before step 2 behavior depends on it; step 3 must harden and verify what steps 1 and 2 shipped.
 Keep the worktree clean. Do not create scratch folders, temporary files, dead files, alternate implementations, or compatibility shims. If runtime QA needs \`.shipcode/runtime-tests/\`, keep those files focused and let ShipCode clean them before commit.
@@ -394,7 +400,8 @@ For each step in the plan:
 2. Identify which existing helpers apply. Reuse before reinvent.
 3. Make the change atomically. Each step should leave the worktree in a consistent state.
 4. Verify the step's rationale still holds after the change.
-5. Update your checklist and do not start the next step until the current step's files and local checks are coherent.
+5. Record any reviewer-relevant evidence in \`implementation-notes.md\`: pattern references used, plan discrepancies, verification commands, and any acceptance criterion that depends on generated output or runtime behavior.
+6. Update your checklist and do not start the next step until the current step's files and local checks are coherent.
 
 Throughout execution:
 - Stay inside the worktree directory. Do not edit files outside the planned \`files\` list without strong justification.
@@ -403,6 +410,8 @@ Throughout execution:
 - Remove any obsolete files made dead by your change when they are in the plan. Do not leave duplicate old/new implementations behind.
 - Before committing, run \`git status --short\` and inspect every changed path. The final diff must contain only planned work plus explicitly justified plan discrepancies.
 - Keep \`implementation-notes.md\` current while you work. Use the GitHub issue content as the source request, and record decisions that were not specified, plan discrepancies, tradeoffs, constraints, verification commands, and anything the reviewer should know.
+- If a required test or verification command fails twice for the same reason, stop changing unrelated code. Capture the exact failing command and concise failure summary in \`implementation-notes.md\`, then either fix the root cause within the plan scope or surface the blocker clearly.
+- Do not rely on "tests passed" as your only handoff. The diff should show behavior changes and tests or checks that exercise them; \`implementation-notes.md\` should explain what was verified and what could not be verified.
 - Commit your changes when all steps are complete. Use \`git add -A && git commit -m "<concise summary of what was done>"\`. Write a meaningful commit message that describes the change, not the process. Do not skip hooks.
 - Do not skip hooks, do not bypass validation, do not weaken type safety to make code compile.
 - If you encounter a real blocker (missing file, broken dep, bad assumption in the plan), surface it clearly and stop — do not paper over it.
@@ -440,7 +449,7 @@ Do not use repository files as a notepad. Keep reasoning, drafts, and scratch wo
 {{APPROVED_PLAN}}
 </approved_plan>
 `,
-    version: '2a1d34cf88783351',
+    version: '6eb3dd38ac91c330',
     requiredSlots: ['APPROVED_PLAN'] as const,
     schemaVersion: 1,
   },
@@ -474,6 +483,7 @@ Default to skepticism.
 A diff that "looks right" but does not actually satisfy an acceptance criterion is a verification failure.
 Partial implementation is failure. Silent drift from the plan is failure. Uncommitted changes outside the planned files is failure.
 Do not give credit for effort. Either the diff implements the plan, or it does not.
+Green tests are evidence, not proof. Passing tests do not rescue code that misses the plan, implements the wrong behavior, or only adds superficial assertions.
 The approved plan contract is three ordered execution phases. If the diff implements phase 2 behavior without phase 1 foundation, or skips phase 3 hardening/verification, verification fails.
 </operating_stance>
 
@@ -483,7 +493,7 @@ For each lens, include a brief assessment in your reasoning. Tag any finding wit
 
 Lens 1 — Correctness: Does the diff implement every plan step? Are there hunks that drift from the plan?
 Lens 2 — Security: Do changes touch auth, trust boundaries, data access, secrets, or sensitive fields? If yes, are guards present?
-Lens 3 — Test coverage: Do changes include tests for new behavior? If not, does the plan explicitly justify the absence?
+Lens 3 — Test coverage: Do changes include meaningful tests or checks for new behavior and failure modes? If not, does the plan explicitly justify the absence? Are the tests behavior-focused, or are they shallow snapshots/implementation-detail assertions that could pass while the feature is broken?
 </verification_lenses>
 
 <verification_method>
@@ -497,6 +507,7 @@ Cross-checks:
 - Every file in the plan's \`files\` array should be touched by the diff (unless the plan explicitly marks it as conditional).
 - Every step in the plan's \`steps\` array should have a corresponding hunk in the diff.
 - The step evidence must preserve order: foundation/spec plumbing first, primary behavior second, hardening/verification third.
+- The hardening step must include concrete evidence: tests, validation behavior, error handling, generated defaults, docs, or an explicit plan-approved reason those are not applicable.
 - Files modified in the diff that are NOT in the plan's \`files\` array are scope creep — flag as warnings unless they are obvious side effects (lockfiles, generated files) or the expected ShipCode artifact \`implementation-notes.md\`.
 - Treat \`implementation-notes.md\` as reviewer evidence only. Do not use it as proof that source behavior changed, but do not fail verification merely because it exists.
 - The worktree must be clean — no uncommitted changes, no stray files.
@@ -532,7 +543,7 @@ Do not infer success from the absence of failure.
 {{ACCEPTANCE_CRITERIA}}
 </acceptance_criteria>
 `,
-    version: '0f7417a49be983a8',
+    version: '9a6c796fe8ca8fcb',
     requiredSlots: ['PLAN_JSON', 'DIFF', 'ACCEPTANCE_CRITERIA', 'OUTPUT_SCHEMA'] as const,
     schemaVersion: 1,
   },

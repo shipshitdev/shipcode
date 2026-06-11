@@ -10,6 +10,7 @@ import type {
   FeatureQaResultQueries,
   GitHubIssueQueries,
   HeatmapQueries,
+  IssueChatSessionQueries,
   IssueEdgeQueries,
   NotificationsQueries,
   PhaseLogQueries,
@@ -21,6 +22,7 @@ import type {
   ProjectFailureQueries,
   ProjectQueries,
   PromptTelemetryQueries,
+  ReviewFindingQueries,
   ReviewQueries,
   SettingsQueries,
   SkillResolutionLogQueries,
@@ -47,6 +49,7 @@ export interface Queries {
   verifications: VerificationQueries;
   githubIssues: GitHubIssueQueries;
   heatmap: HeatmapQueries;
+  issueChatSessions: IssueChatSessionQueries;
   issueEdges: IssueEdgeQueries;
   checkpoints: CheckpointQueries;
   activity: ActivityQueries;
@@ -62,6 +65,7 @@ export interface Queries {
   pipelineSteps: PipelineStepQueries;
   wakeRequests: PipelineWakeRequestQueries;
   promptTelemetry: PromptTelemetryQueries;
+  reviewFindings: ReviewFindingQueries;
   agentConversations: AgentConversationQueries;
   skillResolutionLogs: SkillResolutionLogQueries;
   featureQaResults: FeatureQaResultQueries;
@@ -80,4 +84,10 @@ export interface IpcHandlerDeps {
   notificationService: NotificationService;
   chatNotificationService: ChatNotificationService;
   resourceMonitor?: ResourceMonitor;
+  /**
+   * Invoked after a project is added, relinked, removed, or archived so the
+   * main process can re-sync per-project resources (e.g. WORKFLOW.md watchers)
+   * to the new project set. Optional: defaults to a no-op in tests.
+   */
+  onProjectsChanged?: () => void;
 }

@@ -31,6 +31,7 @@ describe('TelemetryConsentDialog', () => {
 
     expect(screen.getByText('Error reporting')).toBeInTheDocument();
     expect(screen.getByText(/do not include prompts/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /telemetry docs/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
     await waitFor(() => {
@@ -44,6 +45,18 @@ describe('TelemetryConsentDialog', () => {
     await waitFor(() => {
       expect(window.shipcode.invoke).toHaveBeenCalledWith('settings:set', {
         telemetryEnabled: true,
+      });
+    });
+  });
+
+  it('opens the telemetry docs through the safe external URL IPC', async () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: /telemetry docs/i }));
+
+    await waitFor(() => {
+      expect(window.shipcode.invoke).toHaveBeenCalledWith('shell:open-external', {
+        url: 'https://shipcode.shipshit.dev/docs/desktop/settings#privacy-and-error-reporting',
       });
     });
   });

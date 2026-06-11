@@ -1,0 +1,30 @@
+#!/usr/bin/env node
+/*
+ * Deterministic fake `codex` CLI for ShipCode E2E.
+ *
+ * Prepended to PATH when launching the Electron app so the desktop health check
+ * resolves Codex as installed. `checkSystemHealth` shells out to
+ * `codex --version` (availability); auth is satisfied separately by the
+ * OPENAI_API_KEY in the launch env (`checkCodexAuth` reads the env var, it does
+ * NOT shell out to this binary). Both together mark Codex authenticated.
+ *
+ * On the CI runner no real `codex` exists, so this fake wins the PATH lookup.
+ */
+const argv = process.argv.slice(2);
+const sub = argv[0];
+const verb = argv[1];
+
+if (sub === '--version' || sub === '-v') {
+  process.stdout.write('codex-cli 1.0.0-e2e\n');
+  process.exit(0);
+}
+
+if (sub === 'debug' && verb === 'models') {
+  // Model-capabilities probe expects a JSON catalog; an empty list is valid and
+  // falls back to ShipCode's conservative presets without erroring.
+  process.stdout.write(JSON.stringify({ models: [] }));
+  process.exit(0);
+}
+
+// `--help` and anything else: succeed silently.
+process.exit(0);

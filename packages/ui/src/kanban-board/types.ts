@@ -80,7 +80,7 @@ export type BoardColumn = {
 
 export type IssuePhaseChip = {
   phase: ResolvedPhaseModel;
-  provider: 'claude' | 'codex' | 'gemini' | 'openrouter';
+  provider: 'claude' | 'codex' | 'gemini' | 'cursor' | 'openrouter';
   model: string;
   effort: string | null;
 };

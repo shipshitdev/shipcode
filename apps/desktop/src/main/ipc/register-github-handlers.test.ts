@@ -16,6 +16,7 @@ const {
   createIssueMock,
   editIssueMock,
   getIssueMock,
+  applyIssueLabelActionsMock,
   getRepoMetadataMock,
   reopenIssueMock,
   listAllIssuesMock,
@@ -39,6 +40,13 @@ const {
   createIssueMock: vi.fn(),
   editIssueMock: vi.fn(),
   getIssueMock: vi.fn(),
+  applyIssueLabelActionsMock: vi.fn(
+    async (): Promise<{ added: string[]; removed: string[]; skipped: string[] }> => ({
+      added: [],
+      removed: [],
+      skipped: [],
+    }),
+  ),
   getRepoMetadataMock: vi.fn(),
   reopenIssueMock: vi.fn(),
   listAllIssuesMock: vi.fn(async () => [] as Array<unknown>),
@@ -56,11 +64,17 @@ const {
   setIssueLabelPresenceMock: vi.fn(async () => undefined),
   setIssueProjectMetadataMock: vi.fn(async () => [] as string[]),
   syncIssueLabelsMock: vi.fn(async () => undefined),
-  ensureLabelsMock: vi.fn(async () => ({
-    created: [],
-    alreadyPresent: [],
-    failed: [],
-  })),
+  ensureLabelsMock: vi.fn(
+    async (): Promise<{
+      created: string[];
+      alreadyPresent: string[];
+      failed: Array<{ name: string; error: string }>;
+    }> => ({
+      created: [],
+      alreadyPresent: [],
+      failed: [],
+    }),
+  ),
 }));
 
 vi.mock('@shipcode/agents', async () => {
@@ -70,6 +84,7 @@ vi.mock('@shipcode/agents', async () => {
     createIssue = createIssueMock;
     editIssue = editIssueMock;
     getIssue = getIssueMock;
+    applyIssueLabelActions = applyIssueLabelActionsMock;
     getRepoMetadata = getRepoMetadataMock;
     reopenIssue = reopenIssueMock;
     listAllIssues = listAllIssuesMock;
@@ -2864,6 +2879,135 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
+  it('projects complexity + blast radius onto native labels even without a project board (#45)', async () => {
+    const createdRecord = {
+      ...baseIssue,
+      id: 'issue-77',
+      issueNumber: 77,
+      title: 'New issue',
+      body: 'Body',
+      labels: ['enhancement', 'complexity:medium', 'blast:contained'],
+    };
+    createIssueMock.mockResolvedValue({
+      number: 77,
+      title: 'New issue',
+      body: 'Body',
+      labels: ['enhancement', 'complexity:medium', 'blast:contained'],
+      assignee: null,
+      state: 'open',
+      url: 'https://github.com/acme/repo/issues/77',
+    });
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: {
+        upsert: vi.fn(),
+        list: vi.fn(() => [createdRecord]),
+        getByNumber: vi.fn(() => createdRecord),
+        setIssueType: vi.fn(),
+        setPriority: vi.fn(),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const createIssue = handlers.get('github:create-issue');
+    if (!createIssue) throw new Error('github:create-issue handler not registered');
+
+    await createIssue(undefined, {
+      projectId: 'project-1',
+      title: 'New issue',
+      body: 'Body',
+      labels: ['enhancement'],
+      prdMetadata: {
+        estimatedComplexity: 'medium',
+        blastRadius: 'contained',
+      },
+    });
+
+    // complexity:* / blast:* are written as native issue labels regardless of
+    // whether a Projects v2 board is configured.
+    expect(ensureLabelsMock).toHaveBeenCalledWith([
+      {
+        name: 'complexity:medium',
+        color: 'fbca04',
+        description: 'PRD estimated complexity: medium.',
+      },
+      {
+        name: 'blast:contained',
+        color: '1f883d',
+        description: 'PRD blast radius: contained.',
+      },
+    ]);
+    expect(createIssueMock).toHaveBeenCalledWith({
+      title: 'New issue',
+      body: 'Body',
+      labels: ['enhancement', 'complexity:medium', 'blast:contained'],
+    });
+    // baseProject has no board URL, so the project-field path never runs.
+    expect(setIssueProjectMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it('fails before creating a PRD issue when metadata labels cannot be ensured (#45)', async () => {
+    ensureLabelsMock.mockResolvedValueOnce({
+      created: [],
+      alreadyPresent: ['complexity:medium'],
+      failed: [{ name: 'blast:contained', error: 'missing permission' }],
+    });
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: {
+        upsert: vi.fn(),
+        list: vi.fn(),
+        getByNumber: vi.fn(),
+        setIssueType: vi.fn(),
+        setPriority: vi.fn(),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const createIssue = handlers.get('github:create-issue');
+    if (!createIssue) throw new Error('github:create-issue handler not registered');
+
+    await expect(
+      createIssue(undefined, {
+        projectId: 'project-1',
+        title: 'New issue',
+        body: 'Body',
+        labels: ['enhancement'],
+        prdMetadata: {
+          estimatedComplexity: 'medium',
+          blastRadius: 'contained',
+        },
+      }),
+    ).rejects.toThrow('Failed to create PRD metadata labels: blast:contained: missing permission');
+
+    expect(createIssueMock).not.toHaveBeenCalled();
+    expect(queries.githubIssues.upsert).not.toHaveBeenCalled();
+  });
+
   it('creates a PRD issue on the configured project board and returns metadata warnings', async () => {
     const projectWithBoard = {
       ...baseProject,
@@ -3125,6 +3269,79 @@ describe('registerGitHubHandlers', () => {
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
       projectId: 'project-1',
       issues: [updatedRecord],
+    });
+  });
+
+  it('refreshes the cached issue type after editing PRD metadata on the board (#45)', async () => {
+    const projectWithBoard = {
+      ...baseProject,
+      githubProjectUrl: 'https://github.com/orgs/acme/projects/1',
+    };
+    const editedRecord = {
+      ...baseIssue,
+      id: 'issue-42',
+      title: 'Edited',
+      body: 'Edited body',
+      labels: ['enhancement', 'complexity:high', 'blast:infra'],
+    };
+    getIssueMock.mockResolvedValue({
+      number: 42,
+      title: 'Edited',
+      body: 'Edited body',
+      labels: ['enhancement', 'complexity:high', 'blast:infra'],
+      assignee: null,
+      state: 'open',
+      author: null,
+    });
+    setIssueProjectMetadataMock.mockResolvedValue([]);
+    const queries = {
+      projects: {
+        getById: vi.fn(() => projectWithBoard),
+      },
+      githubIssues: {
+        getByNumber: vi.fn(() => editedRecord),
+        upsert: vi.fn(),
+        list: vi.fn(() => [editedRecord]),
+        setIssueType: vi.fn(),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const editIssue = handlers.get('github:edit-issue-body');
+    if (!editIssue) throw new Error('github:edit-issue-body handler not registered');
+
+    await editIssue(undefined, {
+      projectId: 'project-1',
+      issueNumber: 42,
+      title: 'Edited',
+      body: 'Edited body',
+      labels: ['enhancement'],
+      prdMetadata: {
+        estimatedComplexity: 'high',
+        blastRadius: 'infra',
+      },
+    });
+
+    // native labels projected onto the edit too
+    expect(editIssueMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: expect.arrayContaining(['enhancement', 'complexity:high', 'blast:infra']),
+      }),
+    );
+    // local cache issue type refreshed so it isn't stale until next sync (AC4)
+    expect(queries.githubIssues.setIssueType).toHaveBeenCalledWith({
+      id: 'issue-42',
+      issueType: 'Feature',
     });
   });
 
@@ -5160,6 +5377,194 @@ describe('registerGitHubHandlers', () => {
       expect(queries.githubIssues.reconcileCompletedFromEvidence).toHaveBeenCalledWith(
         baseIssue.id,
       );
+    });
+  });
+
+  describe('github:refresh-issues triage rules', () => {
+    const project = {
+      ...baseProject,
+      path: '/tmp',
+      githubProjectUrl: null,
+      githubStatusMapping: null,
+    };
+
+    const matchingRule = {
+      id: 'rule-1',
+      projectId: 'project-1',
+      orderIndex: 0,
+      name: 'bug rule',
+      enabled: true,
+      conditions: { operator: 'any', items: [{ kind: 'title_contains', value: 'issue' }] },
+      actions: { addLabels: ['agent:claude'], removeLabels: [] },
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    const ghIssue = {
+      number: 42,
+      title: 'Issue title',
+      body: 'Issue body',
+      labels: [],
+      assignee: null,
+      state: 'open' as const,
+      updatedAt: '2026-05-08T00:00:00.000Z',
+      url: 'https://github.com/acme/repo/issues/42',
+    };
+
+    function buildTriageQueries(upsertRecord: Record<string, unknown>) {
+      return {
+        projects: {
+          getById: vi.fn(() => project),
+          updateGithubRepoIdentity: vi.fn(),
+        },
+        triageRules: { list: vi.fn(() => [matchingRule]) },
+        githubIssues: buildGithubIssuesQueries({
+          list: vi.fn().mockReturnValueOnce([]).mockReturnValue([upsertRecord]),
+          // The issue is newly discovered: no existing cache row.
+          getByNumber: vi.fn(() => null),
+          upsert: vi.fn(() => upsertRecord),
+          markClosedOnClose: vi.fn(),
+          updateState: vi.fn(),
+          clearArchivedAt: vi.fn(),
+          setPriority: vi.fn(),
+          setIssueType: vi.fn(),
+        }),
+        issueEdges: { replaceBodyEdges: vi.fn() },
+        threads: {
+          getById: vi.fn(() => null),
+          getByProjectAndGithubIssue: vi.fn(() => null),
+        },
+      };
+    }
+
+    function registerWith(queries: ReturnType<typeof buildTriageQueries>) {
+      registerGitHubHandlers({
+        ipcMain,
+        mainWindow: mainWindow as never,
+        queries: queries as never,
+        pipeline: {} as never,
+        emitter: { emit: vi.fn() } as never,
+        notificationService: {} as never,
+        chatNotificationService: {} as never,
+        processManager: {} as never,
+      });
+      const refresh = handlers.get('github:refresh-issues');
+      if (!refresh) throw new Error('github:refresh-issues handler not registered');
+      return refresh;
+    }
+
+    it('applies the first matching rule once and syncs refreshed labels back', async () => {
+      const upsertRecord = { ...baseIssue, id: 'issue-1', issueNumber: 42, labels: [] };
+      const queries = buildTriageQueries(upsertRecord);
+      listAllIssuesMock.mockResolvedValue([ghIssue]);
+      applyIssueLabelActionsMock.mockResolvedValueOnce({
+        added: ['agent:claude'],
+        removed: [],
+        skipped: [],
+      });
+      getIssueMock.mockResolvedValueOnce({ ...ghIssue, labels: ['agent:claude'] });
+
+      const refresh = registerWith(queries);
+      await expect(refresh(undefined, { projectId: 'project-1', force: true })).resolves.toEqual([
+        upsertRecord,
+      ]);
+
+      expect(applyIssueLabelActionsMock).toHaveBeenCalledWith(42, matchingRule.actions);
+      expect(queries.githubIssues.markTriageRulesApplied).toHaveBeenCalledWith('issue-1');
+      expect(queries.githubIssues.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ issueNumber: 42, labels: ['agent:claude'] }),
+      );
+    });
+
+    it('records a triage failure without rejecting the refresh', async () => {
+      const upsertRecord = { ...baseIssue, id: 'issue-1', issueNumber: 42, labels: [] };
+      const queries = buildTriageQueries(upsertRecord);
+      listAllIssuesMock.mockResolvedValue([ghIssue]);
+      applyIssueLabelActionsMock.mockRejectedValueOnce(new Error('gh: label not found'));
+
+      const refresh = registerWith(queries);
+      await expect(
+        refresh(undefined, { projectId: 'project-1', force: true }),
+      ).resolves.toBeDefined();
+
+      expect(queries.githubIssues.recordTriageRulesFailure).toHaveBeenCalledTimes(1);
+      expect(queries.githubIssues.recordTriageRulesFailure).toHaveBeenCalledWith(
+        'issue-1',
+        expect.stringContaining('label not found'),
+      );
+      expect(queries.githubIssues.markTriageRulesApplied).not.toHaveBeenCalled();
+    });
+
+    it('records an outer triage sync failure after rules were marked applied', async () => {
+      const upsertRecord = { ...baseIssue, id: 'issue-1', issueNumber: 42, labels: [] };
+      const queries = buildTriageQueries(upsertRecord);
+      queries.githubIssues.upsert = vi
+        .fn()
+        .mockReturnValueOnce(upsertRecord)
+        .mockImplementationOnce(() => {
+          throw new Error('sqlite write failed');
+        });
+      listAllIssuesMock.mockResolvedValue([ghIssue]);
+      applyIssueLabelActionsMock.mockResolvedValueOnce({
+        added: ['agent:claude'],
+        removed: [],
+        skipped: [],
+      });
+      getIssueMock.mockResolvedValueOnce({ ...ghIssue, labels: ['agent:claude'] });
+
+      const refresh = registerWith(queries);
+      await expect(
+        refresh(undefined, { projectId: 'project-1', force: true }),
+      ).resolves.toBeDefined();
+
+      expect(queries.githubIssues.markTriageRulesApplied).toHaveBeenCalledWith('issue-1');
+      expect(queries.githubIssues.recordTriageRulesFailure).toHaveBeenCalledWith(
+        'issue-1',
+        expect.stringContaining('sqlite write failed'),
+      );
+    });
+
+    it('skips issues whose rules were already applied', async () => {
+      const upsertRecord = {
+        ...baseIssue,
+        id: 'issue-1',
+        issueNumber: 42,
+        rulesAppliedAt: '2026-05-01T00:00:00.000Z',
+      };
+      const queries = buildTriageQueries(upsertRecord);
+      listAllIssuesMock.mockResolvedValue([ghIssue]);
+
+      const refresh = registerWith(queries);
+      await refresh(undefined, { projectId: 'project-1', force: true });
+
+      expect(applyIssueLabelActionsMock).not.toHaveBeenCalled();
+      expect(queries.githubIssues.markTriageRulesApplied).not.toHaveBeenCalled();
+    });
+
+    it('does not reject the refresh when a triage DB write throws', async () => {
+      const upsertRecord = { ...baseIssue, id: 'issue-1', issueNumber: 42, labels: [] };
+      const queries = buildTriageQueries(upsertRecord);
+      // Non-matching rule drives the no-match path, where markTriageRulesApplied
+      // is called outside applyTriageRulesOnce's try/catch.
+      queries.triageRules.list = vi.fn(() => [
+        {
+          ...matchingRule,
+          conditions: {
+            operator: 'any' as const,
+            items: [{ kind: 'title_contains' as const, value: 'zzz-no-match' }],
+          },
+        },
+      ]);
+      queries.githubIssues.markTriageRulesApplied = vi.fn(() => {
+        throw new Error('database is locked');
+      });
+      listAllIssuesMock.mockResolvedValue([ghIssue]);
+
+      const refresh = registerWith(queries);
+      await expect(
+        refresh(undefined, { projectId: 'project-1', force: true }),
+      ).resolves.toBeDefined();
+      expect(queries.githubIssues.markTriageRulesApplied).toHaveBeenCalled();
     });
   });
 });

@@ -12,6 +12,7 @@
 
 import type { TerminalEvent } from '../../terminal-events';
 import { FenceStateMachine } from './fence-suppression';
+import { LineBufferedJsonNormalizer } from './line-buffered-json-normalizer';
 
 interface ToolCallResult {
   summary: string;
@@ -54,48 +55,26 @@ function formatToolCall(name: string, input: Record<string, unknown>): ToolCallR
 }
 
 export class ClaudeNormalizer {
-  private lineBuffer = '';
   private readonly fence: FenceStateMachine;
+  private readonly lines: LineBufferedJsonNormalizer;
   private readonly onEvent: (event: TerminalEvent) => void;
 
   constructor(onEvent: (event: TerminalEvent) => void) {
     this.onEvent = onEvent;
     this.fence = new FenceStateMachine(onEvent);
+    this.lines = new LineBufferedJsonNormalizer(
+      onEvent,
+      this.fence,
+      (line) => JSON.parse(line),
+      (event) => this.processEvent(event),
+    );
   }
 
   /**
    * Feed a raw PTY chunk. Lines may be split across chunks.
    */
   feed(chunk: string): void {
-    this.lineBuffer += chunk;
-
-    let newlineIdx = this.lineBuffer.indexOf('\n');
-    while (newlineIdx !== -1) {
-      const line = this.lineBuffer.slice(0, newlineIdx).trim();
-      this.lineBuffer = this.lineBuffer.slice(newlineIdx + 1);
-
-      if (!line) {
-        newlineIdx = this.lineBuffer.indexOf('\n');
-        continue;
-      }
-
-      // Try to parse as JSON
-      let event: Record<string, unknown>;
-      try {
-        event = JSON.parse(line);
-      } catch {
-        // Not JSON — could be ANSI escape or raw text leaking from PTY.
-        // Forward as raw so it's not lost.
-        if (!this.fence.isSuppressing) {
-          this.onEvent({ kind: 'raw', content: line });
-        }
-        newlineIdx = this.lineBuffer.indexOf('\n');
-        continue;
-      }
-
-      this.processEvent(event);
-      newlineIdx = this.lineBuffer.indexOf('\n');
-    }
+    this.lines.feed(chunk);
   }
 
   private processEvent(event: Record<string, unknown>): void {

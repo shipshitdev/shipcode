@@ -1118,4 +1118,17 @@ describe('ProjectSettingsModal', () => {
 
     expect(await screen.findAllByText('setup file is read only')).toHaveLength(2);
   });
+
+  it('renders the triage rules editor when the Triage rules tab is selected', async () => {
+    mockProjectSettingsInvoke({ 'project:list-triage-rules': [] });
+
+    renderWithProviders();
+    await screen.findByText('Project Settings');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Triage rules' }));
+
+    expect(
+      await screen.findByText(/Rules run once for each newly discovered GitHub issue/i),
+    ).toBeInTheDocument();
+  });
 });

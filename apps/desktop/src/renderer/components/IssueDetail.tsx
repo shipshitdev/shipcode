@@ -12,6 +12,7 @@ import type {
   PipelinePhase,
   PlanRecord,
   Project,
+  ReviewFindingRecord,
   ReviewRecord,
   TaskGraphWithNodes,
   Thread,
@@ -65,7 +66,7 @@ import {
   Play,
   Square,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { toast } from '../stores/toast-store';
@@ -75,16 +76,19 @@ import {
   decodePhaseOption,
   encodePhaseOption,
   resolveFailingPhaseOutput,
+  resolveIssueRetryPresentation,
 } from './issue-detail/helpers';
 import { buildIssueDetailActions } from './issue-detail/IssueDetailActions';
 import { buildIssueDetailDialogs } from './issue-detail/IssueDetailDialogs';
 import { IssueDetailTabs } from './issue-detail/IssueDetailTabs';
 import { PipelineTab } from './issue-detail/PipelineTab';
 import type { IssueDetailTab } from './issue-detail/tab-types';
+import {
+  DETAIL_SIDEBAR_MAX,
+  DETAIL_SIDEBAR_MIN,
+  useResizableDetailSidebar,
+} from './issue-detail/useResizableDetailSidebar';
 
-const DETAIL_SIDEBAR_MIN = 320;
-const DETAIL_SIDEBAR_MAX = 640;
-const DETAIL_SIDEBAR_DEFAULT = 416; // matches previous w-[26rem]
 const EMPTY_PLAN_HISTORY: PlanRecord[] = [];
 
 const INHERIT_EXECUTOR_VALUE = '__inherit__';
@@ -178,36 +182,7 @@ function useIssueDetailView() {
     };
   }, []);
 
-  // Detail sidebar resize (matches TerminalDrawer / ProjectSidebar pattern)
-  const [detailSidebarWidth, setDetailSidebarWidth] = useState(DETAIL_SIDEBAR_DEFAULT);
-  const detailDragRef = useRef<{ startX: number; startW: number } | null>(null);
-  const handleDetailResizeMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      detailDragRef.current = { startX: e.clientX, startW: detailSidebarWidth };
-      const onMove = (ev: MouseEvent) => {
-        const drag = detailDragRef.current;
-        if (!drag) return;
-        // Dragging left = wider sidebar (inverted delta)
-        const delta = drag.startX - ev.clientX;
-        const next = Math.min(
-          DETAIL_SIDEBAR_MAX,
-          Math.max(DETAIL_SIDEBAR_MIN, drag.startW + delta),
-        );
-        setDetailSidebarWidth(next);
-      };
-      const onUp = () => {
-        detailDragRef.current = null;
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.body.classList.remove('cursor-col-resize', 'select-none');
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      document.body.classList.add('cursor-col-resize', 'select-none');
-    },
-    [detailSidebarWidth],
-  );
+  const { detailSidebarWidth, handleDetailResizeMouseDown } = useResizableDetailSidebar();
 
   const [phaseModelValidation, setPhaseModelValidation] = useState<
     Partial<
@@ -386,6 +361,16 @@ function useIssueDetailView() {
     // Push-invalidated by pipeline:phase in useIpc.
   });
 
+  const { data: reviewFindings = [] } = useQuery<ReviewFindingRecord[]>({
+    queryKey: ['review-findings', activeThreadId],
+    queryFn: () =>
+      window.shipcode.invoke('review-findings:list-thread', {
+        threadId: activeThreadId as string,
+        includeClosed: true,
+      }),
+    enabled: !!activeThreadId,
+  });
+
   // Fetch latest verification for the thread
   const { data: latestVerification } = useQuery<VerificationRecord | null>({
     queryKey: ['verification', activeThreadId],
@@ -524,51 +509,10 @@ function useIssueDetailView() {
     () => normalizedThreadPlanHistory[0] ?? null,
     [normalizedThreadPlanHistory],
   );
-  const failedLatestStructuredVerification =
-    latestVerification?.planId === latestPlan?.id &&
-    latestVerification?.result === 'failed' &&
-    !!latestVerification?.structured;
-  const retryAction = useMemo(() => {
-    if (!thread) return null;
-    if (/no code changes/i.test(thread.lastError ?? '')) return 'plan' as const;
-    const structuredPlan = latestPlan?.structured ?? null;
-    if (!structuredPlan) return 'plan' as const;
-    if (!thread.worktreePath) return 'review' as const;
-    if (latestVerification && latestVerification.planId === latestPlan?.id) {
-      if (latestVerification.result === 'failed' && latestVerification.structured) {
-        return 'execute' as const;
-      }
-      if (latestVerification.result === 'failed') return 'verify' as const;
-      if (latestVerification.result === 'passed') return 'commit_and_push' as const;
-    }
-    return 'execute' as const;
-  }, [latestPlan?.id, latestPlan?.structured, latestVerification, thread]);
-  const retryButtonLabel =
-    retryAction === 'review'
-      ? 'Resume review'
-      : retryAction === 'execute'
-        ? 'Resume execution'
-        : retryAction === 'verify'
-          ? 'Resume verification'
-          : retryAction === 'commit_and_push'
-            ? 'Resume shipping'
-            : 'Re-plan';
-  const retrySummary =
-    retryAction === 'review'
-      ? 'Retry will resume from review using the latest structured plan.'
-      : retryAction === 'execute'
-        ? failedLatestStructuredVerification
-          ? 'Retry will resume from execution using the current worktree and latest verification feedback.'
-          : 'Retry will resume from execution using the latest structured plan.'
-        : retryAction === 'verify'
-          ? 'Retry will resume from verification using the current worktree.'
-          : retryAction === 'commit_and_push'
-            ? 'Retry will resume from commit and push using the verified worktree.'
-            : retryAction === 'plan'
-              ? /no code changes/i.test(thread?.lastError ?? '')
-                ? 'The executor produced no file changes. Update the issue description with more detail before replanning.'
-                : 'Retry will start a fresh planning pass. This resumes the workflow, not the same live planner session.'
-              : null;
+  const { retryButtonLabel, retrySummary } = useMemo(
+    () => resolveIssueRetryPresentation({ thread, latestPlan, latestVerification }),
+    [latestPlan, latestVerification, thread],
+  );
   const threadPhase = currentPipelinePhase;
   const canStartPipeline =
     !activeThreadId &&
@@ -644,6 +588,7 @@ function useIssueDetailView() {
         queryKey: ['issue-activity', activeProjectId, activeIssue?.issueNumber],
       }),
       queryClient.invalidateQueries({ queryKey: ['checkpoints', activeThreadId] }),
+      queryClient.invalidateQueries({ queryKey: ['review-findings', activeThreadId] }),
     ]);
   };
 
@@ -1226,14 +1171,16 @@ function useIssueDetailView() {
     ACTIVE_PHASES.includes(threadPhase as PipelinePhase) || threadPhase === PIPELINE_PHASE.approval;
 
   const issueStatusChip = (
-    <PhaseChip
-      status={headerStatus}
-      className={cn(
-        'text-[11px] font-semibold',
-        headerStatusAnimated &&
-          'relative pl-4 before:absolute before:left-1.5 before:top-1/2 before:h-1.5 before:w-1.5 before:-translate-y-1/2 before:rounded-full before:bg-current before:animate-pulse',
-      )}
-    />
+    <span data-testid="issue-phase-chip">
+      <PhaseChip
+        status={headerStatus}
+        className={cn(
+          'text-[11px] font-semibold',
+          headerStatusAnimated &&
+            'relative pl-4 before:absolute before:left-1.5 before:top-1/2 before:h-1.5 before:w-1.5 before:-translate-y-1/2 before:rounded-full before:bg-current before:animate-pulse',
+        )}
+      />
+    </span>
   );
 
   const canUseStatusActions = !isAutomationIssue(activeIssue) && (canRerun || !canStartPipeline);
@@ -1606,6 +1553,7 @@ function useIssueDetailView() {
     completionSection,
     pipelineStartCard,
     rerunSection,
+    triageFailureSection,
   } = buildIssueDetailActions({
     approveError,
     approvedAwaitingExecution,
@@ -1615,6 +1563,7 @@ function useIssueDetailView() {
     effectiveRevisionCount,
     clarificationRequest: thread?.clarificationRequest ?? null,
     failingPhaseOutput,
+    triageFailureReason: activeIssue?.triageFailureReason ?? null,
     hasDiffs: (diffs?.length ?? 0) > 0,
     hasApprovalDecision,
     isCompleted: activeIssue?.pipelineStatus === ISSUE_PIPELINE_STATUS.completed,
@@ -1670,6 +1619,7 @@ function useIssueDetailView() {
       normalizedIssueActivity={normalizedIssueActivity}
       loadingPlanDetailIds={loadingPlanDetailIds}
       normalizedPlanHistory={resolvedPlanHistory}
+      reviewFindings={reviewFindings}
       normalizedReviewsByPlanId={normalizedReviewsByPlanId}
       normalizedThreadPlanHistory={normalizedThreadPlanHistory}
       isPlanHistoryLoading={isPlanHistoryLoading}
@@ -1759,12 +1709,14 @@ function useIssueDetailView() {
   const detailActionStack =
     pipelineStartCard ||
     rerunSection ||
+    triageFailureSection ||
     clarificationSection ||
     approvalSection ||
     completionSection ? (
       <div className="space-y-4 mb-6">
         {pipelineStartCard}
         {rerunSection}
+        {triageFailureSection}
         {completionSection}
         {clarificationSection}
         {approvalSection}

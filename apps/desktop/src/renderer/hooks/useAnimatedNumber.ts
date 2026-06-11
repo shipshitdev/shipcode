@@ -58,8 +58,9 @@ export function useAnimatedNumber(target: number, duration = 600): number {
 
   // Sync ref when target changes (for next animation start point)
   useEffect(() => {
+    const startPointRef = prevRef;
     return () => {
-      prevRef.current = target;
+      startPointRef.current = target;
     };
   }, [target]);
 

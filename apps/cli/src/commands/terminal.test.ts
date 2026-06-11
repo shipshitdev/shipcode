@@ -22,6 +22,22 @@ vi.mock('@shipcode/git', () => ({
 }));
 
 vi.mock('@shipcode/shared', () => ({
+  buildShipCodeRunContract: ({
+    projectPath,
+    worktreePath,
+    baseBranch,
+    currentBranch,
+  }: {
+    projectPath: string;
+    worktreePath: string;
+    baseBranch: string;
+    currentBranch: string;
+  }) => `You are working inside ShipCode
+- Repo: ${projectPath}
+- Worktree: ${worktreePath}
+- Target branch: ${baseBranch}
+- Current branch: ${currentBranch}
+Treat the GitHub issue/PRD below as the source of truth.`,
   PIPELINE_PHASE: {
     completed: 'completed',
     executing: 'executing',
@@ -110,6 +126,16 @@ describe('terminalCommand', () => {
     });
 
     await expect(terminalCommand('123', { provider: 'claude' })).resolves.toBeUndefined();
+
+    const promptInsert = agentConversationInsert.mock.calls.find(
+      ([record]) => record.role === 'prompt',
+    )?.[0];
+    expect(promptInsert?.content).toContain('You are working inside ShipCode');
+    expect(promptInsert?.content).toContain('- Target branch: develop');
+    expect(promptInsert?.content).toContain('- Current branch: shipcode/issue-123');
+    expect(promptInsert?.content).toContain(
+      'Treat the GitHub issue/PRD below as the source of truth.',
+    );
 
     expect(resume).not.toHaveBeenCalled();
     expect(setRawMode).not.toHaveBeenCalled();

@@ -462,12 +462,18 @@ export class GhCli {
     title: string;
     body: string;
     labels?: string[];
+    milestone?: string;
+    assignees?: string[];
   }): Promise<GitHubIssue> {
     // Body is piped via stdin (`--body-file -`) to avoid argv length limits
     // and shell-escaping issues for multi-KB PRDs.
     const args = ['issue', 'create', '--title', options.title, '--body-file', '-'];
     const labels = await this.filterExistingLabels(options.labels ?? []);
     if (labels.length) args.push('--label', labels.join(','));
+    // Native metadata fields (#45): set milestone + assignees at creation so
+    // the data lives in GitHub's first-class fields, not body frontmatter.
+    if (options.milestone) args.push('--milestone', options.milestone);
+    for (const assignee of options.assignees ?? []) args.push('--assignee', assignee);
 
     const stdout = await this.spawnWithStdin('gh', args, options.body);
     // gh issue create outputs the issue URL, e.g. https://github.com/owner/repo/issues/42
@@ -569,7 +575,12 @@ export class GhCli {
         `repoName=${repoName}`,
         '-F',
         `issueNumber=${opts.issueNumber}`,
-        '-F',
+        // `-f` (raw string) not `-F`: issueType is a GraphQL `String!` and is
+        // renderer-supplied. `-F` reads `@path` values from disk (file
+        // disclosure) and coerces numeric/boolean-looking strings to the wrong
+        // GraphQL type. projectOwner stays `-F` — parseGithubProjectUrl
+        // validates it as a GitHub login, so it can never start with `@`.
+        '-f',
         `issueType=${opts.metadata.issueType ?? ''}`,
         '-F',
         `projectOwner=${parsedProject.owner}`,
@@ -720,12 +731,23 @@ export class GhCli {
     title: string;
     body: string;
     labels?: string[];
+    milestone?: string;
+    assignees?: string[];
   }): Promise<void> {
-    await this.spawnWithStdin(
-      'gh',
-      ['issue', 'edit', String(options.issueNumber), '--title', options.title, '--body-file', '-'],
-      options.body,
-    );
+    const args = [
+      'issue',
+      'edit',
+      String(options.issueNumber),
+      '--title',
+      options.title,
+      '--body-file',
+      '-',
+    ];
+    // Native metadata fields (#45). `gh issue edit` uses `--add-assignee`
+    // (additive) rather than the `--assignee` flag used by `gh issue create`.
+    if (options.milestone) args.push('--milestone', options.milestone);
+    for (const assignee of options.assignees ?? []) args.push('--add-assignee', assignee);
+    await this.spawnWithStdin('gh', args, options.body);
     await this.syncIssueLabels(options.issueNumber, options.labels ?? []);
   }
 
@@ -1420,26 +1442,37 @@ export class GhCli {
   }
 
   async listIssueComments(issueNumber: number): Promise<GitHubIssueComment[]> {
+    const { owner, repo } = await this.getRepoCoordinates();
     const { stdout } = await execFileAsync(
       'gh',
-      ['issue', 'view', String(issueNumber), '--json', 'comments'],
+      ['api', '--paginate', '--slurp', `repos/${owner}/${repo}/issues/${issueNumber}/comments`],
       { cwd: this.cwd, env: this.env },
     );
-    const parsed = JSON.parse(stdout) as {
-      comments: Array<{
-        id: string;
-        author: { login: string } | null;
-        body: string;
-        createdAt: string;
-        url: string;
-      }>;
-    };
-    return (parsed.comments ?? []).map((c) => ({
-      id: parseIssueCommentDatabaseId(c.id, c.url),
-      author: c.author?.login ?? null,
-      body: c.body,
-      createdAt: c.createdAt,
-      url: c.url,
+    const parsed = JSON.parse(stdout) as Array<
+      Array<{
+        id: number;
+        user: { login?: string } | null;
+        body?: string;
+        created_at?: string;
+        html_url?: string;
+        author_association?: string | null;
+      }>
+    >;
+    const comments = parsed.flat() as Array<{
+      id: number;
+      user: { login?: string } | null;
+      body?: string;
+      created_at?: string;
+      html_url?: string;
+      author_association?: string | null;
+    }>;
+    return comments.map((c) => ({
+      id: c.id,
+      author: c.user?.login ?? null,
+      authorAssociation: c.author_association ?? null,
+      body: c.body ?? '',
+      createdAt: c.created_at ?? '',
+      url: c.html_url ?? '',
     }));
   }
 
@@ -1547,18 +1580,4 @@ export class GhCli {
     );
     return stdout.trim();
   }
-}
-
-function parseIssueCommentDatabaseId(id: string, url: string): number {
-  const numericId = Number(id);
-  if (Number.isFinite(numericId)) return numericId;
-
-  const match = url.match(/issuecomment-(\d+)/);
-  if (match?.[1]) {
-    const urlId = Number(match[1]);
-    /* v8 ignore next -- regex captures only decimal digits */
-    if (Number.isFinite(urlId)) return urlId;
-  }
-
-  return Number.NaN;
 }

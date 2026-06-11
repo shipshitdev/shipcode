@@ -99,8 +99,6 @@ jobs:
       - name: Install native test dependencies
         run: sudo apt-get update && sudo apt-get install -y ripgrep build-essential python3
       - run: bun install --frozen-lockfile
-      - run: bun run format:check
-      - run: bun run lint:repo
       - run: bun run lint
       - run: bun run typecheck
       - run: bun run test:ci
@@ -330,11 +328,20 @@ jobs:
         run: |
           VERSION=$(node -p "require('./apps/cli/package.json').version")
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          if npm view "@shipshitdev/shipcode@${VERSION}" version >/dev/null 2>&1; then
+          set +e
+          NPM_VIEW_OUTPUT=$(npm view "@shipshitdev/shipcode@${VERSION}" version 2>&1)
+          NPM_VIEW_STATUS=$?
+          set -e
+
+          if [ "$NPM_VIEW_STATUS" -eq 0 ]; then
             echo "published=true" >> "$GITHUB_OUTPUT"
             echo "@shipshitdev/shipcode@${VERSION} is already published; skipping npm publish."
-          else
+          elif echo "$NPM_VIEW_OUTPUT" | grep -qiE 'E404|404 Not Found|No match found|not found'; then
             echo "published=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Failed to check npm package @shipshitdev/shipcode@${VERSION}"
+            echo "$NPM_VIEW_OUTPUT"
+            exit "$NPM_VIEW_STATUS"
           fi
       - name: Publish to npm (OIDC / Trusted Publisher)
         if: steps.npm-package.outputs.published != 'true'

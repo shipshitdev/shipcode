@@ -34,7 +34,7 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto p-4">
+    <div data-testid="pr-detail-panel" className="flex flex-1 flex-col overflow-y-auto p-4">
       {/* Header */}
       <div className="mb-4">
         <div className="flex items-center gap-2">

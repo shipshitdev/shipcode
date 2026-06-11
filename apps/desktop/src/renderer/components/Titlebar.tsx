@@ -117,7 +117,10 @@ function ProviderDetailRow({
   tone: ProviderTone;
   status: CliProviderUsageStatus;
 }) {
+  const queryClient = useQueryClient();
   const checked = formatCheckedAt(status.checkedAt);
+  const poolExhausted =
+    tone === 'claude' && (status.message?.includes('Agent-SDK credit pool exhausted') ?? false);
   return (
     <div
       className={cn(
@@ -168,6 +171,21 @@ function ProviderDetailRow({
           <span className="ml-1 text-muted-foreground">Retries on the next check.</span>
         </div>
       )}
+
+      {poolExhausted ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 self-start rounded-sm border border-danger/30 bg-danger/5 px-1.5 text-[10px] text-danger hover:bg-danger/10"
+          onClick={async () => {
+            await window.shipcode.invoke('provider-usage:reset-claude-pool');
+            await queryClient.invalidateQueries({ queryKey: ['provider-usage'] });
+          }}
+          title="Clear the detected Agent-SDK pool-exhausted state and retry programmatic claude -p"
+        >
+          Reset pool state
+        </Button>
+      ) : null}
 
       {(checked || status.stale) && (
         <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">

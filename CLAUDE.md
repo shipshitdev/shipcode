@@ -5,7 +5,7 @@
 
 ## Working directory
 
-Primary: `/Users/decod3rs/www/shipshitdev/private/shipcode`
+Primary: `/Users/decod3rs/www/shipshitdev/public/shipcode`
 
 ## Session ritual
 

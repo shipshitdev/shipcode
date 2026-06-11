@@ -7,6 +7,8 @@ import {
   buildRendererLoadTarget,
   formatActivePipelineNames,
   formatStalledProcessMessage,
+  isAllowedNavigationTarget,
+  isExternalWebUrl,
   loadLocalEnvFiles,
   shouldQuitWhenAllWindowsClosed,
 } from './index-helpers';
@@ -212,5 +214,46 @@ describe('main window and renderer bootstrap helpers', () => {
       'Agent process stalled — no output for 120s. Killed by watchdog.',
     );
     expect(formatStalledProcessMessage(1_499)).toContain('1s');
+  });
+});
+
+describe('isAllowedNavigationTarget', () => {
+  it('allows only the dev-server origin in development', () => {
+    const dev = 'http://localhost:5173';
+    expect(isAllowedNavigationTarget('http://localhost:5173/index.html', dev)).toBe(true);
+    expect(isAllowedNavigationTarget('http://localhost:5173/some/route', dev)).toBe(true);
+    expect(isAllowedNavigationTarget('https://evil.example.com/', dev)).toBe(false);
+    expect(isAllowedNavigationTarget('http://localhost:6006/', dev)).toBe(false);
+    expect(isAllowedNavigationTarget('file:///tmp/x.html', dev)).toBe(false);
+  });
+
+  it('allows only the exact bundled index.html in a packaged build (no dev server)', () => {
+    const html = '/dist/index.html';
+    expect(isAllowedNavigationTarget('file:///dist/index.html', undefined, html)).toBe(true);
+    // SPA hash/query suffixes on the same file still resolve to the bundled page.
+    expect(isAllowedNavigationTarget('file:///dist/index.html#/board', undefined, html)).toBe(true);
+    expect(isAllowedNavigationTarget('file:///dist/index.html?x=1', undefined, html)).toBe(true);
+    // Any other local file must be rejected — it must not inherit the preload bridge.
+    expect(isAllowedNavigationTarget('file:///tmp/evil.html', undefined, html)).toBe(false);
+    expect(isAllowedNavigationTarget('file:///dist/other.html', undefined, html)).toBe(false);
+    expect(isAllowedNavigationTarget('https://evil.example.com/', undefined, html)).toBe(false);
+    expect(isAllowedNavigationTarget('http://localhost:5173/', undefined, html)).toBe(false);
+    // With no renderer-html reference, no file: navigation is allowed.
+    expect(isAllowedNavigationTarget('file:///dist/index.html', undefined)).toBe(false);
+  });
+
+  it('rejects unparseable targets', () => {
+    expect(isAllowedNavigationTarget('not a url', undefined)).toBe(false);
+    expect(isAllowedNavigationTarget('', 'http://localhost:5173')).toBe(false);
+  });
+});
+
+describe('isExternalWebUrl', () => {
+  it('is true for http(s) URLs and false for everything else', () => {
+    expect(isExternalWebUrl('https://github.com/shipshitdev')).toBe(true);
+    expect(isExternalWebUrl('http://example.com')).toBe(true);
+    expect(isExternalWebUrl('file:///etc/passwd')).toBe(false);
+    expect(isExternalWebUrl('javascript:alert(1)')).toBe(false);
+    expect(isExternalWebUrl('not a url')).toBe(false);
   });
 });

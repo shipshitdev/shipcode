@@ -5,6 +5,7 @@ import { type AgentProvider, GhCli } from '@shipcode/agents/source';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineContext, PipelineDeps } from '../types';
+import { buildPhasePayload } from './context';
 import { buildFrozenInstallFallback, createPipelineRuntime, resolveSetupShell } from './runtime';
 
 const { mockExecFile, mockLoadRepoSetupContract, mockGhCli } = vi.hoisted(() => ({
@@ -128,12 +129,9 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
     workflowWarningEmitted: false,
     abort: new AbortController(),
     stabilizationFeedback: null,
-    executionResumeContext: null,
-    previousPlanRawOutput: null,
     turnCount: 0,
     featureQaState: null,
     runtimeQaCleanup: null,
-    runtimeQaOutput: null,
     cpuQueueStartedAt: null,
     cpuQueueLastNotifiedAt: null,
     ...overrides,
@@ -301,13 +299,13 @@ describe('createPipelineRuntime', () => {
     expect(runtime.buildRepoSetupPlannerNote(context)).toContain('.env.test');
   });
 
-  it('falls back to settings when repo setup contract is absent', () => {
+  it('falls back to settings when repo setup contract is absent', async () => {
     mockLoadRepoSetupContract.mockReturnValue(null);
     const { deps } = makeDeps();
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
 
-    expect(runtime.prepareWorktree(context, 'execute')).resolves.toEqual({ ok: true });
+    await expect(runtime.prepareWorktree(context, 'execute')).resolves.toEqual({ ok: true });
     expect(runtime.getTestingContext(context)).toBe('unit');
     expect(runtime.getVerifyCommands(context)).toEqual(['bun test']);
     expect(runtime.buildRepoSetupPlannerNote(context)).toBe('');
@@ -953,7 +951,13 @@ describe('createPipelineRuntime', () => {
       promptMaterialSummaries: { plan: { totalMaterials: 0 } } as never,
     });
 
-    const result = await runtime.runProviderPhase(context, 'plan', 'prompt', [], {});
+    const result = await runtime.runProviderPhase(
+      context,
+      buildPhasePayload(context, 'plan'),
+      'prompt',
+      [],
+      {},
+    );
 
     expect(result.rawOutput).toBe('done');
     expect(provider.generate).toHaveBeenCalledWith(
@@ -978,6 +982,31 @@ describe('createPipelineRuntime', () => {
     );
   });
 
+  it('sets activeProcessId only while a provider phase is running', async () => {
+    let activeDuringProvider: string | null = null;
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan']),
+      generate: vi.fn(async (request) => {
+        request.onProcessStart?.('proc-1');
+        activeDuringProvider = context.activeProcessId;
+        return {
+          rawOutput: 'done',
+          exitCode: 0,
+        };
+      }),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+
+    await runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {});
+
+    expect(activeDuringProvider).toBe('proc-1');
+    expect(context.activeProcessId).toBeNull();
+  });
+
   it('passes executor model overrides and omits workspace roots outside worktrees', async () => {
     const provider: AgentProvider = {
       id: 'claude-cli',
@@ -996,12 +1025,13 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
+    const context = makeContext({
+      worktreePath: null,
+      executorModelOverride: 'claude-sonnet',
+    });
     const result = await runtime.runProviderPhase(
-      makeContext({
-        worktreePath: null,
-        executorModelOverride: 'claude-sonnet',
-      }),
-      'execute',
+      context,
+      buildPhasePayload(context, 'execute'),
       'prompt',
       [],
       {},
@@ -1031,9 +1061,10 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
+    const context = makeContext({ plannerModelIdOverride: 'claude-opus' });
     const result = await runtime.runProviderPhase(
-      makeContext({ plannerModelIdOverride: 'claude-opus' }),
-      'revision',
+      context,
+      buildPhasePayload(context, 'revision'),
       'prompt',
       [],
       {},
@@ -1066,8 +1097,9 @@ describe('createPipelineRuntime', () => {
     deps.pipelineSteps = pipelineSteps as never;
     const runtime = createPipelineRuntime(deps, {} as never);
 
+    const context = makeContext();
     await expect(
-      runtime.runProviderPhase(makeContext(), 'plan', 'prompt', [], {}),
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {}),
     ).resolves.toEqual(expect.objectContaining({ rawOutput: 'done', exitCode: 0 }));
     expect(pipelineSteps.complete).toHaveBeenCalledWith(
       'step-1',
@@ -1095,7 +1127,14 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
-    const result = await runtime.runProviderPhase(makeContext(), 'plan', 'prompt', [], {});
+    const context = makeContext();
+    const result = await runtime.runProviderPhase(
+      context,
+      buildPhasePayload(context, 'plan'),
+      'prompt',
+      [],
+      {},
+    );
 
     expect(JSON.parse(result.rawOutput)).toEqual({
       token: 'gh-token',
@@ -1138,7 +1177,14 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
-    const result = await runtime.runProviderPhase(makeContext(), 'plan', 'prompt', [], {});
+    const context = makeContext();
+    const result = await runtime.runProviderPhase(
+      context,
+      buildPhasePayload(context, 'plan'),
+      'prompt',
+      [],
+      {},
+    );
 
     expect(JSON.parse(result.rawOutput)).toEqual({
       token: null,
@@ -1169,7 +1215,14 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
-    const result = await runtime.runProviderPhase(makeContext(), 'plan', 'prompt', [], {});
+    const context = makeContext();
+    const result = await runtime.runProviderPhase(
+      context,
+      buildPhasePayload(context, 'plan'),
+      'prompt',
+      [],
+      {},
+    );
 
     expect(JSON.parse(result.rawOutput)).toEqual({ token: null });
   });
@@ -1189,7 +1242,8 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
-    await runtime.runProviderPhase(makeContext(), 'verify', 'prompt', [], {});
+    const context = makeContext();
+    await runtime.runProviderPhase(context, buildPhasePayload(context, 'verify'), 'prompt', [], {});
 
     expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
       'step-1',
@@ -1215,7 +1269,8 @@ describe('createPipelineRuntime', () => {
     const { deps } = makeDeps(provider);
     const runtime = createPipelineRuntime(deps, {} as never);
 
-    await runtime.runProviderPhase(makeContext(), 'verify', 'prompt', [], {});
+    const context = makeContext();
+    await runtime.runProviderPhase(context, buildPhasePayload(context, 'verify'), 'prompt', [], {});
 
     expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
       'step-1',
@@ -1241,9 +1296,9 @@ describe('createPipelineRuntime', () => {
     const context = makeContext();
     context.abort.abort();
 
-    await expect(runtime.runProviderPhase(context, 'execute', 'prompt', [], {})).rejects.toThrow(
-      'AbortError',
-    );
+    await expect(
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'execute'), 'prompt', [], {}),
+    ).rejects.toThrow('AbortError');
     expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
       'step-1',
       expect.objectContaining({
@@ -1291,9 +1346,9 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
 
-    await expect(runtime.runProviderPhase(context, 'plan', 'prompt', [], {})).resolves.toEqual(
-      expect.objectContaining({ rawOutput: 'done', exitCode: 0 }),
-    );
+    await expect(
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {}),
+    ).resolves.toEqual(expect.objectContaining({ rawOutput: 'done', exitCode: 0 }));
     expect(context.promptTelemetryDiagnostics).toContainEqual(
       expect.objectContaining({ phase: 'plan', message: 'telemetry offline', nonFatal: true }),
     );
@@ -1324,15 +1379,102 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
 
-    await expect(runtime.runProviderPhase(context, 'plan', 'prompt', [], {})).resolves.toEqual(
-      expect.objectContaining({ rawOutput: 'done', exitCode: 0 }),
-    );
+    await expect(
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {}),
+    ).resolves.toEqual(expect.objectContaining({ rawOutput: 'done', exitCode: 0 }));
 
     expect(context.promptTelemetryDiagnostics).toContainEqual({
       phase: 'plan',
       message: 'telemetry string failure',
       nonFatal: true,
     });
+  });
+
+  it('runProviderPhaseCore does not mutate context and returns telemetry deltas', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan']),
+      generate: vi.fn(async () => ({ rawOutput: 'done', exitCode: 0 })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+    const input = buildPhasePayload(context, 'plan');
+
+    const result = await runtime.runProviderPhaseCore(input, 'prompt', [], {});
+
+    // The pure core leaves the mutable context untouched...
+    expect(context.promptTelemetry).toHaveLength(0);
+    expect(context.promptTelemetryDiagnostics).toHaveLength(0);
+    // ...and surfaces the mutation it would have made as deltas instead.
+    expect(result.deltas.promptTelemetry).toBeDefined();
+    expect(result.deltas.diagnosticEntry).toBeNull();
+  });
+
+  it('runProviderPhase wrapper applies the telemetry delta to context', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan']),
+      generate: vi.fn(async () => ({ rawOutput: 'done', exitCode: 0 })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+
+    await runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {});
+
+    expect(context.promptTelemetry).toHaveLength(1);
+  });
+
+  it('threads the post-push telemetry counter into invocationId and attempt', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan']),
+      generate: vi.fn(async () => ({ rawOutput: 'done', exitCode: 0 })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+    // One prior telemetry entry → this invocation is attempt 2.
+    context.promptTelemetry.push({} as never);
+
+    await runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {});
+
+    expect(deps.promptTelemetry?.create).toHaveBeenCalledWith(
+      expect.objectContaining({ invocationId: 'thread-1:plan:2', attempt: 2 }),
+    );
+    // Wrapper appended this invocation's entry on top of the pre-seeded one.
+    expect(context.promptTelemetry).toHaveLength(2);
+  });
+
+  it('runProviderPhaseCore returns a diagnostic delta without mutating context', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan']),
+      generate: vi.fn(async () => ({ rawOutput: 'done', exitCode: 0 })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    deps.promptTelemetry = {
+      create: vi.fn(() => {
+        throw new Error('telemetry offline');
+      }),
+    } as never;
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+    const input = buildPhasePayload(context, 'plan');
+
+    const result = await runtime.runProviderPhaseCore(input, 'prompt', [], {});
+
+    expect(result.deltas.diagnosticEntry).toEqual({
+      phase: 'plan',
+      message: 'telemetry offline',
+      nonFatal: true,
+    });
+    expect(context.promptTelemetryDiagnostics).toHaveLength(0);
   });
 
   it('keeps provider exception handling nonfatal when error logging fails', async () => {
@@ -1358,8 +1500,9 @@ describe('createPipelineRuntime', () => {
     } as never;
     const runtime = createPipelineRuntime(deps, {} as never);
 
+    const context = makeContext();
     await expect(
-      runtime.runProviderPhase(makeContext(), 'execute', 'prompt', [], {}),
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'execute'), 'prompt', [], {}),
     ).rejects.toThrow('provider exploded');
   });
 
@@ -1681,9 +1824,9 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
 
-    await expect(runtime.runProviderPhase(context, 'execute', 'prompt', [], {})).rejects.toThrow(
-      'provider exploded',
-    );
+    await expect(
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'execute'), 'prompt', [], {}),
+    ).rejects.toThrow('provider exploded');
     expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
       'step-1',
       expect.objectContaining({
@@ -1951,9 +2094,9 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
 
-    await expect(runtime.runProviderPhase(context, 'plan', 'prompt', [], {})).rejects.toBe(
-      'provider string failure',
-    );
+    await expect(
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {}),
+    ).rejects.toBe('provider string failure');
 
     expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
       'step-1',
@@ -1980,9 +2123,9 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
     const context = makeContext();
 
-    await expect(runtime.runProviderPhase(context, 'execute', 'prompt', [], {})).resolves.toEqual(
-      expect.objectContaining({ rawOutput: 'failed', exitCode: 2 }),
-    );
+    await expect(
+      runtime.runProviderPhase(context, buildPhasePayload(context, 'execute'), 'prompt', [], {}),
+    ).resolves.toEqual(expect.objectContaining({ rawOutput: 'failed', exitCode: 2 }));
 
     expect(deps.pipelineSteps?.complete).toHaveBeenCalledWith(
       'step-1',

@@ -103,6 +103,22 @@ describe('TerminalTranscript', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders user steering input as a distinct user block', () => {
+    renderTranscript(
+      <TerminalTranscript
+        events={[
+          makeTextEvent({
+            id: 'event-user-1',
+            event: { kind: 'user_input', content: 'Use the existing helper.' },
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('User')).toBeInTheDocument();
+    expect(screen.getByText('Use the existing helper.')).toBeInTheDocument();
+  });
+
   it('offers auto fix on failed console output and passes the captured failure text', () => {
     const event = makeRawErrorEvent();
     const onAutoFix = vi.fn();

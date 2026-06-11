@@ -1,11 +1,9 @@
 import { execFile } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
-import { dirname, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import {
   formatPlanComment,
   GhCli,
-  loadRepoSetupContract,
+  isPoolExhausted,
   measurePhasePromptTelemetry,
   type PromptMaterial,
   type ProviderPhase,
@@ -13,9 +11,11 @@ import {
   toPersistedPromptTelemetryMaterials,
 } from '@shipcode/agents/source';
 import {
+  type AppSettings,
   isPipelineStateLabel,
   isRealGithubIssueNumber,
   macroColumnForStatus,
+  type ProviderRunMode,
   pipelineLabelForStatus,
 } from '@shipcode/shared';
 import {
@@ -26,72 +26,33 @@ import {
 } from '@shipcode/shared/source';
 import { GhSyncQueue, type GhSyncWriteOpts } from '../gh-sync-queue';
 import { syncThreadAndIssuePhase } from '../phase-sync';
-import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../types';
+import type {
+  OrchestratorState,
+  PhasePayload,
+  PipelineContext,
+  PipelineDeps,
+  PipelineExecutorModel,
+  ProviderPhaseDeltas,
+} from '../types';
+import { createRuntimeSetupHandlers } from './runtime-setup';
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
+
+export { buildFrozenInstallFallback, resolveSetupShell } from './runtime-setup';
 
 const execFileAsync = promisify(execFile);
 
 /**
- * Build a fallback install command when a frozen-lockfile install fails
- * because of lockfile drift or a manifest/lockfile mismatch. Returns
- * null when the failure signature doesn't match a known fallback case
- * — the original error stands.
+ * Resolve the configured run mode (interactive vs programmatic) for a given
+ * agent + pipeline phase from settings. Every provider phase now carries its
+ * own selectable run mode (defaults to interactive so phases avoid the
+ * rationed `claude -p` Agent-SDK credit pool); programmatic remains opt-in.
  */
-export function buildFrozenInstallFallback(command: string, output: string): string | null {
-  const trimmed = command.trim();
-  // bun install --frozen-lockfile
-  if (/^bun\s+install\s+.*--frozen-lockfile/.test(trimmed)) {
-    if (/lockfile|resolution|min[- ]release[- ]age|version mismatch/i.test(output)) {
-      return trimmed.replace(/\s*--frozen-lockfile/, '');
-    }
-    return null;
-  }
-  // pnpm install --frozen-lockfile
-  if (/^pnpm\s+install\s+.*--frozen-lockfile/.test(trimmed)) {
-    if (/ERR_PNPM|lockfile|resolution|specifiers in/i.test(output)) {
-      return trimmed.replace(/\s*--frozen-lockfile/, '');
-    }
-    return null;
-  }
-  // yarn install --frozen-lockfile
-  if (/^yarn\s+install\s+.*--frozen-lockfile/.test(trimmed)) {
-    if (/lockfile|resolution|YN0028|frozen/i.test(output)) {
-      return trimmed.replace(/\s*--frozen-lockfile/, '');
-    }
-    return null;
-  }
-  // npm ci → npm install
-  if (/^npm\s+ci(\s|$)/.test(trimmed)) {
-    if (/EUSAGE|package-lock|lockfile|ELOCK/i.test(output)) {
-      return trimmed.replace(/^npm\s+ci/, 'npm install');
-    }
-    return null;
-  }
-  return null;
-}
-const TRUSTED_LOGIN_SHELLS = new Set([
-  '/bin/bash',
-  '/bin/zsh',
-  '/usr/bin/bash',
-  '/usr/bin/zsh',
-  '/usr/local/bin/bash',
-  '/usr/local/bin/zsh',
-  '/opt/homebrew/bin/bash',
-  '/opt/homebrew/bin/zsh',
-]);
-
-export function resolveSetupShell(
-  shellExists: (path: string) => boolean = existsSync,
-  preferred = process.env.SHELL,
-): { command: string; args: (setupCommand: string) => string[] } {
-  if (preferred && TRUSTED_LOGIN_SHELLS.has(preferred) && shellExists(preferred)) {
-    return { command: preferred, args: (setupCommand) => ['-ilc', setupCommand] };
-  }
-  for (const shell of ['/bin/zsh', '/bin/bash']) {
-    if (shellExists(shell))
-      return { command: shell, args: (setupCommand) => ['-ilc', setupCommand] };
-  }
-  return { command: '/bin/sh', args: (setupCommand) => ['-c', setupCommand] };
+function getAgentPhaseRunMode(
+  settings: AppSettings,
+  agent: 'claude' | 'codex',
+  phase: ProviderPhase,
+): ProviderRunMode {
+  return settings.agentRunModes[agent][phase];
 }
 
 /**
@@ -152,276 +113,18 @@ export function createPipelineRuntime(
     });
   }
 
-  function ensurePathInsideRoot(root: string, targetPath: string, label: string): string {
-    const resolvedRoot = resolve(root);
-    const resolvedTarget = resolve(targetPath);
-    if (resolvedTarget === resolvedRoot || resolvedTarget.startsWith(resolvedRoot + sep)) {
-      return resolvedTarget;
-    }
-    throw new Error(`${label} escapes the project root`);
-  }
-
-  function ensureRepoSetupContract(context: PipelineContext) {
-    if (context.repoSetupLoaded) return context.repoSetupContract;
-    context.repoSetupContract = loadRepoSetupContract(context.projectPath);
-    context.repoSetupLoaded = true;
-    return context.repoSetupContract;
-  }
-
-  const SHELL_COMMAND_TIMEOUT_FALLBACK_MS = 10 * 60 * 1000;
-
-  function resolveShellTimeoutMs(context?: PipelineContext): number {
-    const override = context?.repoSetupContract?.contract.shellCommandTimeoutMs;
-    if (typeof override === 'number' && override > 0) return override;
-    const fromSettings = deps.settings.get().shellCommandTimeoutMs;
-    if (typeof fromSettings === 'number' && fromSettings > 0) return fromSettings;
-    return SHELL_COMMAND_TIMEOUT_FALLBACK_MS;
-  }
-
-  async function runShellCommand(
-    threadId: string,
-    cwd: string,
-    command: string,
-    signal: AbortSignal,
-    options?: { extraEnv?: Record<string, string>; timeoutMs?: number },
-  ): Promise<{ exitCode: number; output: string }> {
-    const timeoutMs = options?.timeoutMs ?? resolveShellTimeoutMs();
-    return await new Promise((resolvePromise, rejectPromise) => {
-      let settled = false;
-      const chunks: string[] = [];
-      const shell = resolveSetupShell();
-      const managed = deps.processManager.spawnWithStdin(
-        'shell',
-        shell.command,
-        shell.args(command),
-        cwd,
-        '',
-        threadId,
-        {
-          detached: true,
-          extraEnv: options?.extraEnv,
-        },
-      );
-
-      const cleanup = () => {
-        clearTimeout(timer);
-        deps.processManager.removeListener('output', onOutput);
-        deps.processManager.removeListener('exit', onExit);
-        signal.removeEventListener('abort', onAbort);
-      };
-
-      const rejectOnce = (error: Error) => {
-        settled = true;
-        cleanup();
-        rejectPromise(error);
-      };
-
-      const timer = setTimeout(() => {
-        if (settled) return;
-        emitTerminalRaw(
-          threadId,
-          `\r\n[shipcode] Command timed out after ${Math.round(timeoutMs / 60_000)}m — killing process.\r\n`,
-        );
-        deps.processManager.kill(managed.id);
-        setTimeout(() => {
-          try {
-            const proc = deps.processManager.get(managed.id);
-            if (proc && proc.state !== 'exited') deps.processManager.kill(managed.id, 'SIGKILL');
-          } catch {}
-        }, 5_000);
-        rejectOnce(
-          new Error(
-            `Command timed out after ${Math.round(timeoutMs / 60_000)} minutes: ${command}`,
-          ),
-        );
-      }, timeoutMs);
-
-      const onOutput = (processId: string, chunk: string) => {
-        if (processId !== managed.id) return;
-        chunks.push(chunk);
-        emitTerminalRaw(threadId, chunk);
-      };
-
-      const onExit = (processId: string, exitCode: number) => {
-        if (processId !== managed.id || settled) return;
-        settled = true;
-        const output = chunks.join('');
-        cleanup();
-        resolvePromise({ exitCode, output });
-      };
-
-      const onAbort = () => {
-        if (settled) return;
-        deps.processManager.kill(managed.id);
-        rejectOnce(new Error(`Command aborted: ${command}`));
-      };
-
-      deps.processManager.on('output', onOutput);
-      deps.processManager.on('exit', onExit);
-      signal.addEventListener('abort', onAbort, { once: true });
-    });
-  }
-
-  async function prepareWorktree(
-    context: PipelineContext,
-    stage: 'execute' | 'verify',
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
-    const loaded = ensureRepoSetupContract(context);
-    if (!loaded || !context.worktreePath) return { ok: true };
-
-    const { contract, path: contractPath } = loaded;
-    const shouldRunSetup =
-      stage === 'execute' || (stage === 'verify' && contract.setupBeforeVerify);
-    if (!shouldRunSetup && contract.envFiles.length === 0) return { ok: true };
-
-    emitTerminalLifecycle(
-      context.threadId,
-      `[setup] Using repo setup contract ${contractPath}\r\n`,
-    );
-
-    for (const envFile of contract.envFiles) {
-      try {
-        const sourcePath = ensurePathInsideRoot(
-          context.projectPath,
-          resolve(context.projectPath, envFile.source),
-          `env file source "${envFile.source}"`,
-        );
-        const targetRelative = envFile.target ?? envFile.source;
-        const targetPath = ensurePathInsideRoot(
-          context.worktreePath,
-          resolve(context.worktreePath, targetRelative),
-          `env file target "${targetRelative}"`,
-        );
-
-        if (!existsSync(sourcePath)) {
-          if (envFile.required) {
-            return { ok: false, error: `required env file missing: ${envFile.source}` };
-          }
-          emitTerminalLifecycle(
-            context.threadId,
-            `[setup] Optional env file missing, skipping ${envFile.source}\r\n`,
-          );
-          continue;
-        }
-
-        mkdirSync(dirname(targetPath), { recursive: true });
-        copyFileSync(sourcePath, targetPath);
-        emitTerminalLifecycle(
-          context.threadId,
-          `[setup] Copied ${envFile.source} -> ${targetRelative}\r\n`,
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { ok: false, error: message };
-      }
-    }
-
-    if (!shouldRunSetup) return { ok: true };
-
-    for (const command of contract.setupCommands) {
-      emitTerminalLifecycle(context.threadId, `[setup] $ ${command}\r\n`);
-      try {
-        const result = await runShellCommand(
-          context.threadId,
-          context.worktreePath,
-          command,
-          context.abort.signal,
-        );
-        if (result.exitCode !== 0) {
-          const snippet = result.output.trim().split('\n').slice(-3).join(' ').slice(0, 300);
-          // Retry a frozen-lockfile install without the freeze flag when
-          // the failure looks like lockfile drift / resolution mismatch.
-          // Repo-owned lockfiles drift quickly and a hard-fail blocks the
-          // whole pipeline; falling back to a normal install matches what
-          // a human would do.
-          const fallback = buildFrozenInstallFallback(command, result.output);
-          if (fallback) {
-            emitTerminalLifecycle(
-              context.threadId,
-              `[setup] frozen install failed — retrying without --frozen-lockfile: $ ${fallback}\r\n`,
-            );
-            try {
-              const retry = await runShellCommand(
-                context.threadId,
-                context.worktreePath,
-                fallback,
-                context.abort.signal,
-              );
-              if (retry.exitCode === 0) continue;
-              const retrySnippet = retry.output
-                .trim()
-                .split('\n')
-                .slice(-3)
-                .join(' ')
-                .slice(0, 300);
-              return {
-                ok: false,
-                error: `command failed after fallback (${retry.exitCode}): ${fallback}${retrySnippet ? ` — ${retrySnippet}` : ''}`,
-              };
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error);
-              return {
-                ok: false,
-                error: `command error during fallback: ${fallback} — ${message}`,
-              };
-            }
-          }
-          return {
-            ok: false,
-            error: `command failed (${result.exitCode}): ${command}${snippet ? ` — ${snippet}` : ''}`,
-          };
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { ok: false, error: `command error: ${command} — ${message}` };
-      }
-    }
-
-    return { ok: true };
-  }
-
-  function getTestingContext(context: PipelineContext): string | null {
-    const loaded = ensureRepoSetupContract(context);
-    return loaded?.contract.testingContext ?? deps.settings.get().testingContext;
-  }
-
-  function getVerifyCommands(context: PipelineContext): string[] {
-    const loaded = ensureRepoSetupContract(context);
-    if (loaded && loaded.contract.verifyCommands.length > 0) {
-      return loaded.contract.verifyCommands;
-    }
-    const testCommand = deps.settings.get().testCommand?.trim();
-    return testCommand ? [testCommand] : [];
-  }
-
-  function buildRepoSetupPlannerNote(context: PipelineContext): string {
-    const loaded = ensureRepoSetupContract(context);
-    if (!loaded) return '';
-
-    const bits: string[] = [];
-    if (loaded.contract.setupCommands.length > 0) {
-      bits.push(
-        `Setup commands: ${loaded.contract.setupCommands.map((command) => `\`${command}\``).join(', ')}`,
-      );
-    }
-    if (loaded.contract.verifyCommands.length > 0) {
-      bits.push(
-        `Verification commands: ${loaded.contract.verifyCommands
-          .map((command) => `\`${command}\``)
-          .join(', ')}`,
-      );
-    }
-    if (loaded.contract.envFiles.length > 0) {
-      bits.push(
-        `Env files propagated into the worktree: ${loaded.contract.envFiles
-          .map((file) => `\`${file.source}\`${file.required ? '' : ' (optional)'}`)
-          .join(', ')}`,
-      );
-    }
-    if (bits.length === 0) return '';
-
-    return `\n\n<!-- auto-injected: repo setup contract -->\nNote: This repo defines a setup contract in \`.shipcode/setup.json\`.\n${bits.join('\n')}`;
-  }
+  const {
+    ensureRepoSetupContract,
+    runShellCommand,
+    prepareWorktree,
+    getTestingContext,
+    getVerifyCommands,
+    buildRepoSetupPlannerNote,
+  } = createRuntimeSetupHandlers({
+    deps,
+    emitTerminalRaw,
+    emitTerminalLifecycle,
+  });
 
   function formatStabilizationFeedback(inputs: {
     prNumber: number;
@@ -531,67 +234,77 @@ export function createPipelineRuntime(
   }
 
   function resolveAgentForPhase(
-    context: PipelineContext,
+    input: Pick<
+      OrchestratorState,
+      'plannerModel' | 'reviewerModel' | 'verifierModel' | 'executorModel'
+    >,
     phase: ProviderPhase,
   ): PipelineExecutorModel {
     switch (phase) {
       case 'plan':
       case 'revision':
-        return context.plannerModel;
+        return input.plannerModel;
       case 'review':
-        return context.reviewerModel;
+        return input.reviewerModel;
       case 'verify':
-        return context.verifierModel;
+        return input.verifierModel;
       case 'execute':
-        if (context.executorModel) return context.executorModel;
+        if (input.executorModel) return input.executorModel;
         return 'claude';
     }
   }
 
-  async function runProviderPhase(
-    context: PipelineContext,
-    phase: ProviderPhase,
+  /**
+   * Pure provider-phase execution. Reads only the frozen `PhasePayload` snapshot
+   * — never the mutable `PipelineContext` — and returns the context mutations it
+   * would have made (`deltas`) for the orchestrator to apply. The
+   * `runProviderPhase` wrapper builds the payload (via `buildPhasePayload`) and
+   * applies the deltas.
+   */
+  async function runProviderPhaseCore(
+    input: PhasePayload,
     prompt: string,
     promptMaterials: PromptMaterial[],
     phaseHints: ProviderRequest['phaseHints'],
+    lifecycle?: { onProcessStart?: (processId: string) => void },
   ): Promise<{
     rawOutput: string;
     exitCode: number;
     resolvedModel?: string;
     promptTelemetry?: import('@shipcode/agents/source').PhasePromptTelemetry;
     clarificationRequest?: import('@shipcode/shared').ClarificationRequest;
+    deltas: ProviderPhaseDeltas;
   }> {
-    const agent = resolveAgentForPhase(context, phase);
+    // PhasePayload pre-resolves the phase's agent + model-id override (identical
+    // logic to the old internal `resolveAgentForPhase` + `modelHint` IIFE).
+    const phase = input.phase;
+    const agent = input.model;
+    const modelHint = input.modelIdOverride;
     const provider = deps.providers.for(agent, phase);
     // When a GitHub issue is resumed, planning/review should inspect the same
     // worktree that already contains in-progress changes instead of the clean
     // project root.
-    const cwd = context.worktreePath ?? context.projectPath;
-    const modelHint = (() => {
-      if (agent === context.executorModel && context.executorModelOverride) {
-        return context.executorModelOverride;
-      }
-      switch (phase) {
-        case 'plan':
-        case 'revision':
-          return context.plannerModelIdOverride;
-        case 'review':
-          return context.reviewerModelIdOverride;
-        case 'execute':
-          return context.executorModelIdOverride;
-        case 'verify':
-          return context.verifierModelIdOverride;
-      }
-    })();
+    const cwd = input.worktreePath ?? input.projectPath;
 
-    const plannerPhases: ProviderPhase[] = ['plan', 'revision', 'verify'];
-    const configuredRunMode =
-      phase === 'execute' && (agent === 'claude' || agent === 'codex')
-        ? deps.settings.get().agentRunModes[agent].execute
+    // Structured phases parse machine-readable fenced JSON and cap turns at 1.
+    const structuredPhases: ProviderPhase[] = ['plan', 'review', 'revision', 'verify'];
+    const configuredRunMode: ProviderRunMode | undefined =
+      agent === 'claude' || agent === 'codex'
+        ? getAgentPhaseRunMode(deps.settings.get(), agent, phase)
         : undefined;
-    const mergedHints: ProviderRequest['phaseHints'] = plannerPhases.includes(phase)
-      ? { maxTurns: 1, ...phaseHints }
-      : { ...phaseHints, ...(configuredRunMode ? { runMode: configuredRunMode } : {}) };
+    // Auto-fallback: when the rationed `claude -p` Agent-SDK credit pool is
+    // exhausted, route programmatic claude phases through the interactive CLI
+    // (which is unaffected by the pool) instead of failing. Codex has no such
+    // pool, so it is never rerouted here.
+    const effectiveRunMode: ProviderRunMode | undefined =
+      agent === 'claude' && configuredRunMode === 'programmatic' && isPoolExhausted()
+        ? 'interactive'
+        : configuredRunMode;
+    const mergedHints: ProviderRequest['phaseHints'] = {
+      ...(structuredPhases.includes(phase) ? { maxTurns: 1 } : {}),
+      ...phaseHints,
+      ...(effectiveRunMode ? { runMode: effectiveRunMode } : {}),
+    };
 
     // Lifecycle envelope: start a pipeline_step_log row before generation so
     // a crashed run still leaves a 'started' breadcrumb. The completion path
@@ -600,10 +313,10 @@ export function createPipelineRuntime(
       try {
         return (
           deps.pipelineSteps?.start({
-            threadId: context.threadId,
-            runId: context.runId,
+            threadId: input.threadId,
+            runId: input.runId,
             phase,
-            attempt: context.promptTelemetry.length + 1,
+            attempt: input.promptTelemetryCount + 1,
             provider: provider.id,
             requestedModel: modelHint ?? agent,
           }) ?? null
@@ -620,10 +333,10 @@ export function createPipelineRuntime(
       try {
         return (
           deps.agentConversations?.insert({
-            threadId: context.threadId,
-            runId: context.runId,
+            threadId: input.threadId,
+            runId: input.runId,
             phase,
-            round: context.promptTelemetry.length,
+            round: input.promptTelemetryCount,
             speaker: 'pipeline',
             role: 'prompt',
             provider: provider.id,
@@ -642,17 +355,18 @@ export function createPipelineRuntime(
       // Defense in depth: only assert workspace shape when running inside a
       // worktree. Plan/review for issues that haven't materialized a
       // worktree yet still spawn at the project root and skip the check.
-      const workspaceRoot = context.worktreePath ? deps.settings.get().worktreeRoot : undefined;
+      const workspaceRoot = input.worktreePath ? deps.settings.get().worktreeRoot : undefined;
       response = await provider.generate({
         phase,
         prompt,
         cwd,
-        projectPath: context.projectPath,
-        signal: context.abort.signal,
+        projectPath: input.projectPath,
+        signal: input.abort,
         phaseHints: mergedHints,
-        promptMaterialSummary: context.promptMaterialSummaries[phase],
+        promptMaterialSummary: input.promptMaterialSummary,
         modelHint: modelHint ?? undefined,
-        threadId: context.threadId,
+        threadId: input.threadId,
+        onProcessStart: lifecycle?.onProcessStart,
         ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
         githubGraphql: {
           // Token read happens at tool-call time, not now — captures
@@ -660,7 +374,7 @@ export function createPipelineRuntime(
           getToken: () => readGhAuthToken(),
           getDefaultRepo: async () => {
             try {
-              const { githubRepoFullName } = await new GhCli(context.projectPath).getRepoMetadata();
+              const { githubRepoFullName } = await new GhCli(input.projectPath).getRepoMetadata();
               const [owner, repo] = githubRepoFullName.split('/');
               if (!owner || !repo) return null;
               return { owner, repo };
@@ -672,22 +386,22 @@ export function createPipelineRuntime(
         onTerminalEvent: (event) =>
           deps.emitter.emit({
             type: 'terminal:event',
-            threadId: context.threadId,
-            ...(context.runId ? { runId: context.runId } : {}),
+            threadId: input.threadId,
+            ...(input.runId ? { runId: input.runId } : {}),
             event,
           }),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const aborted = context.abort.signal.aborted || /abort/i.test(message);
+      const aborted = input.abort.aborted || /abort/i.test(message);
 
       // Conversation log: write synthetic error response row.
       try {
         deps.agentConversations?.insert({
-          threadId: context.threadId,
-          runId: context.runId,
+          threadId: input.threadId,
+          runId: input.runId,
           phase,
-          round: context.promptTelemetry.length,
+          round: input.promptTelemetryCount,
           speaker: 'pipeline',
           role: 'response',
           parentId: promptConvRow?.id ?? null,
@@ -715,10 +429,10 @@ export function createPipelineRuntime(
     // Conversation log: write the provider response row.
     try {
       deps.agentConversations?.insert({
-        threadId: context.threadId,
-        runId: context.runId,
+        threadId: input.threadId,
+        runId: input.runId,
         phase,
-        round: context.promptTelemetry.length,
+        round: input.promptTelemetryCount,
         speaker: provider.id,
         role: 'response',
         parentId: promptConvRow?.id ?? null,
@@ -768,14 +482,18 @@ export function createPipelineRuntime(
       prompt,
       materials: promptMaterials,
     });
-    context.promptTelemetry.push(promptTelemetry);
+    // Mutation delta, applied to context by the caller. The "+ 1" reproduces
+    // the old post-push `promptTelemetry.length` (count at snapshot time, plus
+    // this very entry) used for invocationId/attempt.
+    const deltas: ProviderPhaseDeltas = { promptTelemetry, diagnosticEntry: null };
+    const nextAttempt = input.promptTelemetryCount + 1;
     try {
       deps.promptTelemetry?.create({
-        threadId: context.threadId,
-        runId: context.runId,
+        threadId: input.threadId,
+        runId: input.runId,
         phase,
-        invocationId: `${context.threadId}:${phase}:${context.promptTelemetry.length}`,
-        attempt: context.promptTelemetry.length,
+        invocationId: `${input.threadId}:${phase}:${nextAttempt}`,
+        attempt: nextAttempt,
         provider: provider.id,
         model: response.resolvedModel ?? modelHint ?? agent,
         promptCharacters: promptTelemetry.promptSize.characters,
@@ -790,21 +508,21 @@ export function createPipelineRuntime(
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      context.promptTelemetryDiagnostics.push({ phase, message, nonFatal: true });
+      deltas.diagnosticEntry = { phase, message, nonFatal: true };
       console.error('[pipeline] prompt telemetry persistence failed:', error);
     }
 
     if (response.resolvedModel) {
       const requestedModel = modelHint ?? agent;
       try {
-        deps.threads.setResolvedModel(context.threadId, phase, response.resolvedModel);
+        deps.threads.setResolvedModel(input.threadId, phase, response.resolvedModel);
       } catch (error) {
         console.error('[pipeline] setResolvedModel failed:', error);
       }
       if (response.tokensUsed) {
         try {
           deps.threads.addTokenUsage(
-            context.threadId,
+            input.threadId,
             response.tokensUsed.prompt,
             response.tokensUsed.completion,
             response.costUsd ?? 0,
@@ -815,8 +533,8 @@ export function createPipelineRuntime(
       }
       deps.emitter.emit({
         type: 'pipeline:model-resolved',
-        threadId: context.threadId,
-        ...(context.runId ? { runId: context.runId } : {}),
+        threadId: input.threadId,
+        ...(input.runId ? { runId: input.runId } : {}),
         phase,
         requestedModel,
         resolvedModel: response.resolvedModel,
@@ -831,7 +549,54 @@ export function createPipelineRuntime(
       resolvedModel: response.resolvedModel,
       promptTelemetry,
       clarificationRequest: response.clarificationRequest,
+      deltas,
     };
+  }
+
+  /**
+   * Orchestrator seam: run the pure core against the caller-built frozen
+   * `PhasePayload`, then apply the returned mutation deltas back to context. The
+   * caller builds the payload (capturing `promptTelemetryCount`) immediately
+   * before this call with no intervening telemetry push, so the count stays
+   * consistent with the push below.
+   */
+  async function runProviderPhase(
+    context: PipelineContext,
+    payload: PhasePayload,
+    prompt: string,
+    promptMaterials: PromptMaterial[],
+    phaseHints: ProviderRequest['phaseHints'],
+  ): Promise<{
+    rawOutput: string;
+    exitCode: number;
+    resolvedModel?: string;
+    promptTelemetry?: import('@shipcode/agents/source').PhasePromptTelemetry;
+    clarificationRequest?: import('@shipcode/shared').ClarificationRequest;
+  }> {
+    let phaseProcessId: string | null = null;
+    try {
+      const { deltas, ...response } = await runProviderPhaseCore(
+        payload,
+        prompt,
+        promptMaterials,
+        phaseHints,
+        {
+          onProcessStart: (processId) => {
+            phaseProcessId = processId;
+            context.activeProcessId = processId;
+          },
+        },
+      );
+      context.promptTelemetry.push(deltas.promptTelemetry);
+      if (deltas.diagnosticEntry !== null) {
+        context.promptTelemetryDiagnostics.push(deltas.diagnosticEntry);
+      }
+      return response;
+    } finally {
+      if (phaseProcessId !== null && context.activeProcessId === phaseProcessId) {
+        context.activeProcessId = null;
+      }
+    }
   }
 
   /** Perform the actual GH write for a single state snapshot. */
@@ -1147,6 +912,7 @@ export function createPipelineRuntime(
     formatTestFixFeedback,
     resolveAgentForPhase,
     runProviderPhase,
+    runProviderPhaseCore,
     emitPhase,
     postPlanComment,
     postTaskGraphComment,

@@ -1,3 +1,12 @@
+export type { PoolExhaustionMatcher, PoolExhaustionState } from './agent-sdk-pool-state';
+export {
+  __resetPoolStateForTests,
+  classifyPoolExhaustion,
+  clearPoolExhausted,
+  getPoolState,
+  isPoolExhausted,
+  markPoolExhausted,
+} from './agent-sdk-pool-state';
 export type {
   AutoCommitGenerateInput,
   AutoCommitGenerateResult,
@@ -61,6 +70,8 @@ export {
   checkCliProviderUsage,
   checkCodexAuth,
   checkCodexModelCapabilities,
+  checkCursorAuth,
+  checkCursorModelCapabilities,
   checkDesktopApps,
   checkGeminiAuth,
   checkGeminiModelCapabilities,
@@ -140,6 +151,8 @@ export {
   EXECUTION_NOTES_FILE,
   EXECUTION_NOTES_PROTOCOL,
 } from './prompts/execute-prompt';
+export type { IssueRunPromptContext } from './prompts/issue-run-prompt';
+export { buildIssueRunPrompt } from './prompts/issue-run-prompt';
 export type {
   PhasePromptContextSlice,
   PhasePromptPolicy,
@@ -221,5 +234,5 @@ export {
   validateSkill,
 } from './skills';
 export type { ParseResult } from './stream-parser';
-export { extractCodexThreadId, StreamParser } from './stream-parser';
+export { extractCodexThreadId, resolveCliText, StreamParser } from './stream-parser';
 export type { TerminalEvent } from './terminal-events';

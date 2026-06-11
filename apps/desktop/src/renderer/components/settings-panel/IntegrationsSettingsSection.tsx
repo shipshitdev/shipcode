@@ -24,6 +24,39 @@ import { FolderGit, Sparkles, Terminal } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
+// Render-invariant statics — hoisted to module scope so they are not recreated
+// on every render of the settings view.
+const getCliVersionLine = (version: string | null): string | null =>
+  version?.split('\n')[0]?.trim() ?? null;
+
+const missingCli = {
+  available: false,
+  version: null,
+  path: null,
+  error: null,
+  authenticated: false,
+};
+
+const projectOpenTargets: ProjectOpenTarget[] = [
+  'cursor',
+  'finder',
+  'terminal',
+  'ghostty',
+  'vscode',
+  't3code',
+];
+
+const projectOpenTargetLabels: Record<ProjectOpenTarget, string> = {
+  cursor: 'Cursor',
+  finder: 'Finder',
+  terminal: 'Terminal',
+  ghostty: 'Ghostty',
+  vscode: 'Visual Studio Code',
+  t3code: 'T3 Code',
+};
+
+const terminalOpenTargets: AppSettings['terminalOpenTarget'][] = ['terminal', 'ghostty'];
+
 function StatusPill({
   tone,
   children,
@@ -46,6 +79,27 @@ function StatusPill({
     >
       {children}
     </span>
+  );
+}
+
+function DesktopAppHealthCard({ app }: { app: DesktopAppHealth }) {
+  return (
+    <div className="rounded-md border border-border bg-primary/40 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-[140px] text-[13px] font-medium text-primary">{app.label}</div>
+        <StatusPill tone={app.available ? 'success' : 'neutral'}>
+          {app.available ? 'Available' : 'Unavailable'}
+        </StatusPill>
+      </div>
+      <div className="mt-2 space-y-1 text-[12px] text-secondary">
+        {app.path ? (
+          <div>
+            Path: <code>{app.path}</code>
+          </div>
+        ) : null}
+        {app.error ? <div className="text-amber-300">{app.error}</div> : null}
+      </div>
+    </div>
   );
 }
 
@@ -87,31 +141,6 @@ function useIntegrationsSettingsSectionView({
     } as const;
   };
 
-  const getCliVersionLine = (version: string | null) => version?.split('\n')[0]?.trim() ?? null;
-  const missingCli = {
-    available: false,
-    version: null,
-    path: null,
-    error: null,
-    authenticated: false,
-  };
-  const projectOpenTargets: ProjectOpenTarget[] = [
-    'cursor',
-    'finder',
-    'terminal',
-    'ghostty',
-    'vscode',
-    't3code',
-  ];
-  const projectOpenTargetLabels: Record<ProjectOpenTarget, string> = {
-    cursor: 'Cursor',
-    finder: 'Finder',
-    terminal: 'Terminal',
-    ghostty: 'Ghostty',
-    vscode: 'Visual Studio Code',
-    t3code: 'T3 Code',
-  };
-  const terminalOpenTargets: AppSettings['terminalOpenTarget'][] = ['terminal', 'ghostty'];
   const getDesktopApp = (target: ProjectOpenTarget): DesktopAppHealth =>
     integrationStatus?.desktopApps?.[target] ?? {
       key: target,
@@ -156,26 +185,7 @@ function useIntegrationsSettingsSectionView({
       <div className="space-y-2">
         {terminalOpenTargets.map((target) => {
           const app = getDesktopApp(target);
-          return (
-            <div key={target} className="rounded-md border border-border bg-primary/40 p-3">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-[140px] text-[13px] font-medium text-primary">
-                  {app.label}
-                </div>
-                <StatusPill tone={app.available ? 'success' : 'neutral'}>
-                  {app.available ? 'Available' : 'Unavailable'}
-                </StatusPill>
-              </div>
-              <div className="mt-2 space-y-1 text-[12px] text-secondary">
-                {app.path ? (
-                  <div>
-                    Path: <code>{app.path}</code>
-                  </div>
-                ) : null}
-                {app.error ? <div className="text-amber-300">{app.error}</div> : null}
-              </div>
-            </div>
-          );
+          return <DesktopAppHealthCard key={target} app={app} />;
         })}
       </div>
     </SettingsSection>
@@ -216,26 +226,7 @@ function useIntegrationsSettingsSectionView({
       <div className="space-y-2">
         {projectOpenTargets.map((target) => {
           const app = getDesktopApp(target);
-          return (
-            <div key={target} className="rounded-md border border-border bg-primary/40 p-3">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-[140px] text-[13px] font-medium text-primary">
-                  {app.label}
-                </div>
-                <StatusPill tone={app.available ? 'success' : 'neutral'}>
-                  {app.available ? 'Available' : 'Unavailable'}
-                </StatusPill>
-              </div>
-              <div className="mt-2 space-y-1 text-[12px] text-secondary">
-                {app.path ? (
-                  <div>
-                    Path: <code>{app.path}</code>
-                  </div>
-                ) : null}
-                {app.error ? <div className="text-amber-300">{app.error}</div> : null}
-              </div>
-            </div>
-          );
+          return <DesktopAppHealthCard key={target} app={app} />;
         })}
       </div>
     </SettingsSection>
@@ -270,6 +261,7 @@ function useIntegrationsSettingsSectionView({
               { key: 'claude', label: 'Claude CLI' },
               { key: 'codex', label: 'Codex CLI' },
               { key: 'gemini', label: 'Gemini CLI' },
+              { key: 'cursor', label: 'Cursor CLI' },
               { key: 'gh', label: 'GitHub CLI' },
             ].map(({ key, label }) => {
               const cli =
@@ -279,7 +271,9 @@ function useIntegrationsSettingsSectionView({
                     ? integrationStatus.system.codex
                     : key === 'gemini'
                       ? (integrationStatus.system.gemini ?? missingCli)
-                      : integrationStatus.system.gh;
+                      : key === 'cursor'
+                        ? (integrationStatus.system.cursor ?? missingCli)
+                        : integrationStatus.system.gh;
               const ghScope =
                 key === 'gh'
                   ? integrationStatus.ghAuth.hasProjectScope === true
@@ -290,13 +284,13 @@ function useIntegrationsSettingsSectionView({
                   : null;
               const versionLine = getCliVersionLine(cli.version);
               const Icon =
-                key === 'claude' || key === 'gemini'
+                key === 'claude' || key === 'gemini' || key === 'cursor'
                   ? Sparkles
                   : key === 'codex'
                     ? Terminal
                     : FolderGit;
               const modelCapabilities =
-                key === 'claude' || key === 'codex' || key === 'gemini'
+                key === 'claude' || key === 'codex' || key === 'gemini' || key === 'cursor'
                   ? integrationStatus.modelCapabilities?.[key]
                   : null;
 

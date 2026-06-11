@@ -119,6 +119,12 @@ describe('pipelineLabelForStatus', () => {
     expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.shipping)).toBe(
       'shipcode:pipeline:shipping',
     );
+    expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.needsReview)).toBe(
+      'shipcode:pipeline:needs_review',
+    );
+    expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.readyToMerge)).toBe(
+      'shipcode:pipeline:ready_to_merge',
+    );
     expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.clarifying)).toBe(
       'shipcode:pipeline:clarifying',
     );
@@ -204,6 +210,8 @@ describe('macroColumnForStatus', () => {
   it('maps human-review statuses → human_review', () => {
     expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.clarifying)).toBe('human_review');
     expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.approval)).toBe('human_review');
+    expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.needsReview)).toBe('human_review');
+    expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.readyToMerge)).toBe('human_review');
     expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.paused)).toBe('human_review');
     expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.failed)).toBe('human_review');
   });

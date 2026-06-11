@@ -133,6 +133,7 @@ export function DroppableColumn({
   return (
     <div
       ref={setNodeRef}
+      data-testid={`kanban-column-${columnKey}`}
       className={cn(
         'flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border/40 bg-secondary transition-colors',
         compact ? 'min-w-0 max-w-none basis-0' : 'max-w-[300px] min-w-[240px]',
@@ -541,6 +542,7 @@ export function StackedColumn({
 
   return (
     <div
+      data-testid={`kanban-column-${column.key}`}
       className={cn(
         'flex min-h-0 flex-col overflow-hidden rounded-md border border-border/40 bg-secondary',
         compact ? 'min-w-0 max-w-none flex-1 basis-0' : 'min-w-[280px] max-w-[360px] flex-[1.3]',

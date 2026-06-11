@@ -1,6 +1,6 @@
 {
   "name": "@shipcode/pipeline",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -29,6 +29,6 @@
   },
   "devDependencies": {
     "typescript": "6.0.3",
-    "vitest": "4.1.6"
+    "vitest": "4.1.8"
   }
 }

@@ -60,6 +60,8 @@ import type {
   RecentTask,
   RepoMemoryStatus,
   RepoSetupContract,
+  ReviewFindingRecord,
+  ReviewFindingStatus,
   ReviewRecord,
   ShipCodePlan,
   SystemHealth,
@@ -210,6 +212,15 @@ export interface IpcInvokeChannels {
   'pipeline:reject': { args: { threadId: string; feedback: string }; result: undefined };
   'pipeline:stabilize-pr': { args: { threadId: string }; result: undefined };
   'pipeline:pause': { args: { threadId: string }; result: undefined };
+  'pipeline:steer-execution': {
+    args: { threadId: string; instruction: string };
+    result: {
+      threadId: string;
+      status: 'delivered' | 'stale' | 'rejected';
+      message: string;
+      processId: string | null;
+    };
+  };
   'pipeline:resume': { args: { threadId: string }; result: undefined };
   'pipeline:cancel': { args: { threadId: string }; result: undefined };
   'pipeline:skip-review': { args: { threadId: string }; result: undefined };
@@ -227,6 +238,18 @@ export interface IpcInvokeChannels {
   'plan:update': { args: { planId: string; structured: ShipCodePlan }; result: undefined };
 
   'review:get': { args: { planId: string }; result: ReviewRecord | null };
+  'review-findings:list-thread': {
+    args: { threadId: string; includeClosed?: boolean };
+    result: ReviewFindingRecord[];
+  };
+  'review-findings:list-open': {
+    args: { threadId: string };
+    result: ReviewFindingRecord[];
+  };
+  'review-findings:update-status': {
+    args: { findingId: string; status: Exclude<ReviewFindingStatus, 'open'> };
+    result: ReviewFindingRecord | null;
+  };
 
   'task-graph:get-latest': { args: { threadId: string }; result: TaskGraphWithNodes | null };
 
@@ -273,6 +296,7 @@ export interface IpcInvokeChannels {
 
   'health:check': { args: undefined; result: SystemHealth };
   'provider-usage:check': { args: undefined; result: CliProviderUsageMap };
+  'provider-usage:reset-claude-pool': { args: undefined; result: { ok: boolean } };
   'integrations:check': { args: undefined; result: IntegrationStatus };
   'integrations:validate-openrouter-model': {
     args: { modelId: string };
@@ -717,6 +741,52 @@ export interface IpcInvokeChannels {
   'instant:list': { args: undefined; result: Thread[] };
   'instant:cleanup': { args: undefined; result: { deleted: number } };
 
+  // Issue-scoped resumable chat sessions
+  'issue-chat:get-session': {
+    args: { threadId: string };
+    result: {
+      threadId: string;
+      provider: 'claude' | 'codex';
+      sessionId: string | null;
+      modelId: string | null;
+      reasoningEffort: ReasoningEffort | null;
+      worktreePath: string;
+    } | null;
+  };
+  'issue-chat:start': {
+    args: {
+      threadId: string;
+      provider: 'claude' | 'codex';
+      modelId?: string | null;
+      reasoningEffort?: ReasoningEffort;
+    };
+    result: {
+      threadId: string;
+      provider: 'claude' | 'codex';
+      modelId: string | null;
+      sessionId: string | null;
+      reasoningEffort: ReasoningEffort | null;
+      worktreePath: string;
+      reattached: boolean;
+      activeProcessId: string | null;
+    };
+  };
+  'issue-chat:turn': {
+    args: { threadId: string; text: string };
+    result: {
+      threadId: string;
+      promptId: string;
+      responseId: string;
+      round: number;
+      exitCode: number;
+      content: string;
+    };
+  };
+  'issue-chat:stop': {
+    args: { threadId: string };
+    result: { threadId: string; stopped: boolean };
+  };
+
   // Issue-linked interactive terminal sessions
   'issue-terminal:start': {
     args: {
@@ -811,6 +881,7 @@ export interface IpcStreamChannels {
   'activity:appended': ActivityEntry;
   'dashboard:invalidate': { kinds: Array<'stats' | 'activity' | 'running' | 'recent'> };
   'update:status-changed': UpdateStatus;
+  'workflow:reloaded': { path: string | null; ok: boolean; warning: string | null };
 }
 
 export type IpcInvokeChannel = keyof IpcInvokeChannels;

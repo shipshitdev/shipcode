@@ -1,11 +1,3 @@
-import { defineConfig } from 'vitest/config';
-import { withCoverage } from '../../vitest.coverage';
+import { definePackageVitestConfig } from '../../vitest.package-config';
 
-export default defineConfig({
-  test: withCoverage(
-    {
-      include: ['src/**/*.test.ts'],
-    },
-    ['src/**/*.{ts,tsx}'],
-  ),
-});
+export default definePackageVitestConfig();

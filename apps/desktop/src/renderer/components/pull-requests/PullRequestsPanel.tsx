@@ -46,7 +46,7 @@ export function PullRequestsPanel() {
   }
 
   return (
-    <div className="flex flex-1 min-w-0 overflow-hidden">
+    <div data-testid="pr-panel" className="flex flex-1 min-w-0 overflow-hidden">
       {/* Left: PR list */}
       <div className="flex w-80 shrink-0 flex-col border-r border-border">
         {/* Filter bar */}
@@ -54,6 +54,7 @@ export function PullRequestsPanel() {
           {FILTERS.map(({ value, label }) => (
             <Button
               key={value}
+              data-testid={`pr-filter-${value}`}
               variant="ghost"
               className={cn(
                 'h-6 px-2 text-[11px] font-medium text-secondary',
@@ -95,6 +96,7 @@ export function PullRequestsPanel() {
             pullRequests.map((pr) => (
               <Button
                 key={pr.number}
+                data-testid={`pr-list-item-${pr.number}`}
                 type="button"
                 variant="ghost"
                 className={cn(

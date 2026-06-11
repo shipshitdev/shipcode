@@ -662,6 +662,7 @@ function useCreateIssueModalView() {
       <div
         className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-4"
         data-create-issue-scroll-region
+        data-testid="create-issue-modal"
       >
         <section
           aria-label="Issue content"
@@ -903,6 +904,7 @@ function useCreateIssueModalView() {
           onClick={handleSubmit}
           disabled={submitDisabled}
           aria-label={mode === 'edit' ? 'Save PRD' : undefined}
+          data-testid="create-issue-submit"
         >
           <LoadingButtonContent loading={submitting}>
             <span>{submitLabel}</span>

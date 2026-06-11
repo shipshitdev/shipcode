@@ -12,6 +12,7 @@ export {
   resolveIssuePriorityBadge,
 } from '@/kanban-board/utils';
 export { LoadingButtonContent } from '@/LoadingButtonContent';
+export { useSharedSecondNow } from '@/lib/second-ticker';
 export type { PageHeaderProps } from '@/PageHeader';
 export { PageHeader } from '@/PageHeader';
 export { PhaseChip } from '@/PhaseChip';

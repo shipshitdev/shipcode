@@ -9,6 +9,7 @@ import type {
   ReasoningEffort,
 } from '@shipcode/shared';
 import { SHIPCODE_AGENT_LABELS, SHIPCODE_CLASSIFICATION_LABELS } from '@shipcode/shared';
+import { classifyPoolExhaustion, markPoolExhausted } from '../agent-sdk-pool-state';
 import { extractCliFailureMessage, formatCliSpawnFailure } from '../cli-error';
 import { unwrapCliResultEnvelope } from '../cli-result';
 import { OpenRouterClient, OpenRouterError } from '../providers/openrouter-http';
@@ -231,6 +232,11 @@ function runCliTriage(opts: {
     proc.on('close', (code) => {
       clearTimeout(timer);
       if (code !== 0) {
+        // Triage runs `claude -p`, drawing from the rationed Agent-SDK pool.
+        // Flag exhaustion so the UI alerts; triage itself still fails this run.
+        if (classifyPoolExhaustion(stdout, stderr, code ?? 1)) {
+          markPoolExhausted('Claude Agent-SDK credit pool exhausted');
+        }
         reject(new Error(`${label} exited ${code}: ${extractCliFailureMessage(stdout, stderr)}`));
         return;
       }

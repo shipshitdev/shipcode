@@ -229,12 +229,34 @@ const VERIFICATION_FAILED_JSON = JSON.stringify({
   issues: [{ severity: 'blocker', description: 'broke' }],
 });
 
+// These integration tests drive the programmatic stream-json contract via
+// `spawnWithStdin`. The production default for the structured phases is now
+// interactive (Track 2); pin them back to programmatic here so the existing
+// programmatic-path assertions stay meaningful. The interactive structured
+// path is covered by the cli-provider unit tests and the dedicated interactive
+// pipeline test below.
 const TEST_DEFAULT_SETTINGS = {
   ...DEFAULT_SETTINGS,
   plannerModel: 'claude' as const,
   reviewerModel: 'codex' as const,
   executorModel: 'claude' as const,
   verifierModel: 'claude' as const,
+  agentRunModes: {
+    claude: {
+      ...DEFAULT_SETTINGS.agentRunModes.claude,
+      plan: 'programmatic' as const,
+      review: 'programmatic' as const,
+      revision: 'programmatic' as const,
+      verify: 'programmatic' as const,
+    },
+    codex: {
+      ...DEFAULT_SETTINGS.agentRunModes.codex,
+      plan: 'programmatic' as const,
+      review: 'programmatic' as const,
+      revision: 'programmatic' as const,
+      verify: 'programmatic' as const,
+    },
+  },
 };
 
 /** Flush the microtask queue so async handlers (await import) settle */
@@ -2220,23 +2242,23 @@ Custom prompt`,
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
-    it('appends interrupted execution resume context once', async () => {
+    it('appends interrupted execution resume context from the start carry', async () => {
       const pipeline = createPipeline(mock.deps);
       pipeline.initializeContext('t1', {
         projectPath: '/proj',
         worktreePath: '/worktree',
         baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON), {
         executionResumeContext:
           '\n\n<interrupted_run_context>\nContinue from the existing WIP.\n</interrupted_run_context>',
       });
-
-      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
       await flush();
 
       const executeCall = vi.mocked(mock.deps.processManager.spawn).mock.calls[0];
       expect(executeCall[2][1]).toContain('<interrupted_run_context>');
       expect(executeCall[2][1]).toContain('Continue from the existing WIP.');
-      expect(requireContext(pipeline).executionResumeContext).toBeNull();
     });
 
     it('exit 0 + autonomous → starts verification (emits verifying)', async () => {
@@ -2683,7 +2705,8 @@ Custom prompt`,
       const context = requireContext(pipeline);
       expect(context.nodeVerificationRetries).toBe(1);
       expect(context.retryTimer).not.toBeNull();
-      expect(context.stabilizationFeedback).toContain('<node_verification_failure>');
+      // Node-verification feedback now rides the carried execute outcome (asserted
+      // at the unit level in execution-phases.test.ts), not context.stabilizationFeedback.
       expect(taskGraphs.updateNodeStatus).toHaveBeenLastCalledWith('node-1', 'ready');
 
       await vi.advanceTimersByTimeAsync(1000);
@@ -4357,6 +4380,7 @@ Custom prompt`,
       });
 
       await pipeline.startTesting('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -4427,6 +4451,7 @@ Custom prompt`,
       });
 
       await pipeline.startTesting('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -4523,6 +4548,7 @@ Custom prompt`,
       };
 
       await pipeline.startTesting('t1');
+      await flush();
 
       expect(context.retryTimer).not.toBeNull();
       expect(mock.deps.threads.recordFailure).not.toHaveBeenCalledWith(
@@ -4684,6 +4710,7 @@ Custom prompt`,
       };
 
       await pipeline.startTesting('t1');
+      await flush();
 
       expect(mock.deps.processManager.spawnWithStdin).not.toHaveBeenCalledWith(
         'shell',
@@ -4743,6 +4770,7 @@ Custom prompt`,
       };
 
       await pipeline.startTesting('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -5380,6 +5408,66 @@ Custom prompt`,
       expect(ctx?.executorModel).toBe('codex');
     });
 
+    it('wraps normal GitHub issues in the ShipCode run contract before planning', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.includes('symbolic-ref')) return 'origin/develop';
+        if (cmd === 'git rev-parse develop') return 'forksha';
+        if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'shipcode/7-bug';
+        return '';
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      const issue = {
+        number: 7,
+        title: 'Bug',
+        body: '---\nstatus: planned\n---\n# PRD: bug\n\n## Goals\n- Fix it',
+        labels: [],
+      };
+
+      await pipeline.startFromGitHubIssue('t1', '/proj', issue, 'claude', {
+        worktreePath: '/worktree/issue-7',
+      });
+      await flush();
+
+      const args = vi.mocked(mock.deps.processManager.spawn).mock.calls[0][2] as string[];
+      const prompt = args[1];
+      expect(prompt).toContain('You are working inside ShipCode');
+      expect(prompt).toContain('- Repo: /proj');
+      expect(prompt).toContain('- Worktree: /worktree/issue-7');
+      expect(prompt).toContain('- Target branch: develop');
+      expect(prompt).toContain('- Current branch: shipcode/7-bug');
+      expect(prompt).toContain('- Do not rename the current branch.');
+      expect(prompt).toContain('Treat the GitHub issue/PRD below as the source of truth.');
+      expect(prompt).toContain('# PRD: bug');
+      expect(prompt).not.toContain('status: planned');
+    });
+
+    it('does not resolve the project checkout branch before a worktree exists', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.includes('symbolic-ref')) return 'origin/develop';
+        if (cmd === 'git rev-parse develop') return 'forksha';
+        if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'develop';
+        return '';
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      const issue = {
+        number: 7,
+        title: 'Bug',
+        body: 'Fix it',
+        labels: [],
+      };
+
+      await pipeline.startFromGitHubIssue('t1', '/proj', issue, 'claude');
+      await flush();
+
+      const args = vi.mocked(mock.deps.processManager.spawn).mock.calls[0][2] as string[];
+      const prompt = args[1];
+      expect(prompt).toContain('- Target branch: develop');
+      expect(prompt).toContain('- Current branch: (current worktree branch)');
+      expect(prompt).not.toContain('- Current branch: develop');
+    });
+
     it('defaults baseBranch to main on failure', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('symbolic-ref')) throw new Error('no remote HEAD');
@@ -5802,7 +5890,6 @@ Custom prompt`,
         worktreePath: '/worktree',
         cancelled: true,
         verifiedSha: 'old-sha',
-        stabilizationFeedback: 'old feedback',
         autonomous: true,
       });
 

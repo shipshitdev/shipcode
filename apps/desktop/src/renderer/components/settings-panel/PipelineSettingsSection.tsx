@@ -768,7 +768,7 @@ function pipelineSettingsSection({
                   : null
               }
               reasoningEffortValue={settings.executorReasoningEffort}
-              validProviders={['claude', 'codex', 'gemini', 'openrouter']}
+              validProviders={['claude', 'codex', 'gemini', 'cursor', 'openrouter']}
               onModelChange={(value) =>
                 onUpdate({
                   executorModel: value as AppSettings['executorModel'],

@@ -1,4 +1,4 @@
-import { exec, execFile, execFileSync } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -11,17 +11,12 @@ import type {
   CliModelCapabilityOption,
   CliProviderUsageMap,
   CliProviderUsageProvider,
-  CliProviderUsageState,
   CliProviderUsageStatus,
-  CliProviderUsageWindow,
-  DesktopAppHealth,
-  DesktopAppHealthMap,
   GhAuthStatus,
   IntegrationStatus,
   OpenRouterHealth,
   OpenRouterModelCheck,
   OpenRouterModelValidation,
-  ProjectOpenTarget,
   ReasoningEffort,
   SystemHealth,
 } from '@shipcode/shared';
@@ -31,128 +26,28 @@ import {
   getSupportedReasoningEfforts,
   normalizeReasoningModelId,
   OPENROUTER_API_BASE,
-  stripAnsi,
 } from '@shipcode/shared';
 import * as pty from 'node-pty';
+import { clearPoolExhausted, isPoolExhausted } from './agent-sdk-pool-state';
+import { checkDesktopApps } from './desktop-app-health';
+import {
+  normalizeForSearch,
+  parseClaudeUsageText,
+  parseCodexStatusText,
+} from './provider-usage-parsers';
+import {
+  __resetShellExecEnvCacheForTests,
+  assertSafeEnvVarName,
+  resolveCommandOnPath,
+  shellExecEnv,
+} from './shell-env';
+
+export { checkDesktopApps } from './desktop-app-health';
+export { parseClaudeUsageText, parseCodexStatusText } from './provider-usage-parsers';
+export { shellExecEnv } from './shell-env';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
-
-const SAFE_COMMAND_NAME = /^[a-zA-Z0-9._-]+$/;
-const SAFE_ENV_VAR_NAME = /^[A-Z_][A-Z0-9_]*$/;
-
-function assertSafeCommandName(command: string): void {
-  if (!SAFE_COMMAND_NAME.test(command)) {
-    throw new Error(`Unsafe command name: ${command}`);
-  }
-}
-
-function assertSafeEnvVarName(name: string): void {
-  if (!SAFE_ENV_VAR_NAME.test(name)) {
-    throw new Error(`Unsafe environment variable name: ${name}`);
-  }
-}
-
-async function resolveCommandOnPath(command: string, env: Record<string, string>): Promise<string> {
-  assertSafeCommandName(command);
-  const { stdout } = await execFileAsync('which', [command], { env });
-  return stdout.trim();
-}
-
-const TRUSTED_SHELLS = new Set([
-  '/bin/bash',
-  '/bin/zsh',
-  '/bin/sh',
-  '/usr/bin/bash',
-  '/usr/bin/zsh',
-  '/usr/local/bin/bash',
-  '/usr/local/bin/zsh',
-  '/opt/homebrew/bin/bash',
-  '/opt/homebrew/bin/zsh',
-]);
-
-let cachedShellPath: string | null = null;
-let cachedShellPathKey: string | null = null;
-
-function splitPath(value: string | null | undefined): string[] {
-  if (!value) return [];
-  return value.split(':').filter((segment) => segment.length > 0);
-}
-
-function mergePathSegments(...pathGroups: Array<string[] | string | null | undefined>): string {
-  const seen = new Set<string>();
-  const merged: string[] = [];
-
-  for (const group of pathGroups) {
-    const segments = Array.isArray(group) ? group : splitPath(group);
-    for (const segment of segments) {
-      if (seen.has(segment)) continue;
-      seen.add(segment);
-      merged.push(segment);
-    }
-  }
-
-  return merged.join(':');
-}
-
-function fallbackExecPathSegments(): string[] {
-  const home = homedir();
-  const bunInstall = process.env.BUN_INSTALL || join(home, '.bun');
-  return [
-    join(bunInstall, 'bin'),
-    join(home, 'bin'),
-    join(home, '.local', 'bin'),
-    '/opt/homebrew/bin',
-    '/opt/homebrew/sbin',
-    '/usr/local/bin',
-    '/usr/bin',
-    '/bin',
-    '/usr/sbin',
-    '/sbin',
-  ];
-}
-
-function getShellPath(): string {
-  /* v8 ignore start -- env nullish fallbacks are process hygiene and not semantically meaningful branches */
-  const cacheKey = [
-    process.env.SHELL ?? '',
-    process.env.PATH ?? '',
-    process.env.BUN_INSTALL ?? '',
-  ].join('\0');
-  /* v8 ignore stop */
-  if (cachedShellPath && cachedShellPathKey === cacheKey) return cachedShellPath;
-  let shellPath = '';
-  try {
-    /* v8 ignore start -- SHELL is normally defined in runtime; fallback is process hygiene */
-    const shell = process.env.SHELL ?? '/bin/zsh';
-    /* v8 ignore stop */
-    if (!TRUSTED_SHELLS.has(shell)) {
-      cachedShellPath = mergePathSegments(process.env.PATH, fallbackExecPathSegments());
-      cachedShellPathKey = cacheKey;
-      return cachedShellPath;
-    }
-    const output = execFileSync(shell, ['-ilc', 'printf "%s" "$PATH"'], {
-      encoding: 'utf-8',
-      timeout: 5000,
-    }).trim();
-    /* v8 ignore next -- split always contains at least one entry */
-    shellPath = output.split('\n').at(-1)?.trim() ?? '';
-  } catch {
-    shellPath = '';
-  }
-
-  cachedShellPath = mergePathSegments(shellPath, process.env.PATH, fallbackExecPathSegments());
-  cachedShellPathKey = cacheKey;
-  return cachedShellPath;
-}
-
-export function shellExecEnv(): Record<string, string> {
-  return {
-    ...process.env,
-    BUN_INSTALL: process.env.BUN_INSTALL || join(homedir(), '.bun'),
-    PATH: getShellPath(),
-  } as Record<string, string>;
-}
 
 const CLI_USAGE_TIMEOUT_MS = 20_000;
 const CLI_USAGE_OUTPUT_TAIL = 8_192;
@@ -179,10 +74,10 @@ let systemHealthInFlight: Promise<SystemHealth> | null = null;
 let systemHealthWithAuthCache: TimedCacheEntry<SystemHealth> | null = null;
 let systemHealthWithAuthInFlight: Promise<SystemHealth> | null = null;
 let cliModelCapabilitiesCache: TimedCacheEntry<
-  Record<'claude' | 'codex' | 'gemini', CliModelCapabilities>
+  Record<'claude' | 'codex' | 'gemini' | 'cursor', CliModelCapabilities>
 > | null = null;
 let cliModelCapabilitiesInFlight: Promise<
-  Record<'claude' | 'codex' | 'gemini', CliModelCapabilities>
+  Record<'claude' | 'codex' | 'gemini' | 'cursor', CliModelCapabilities>
 > | null = null;
 const providerUsageCache = new Map<
   CliProviderUsageProvider,
@@ -191,15 +86,6 @@ const providerUsageCache = new Map<
 const providerUsageInFlight = new Map<CliProviderUsageProvider, Promise<CliProviderUsageStatus>>();
 const integrationStatusCache = new Map<string, TimedCacheEntry<IntegrationStatus>>();
 const integrationStatusInFlight = new Map<string, Promise<IntegrationStatus>>();
-const DESKTOP_APP_LABELS: Record<ProjectOpenTarget, string> = {
-  cursor: 'Cursor',
-  finder: 'Finder',
-  terminal: 'Terminal',
-  ghostty: 'Ghostty',
-  vscode: 'Visual Studio Code',
-  t3code: 'T3 Code',
-};
-
 async function checkCli(command: string, versionFlag: string = '--version'): Promise<CliHealth> {
   const env = shellExecEnv();
   try {
@@ -238,84 +124,6 @@ async function checkCli(command: string, versionFlag: string = '--version'): Pro
       authenticated: false,
     };
   }
-}
-
-function unavailableDesktopApp(key: ProjectOpenTarget, error: string): DesktopAppHealth {
-  return {
-    key,
-    label: DESKTOP_APP_LABELS[key],
-    available: false,
-    path: null,
-    error,
-  };
-}
-
-const ALWAYS_AVAILABLE_APPS: Set<ProjectOpenTarget> = new Set(['finder', 'terminal']);
-
-const ALWAYS_AVAILABLE_PATHS: Partial<Record<ProjectOpenTarget, string>> = {
-  finder: '/System/Library/CoreServices/Finder.app',
-  terminal: '/System/Applications/Utilities/Terminal.app',
-};
-
-const DESKTOP_APP_BUNDLE_NAMES: Record<ProjectOpenTarget, string> = {
-  cursor: 'Cursor.app',
-  finder: 'Finder.app',
-  terminal: 'Terminal.app',
-  ghostty: 'Ghostty.app',
-  vscode: 'Visual Studio Code.app',
-  t3code: 'T3 Code (Alpha).app',
-};
-
-async function checkDesktopAppByName(
-  key: ProjectOpenTarget,
-  _appName: string,
-): Promise<DesktopAppHealth> {
-  if (process.platform !== 'darwin') {
-    return unavailableDesktopApp(key, 'Desktop app detection is currently macOS-only');
-  }
-
-  if (ALWAYS_AVAILABLE_APPS.has(key)) {
-    return {
-      key,
-      label: DESKTOP_APP_LABELS[key],
-      available: true,
-      path: ALWAYS_AVAILABLE_PATHS[key] ?? null,
-      error: null,
-    };
-  }
-
-  const bundleName = DESKTOP_APP_BUNDLE_NAMES[key];
-  const candidates = [
-    `/Applications/${bundleName}`,
-    `${process.env.HOME}/Applications/${bundleName}`,
-  ];
-
-  for (const candidate of candidates) {
-    if (await fileExists(candidate)) {
-      return {
-        key,
-        label: DESKTOP_APP_LABELS[key],
-        available: true,
-        path: candidate,
-        error: null,
-      };
-    }
-  }
-
-  return unavailableDesktopApp(key, `${DESKTOP_APP_LABELS[key]} is not installed`);
-}
-
-export async function checkDesktopApps(): Promise<DesktopAppHealthMap> {
-  const [cursor, finder, terminal, ghostty, vscode, t3code] = await Promise.all([
-    checkDesktopAppByName('cursor', 'Cursor'),
-    checkDesktopAppByName('finder', 'Finder'),
-    checkDesktopAppByName('terminal', 'Terminal'),
-    checkDesktopAppByName('ghostty', 'Ghostty'),
-    checkDesktopAppByName('vscode', 'Visual Studio Code'),
-    checkDesktopAppByName('t3code', 'T3 Code'),
-  ]);
-
-  return { cursor, finder, terminal, ghostty, vscode, t3code };
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -426,141 +234,6 @@ interface PtyProbeOptions {
 interface ClaudeAuthDetails {
   accountEmail: string | null;
   loginMethod: string | null;
-}
-
-function cleanTerminalText(text: string): string {
-  return stripAnsi(text).replace(/\r/g, '');
-}
-
-function normalizeForSearch(text: string): string {
-  return cleanTerminalText(text).toLowerCase().replace(/\s+/g, '');
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function parseNumericText(raw: string): number | null {
-  let text = raw.trim().replace(/[\u00A0\u202F\s]/g, '');
-  /* v8 ignore next -- callers only invoke after numeric regex captures */
-  if (!text) return null;
-
-  const hasComma = text.includes(',');
-  const hasDot = text.includes('.');
-  if (hasComma && hasDot) {
-    if (text.lastIndexOf(',') > text.lastIndexOf('.')) {
-      text = text.replace(/\./g, '').replace(/,/g, '.');
-    } else {
-      text = text.replace(/,/g, '');
-    }
-  } else if (hasComma) {
-    if (/^\d{1,3}(,\d{3})+$/.test(text)) {
-      text = text.replace(/,/g, '');
-    } else {
-      text = text.replace(/,/g, '.');
-    }
-  } else if (hasDot && /^\d{1,3}(\.\d{3})+$/.test(text)) {
-    text = text.replace(/\./g, '');
-  }
-
-  const parsed = Number(text);
-  /* v8 ignore next -- callers only pass normalized numeric captures */
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function firstNumber(pattern: RegExp, text: string): number | null {
-  const match = pattern.exec(text);
-  return match?.[1] ? parseNumericText(match[1]) : null;
-}
-
-function percentLeftFromLine(line: string | null): number | null {
-  if (!line) return null;
-  const match = /([0-9]{1,3})%\s+left/i.exec(line);
-  if (!match) return null;
-  const value = Number.parseInt(match[1], 10);
-  /* v8 ignore next -- regex captures only decimal digits */
-  return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : null;
-}
-
-function resetStringFromLine(line: string | null): string | null {
-  if (!line) return null;
-  const match = /resets?\s+([^)│┃\n]+)/i.exec(line);
-  return match?.[1]?.trim() || null;
-}
-
-function toWindow(
-  key: CliProviderUsageWindow['key'],
-  fallbackLabel: string,
-  leftPercent: number | null,
-  resetDescription: string | null = null,
-): CliProviderUsageWindow | null {
-  if (leftPercent == null && !resetDescription) return null;
-  /* v8 ignore start -- branch only exists for reset-only windows, which current parsers do not emit */
-  const safeLeft = leftPercent == null ? null : Math.max(0, Math.min(100, Math.trunc(leftPercent)));
-  /* v8 ignore stop */
-  return {
-    key,
-    label: fallbackLabel,
-    /* v8 ignore start -- current parsers do not emit reset-only windows */
-    usedPercent: safeLeft == null ? null : Math.max(0, Math.min(100, 100 - safeLeft)),
-    /* v8 ignore stop */
-    leftPercent: safeLeft,
-    resetsAt: null,
-    resetDescription,
-  };
-}
-
-function extractClaudePercent(compactText: string, labels: string[]): number | null {
-  for (const label of labels.map((entry) => entry.toLowerCase().replace(/\s+/g, ''))) {
-    const index = compactText.lastIndexOf(label);
-    if (index === -1) continue;
-    const slice = compactText.slice(index + label.length, index + label.length + 160);
-    // Try "N% left" first (legacy), then "N% used" (v2.1+)
-    const leftMatch = /([0-9]{1,3})%left/.exec(slice);
-    if (leftMatch) {
-      const value = Number.parseInt(leftMatch[1], 10);
-      /* v8 ignore next -- regex captures only decimal digits */
-      if (Number.isFinite(value)) return Math.max(0, Math.min(100, value));
-    }
-    const usedMatch = /([0-9]{1,3})%used/.exec(slice);
-    /* v8 ignore next -- fallback windows without usage percent are handled by higher-level parser tests */
-    if (usedMatch) {
-      const value = Number.parseInt(usedMatch[1], 10);
-      /* v8 ignore next -- regex captures only decimal digits */
-      if (Number.isFinite(value)) return Math.max(0, Math.min(100, 100 - value));
-    }
-  }
-  return null;
-}
-
-function extractClaudeReset(collapsedText: string, labels: string[]): string | null {
-  for (const label of labels) {
-    const labelPattern = label
-      .trim()
-      .split(/\s+/)
-      .map((part) => escapeRegex(part))
-      .join('\\s*');
-    const regex = new RegExp(
-      `${labelPattern}[\\s\\S]{0,120}?resets?\\s+(.{1,40}?)(?=\\s+(?:Current\\s+|Failed\\s+to\\s+load|$))`,
-      'i',
-    );
-    const match = regex.exec(collapsedText);
-    if (match?.[1]?.trim()) return match[1].trim();
-  }
-  return null;
-}
-
-function extractClaudePercentsInOrder(compactText: string): number[] {
-  // Match both "N%left" (legacy, value = left%) and "N%used" (v2.1+, value = 100 - used%)
-  return [...compactText.matchAll(/([0-9]{1,3})%(left|used)/g)]
-    .map((match) => {
-      const raw = Number.parseInt(match[1], 10);
-      /* v8 ignore next -- regex captures only decimal digits */
-      if (!Number.isFinite(raw)) return null;
-      const leftPercent = match[2] === 'used' ? 100 - raw : raw;
-      return Math.max(0, Math.min(100, leftPercent));
-    })
-    .filter((value): value is number => value != null);
 }
 
 export function parseClaudeAuthStatusOutput(stdout: string): ClaudeAuthDetails {
@@ -794,171 +467,6 @@ async function runPtyProbe(options: PtyProbeOptions): Promise<string> {
   });
 }
 
-function deriveUsageState(
-  provider: CliProviderUsageProvider,
-  windows: CliProviderUsageWindow[],
-  creditsRemaining: number | null,
-): CliProviderUsageState {
-  const session = windows.find((window) => window.key === 'session') ?? null;
-  const weekly = windows.find((window) => window.key === 'weekly') ?? null;
-  const model = windows.find((window) => window.key === 'model') ?? null;
-
-  if (session?.leftPercent != null && session.leftPercent <= 0) return 'blocked';
-  if (provider === 'codex') {
-    if (weekly?.leftPercent != null && weekly.leftPercent <= 0 && (creditsRemaining ?? 0) <= 0) {
-      return 'blocked';
-    }
-  } else if (model?.leftPercent != null) {
-    if (model.leftPercent <= 0) return 'blocked';
-    if (model.leftPercent <= 15) return 'warning';
-    return 'ready';
-  }
-
-  const relevant = windows.filter((window) => window.leftPercent != null);
-  if (relevant.some((window) => window.leftPercent != null && window.leftPercent <= 15)) {
-    return 'warning';
-  }
-  return relevant.length > 0 ? 'ready' : 'unknown';
-}
-
-export function parseCodexStatusText(
-  stdout: string,
-  checkedAt = new Date().toISOString(),
-  version: string | null = null,
-): CliProviderUsageStatus {
-  // "codex --version" outputs "codex-cli X.Y.Z" — strip the binary name prefix so
-  // the UI renders "vX.Y.Z" instead of "vcodex-cli X.Y.Z".
-  const normalizedVersion = version ? (version.match(/\d+\.\d+[\w.-]*/)?.[0] ?? version) : null;
-  const clean = cleanTerminalText(stdout);
-  const creditsRemaining = firstNumber(/Credits:\s*([0-9][0-9., ]*)/i, clean);
-  const sessionLine = firstCodexLimitBlock(clean, '5h limit');
-  const weeklyLine = firstCodexLimitBlock(clean, 'Weekly limit');
-  const windows = [
-    toWindow(
-      'session',
-      'Session',
-      percentLeftFromLine(sessionLine),
-      resetStringFromLine(sessionLine),
-    ),
-    toWindow('weekly', 'Weekly', percentLeftFromLine(weeklyLine), resetStringFromLine(weeklyLine)),
-  ].filter((window): window is CliProviderUsageWindow => window !== null);
-
-  return {
-    provider: 'codex',
-    available: windows.length > 0 || creditsRemaining != null,
-    stale: false,
-    state: deriveUsageState('codex', windows, creditsRemaining),
-    source: 'cli',
-    version: normalizedVersion,
-    accountEmail: null,
-    loginMethod: null,
-    updatedAt: checkedAt,
-    checkedAt,
-    message:
-      windows.length > 0 || creditsRemaining != null ? null : 'Codex CLI returned no quota data',
-    creditsRemaining,
-    windows,
-  };
-}
-
-function firstCodexLimitBlock(text: string, label: '5h limit' | 'Weekly limit'): string | null {
-  const labelPattern = new RegExp(escapeRegex(label), 'i');
-  const nextBlockPattern = /\s(?:5h limit|Weekly limit|GPT-[\w.-]+(?:-[\w.-]+)* limit):/gi;
-  const lines = text.split('\n');
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    const labelMatch = labelPattern.exec(line);
-    if (!labelMatch) continue;
-    const nextLine = lines[index + 1] ?? '';
-    let segment = line.slice(labelMatch.index);
-    nextBlockPattern.lastIndex = label.length;
-    const nextBlock = nextBlockPattern.exec(segment);
-    if (nextBlock) {
-      segment = segment.slice(0, nextBlock.index);
-    }
-    if (!/resets?/i.test(segment) && /resets?/i.test(nextLine)) {
-      segment = `${segment} ${nextLine}`;
-    }
-    return segment;
-  }
-  return null;
-}
-
-export function parseClaudeUsageText(
-  stdout: string,
-  checkedAt = new Date().toISOString(),
-  auth: ClaudeAuthDetails = { accountEmail: null, loginMethod: null },
-  version: string | null = null,
-): CliProviderUsageStatus {
-  // "claude --version" outputs e.g. "2.1.92 (Claude Code)" — strip the parenthetical
-  // so the UI renders "v2.1.92" instead of "v2.1.92 (Claude Code)".
-  const normalizedVersion = version ? (version.match(/\d+\.\d+[\w.-]*/)?.[0] ?? version) : null;
-  const clean = cleanTerminalText(stdout);
-  const collapsed = clean.replace(/\s+/g, ' ').trim();
-  const compact = normalizeForSearch(clean);
-
-  // --- Legacy format: "Current session ... N% left" ---
-  const sessionLabel = ['Current session'];
-  const weeklyLabel = ['Current week (all models)', 'Current week'];
-  const modelLabels = [
-    'Current week (Opus)',
-    'Current week (Sonnet only)',
-    'Current week (Sonnet)',
-  ];
-
-  let sessionPercent = extractClaudePercent(compact, sessionLabel);
-  let weeklyPercent = extractClaudePercent(compact, weeklyLabel);
-  let modelPercent = extractClaudePercent(compact, modelLabels);
-
-  const hasWeeklyLabel = weeklyLabel.some((label) => compact.includes(normalizeForSearch(label)));
-  const hasModelLabel = modelLabels.some((label) => compact.includes(normalizeForSearch(label)));
-  if (
-    sessionPercent == null ||
-    (hasWeeklyLabel && weeklyPercent == null) ||
-    (hasModelLabel && modelPercent == null)
-  ) {
-    const ordered = extractClaudePercentsInOrder(compact);
-    if (sessionPercent == null && ordered[0] != null) sessionPercent = ordered[0];
-    /* v8 ignore next -- direct label parsing handles weekly percentages before ordered fallback */
-    if (hasWeeklyLabel && weeklyPercent == null && ordered[1] != null) weeklyPercent = ordered[1];
-    /* v8 ignore next -- direct label parsing handles model percentages before ordered fallback */
-    if (hasModelLabel && modelPercent == null && ordered[2] != null) modelPercent = ordered[2];
-  }
-
-  const modelLabel = compact.includes(normalizeForSearch('Current week (Sonnet'))
-    ? 'Sonnet'
-    : compact.includes(normalizeForSearch('Current week (Haiku'))
-      ? 'Haiku'
-      : 'Opus';
-  const windows = [
-    toWindow('session', 'Session', sessionPercent, extractClaudeReset(collapsed, sessionLabel)),
-    toWindow('weekly', 'Weekly', weeklyPercent, extractClaudeReset(collapsed, weeklyLabel)),
-    toWindow('model', modelLabel, modelPercent, extractClaudeReset(collapsed, modelLabels)),
-  ].filter((window): window is CliProviderUsageWindow => window !== null);
-
-  const loadFailure = /failed\s*to\s*load\s*usage\s*data/i.test(clean);
-  return {
-    provider: 'claude',
-    available: windows.length > 0,
-    stale: false,
-    state: deriveUsageState('claude', windows, null),
-    source: 'cli',
-    version: normalizedVersion,
-    accountEmail: auth.accountEmail,
-    loginMethod: auth.loginMethod,
-    updatedAt: checkedAt,
-    checkedAt,
-    message:
-      windows.length > 0
-        ? null
-        : loadFailure
-          ? 'Claude CLI failed to load usage data'
-          : 'Claude CLI returned no quota data',
-    creditsRemaining: null,
-    windows,
-  };
-}
-
 async function probeClaudeUsage(
   version: string | null,
   binaryPath: string,
@@ -1154,6 +662,21 @@ export async function checkGeminiAuth(): Promise<boolean> {
 
   try {
     await execAsync('gemini auth status', { timeout: 10_000, env: shellExecEnv() });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function checkCursorAuth(): Promise<boolean> {
+  // Headless fallback: an API key authenticates without an interactive login.
+  if (await readEnvVar('CURSOR_API_KEY')) {
+    return true;
+  }
+
+  // Otherwise rely on the CLI's own stored credentials (`cursor-agent login`).
+  try {
+    await execAsync('cursor-agent status', { timeout: 10_000, env: shellExecEnv() });
     return true;
   } catch {
     return false;
@@ -1481,15 +1004,16 @@ export async function checkSystemHealth(options: CacheOptions = {}): Promise<Sys
   }
 
   systemHealthInFlight = (async () => {
-    const [claude, codex, gemini, git, gh] = await Promise.all([
+    const [claude, codex, gemini, cursor, git, gh] = await Promise.all([
       checkCli('claude', '--version'),
       checkCli('codex', '--version'),
       checkCli('gemini', '--version'),
+      checkCli('cursor-agent', '--version'),
       checkCli('git', '--version'),
       checkCli('gh', '--version'),
     ]);
 
-    const result = { claude, codex, gemini, git, gh };
+    const result = { claude, codex, gemini, cursor, git, gh };
     systemHealthCache = createTimedCacheEntry(result);
     return result;
   })();
@@ -1512,19 +1036,22 @@ export async function checkSystemHealthWithAuth(options: CacheOptions = {}): Pro
   }
 
   systemHealthWithAuthInFlight = (async () => {
-    const [health, claudeAuth, codexAuth, geminiAuth] = await Promise.all([
+    const [health, claudeAuth, codexAuth, geminiAuth, cursorAuth] = await Promise.all([
       checkSystemHealth(options),
       checkClaudeAuth(),
       checkCodexAuth(),
       checkGeminiAuth(),
+      checkCursorAuth(),
     ]);
 
     const gemini = health.gemini;
+    const cursor = health.cursor;
     const result: SystemHealth = {
       ...health,
       claude: { ...health.claude, authenticated: health.claude.available && claudeAuth },
       codex: { ...health.codex, authenticated: health.codex.available && codexAuth },
       ...(gemini ? { gemini: { ...gemini, authenticated: gemini.available && geminiAuth } } : {}),
+      ...(cursor ? { cursor: { ...cursor, authenticated: cursor.available && cursorAuth } } : {}),
     };
     systemHealthWithAuthCache = createTimedCacheEntry(result);
     return result;
@@ -1657,20 +1184,42 @@ export async function checkGeminiModelCapabilities(): Promise<CliModelCapabiliti
   }
 }
 
+export async function checkCursorModelCapabilities(): Promise<CliModelCapabilities> {
+  const checkedAt = new Date().toISOString();
+  try {
+    await execAsync('cursor-agent --help', {
+      timeout: CLI_MODEL_CATALOG_TIMEOUT_MS,
+      maxBuffer: 512_000,
+      env: shellExecEnv(),
+    });
+    // Cursor has no queryable model catalog; ShipCode exposes only `auto`.
+    return fallbackCliModelCapabilities('cursor', checkedAt);
+  } catch (error) {
+    return {
+      provider: 'cursor',
+      source: 'unavailable',
+      models: [],
+      error: `Cursor CLI unavailable: ${summarizeExecFailure(error)}`,
+      checkedAt,
+    };
+  }
+}
+
 export async function checkCliModelCapabilities(
   options: CacheOptions = {},
-): Promise<Record<'claude' | 'codex' | 'gemini', CliModelCapabilities>> {
+): Promise<Record<'claude' | 'codex' | 'gemini' | 'cursor', CliModelCapabilities>> {
   const cached = getFreshCachedValue(cliModelCapabilitiesCache, CLI_MODEL_CAPABILITIES_TTL_MS);
   if (!options.force && cached) return cached;
   if (cliModelCapabilitiesInFlight) return cliModelCapabilitiesInFlight;
 
   cliModelCapabilitiesInFlight = (async () => {
-    const [claude, codex, gemini] = await Promise.all([
+    const [claude, codex, gemini, cursor] = await Promise.all([
       checkClaudeModelCapabilities(),
       checkCodexModelCapabilities(),
       checkGeminiModelCapabilities(),
+      checkCursorModelCapabilities(),
     ]);
-    const result = { claude, codex, gemini };
+    const result = { claude, codex, gemini, cursor };
     cliModelCapabilitiesCache = createTimedCacheEntry(result);
     return result;
   })();
@@ -1689,7 +1238,23 @@ export async function checkCliProviderUsage(
     checkProviderUsage('claude', options),
     checkProviderUsage('codex', options),
   ]);
-  return { claude, codex };
+  return { claude: overlayClaudePoolState(claude), codex };
+}
+
+/**
+ * Agent-SDK (`claude -p`) credit-pool exhaustion is detected by failure and
+ * held in process memory, not in the `/usage` panel (which never surfaces the
+ * pool). Overlay the live usage status with that signal at the return boundary
+ * so the existing provider-usage UI renders it — without contaminating the 60s
+ * usage cache with this ephemeral state.
+ */
+function overlayClaudePoolState(status: CliProviderUsageStatus): CliProviderUsageStatus {
+  if (!isPoolExhausted()) return status;
+  return {
+    ...status,
+    state: 'blocked',
+    message: 'Agent-SDK credit pool exhausted — claude -p falls back to interactive CLI',
+  };
 }
 
 export async function checkIntegrationStatus(
@@ -1744,8 +1309,7 @@ export async function checkIntegrationStatus(
  * @knipignore
  */
 export function __resetHealthCheckCachesForTests(): void {
-  cachedShellPath = null;
-  cachedShellPathKey = null;
+  __resetShellExecEnvCacheForTests();
   systemHealthCache = null;
   systemHealthInFlight = null;
   systemHealthWithAuthCache = null;
@@ -1756,4 +1320,5 @@ export function __resetHealthCheckCachesForTests(): void {
   providerUsageInFlight.clear();
   integrationStatusCache.clear();
   integrationStatusInFlight.clear();
+  clearPoolExhausted();
 }

@@ -1,6 +1,6 @@
 {
   "name": "@shipcode/ui",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "ShipCode-specific UI components for the ShipCode monorepo.",
   "type": "module",
@@ -12,6 +12,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./second-ticker": {
+      "types": "./dist/second-ticker.d.ts",
+      "import": "./dist/second-ticker.js",
+      "require": "./dist/second-ticker.cjs"
     }
   },
   "files": [
@@ -35,8 +40,8 @@
     "@radix-ui/react-tooltip": "1.2.8",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "lucide-react": "1.16.0",
-    "shiki": "4.0.2",
+    "lucide-react": "1.17.0",
+    "shiki": "4.2.0",
     "tailwind-merge": "3.6.0"
   },
   "peerDependencies": {
@@ -45,11 +50,11 @@
   },
   "devDependencies": {
     "@shipcode/shared": "workspace:*",
-    "@types/react": "19.2.14",
+    "@types/react": "19.2.16",
     "@types/react-dom": "19.2.3",
     "jsdom": "29.1.1",
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
     "tsup": "8.5.1",
     "typescript": "6.0.3"
   }
