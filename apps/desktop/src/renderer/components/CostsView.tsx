@@ -170,20 +170,24 @@ export function CostsView() {
 
   const { data: projectTasks = [] } = useQuery<CostTaskSummary[]>({
     queryKey: ['costs-project-tasks', selectedProjectId, projectPage],
-    queryFn: () =>
-      window.shipcode.invoke<CostTaskSummary[]>('costs:list-tasks', {
-        projectId: selectedProjectId!,
+    queryFn: () => {
+      if (!selectedProjectId) return [];
+      return window.shipcode.invoke<CostTaskSummary[]>('costs:list-tasks', {
+        projectId: selectedProjectId,
         limit: PAGE_SIZE,
         offset: (projectPage - 1) * PAGE_SIZE,
-      }),
+      });
+    },
     // Event-driven: invalidated by pipeline:model-resolved in useIpc.
     enabled: !!selectedProjectId,
   });
 
   const { data: projectTasksTotal = 0 } = useQuery<number>({
     queryKey: ['costs-project-tasks-count', selectedProjectId],
-    queryFn: () =>
-      window.shipcode.invoke<number>('costs:count-tasks', { projectId: selectedProjectId! }),
+    queryFn: () => {
+      if (!selectedProjectId) return 0;
+      return window.shipcode.invoke<number>('costs:count-tasks', { projectId: selectedProjectId });
+    },
     // Event-driven: invalidated by pipeline:model-resolved in useIpc.
     enabled: !!selectedProjectId,
   });
@@ -196,6 +200,9 @@ export function CostsView() {
 
   const tasksTotalPages = Math.max(1, Math.ceil(tasksTotal / PAGE_SIZE));
   const projectTasksTotalPages = Math.max(1, Math.ceil(projectTasksTotal / PAGE_SIZE));
+  const selectedProjectName =
+    data?.byProject.find((project) => project.projectId === selectedProjectId)?.projectName ??
+    'Project';
 
   function displayValue(costUsd: number, tokens: number): string {
     if (displayMode === 'tokens') return formatTokenCount(tokens);
@@ -349,8 +356,7 @@ export function CostsView() {
           {selectedProjectId && data && (
             <section>
               <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {data.byProject.find((p) => p.projectId === selectedProjectId)!.projectName} Cost
-                Details
+                {selectedProjectName} Cost Details
               </h2>
               <CostTaskTable
                 tasks={projectTasks}

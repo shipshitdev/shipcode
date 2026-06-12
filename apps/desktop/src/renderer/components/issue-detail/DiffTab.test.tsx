@@ -86,7 +86,9 @@ describe('DiffTab', () => {
   });
 
   it('renders a singular file count and closes from the custom header action', async () => {
-    render(<DiffTab diffs={[diffs[0]!]} />);
+    const firstDiff = diffs[0];
+    if (!firstDiff) throw new Error('Expected a diff fixture');
+    render(<DiffTab diffs={[firstDiff]} />);
 
     expect(screen.getByText('1 file')).toBeInTheDocument();
 

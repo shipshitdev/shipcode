@@ -213,7 +213,14 @@ export function ProjectSettingsGitHubTab({
 }) {
   const queryClient = useQueryClient();
 
-  const readinessQuery = useQuery<ProjectReadinessReport>({
+  const {
+    data: readiness,
+    error: readinessError,
+    isError: isReadinessError,
+    isFetching: isReadinessFetching,
+    isLoading: isReadinessLoading,
+    refetch: refetchReadiness,
+  } = useQuery<ProjectReadinessReport>({
     queryKey: ['project-readiness', projectId],
     queryFn: () => window.shipcode.invoke('github:check-project-readiness', { projectId }),
     enabled: pathExists && isActive,
@@ -221,8 +228,8 @@ export function ProjectSettingsGitHubTab({
   });
 
   const existingNames = useMemo(
-    () => new Set(readinessQuery.data?.labelNames ?? []),
-    [readinessQuery.data?.labelNames],
+    () => new Set(readiness?.labelNames ?? []),
+    [readiness?.labelNames],
   );
 
   const missingCount = useMemo(
@@ -230,10 +237,10 @@ export function ProjectSettingsGitHubTab({
     [existingNames],
   );
 
-  const mappedStatus = readinessQuery.data?.statusMapping ?? statusMapping;
+  const mappedStatus = readiness?.statusMapping ?? statusMapping;
 
   async function refreshReadiness() {
-    await readinessQuery.refetch();
+    await refetchReadiness();
     queryClient.invalidateQueries({ queryKey: ['project', projectId] });
   }
 
@@ -253,14 +260,14 @@ export function ProjectSettingsGitHubTab({
         radius, and product taxonomy belong in GitHub issue types and Projects fields.
       </div>
 
-      {readinessQuery.isLoading ? (
+      {isReadinessLoading ? (
         <div className="text-[12px] text-muted-foreground">Checking GitHub readiness…</div>
       ) : (
         <>
           <ProjectReadinessSummary
-            readiness={readinessQuery.data}
-            fetching={readinessQuery.isFetching}
-            error={readinessQuery.error}
+            readiness={readiness}
+            fetching={isReadinessFetching}
+            error={readinessError}
             onRefresh={() => {
               void refreshReadiness();
             }}
@@ -306,9 +313,9 @@ export function ProjectSettingsGitHubTab({
               onClick={() => {
                 void refreshReadiness();
               }}
-              disabled={readinessQuery.isFetching || missingCount === 0}
+              disabled={isReadinessFetching || missingCount === 0}
             >
-              <LoadingButtonContent loading={readinessQuery.isFetching}>
+              <LoadingButtonContent loading={isReadinessFetching}>
                 {missingCount === 0
                   ? 'All labels present'
                   : `Sync ${missingCount} missing label${missingCount === 1 ? '' : 's'}`}
@@ -316,25 +323,24 @@ export function ProjectSettingsGitHubTab({
             </Button>
           </SettingsRow>
 
-          {readinessQuery.data?.labelSync.created.length ? (
+          {readiness?.labelSync.created.length ? (
             <div className="text-[11px] text-muted-foreground">
-              Created {readinessQuery.data.labelSync.created.length} missing ShipCode label
-              {readinessQuery.data.labelSync.created.length === 1 ? '' : 's'}.
+              Created {readiness.labelSync.created.length} missing ShipCode label
+              {readiness.labelSync.created.length === 1 ? '' : 's'}.
             </div>
           ) : null}
 
-          {readinessQuery.isError ? (
+          {isReadinessError ? (
             <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-danger">
-              {String(readinessQuery.error)}
+              {String(readinessError)}
             </div>
           ) : null}
 
-          {readinessQuery.data?.labelSync.failed &&
-          readinessQuery.data.labelSync.failed.length > 0 ? (
+          {readiness?.labelSync.failed && readiness.labelSync.failed.length > 0 ? (
             <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] text-warning">
               <div className="font-medium">Failed labels:</div>
               <ul className="mt-1 space-y-0.5">
-                {readinessQuery.data.labelSync.failed.map((f: { name: string; error: string }) => (
+                {readiness.labelSync.failed.map((f: { name: string; error: string }) => (
                   <li key={f.name}>
                     {f.name}: {f.error}
                   </li>

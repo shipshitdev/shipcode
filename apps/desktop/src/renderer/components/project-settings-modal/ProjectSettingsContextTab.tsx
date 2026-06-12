@@ -11,6 +11,8 @@ import {
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import type { ContextGeneratorCli } from './shared';
 
+const MANAGED_FILE_NAMES = ['goal.md', 'architecture.md', 'constraints.md', 'do-dont.md'] as const;
+
 export function ProjectSettingsContextTab({
   contextFiles,
   contextGeneratorCli,
@@ -34,8 +36,6 @@ export function ProjectSettingsContextTab({
   }>;
   onGenerateContext: () => void;
 }) {
-  const managedFileNames = ['goal.md', 'architecture.md', 'constraints.md', 'do-dont.md'] as const;
-
   return (
     <div className="space-y-6">
       <section>
@@ -44,7 +44,7 @@ export function ProjectSettingsContextTab({
           description="Repo memory is the pipeline's documented project context. Generate core files from repo docs; other .agents/memory/*.md files are loaded too."
         >
           <div className="flex min-w-[220px] flex-col gap-1.5">
-            {managedFileNames.map((name) => {
+            {MANAGED_FILE_NAMES.map((name) => {
               const file = contextFiles?.find((entry) => entry.name === name);
               return (
                 <div key={name} className="flex items-center gap-2 text-xs">

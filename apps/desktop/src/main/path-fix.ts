@@ -80,7 +80,7 @@ export function fixMainProcessPath(
 
   const stdout = String(result.stdout ?? '');
   const match = stdout.match(new RegExp(`${SENTINEL}(.*)${SENTINEL}`));
-  if (!match || !match[1]) {
+  if (!match?.[1]) {
     return { applied: false, reason: 'shell_failed', shellError: 'no sentinel match' };
   }
 

@@ -142,7 +142,7 @@ function extractClaudeText(buffer: string): string | null {
   const lines = buffer.split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     const parsed = parseJsonLine(lines[i]);
-    if (!parsed || parsed.type !== 'result') continue;
+    if (parsed?.type !== 'result') continue;
     if (typeof parsed.result === 'string') return parsed.result;
     if (Array.isArray(parsed.result)) {
       const text = (parsed.result as Array<{ type: string; text?: string }>)
@@ -164,7 +164,7 @@ function extractCodexText(buffer: string): string | null {
   const agentTexts: string[] = [];
   for (const line of buffer.split('\n')) {
     const parsed = parseJsonLine(line);
-    if (!parsed || parsed.type !== 'item.completed') continue;
+    if (parsed?.type !== 'item.completed') continue;
     const item = parsed.item as { type?: string; text?: string } | undefined;
     if (item?.type === 'agent_message' && typeof item.text === 'string') {
       agentTexts.push(item.text);

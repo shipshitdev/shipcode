@@ -101,12 +101,12 @@ function quantileThresholds(values: number[]): [number, number, number, number] 
   if (positives.length === 0) return [0, 0, 0, 0];
   const pick = (frac: number): number => {
     const idx = Math.min(positives.length - 1, Math.max(0, Math.floor(positives.length * frac)));
-    return positives[idx]!;
+    return positives[idx] ?? 0;
   };
   const t1 = pick(0.25);
   const t2 = pick(0.5);
   const t3 = pick(0.75);
-  const t4 = positives[positives.length - 1]!;
+  const t4 = positives.at(-1) ?? 0;
   return [t1, t2, t3, t4];
 }
 
@@ -242,7 +242,8 @@ export function ActivityHeatmap({
 
   const handleCellEnter = useCallback((e: React.MouseEvent, record: HeatmapDayRecord) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const containerRect = containerRef.current!.getBoundingClientRect();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    if (!containerRect) return;
     setTooltip({
       record,
       x: rect.left + rect.width / 2 - containerRect.left,
