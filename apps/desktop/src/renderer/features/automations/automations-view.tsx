@@ -181,6 +181,9 @@ function AutomationCard({
               {automation.lastStartedAt
                 ? `Last run ${formatAutomationRelativeTime(automation.lastStartedAt)} · ${automation.runCount} total`
                 : 'Never run'}
+              {automation.enabled && automation.nextRunAt
+                ? ` · Next ${formatAutomationRelativeTime(automation.nextRunAt)}`
+                : ''}
             </div>
           </Button>
 
