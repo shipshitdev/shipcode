@@ -2,6 +2,7 @@ import { type CollisionDetection, pointerWithin, rectIntersection } from '@dnd-k
 import type {
   AppSettings,
   GhStatusMapping,
+  GhStatusOption,
   GitHubIssueCacheRecord,
   IssuePipelineStatus,
   Project,
@@ -470,12 +471,52 @@ export function formatDate(iso: string): string {
 }
 
 /**
+ * GitHub Projects v2 single-select option colors → CSS hex.
+ * GitHub stores a Status option's color as an 8-value enum (not hex); map each to
+ * a Primer-aligned hex so the kanban column dot mirrors the board's own palette.
+ */
+const GH_STATUS_COLOR_HEX: Record<string, string> = {
+  GRAY: '#6e7781',
+  BLUE: '#0969da',
+  GREEN: '#1a7f37',
+  YELLOW: '#9a6700',
+  ORANGE: '#bc4c00',
+  RED: '#cf222e',
+  PINK: '#bf3989',
+  PURPLE: '#8250df',
+};
+
+/** ShipCode macro column → the GhStatusMapping field that backs it. */
+function statusOptionForColumn(
+  columnKey: ColumnKey,
+  mapping: GhStatusMapping,
+): GhStatusOption | null {
+  switch (columnKey) {
+    case 'todo':
+      return mapping.todo;
+    case 'agent':
+      return mapping.inProgress;
+    case 'human':
+      return mapping.humanReview;
+    case 'deferred':
+      return mapping.deferred ?? null;
+    case 'done':
+      return mapping.done;
+    default:
+      return null;
+  }
+}
+
+/**
  * Returns CSS hex color for a kanban column dot when a GitHub Projects
  * color is available, or null to fall back to the default Tailwind class.
  */
 export function resolveColumnDotColor(
-  _columnKey: ColumnKey,
-  _mapping: GhStatusMapping | null | undefined,
+  columnKey: ColumnKey,
+  mapping: GhStatusMapping | null | undefined,
 ): string | null {
-  return null;
+  if (!mapping) return null;
+  const color = statusOptionForColumn(columnKey, mapping)?.color;
+  if (!color) return null;
+  return GH_STATUS_COLOR_HEX[color.toUpperCase()] ?? null;
 }
