@@ -7,6 +7,7 @@ import {
   type ReasoningEffort,
   type UpdateAutomationInput,
 } from '@shipcode/shared';
+import { CollapsibleSection } from '@shipcode/ui';
 import {
   Button,
   Input,
@@ -29,6 +30,7 @@ import log from 'electron-log/renderer';
 import { Wand2 } from 'lucide-react';
 import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { useAppStore } from '../../stores/app-store';
+import { executorModelPlaceholder, executorModelSuggestions } from './executor-model-options';
 
 const PRESETS: Array<{ id: string; label: string; cron: string | null }> = [
   { id: 'hourly', label: 'Every hour', cron: '0 * * * *' },
@@ -473,83 +475,102 @@ function useCreateAutomationModalView() {
           )}
         </div>
 
-        <details className="rounded-md border border-border bg-tertiary/20 px-3 py-2">
-          <summary className="cursor-pointer text-xs font-medium text-secondary">
-            Executor override (optional)
-          </summary>
-          <div className="mt-3 flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="auto-provider" className="text-xs text-secondary">
-                Provider
-              </Label>
-              <Select
-                value={provider}
-                onValueChange={(value) =>
-                  dispatchForm({
-                    type: 'field',
-                    field: 'provider',
-                    value: value as 'inherit' | AgentType,
-                  })
-                }
-              >
-                <SelectTrigger id="auto-provider" className="bg-transparent">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PROVIDER_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="auto-model" className="text-xs text-secondary">
-                Model ID
-              </Label>
-              <Input
-                id="auto-model"
-                value={executorModelId}
-                onChange={(e) =>
-                  dispatchForm({
-                    type: 'field',
-                    field: 'executorModelId',
-                    value: e.target.value,
-                  })
-                }
-                placeholder="e.g. anthropic/claude-opus-4-7"
-                className="font-mono text-xs"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="auto-reasoning" className="text-xs text-secondary">
-                Reasoning effort
-              </Label>
-              <Select
-                value={reasoning}
-                onValueChange={(value) =>
-                  dispatchForm({
-                    type: 'field',
-                    field: 'reasoning',
-                    value: value as 'inherit' | ReasoningEffort,
-                  })
-                }
-              >
-                <SelectTrigger id="auto-reasoning" className="bg-transparent">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {REASONING_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        <CollapsibleSection
+          title="Executor override (optional)"
+          contentClassName="flex flex-col gap-3"
+        >
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="auto-provider" className="text-xs text-secondary">
+              Provider
+            </Label>
+            <Select
+              value={provider}
+              onValueChange={(value) =>
+                dispatchForm({
+                  type: 'field',
+                  field: 'provider',
+                  value: value as 'inherit' | AgentType,
+                })
+              }
+            >
+              <SelectTrigger id="auto-provider" className="bg-transparent">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PROVIDER_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </details>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="auto-model" className="text-xs text-secondary">
+              Model ID
+            </Label>
+            <Input
+              id="auto-model"
+              value={executorModelId}
+              onChange={(e) =>
+                dispatchForm({
+                  type: 'field',
+                  field: 'executorModelId',
+                  value: e.target.value,
+                })
+              }
+              placeholder={executorModelPlaceholder(provider)}
+              className="font-mono text-xs"
+            />
+            {executorModelSuggestions(provider).length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {executorModelSuggestions(provider).map((o) => (
+                  <Button
+                    key={o.value}
+                    type="button"
+                    variant="secondary"
+                    size="xs"
+                    onClick={() =>
+                      dispatchForm({
+                        type: 'field',
+                        field: 'executorModelId',
+                        value: o.value,
+                      })
+                    }
+                  >
+                    {o.label}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="auto-reasoning" className="text-xs text-secondary">
+              Reasoning effort
+            </Label>
+            <Select
+              value={reasoning}
+              onValueChange={(value) =>
+                dispatchForm({
+                  type: 'field',
+                  field: 'reasoning',
+                  value: value as 'inherit' | ReasoningEffort,
+                })
+              }
+            >
+              <SelectTrigger id="auto-reasoning" className="bg-transparent">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {REASONING_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CollapsibleSection>
 
         <Label
           htmlFor="auto-enabled"
