@@ -30,7 +30,9 @@ export interface AppSettings {
   /**
    * When true, every programmatic (`claude -p`) phase is forced to the
    * interactive CLI regardless of per-phase run-mode settings. Escape hatch
-   * for users who never want to touch the rationed Agent-SDK credit pool.
+   * for users who prefer Claude to always run on the interactive subscription
+   * seat, or as a safety valve if Anthropic re-rations the Agent-SDK credit
+   * pool (see the pool-exhaustion fallback in cli-provider / runtime).
    */
   forceInteractiveClaude: boolean;
   localPreview: LocalPreviewSettings;

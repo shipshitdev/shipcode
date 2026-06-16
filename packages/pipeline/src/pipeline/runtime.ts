@@ -43,9 +43,11 @@ const execFileAsync = promisify(execFile);
 
 /**
  * Resolve the configured run mode (interactive vs programmatic) for a given
- * agent + pipeline phase from settings. Every provider phase now carries its
- * own selectable run mode (defaults to interactive so phases avoid the
- * rationed `claude -p` Agent-SDK credit pool); programmatic remains opt-in.
+ * agent + pipeline phase from settings. Every provider phase carries its own
+ * selectable run mode. Structured phases default to programmatic (`claude -p` /
+ * `codex exec --json`) for structured output; the pool-exhaustion fallback
+ * below still reroutes programmatic claude to interactive if Anthropic
+ * re-rations the Agent-SDK credit pool.
  */
 function getAgentPhaseRunMode(
   settings: AppSettings,

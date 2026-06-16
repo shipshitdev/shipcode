@@ -39,7 +39,7 @@ Set `SHIPCODE_TELEMETRY_ENABLED=false` before launching the desktop app to disab
 | `maxConcurrentPipelines` | 3 | Workspace-wide active pipeline cap |
 | `maxConcurrentExecutions` | 3 | Per-project execution cap after planning/approval |
 | `pipelineSpeedProfile` | `smart_fast` | Default scheduling/execution profile |
-| `agentRunModes` | interactive | Per-provider output mode controls for Claude and Codex issue execution, terminal fixes, and instant sessions |
+| `agentRunModes` | programmatic (structured phases & Codex execute); interactive (Claude execute, terminal fixes, instant) | Per-provider, per-phase output transport. Programmatic streams `claude -p` / `codex exec --json`; interactive drives the official CLI in a terminal pane. Programmatic Claude execute/terminal-fix/instant is disabled (host tools, no OS sandbox); Codex programmatic runs sandboxed via `codex exec` |
 | `plannerReasoningEffort` | `low` | Default planner effort. Exact options depend on the selected provider |
 | `reviewerReasoningEffort` | `high` | Default reviewer effort. Exact options depend on the selected provider |
 | `executorReasoningEffort` | `medium` | Default executor effort. Exact options depend on the selected provider |

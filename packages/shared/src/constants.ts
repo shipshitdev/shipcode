@@ -32,24 +32,37 @@ export const DEFAULT_SETTINGS: AppSettings = {
   telemetryEnabled: null,
   defaultWorktreeEnabled: true,
   terminalScrollback: 10_000,
+  // Programmatic (`claude -p` / `codex exec --json`) is the default for the
+  // structured reasoning phases — Anthropic reverted the 2026 Agent-SDK billing
+  // change, so `claude -p` draws from the subscription seat again. Structured
+  // claude phases run with ALL tools disallowed (pure prompt→JSON), so they
+  // carry no host risk. EXCEPTIONS, kept on the interactive CLI:
+  //   - Claude execute/terminalFix/instant: programmatic claude there grants
+  //     host Edit/Write/Bash with NO OS sandbox (see cli-provider execute guard),
+  //     so they stay interactive regardless of this default.
+  //   - terminalFix/instant for both providers default to interactive because
+  //     they are watched terminal-pane surfaces, not headless automation.
+  // Codex execute is programmatic by default: `codex exec --sandbox` is
+  // OS-sandboxed, and codex is the default executor, so the out-of-box pipeline
+  // runs fully programmatic.
   agentRunModes: {
     claude: {
       issueTerminal: 'interactive',
-      plan: 'interactive',
-      review: 'interactive',
-      revision: 'interactive',
-      verify: 'interactive',
+      plan: 'programmatic',
+      review: 'programmatic',
+      revision: 'programmatic',
+      verify: 'programmatic',
       execute: 'interactive',
       terminalFix: 'interactive',
       instant: 'interactive',
     },
     codex: {
       issueTerminal: 'interactive',
-      plan: 'interactive',
-      review: 'interactive',
-      revision: 'interactive',
-      verify: 'interactive',
-      execute: 'interactive',
+      plan: 'programmatic',
+      review: 'programmatic',
+      revision: 'programmatic',
+      verify: 'programmatic',
+      execute: 'programmatic',
       terminalFix: 'interactive',
       instant: 'interactive',
     },

@@ -601,6 +601,11 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
         promptSize: measurePromptPayload(req.prompt),
         ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
       };
+      // Security guard, independent of the Agent-SDK billing question: a
+      // programmatic (`claude -p`) execute grants Edit/Write/Bash on the host
+      // with NO OS sandbox. This stays blocked even though programmatic is now
+      // the default for the (tool-less) structured phases. Use interactive
+      // Claude execute, or codex (sandboxed via `codex exec`).
       if (req.phase === 'execute' && req.phaseHints?.runMode !== 'interactive') {
         return {
           rawOutput:

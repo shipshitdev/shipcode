@@ -31,11 +31,19 @@ export type InstantFixScope = 'user' | 'project' | 'custom';
 export type ProviderRunMode = 'programmatic' | 'interactive';
 
 /**
- * Per-agent run-mode selection. Each pipeline phase (plan/review/revision/
- * verify/execute) carries its own transport: `interactive` drives the official
- * CLI in a PTY (billed against the interactive subscription seat), while
- * `programmatic` uses `claude -p` / `codex exec --json` (claude draws from the
- * rationed Agent-SDK credit pool). `issueTerminal` is always interactive.
+ * Per-agent run-mode selection. Each phase carries its own transport:
+ * `programmatic` uses `claude -p` / `codex exec --json` (structured output);
+ * `interactive` drives the official CLI in a PTY. `issueTerminal` is always
+ * interactive.
+ *
+ * Defaults (see DEFAULT_SETTINGS): structured reasoning phases (plan/review/
+ * revision/verify) are programmatic for both providers — Anthropic reverted the
+ * 2026 Agent-SDK billing change, and these claude phases run with all tools
+ * disallowed (pure prompt→JSON), so they carry no host risk. execute is
+ * programmatic for codex (sandboxed via `codex exec`) but interactive for
+ * claude: programmatic claude execute/terminalFix/instant would grant host
+ * Edit/Write/Bash with no OS sandbox. terminalFix/instant default interactive
+ * (watched terminal panes).
  */
 export interface AgentRunModeConfig {
   issueTerminal: 'interactive';

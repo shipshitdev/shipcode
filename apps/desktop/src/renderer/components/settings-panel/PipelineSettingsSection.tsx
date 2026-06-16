@@ -41,28 +41,61 @@ import { ChevronDown } from 'lucide-react';
 import { getModelOptions } from '../model-provider-options-data';
 import { PhaseModelRow } from './PhaseModelRow';
 
-function RunModeSelect({ value }: { value: AppSettings['agentRunModes']['claude']['execute'] }) {
+type RunModeValue = AppSettings['agentRunModes']['claude']['execute'];
+type RunModePhase = 'execute' | 'terminalFix' | 'instant';
+
+function RunModeSelect({
+  agent,
+  phase,
+  settings,
+  onUpdate,
+}: {
+  agent: 'claude' | 'codex';
+  phase: RunModePhase;
+  settings: AppSettings;
+  onUpdate: (patch: Partial<AppSettings>) => void;
+}) {
+  const value = settings.agentRunModes[agent][phase];
+  // Programmatic Claude on these surfaces spawns `claude -p` with host
+  // Edit/Write/Bash tools and NO OS sandbox, so it stays disabled. Codex runs
+  // through `codex exec --sandbox`, so programmatic is safe and selectable.
+  const programmaticBlocked = agent === 'claude';
+
+  const handleChange = (next: RunModeValue) => {
+    onUpdate({
+      agentRunModes: {
+        ...settings.agentRunModes,
+        [agent]: { ...settings.agentRunModes[agent], [phase]: next },
+      },
+    });
+  };
+
+  const select = (
+    <Select value={value} onValueChange={(next) => handleChange(next as RunModeValue)}>
+      <SelectTrigger className="w-[190px]">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="interactive">Interactive CLI</SelectItem>
+        <SelectItem value="programmatic" disabled={programmaticBlocked}>
+          Programmatic
+        </SelectItem>
+      </SelectContent>
+    </Select>
+  );
+
+  if (!programmaticBlocked) return select;
+
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="inline-flex cursor-not-allowed">
-            <Select value={value} disabled>
-              <SelectTrigger className="w-[190px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="interactive">Interactive CLI</SelectItem>
-                <SelectItem value="programmatic" disabled>
-                  Programmatic
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </span>
+          <span className="inline-flex">{select}</span>
         </TooltipTrigger>
         <TooltipContent side="top" className="max-w-[300px]">
-          Programmatic mode is disabled while Claude non-interactive billing is unsettled. ShipCode
-          will not route Claude through claude -p or SDK wrappers by default.
+          Programmatic mode runs claude -p with host file/shell tools and no OS sandbox, so it stays
+          disabled for Claude here. Use Interactive CLI for Claude, or Codex (which runs sandboxed
+          via codex exec) for programmatic output.
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -139,43 +172,73 @@ function pipelineSettingsSection({
         <TabsContent value="runtime" className="mt-0">
           <SettingsSection
             title="Agent Output Mode"
-            description="Interactive CLI output is the active path. Programmatic mode stays visible for future structured automation, but is disabled while Claude non-interactive billing is unsettled."
+            description="Per-surface transport for execute, terminal fixes, and instant sessions. Programmatic streams structured claude -p / codex exec output; Interactive drives the official CLI in a terminal pane. Pipeline plan/review/verify default to programmatic and are not shown here. Programmatic Claude is disabled for these surfaces because it grants host tools without an OS sandbox — use Codex (sandboxed) for programmatic output."
           >
             <SettingsRow
               label="Claude execute output"
-              description="Uses the official Claude CLI session surface. Does not route through claude -p."
+              description="Claude execute stays on the interactive CLI: programmatic claude -p would run host Edit/Write/Bash with no OS sandbox."
             >
-              <RunModeSelect value={settings.agentRunModes.claude.execute} />
+              <RunModeSelect
+                agent="claude"
+                phase="execute"
+                settings={settings}
+                onUpdate={onUpdate}
+              />
             </SettingsRow>
             <SettingsRow
               label="Claude terminal fix output"
               description="Terminal fixes open as supervised interactive CLI sessions."
             >
-              <RunModeSelect value={settings.agentRunModes.claude.terminalFix} />
+              <RunModeSelect
+                agent="claude"
+                phase="terminalFix"
+                settings={settings}
+                onUpdate={onUpdate}
+              />
             </SettingsRow>
             <SettingsRow
               label="Claude instant output"
               description="Instant assistant output stays attached to an interactive terminal pane."
             >
-              <RunModeSelect value={settings.agentRunModes.claude.instant} />
+              <RunModeSelect
+                agent="claude"
+                phase="instant"
+                settings={settings}
+                onUpdate={onUpdate}
+              />
             </SettingsRow>
             <SettingsRow
               label="Codex execute output"
-              description="Uses official Codex CLI output instead of a synthetic console stream."
+              description="Codex execute defaults to programmatic — codex exec runs inside an OS sandbox (workspace-write)."
             >
-              <RunModeSelect value={settings.agentRunModes.codex.execute} />
+              <RunModeSelect
+                agent="codex"
+                phase="execute"
+                settings={settings}
+                onUpdate={onUpdate}
+              />
             </SettingsRow>
             <SettingsRow
               label="Codex terminal fix output"
-              description="Terminal fixes open as supervised interactive CLI sessions."
+              description="Interactive opens a supervised terminal pane; programmatic streams sandboxed codex exec output."
             >
-              <RunModeSelect value={settings.agentRunModes.codex.terminalFix} />
+              <RunModeSelect
+                agent="codex"
+                phase="terminalFix"
+                settings={settings}
+                onUpdate={onUpdate}
+              />
             </SettingsRow>
             <SettingsRow
               label="Codex instant output"
-              description="Instant assistant output stays attached to an interactive terminal pane."
+              description="Interactive keeps the terminal pane; programmatic streams sandboxed codex exec output."
             >
-              <RunModeSelect value={settings.agentRunModes.codex.instant} />
+              <RunModeSelect
+                agent="codex"
+                phase="instant"
+                settings={settings}
+                onUpdate={onUpdate}
+              />
             </SettingsRow>
           </SettingsSection>
 

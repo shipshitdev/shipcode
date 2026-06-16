@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { extractCodexThreadId, isPoolExhausted } from '@shipcode/agents';
+import { extractCodexThreadId } from '@shipcode/agents';
 import {
   type InstantFixScope,
   type ProviderRunMode,
@@ -56,24 +56,16 @@ function getRunMode(
 ): ProviderRunMode {
   const settings = queries.settings.get();
   const configured = settings.agentRunModes[cli][action];
-  // Claude programmatic draws from the rationed Agent-SDK credit pool. Coerce
-  // to interactive when the user forces it or the pool is exhausted so the run
-  // succeeds against the interactive seat instead of failing.
-  if (
-    cli === 'claude' &&
-    configured === 'programmatic' &&
-    (settings.forceInteractiveClaude || isPoolExhausted())
-  ) {
+  // Programmatic Claude instant/terminalFix spawns `claude -p` with host
+  // Edit/Write/Bash tools and NO OS sandbox (unlike codex `exec --sandbox`),
+  // so it is never allowed for these surfaces — always coerce to the
+  // interactive CLI. The `forceInteractiveClaude` / pool-exhaustion escape
+  // hatch is folded in here as defense-in-depth. Codex programmatic is
+  // OS-sandboxed and passes through unchanged.
+  if (cli === 'claude' && configured === 'programmatic') {
     return 'interactive';
   }
   return configured;
-}
-
-function assertProgrammaticRunAllowed(cli: InstantCli): void {
-  if (cli !== 'claude') return;
-  throw new Error(
-    'Programmatic Claude runs are disabled while non-interactive billing is unsettled. Use Interactive CLI mode.',
-  );
 }
 
 async function writePromptArtifact(args: {
@@ -517,8 +509,6 @@ export function registerInstantHandlers({
         return { threadId: thread.id };
       }
 
-      assertProgrammaticRunAllowed(args.cli);
-
       // 5. Build CLI args (prompt piped via stdin, not argv)
       let cliArgs: string[];
       if (args.cli === 'claude') {
@@ -660,8 +650,6 @@ export function registerInstantHandlers({
         return { threadId: thread.id };
       }
 
-      assertProgrammaticRunAllowed(args.cli);
-
       const sessionId = args.cli === 'claude' ? crypto.randomUUID() : undefined;
       const cliArgs =
         args.cli === 'claude'
@@ -760,8 +748,6 @@ export function registerInstantHandlers({
         );
         return { threadId: thread.id, cli, title };
       }
-
-      assertProgrammaticRunAllowed(cli);
 
       const proc =
         cli === 'claude'
