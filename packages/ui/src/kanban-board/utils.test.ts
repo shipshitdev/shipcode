@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import type { AppSettings, GitHubIssueCacheRecord, Project, Thread } from '@shipcode/shared';
+import type {
+  AppSettings,
+  GhStatusMapping,
+  GitHubIssueCacheRecord,
+  Project,
+  Thread,
+} from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
 import {
@@ -700,6 +706,46 @@ describe('resolveIssuePriorityBadge', () => {
     expect(badge?.label).toBe('Icebox');
     expect(badge?.variant).toBe('accent');
     expect(badge?.rank).toBeNull();
+  });
+});
+
+describe('resolveColumnDotColor', () => {
+  const opt = (name: string, color: string | null): { name: string; color: string | null } => ({
+    name,
+    color,
+  });
+  const mapping: GhStatusMapping = {
+    todo: opt('Todo', 'GREEN'),
+    inProgress: opt('In Progress', 'PURPLE'),
+    humanReview: opt('Human Review', 'ORANGE'),
+    deferred: opt('Deferred', 'GRAY'),
+    done: opt('Done', 'BLUE'),
+  };
+
+  it('maps each macro column to its GitHub status option hex', () => {
+    expect(resolveColumnDotColor('todo', mapping)).toBe('#1a7f37');
+    expect(resolveColumnDotColor('agent', mapping)).toBe('#8250df');
+    expect(resolveColumnDotColor('human', mapping)).toBe('#bc4c00');
+    expect(resolveColumnDotColor('deferred', mapping)).toBe('#6e7781');
+    expect(resolveColumnDotColor('done', mapping)).toBe('#0969da');
+  });
+
+  it('accepts lowercase color enums from the API', () => {
+    expect(resolveColumnDotColor('todo', { ...mapping, todo: opt('Todo', 'green') })).toBe(
+      '#1a7f37',
+    );
+  });
+
+  it('falls back to null when mapping, option, or color is absent', () => {
+    expect(resolveColumnDotColor('todo', null)).toBeNull();
+    expect(resolveColumnDotColor('todo', undefined)).toBeNull();
+    expect(resolveColumnDotColor('todo', { ...mapping, todo: null })).toBeNull();
+    expect(resolveColumnDotColor('todo', { ...mapping, todo: opt('Todo', null) })).toBeNull();
+    expect(resolveColumnDotColor('deferred', { ...mapping, deferred: undefined })).toBeNull();
+  });
+
+  it('falls back to null for an unrecognized GitHub color enum', () => {
+    expect(resolveColumnDotColor('todo', { ...mapping, todo: opt('Todo', 'TEAL') })).toBeNull();
   });
 });
 
