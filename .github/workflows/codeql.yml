@@ -1,0 +1,57 @@
+name: CodeQL Security Analysis
+
+# Advisory SAST — never on the PR hot path (slow, occasionally flaky). Runs on a
+# weekly cron and on demand; findings land in the repo Security tab as SARIF.
+on:
+  workflow_dispatch:
+  schedule:
+    # Mondays 05:00 UTC — off-cycle from the CI (Sun 06:00) and E2E (Sun 07:00) crons.
+    - cron: '0 5 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["javascript-typescript"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          config: |
+            paths:
+              - apps/
+              - packages/
+            paths-ignore:
+              - '**/node_modules/**'
+              - '**/dist/**'
+              - '**/out/**'
+              - '**/.next/**'
+              - '**/*.spec.ts'
+              - '**/*.test.ts'
+              - '**/*.e2e.ts'
+              - '**/test/**'
+              - '**/tests/**'
+              - '**/__tests__/**'
+              - '**/mocks/**'
+              - '**/fixtures/**'
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"

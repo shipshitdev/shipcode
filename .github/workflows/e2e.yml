@@ -1,13 +1,10 @@
 name: E2E
 
-# Branch model: develop (integration) → staging → master (default + release).
-# - Weekly cron fires ONLY from the default branch's copy of this file, so the
-#   scheduled review always runs against master. (It stays dormant on develop/
-#   staging — GitHub ignores cron on non-default branches.)
-# - workflow_dispatch is available on any branch that has this file; pick the
-#   branch to test via the `target_ref` input below. The suite currently lives
-#   on develop only; once promoted, master/staging dispatch + weekly cron light
-#   up with no further changes.
+# Trunk-based: master is the single trunk.
+# - Weekly cron fires from the default branch (master), so the scheduled review
+#   always runs against the trunk.
+# - workflow_dispatch defaults to master; `target_ref` lets you point the suite
+#   at any branch/tag (e.g. a release tag or a feature branch under test).
 run-name: >-
   E2E ·
   ${{ github.event_name == 'workflow_dispatch' && format('{0} (manual)', inputs.target_ref)
@@ -23,13 +20,9 @@ on:
   workflow_dispatch:
     inputs:
       target_ref:
-        description: 'Branch to run the full desktop E2E suite against'
-        type: choice
-        default: develop
-        options:
-          - develop
-          - staging
-          - master
+        description: 'Branch/tag to run the full desktop E2E suite against'
+        type: string
+        default: master
       only_failed:
         description: 'Re-run only previously-failed E2E tests (--last-failed). Faster after a fix, but SKIPS the flow-coverage gate — not authoritative. Default: full run.'
         type: boolean
