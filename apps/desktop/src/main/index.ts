@@ -573,6 +573,7 @@ function createWindow() {
   mainWindow.on('closed', () => {
     if (watchdogTimer) clearInterval(watchdogTimer);
     reconciliationLoop.stop();
+    automationScheduler.stop();
     workflowWatchManager.dispose();
     updateService?.stop();
     updateService = null;

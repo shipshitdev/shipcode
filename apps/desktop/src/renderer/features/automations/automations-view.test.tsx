@@ -217,6 +217,37 @@ describe('AutomationsView', () => {
     expect(screen.getByText(/My Repo/)).toBeInTheDocument();
   });
 
+  it('shows the next scheduled run when enabled and scheduled', async () => {
+    const future = new Date(Date.now() + 1000 * 60 * 60 * 26).toISOString();
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'automations:list-all') {
+        return [makeAutomation({ enabled: true, nextRunAt: future })];
+      }
+      if (channel === 'project:list-visible') return [makeProject()];
+      return null;
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText(/Next in/)).toBeInTheDocument();
+  });
+
+  it('omits the next run line when the automation is disabled', async () => {
+    const future = new Date(Date.now() + 1000 * 60 * 60 * 26).toISOString();
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'automations:list-all') {
+        return [makeAutomation({ enabled: false, nextRunAt: future })];
+      }
+      if (channel === 'project:list-visible') return [makeProject()];
+      return null;
+    });
+
+    renderWithProviders();
+
+    await waitFor(() => expect(screen.getByText('Daily smoke')).toBeInTheDocument());
+    expect(screen.queryByText(/Next in/)).not.toBeInTheDocument();
+  });
+
   it('runs, edits, toggles, and deletes an automation from the card actions', async () => {
     invokeMock.mockImplementation(async (channel: string) => {
       if (channel === 'automations:list-all') return [makeAutomation({ enabled: true })];

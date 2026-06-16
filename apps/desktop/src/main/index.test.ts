@@ -103,6 +103,7 @@ const pipelineSchedulerMock = {
 
 const automationSchedulerMock = {
   start: vi.fn(),
+  stop: vi.fn(),
 };
 
 const updateServiceMock = {
