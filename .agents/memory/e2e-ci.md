@@ -1,110 +1,105 @@
 ---
 name: e2e_ci_architecture
-description: How the E2E GitHub Actions workflow is wired across develop/staging/master — triggers, weekly cron, build ordering, and the macstudio relationship
+description: How the CI + E2E GitHub Actions workflows are wired on the master trunk — trust gate, affected scoping, weekly crons, build ordering, and the macstudio relationship
 type: architecture
 status: active
-last_verified: 2026-06-07
-topics: [e2e, ci, github-actions, workflow, branches, cron]
+last_verified: 2026-06-16
+topics: [e2e, ci, github-actions, workflow, trunk, branches, cron]
 ---
 
-**Workflow:** `.github/workflows/e2e.yml` (suite in `apps/e2e/`, added in #227). Runs
-two Playwright projects: `desktop` (real Electron via `_electron.launch`, macOS) and
-`web-smoke` (static web/docs over HTTP, Linux). Plus a journey **flow-coverage gate**
+**Workflows:** `.github/workflows/ci.yml` (lint/design/typecheck/test backbone) and
+`.github/workflows/e2e.yml` (Playwright suite in `apps/e2e/`, added in #227). E2E runs
+two projects: `desktop` (real Electron via `_electron.launch`, macOS) and `web-smoke`
+(static web/docs over HTTP, Linux), plus a journey **flow-coverage gate**
 (`apps/e2e/scripts/check-flow-coverage.mjs`, `E2E_FLOW_COVERAGE_MIN=90`).
 
-## Branch model
+## Branch model — trunk-based (migrated 2026-06-16, PR #235)
 
-`develop` (integration) → `staging` → `master` (GitHub **default** branch + release).
-As of 2026-06-07 the E2E suite lives **only on develop**; master/staging are ~72
-commits behind and have no `apps/e2e`. Promotion of the app code happens later — the
-workflow is intentionally set up so all three branches light up with no further edits
-once promoted.
+**Single trunk: `master`.** No `develop`/`staging` — both deleted in the migration.
+Matches genfeed.ai / vitae.ai. PRs target `master`; squash-merge after the gates pass;
+post-merge push to `master` runs the full suite. Release = tag / dispatch.
 
-## Triggers
+`master` is the GitHub **default branch** and is branch-protected: required checks
+`Trust Check`, `Lint`, `Design System`, `Typecheck`, `Test`, `Secret Scan`,
+`React Doctor`; strict up-to-date; linear history; no force-push; no deletion.
+`enforce_admins` is **false** so admin squash-merge still works.
 
-- **`schedule` (`0 7 * * 0`, weekly Sun 07:00 UTC):** the weekly review. **GitHub runs
-  cron ONLY from the workflow file on the default branch (master).** So the weekly will
-  not fire until `e2e.yml` is promoted to master; on develop/staging the cron stanza is
-  dormant (GitHub ignores it). This is by design — weekly is meant to run against master.
-- **`workflow_dispatch`:** manual run, available on any branch that has the file. A
-  `target_ref` choice input (`develop`/`staging`/`master`, default `develop`) selects
-  which branch's code to check out and test. Dispatch works on develop **today** even
-  though the file is not on master (only *cron* needs the default branch).
-  - `gh workflow run e2e.yml --ref develop` — trigger from CLI.
-  - Checkout ref = `${{ inputs.target_ref || github.ref }}`: dispatch uses the chosen
-    branch; schedule (no inputs) falls through to `github.ref` = master.
+## CI backbone — ci.yml (PR #235)
+
+`on: push:[master], pull_request:[master], schedule '0 6 * * 0', workflow_dispatch,
+workflow_call`. Jobs:
+
+- **`trust` (Trust Check):** fork-PR gate. `actions/github-script@v8` checks
+  `author_association` (OWNER/MEMBER/COLLABORATOR) or same-repo head, else requires the
+  `run-ci` label. Non-PR events auto-trusted. Every other job
+  `needs: trust, if: needs.trust.outputs.is-trusted == 'true'`.
+- **`lint` (Lint):** `bun run lint` (biome, whole repo — sub-minute, no affected scoping).
+- **`design` (Design System):** `bun run lint:design` (`design.md lint DESIGN.md`).
+- **`typecheck` (Typecheck):** on PRs `TURBO_SCM_BASE=<pr base sha> bunx turbo run
+  typecheck --affected`; full `bun run typecheck` otherwise. `fetch-depth: 0` for the SCM
+  diff.
+- **`test` (Test):** same affected-on-PR pattern for `turbo run test`; full `test:ci`
+  otherwise. `fetch-depth: 0`, ripgrep installed.
+- **`coverage` (Coverage):** decoupled — `schedule || workflow_dispatch || push-to-master`
+  only, never blocks a PR. `COVERAGE_MIN=80`.
+
+Shared setup lives in the **`.github/actions/setup-bun-env`** composite action (Bun
+1.3.14 + Node 22, Bun module store + Turbo cache, optional ripgrep,
+`bun install --frozen-lockfile`) — used by every CI job instead of copy-paste.
+
+**CodeQL** (`.github/workflows/codeql.yml`): advisory SAST, `workflow_dispatch` +
+weekly cron (`0 5 * * 1`), never on the PR hot path; SARIF → Security tab.
+
+## E2E triggers
+
+- **`schedule` (`0 7 * * 0`, weekly Sun 07:00 UTC):** the weekly review. GitHub runs cron
+  **only from the default branch (master)** — now satisfied natively (master is the trunk).
+  Runs against master.
+- **`workflow_dispatch`:** manual. `target_ref` is a **string** input, default `master`;
+  point it at any branch/tag (release tag, feature branch under test).
+  - `gh workflow run e2e.yml --ref master`
+  - Checkout ref = `${{ inputs.target_ref || github.ref }}`: dispatch uses the chosen ref;
+    schedule (no inputs) falls through to `github.ref` = master.
 - **`pull_request` (paths-filtered):** cheap HTTP-only `web-smoke` on Linux. The heavy
   `desktop-e2e` job is gated to `schedule || workflow_dispatch` — never per-PR.
 
 ## Orchestrator: full.yml (CI → E2E in one dispatch)
 
-`.github/workflows/full.yml` runs **CI first, then E2E** in a single manual
-dispatch, sequenced by `needs: ci`. It adds **no job logic** — it `uses:` the
-existing `ci.yml` and `e2e.yml` as **reusable workflows**. Each of those gained
-one additive `workflow_call:` trigger in its `on:` block (job bodies untouched):
+`.github/workflows/full.yml` runs **CI first, then E2E** in a single manual dispatch,
+sequenced by `needs: ci`. No job logic — it `uses:` `ci.yml` and `e2e.yml` as reusable
+workflows (both carry a `workflow_call:` trigger). full.yml forwards `github.ref_name` as
+e2e's `target_ref`, so e2e's `checkout ref: ${{ inputs.target_ref || github.ref }}`
+resolves to the dispatched ref.
 
-- `ci.yml`: bare `workflow_call:` (no inputs).
-- `e2e.yml`: `workflow_call:` with a `target_ref` **string** input (workflow_call
-  inputs can't be `type: choice`, unlike the dispatch input). full.yml forwards
-  `github.ref_name`, so e2e's `checkout ref: ${{ inputs.target_ref || github.ref }}`
-  resolves to the dispatched branch.
+- **`ci.yml`:** bare `workflow_call:` (no inputs).
+- **`e2e.yml`:** `workflow_call:` with a `target_ref` **string** input (workflow_call
+  inputs can't be `type: choice`, unlike the dispatch input).
 
 Key behaviours:
 
-- **Event propagation:** inside a `workflow_call`-invoked file, `github.event_name`
-  is the **caller's** event = `workflow_dispatch`. So `ci.yml`'s `quality` +
-  `coverage` run (full CI) and `e2e.yml`'s `lint-typecheck` + `desktop-e2e` run.
-  `fast-qa` (PR-only) and `web-smoke` (PR-only) stay skipped — correct.
-- **Branch = dispatch ref.** Both children run against the branch full.yml is
-  dispatched on (`gh workflow run full.yml --ref develop`, or the UI dropdown).
-  Works on any branch that has all three files (develop today; staging/master
-  once promoted — same model as e2e.yml).
+- **Event propagation:** inside a `workflow_call`-invoked file, `github.event_name` is the
+  **caller's** event = `workflow_dispatch`. So ci.yml runs its full PR-and-push jobs and
+  e2e.yml's `lint-typecheck` + `desktop-e2e` run; `web-smoke` (PR-only) stays skipped.
 - **Ordering:** if CI fails, `needs: ci` blocks E2E (no wasted macOS minutes).
 - **Permissions:** orchestrator + each called job declare `contents: read`.
+- **Registration:** full.yml is now **`workflow_dispatch`-only**. Because master is the
+  default branch, GitHub indexes dispatch-only workflows natively — no trick needed. The
+  old paths-filtered `pull_request` self-test (a workaround for registering the workflow
+  on a non-default `develop`) was **removed in PR #235**; it only existed to make the file
+  dispatchable before trunk migration.
 
-Validate edits with `actionlint .github/workflows/*.yml` (checks the `uses:`
-graph + input types, not just YAML). Direct `workflow_dispatch` on ci.yml or
-e2e.yml individually still works unchanged.
+Validate edits with `actionlint .github/workflows/*.yml` (checks the `uses:` graph + input
+types, not just YAML). Direct `workflow_dispatch` on ci.yml or e2e.yml individually still
+works unchanged.
 
-**Dispatchability gate + how full.yml is dispatchable on develop:** GitHub
-indexes `workflow_dispatch`-only (and `schedule`) workflows **only from the
-default branch (master)**. A pure dispatch-only full.yml would therefore 404 on
-develop (`gh workflow run full.yml` → "not found on the default branch") — the
-same default-branch rule that gates the weekly cron. `pull_request`/`push`
-triggers, by contrast, get a workflow indexed from **any** branch — **but only
-once that trigger actually FIRES**. Pushing a file that carries a `pull_request`
-trigger to a non-default branch does **not** register it; the workflow stays 404
-(`gh api .../actions/workflows/full.yml` → Not Found) until a real event fires
-it. e2e.yml was registered because PR #227 fired its `pull_request`; full.yml
-stayed 404 after 3f26a36f pushed the bare trigger, and only registered when
-PR #229 edited full.yml and fired its paths-filtered self-test (gotcha proven
-2026-06-07).
+## Caching — "only redo the parts that changed" (best-practice)
 
-Chosen fix (2026-06-07): full.yml carries a **paths-filtered `pull_request`
-trigger** (`paths: ['.github/workflows/full.yml']`) so editing the file in a PR
-fires it. That first firing (PR #229) registered the workflow (id 290778929) →
-it's now dispatchable on develop (`gh workflow run full.yml --ref develop`)
-**without promoting to master**. Registration persists after the PR closes;
-re-firing is not needed. Filtered to its own file so it never auto-runs
-the orchestrator on normal PRs; it self-tests only when full.yml itself changes,
-and on that `pull_request` event the children run their light PR-path jobs
-(ci → `fast-qa`, e2e → `web-smoke`) — `github.event_name` inside a
-`workflow_call` is the caller's event = `pull_request`, so the heavy
-`desktop-e2e`/`quality` jobs stay skipped. The e2e `only_failed` passthrough is
-`${{ inputs.only_failed || false }}` so the empty pull_request value still
-type-checks as a boolean `workflow_call` input. **Remove the `pull_request`
-trigger once the suite is promoted to master** (dispatch-from-master then needs
-no trick). Dispatch ref ≠ registration: once indexed, the ref dropdown / `--ref`
-selects which branch's copy executes (local `uses: ./...` resolve from that same
-ref).
+Goal (Vincent): after a fix, don't re-run everything green — only the updated parts.
+Three sound layers + one explicit reject:
 
-## Caching — "only redo the parts that changed" (best-practice, 2026-06-07)
-
-Goal (Vincent): after a fix, don't re-run everything green — only the updated
-parts. Industry-standard answer, three sound layers + one explicit reject:
-
-**1. Turbo cache persistence (the real "incremental" win).** Every job that runs
-a turbo task persists `.turbo` across runs via `actions/cache`:
+**1. Turbo cache persistence (the real "incremental" win).** Every job that runs a turbo
+task persists `.turbo` across runs via `actions/cache` (in CI jobs this is handled by the
+`setup-bun-env` composite; e2e jobs carry their own):
 
 ```yaml
 - uses: actions/cache@v4
@@ -116,44 +111,40 @@ a turbo task persists `.turbo` across runs via `actions/cache`:
       turbo-${{ runner.os }}-
 ```
 
-`sha` key + prefix `restore-keys` is Turborepo's official CI pattern: each run
-saves a fresh snapshot and restores the most recent one; **turbo decides hit/miss
-by content hash, not the cache key**. So unchanged packages' `build` / `typecheck`
-/ `test` / `lint` / `coverage` restore instantly; only changed packages re-run.
-Per-job key prefix avoids save collisions (`runner.os` separates Linux vs macOS).
-Cache dir is `.turbo/cache` (no `cacheDir` override; gitignored via `.turbo/`).
-Applied to: ci.yml `quality`/`fast-qa`/`coverage`; e2e.yml `lint-typecheck`/
-`desktop-e2e`/`web-smoke`. **E2E specs themselves are `cache: false` in turbo.json
-(non-hermetic — launch real Electron / serve files) so turbo never caches them;
-the cache only accelerates their `^build` deps.** Correct by design.
+`sha` key + prefix `restore-keys` is Turborepo's official CI pattern: each run saves a
+fresh snapshot and restores the most recent one; **turbo decides hit/miss by content hash,
+not the cache key**. So unchanged packages' `build` / `typecheck` / `test` / `lint` /
+`coverage` restore instantly; only changed packages re-run. Per-job key prefix avoids save
+collisions (`runner.os` separates Linux vs macOS). Cache dir is `.turbo/cache` (gitignored
+via `.turbo/`). Applied to: ci.yml `typecheck`/`test`/`coverage` (via composite
+`turbo-key-prefix`); e2e.yml `lint-typecheck`/`desktop-e2e`/`web-smoke`. **E2E specs
+themselves are `cache: false` in turbo.json** (non-hermetic — launch real Electron / serve
+files) so turbo never caches them; the cache only accelerates their `^build` deps.
 
 **2. Dep + binary caches (speed, not correctness).** Bun module store
-(`~/.bun/install/cache`, key `bun-<os>-<hash bun.lock>`) added to the ci.yml jobs
-(they lacked it; e2e jobs already had it). Electron binary
-(`~/Library/Caches/electron`, key `electron-<os>-<hash apps/desktop/package.json>`)
-on `desktop-e2e` so install.js doesn't re-pull ~100 MB from the CDN each run
-(install.js is idempotent — skips download on a cache hit).
+(`~/.bun/install/cache`, key `bun-<os>-<hash bun.lock>`) — in CI via the composite, in e2e
+inline. Electron binary (`~/Library/Caches/electron`, key
+`electron-<os>-<hash apps/desktop/package.json>`) on `desktop-e2e` so install.js doesn't
+re-pull ~100 MB from the CDN each run (install.js is idempotent — skips download on a hit).
 
-**3. `--last-failed` opt-in (post-fix loop for E2E, NOT the gate).** Dispatch
-input `only_failed` (default **false**) on e2e.yml + full.yml. When true,
-`desktop-e2e` runs `playwright test --last-failed` and **skips the flow-coverage
-gate** (emits a `::notice` saying the run is not authoritative). The failed-test
-list (`apps/e2e/test-results/.last-run.json`) is persisted with
-`actions/cache/save` (`if: always()`, per-branch key `pw-lastrun-<ref>-<run_id>`)
-and restored (`restore-keys: pw-lastrun-<ref>-`) only in `only_failed` mode. This
-gives "re-run only what broke after a fix" for E2E **without** weakening the
-default full run, which stays the authoritative gate (schedule + plain dispatch).
+**3. `--last-failed` opt-in (post-fix loop for E2E, NOT the gate).** Dispatch input
+`only_failed` (default **false**) on e2e.yml + full.yml. When true, `desktop-e2e` runs
+`playwright test --last-failed` and **skips the flow-coverage gate** (emits a `::notice`
+that the run is not authoritative). The failed-test list
+(`apps/e2e/test-results/.last-run.json`) is persisted with `actions/cache/save`
+(`if: always()`, per-branch key `pw-lastrun-<ref>-<run_id>`) and restored
+(`restore-keys: pw-lastrun-<ref>-`) only in `only_failed` mode. Gives "re-run only what
+broke" for E2E without weakening the default full run (schedule + plain dispatch).
 
-**4. Rejected: `--only-changed`.** Playwright's `--only-changed` detects changes
-via the **static import graph**. This suite exercises **runtime-served
-artifacts** — the desktop project launches the built Electron binary
-(`executablePath`), web-smoke serves static files over HTTP — none of which are
-statically imported into the specs. So `--only-changed` would silently miss
+**4. Rejected: `--only-changed`.** Playwright's `--only-changed` detects changes via the
+**static import graph**. This suite exercises **runtime-served artifacts** — desktop
+launches the built Electron binary (`executablePath`), web-smoke serves static files over
+HTTP — none statically imported into the specs. So `--only-changed` would silently miss
 app-source changes and skip tests that should run. Unsound here; not used.
 
-Future speedup (not implemented): Playwright sharding
-(`--shard=k/n` + `blob` reporter + `merge-reports`) and/or Vercel Remote Cache
-(`TURBO_TOKEN`/`TURBO_TEAM`) to share the turbo cache across machines.
+Future speedup (not implemented): Playwright sharding (`--shard=k/n` + `blob` reporter +
+`merge-reports`) and/or Vercel Remote Cache (`TURBO_TOKEN`/`TURBO_TEAM`) to share the turbo
+cache across machines.
 
 Validate any change with `actionlint .github/workflows/*.yml`.
 
@@ -162,9 +153,9 @@ Validate any change with `actionlint .github/workflows/*.yml`.
 `@shipcode/shared`, `@shipcode/db`, etc. expose their public API via `exports → ./dist/*`
 (built `.d.ts`). The desktop bundle is built with `bun --filter @shipcode/desktop
 build:code` (`tsc && vite build`) which **bypasses turbo's dep graph**. With no
-`packages/*/dist`, tsc fails with dozens of `TS2307: Cannot find module
-'@shipcode/shared'` plus cascade `TS7006 implicit any` / Pick<> mismatch errors (the
-first dispatched run, 27087740056, died exactly here at "Build desktop bundle").
+`packages/*/dist`, tsc fails with dozens of `TS2307: Cannot find module '@shipcode/shared'`
+plus cascade `TS7006 implicit any` / Pick<> mismatch errors (the first dispatched run,
+27087740056, died exactly here at "Build desktop bundle").
 
 Fix: build workspace packages first, mirroring the repo's `coverage` script idiom:
 
@@ -173,20 +164,20 @@ Fix: build workspace packages first, mirroring the repo's `coverage` script idio
 - run: bun --filter @shipcode/desktop build:code       # tsc now resolves the deps
 ```
 
-Verified locally: clearing `packages/*/dist` reproduces the failure; the two-step
-sequence builds clean (exit 0). The TS errors were 100% cascade — no source bug.
+Verified locally: clearing `packages/*/dist` reproduces the failure; the two-step sequence
+builds clean (exit 0). The TS errors were 100% cascade — no source bug.
 
 ## Job graph: lint-typecheck → desktop-e2e
 
-A fast **Linux prerequisite gate** runs before the macOS suite so a bad commit fails
-cheap (≈1 min) instead of burning scarce macOS minutes:
+A fast **Linux prerequisite gate** runs before the macOS suite so a bad commit fails cheap
+(≈1 min) instead of burning scarce macOS minutes:
 
 ```
 lint-typecheck (ubuntu-latest)  →  desktop-e2e (macos-15, needs: lint-typecheck)
 ```
 
 `lint-typecheck` runs `bun run lint` (Biome) + `bun run typecheck` (turbo `tsc --noEmit`,
-`dependsOn: ^build` so it builds the package `.d.ts` first). Both gates are `schedule ||
+`dependsOn: ^build` so it builds the package `.d.ts` first). Both gated to `schedule ||
 workflow_dispatch` (mirror desktop-e2e). `web-smoke` stays independent on `pull_request`.
 
 ## Electron binary on CI (the second #227 blocker, fixed 2026-06-07)
@@ -197,12 +188,12 @@ Two distinct electron artifacts, two distinct sources — don't conflate them:
   ~1.1 MB). A normal `bun install` extracts them, so the **typecheck gate needs nothing
   extra**. (If they're ever missing locally the bun store is corrupt — restore by copying
   `electron.d.ts` from the tarball; do *not* expect install.js to produce them for v42.)
-- **Binary (`Electron.app`)** is downloaded by electron's **postinstall** (`install.js`
-  → `@electron/get` → CDN zip → `extract-zip` → writes `dist/` + `path.txt`). **Bun does
-  NOT run postinstall scripts** unless the package is a `trustedDependencies` entry — and
-  adding electron there churns `bun.lock`, breaking `--frozen-lockfile`. So after
-  `bun install` the binary is absent and `require('electron')` throws *"Electron failed to
-  install correctly"* (run 27088478619 died here at `electron-app.ts:24`).
+- **Binary (`Electron.app`)** is downloaded by electron's **postinstall** (`install.js` →
+  `@electron/get` → CDN zip → `extract-zip` → writes `dist/` + `path.txt`). **Bun does NOT
+  run postinstall scripts** unless the package is a `trustedDependencies` entry — and adding
+  electron there churns `bun.lock`, breaking `--frozen-lockfile`. So after `bun install` the
+  binary is absent and `require('electron')` throws *"Electron failed to install
+  correctly"* (run 27088478619 died here at `electron-app.ts:24`).
 
 Fix: an explicit step in `desktop-e2e` after `bun install` that runs install.js
 version-agnostically and verifies the path resolves (throws loudly if not):
@@ -222,7 +213,7 @@ lint-typecheck gate does **not** need this step (types come from the tarball).
 
 ## macstudio (still authoritative for now)
 
-The weekly E2E currently runs on Vincent's Mac Studio (manual / local — **no launchd
-plist or crontab in the repo**). GitHub Actions is being made "always ready to trigger"
-(free macOS compute, public repo) but the macstudio process is **not disabled** yet.
-Cut over only when the GH weekly is green on master post-promotion.
+The weekly E2E currently runs on Vincent's Mac Studio (manual / local — **no launchd plist
+or crontab in the repo**). GitHub Actions is "always ready to trigger" (free macOS compute,
+public repo) and the weekly cron now fires natively from master, but the macstudio process
+is **not disabled** yet. Cut over only once the GH weekly is reliably green on master.

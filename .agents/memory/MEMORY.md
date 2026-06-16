@@ -42,9 +42,14 @@ Where things live:
 - **Why it was built a certain way** → `.agents/memory/` (short flat filenames)
 - **Inline SPECS / TODOS / DECISIONS dirs** → never
 
-## Current state (2026-04-11)
+## Current state
 
-- **OpenRouter Tier 1/2/3 all shipped** in PR #9 (merged 2026-04-10). Provider abstraction, HTTP backend for plan/review/verify, in-process tool-call EXECUTE harness, and `openrouter/auto` meta-router with per-phase telemetry all live. Tracked under closed epic shipshitdev/shipcode#8 with sub-issues #20/#21/#22.
+- **Trunk-based since 2026-06-16 (PR #235).** Single `master` trunk — `develop`/`staging`
+  deleted. PRs → master, squash-merge after 7 required checks (`Trust Check`, `Lint`,
+  `Design System`, `Typecheck`, `Test`, `Secret Scan`, `React Doctor`); strict, linear
+  history, no force-push. CI backbone (trust gate, turbo `--affected`, `setup-bun-env`
+  composite, CodeQL advisory) matches genfeed.ai / vitae.ai. See: `e2e-ci.md`.
+- **OpenRouter Tier 1/2/3 all shipped** (2026-04-11) in PR #9 (merged 2026-04-10). Provider abstraction, HTTP backend for plan/review/verify, in-process tool-call EXECUTE harness, and `openrouter/auto` meta-router with per-phase telemetry all live. Tracked under closed epic shipshitdev/shipcode#8 with sub-issues #20/#21/#22.
 - **Pipeline phases can all route through OpenRouter.** Claude and codex CLIs still work unchanged. `AgentType = 'claude' | 'codex' | 'gh' | 'openrouter'`.
 
 ## Hard rules (from past incidents)
@@ -76,4 +81,4 @@ Where things live:
 - `ipc-errors.md` — clamp IPC errors at main-process boundary
 - `skills.md` — skills/memory folder layout, symlink rules
 - `agents.md` — custom sub-agent roster, routing rules, parallel patterns
-- `e2e-ci.md` — E2E workflow: branch triggers, weekly-cron-on-master rule, build ordering, macstudio cutover
+- `e2e-ci.md` — trunk-based CI+E2E backbone: single master trunk, trust gate, affected scoping, weekly crons, build ordering, macstudio cutover
