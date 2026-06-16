@@ -40,10 +40,12 @@ export type ProviderRunMode = 'programmatic' | 'interactive';
  * revision/verify) are programmatic for both providers — Anthropic reverted the
  * 2026 Agent-SDK billing change, and these claude phases run with all tools
  * disallowed (pure prompt→JSON), so they carry no host risk. execute is
- * programmatic for codex (sandboxed via `codex exec`) but interactive for
- * claude: programmatic claude execute/terminalFix/instant would grant host
- * Edit/Write/Bash with no OS sandbox. terminalFix/instant default interactive
- * (watched terminal panes).
+ * programmatic for codex (sandboxed via `codex exec`) and interactive for
+ * claude by default. Programmatic claude execute CAN be selected, but only runs
+ * wrapped in the `srt` OS sandbox (claudeExecuteSandboxEnabled) — see
+ * sandbox/srt.ts; otherwise it fails closed. Claude terminalFix/instant stay
+ * interactive (no sandbox path on those surfaces); terminalFix/instant default
+ * interactive (watched terminal panes).
  */
 export interface AgentRunModeConfig {
   issueTerminal: 'interactive';

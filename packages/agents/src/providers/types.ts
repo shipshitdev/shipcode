@@ -142,6 +142,18 @@ export interface ProviderPhaseHints {
   reasoningEffort?: ReasoningEffort;
   /** Runtime transport selected from AppSettings.agentRunModes. */
   runMode?: ProviderRunMode;
+  /**
+   * OS-sandbox config for programmatic Claude EXECUTE. Set by the pipeline
+   * runtime (from AppSettings) only when claude + execute + programmatic +
+   * sandbox enabled. When present, the provider wraps `claude -p` in `srt`
+   * (Seatbelt/bubblewrap). When absent, programmatic claude execute fails
+   * closed — it is never run unsandboxed.
+   */
+  osSandbox?: {
+    backend: 'srt';
+    networkPolicy: 'anthropic-only' | 'anthropic-github';
+    extraWritePaths: string[];
+  };
 }
 
 export interface ProviderRequest {

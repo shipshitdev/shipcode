@@ -17,6 +17,7 @@ import { PLAN_FENCE_TAG, REVIEW_FENCE_TAG, VERIFICATION_FENCE_TAG } from '@shipc
 import { classifyPoolExhaustion, markPoolExhausted } from '../agent-sdk-pool-state';
 import type { ProcessManager } from '../process-manager';
 import { measurePromptPayload } from '../prompt-scope';
+import { buildSandboxedClaudeExecuteCommand, resolveSrt } from '../sandbox/srt';
 import { StreamParser } from '../stream-parser';
 import { stripAnsi } from './output-summary';
 import { mapReasoningEffortToClaudeThinkingTokens, mapReasoningEffortToCodex } from './reasoning';
@@ -82,11 +83,16 @@ async function runCli(
   workspaceRoot?: string | null,
   options?: Parameters<ProcessManager['spawn']>[5],
   onProcessStart?: (processId: string) => void,
+  // Spawn a different binary than `agentId` while keeping the process TYPE tag
+  // as the agent (e.g. wrap `claude` inside the `srt` OS sandbox). The override
+  // must be a ProcessManager-allowlisted command (resolved srt path).
+  commandOverride?: string,
 ): Promise<CliRunResult> {
   if (signal.aborted) {
     return { rawOutput: '', exitCode: 130 };
   }
 
+  const command = commandOverride ?? agentId;
   let process: ReturnType<ProcessManager['spawn']>;
   try {
     const spawnOptions = {
@@ -97,7 +103,7 @@ async function runCli(
     if (stdin !== undefined && processManagerWithStdin.spawnWithStdin) {
       process = processManagerWithStdin.spawnWithStdin(
         agentId,
-        agentId,
+        command,
         args,
         cwd,
         stdin,
@@ -107,7 +113,7 @@ async function runCli(
     } else {
       process = processManager.spawn(
         agentId,
-        agentId,
+        command,
         materializeStdinArgsForLegacySpawn(args, stdin),
         cwd,
         threadId,
@@ -230,6 +236,9 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
       if (allowedTools) execArgs.push('--allowedTools', allowedTools.join(','));
       /* v8 ignore next -- execute normally has no disallowed tools unless explicitly configured */
       if (disallowedTools) execArgs.push('--disallowedTools', disallowedTools.join(','));
+      // Safe ONLY because the execute branch in generate() always wraps this
+      // command in the srt OS sandbox (buildSandboxedClaudeExecuteCommand) and
+      // fails closed otherwise. Never spawn these args without that wrapper.
       execArgs.push('--dangerously-skip-permissions');
       injectThinkingTokens(execArgs, req);
       return { args: execArgs, stdin: req.prompt };
@@ -601,25 +610,6 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
         promptSize: measurePromptPayload(req.prompt),
         ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
       };
-      // Security guard, independent of the Agent-SDK billing question: a
-      // programmatic (`claude -p`) execute grants Edit/Write/Bash on the host
-      // with NO OS sandbox. This stays blocked even though programmatic is now
-      // the default for the (tool-less) structured phases. Use interactive
-      // Claude execute, or codex (sandboxed via `codex exec`).
-      if (req.phase === 'execute' && req.phaseHints?.runMode !== 'interactive') {
-        return {
-          rawOutput:
-            'Programmatic Claude execute is disabled because it exposes host shell/file tools without an OS sandbox. Use interactive Claude execute or a sandboxed provider.',
-          exitCode: 1,
-          resolvedModel: req.modelHint ?? 'claude',
-          promptTelemetry,
-          providerError: {
-            kind: 'unexpected_stop',
-            message: 'programmatic Claude execute is disabled',
-            retryable: false,
-          },
-        };
-      }
       // Interactive structured phases (plan/review/revision/verify) bridge
       // their machine-readable output through a written file artifact instead
       // of stream-json, so they avoid the rationed `claude -p` pool while
@@ -669,25 +659,86 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
               : {}),
         };
       }
-      // `interactive` is true only when this run avoids the `claude -p`
-      // path entirely (so it draws from the interactive subscription seat,
-      // not the rationed Agent-SDK credit pool).
+      // `interactive` is true only when this run avoids the `claude -p` path
+      // entirely (interactive subscription seat, not the programmatic path).
       const interactive = req.phaseHints?.runMode === 'interactive' && req.phase === 'execute';
-      const command = interactive
-        ? await buildClaudeInteractiveExecuteCommand(req)
-        : buildClaudeCommand(req);
-      const result = await runCli(
-        processManager,
-        'claude',
-        command.args,
-        command.stdin,
-        req.cwd,
-        req.signal,
-        req.threadId,
-        req.workspaceRoot,
-        { ...(command.options ?? {}), envKeyAllowlist: [...CLAUDE_ENV_KEYS] },
-        req.onProcessStart,
-      );
+
+      // Resolve the command. Programmatic claude EXECUTE grants host
+      // Edit/Write/Bash with no built-in OS sandbox, so it is REQUIRED to run
+      // inside the `srt` OS sandbox (Seatbelt/bubblewrap). If the sandbox is
+      // disabled (no osSandbox hint) or unavailable (srt not resolvable), it
+      // fails closed — it is never run unsandboxed. Programmatic structured
+      // phases (plan/review/verify) are tool-less, so they skip this.
+      let command: CliCommand;
+      let commandOverride: string | undefined;
+      let sandboxCleanup: (() => Promise<void>) | undefined;
+      if (req.phase === 'execute' && !interactive) {
+        const osSandbox = req.phaseHints?.osSandbox;
+        if (osSandbox?.backend !== 'srt') {
+          return {
+            rawOutput:
+              'Programmatic Claude execute requires the OS sandbox (srt), which is disabled. Enable claudeExecuteSandboxEnabled, switch this phase to interactive, or use codex (sandboxed via codex exec).',
+            exitCode: 1,
+            resolvedModel: req.modelHint ?? 'claude',
+            promptTelemetry,
+            providerError: {
+              kind: 'unexpected_stop',
+              message: 'programmatic Claude execute requires the OS sandbox',
+              retryable: false,
+            },
+          };
+        }
+        const inner = buildClaudeCommand(req);
+        const sandboxed = await buildSandboxedClaudeExecuteCommand({
+          worktreePath: req.cwd,
+          innerClaudeArgs: inner.args,
+          networkPolicy: osSandbox.networkPolicy,
+          extraWritePaths: osSandbox.extraWritePaths,
+        });
+        if (!sandboxed) {
+          return {
+            rawOutput: `${resolveSrt().reason}. Install @anthropic-ai/sandbox-runtime or disable sandboxed Claude execute.`,
+            exitCode: 127,
+            resolvedModel: req.modelHint ?? 'claude',
+            promptTelemetry,
+            providerError: {
+              kind: 'binary_missing',
+              message: 'srt sandbox unavailable',
+              retryable: false,
+            },
+          };
+        }
+        command = { args: sandboxed.args, stdin: inner.stdin };
+        commandOverride = sandboxed.command;
+        sandboxCleanup = sandboxed.cleanup;
+        // Remove the policy file promptly on abort instead of waiting out
+        // runCli's kill grace window. fs.rm(force) is idempotent, so the
+        // finally below double-calling cleanup is harmless.
+        req.signal.addEventListener('abort', () => void sandboxCleanup?.(), { once: true });
+      } else {
+        command = interactive
+          ? await buildClaudeInteractiveExecuteCommand(req)
+          : buildClaudeCommand(req);
+      }
+
+      let result: CliRunResult;
+      try {
+        result = await runCli(
+          processManager,
+          'claude',
+          command.args,
+          command.stdin,
+          req.cwd,
+          req.signal,
+          req.threadId,
+          req.workspaceRoot,
+          { ...(command.options ?? {}), envKeyAllowlist: [...CLAUDE_ENV_KEYS] },
+          req.onProcessStart,
+          commandOverride,
+        );
+      } finally {
+        if (sandboxCleanup) await sandboxCleanup();
+      }
       const parser = new StreamParser();
       parser.feed(result.rawOutput);
       const usage = parser.extractUsage();

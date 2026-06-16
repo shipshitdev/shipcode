@@ -39,7 +39,10 @@ Set `SHIPCODE_TELEMETRY_ENABLED=false` before launching the desktop app to disab
 | `maxConcurrentPipelines` | 3 | Workspace-wide active pipeline cap |
 | `maxConcurrentExecutions` | 3 | Per-project execution cap after planning/approval |
 | `pipelineSpeedProfile` | `smart_fast` | Default scheduling/execution profile |
-| `agentRunModes` | programmatic (structured phases & Codex execute); interactive (Claude execute, terminal fixes, instant) | Per-provider, per-phase output transport. Programmatic streams `claude -p` / `codex exec --json`; interactive drives the official CLI in a terminal pane. Programmatic Claude execute/terminal-fix/instant is disabled (host tools, no OS sandbox); Codex programmatic runs sandboxed via `codex exec` |
+| `agentRunModes` | programmatic (structured phases & Codex execute); interactive (Claude execute, terminal fixes, instant) | Per-provider, per-phase output transport. Programmatic streams `claude -p` / `codex exec --json`; interactive drives the official CLI in a terminal pane. Programmatic Claude execute requires the sandbox below; Claude terminal-fix/instant stay interactive (host tools, no sandbox path); Codex programmatic runs sandboxed via `codex exec` |
+| `claudeExecuteSandboxEnabled` | true | Required to select Programmatic for Claude execute. Wraps `claude -p` in the `srt` OS sandbox (`@anthropic-ai/sandbox-runtime`, macOS Seatbelt / Linux bubblewrap) so file/shell/MCP access is confined to the worktree. When false, programmatic Claude execute fails closed. No effect on Codex or the tool-less structured Claude phases |
+| `claudeExecuteSandboxNetworkPolicy` | `anthropic-github` | Outbound allowlist for the sandboxed execute run. `anthropic-only` = Anthropic API only; `anthropic-github` also permits GitHub + npm registry (branch pushes, dependency installs) |
+| `claudeExecuteSandboxExtraWritePaths` | `[]` | Extra absolute / `~`-prefixed paths the sandbox may write to, beyond the worktree and temp dir |
 | `plannerReasoningEffort` | `low` | Default planner effort. Exact options depend on the selected provider |
 | `reviewerReasoningEffort` | `high` | Default reviewer effort. Exact options depend on the selected provider |
 | `executorReasoningEffort` | `medium` | Default executor effort. Exact options depend on the selected provider |

@@ -68,6 +68,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
     },
   },
   forceInteractiveClaude: false,
+  // Programmatic claude execute runs only inside the srt OS sandbox. Enabled by
+  // default so selecting programmatic claude execute is safe out of the box; the
+  // run-mode default for claude execute stays interactive, so this only engages
+  // when a user opts that phase into programmatic.
+  claudeExecuteSandboxEnabled: true,
+  claudeExecuteSandboxNetworkPolicy: 'anthropic-github',
+  claudeExecuteSandboxExtraWritePaths: [],
   localPreview: {
     enabled: true,
     hostMode: 'localhost-subdomain',

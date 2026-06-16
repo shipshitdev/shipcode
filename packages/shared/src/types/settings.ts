@@ -35,6 +35,23 @@ export interface AppSettings {
    * pool (see the pool-exhaustion fallback in cli-provider / runtime).
    */
   forceInteractiveClaude: boolean;
+  /**
+   * Master toggle for the programmatic Claude EXECUTE OS sandbox. Programmatic
+   * `claude -p` execute grants host Edit/Write/Bash with no built-in sandbox,
+   * so it only runs wrapped in `srt` (@anthropic-ai/sandbox-runtime, Seatbelt/
+   * bubblewrap). When false, programmatic claude execute fails closed (never
+   * runs unsandboxed). Has no effect on codex (already sandboxed) or on the
+   * tool-less structured claude phases.
+   */
+  claudeExecuteSandboxEnabled: boolean;
+  /**
+   * Outbound network allowlist preset for the sandboxed execute run.
+   * `anthropic-only` = Anthropic API only; `anthropic-github` also allows
+   * GitHub + npm registry (needed to push branches / install deps).
+   */
+  claudeExecuteSandboxNetworkPolicy: 'anthropic-only' | 'anthropic-github';
+  /** Extra absolute / ~-prefixed paths the sandbox may write to (beyond the worktree + tmp). */
+  claudeExecuteSandboxExtraWritePaths: string[];
   localPreview: LocalPreviewSettings;
   projectOpenTarget: ProjectOpenTarget;
   terminalOpenTarget: TerminalOpenTarget;

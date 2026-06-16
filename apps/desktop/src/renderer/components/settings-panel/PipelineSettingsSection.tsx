@@ -56,10 +56,18 @@ function RunModeSelect({
   onUpdate: (patch: Partial<AppSettings>) => void;
 }) {
   const value = settings.agentRunModes[agent][phase];
-  // Programmatic Claude on these surfaces spawns `claude -p` with host
-  // Edit/Write/Bash tools and NO OS sandbox, so it stays disabled. Codex runs
-  // through `codex exec --sandbox`, so programmatic is safe and selectable.
-  const programmaticBlocked = agent === 'claude';
+  // Codex always runs sandboxed (`codex exec --sandbox`), so programmatic is
+  // selectable. For Claude, programmatic spawns `claude -p` with host
+  // Edit/Write/Bash and no built-in sandbox:
+  //   - execute: allowed only when the srt OS sandbox is enabled (it wraps the
+  //     whole process); blocked otherwise.
+  //   - terminalFix / instant: no sandbox path on those surfaces, so blocked.
+  const programmaticBlocked =
+    agent === 'claude' && !(phase === 'execute' && settings.claudeExecuteSandboxEnabled);
+  const blockedReason =
+    agent === 'claude' && phase === 'execute'
+      ? 'Programmatic Claude execute runs inside the srt OS sandbox. Enable “Sandbox Claude execute” below to select it.'
+      : 'Programmatic mode runs claude -p with host file/shell tools and no OS sandbox, so it stays disabled for Claude here. Use Codex (sandboxed via codex exec) for programmatic output.';
 
   const handleChange = (next: RunModeValue) => {
     onUpdate({
@@ -93,9 +101,7 @@ function RunModeSelect({
           <span className="inline-flex">{select}</span>
         </TooltipTrigger>
         <TooltipContent side="top" className="max-w-[300px]">
-          Programmatic mode runs claude -p with host file/shell tools and no OS sandbox, so it stays
-          disabled for Claude here. Use Interactive CLI for Claude, or Codex (which runs sandboxed
-          via codex exec) for programmatic output.
+          {blockedReason}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -172,11 +178,11 @@ function pipelineSettingsSection({
         <TabsContent value="runtime" className="mt-0">
           <SettingsSection
             title="Agent Output Mode"
-            description="Per-surface transport for execute, terminal fixes, and instant sessions. Programmatic streams structured claude -p / codex exec output; Interactive drives the official CLI in a terminal pane. Pipeline plan/review/verify default to programmatic and are not shown here. Programmatic Claude is disabled for these surfaces because it grants host tools without an OS sandbox — use Codex (sandboxed) for programmatic output."
+            description="Per-surface transport for execute, terminal fixes, and instant sessions. Programmatic streams structured claude -p / codex exec output; Interactive drives the official CLI in a terminal pane. Pipeline plan/review/verify default to programmatic and are not shown here. Programmatic Claude execute requires the OS sandbox (enabled below); Claude terminal-fix and instant stay interactive-only (no sandbox path); Codex is always sandboxed."
           >
             <SettingsRow
               label="Claude execute output"
-              description="Claude execute stays on the interactive CLI: programmatic claude -p would run host Edit/Write/Bash with no OS sandbox."
+              description="Interactive drives the CLI in a terminal pane. Programmatic runs claude -p inside the srt OS sandbox — enable “Sandbox Claude execute” below to unlock it."
             >
               <RunModeSelect
                 agent="claude"
@@ -240,6 +246,54 @@ function pipelineSettingsSection({
                 onUpdate={onUpdate}
               />
             </SettingsRow>
+            <SettingsRow
+              label="Sandbox Claude execute"
+              htmlFor="claude-execute-sandbox"
+              description="Required to select Programmatic for Claude execute. Wraps claude -p in the srt OS sandbox (macOS Seatbelt / Linux bubblewrap) so file, shell, and MCP access is confined to the worktree. When off, programmatic Claude execute is disabled."
+            >
+              <Switch
+                id="claude-execute-sandbox"
+                checked={settings.claudeExecuteSandboxEnabled}
+                onCheckedChange={(checked: boolean) => {
+                  // Turning the sandbox off also reverts a programmatic Claude
+                  // execute selection to interactive, so settings never persist
+                  // the incoherent "programmatic + no sandbox" combination (which
+                  // would fail closed at run time).
+                  const patch: Partial<AppSettings> = { claudeExecuteSandboxEnabled: checked };
+                  if (!checked && settings.agentRunModes.claude.execute === 'programmatic') {
+                    patch.agentRunModes = {
+                      ...settings.agentRunModes,
+                      claude: { ...settings.agentRunModes.claude, execute: 'interactive' },
+                    };
+                  }
+                  onUpdate(patch);
+                }}
+              />
+            </SettingsRow>
+            {settings.claudeExecuteSandboxEnabled && (
+              <SettingsRow
+                label="Sandbox network policy"
+                description="Outbound allowlist for sandboxed Claude execute. Anthropic only is tightest; Anthropic + GitHub also permits GitHub and the npm registry for branch pushes and dependency installs."
+              >
+                <Select
+                  value={settings.claudeExecuteSandboxNetworkPolicy}
+                  onValueChange={(value) =>
+                    onUpdate({
+                      claudeExecuteSandboxNetworkPolicy:
+                        value as AppSettings['claudeExecuteSandboxNetworkPolicy'],
+                    })
+                  }
+                >
+                  <SelectTrigger className="w-[190px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="anthropic-only">Anthropic only</SelectItem>
+                    <SelectItem value="anthropic-github">Anthropic + GitHub</SelectItem>
+                  </SelectContent>
+                </Select>
+              </SettingsRow>
+            )}
           </SettingsSection>
 
           <SettingsSection>

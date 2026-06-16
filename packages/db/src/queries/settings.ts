@@ -1,3 +1,4 @@
+import nodePath from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type {
   AppSettings,
@@ -175,6 +176,35 @@ function isExecutorModel(value: unknown): value is AppSettings['triageModel'] {
   return typeof value === 'string' && (EXECUTOR_MODELS as readonly string[]).includes(value);
 }
 
+const SANDBOX_NETWORK_POLICIES = ['anthropic-only', 'anthropic-github'] as const;
+function isSandboxNetworkPolicy(
+  value: unknown,
+): value is AppSettings['claudeExecuteSandboxNetworkPolicy'] {
+  return (
+    typeof value === 'string' && (SANDBOX_NETWORK_POLICIES as readonly string[]).includes(value)
+  );
+}
+
+const FORBIDDEN_WRITE_ROOTS = ['/etc', '/usr', '/bin', '/sbin', '/System', '/private/etc', '/var'];
+function isSafeExtraWritePath(p: unknown): p is string {
+  if (typeof p !== 'string' || p.length === 0) return false;
+  if (!p.startsWith('/') && !p.startsWith('~/')) return false;
+  if (nodePath.normalize(p) !== p) return false; // rejects `..`/redundant segments
+  if (p === '/') return false;
+  return !FORBIDDEN_WRITE_ROOTS.some((root) => p === root || p.startsWith(`${root}/`));
+}
+
+function parseStringArraySetting(raw: string | undefined, fallback: string[]): string[] {
+  if (!raw) return [...fallback];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((x) => typeof x === 'string')) return parsed;
+  } catch {
+    // fall through
+  }
+  return [...fallback];
+}
+
 export class SettingsQueries {
   constructor(private db: DatabaseSync) {}
 
@@ -208,6 +238,19 @@ export class SettingsQueries {
       forceInteractiveClaude: parseBool(
         stored.forceInteractiveClaude,
         DEFAULT_SETTINGS.forceInteractiveClaude,
+      ),
+      claudeExecuteSandboxEnabled: parseBool(
+        stored.claudeExecuteSandboxEnabled,
+        DEFAULT_SETTINGS.claudeExecuteSandboxEnabled,
+      ),
+      claudeExecuteSandboxNetworkPolicy: isSandboxNetworkPolicy(
+        stored.claudeExecuteSandboxNetworkPolicy,
+      )
+        ? stored.claudeExecuteSandboxNetworkPolicy
+        : DEFAULT_SETTINGS.claudeExecuteSandboxNetworkPolicy,
+      claudeExecuteSandboxExtraWritePaths: parseStringArraySetting(
+        stored.claudeExecuteSandboxExtraWritePaths,
+        DEFAULT_SETTINGS.claudeExecuteSandboxExtraWritePaths,
       ),
       localPreview: parseJsonSetting(stored.localPreview, DEFAULT_SETTINGS.localPreview),
       projectOpenTarget: isProjectOpenTarget(stored.projectOpenTarget)
@@ -477,6 +520,27 @@ export class SettingsQueries {
     }
     if ('worktreeBranchFormat' in patch && patch.worktreeBranchFormat != null) {
       validateBranchFormat(patch.worktreeBranchFormat);
+    }
+    if (
+      'claudeExecuteSandboxNetworkPolicy' in patch &&
+      patch.claudeExecuteSandboxNetworkPolicy != null
+    ) {
+      if (!isSandboxNetworkPolicy(patch.claudeExecuteSandboxNetworkPolicy)) {
+        throw new Error(
+          'claudeExecuteSandboxNetworkPolicy must be anthropic-only|anthropic-github',
+        );
+      }
+    }
+    if (
+      'claudeExecuteSandboxExtraWritePaths' in patch &&
+      patch.claudeExecuteSandboxExtraWritePaths != null
+    ) {
+      const paths = patch.claudeExecuteSandboxExtraWritePaths;
+      if (!Array.isArray(paths) || !paths.every(isSafeExtraWritePath)) {
+        throw new Error(
+          'claudeExecuteSandboxExtraWritePaths must be an array of absolute or ~-prefixed paths with no traversal or system roots',
+        );
+      }
     }
     if ('devLogLevel' in patch && patch.devLogLevel != null) {
       if (!isDevLogLevel(patch.devLogLevel)) {
