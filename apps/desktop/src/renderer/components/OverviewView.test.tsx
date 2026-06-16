@@ -603,9 +603,11 @@ describe('OverviewView', () => {
 
     renderWithProviders();
 
-    fireEvent.click(
-      await screen.findByText(/#10 Fallback task/).then((node) => node.closest('tr')!),
-    );
+    const fallbackTaskRow = await screen
+      .findByText(/#10 Fallback task/)
+      .then((node) => node.closest('tr'));
+    if (!fallbackTaskRow) throw new Error('Expected fallback task row');
+    fireEvent.click(fallbackTaskRow);
 
     await waitFor(() => {
       expect(useAppStore.getState().activeThreadId).toBe('thread-fallback');

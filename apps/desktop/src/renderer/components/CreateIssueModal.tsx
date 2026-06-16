@@ -263,7 +263,11 @@ function useCreateIssueModalView() {
   const [dragActive, setDragActive] = useState(false);
   const [attachmentErrors, setAttachmentErrors] = useState<string[]>([]);
   const sessionIdRef = useRef<string | null>(null);
-  const senderIdRef = useRef<string>(crypto.randomUUID());
+  const senderIdRef = useRef<string | null>(null);
+  if (senderIdRef.current === null) {
+    senderIdRef.current = crypto.randomUUID();
+  }
+  const senderId = senderIdRef.current;
 
   const mode: 'create' | 'edit' = editingPrd ? 'edit' : 'create';
 
@@ -277,13 +281,13 @@ function useCreateIssueModalView() {
     const result = await window.shipcode.invoke<{ sessionId: string }>(
       'prd-attachments:create-session',
       {
-        senderId: senderIdRef.current,
+        senderId,
         projectId: effectiveProjectId,
       },
     );
     sessionIdRef.current = result.sessionId;
     return result.sessionId;
-  }, [effectiveProjectId]);
+  }, [effectiveProjectId, senderId]);
 
   const clearAttachmentSession = useCallback(async () => {
     const id = sessionIdRef.current;
@@ -328,7 +332,8 @@ function useCreateIssueModalView() {
   );
 
   const handleRemoveAttachment = useCallback(async (attachment: StagedPrdAttachment) => {
-    const id = sessionIdRef.current!;
+    const id = sessionIdRef.current;
+    if (!id) return;
     try {
       await window.shipcode.invoke('prd-attachments:remove', {
         sessionId: id,

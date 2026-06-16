@@ -74,42 +74,35 @@ const PROJECT_OPEN_TARGET_LABELS: Record<ProjectOpenTarget, string> = {
   t3code: 'T3 Code',
 };
 
-function clearFlashTimeouts(ref: { current: Map<string, ReturnType<typeof setTimeout>> }) {
-  const flashTimeouts = ref.current;
+type FlashTimeoutsByIssueId = Map<string, ReturnType<typeof setTimeout>>;
+
+function clearFlashTimeouts(flashTimeouts: FlashTimeoutsByIssueId) {
   for (const timeout of flashTimeouts.values()) {
     clearTimeout(timeout);
   }
   flashTimeouts.clear();
 }
 
-function deleteFlashTimeout(
-  ref: { current: Map<string, ReturnType<typeof setTimeout>> },
-  issueId: string,
-) {
-  ref.current.delete(issueId);
+function deleteFlashTimeout(flashTimeouts: FlashTimeoutsByIssueId, issueId: string) {
+  flashTimeouts.delete(issueId);
 }
 
 function restartFlashTimeout(
-  ref: { current: Map<string, ReturnType<typeof setTimeout>> },
+  flashTimeouts: FlashTimeoutsByIssueId,
   issueId: string,
   dispatch: (action: FlashingIssueIdsAction) => void,
 ) {
-  const flashTimeouts = ref.current;
   const existing = flashTimeouts.get(issueId);
   if (existing) clearTimeout(existing);
 
   const timeout = setTimeout(() => {
-    deleteFlashTimeout(ref, issueId);
+    deleteFlashTimeout(flashTimeouts, issueId);
     dispatch({ type: 'remove', id: issueId });
   }, KANBAN_FLASH_MS);
   flashTimeouts.set(issueId, timeout);
 }
 
-function clearFlashTimeout(
-  ref: { current: Map<string, ReturnType<typeof setTimeout>> },
-  issueId: string,
-) {
-  const flashTimeouts = ref.current;
+function clearFlashTimeout(flashTimeouts: FlashTimeoutsByIssueId, issueId: string) {
   const timeout = flashTimeouts.get(issueId);
   if (!timeout) return;
   clearTimeout(timeout);
@@ -246,8 +239,17 @@ function useIssuesPanelView() {
   const requestCommentComposer = useAppStore((state) => state.requestCommentComposer);
   const setGithubIssues = useAppStore((state) => state.setGithubIssues);
   const pendingCreatedIssues = useAppStore((state) => state.pendingCreatedIssues);
-  const previousTaskStatusById = useRef(new Map<string, IssuePipelineStatus>());
-  const flashTimeoutsByIssueId = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const previousTaskStatusByIdRef = useRef<Map<string, IssuePipelineStatus> | null>(null);
+  if (previousTaskStatusByIdRef.current === null) {
+    previousTaskStatusByIdRef.current = new Map();
+  }
+  const previousTaskStatusById = previousTaskStatusByIdRef.current;
+
+  const flashTimeoutsByIssueIdRef = useRef<FlashTimeoutsByIssueId | null>(null);
+  if (flashTimeoutsByIssueIdRef.current === null) {
+    flashTimeoutsByIssueIdRef.current = new Map();
+  }
+  const flashTimeoutsByIssueId = flashTimeoutsByIssueIdRef.current;
   const [flashingIssueIds, dispatchFlashingIssueIds] = useReducer(
     flashingIssueIdsReducer,
     new Set<string>(),
@@ -441,14 +443,17 @@ function useIssuesPanelView() {
     }
 
     const changedIds: string[] = [];
-    const previous = previousTaskStatusById.current;
+    const previous = previousTaskStatusById;
     for (const [issueId, status] of tracked) {
       const previousStatus = previous.get(issueId);
       if (previousStatus !== undefined && previousStatus !== status) {
         changedIds.push(issueId);
       }
     }
-    previousTaskStatusById.current = tracked;
+    previousTaskStatusById.clear();
+    for (const [issueId, status] of tracked) {
+      previousTaskStatusById.set(issueId, status);
+    }
     if (changedIds.length === 0) return;
 
     dispatchFlashingIssueIds({ type: 'add', ids: changedIds });
@@ -462,13 +467,13 @@ function useIssuesPanelView() {
         clearFlashTimeout(flashTimeoutsByIssueId, issueId);
       }
     };
-  }, [boardIssues]);
+  }, [boardIssues, flashTimeoutsByIssueId, previousTaskStatusById]);
 
   useEffect(() => {
     return () => {
       clearFlashTimeouts(flashTimeoutsByIssueId);
     };
-  }, []);
+  }, [flashTimeoutsByIssueId]);
 
   // Optimistically flip a single issue's pipelineStatus in the local cache so
   // the card jumps to its new column instantly on drop, instead of waiting

@@ -181,7 +181,7 @@ async function driveToApprovalState(harness: Harness): Promise<void> {
       const state = qc.getQueryState(['plan-history', threadId]);
       // fetchStatus is 'idle' when no fetch is in progress. Accept also undefined
       // (query not yet tracked) to avoid hanging if the invalidation was a no-op.
-      return !state || state.fetchStatus !== 'fetching';
+      return state?.fetchStatus !== 'fetching';
     },
     THREAD_ID,
     { timeout: 5000 },

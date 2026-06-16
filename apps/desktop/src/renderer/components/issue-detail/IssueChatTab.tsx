@@ -16,7 +16,7 @@ import {
 } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bot, RefreshCw, Send, Square } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { toast } from '../../stores/toast-store';
 import {
   AssistantTimeline,
@@ -82,6 +82,51 @@ function appendLocalUserMessage(
   };
 }
 
+interface IssueChatUiState {
+  draft: string;
+  selectedProvider: IssueChatProvider;
+  sessionStarted: boolean;
+  isSubmitting: boolean;
+  userMessages: AssistantTimelineUserMessage[];
+}
+
+type IssueChatUiAction =
+  | { type: 'draft'; value: string }
+  | { type: 'selected-provider'; provider: IssueChatProvider }
+  | { type: 'session-started'; value: boolean }
+  | { type: 'submitting'; value: boolean }
+  | { type: 'queued-user-message'; threadId: string; content: string };
+
+const ISSUE_CHAT_INITIAL_STATE: IssueChatUiState = {
+  draft: '',
+  selectedProvider: 'claude',
+  sessionStarted: false,
+  isSubmitting: false,
+  userMessages: [],
+};
+
+function issueChatUiReducer(state: IssueChatUiState, action: IssueChatUiAction): IssueChatUiState {
+  switch (action.type) {
+    case 'draft':
+      return { ...state, draft: action.value };
+    case 'selected-provider':
+      return { ...state, selectedProvider: action.provider };
+    case 'session-started':
+      return { ...state, sessionStarted: action.value };
+    case 'submitting':
+      return { ...state, isSubmitting: action.value };
+    case 'queued-user-message':
+      return {
+        ...state,
+        draft: '',
+        userMessages: [
+          ...state.userMessages,
+          appendLocalUserMessage(action.threadId, action.content, state.userMessages.length),
+        ],
+      };
+  }
+}
+
 export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTabProps) {
   const queryClient = useQueryClient();
   const transcript = useAssistantTranscript(threadId);
@@ -99,11 +144,12 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
     queryFn: () => window.shipcode.invoke('issue-chat:get-session', { threadId }),
     enabled: !!threadId,
   });
-  const [draft, setDraft] = useState('');
-  const [provider, setProvider] = useState<IssueChatProvider>('claude');
-  const [sessionStarted, setSessionStarted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [userMessages, setUserMessages] = useState<AssistantTimelineUserMessage[]>([]);
+  const [issueChatState, dispatchIssueChat] = useReducer(
+    issueChatUiReducer,
+    ISSUE_CHAT_INITIAL_STATE,
+  );
+  const { draft, selectedProvider, sessionStarted, isSubmitting, userMessages } = issueChatState;
+  const provider = issueChatSession?.provider ?? selectedProvider;
 
   const isRunning = useMemo(
     () => isIssueChatTurnRunning({ events: transcript, isSubmitting }),
@@ -123,9 +169,9 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
   const persistedPromptContents = useMemo(
     () =>
       new Set(
-        issueChatConversations
-          .filter((turn) => turn.role === 'prompt')
-          .map((turn) => turn.content.trim()),
+        issueChatConversations.flatMap((turn) =>
+          turn.role === 'prompt' ? [turn.content.trim()] : [],
+        ),
       ),
     [issueChatConversations],
   );
@@ -138,21 +184,15 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
     persistedMessages.length > 0 || pendingUserMessages.length > 0 || visibleEvents.length > 0;
   const canResume = issueChatSession != null && !sessionStarted && !isRunning;
 
-  useEffect(() => {
-    if (!issueChatSession) return;
-    setProvider(issueChatSession.provider);
-  }, [issueChatSession]);
-
   const startOrResumeSession = useCallback(async () => {
-    const selectedProvider = issueChatSession?.provider ?? provider;
     const result = await window.shipcode.invoke<IssueChatStartResult>('issue-chat:start', {
       threadId,
-      provider: selectedProvider,
+      provider,
       modelId: issueChatSession?.modelId ?? undefined,
       reasoningEffort: issueChatSession?.reasoningEffort ?? 'medium',
     });
-    setProvider(result.provider);
-    setSessionStarted(true);
+    dispatchIssueChat({ type: 'selected-provider', provider: result.provider });
+    dispatchIssueChat({ type: 'session-started', value: true });
     await queryClient.invalidateQueries({
       queryKey: ['issue-chat-session', threadId],
     });
@@ -162,32 +202,30 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isSubmitting || isRunning) return;
-      setIsSubmitting(true);
+      dispatchIssueChat({ type: 'submitting', value: true });
       try {
         if (!sessionStarted) {
           await startOrResumeSession();
         }
 
-        setUserMessages((previous) => [
-          ...previous,
-          appendLocalUserMessage(threadId, trimmed, previous.length),
-        ]);
-        setDraft('');
+        dispatchIssueChat({ type: 'queued-user-message', threadId, content: trimmed });
 
         await window.shipcode.invoke('issue-chat:turn', { threadId, text: trimmed });
-        await queryClient.invalidateQueries({
-          queryKey: ['agent-conversations', threadId],
-        });
-        await queryClient.invalidateQueries({
-          queryKey: ['agent-conversations', threadId, 'issue_chat'],
-        });
-        await queryClient.invalidateQueries({
-          queryKey: ['issue-chat-session', threadId],
-        });
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['agent-conversations', threadId],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ['agent-conversations', threadId, 'issue_chat'],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ['issue-chat-session', threadId],
+          }),
+        ]);
       } catch (error) {
         toast.error('Issue chat failed', error instanceof Error ? error.message : undefined);
       } finally {
-        setIsSubmitting(false);
+        dispatchIssueChat({ type: 'submitting', value: false });
       }
     },
     [isRunning, isSubmitting, queryClient, sessionStarted, startOrResumeSession, threadId],
@@ -200,7 +238,7 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
   const handleStop = useCallback(async () => {
     try {
       await window.shipcode.invoke('issue-chat:stop', { threadId });
-      setSessionStarted(false);
+      dispatchIssueChat({ type: 'session-started', value: false });
     } catch (error) {
       toast.error('Issue chat stop failed', error instanceof Error ? error.message : undefined);
     }
@@ -215,7 +253,7 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
   }, [startOrResumeSession]);
 
   const setSuggestedPrompt = useCallback((prompt: string) => {
-    setDraft(prompt);
+    dispatchIssueChat({ type: 'draft', value: prompt });
   }, []);
 
   return (
@@ -294,7 +332,7 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
         <div className="flex w-full flex-col rounded-lg border border-border bg-elevated">
           <Textarea
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => dispatchIssueChat({ type: 'draft', value: event.target.value })}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey && !isRunning) {
                 event.preventDefault();
@@ -307,7 +345,12 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
           <div className="flex items-center gap-1 border-t border-border/50 px-2 py-1.5">
             <Select
               value={provider}
-              onValueChange={(next) => setProvider(next as IssueChatProvider)}
+              onValueChange={(next) =>
+                dispatchIssueChat({
+                  type: 'selected-provider',
+                  provider: next as IssueChatProvider,
+                })
+              }
               disabled={sessionStarted || isRunning || issueChatSession != null}
             >
               <SelectTrigger

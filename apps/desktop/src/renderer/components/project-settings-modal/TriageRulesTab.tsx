@@ -433,7 +433,11 @@ export function TriageRulesTab({ projectId, isActive }: { projectId: string; isA
   const dirtyRef = useRef(false);
   dirtyRef.current = dirty;
 
-  const rulesQuery = useQuery<TriageRule[]>({
+  const {
+    data: savedRules,
+    error: rulesError,
+    isLoading: rulesLoading,
+  } = useQuery<TriageRule[]>({
     queryKey: ['project-triage-rules', projectId],
     queryFn: () => window.shipcode.invoke('project:list-triage-rules', { projectId }),
     enabled: isActive && !!projectId,
@@ -441,12 +445,12 @@ export function TriageRulesTab({ projectId, isActive }: { projectId: string; isA
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: projectId triggers reset when switching projects
   useEffect(() => {
-    if (dirtyRef.current && rulesQuery.data) return;
+    if (dirtyRef.current && savedRules) return;
     dispatch({
       type: 'hydrate',
-      rules: rulesQuery.data ? rulesQuery.data.map(toEditableRule) : [],
+      rules: savedRules ? savedRules.map(toEditableRule) : [],
     });
-  }, [projectId, rulesQuery.data]);
+  }, [projectId, savedRules]);
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -479,14 +483,14 @@ export function TriageRulesTab({ projectId, isActive }: { projectId: string; isA
     dispatch({ type: 'move-rule', index, direction });
   }
 
-  if (rulesQuery.isLoading) {
+  if (rulesLoading) {
     return <div className="text-[12px] text-muted-foreground">Loading triage rules…</div>;
   }
 
-  if (rulesQuery.error) {
+  if (rulesError) {
     return (
       <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-danger">
-        {clampError(rulesQuery.error)}
+        {clampError(rulesError)}
       </div>
     );
   }

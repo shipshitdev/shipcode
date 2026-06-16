@@ -1,7 +1,7 @@
 import type { AgentConversationRecord } from '@shipcode/shared';
 import { Badge, Button, Skeleton } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckIcon, CopyIcon, MessageSquarePlusIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -23,6 +23,7 @@ const SPEAKER_COLORS: Record<string, string> = {
 
 const ALL_PHASES = ['plan', 'review', 'revision', 'execute', 'verify', 'issue_chat'] as const;
 const COLLAPSE_LINE_THRESHOLD = 30;
+type GithubPostState = 'hidden' | 'idle' | 'posting' | 'posted';
 
 interface ConversationsTabProps {
   threadId: string;
@@ -31,6 +32,7 @@ interface ConversationsTabProps {
 }
 
 export function ConversationsTab({ threadId, projectId, issueNumber }: ConversationsTabProps) {
+  const queryClient = useQueryClient();
   const [selectedPhases, setSelectedPhases] = useState<Set<string>>(new Set(ALL_PHASES));
   const [expandedTurns, setExpandedTurns] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -107,6 +109,7 @@ export function ConversationsTab({ threadId, projectId, issueNumber }: Conversat
     onSuccess: (_result, conv) => {
       setPostedId(conv.id);
       setTimeout(() => setPostedId(null), 1500);
+      queryClient.invalidateQueries({ queryKey: ['issue-comments', projectId, issueNumber] });
     },
   });
 
@@ -172,23 +175,28 @@ export function ConversationsTab({ threadId, projectId, issueNumber }: Conversat
           <h3 className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
             {phase} ({turns.length})
           </h3>
-          {turns.map((conv) => (
-            <ConversationTurn
-              key={conv.id}
-              conv={conv}
-              isExpanded={expandedTurns.has(conv.id)}
-              isCopied={copiedId === conv.id}
-              onToggleExpand={() => toggleExpand(conv.id)}
-              onCopy={() => copyTurn(conv)}
-              onPostToGithub={
-                conv.phase === 'issue_chat' && conv.role === 'response'
-                  ? () => confirmAndPostTurn(conv)
-                  : undefined
-              }
-              isPostingToGithub={postTurn.isPending && postTurn.variables?.id === conv.id}
-              isPostedToGithub={postedId === conv.id}
-            />
-          ))}
+          {turns.map((conv) => {
+            const canPostToGithub = conv.phase === 'issue_chat' && conv.role === 'response';
+            const githubPostState: GithubPostState = !canPostToGithub
+              ? 'hidden'
+              : postTurn.isPending && postTurn.variables?.id === conv.id
+                ? 'posting'
+                : postedId === conv.id
+                  ? 'posted'
+                  : 'idle';
+            return (
+              <ConversationTurn
+                key={conv.id}
+                conv={conv}
+                isExpanded={expandedTurns.has(conv.id)}
+                isCopied={copiedId === conv.id}
+                onToggleExpand={() => toggleExpand(conv.id)}
+                onCopy={() => copyTurn(conv)}
+                onPostToGithub={canPostToGithub ? () => confirmAndPostTurn(conv) : undefined}
+                githubPostState={githubPostState}
+              />
+            );
+          })}
         </div>
       ))}
     </div>
@@ -202,8 +210,7 @@ function ConversationTurn({
   onToggleExpand,
   onCopy,
   onPostToGithub,
-  isPostingToGithub,
-  isPostedToGithub,
+  githubPostState,
 }: {
   conv: AgentConversationRecord;
   isExpanded: boolean;
@@ -211,8 +218,7 @@ function ConversationTurn({
   onToggleExpand: () => void;
   onCopy: () => void;
   onPostToGithub?: () => void;
-  isPostingToGithub?: boolean;
-  isPostedToGithub?: boolean;
+  githubPostState: GithubPostState;
 }) {
   const lines = conv.content.split('\n');
   const isLong = lines.length > COLLAPSE_LINE_THRESHOLD;
@@ -246,18 +252,18 @@ function ConversationTurn({
           {conv.costUsd != null && conv.costUsd > 0 && (
             <span className="text-muted-foreground text-[10px]">${conv.costUsd.toFixed(4)}</span>
           )}
-          {onPostToGithub && (
+          {onPostToGithub && githubPostState !== 'hidden' && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={onPostToGithub}
-              disabled={isPostingToGithub}
+              disabled={githubPostState === 'posting'}
               className="h-6 gap-1 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
             >
               <MessageSquarePlusIcon className="size-3" />
-              <LoadingButtonContent loading={!!isPostingToGithub}>
-                {isPostedToGithub ? 'Posted' : 'Post'}
+              <LoadingButtonContent loading={githubPostState === 'posting'}>
+                {githubPostState === 'posted' ? 'Posted' : 'Post'}
               </LoadingButtonContent>
             </Button>
           )}

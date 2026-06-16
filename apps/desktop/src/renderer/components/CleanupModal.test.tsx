@@ -224,7 +224,9 @@ describe('CleanupModal', () => {
     expect(await screen.findByText('1 failed:')).toBeInTheDocument();
     expect(screen.getByText(/branch locked/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!);
+    const closeButton = screen.getAllByRole('button', { name: 'Close' }).at(-1);
+    if (!closeButton) throw new Error('Expected a close button');
+    fireEvent.click(closeButton);
     expect(onClose).toHaveBeenCalled();
 
     rerender(
