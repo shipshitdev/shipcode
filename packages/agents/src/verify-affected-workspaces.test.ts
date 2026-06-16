@@ -9,17 +9,22 @@ const scriptPath = path.join(repoRoot, 'scripts', 'verify-affected-workspaces.ts
 const tempDirs: string[] = [];
 
 function run(command: string, args: string[], cwd: string): string {
-  return execFileSync(command, args, {
-    cwd,
-    encoding: 'utf-8',
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: 'ShipCode Test',
-      GIT_AUTHOR_EMAIL: 'shipcode@example.com',
-      GIT_COMMITTER_NAME: 'ShipCode Test',
-      GIT_COMMITTER_EMAIL: 'shipcode@example.com',
-    },
-  });
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 'ShipCode Test',
+    GIT_AUTHOR_EMAIL: 'shipcode@example.com',
+    GIT_COMMITTER_NAME: 'ShipCode Test',
+    GIT_COMMITTER_EMAIL: 'shipcode@example.com',
+  };
+  // Run hermetically against the fixture repo. verify-affected-workspaces.ts
+  // reads these to choose its diff base / task set; a value inherited from the
+  // host (e.g. CI exports TURBO_SCM_BASE = the PR base sha) points outside the
+  // fixture and would make affected-detection find nothing. Strip them so the
+  // script falls back to its default base of HEAD within the fixture.
+  delete env.TURBO_SCM_BASE;
+  delete env.SHIPCODE_VERIFY_BASE;
+  delete env.SHIPCODE_VERIFY_TASKS;
+  return execFileSync(command, args, { cwd, encoding: 'utf-8', env });
 }
 
 function writeJson(filePath: string, value: unknown) {
