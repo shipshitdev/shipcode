@@ -50,6 +50,24 @@ Shared setup lives in the **`.github/actions/setup-bun-env`** composite action (
 **CodeQL** (`.github/workflows/codeql.yml`): advisory SAST, `workflow_dispatch` +
 weekly cron (`0 5 * * 1`), never on the PR hot path; SARIF → Security tab.
 
+## Secret Scan — gitleaks (PIN it, never fetch `releases/latest`)
+
+`.github/workflows/secret-scan.yml`: license-free gitleaks **filesystem** scan
+(`gitleaks dir . --redact --no-banner --exit-code 1`). Required gate on every PR + push.
+
+**Hard rule (broke master 2026-06-16, fixed PR #237):** never resolve the gitleaks
+version at runtime via the unauthenticated GitHub API (`curl …/releases/latest | jq .tag_name`).
+That call gets rate-limited on shared runners → returns no `tag_name` → `TAG=null` → the
+download 404s → the required gate fails. **Pin** `GITLEAKS_VERSION` (env), download the
+`*_checksums.txt`, and `sha256sum -c` **before** extracting. The local tarball filename MUST
+equal the asset name (`gitleaks_<v>_linux_x64.tar.gz`) — `sha256sum -c` reads the name from
+the checksum line, so a renamed download fails verification. Checkout uses
+`persist-credentials: false` (filesystem scan needs no token; zizmor artipacked).
+
+Same broken pattern was fanned to and fixed in `ui`, `v0`, `vitae.ai` the same day. The scan
+runs on a fresh checkout, so untracked + gitignored local `.env` files are never seen by CI —
+verify suspected leaks with `gitleaks dir <git-archive-export>`, not a raw working-tree scan.
+
 ## E2E triggers
 
 - **`schedule` (`0 7 * * 0`, weekly Sun 07:00 UTC):** the weekly review. GitHub runs cron
