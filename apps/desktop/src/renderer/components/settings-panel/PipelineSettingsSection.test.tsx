@@ -215,7 +215,7 @@ describe('PipelineSettingsSection', () => {
     expect(onUpdate).toHaveBeenCalledWith({ testingContext: null });
   });
 
-  it('shows interactive-only agent output mode controls', () => {
+  it('shows editable agent output mode controls and the Claude execute sandbox toggle', () => {
     render(
       <PipelineSettingsSection
         settings={DEFAULT_SETTINGS}
@@ -227,13 +227,49 @@ describe('PipelineSettingsSection', () => {
     expect(screen.getByText('Agent Output Mode')).toBeInTheDocument();
     expect(screen.getByText('Claude execute output')).toBeInTheDocument();
     expect(screen.getByText('Codex execute output')).toBeInTheDocument();
+    // Sandbox toggle gates whether programmatic Claude execute is selectable.
+    expect(screen.getByRole('switch', { name: 'Sandbox Claude execute' })).toBeInTheDocument();
+    // The six run-mode selects (claude/codex × execute/terminalFix/instant) are
+    // now editable, not hard-disabled. Codex execute defaults to Programmatic.
     const modeControls = screen.getAllByRole('combobox').filter((control) => {
-      return control.textContent?.includes('Interactive CLI');
+      const text = control.textContent ?? '';
+      return text.includes('Interactive CLI') || text.includes('Programmatic');
     });
-    expect(modeControls).toHaveLength(6);
+    expect(modeControls.length).toBeGreaterThanOrEqual(6);
     for (const control of modeControls) {
-      expect(control).toBeDisabled();
+      expect(control).not.toBeDisabled();
     }
+  });
+
+  it('reverts programmatic Claude execute to interactive when the sandbox is turned off', () => {
+    const onUpdate = vi.fn();
+    const settings: AppSettings = {
+      ...DEFAULT_SETTINGS,
+      claudeExecuteSandboxEnabled: true,
+      agentRunModes: {
+        ...DEFAULT_SETTINGS.agentRunModes,
+        claude: { ...DEFAULT_SETTINGS.agentRunModes.claude, execute: 'programmatic' },
+      },
+    };
+
+    render(
+      <PipelineSettingsSection
+        settings={settings}
+        integrationStatus={integrationStatus}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Sandbox Claude execute' }));
+
+    expect(onUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        claudeExecuteSandboxEnabled: false,
+        agentRunModes: expect.objectContaining({
+          claude: expect.objectContaining({ execute: 'interactive' }),
+        }),
+      }),
+    );
   });
 
   it('labels PRD rewrite settings as shared format settings', () => {

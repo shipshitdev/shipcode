@@ -69,6 +69,25 @@ function filterEnv(env: Record<string, string>): Record<string, string> {
   return filtered;
 }
 
+/**
+ * Absolute path of the OS-sandbox binary (`srt`) resolved at runtime. Spawning
+ * the sandbox wrapper requires an allowlist escape, but we narrow it to the one
+ * exact resolved path — never the bare string "srt" — so this is not a general
+ * allowlist widening. Populated by resolveSrt() in sandbox/srt.ts.
+ */
+let allowedSandboxBinary: string | null = null;
+
+export function registerSandboxBinary(absolutePath: string): void {
+  // Write-once: only the first resolved sandbox binary is ever allowlisted.
+  // resolveSrt() caches, so this is effectively set a single time per process.
+  if (allowedSandboxBinary !== null) return;
+  allowedSandboxBinary = absolutePath;
+}
+
+function isAllowedSandboxBinary(command: string): boolean {
+  return allowedSandboxBinary !== null && command === allowedSandboxBinary;
+}
+
 function isTrustedShell(command: string): command is ProcessManagerShellCommand {
   return TRUSTED_SHELLS.has(command);
 }
@@ -85,7 +104,8 @@ function assertProcessManagerCommand(command: string): asserts command is Proces
   if (
     isTrustedShell(command) ||
     isAllowlistedAgentCommand(command) ||
-    isTrustedPackageCommand(command)
+    isTrustedPackageCommand(command) ||
+    isAllowedSandboxBinary(command)
   )
     return;
   throw new Error(`Command is not allowlisted for ProcessManager: ${command}`);
@@ -140,6 +160,10 @@ function getShellEnv(): Record<string, string> {
 function resolveCommand(command: string): string {
   assertProcessManagerCommand(command);
   if (isTrustedShell(command)) return command;
+  // Already-absolute paths (e.g. the resolved srt binary) passed the allowlist
+  // check and need no shell lookup — short-circuit to avoid a login-shell spawn
+  // and unquoted interpolation of paths containing spaces.
+  if (command.startsWith('/')) return command;
   const shell = process.env.SHELL;
   if (!shell || !isTrustedShell(shell)) return command;
   try {

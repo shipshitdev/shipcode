@@ -20,6 +20,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.55",
     "@shipcode/shared": "workspace:*",
     "node-pty": "1.1.0",
     "nanoid": "5.1.11",

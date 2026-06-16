@@ -5,6 +5,7 @@
     "url": "https://shipshit.dev"
   },
   "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.55",
     "@fontsource/dm-sans": "5.2.8",
     "@sentry/electron": "7.13.0",
     "@shipcode/agents": "workspace:*",

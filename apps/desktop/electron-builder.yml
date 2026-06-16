@@ -7,6 +7,11 @@ directories:
 files:
   - dist/**/*
   - package.json
+# The srt sandbox CLI (and its native seccomp helper) must live on the real
+# filesystem so it can be spawned as a subprocess — it cannot run from inside
+# app.asar. resolveSrt() rewrites the resolved path to app.asar.unpacked.
+asarUnpack:
+  - node_modules/@anthropic-ai/sandbox-runtime/**
 mac:
   target:
     - dmg

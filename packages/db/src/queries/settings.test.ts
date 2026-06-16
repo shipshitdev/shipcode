@@ -25,10 +25,17 @@ describe('SettingsQueries', () => {
     expect(s.telemetryEnabled).toBeNull();
     expect(s.defaultWorktreeEnabled).toBe(true);
     expect(s.terminalScrollback).toBe(10000);
+    // Structured phases default to programmatic for both providers.
+    expect(s.agentRunModes.claude.plan).toBe('programmatic');
+    expect(s.agentRunModes.claude.verify).toBe('programmatic');
+    expect(s.agentRunModes.codex.plan).toBe('programmatic');
+    // Codex execute is sandboxed (`codex exec`) → programmatic; Claude execute
+    // grants host tools with no OS sandbox → stays interactive.
+    expect(s.agentRunModes.codex.execute).toBe('programmatic');
     expect(s.agentRunModes.claude.execute).toBe('interactive');
-    expect(s.agentRunModes.codex.execute).toBe('interactive');
-    expect(s.agentRunModes.claude.plan).toBe('interactive');
-    expect(s.agentRunModes.claude.verify).toBe('interactive');
+    // Watched terminal-pane surfaces stay interactive by default.
+    expect(s.agentRunModes.claude.instant).toBe('interactive');
+    expect(s.agentRunModes.codex.terminalFix).toBe('interactive');
     expect(s.forceInteractiveClaude).toBe(false);
     expect(s.plannerModel).toBe('codex');
     expect(s.reviewerModel).toBe('codex');
@@ -108,12 +115,12 @@ describe('SettingsQueries', () => {
     const modes = settings.get().agentRunModes;
     // Pre-existing key preserved.
     expect(modes.claude.execute).toBe('programmatic');
-    // New per-phase keys backfilled from defaults.
-    expect(modes.claude.plan).toBe('interactive');
-    expect(modes.claude.review).toBe('interactive');
-    expect(modes.claude.revision).toBe('interactive');
-    expect(modes.claude.verify).toBe('interactive');
-    expect(modes.codex.plan).toBe('interactive');
+    // New per-phase keys backfilled from defaults (structured → programmatic).
+    expect(modes.claude.plan).toBe('programmatic');
+    expect(modes.claude.review).toBe('programmatic');
+    expect(modes.claude.revision).toBe('programmatic');
+    expect(modes.claude.verify).toBe('programmatic');
+    expect(modes.codex.plan).toBe('programmatic');
   });
 
   it('rejects an invalid run-mode value and falls back to the default', () => {
@@ -135,7 +142,7 @@ describe('SettingsQueries', () => {
       }),
     );
 
-    expect(settings.get().agentRunModes.claude.plan).toBe('interactive');
+    expect(settings.get().agentRunModes.claude.plan).toBe('programmatic');
   });
 
   describe('worktreeRoot', () => {

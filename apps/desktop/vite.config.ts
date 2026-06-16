@@ -11,6 +11,8 @@ const NATIVE_EXTERNALS = [
   'node:sqlite',
   'node-pty',
   'simple-git',
+  // Resolved + spawned at runtime via createRequire; never bundle the shebang CLI.
+  '@anthropic-ai/sandbox-runtime',
   ...builtinModules,
   ...builtinModules.map((m) => `node:${m}`),
 ];

@@ -43,9 +43,11 @@ const execFileAsync = promisify(execFile);
 
 /**
  * Resolve the configured run mode (interactive vs programmatic) for a given
- * agent + pipeline phase from settings. Every provider phase now carries its
- * own selectable run mode (defaults to interactive so phases avoid the
- * rationed `claude -p` Agent-SDK credit pool); programmatic remains opt-in.
+ * agent + pipeline phase from settings. Every provider phase carries its own
+ * selectable run mode. Structured phases default to programmatic (`claude -p` /
+ * `codex exec --json`) for structured output; the pool-exhaustion fallback
+ * below still reroutes programmatic claude to interactive if Anthropic
+ * re-rations the Agent-SDK credit pool.
  */
 function getAgentPhaseRunMode(
   settings: AppSettings,
@@ -288,9 +290,10 @@ export function createPipelineRuntime(
 
     // Structured phases parse machine-readable fenced JSON and cap turns at 1.
     const structuredPhases: ProviderPhase[] = ['plan', 'review', 'revision', 'verify'];
+    const settingsSnapshot = deps.settings.get();
     const configuredRunMode: ProviderRunMode | undefined =
       agent === 'claude' || agent === 'codex'
-        ? getAgentPhaseRunMode(deps.settings.get(), agent, phase)
+        ? getAgentPhaseRunMode(settingsSnapshot, agent, phase)
         : undefined;
     // Auto-fallback: when the rationed `claude -p` Agent-SDK credit pool is
     // exhausted, route programmatic claude phases through the interactive CLI
@@ -300,10 +303,25 @@ export function createPipelineRuntime(
       agent === 'claude' && configuredRunMode === 'programmatic' && isPoolExhausted()
         ? 'interactive'
         : configuredRunMode;
+    // Programmatic claude EXECUTE must run inside the `srt` OS sandbox (host
+    // tools, no built-in sandbox). Pass the policy down so the provider wraps
+    // `claude -p` in srt; absent this hint the provider fails closed.
+    const osSandbox =
+      agent === 'claude' &&
+      phase === 'execute' &&
+      effectiveRunMode === 'programmatic' &&
+      settingsSnapshot.claudeExecuteSandboxEnabled
+        ? {
+            backend: 'srt' as const,
+            networkPolicy: settingsSnapshot.claudeExecuteSandboxNetworkPolicy,
+            extraWritePaths: settingsSnapshot.claudeExecuteSandboxExtraWritePaths,
+          }
+        : undefined;
     const mergedHints: ProviderRequest['phaseHints'] = {
       ...(structuredPhases.includes(phase) ? { maxTurns: 1 } : {}),
       ...phaseHints,
       ...(effectiveRunMode ? { runMode: effectiveRunMode } : {}),
+      ...(osSandbox ? { osSandbox } : {}),
     };
 
     // Lifecycle envelope: start a pipeline_step_log row before generation so
