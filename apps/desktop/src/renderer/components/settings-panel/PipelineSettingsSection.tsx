@@ -178,7 +178,7 @@ function pipelineSettingsSection({
         <TabsContent value="runtime" className="mt-0">
           <SettingsSection
             title="Agent Output Mode"
-            description="Per-surface transport for execute, terminal fixes, and instant sessions. Programmatic streams structured claude -p / codex exec output; Interactive drives the official CLI in a terminal pane. Pipeline plan/review/verify default to programmatic and are not shown here. Programmatic Claude execute requires the OS sandbox (enabled below); Claude terminal-fix and instant stay interactive-only (no sandbox path); Codex is always sandboxed."
+            description="Per-surface transport for execute, terminal fixes, and instant sessions. Programmatic streams structured claude -p / codex exec output; Interactive drives the official CLI in a terminal pane. Pipeline plan/review/revision/verify default to programmatic and are not shown here. Programmatic Claude execute requires the OS sandbox (enabled below); Claude terminal-fix and instant stay interactive-only (no sandbox path); Codex is always sandboxed."
           >
             <SettingsRow
               label="Claude execute output"
