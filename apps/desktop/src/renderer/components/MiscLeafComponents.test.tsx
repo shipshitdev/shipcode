@@ -148,14 +148,15 @@ describe('misc leaf components', () => {
     );
 
     expect(projectDraft).not.toBeNull();
-    expect(formatInheritedSummary(DEFAULT_SETTINGS, projectDraft!, 'planner')).toMatch(
+    if (!projectDraft) throw new Error('Expected project draft');
+    expect(formatInheritedSummary(DEFAULT_SETTINGS, projectDraft, 'planner')).toMatch(
       /^Anthropic \/ None$/,
     );
     expect(
       formatInheritedSummary(
         { ...DEFAULT_SETTINGS, openrouterPlannerModel: 'anthropic/planner' },
         {
-          ...projectDraft!,
+          ...projectDraft,
           plannerModelOverride: 'openrouter',
           plannerModelIdOverride: null,
         },

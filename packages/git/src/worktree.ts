@@ -137,11 +137,11 @@ export class WorktreeManager {
   ): Promise<{ worktreePath: string; branch: string }>;
   async create(
     idOrNumber: string | number,
-    titleOrBase?: string,
-    baseBranch?: string,
+    ...rest: [titleOrBase?: string, baseBranch?: string]
   ): Promise<{ worktreePath: string; branch: string }> {
+    const [titleOrBase, baseBranch] = rest;
     const parent = resolveWorktreeParent(this.projectPath, this.options.worktreeRoot ?? null);
-    const hasExplicitThreadTitle = typeof idOrNumber === 'string' && arguments.length >= 3;
+    const hasExplicitThreadTitle = typeof idOrNumber === 'string' && rest.length >= 2;
     const threadTitle = hasExplicitThreadTitle ? titleOrBase : undefined;
     const base =
       typeof idOrNumber === 'number'

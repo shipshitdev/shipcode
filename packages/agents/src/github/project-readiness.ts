@@ -256,7 +256,7 @@ function detectStatusMapping(statusField: ProjectFieldNode | undefined): {
   missing: string[];
   options: string[];
 } {
-  if (!statusField || statusField.__typename !== 'ProjectV2SingleSelectField') {
+  if (statusField?.__typename !== 'ProjectV2SingleSelectField') {
     return {
       mapping: null,
       missing: ['Todo', 'In Progress', 'Human Review', 'Done', 'Deferred'],

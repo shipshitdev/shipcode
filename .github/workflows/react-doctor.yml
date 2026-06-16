@@ -2,26 +2,25 @@ name: React Doctor
 
 on:
   pull_request:
-    branches: [develop, staging, master]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [master]
 
 permissions:
   contents: read
   pull-requests: write
+  issues: write
+  statuses: write
 
 concurrency:
-  group: react-doctor-${{ github.event.pull_request.number }}
+  group: react-doctor-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   react-doctor:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: millionco/react-doctor@main
-        with:
-          # Full-repo scan (not diff) so every workspace + dead-code analysis
-          # is covered, not just files changed in the PR.
-          diff: false
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: millionco/react-doctor@v2

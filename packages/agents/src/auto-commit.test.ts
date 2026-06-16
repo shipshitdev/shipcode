@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const spawnMock = vi.hoisted(() => vi.fn());
@@ -15,35 +14,6 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
-
-function createFakeProc() {
-  const proc = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter;
-    stderr: EventEmitter;
-    stdin: { end: ReturnType<typeof vi.fn> };
-    kill: ReturnType<typeof vi.fn>;
-  };
-  proc.stdout = new EventEmitter();
-  proc.stderr = new EventEmitter();
-  proc.stdin = { end: vi.fn() };
-  proc.kill = vi.fn();
-  return {
-    proc,
-    close: (code: number, output: { stdout?: string; stderr?: string } = {}) => {
-      if (output.stdout) proc.stdout.emit('data', output.stdout);
-      if (output.stderr) proc.stderr.emit('data', output.stderr);
-      proc.emit('close', code);
-    },
-  };
-}
-
-async function waitForSpawnCount(count: number) {
-  for (let i = 0; i < 20; i++) {
-    if (spawnMock.mock.calls.length >= count) return;
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-  throw new Error(`Expected ${count} spawned processes, got ${spawnMock.mock.calls.length}`);
-}
 
 describe('parseAndValidate', () => {
   it('accepts valid JSON covering full dirty set', () => {

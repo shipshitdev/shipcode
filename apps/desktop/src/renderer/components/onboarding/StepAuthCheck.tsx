@@ -14,6 +14,27 @@ interface Props {
   isChecking: boolean;
 }
 
+const AUTH_CHECK_PROGRESS_STEPS: StartupProgressStep[] = [
+  {
+    id: 'claude',
+    label: 'Check Claude CLI login',
+    detail: 'Verifying the CLI is installed and authenticated.',
+    status: 'active',
+  },
+  {
+    id: 'codex',
+    label: 'Check Codex CLI login',
+    detail: 'Verifying the CLI is installed and authenticated.',
+    status: 'active',
+  },
+  {
+    id: 'github',
+    label: 'Check GitHub CLI login',
+    detail: 'Verifying gh auth and project scope.',
+    status: 'active',
+  },
+];
+
 function CliStatus({ label, health }: { label: string; health: CliHealth }) {
   return (
     <div className="flex items-center gap-3 rounded-md bg-tertiary px-3 py-2">
@@ -111,32 +132,11 @@ export function StepAuthCheck({ authResult, onRecheck, isChecking }: Props) {
 }
 
 function AuthCheckProgress() {
-  const steps: StartupProgressStep[] = [
-    {
-      id: 'claude',
-      label: 'Check Claude CLI login',
-      detail: 'Verifying the CLI is installed and authenticated.',
-      status: 'active',
-    },
-    {
-      id: 'codex',
-      label: 'Check Codex CLI login',
-      detail: 'Verifying the CLI is installed and authenticated.',
-      status: 'active',
-    },
-    {
-      id: 'github',
-      label: 'Check GitHub CLI login',
-      detail: 'Verifying gh auth and project scope.',
-      status: 'active',
-    },
-  ];
-
   return (
     <StartupProgress
       title="Checking login state"
       subtitle="ShipCode uses your local CLI sessions."
-      steps={steps}
+      steps={AUTH_CHECK_PROGRESS_STEPS}
       className="min-h-0 justify-start bg-transparent px-0 py-1"
     />
   );

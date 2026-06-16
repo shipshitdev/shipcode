@@ -270,7 +270,16 @@ function useKanbanBoardView({
   const [pendingIssueActions, setPendingIssueActions] = useState<
     Partial<Record<string, PendingIssueAction>>
   >({});
-  const pendingActionTimeouts = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const pendingActionTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>> | null>(null);
+  if (pendingActionTimeoutsRef.current === null) {
+    pendingActionTimeoutsRef.current = new Map();
+  }
+  const getPendingActionTimeouts = useCallback(() => {
+    if (pendingActionTimeoutsRef.current === null) {
+      pendingActionTimeoutsRef.current = new Map();
+    }
+    return pendingActionTimeoutsRef.current;
+  }, []);
   const shortcutsEnabled = keyboardShortcutsEnabled ?? !readOnly;
   const compact = presentationMode === 'compact';
   const threadById = useMemo(
@@ -478,7 +487,8 @@ function useKanbanBoardView({
     ) => {
       if (!handler) return;
 
-      const existingTimeout = pendingActionTimeouts.current.get(issue.id);
+      const pendingActionTimeouts = getPendingActionTimeouts();
+      const existingTimeout = pendingActionTimeouts.get(issue.id);
       if (existingTimeout) clearTimeout(existingTimeout);
 
       const startedAt = Date.now();
@@ -487,7 +497,7 @@ function useKanbanBoardView({
       const finish = () => {
         const remaining = Math.max(0, MIN_ACTION_PENDING_MS - (Date.now() - startedAt));
         const timeout = setTimeout(() => {
-          pendingActionTimeouts.current.delete(issue.id);
+          pendingActionTimeouts.delete(issue.id);
           setPendingIssueActions((current) => {
             if (current[issue.id] !== action) return current;
             const next = { ...current };
@@ -495,12 +505,12 @@ function useKanbanBoardView({
             return next;
           });
         }, remaining);
-        pendingActionTimeouts.current.set(issue.id, timeout);
+        pendingActionTimeouts.set(issue.id, timeout);
       };
 
       Promise.resolve(handler(issue)).finally(finish);
     },
-    [],
+    [getPendingActionTimeouts],
   );
 
   const handleStartPipeline = useCallback(
@@ -604,10 +614,12 @@ function useKanbanBoardView({
 
   useEffect(
     () => () => {
-      for (const timeout of pendingActionTimeouts.current.values()) {
+      const pendingActionTimeouts = pendingActionTimeoutsRef.current;
+      if (!pendingActionTimeouts) return;
+      for (const timeout of pendingActionTimeouts.values()) {
         clearTimeout(timeout);
       }
-      pendingActionTimeouts.current.clear();
+      pendingActionTimeouts.clear();
     },
     [],
   );

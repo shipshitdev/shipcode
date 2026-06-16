@@ -311,7 +311,8 @@ describe('ActivityHeatmap', () => {
       />,
     );
 
-    const zeroCostCell = (await screen.findAllByLabelText(/^.+: \$0\.00$/))[0]!;
+    const zeroCostCell = (await screen.findAllByLabelText(/^.+: \$0\.00$/))[0];
+    if (!zeroCostCell) throw new Error('Expected zero-cost cell');
     expect(await screen.findByLabelText(/^.+: \$1\.23$/)).toBeInTheDocument();
     fireEvent.mouseEnter(zeroCostCell);
 

@@ -61,6 +61,15 @@ interface SkillRewriteResult {
   content: string;
 }
 
+const SOURCE_BADGE_META: Record<
+  SkillRowView['source'],
+  { label: string; variant: 'default' | 'success' | 'info' }
+> = {
+  project: { label: 'Project', variant: 'success' },
+  global: { label: 'Global', variant: 'info' },
+  default: { label: 'Default', variant: 'default' },
+};
+
 const PHASE_LABELS: Record<PhaseSkillKey, { label: string; description: string }> = {
   'plan-generation': {
     label: 'Planner',
@@ -642,13 +651,7 @@ function SourceBadge({
       </Badge>
     );
   }
-  const labels: Record<typeof source, { label: string; variant: 'default' | 'success' | 'info' }> =
-    {
-      project: { label: 'Project', variant: 'success' },
-      global: { label: 'Global', variant: 'info' },
-      default: { label: 'Default', variant: 'default' },
-    };
-  const meta = labels[source];
+  const meta = SOURCE_BADGE_META[source];
   return (
     <Badge variant={meta.variant} className={cn('text-[9px]', inline && 'ml-1')}>
       {meta.label}

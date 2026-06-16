@@ -63,13 +63,16 @@ export function NotificationToaster() {
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
-  const lastSeenIdsRef = useRef<Set<string>>(new Set());
+  const lastSeenIdsRef = useRef<Set<string> | null>(null);
+  if (lastSeenIdsRef.current === null) {
+    lastSeenIdsRef.current = new Set();
+  }
+  const lastSeenIds = lastSeenIdsRef.current;
 
   // Play sound when a new notification appears.
   useEffect(() => {
     if (!settings?.notificationSoundEnabled) return;
-    const seen = lastSeenIdsRef.current;
-    const newOnes = notifications.filter((n) => !seen.has(n.id));
+    const newOnes = notifications.filter((n) => !lastSeenIds.has(n.id));
     if (newOnes.length > 0) {
       try {
         const audio = new Audio(notifySoundUrl);
@@ -81,8 +84,11 @@ export function NotificationToaster() {
         // Ignore audio failures
       }
     }
-    lastSeenIdsRef.current = new Set(notifications.map((n) => n.id));
-  }, [notifications, settings?.notificationSoundEnabled]);
+    lastSeenIds.clear();
+    for (const notification of notifications) {
+      lastSeenIds.add(notification.id);
+    }
+  }, [lastSeenIds, notifications, settings?.notificationSoundEnabled]);
 
   const handleClick = (notification: NotificationRecord) => {
     if (notification.projectId) selectProject(notification.projectId);
