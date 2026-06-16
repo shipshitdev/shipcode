@@ -6,7 +6,7 @@
   "description": "Repo-level end-to-end coverage for ShipCode (Playwright: Electron desktop + static web/docs smoke).",
   "scripts": {
     "e2e": "playwright test",
-    "e2e:ci": "playwright test --reporter=list,html,json && node scripts/check-flow-coverage.mjs",
+    "e2e:ci": "playwright test --reporter=list,html,json; pw=$?; node scripts/check-flow-coverage.mjs && exit $pw",
     "e2e:desktop": "playwright test --project=desktop",
     "e2e:smoke": "playwright test --project=web-smoke",
     "check:flow-coverage": "node scripts/check-flow-coverage.mjs"
