@@ -1,31 +1,16 @@
 name: Full (CI → E2E)
 
 # One-button orchestrator: runs the CI workflow first, then — only if CI is
-# green — the full E2E suite, in a single manual dispatch. Dispatchable on any
-# branch that has this file (develop today; staging/master once promoted).
+# green — the full E2E suite, in a single manual dispatch.
 #
 # It does NOT duplicate any job logic: it `uses:` the existing ci.yml and
-# e2e.yml as reusable workflows (they gained an additive `workflow_call:`
-# trigger). `needs: ci` enforces the ordering. Both children run against the
-# branch this workflow is dispatched on (github.ref); that branch is forwarded
-# to e2e as target_ref so its checkout resolves correctly.
+# e2e.yml as reusable workflows (both carry a `workflow_call:` trigger).
+# `needs: ci` enforces the ordering. Both children run against the branch/tag
+# this workflow is dispatched on (github.ref), forwarded to e2e as target_ref so
+# its checkout resolves correctly.
 #
-# Pick the branch in the "Run workflow" dropdown, or:
-#   gh workflow run full.yml --ref develop
-#
-# Registration note: GitHub indexes workflow_dispatch-only workflows ONLY from
-# the default branch (master). To make this dispatchable on develop *without*
-# promoting to master, it carries a paths-filtered `pull_request` trigger
-# (below) — that forces GitHub to index the file from develop. It is filtered to
-# this file alone, so it auto-runs only as a self-test when full.yml itself
-# changes in a PR; on that PR event the children run their light PR-path jobs
-# (ci → fast-qa, e2e → web-smoke), never the heavy macOS suite. Same trick e2e.yml
-# uses. Remove the pull_request trigger once the suite is promoted to master.
-#
-# (A workflow with only a pull_request/push trigger is registered the first time
-# that trigger actually FIRES — pushing the file is not enough. This PR, which
-# edits full.yml, is that first firing event and registers the workflow on the
-# repo so `gh workflow run full.yml --ref develop` works thereafter.)
+# Pick the ref in the "Run workflow" dropdown, or:
+#   gh workflow run full.yml --ref master
 
 run-name: "Full CI→E2E · ${{ github.ref_name }}"
 
@@ -36,11 +21,6 @@ on:
         description: 'E2E: re-run only previously-failed tests (--last-failed). Skips the flow-coverage gate. CI still runs in full.'
         type: boolean
         default: false
-  # Indexing-only trigger (see registration note above). NOT meant to run the
-  # orchestrator on normal PRs — paths-filtered to full.yml itself.
-  pull_request:
-    paths:
-      - '.github/workflows/full.yml'
 
 permissions:
   contents: read

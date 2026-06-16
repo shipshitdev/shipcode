@@ -1,0 +1,60 @@
+name: Setup Bun environment
+description: >-
+  Install Bun + Node, restore the Bun module store and (optionally) the Turbo
+  cache, then `bun install --frozen-lockfile`. Shared by every CI job so the
+  setup block lives in one place instead of being copy-pasted per job.
+
+inputs:
+  bun-version:
+    description: Bun version to install.
+    required: false
+    default: "1.3.14"
+  node-version:
+    description: Node version to install (Electron/tooling parity).
+    required: false
+    default: "22"
+  cache-turbo:
+    description: Restore/save the .turbo cache. Disable for jobs that do no Turbo work.
+    required: false
+    default: "true"
+  turbo-key-prefix:
+    description: Per-job Turbo cache key prefix so jobs don't clobber each other's snapshots.
+    required: false
+    default: "ci"
+  install-ripgrep:
+    description: Install ripgrep (some repo scripts shell out to `rg`).
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ inputs.bun-version }}
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+    # Bun module store — avoids re-downloading deps every run.
+    - uses: actions/cache@v4
+      with:
+        path: ~/.bun/install/cache
+        key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+        restore-keys: bun-${{ runner.os }}-
+    # Turbo cache — persists per-task outputs across runs. sha key + prefix
+    # restore-keys is Turborepo's official CI pattern: each run saves a fresh
+    # snapshot and restores the most recent one; content hashes (not the key)
+    # decide what re-runs.
+    - if: inputs.cache-turbo == 'true'
+      uses: actions/cache@v4
+      with:
+        path: .turbo
+        key: turbo-${{ runner.os }}-${{ inputs.turbo-key-prefix }}-${{ github.sha }}
+        restore-keys: |
+          turbo-${{ runner.os }}-${{ inputs.turbo-key-prefix }}-
+          turbo-${{ runner.os }}-
+    - if: inputs.install-ripgrep == 'true'
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y ripgrep
+    - shell: bash
+      run: bun install --frozen-lockfile
