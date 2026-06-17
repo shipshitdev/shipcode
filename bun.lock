@@ -107,18 +107,6 @@
         "@types/react": "19.2.16",
       },
     },
-    "apps/e2e": {
-      "name": "@shipcode/e2e",
-      "version": "0.0.0",
-      "dependencies": {
-        "@shipcode/db": "workspace:*",
-        "@shipcode/shared": "workspace:*",
-      },
-      "devDependencies": {
-        "@playwright/test": "1.60.0",
-        "@types/node": "25.9.1",
-      },
-    },
     "apps/web": {
       "name": "@shipcode/web",
       "version": "0.1.2",
@@ -137,6 +125,22 @@
         "jsdom": "29.1.1",
         "tailwindcss": "4.3.0",
         "typescript": "6.0.3",
+      },
+    },
+    "e2e": {
+      "name": "@shipcode/e2e",
+      "version": "0.0.0",
+      "dependencies": {
+        "@shipcode/agents": "workspace:*",
+        "@shipcode/db": "workspace:*",
+        "@shipcode/git": "workspace:*",
+        "@shipcode/pipeline": "workspace:*",
+        "@shipcode/shared": "workspace:*",
+        "@shipcode/ui": "workspace:*",
+      },
+      "devDependencies": {
+        "@playwright/test": "1.60.0",
+        "@types/node": "25.9.1",
       },
     },
     "packages/agents": {
@@ -853,7 +857,7 @@
 
     "@shipcode/docs": ["@shipcode/docs@workspace:apps/docs"],
 
-    "@shipcode/e2e": ["@shipcode/e2e@workspace:apps/e2e"],
+    "@shipcode/e2e": ["@shipcode/e2e@workspace:e2e"],
 
     "@shipcode/git": ["@shipcode/git@workspace:packages/git"],
 

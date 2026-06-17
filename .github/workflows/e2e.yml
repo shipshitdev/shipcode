@@ -1,22 +1,22 @@
 name: E2E
 
 # Trunk-based: master is the single trunk.
-# - Weekly cron fires from the default branch (master), so the scheduled review
+# - Nightly cron fires from the default branch (master), so the scheduled review
 #   always runs against the trunk.
 # - workflow_dispatch defaults to master; `target_ref` lets you point the suite
 #   at any branch/tag (e.g. a release tag or a feature branch under test).
 run-name: >-
   E2E ·
   ${{ github.event_name == 'workflow_dispatch' && format('{0} (manual)', inputs.target_ref)
-   || github.event_name == 'schedule' && 'master (weekly)'
+   || github.event_name == 'schedule' && 'master (nightly)'
    || 'PR smoke' }}
 
 on:
   schedule:
-    # Weekly, Sundays 07:00 UTC — 1h after the CI coverage cron (0 6 * * 0)
+    # Nightly, 07:00 UTC — 1h after the CI coverage cron (0 6 * * *)
     # so the two never queue on macOS runners at the same instant. Runs against
     # master (default branch); see the branch-model note above.
-    - cron: '0 7 * * 0'
+    - cron: '0 7 * * *'
   workflow_dispatch:
     inputs:
       target_ref:
@@ -24,7 +24,7 @@ on:
         type: string
         default: master
       only_failed:
-        description: 'Re-run only previously-failed E2E tests (--last-failed). Faster after a fix, but SKIPS the flow-coverage gate — not authoritative. Default: full run.'
+        description: 'Re-run only previously-failed E2E tests (--last-failed). Faster after a fix, but SKIPS coverage gates — not authoritative. Default: full run.'
         type: boolean
         default: false
   # Reusable entry point for the `full` orchestrator (.github/workflows/full.yml),
@@ -40,16 +40,14 @@ on:
         type: string
         default: ''
       only_failed:
-        description: 'Re-run only previously-failed E2E tests (--last-failed); skips the flow-coverage gate.'
+        description: 'Re-run only previously-failed E2E tests (--last-failed); skips coverage gates.'
         type: boolean
         default: false
   pull_request:
-    # Cheap HTTP-only web/docs smoke on PRs that touch E2E or the surfaces it covers.
+    # Cheap HTTP-only web/docs + CLI smoke on PRs that touch E2E or covered app surfaces.
     paths:
-      - 'apps/e2e/**'
-      - 'apps/desktop/**'
-      - 'apps/web/**'
-      - 'apps/docs/**'
+      - 'e2e/**'
+      - 'apps/**'
       - 'packages/pipeline/**'
       - 'packages/ui/**'
       - '.github/workflows/e2e.yml'
@@ -57,7 +55,10 @@ on:
 env:
   BUN_VERSION: "1.3.14"
   NODE_VERSION: "22"
+  E2E_APP_COVERAGE_MIN: "100"
   E2E_FLOW_COVERAGE_MIN: "90"
+  E2E_PAGE_COVERAGE_MIN: "100"
+  E2E_BEHAVIOR_COVERAGE_MIN: "100"
 
 permissions:
   contents: read
@@ -106,9 +107,9 @@ jobs:
       - name: Typecheck (tsc, all workspaces)
         run: bun run typecheck
 
-  # Full E2E suite (Electron desktop journeys + web/docs smoke) + flow-coverage
-  # gate. Runs on macOS because the desktop project launches the real Electron
-  # app. Scheduled + manual only — too heavy for every PR. Gated behind the fast
+  # Full E2E suite (Electron desktop journeys + web/docs + CLI smoke) + coverage
+  # gates. Runs on macOS because the desktop project launches the real Electron
+  # app. Nightly + manual only — too heavy for every PR. Gated behind the fast
   # Linux lint+typecheck job above.
   desktop-e2e:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -177,19 +178,22 @@ jobs:
         if: ${{ inputs.only_failed }}
         uses: actions/cache/restore@v4
         with:
-          path: apps/e2e/test-results/.last-run.json
+          path: e2e/test-results/.last-run.json
           key: pw-lastrun-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: pw-lastrun-${{ github.ref_name }}-
-      # Default: full suite + flow-coverage gate (authoritative). Opt-in
+      # Default: full suite + coverage gates (authoritative). Opt-in
       # only_failed: re-run just the previously-failed specs and SKIP the gate —
       # a fast post-fix loop, never the gate. Both write the same .last-run.json.
-      - name: Run E2E suite + flow-coverage gate
+      - name: Run E2E suite + coverage gates
         env:
           E2E_FLOW_COVERAGE_MIN: ${{ env.E2E_FLOW_COVERAGE_MIN }}
+          E2E_APP_COVERAGE_MIN: ${{ env.E2E_APP_COVERAGE_MIN }}
+          E2E_PAGE_COVERAGE_MIN: ${{ env.E2E_PAGE_COVERAGE_MIN }}
+          E2E_BEHAVIOR_COVERAGE_MIN: ${{ env.E2E_BEHAVIOR_COVERAGE_MIN }}
         run: |
           if [ "${{ inputs.only_failed }}" = "true" ]; then
-            echo "::notice title=Partial E2E run::--last-failed re-runs only previously-failed tests. Flow-coverage gate SKIPPED — this run is NOT authoritative."
-            cd apps/e2e
+            echo "::notice title=Partial E2E run::--last-failed re-runs only previously-failed tests. Coverage gates SKIPPED — this run is NOT authoritative."
+            cd e2e
             bunx playwright test --last-failed --reporter=list,html,json
           else
             bun run e2e:ci
@@ -200,7 +204,7 @@ jobs:
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: apps/e2e/test-results/.last-run.json
+          path: e2e/test-results/.last-run.json
           key: pw-lastrun-${{ github.ref_name }}-${{ github.run_id }}
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -208,11 +212,15 @@ jobs:
           name: e2e-artifacts-${{ github.run_id }}
           retention-days: 7
           path: |
-            apps/e2e/playwright-report/**
-            apps/e2e/test-results/**
-            apps/e2e/e2e-flow-coverage.json
+            e2e/playwright-report/**
+            e2e/test-results/**
+            e2e/e2e-app-coverage.json
+            e2e/e2e-flow-coverage.json
+            e2e/e2e-page-inventory.json
+            e2e/e2e-page-coverage.json
+            e2e/e2e-behavior-coverage.json
 
-  # PR guard: web/docs smoke is HTTP-only (no Electron) so it runs fast on Linux.
+  # PR guard: web/docs + CLI smoke is HTTP/Node-only (no Electron) so it runs fast on Linux.
   web-smoke:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -241,7 +249,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: bun install --frozen-lockfile
-      - name: Run web/docs smoke
+      - name: Run web/docs + CLI smoke
         run: bun run e2e:smoke
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -249,5 +257,5 @@ jobs:
           name: e2e-web-smoke-${{ github.run_id }}
           retention-days: 7
           path: |
-            apps/e2e/playwright-report/**
-            apps/e2e/test-results/**
+            e2e/playwright-report/**
+            e2e/test-results/**

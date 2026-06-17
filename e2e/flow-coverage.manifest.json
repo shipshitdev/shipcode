@@ -72,6 +72,13 @@
       "covered": true,
       "spec": "src/specs/web/web-docs-smoke.e2e.ts",
       "rationale": "Builds the static web + docs exports, serves them, and asserts the landing page and key docs routes return 200 with expected content."
+    },
+    {
+      "id": "cli-smoke",
+      "title": "CLI smoke: built shipcode binary exposes command help, version, and safe pre-onboarding status",
+      "covered": true,
+      "spec": "src/specs/cli/cli.e2e.ts",
+      "rationale": "Builds apps/cli, executes the real Node entrypoint in an isolated HOME, and asserts command discovery plus safe no-database behavior."
     }
   ]
 }

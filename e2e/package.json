@@ -1,0 +1,30 @@
+{
+  "name": "@shipcode/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Repo-level end-to-end coverage for ShipCode (Playwright: Electron desktop, static web/docs, and CLI smoke).",
+  "scripts": {
+    "e2e": "playwright test",
+    "e2e:ci": "playwright test --reporter=list,html,json; pw=$?; node scripts/check-app-coverage.mjs; app=$?; node scripts/check-flow-coverage.mjs; flow=$?; node scripts/check-page-inventory.mjs; inventory=$?; node scripts/check-page-coverage.mjs; page=$?; node scripts/check-behavior-coverage.mjs; behavior=$?; if [ \"$pw\" -ne 0 ]; then exit \"$pw\"; fi; if [ \"$app\" -ne 0 ]; then exit \"$app\"; fi; if [ \"$flow\" -ne 0 ]; then exit \"$flow\"; fi; if [ \"$inventory\" -ne 0 ]; then exit \"$inventory\"; fi; if [ \"$page\" -ne 0 ]; then exit \"$page\"; fi; exit \"$behavior\"",
+    "e2e:desktop": "playwright test --project=desktop",
+    "e2e:smoke": "playwright test --project=web-smoke --project=cli",
+    "check:app-coverage": "node scripts/check-app-coverage.mjs",
+    "check:flow-coverage": "node scripts/check-flow-coverage.mjs",
+    "check:page-inventory": "node scripts/check-page-inventory.mjs",
+    "check:page-coverage": "node scripts/check-page-coverage.mjs",
+    "check:behavior-coverage": "node scripts/check-behavior-coverage.mjs"
+  },
+  "dependencies": {
+    "@shipcode/agents": "workspace:*",
+    "@shipcode/db": "workspace:*",
+    "@shipcode/git": "workspace:*",
+    "@shipcode/pipeline": "workspace:*",
+    "@shipcode/shared": "workspace:*",
+    "@shipcode/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.60.0",
+    "@types/node": "25.9.1"
+  }
+}

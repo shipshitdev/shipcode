@@ -55,7 +55,8 @@
   },
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "e2e"
   ],
   "patchedDependencies": {
     "nextra@4.6.1": "patches/nextra@4.6.1.patch",
