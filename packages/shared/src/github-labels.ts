@@ -11,6 +11,7 @@ export const SHIPCODE_AGENT_LABEL_PREFIX = `${SHIPCODE_LABEL_PREFIX}agent:` as c
 export const LEGACY_AGENT_LABEL_PREFIX = 'agent:' as const;
 export const PIPELINE_LABEL_PREFIX = `${SHIPCODE_LABEL_PREFIX}pipeline:` as const;
 export const SHIPCODE_CI_BLOCKED_LABEL = `${SHIPCODE_LABEL_PREFIX}blocked:ci` as const;
+export const SHIPCODE_ACTIVE_CLAIM_LABEL = `${SHIPCODE_LABEL_PREFIX}claim:active` as const;
 
 export function isShipCodeAgentLabel(label: string): boolean {
   return label.startsWith(SHIPCODE_AGENT_LABEL_PREFIX);
@@ -131,6 +132,11 @@ export const SHIPCODE_METADATA_LABELS: readonly GitHubLabelDefinition[] = [
     name: SHIPCODE_CI_BLOCKED_LABEL,
     color: 'cf222e',
     description: 'Linked PR has failing CI checks and needs follow-up.',
+  },
+  {
+    name: SHIPCODE_ACTIVE_CLAIM_LABEL,
+    color: '6e7781',
+    description: 'An external ShipCode-compatible dev loop has claimed this issue.',
   },
 ] as const;
 

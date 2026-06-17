@@ -73,6 +73,18 @@ export interface WritingPrdsSkillInfo {
   openTargetPath: string;
 }
 
+export interface RepoSkillSeedFile {
+  path: string;
+  absolutePath: string;
+  status: 'written' | 'skipped';
+}
+
+export interface RepoSkillSeedResult {
+  bundle: 'dev-loop';
+  targetDir: string;
+  files: RepoSkillSeedFile[];
+}
+
 export interface DesktopAppHealth {
   key: ProjectOpenTarget;
   label: string;

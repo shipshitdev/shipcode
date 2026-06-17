@@ -13,6 +13,7 @@ const terminalCommandMock = vi.fn();
 const terminalSummaryCommandMock = vi.fn();
 const terminalCommentCommandMock = vi.fn();
 const prdCommandMock = vi.fn();
+const seedSkillsCommandMock = vi.fn();
 const parseMock = vi.fn();
 
 const { commandCalls, resetCommanderMock } = vi.hoisted(() => {
@@ -78,6 +79,10 @@ vi.mock('./commands/prd', () => ({
   prdCommand: prdCommandMock,
 }));
 
+vi.mock('./commands/skills', () => ({
+  seedSkillsCommand: seedSkillsCommandMock,
+}));
+
 vi.mock('commander', () => {
   class MockSubCommand {
     public name: string;
@@ -95,6 +100,11 @@ vi.mock('commander', () => {
       const command = commandCalls.find((entry) => entry.name === this.name);
       command?.options.push({ flags, description, defaultValue });
       return this;
+    });
+    public command = vi.fn((name: string) => {
+      const childName = `${this.name} ${name}`;
+      commandCalls.push({ name: childName, options: [] });
+      return new MockSubCommand(childName);
     });
 
     constructor(name: string) {
@@ -140,6 +150,18 @@ describe('CLI entrypoint', () => {
         options: [],
         description: 'Initialize ShipCode in the current project',
         action: onboardCommandMock,
+      },
+      {
+        name: 'skills',
+        options: [],
+        description: 'Manage repo-local skills',
+        action: undefined,
+      },
+      {
+        name: 'skills seed [bundle]',
+        options: [{ flags: '--force', description: 'overwrite existing skill files' }],
+        description: 'Seed bundled ShipCode skills into ./skills',
+        action: seedSkillsCommandMock,
       },
       {
         name: 'status',
