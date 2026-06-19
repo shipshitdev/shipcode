@@ -56,6 +56,20 @@ describe('repo skill seeder', () => {
     expect(fs.readFileSync(target, 'utf-8')).toContain('name: writing-prds');
   });
 
+  it('every real bundle file path stays confined within skills/', () => {
+    // Data sanity check: none of the shipped dev-loop bundle entries escape skills/.
+    // The guard itself is exercised end-to-end in repo-skill-seeder.path-guard.test.ts.
+    const files = listRepoSkillBundleFiles('dev-loop');
+    const skillsRoot = path.resolve(tempDir, 'skills');
+
+    for (const file of files) {
+      const absolutePath = path.resolve(skillsRoot, file.path);
+      const relative = path.relative(skillsRoot, absolutePath);
+      expect(relative, `${file.path} escapes skills/`).not.toMatch(/^\.\./);
+      expect(path.isAbsolute(relative), `${file.path} resolved absolute`).toBe(false);
+    }
+  });
+
   it('seeds the ShipCode label profile instead of generic dev-loop labels', () => {
     const joined = listRepoSkillBundleFiles('dev-loop')
       .map((file) => file.content)

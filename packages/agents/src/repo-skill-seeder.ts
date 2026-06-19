@@ -1,15 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { REPO_SKILL_BUNDLE_KEYS, type RepoSkillBundleKey } from '@shipcode/shared';
 import { DEV_LOOP_REPO_SKILL_FILES } from './bundled-repo-skills/dev-loop.generated';
+
+export type { RepoSkillBundleKey };
+export { REPO_SKILL_BUNDLE_KEYS };
 
 export interface RepoSkillFile {
   path: string;
   content: string;
 }
-
-export const REPO_SKILL_BUNDLE_KEYS = ['dev-loop'] as const;
-
-export type RepoSkillBundleKey = (typeof REPO_SKILL_BUNDLE_KEYS)[number];
 
 export interface SeedRepoSkillBundleOptions {
   bundle?: RepoSkillBundleKey;

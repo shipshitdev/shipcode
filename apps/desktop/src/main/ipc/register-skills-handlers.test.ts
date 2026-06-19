@@ -531,7 +531,6 @@ describe('registerSkillsHandlers', () => {
       files: [
         {
           path: 'skills/writing-prds/SKILL.md',
-          absolutePath: path.join('/repo', 'skills', 'writing-prds', 'SKILL.md'),
           status: 'written',
         },
       ],

@@ -269,19 +269,17 @@ function useSkillsView() {
   });
 
   const seedRepoSkillsMutation = useMutation({
-    mutationFn: (): Promise<RepoSkillSeedResult> => {
-      if (!activeProjectId) throw new Error('Select a project first.');
-      return window.shipcode.invoke<RepoSkillSeedResult>('skills:seed-repo-bundle', {
-        projectId: activeProjectId,
+    mutationFn: ({ projectId: pid }: { projectId: string }): Promise<RepoSkillSeedResult> =>
+      window.shipcode.invoke<RepoSkillSeedResult>('skills:seed-repo-bundle', {
+        projectId: pid,
         bundle: 'dev-loop',
-      });
-    },
-    onSuccess: (result) => {
+      }),
+    onSuccess: (result, variables) => {
       const written = result.files.filter((file) => file.status === 'written').length;
       const skipped = result.files.filter((file) => file.status === 'skipped').length;
       setSeedNotice(`Dev-loop skills seeded: ${written} written, ${skipped} skipped.`);
       setSeedError(null);
-      queryClient.invalidateQueries({ queryKey: ['skills:writing-prds', activeProjectId] });
+      queryClient.invalidateQueries({ queryKey: ['skills:writing-prds', variables.projectId] });
     },
     onError: (err: unknown) => {
       setSeedError(clampError(err));
@@ -474,7 +472,10 @@ function useSkillsView() {
                     <Button
                       variant="secondary"
                       className="mt-2 w-full"
-                      onClick={() => seedRepoSkillsMutation.mutate()}
+                      onClick={() => {
+                        if (!activeProjectId) return;
+                        seedRepoSkillsMutation.mutate({ projectId: activeProjectId });
+                      }}
                       disabled={seedRepoSkillsMutation.isPending}
                     >
                       <LoadingButtonContent loading={seedRepoSkillsMutation.isPending}>
@@ -483,11 +484,17 @@ function useSkillsView() {
                       </LoadingButtonContent>
                     </Button>
                     {seedError ? (
-                      <div className="mt-2 rounded border border-red-500/40 bg-red-500/5 p-2 text-[11px] text-red-300">
+                      <div
+                        role="alert"
+                        className="mt-2 rounded border border-red-500/40 bg-red-500/5 p-2 text-[11px] text-red-300"
+                      >
                         {seedError}
                       </div>
                     ) : seedNotice ? (
-                      <div className="mt-2 rounded border border-green-500/30 bg-green-500/5 p-2 text-[11px] text-green-300">
+                      <div
+                        aria-live="polite"
+                        className="mt-2 rounded border border-green-500/30 bg-green-500/5 p-2 text-[11px] text-green-300"
+                      >
                         {seedNotice}
                       </div>
                     ) : null}

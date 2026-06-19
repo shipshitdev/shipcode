@@ -147,12 +147,10 @@ describe('SkillsView', () => {
           files: [
             {
               path: 'skills/writing-prds/SKILL.md',
-              absolutePath: '/repo/skills/writing-prds/SKILL.md',
               status: 'written',
             },
             {
               path: 'skills/qa-reviewer/SKILL.md',
-              absolutePath: '/repo/skills/qa-reviewer/SKILL.md',
               status: 'skipped',
             },
           ],
@@ -361,6 +359,23 @@ describe('SkillsView', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /Rewrite draft/i }));
     expect(await screen.findByText('rewrite unavailable')).toBeInTheDocument();
+  });
+
+  it('shows the seed error and hides the success notice when seed-repo-bundle rejects', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'skills:list-for-view') return makeSkillList();
+      const writingPrdsInfo = mockWritingPrdsInfo(channel);
+      if (writingPrdsInfo) return writingPrdsInfo;
+      if (channel === 'skills:seed-repo-bundle') throw new Error('disk is full');
+      throw new Error(`Unexpected channel: ${channel}`);
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Seed dev-loop skills/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('disk is full');
+    expect(screen.queryByText(/Dev-loop skills seeded/)).not.toBeInTheDocument();
   });
 
   it('shows the PRD skill fallback copy when no project is selected', async () => {

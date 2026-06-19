@@ -10,7 +10,13 @@ import {
   seedRepoSkillBundle,
   validateSkill,
 } from '@shipcode/agents';
-import { clampError, clampTextBlock, type PhaseSkillKey, type Project } from '@shipcode/shared';
+import {
+  clampError,
+  clampTextBlock,
+  type PhaseSkillKey,
+  type Project,
+  type RepoSkillBundleKey,
+} from '@shipcode/shared';
 import { shell } from 'electron';
 import log from '../logger.service';
 import { assertPrdRewriteModelSupported, buildSkillRow } from './helpers';
@@ -258,20 +264,26 @@ export function registerSkillsHandlers({ ipcMain, queries }: IpcHandlerDeps): vo
         projectId,
         bundle = 'dev-loop',
         force = false,
-      }: { projectId: string; bundle?: string; force?: boolean },
+      }: { projectId: string; bundle?: RepoSkillBundleKey; force?: boolean },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
-      if (!isRepoSkillBundleKey(bundle)) {
-        throw new Error(`Unknown repo skill bundle: ${bundle}`);
-      }
-
       try {
-        return seedRepoSkillBundle({
+        const project = queries.projects.getById(projectId);
+        if (!project) throw new Error(`Project ${projectId} not found`);
+        if (!isRepoSkillBundleKey(bundle)) {
+          throw new Error(`Unknown repo skill bundle: ${bundle}`);
+        }
+
+        const result = seedRepoSkillBundle({
           bundle,
           cwd: project.path,
           force,
         });
+
+        return {
+          bundle: result.bundle,
+          targetDir: result.targetDir,
+          files: result.files.map(({ path: filePath, status }) => ({ path: filePath, status })),
+        };
       } catch (err) {
         log.error('[skills:seed-repo-bundle]', err);
         throw new Error(clampError(err));

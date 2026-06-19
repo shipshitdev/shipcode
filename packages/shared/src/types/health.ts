@@ -73,14 +73,19 @@ export interface WritingPrdsSkillInfo {
   openTargetPath: string;
 }
 
+// === Repo Skill Bundle Keys ===
+
+export const REPO_SKILL_BUNDLE_KEYS = ['dev-loop'] as const;
+
+export type RepoSkillBundleKey = (typeof REPO_SKILL_BUNDLE_KEYS)[number];
+
 export interface RepoSkillSeedFile {
   path: string;
-  absolutePath: string;
   status: 'written' | 'skipped';
 }
 
 export interface RepoSkillSeedResult {
-  bundle: 'dev-loop';
+  bundle: RepoSkillBundleKey;
   targetDir: string;
   files: RepoSkillSeedFile[];
 }

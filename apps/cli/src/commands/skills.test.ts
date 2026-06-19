@@ -7,6 +7,7 @@ const { isRepoSkillBundleKeyMock, seedRepoSkillBundleMock } = vi.hoisted(() => (
 
 vi.mock('@shipcode/agents', () => ({
   isRepoSkillBundleKey: isRepoSkillBundleKeyMock,
+  REPO_SKILL_BUNDLE_KEYS: ['dev-loop'] as const,
   seedRepoSkillBundle: seedRepoSkillBundleMock,
 }));
 
@@ -71,7 +72,17 @@ describe('seedSkillsCommand', () => {
     expect(() => seedSkillsCommand('unknown')).toThrow('process.exit:1');
 
     expect(errorSpy).toHaveBeenCalledWith('Unknown skills bundle: unknown');
-    expect(errorSpy).toHaveBeenCalledWith('Available bundles: dev-loop');
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Available bundles: dev-loop'));
     expect(seedRepoSkillBundleMock).not.toHaveBeenCalled();
+  });
+
+  it('exits with a friendly error message on fs failure', () => {
+    seedRepoSkillBundleMock.mockImplementationOnce(() => {
+      throw new Error('EACCES: permission denied');
+    });
+
+    expect(() => seedSkillsCommand('dev-loop')).toThrow('process.exit:1');
+
+    expect(errorSpy).toHaveBeenCalledWith('Failed to seed skills: EACCES: permission denied');
   });
 });
