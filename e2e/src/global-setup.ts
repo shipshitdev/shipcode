@@ -68,9 +68,9 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
       cwd: REPO_ROOT,
       stdio: 'inherit',
     });
-  }
 
-  if (!existsSync(DESKTOP_MAIN)) {
-    throw new Error(`[e2e] desktop build did not produce ${DESKTOP_MAIN}`);
+    if (!existsSync(DESKTOP_MAIN)) {
+      throw new Error(`[e2e] desktop build did not produce ${DESKTOP_MAIN}`);
+    }
   }
 }

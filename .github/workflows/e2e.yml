@@ -1,22 +1,22 @@
 name: E2E
 
 # Trunk-based: master is the single trunk.
-# - Nightly cron fires from the default branch (master), so the scheduled review
+# - Weekly cron fires from the default branch (master), so the scheduled review
 #   always runs against the trunk.
 # - workflow_dispatch defaults to master; `target_ref` lets you point the suite
 #   at any branch/tag (e.g. a release tag or a feature branch under test).
 run-name: >-
   E2E ·
   ${{ github.event_name == 'workflow_dispatch' && format('{0} (manual)', inputs.target_ref)
-   || github.event_name == 'schedule' && 'master (nightly)'
+   || github.event_name == 'schedule' && 'master (weekly)'
    || 'PR smoke' }}
 
 on:
   schedule:
-    # Nightly, 07:00 UTC — 1h after the CI coverage cron (0 6 * * *)
+    # Weekly, Sundays 07:00 UTC — 1h after the CI coverage cron (0 6 * * 0)
     # so the two never queue on macOS runners at the same instant. Runs against
     # master (default branch); see the branch-model note above.
-    - cron: '0 7 * * *'
+    - cron: '0 7 * * 0'
   workflow_dispatch:
     inputs:
       target_ref:
@@ -109,7 +109,7 @@ jobs:
 
   # Full E2E suite (Electron desktop journeys + web/docs + CLI smoke) + coverage
   # gates. Runs on macOS because the desktop project launches the real Electron
-  # app. Nightly + manual only — too heavy for every PR. Gated behind the fast
+  # app. Weekly + manual only — too heavy for every PR. Gated behind the fast
   # Linux lint+typecheck job above.
   desktop-e2e:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

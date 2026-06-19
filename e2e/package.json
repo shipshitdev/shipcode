@@ -16,12 +16,8 @@
     "check:behavior-coverage": "node scripts/check-behavior-coverage.mjs"
   },
   "dependencies": {
-    "@shipcode/agents": "workspace:*",
     "@shipcode/db": "workspace:*",
-    "@shipcode/git": "workspace:*",
-    "@shipcode/pipeline": "workspace:*",
-    "@shipcode/shared": "workspace:*",
-    "@shipcode/ui": "workspace:*"
+    "@shipcode/shared": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "1.60.0",

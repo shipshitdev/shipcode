@@ -131,12 +131,8 @@
       "name": "@shipcode/e2e",
       "version": "0.0.0",
       "dependencies": {
-        "@shipcode/agents": "workspace:*",
         "@shipcode/db": "workspace:*",
-        "@shipcode/git": "workspace:*",
-        "@shipcode/pipeline": "workspace:*",
         "@shipcode/shared": "workspace:*",
-        "@shipcode/ui": "workspace:*",
       },
       "devDependencies": {
         "@playwright/test": "1.60.0",
