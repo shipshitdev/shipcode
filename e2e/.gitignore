@@ -1,0 +1,8 @@
+node_modules
+playwright-report
+test-results
+e2e-app-coverage.json
+e2e-flow-coverage.json
+e2e-page-inventory.json
+e2e-page-coverage.json
+e2e-behavior-coverage.json

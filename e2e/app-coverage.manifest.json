@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "definition": "App coverage means every product app under apps/ has at least one deterministic E2E smoke or journey that proves the built app can start and expose its core contract. The root e2e/ workspace is the harness and is intentionally outside the product app inventory.",
+  "gateMinPct": 100,
+  "apps": [
+    {
+      "id": "desktop",
+      "packageName": "@shipcode/desktop",
+      "path": "apps/desktop",
+      "kind": "electron-app",
+      "title": "Desktop Electron app",
+      "covered": true,
+      "specs": [
+        "src/specs/desktop/onboarding.e2e.ts",
+        "src/specs/desktop/page-surfaces.e2e.ts",
+        "src/specs/desktop/page-behaviors.e2e.ts"
+      ],
+      "rationale": "Launches the built Electron app and drives real renderer/main-process behavior through Playwright."
+    },
+    {
+      "id": "web",
+      "packageName": "@shipcode/web",
+      "path": "apps/web",
+      "kind": "next-static-app",
+      "title": "Marketing web app",
+      "covered": true,
+      "specs": ["src/specs/web/web-docs-smoke.e2e.ts", "src/specs/web/docs-route-coverage.e2e.ts"],
+      "rationale": "Builds the static web export, serves it over HTTP, and asserts the landing route content."
+    },
+    {
+      "id": "docs",
+      "packageName": "@shipcode/docs",
+      "path": "apps/docs",
+      "kind": "next-static-docs",
+      "title": "Docs app",
+      "covered": true,
+      "specs": ["src/specs/web/web-docs-smoke.e2e.ts", "src/specs/web/docs-route-coverage.e2e.ts"],
+      "rationale": "Builds the static docs export, serves it over HTTP, and asserts every exported docs content route."
+    },
+    {
+      "id": "cli",
+      "packageName": "@shipshitdev/shipcode",
+      "path": "apps/cli",
+      "kind": "node-cli",
+      "title": "ShipCode CLI",
+      "covered": true,
+      "specs": ["src/specs/cli/cli.e2e.ts"],
+      "rationale": "Builds the CLI entrypoint and executes the real binary with an isolated HOME to verify help/version/status behavior."
+    }
+  ]
+}

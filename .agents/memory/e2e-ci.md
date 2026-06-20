@@ -8,10 +8,10 @@ topics: [e2e, ci, github-actions, workflow, trunk, branches, cron]
 ---
 
 **Workflows:** `.github/workflows/ci.yml` (lint/design/typecheck/test backbone) and
-`.github/workflows/e2e.yml` (Playwright suite in `apps/e2e/`, added in #227). E2E runs
+`.github/workflows/e2e.yml` (Playwright suite in `e2e/`, added in #227). E2E runs
 two projects: `desktop` (real Electron via `_electron.launch`, macOS) and `web-smoke`
 (static web/docs over HTTP, Linux), plus a journey **flow-coverage gate**
-(`apps/e2e/scripts/check-flow-coverage.mjs`, `E2E_FLOW_COVERAGE_MIN=90`).
+(`e2e/scripts/check-flow-coverage.mjs`, `E2E_FLOW_COVERAGE_MIN=90`).
 
 ## Branch model — trunk-based (migrated 2026-06-16, PR #235)
 
@@ -149,7 +149,7 @@ re-pull ~100 MB from the CDN each run (install.js is idempotent — skips downlo
 `only_failed` (default **false**) on e2e.yml + full.yml. When true, `desktop-e2e` runs
 `playwright test --last-failed` and **skips the flow-coverage gate** (emits a `::notice`
 that the run is not authoritative). The failed-test list
-(`apps/e2e/test-results/.last-run.json`) is persisted with `actions/cache/save`
+(`e2e/test-results/.last-run.json`) is persisted with `actions/cache/save`
 (`if: always()`, per-branch key `pw-lastrun-<ref>-<run_id>`) and restored
 (`restore-keys: pw-lastrun-<ref>-`) only in `only_failed` mode. Gives "re-run only what
 broke" for E2E without weakening the default full run (schedule + plain dispatch).

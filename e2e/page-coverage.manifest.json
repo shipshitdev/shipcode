@@ -1,0 +1,423 @@
+{
+  "version": 1,
+  "definition": "Page coverage means every routable desktop surface, project tab, settings section, issue-detail tab, web route, and exported docs route has a deterministic E2E smoke assertion.",
+  "gateMinPct": 100,
+  "surfaces": [
+    {
+      "id": "desktop-overview",
+      "kind": "desktop-view",
+      "title": "Overview",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "desktop-activity",
+      "kind": "desktop-view",
+      "title": "Activity",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "desktop-inbox",
+      "kind": "desktop-view",
+      "title": "Inbox",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "desktop-costs",
+      "kind": "desktop-view",
+      "title": "Costs",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "desktop-skills",
+      "kind": "desktop-view",
+      "title": "Skills",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "desktop-automations",
+      "kind": "desktop-view",
+      "title": "Automations",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "project-issues",
+      "kind": "project-tab",
+      "title": "Issues",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "project-git",
+      "kind": "project-tab",
+      "title": "Git",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "project-code",
+      "kind": "project-tab",
+      "title": "Code",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "project-pull-requests",
+      "kind": "project-tab",
+      "title": "Pull requests",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "project-terminal",
+      "kind": "project-tab",
+      "title": "Terminal",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "project-insights",
+      "kind": "project-tab",
+      "title": "Insights",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-general",
+      "kind": "settings-section",
+      "title": "General",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-integrations",
+      "kind": "settings-section",
+      "title": "Integrations",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-github",
+      "kind": "settings-section",
+      "title": "GitHub",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-notifications",
+      "kind": "settings-section",
+      "title": "Notifications",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-pipeline",
+      "kind": "settings-section",
+      "title": "Pipeline",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-auto-commit",
+      "kind": "settings-section",
+      "title": "Auto-commit",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-shortcuts",
+      "kind": "settings-section",
+      "title": "Shortcuts",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-archived",
+      "kind": "settings-section",
+      "title": "Archived",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-developer",
+      "kind": "settings-section",
+      "title": "Developer",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-about",
+      "kind": "settings-section",
+      "title": "About",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "issue-tab-prd",
+      "kind": "issue-tab",
+      "title": "Issue",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "issue-tab-console",
+      "kind": "issue-tab",
+      "title": "Console",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "issue-tab-comments",
+      "kind": "issue-tab",
+      "title": "Comments",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "issue-tab-history",
+      "kind": "issue-tab",
+      "title": "Plans",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "issue-tab-findings",
+      "kind": "issue-tab",
+      "title": "Findings",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "issue-tab-diff",
+      "kind": "issue-tab",
+      "title": "Diff",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "issue-tab-runs",
+      "kind": "issue-tab",
+      "title": "Runs",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "issue-tab-activity",
+      "kind": "issue-tab",
+      "title": "Activity",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "issue-tab-conversations",
+      "kind": "issue-tab",
+      "title": "Conversations",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "issue-tab-chat",
+      "kind": "issue-tab",
+      "title": "Chat",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "web-home",
+      "kind": "web-route",
+      "title": "Marketing home",
+      "path": "/",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-index",
+      "kind": "docs-route",
+      "title": "Docs index",
+      "path": "/",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-getting-started",
+      "kind": "docs-route",
+      "title": "Getting started",
+      "path": "/getting-started",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-architecture",
+      "kind": "docs-route",
+      "title": "Architecture",
+      "path": "/architecture",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-configuration",
+      "kind": "docs-route",
+      "title": "Configuration",
+      "path": "/configuration",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-openrouter",
+      "kind": "docs-route",
+      "title": "OpenRouter",
+      "path": "/openrouter",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-cli-index",
+      "kind": "docs-route",
+      "title": "CLI",
+      "path": "/cli",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-pipeline-overview",
+      "kind": "docs-route",
+      "title": "Pipeline overview",
+      "path": "/pipeline/overview",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-activity",
+      "kind": "docs-route",
+      "title": "Desktop activity",
+      "path": "/desktop/activity",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-automations",
+      "kind": "docs-route",
+      "title": "Desktop automations",
+      "path": "/desktop/automations",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-code",
+      "kind": "docs-route",
+      "title": "Desktop code",
+      "path": "/desktop/code",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-costs",
+      "kind": "docs-route",
+      "title": "Desktop costs",
+      "path": "/desktop/costs",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-git",
+      "kind": "docs-route",
+      "title": "Desktop git",
+      "path": "/desktop/git",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-inbox",
+      "kind": "docs-route",
+      "title": "Desktop inbox",
+      "path": "/desktop/inbox",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-insights",
+      "kind": "docs-route",
+      "title": "Desktop insights",
+      "path": "/desktop/insights",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-kanban",
+      "kind": "docs-route",
+      "title": "Desktop kanban",
+      "path": "/desktop/kanban",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-mission-control",
+      "kind": "docs-route",
+      "title": "Desktop mission control",
+      "path": "/desktop/mission-control",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-overview",
+      "kind": "docs-route",
+      "title": "Desktop overview",
+      "path": "/desktop/overview",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-plan-viewer",
+      "kind": "docs-route",
+      "title": "Desktop plan viewer",
+      "path": "/desktop/plan-viewer",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-project-settings",
+      "kind": "docs-route",
+      "title": "Desktop project settings",
+      "path": "/desktop/project-settings",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-pull-requests",
+      "kind": "docs-route",
+      "title": "Desktop pull requests",
+      "path": "/desktop/pull-requests",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-settings",
+      "kind": "docs-route",
+      "title": "Desktop settings",
+      "path": "/desktop/settings",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-skills",
+      "kind": "docs-route",
+      "title": "Desktop skills",
+      "path": "/desktop/skills",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-terminal",
+      "kind": "docs-route",
+      "title": "Desktop terminal",
+      "path": "/desktop/terminal",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    }
+  ]
+}

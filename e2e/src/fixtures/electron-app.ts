@@ -13,10 +13,10 @@ import {
 import { type SeedOptions, type SeedResult, seedDatabase } from './seed';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(HERE, '..', '..', '..', '..');
+const REPO_ROOT = path.resolve(HERE, '..', '..', '..');
 const DESKTOP_DIR = path.join(REPO_ROOT, 'apps', 'desktop');
 const DESKTOP_MAIN = path.join(DESKTOP_DIR, 'dist', 'main', 'index.js');
-const FAKE_BIN = path.join(REPO_ROOT, 'apps', 'e2e', 'fixtures', 'bin');
+const FAKE_BIN = path.join(REPO_ROOT, 'e2e', 'fixtures', 'bin');
 
 // Resolve Electron's binary from the desktop package so we launch the exact
 // version the app is built against, regardless of workspace hoisting.
@@ -151,6 +151,9 @@ export async function launchApp(seedOptions: SeedOptions = {}): Promise<Harness>
     }
     fs.rmSync(userData, { recursive: true, force: true });
     if (seed.projectPath) fs.rmSync(seed.projectPath, { recursive: true, force: true });
+    for (const cleanupPath of seed.cleanupPaths) {
+      fs.rmSync(cleanupPath, { recursive: true, force: true });
+    }
   };
 
   return { app, page, seed, fire, getState, setState, callStore, cleanup };

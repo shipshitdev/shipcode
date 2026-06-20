@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 /**
  * Repo-level E2E config for ShipCode.
  *
- * Two projects:
+ * Three projects:
  *  - `desktop`   — launches the built Electron app (apps/desktop/dist) via
  *                  Playwright's _electron API and drives real user journeys
  *                  against the real main-process IPC surface. Deterministic:
@@ -15,9 +15,10 @@ import { defineConfig } from '@playwright/test';
  *                  critical content. Each spec owns its static server
  *                  lifecycle (see src/fixtures/static-server.ts), so this
  *                  project is fully independent of the desktop one.
+ *  - `cli`       — builds and executes the packaged Node CLI in a temp HOME.
  *
  * Run everything: `bun run e2e`. Single project: `--project=desktop` /
- * `--project=web-smoke`.
+ * `--project=web-smoke` / `--project=cli`.
  */
 export default defineConfig({
   testDir: './src/specs',
@@ -39,6 +40,10 @@ export default defineConfig({
     {
       name: 'web-smoke',
       testMatch: /web\/.*\.e2e\.ts$/,
+    },
+    {
+      name: 'cli',
+      testMatch: /cli\/.*\.e2e\.ts$/,
     },
   ],
 });

@@ -1,0 +1,568 @@
+{
+  "version": 1,
+  "definition": "Behavior coverage means every page surface has at least one deterministic E2E assertion for its user-visible contract, and critical workflows have explicit behavior entries. This is E2E contract coverage, not V8 line coverage.",
+  "gateMinPct": 100,
+  "requiredSurfaceKinds": [
+    "desktop-view",
+    "project-tab",
+    "settings-section",
+    "issue-tab",
+    "web-route",
+    "docs-route"
+  ],
+  "behaviors": [
+    {
+      "id": "overview-stat-card-navigation",
+      "surfaceId": "desktop-overview",
+      "title": "Overview stat cards navigate to the inbox and activity surfaces",
+      "covered": true,
+      "spec": "src/specs/desktop/page-behaviors.e2e.ts"
+    },
+    {
+      "id": "command-palette-top-level-navigation",
+      "surfaceId": "desktop-overview",
+      "title": "Command palette searches and navigates to a top-level desktop view",
+      "covered": true,
+      "spec": "src/specs/desktop/app-shell-behaviors.e2e.ts"
+    },
+    {
+      "id": "assistant-suggested-prompt-cli-state",
+      "surfaceId": "desktop-overview",
+      "title": "Assistant panel fills suggested prompts and persists the selected CLI",
+      "covered": true,
+      "spec": "src/specs/desktop/app-shell-behaviors.e2e.ts"
+    },
+    {
+      "id": "activity-surface-contract",
+      "surfaceId": "desktop-activity",
+      "title": "Activity view mounts its timeline surface and can be reached from overview",
+      "covered": true,
+      "spec": "src/specs/desktop/page-behaviors.e2e.ts"
+    },
+    {
+      "id": "inbox-live-notification-routing",
+      "surfaceId": "desktop-inbox",
+      "title": "Inbox renders live notification rows and preserves safe navigation",
+      "covered": true,
+      "spec": "src/specs/desktop/notifications-inbox.e2e.ts"
+    },
+    {
+      "id": "costs-display-mode-toggle",
+      "surfaceId": "desktop-costs",
+      "title": "Costs view switches between token and USD display modes",
+      "covered": true,
+      "spec": "src/specs/desktop/page-behaviors.e2e.ts"
+    },
+    {
+      "id": "skills-phase-editor-navigation",
+      "surfaceId": "desktop-skills",
+      "title": "Skills view changes active pipeline phase and exposes unsaved draft state",
+      "covered": true,
+      "spec": "src/specs/desktop/page-behaviors.e2e.ts"
+    },
+    {
+      "id": "automations-create-modal-validation",
+      "surfaceId": "desktop-automations",
+      "title": "Automations view opens the create modal and validates required fields",
+      "covered": true,
+      "spec": "src/specs/desktop/page-behaviors.e2e.ts"
+    },
+    {
+      "id": "automations-custom-cron-create",
+      "surfaceId": "desktop-automations",
+      "title": "Automation modal validates custom cron input and creates a persisted automation card",
+      "covered": true,
+      "spec": "src/specs/desktop/app-shell-behaviors.e2e.ts"
+    },
+    {
+      "id": "project-issues-board-cards",
+      "surfaceId": "project-issues",
+      "title": "Issues board renders seeded cards with stable card test ids",
+      "covered": true,
+      "spec": "src/specs/desktop/project-board.e2e.ts"
+    },
+    {
+      "id": "command-palette-issue-search-navigation",
+      "surfaceId": "project-issues",
+      "title": "Command palette searches cached issues and opens issue detail",
+      "covered": true,
+      "spec": "src/specs/desktop/app-shell-behaviors.e2e.ts"
+    },
+    {
+      "id": "project-git-worktree-controls",
+      "surfaceId": "project-git",
+      "title": "Git tab exposes worktree status and cleanup controls",
+      "covered": true,
+      "spec": "src/specs/desktop/page-behaviors.e2e.ts"
+    },
+    {
+      "id": "project-code-file-selection",
+      "surfaceId": "project-code",
+      "title": "Code tab selects a file, renders source, and switches to diff mode",
+      "covered": true,
+      "spec": "src/specs/desktop/page-behaviors.e2e.ts"
+    },
+    {
+      "id": "project-pull-requests-filtering",
+      "surfaceId": "project-pull-requests",
+      "title": "Pull request panel exposes empty state and filter controls",
+      "covered": true,
+      "spec": "src/specs/desktop/pull-request-panel.e2e.ts"
+    },
+    {
+      "id": "project-terminal-pane-lifecycle",
+      "surfaceId": "project-terminal",
+      "title": "Terminal tab shows empty state, renders a replay pane, and closes it",
+      "covered": true,
+      "spec": "src/specs/desktop/page-behaviors.e2e.ts"
+    },
+    {
+      "id": "project-insights-range-toggle",
+      "surfaceId": "project-insights",
+      "title": "Insights view changes heatmap range and metric controls",
+      "covered": true,
+      "spec": "src/specs/desktop/page-behaviors.e2e.ts"
+    },
+    {
+      "id": "settings-general-section",
+      "surfaceId": "settings-general",
+      "title": "Settings general section renders its persisted controls",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-general-theme-font-persistence",
+      "surfaceId": "settings-general",
+      "title": "General settings persist theme and font-size choices through the app bridge",
+      "covered": true,
+      "spec": "src/specs/desktop/app-shell-behaviors.e2e.ts"
+    },
+    {
+      "id": "settings-general-worktree-root-validation",
+      "surfaceId": "settings-general",
+      "title": "General settings reject a relative worktree root before persistence",
+      "covered": true,
+      "spec": "src/specs/desktop/app-shell-behaviors.e2e.ts"
+    },
+    {
+      "id": "settings-integrations-section",
+      "surfaceId": "settings-integrations",
+      "title": "Settings integrations section renders CLI/provider readiness controls",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-integrations-chat-provider-persistence",
+      "surfaceId": "settings-integrations",
+      "title": "Integrations settings persist Discord and Telegram chat provider fields",
+      "covered": true,
+      "spec": "src/specs/desktop/settings-behaviors.e2e.ts"
+    },
+    {
+      "id": "settings-github-section",
+      "surfaceId": "settings-github",
+      "title": "Settings GitHub section renders repository integration controls",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-github-polling-auto-run-persistence",
+      "surfaceId": "settings-github",
+      "title": "GitHub settings persist polling interval and auto-run priority controls",
+      "covered": true,
+      "spec": "src/specs/desktop/settings-behaviors.e2e.ts"
+    },
+    {
+      "id": "settings-notifications-section",
+      "surfaceId": "settings-notifications",
+      "title": "Settings notifications section renders notification controls",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-notifications-dependent-toggle-contract",
+      "surfaceId": "settings-notifications",
+      "title": "Notification settings disable dependent desktop toggles and persist chat alert toggles",
+      "covered": true,
+      "spec": "src/specs/desktop/settings-behaviors.e2e.ts"
+    },
+    {
+      "id": "settings-pipeline-section",
+      "surfaceId": "settings-pipeline",
+      "title": "Settings pipeline section renders runtime and model controls",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-pipeline-approval-concurrency-persistence",
+      "surfaceId": "settings-pipeline",
+      "title": "Pipeline settings persist approval and concurrency controls",
+      "covered": true,
+      "spec": "src/specs/desktop/app-shell-behaviors.e2e.ts"
+    },
+    {
+      "id": "settings-auto-commit-section",
+      "surfaceId": "settings-auto-commit",
+      "title": "Settings auto-commit section renders cleanup controls",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-auto-commit-provider-cleanup-persistence",
+      "surfaceId": "settings-auto-commit",
+      "title": "Auto-commit settings persist provider, mode, and cleanup criteria controls",
+      "covered": true,
+      "spec": "src/specs/desktop/settings-behaviors.e2e.ts"
+    },
+    {
+      "id": "settings-shortcuts-reference-contract",
+      "surfaceId": "settings-shortcuts",
+      "title": "Settings shortcuts section renders the canonical shortcut reference by category",
+      "covered": true,
+      "spec": "src/specs/desktop/settings-behaviors.e2e.ts"
+    },
+    {
+      "id": "settings-archived-restore-contract",
+      "surfaceId": "settings-archived",
+      "title": "Settings archived section restores archived projects and issues",
+      "covered": true,
+      "spec": "src/specs/desktop/settings-behaviors.e2e.ts"
+    },
+    {
+      "id": "settings-developer-section",
+      "surfaceId": "settings-developer",
+      "title": "Settings developer section renders developer controls",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-developer-log-level-persistence",
+      "surfaceId": "settings-developer",
+      "title": "Developer settings persist file log level changes",
+      "covered": true,
+      "spec": "src/specs/desktop/settings-behaviors.e2e.ts"
+    },
+    {
+      "id": "settings-about-section",
+      "surfaceId": "settings-about",
+      "title": "Settings about section renders version and telemetry controls",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-about-update-track-reserved-options",
+      "surfaceId": "settings-about",
+      "title": "About settings expose Master as the only selectable update track",
+      "covered": true,
+      "spec": "src/specs/desktop/settings-behaviors.e2e.ts"
+    },
+    {
+      "id": "issue-prd-tab-navigation",
+      "surfaceId": "issue-tab-prd",
+      "title": "Issue tab opens from a board card and remains selectable",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "issue-console-terminal-transcript",
+      "surfaceId": "issue-tab-console",
+      "title": "Console tab renders canonical terminal transcript events",
+      "covered": true,
+      "spec": "src/specs/desktop/terminal-transcript.e2e.ts"
+    },
+    {
+      "id": "issue-comments-composer-contract",
+      "surfaceId": "issue-tab-comments",
+      "title": "Comments tab renders GitHub comment empty state and validates composer enablement",
+      "covered": true,
+      "spec": "src/specs/desktop/issue-detail-behaviors.e2e.ts"
+    },
+    {
+      "id": "issue-history-approval-actions",
+      "surfaceId": "issue-tab-history",
+      "title": "Plan history supports approval, request changes, and cancel choices",
+      "covered": true,
+      "spec": "src/specs/desktop/approval-resume.e2e.ts"
+    },
+    {
+      "id": "issue-findings-status-update",
+      "surfaceId": "issue-tab-findings",
+      "title": "Findings tab updates an open review finding to fixed through IPC",
+      "covered": true,
+      "spec": "src/specs/desktop/issue-detail-behaviors.e2e.ts"
+    },
+    {
+      "id": "issue-diff-fullscreen-viewer",
+      "surfaceId": "issue-tab-diff",
+      "title": "Diff tab renders seeded file changes and opens the full-screen viewer",
+      "covered": true,
+      "spec": "src/specs/desktop/issue-detail-behaviors.e2e.ts"
+    },
+    {
+      "id": "issue-runs-timeline-summary",
+      "surfaceId": "issue-tab-runs",
+      "title": "Runs tab renders a durable pipeline run timeline summary",
+      "covered": true,
+      "spec": "src/specs/desktop/issue-detail-behaviors.e2e.ts"
+    },
+    {
+      "id": "issue-activity-timeline-row",
+      "surfaceId": "issue-tab-activity",
+      "title": "Activity tab renders issue-scoped timeline rows",
+      "covered": true,
+      "spec": "src/specs/desktop/issue-detail-behaviors.e2e.ts"
+    },
+    {
+      "id": "issue-conversations-phase-filter",
+      "surfaceId": "issue-tab-conversations",
+      "title": "Conversations tab filters recorded agent turns by phase",
+      "covered": true,
+      "spec": "src/specs/desktop/issue-detail-behaviors.e2e.ts"
+    },
+    {
+      "id": "issue-chat-draft-provider-contract",
+      "surfaceId": "issue-tab-chat",
+      "title": "Issue chat tab renders persisted transcript state and enables draft turns",
+      "covered": true,
+      "spec": "src/specs/desktop/issue-detail-behaviors.e2e.ts"
+    },
+    {
+      "id": "web-home-content",
+      "surfaceId": "web-home",
+      "title": "Marketing home route serves route-specific ShipCode content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-index-content",
+      "surfaceId": "docs-index",
+      "title": "Docs index route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-getting-started-content",
+      "surfaceId": "docs-getting-started",
+      "title": "Getting started docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-architecture-content",
+      "surfaceId": "docs-architecture",
+      "title": "Architecture docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-configuration-content",
+      "surfaceId": "docs-configuration",
+      "title": "Configuration docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-openrouter-content",
+      "surfaceId": "docs-openrouter",
+      "title": "OpenRouter docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-cli-content",
+      "surfaceId": "docs-cli-index",
+      "title": "CLI docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-pipeline-overview-content",
+      "surfaceId": "docs-pipeline-overview",
+      "title": "Pipeline overview docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-activity-content",
+      "surfaceId": "docs-desktop-activity",
+      "title": "Desktop activity docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-automations-content",
+      "surfaceId": "docs-desktop-automations",
+      "title": "Desktop automations docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-code-content",
+      "surfaceId": "docs-desktop-code",
+      "title": "Desktop code docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-costs-content",
+      "surfaceId": "docs-desktop-costs",
+      "title": "Desktop costs docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-git-content",
+      "surfaceId": "docs-desktop-git",
+      "title": "Desktop git docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-inbox-content",
+      "surfaceId": "docs-desktop-inbox",
+      "title": "Desktop inbox docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-insights-content",
+      "surfaceId": "docs-desktop-insights",
+      "title": "Desktop insights docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-kanban-content",
+      "surfaceId": "docs-desktop-kanban",
+      "title": "Desktop kanban docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-mission-control-content",
+      "surfaceId": "docs-desktop-mission-control",
+      "title": "Desktop mission control docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-overview-content",
+      "surfaceId": "docs-desktop-overview",
+      "title": "Desktop overview docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-plan-viewer-content",
+      "surfaceId": "docs-desktop-plan-viewer",
+      "title": "Desktop plan viewer docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-project-settings-content",
+      "surfaceId": "docs-desktop-project-settings",
+      "title": "Desktop project settings docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-pull-requests-content",
+      "surfaceId": "docs-desktop-pull-requests",
+      "title": "Desktop pull requests docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-settings-content",
+      "surfaceId": "docs-desktop-settings",
+      "title": "Desktop settings docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-skills-content",
+      "surfaceId": "docs-desktop-skills",
+      "title": "Desktop skills docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-desktop-terminal-content",
+      "surfaceId": "docs-desktop-terminal",
+      "title": "Desktop terminal docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "onboarding-stepper-finish",
+      "surfaceId": "desktop-overview",
+      "title": "Onboarding wizard steps forward/back and finishes into the main workspace",
+      "covered": true,
+      "spec": "src/specs/desktop/onboarding.e2e.ts"
+    },
+    {
+      "id": "project-board-filtering",
+      "surfaceId": "project-issues",
+      "title": "Issues board filtering narrows visible cards deterministically",
+      "covered": true,
+      "spec": "src/specs/desktop/project-board.e2e.ts"
+    },
+    {
+      "id": "project-board-issue-detail-back",
+      "surfaceId": "project-issues",
+      "title": "Issue cards open detail and back navigation returns to the board",
+      "covered": true,
+      "spec": "src/specs/desktop/project-board.e2e.ts"
+    },
+    {
+      "id": "create-issue-required-body",
+      "surfaceId": "project-issues",
+      "title": "Create issue modal disables submit until a body exists",
+      "covered": true,
+      "spec": "src/specs/desktop/issue-prd.e2e.ts"
+    },
+    {
+      "id": "create-issue-quick-mode",
+      "surfaceId": "project-issues",
+      "title": "Create issue modal quick mode changes the input contract",
+      "covered": true,
+      "spec": "src/specs/desktop/issue-prd.e2e.ts"
+    },
+    {
+      "id": "pipeline-phase-status-updates",
+      "surfaceId": "issue-tab-prd",
+      "title": "Synthetic pipeline phase events update issue status",
+      "covered": true,
+      "spec": "src/specs/desktop/pipeline-lifecycle.e2e.ts"
+    },
+    {
+      "id": "inbox-filter-sort-dismiss",
+      "surfaceId": "desktop-inbox",
+      "title": "Inbox filters approvals, toggles sort, and handles dismiss push events",
+      "covered": true,
+      "spec": "src/specs/desktop/notifications-inbox.e2e.ts"
+    },
+    {
+      "id": "terminal-transcript-thread-isolation",
+      "surfaceId": "issue-tab-console",
+      "title": "Terminal transcript ignores events for other thread ids",
+      "covered": true,
+      "spec": "src/specs/desktop/terminal-transcript.e2e.ts"
+    },
+    {
+      "id": "project-settings-pipeline-save",
+      "surfaceId": "project-issues",
+      "title": "Project settings modal saves a pipeline speed profile selection",
+      "covered": true,
+      "spec": "src/specs/desktop/project-settings.e2e.ts"
+    },
+    {
+      "id": "pull-request-filter-cycle",
+      "surfaceId": "project-pull-requests",
+      "title": "Pull request filters cycle through all/open/closed without unmounting",
+      "covered": true,
+      "spec": "src/specs/desktop/pull-request-panel.e2e.ts"
+    }
+  ]
+}
