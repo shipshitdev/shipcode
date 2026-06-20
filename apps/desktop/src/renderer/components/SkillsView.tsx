@@ -15,7 +15,7 @@ import {
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, Sparkles } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 // The row shape below mirrors what apps/desktop/src/main/ipc.ts builds in
@@ -108,10 +108,50 @@ const SKILLS_LOADING_ROW_KEYS = [
 
 const SCOPE_GLOBAL = '__GLOBAL__' as const;
 
+// Scope picker + dev-loop seed feedback are reset together whenever the active
+// project changes. Folding them into one reducer keeps that reset (and the
+// mutually-exclusive seed notice/error) a single state update, so the effect
+// produces one re-render instead of three (react-doctor/no-cascading-set-state).
+interface SkillsScopeState {
+  scope: string;
+  seedNotice: string | null;
+  seedError: string | null;
+}
+
+type SkillsScopeAction =
+  | { type: 'project-changed' }
+  | { type: 'set-scope'; scope: string }
+  | { type: 'seed-success'; notice: string }
+  | { type: 'seed-error'; error: string };
+
+const INITIAL_SCOPE_STATE: SkillsScopeState = {
+  scope: SCOPE_GLOBAL,
+  seedNotice: null,
+  seedError: null,
+};
+
+function skillsScopeReducer(state: SkillsScopeState, action: SkillsScopeAction): SkillsScopeState {
+  switch (action.type) {
+    // Switching projects clears any stale per-project view in one update.
+    case 'project-changed':
+      return INITIAL_SCOPE_STATE;
+    case 'set-scope':
+      return { ...state, scope: action.scope };
+    // Seed notice and error are mutually exclusive — showing one clears the other.
+    case 'seed-success':
+      return { ...state, seedNotice: action.notice, seedError: null };
+    case 'seed-error':
+      return { ...state, seedError: action.error, seedNotice: null };
+    default:
+      return state;
+  }
+}
+
 function useSkillsView() {
   const queryClient = useQueryClient();
   const activeProjectId = useAppStore((state) => state.activeProjectId);
-  const [scope, setScope] = useState<string>(SCOPE_GLOBAL);
+  const [scopeState, dispatchScope] = useReducer(skillsScopeReducer, INITIAL_SCOPE_STATE);
+  const { scope, seedNotice, seedError } = scopeState;
   const [activePhase, setActivePhase] = useState<PhaseSkillKey>('plan-generation');
   const [draft, setDraft] = useState<string>('');
   const [draftDirty, setDraftDirty] = useState(false);
@@ -119,8 +159,6 @@ function useSkillsView() {
   const [rewriteInstruction, setRewriteInstruction] = useState('');
   const [rewriteError, setRewriteError] = useState<string | null>(null);
   const [rewriteNotice, setRewriteNotice] = useState<string | null>(null);
-  const [seedNotice, setSeedNotice] = useState<string | null>(null);
-  const [seedError, setSeedError] = useState<string | null>(null);
 
   const projectId = scope === SCOPE_GLOBAL ? null : scope;
 
@@ -129,9 +167,7 @@ function useSkillsView() {
   // project.
   useEffect(() => {
     void activeProjectId;
-    setScope(SCOPE_GLOBAL);
-    setSeedNotice(null);
-    setSeedError(null);
+    dispatchScope({ type: 'project-changed' });
   }, [activeProjectId]);
 
   const { data: list, isLoading } = useQuery<SkillListEntry[]>({
@@ -173,7 +209,7 @@ function useSkillsView() {
     setRewriteNotice(null);
   };
   const handleScopeChange = (value: string) => {
-    setScope(value);
+    dispatchScope({ type: 'set-scope', scope: value });
     resetEditorChrome();
   };
   const handlePhaseChange = (phase: PhaseSkillKey) => {
@@ -277,13 +313,14 @@ function useSkillsView() {
     onSuccess: (result, variables) => {
       const written = result.files.filter((file) => file.status === 'written').length;
       const skipped = result.files.filter((file) => file.status === 'skipped').length;
-      setSeedNotice(`Dev-loop skills seeded: ${written} written, ${skipped} skipped.`);
-      setSeedError(null);
+      dispatchScope({
+        type: 'seed-success',
+        notice: `Dev-loop skills seeded: ${written} written, ${skipped} skipped.`,
+      });
       queryClient.invalidateQueries({ queryKey: ['skills:writing-prds', variables.projectId] });
     },
     onError: (err: unknown) => {
-      setSeedError(clampError(err));
-      setSeedNotice(null);
+      dispatchScope({ type: 'seed-error', error: clampError(err) });
     },
   });
 
