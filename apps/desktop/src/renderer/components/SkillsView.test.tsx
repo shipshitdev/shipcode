@@ -120,7 +120,7 @@ describe('SkillsView', () => {
 
     renderWithProviders();
 
-    expect(await screen.findByText('PRD Skill')).toBeInTheDocument();
+    expect(await screen.findByText('Repo Skills')).toBeInTheDocument();
     expect(screen.getByText('writing-prds')).toBeInTheDocument();
     expect(screen.getByText('Repo file')).toBeInTheDocument();
     expect(screen.getByText('Present')).toBeInTheDocument();
@@ -133,6 +133,43 @@ describe('SkillsView', () => {
         projectId: 'project-1',
       });
     });
+  });
+
+  it('seeds the dev-loop repo skills for the active project', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'skills:list-for-view') return makeSkillList();
+      const writingPrdsInfo = mockWritingPrdsInfo(channel);
+      if (writingPrdsInfo) return writingPrdsInfo;
+      if (channel === 'skills:seed-repo-bundle') {
+        return {
+          bundle: 'dev-loop',
+          targetDir: '/repo/skills',
+          files: [
+            {
+              path: 'skills/writing-prds/SKILL.md',
+              status: 'written',
+            },
+            {
+              path: 'skills/qa-reviewer/SKILL.md',
+              status: 'skipped',
+            },
+          ],
+        };
+      }
+      throw new Error(`Unexpected channel: ${channel}`);
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Seed dev-loop skills/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('skills:seed-repo-bundle', {
+        projectId: 'project-1',
+        bundle: 'dev-loop',
+      });
+    });
+    expect(await screen.findByText('Dev-loop skills seeded: 1 written, 1 skipped.')).toBeVisible();
   });
 
   it('rewrites the selected skill into the editor draft without saving', async () => {
@@ -324,6 +361,23 @@ describe('SkillsView', () => {
     expect(await screen.findByText('rewrite unavailable')).toBeInTheDocument();
   });
 
+  it('shows the seed error and hides the success notice when seed-repo-bundle rejects', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'skills:list-for-view') return makeSkillList();
+      const writingPrdsInfo = mockWritingPrdsInfo(channel);
+      if (writingPrdsInfo) return writingPrdsInfo;
+      if (channel === 'skills:seed-repo-bundle') throw new Error('disk is full');
+      throw new Error(`Unexpected channel: ${channel}`);
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Seed dev-loop skills/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('disk is full');
+    expect(screen.queryByText(/Dev-loop skills seeded/)).not.toBeInTheDocument();
+  });
+
   it('shows the PRD skill fallback copy when no project is selected', async () => {
     useAppStore.setState({ activeProjectId: null });
     invokeMock.mockImplementation(async (channel) => {
@@ -333,7 +387,7 @@ describe('SkillsView', () => {
 
     renderWithProviders();
 
-    expect(await screen.findByText('PRD Skill')).toBeInTheDocument();
+    expect(await screen.findByText('Repo Skills')).toBeInTheDocument();
     expect(screen.getByText(/Pick a project from the sidebar/)).toBeInTheDocument();
   });
 

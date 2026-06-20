@@ -43,7 +43,7 @@ gh label list --limit 200 --json name
 ### Workflow State
 
 Workflow state is represented in the typed GitHub Projects v2 `Status`
-single-select field (`Todo`, `In Progress`, `Human Review`, `Done`, `Deferred`). ShipCode also
+single-select field (`Backlog`, `In Progress`, `Human Review`, `Done`, `Deferred`). ShipCode also
 uses namespaced `shipcode:pipeline:*` labels for transient agent-loop sub-states
 and debugging.
 
@@ -59,6 +59,8 @@ and debugging.
 | `shipcode:pipeline:verifying` | `#d93f0b` | Agent is verifying the result. |
 | `shipcode:pipeline:shipping` | `#0e8a16` | Agent is opening or merging a PR. |
 | `shipcode:pipeline:paused` | `#6e7781` | Pipeline is paused and can be resumed. |
+| `shipcode:pipeline:needs_review` | `#d4c5f9` | Linked PR is waiting on review attention. |
+| `shipcode:pipeline:ready_to_merge` | `#0e8a16` | Linked PR is approved and ready to merge. |
 | `shipcode:pipeline:failed` | `#b60205` | Pipeline encountered an error. |
 
 ### System Labels
@@ -66,6 +68,7 @@ and debugging.
 | Name | Color | Description |
 |------|-------|-------------|
 | `shipcode:blocked:ci` | `#cf222e` | Linked PR has failing CI checks and needs follow-up. |
+| `shipcode:claim:active` | `#6e7781` | An external ShipCode-compatible dev loop has claimed this issue. |
 
 Type, priority, status, complexity, and blast radius belong in native GitHub issue type or project fields when those fields are available. Do not recreate them as labels.
 

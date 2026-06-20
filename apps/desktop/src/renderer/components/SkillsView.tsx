@@ -1,4 +1,4 @@
-import { clampError, type PhaseSkillKey } from '@shipcode/shared';
+import { clampError, type PhaseSkillKey, type RepoSkillSeedResult } from '@shipcode/shared';
 import { PageHeader } from '@shipcode/ui';
 import {
   Badge,
@@ -14,7 +14,7 @@ import {
 } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Sparkles } from 'lucide-react';
+import { Download, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
@@ -119,6 +119,8 @@ function useSkillsView() {
   const [rewriteInstruction, setRewriteInstruction] = useState('');
   const [rewriteError, setRewriteError] = useState<string | null>(null);
   const [rewriteNotice, setRewriteNotice] = useState<string | null>(null);
+  const [seedNotice, setSeedNotice] = useState<string | null>(null);
+  const [seedError, setSeedError] = useState<string | null>(null);
 
   const projectId = scope === SCOPE_GLOBAL ? null : scope;
 
@@ -128,6 +130,8 @@ function useSkillsView() {
   useEffect(() => {
     void activeProjectId;
     setScope(SCOPE_GLOBAL);
+    setSeedNotice(null);
+    setSeedError(null);
   }, [activeProjectId]);
 
   const { data: list, isLoading } = useQuery<SkillListEntry[]>({
@@ -261,6 +265,25 @@ function useSkillsView() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['skills:list'] });
+    },
+  });
+
+  const seedRepoSkillsMutation = useMutation({
+    mutationFn: ({ projectId: pid }: { projectId: string }): Promise<RepoSkillSeedResult> =>
+      window.shipcode.invoke<RepoSkillSeedResult>('skills:seed-repo-bundle', {
+        projectId: pid,
+        bundle: 'dev-loop',
+      }),
+    onSuccess: (result, variables) => {
+      const written = result.files.filter((file) => file.status === 'written').length;
+      const skipped = result.files.filter((file) => file.status === 'skipped').length;
+      setSeedNotice(`Dev-loop skills seeded: ${written} written, ${skipped} skipped.`);
+      setSeedError(null);
+      queryClient.invalidateQueries({ queryKey: ['skills:writing-prds', variables.projectId] });
+    },
+    onError: (err: unknown) => {
+      setSeedError(clampError(err));
+      setSeedNotice(null);
     },
   });
 
@@ -400,7 +423,7 @@ function useSkillsView() {
 
             <div className="mt-6 border-t border-border pt-4">
               <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                PRD Skill
+                Repo Skills
               </h4>
               <div className="rounded border border-border bg-secondary/30 p-3">
                 <div className="flex items-start justify-between gap-2">
@@ -446,12 +469,41 @@ function useSkillsView() {
                         Open in system editor
                       </LoadingButtonContent>
                     </Button>
+                    <Button
+                      variant="secondary"
+                      className="mt-2 w-full"
+                      onClick={() => {
+                        if (!activeProjectId) return;
+                        seedRepoSkillsMutation.mutate({ projectId: activeProjectId });
+                      }}
+                      disabled={seedRepoSkillsMutation.isPending}
+                    >
+                      <LoadingButtonContent loading={seedRepoSkillsMutation.isPending}>
+                        <Download size={13} aria-hidden="true" />
+                        Seed dev-loop skills
+                      </LoadingButtonContent>
+                    </Button>
+                    {seedError ? (
+                      <div
+                        role="alert"
+                        className="mt-2 rounded border border-red-500/40 bg-red-500/5 p-2 text-[11px] text-red-300"
+                      >
+                        {seedError}
+                      </div>
+                    ) : seedNotice ? (
+                      <div
+                        aria-live="polite"
+                        className="mt-2 rounded border border-green-500/30 bg-green-500/5 p-2 text-[11px] text-green-300"
+                      >
+                        {seedNotice}
+                      </div>
+                    ) : null}
                   </>
                 ) : (
                   <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
                     Pick a project from the sidebar to inspect that repo&apos;s
                     <span className="mx-1 font-mono">skills/writing-prds/SKILL.md</span>
-                    file.
+                    file and seed dev-loop skills.
                   </p>
                 )}
               </div>

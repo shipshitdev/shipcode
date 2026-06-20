@@ -1,6 +1,6 @@
 # Skills Editor
 
-The Skills Editor is where you edit the prompts that drive each pipeline phase. ShipCode calls these prompts "skills" — they're the PRD generator, plan prompt, review prompt, and verify prompt that the planner / reviewer / executor / verifier use.
+The Skills Editor is where you edit the prompts that drive each pipeline phase. ShipCode calls these prompts "skills": planning, adversarial review, plan revision, execution, verification, and PR body generation.
 
 The component is [`apps/desktop/src/renderer/components/SkillsView.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/components/SkillsView.tsx).
 
@@ -8,29 +8,35 @@ The component is [`apps/desktop/src/renderer/components/SkillsView.tsx`](https:/
 
 | Skill | Used by | Purpose |
 |-------|---------|---------|
-| `writing-prds` | PRD generator (new-issue flow) | Turns a one-liner into a full issue body before a pipeline starts |
-| `plan-prompt` | Planner phase | Wraps the issue body into a planner system prompt |
-| `review-prompt` | Reviewer phase | Adversarial critique template |
-| `execute-prompt` | Executor phase | Instructions given to Claude / Codex / OpenRouter during execution |
-| `verify-prompt` | Verifier phase | Acceptance-criteria checker |
+| `plan-generation` | Planner phase | Turns the issue body into a structured `ShipCodePlan` |
+| `adversarial-review` | Reviewer phase | Critiques the plan before execution |
+| `plan-revision` | Revision phase | Rewrites the plan to address review findings |
+| `plan-execution` | Executor phase | Instructions given to Claude / Codex / OpenRouter during execution |
+| `plan-verification` | Verifier phase | Checks the diff, test output, and acceptance criteria |
+| `pr-generation` | Shipping phase | Generates the pull request body |
 
-Each skill is a markdown file with frontmatter (name, description, model hints). Editing a skill saves it back to disk — **the file on disk is the source of truth**, not the DB.
+Each editable phase skill starts from a bundled `SKILL.md` default. Saving in the app writes an override to the local SQLite `skills` table for either the selected project or the global scope. Project overrides beat global overrides, and invalid overrides are quarantined so ShipCode falls back to the next valid tier.
 
 ## Where skills live
 
-- **Repo-scoped skills** — `.agents/skills/<skill-name>/SKILL.md` inside the target repo. These override the built-in skills for that project.
-- **Built-in skills** — shipped with the app, used as a fallback when no repo skill exists.
+- **Bundled defaults** live in ShipCode's repo under `skills/<skill-name>/SKILL.md` and are compiled into `packages/agents/src/skills/defaults.generated.ts`.
+- **Global and project overrides** live in the app database, keyed by `(project_id, phase)`.
+- **`writing-prds`** is separate: ShipCode reads `skills/writing-prds/SKILL.md` from the target repo during PRD rewrite. It is surfaced in the Skills view as a repo skill location, not as an editable phase override.
 
 The PRD generator reads `skills/writing-prds/SKILL.md` from the **target repo** (the repo whose issue you're writing a PRD for), not from the ShipCode install itself. This means a project can evolve its own PRD style without touching ShipCode.
+
+Use **Seed dev-loop skills** in the Skills view, or run `shipcode skills seed` from a target repo, to materialize the curated dev-loop skills as `skills/<skill-name>/...`. Both paths write the ShipCode profile of the public `shipshitdev/skills` dev-loop bundle, including `writing-prds`, `writing-plans`, `prd-quality-gate`, `executing-plans`, `setup-agent-routing`, `gh-project-board`, `qa-reviewer`, `feature-intake`, and `task-prd-creator`. Existing files are skipped unless the CLI is run with `--force`.
 
 ## Editing flow
 
 1. Open **Skills** from the sidebar
-2. Pick a skill from the left rail
+2. Pick a phase skill from the left rail
 3. Edit the markdown on the right
-4. Save — writes back to disk and invalidates any cached skill instances
+4. Save — validates required `{{SLOT}}` placeholders and writes the selected global or project override
 
 Changes take effect on the next pipeline run. In-flight runs keep the skill they started with.
+
+Use **Reset to bundled default** to delete the selected override and fall back to the next tier.
 
 ## Related
 
