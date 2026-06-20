@@ -82,17 +82,18 @@ Brief explanation of WHY this matters (1-3 sentences).
 
 **Incorrect (description of problem):**
 
-\`\`\`typescript
+```typescript
 // Bad code with comment on key line
-\`\`\`
+```
 
 **Correct (description of solution):**
 
-\`\`\`typescript
+```typescript
 // Good code with minimal diff from incorrect
-\`\`\`
+```
 
 Reference: [Documentation Link](https://example.com)
+
 ```
 
 ## File Naming Convention

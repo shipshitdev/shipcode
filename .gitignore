@@ -24,6 +24,9 @@ apps/*/.vitest-reports/
 packages/*/.vitest-reports/
 .nyc_output/
 .claude/settings.json
+# .claude/skills/ are symlinks regenerated from committed .agents/skills/ by
+# scripts/setup-skills.sh (postinstall). Source of truth is .agents/skills/.
+.claude/skills/
 .clawpatch/
 # Added by code-review-graph
 .code-review-graph/

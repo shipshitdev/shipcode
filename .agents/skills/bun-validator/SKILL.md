@@ -2,7 +2,7 @@
 name: bun-validator
 description: Validate Bun workspace configuration and detect common monorepo issues. Ensures proper workspace setup, dependency catalogs, isolated installs, and Bun 1.3+ best practices.
 metadata:
-  version: 1.0.0
+  version: "1.0.0"
   tags: bun, monorepo, workspace, validation, package-manager
 ---
 
@@ -313,5 +313,5 @@ Each workspace should list all its dependencies - don't rely on hoisting.
 ## Integration
 
 - `linter-formatter-init` - Sets up Biome with Bun
-- `project-scaffold` - Creates workspace structure
+- `project-init-orchestrator` - Creates workspace structure
 - `nextjs-validator` - Validates Next.js in workspace

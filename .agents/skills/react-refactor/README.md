@@ -80,17 +80,18 @@ tags: prefix, technique, related-concepts
 
 **Incorrect (what's wrong):**
 
-\`\`\`tsx
+```tsx
 // Bad example with comments explaining the cost
-\`\`\`
+```
 
 **Correct (what's right):**
 
-\`\`\`tsx
+```tsx
 // Good example with comments explaining the benefit
-\`\`\`
+```
 
 Reference: [Link](https://example.com)
+
 ```
 
 ## File Naming Convention
