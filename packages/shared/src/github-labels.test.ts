@@ -56,7 +56,10 @@ describe('SHIPCODE_DEFAULT_LABELS', () => {
 
   it('keeps only labels that are not covered by native GitHub/project fields', () => {
     const labelNames = SHIPCODE_DEFAULT_LABELS.map((label) => label.name);
-    expect(SHIPCODE_METADATA_LABELS.map((label) => label.name)).toEqual(['shipcode:blocked:ci']);
+    expect(SHIPCODE_METADATA_LABELS.map((label) => label.name)).toEqual([
+      'shipcode:blocked:ci',
+      'shipcode:claim:active',
+    ]);
     expect(labelNames.some((name) => name.startsWith('complexity:'))).toBe(false);
     expect(labelNames.some((name) => name.startsWith('blast:'))).toBe(false);
   });

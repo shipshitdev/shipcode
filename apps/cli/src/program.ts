@@ -8,6 +8,7 @@ import { prdCommand } from './commands/prd';
 import { retryCommand } from './commands/retry';
 import { reviewCommand } from './commands/review';
 import { runCommand } from './commands/run';
+import { seedSkillsCommand } from './commands/skills';
 import { startCommand } from './commands/start';
 import { statusCommand } from './commands/status';
 import {
@@ -28,6 +29,13 @@ export function runCli(): void {
     .command('onboard')
     .description('Initialize ShipCode in the current project')
     .action(onboardCommand);
+
+  const skills = program.command('skills').description('Manage repo-local skills');
+  skills
+    .command('seed [bundle]')
+    .description('Seed bundled ShipCode skills into ./skills')
+    .option('--force', 'overwrite existing skill files')
+    .action(seedSkillsCommand);
 
   program
     .command('status')

@@ -207,6 +207,19 @@ export { ClaudeNormalizer } from './providers/normalizers/claude-normalizer';
 export { CodexNormalizer } from './providers/normalizers/codex-normalizer';
 export type { LoadedRepoSetupContract } from './repo-setup-contract';
 export { loadRepoSetupContract } from './repo-setup-contract';
+export type {
+  RepoSkillBundleKey,
+  RepoSkillFile,
+  SeededRepoSkillFile,
+  SeedRepoSkillBundleOptions,
+  SeedRepoSkillBundleResult,
+} from './repo-skill-seeder';
+export {
+  isRepoSkillBundleKey,
+  listRepoSkillBundleFiles,
+  REPO_SKILL_BUNDLE_KEYS,
+  seedRepoSkillBundle,
+} from './repo-skill-seeder';
 export { discoverRuntimeTests, getRuntimeTestsDir } from './runtime-test-discovery';
 export type { RunningServer } from './server-lifecycle';
 export { ServerLifecycleManager } from './server-lifecycle';

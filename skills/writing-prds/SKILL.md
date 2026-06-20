@@ -27,7 +27,7 @@ metadata.
 Use native GitHub and Projects fields instead:
 
 - **Issue type:** `Feature`, `Bug`, or `Task`.
-- **Project status:** `Todo`, `In Progress`, `Human Review`, `Done`, or `Deferred`.
+- **Project status:** `Backlog`, `In Progress`, `Human Review`, `Done`, or `Deferred`.
 - **Project priority:** `P0`, `P1`, `P2`, or `P3`.
 - **Project complexity:** `Low`, `Medium`, or `High`.
 - **Project blast radius:** `Contained`, `Cross-package`, `Cross-app`, or `Infra`.

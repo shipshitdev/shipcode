@@ -12,6 +12,8 @@ const mockAssertPrdRewriteModelSupported = vi.hoisted(() => vi.fn());
 const mockValidateSkill = vi.hoisted(() => vi.fn());
 const mockBuildSkillRow = vi.hoisted(() => vi.fn());
 const mockOpenPath = vi.hoisted(() => vi.fn());
+const mockIsRepoSkillBundleKey = vi.hoisted(() => vi.fn());
+const mockSeedRepoSkillBundle = vi.hoisted(() => vi.fn());
 
 vi.mock('@shipcode/agents', () => ({
   DEFAULT_SKILLS: {
@@ -24,8 +26,10 @@ vi.mock('@shipcode/agents', () => ({
   },
   PHASE_SKILL_KEYS: ['plan-generation'],
   inspectProjectSetup: mockInspectProjectSetup,
+  isRepoSkillBundleKey: mockIsRepoSkillBundleKey,
   loadRepoContext: mockLoadRepoContext,
   rewriteSkillDraft: mockRewriteSkillDraft,
+  seedRepoSkillBundle: mockSeedRepoSkillBundle,
   validateSkill: mockValidateSkill,
 }));
 
@@ -148,6 +152,18 @@ describe('registerSkillsHandlers', () => {
     });
     mockAssertPrdRewriteModelSupported.mockResolvedValue(undefined);
     mockValidateSkill.mockReturnValue(null);
+    mockIsRepoSkillBundleKey.mockImplementation((value) => value === 'dev-loop');
+    mockSeedRepoSkillBundle.mockReturnValue({
+      bundle: 'dev-loop',
+      targetDir: path.join('/repo', 'skills'),
+      files: [
+        {
+          path: 'skills/writing-prds/SKILL.md',
+          absolutePath: path.join('/repo', 'skills', 'writing-prds', 'SKILL.md'),
+          status: 'written',
+        },
+      ],
+    });
     mockBuildSkillRow.mockImplementation(
       (_queries: unknown, phase: string, projectId: string | null) => ({
         id: `${projectId ?? 'global'}:${phase}`,
@@ -504,5 +520,49 @@ describe('registerSkillsHandlers', () => {
       'Project missing-project not found',
     );
     existsSpy.mockRestore();
+  });
+
+  it('seeds a repo skill bundle into the selected project', () => {
+    const seedRepoBundle = getHandler('skills:seed-repo-bundle');
+
+    expect(seedRepoBundle(null, { projectId: 'project-1' })).toEqual({
+      bundle: 'dev-loop',
+      targetDir: path.join('/repo', 'skills'),
+      files: [
+        {
+          path: 'skills/writing-prds/SKILL.md',
+          status: 'written',
+        },
+      ],
+    });
+    expect(mockSeedRepoSkillBundle).toHaveBeenCalledWith({
+      bundle: 'dev-loop',
+      cwd: '/repo',
+      force: false,
+    });
+
+    seedRepoBundle(null, { projectId: 'project-1', bundle: 'dev-loop', force: true });
+    expect(mockSeedRepoSkillBundle).toHaveBeenLastCalledWith({
+      bundle: 'dev-loop',
+      cwd: '/repo',
+      force: true,
+    });
+  });
+
+  it('rejects missing projects and unknown repo skill bundles', () => {
+    const seedRepoBundle = getHandler('skills:seed-repo-bundle');
+
+    queries.projects.getById.mockReturnValueOnce(null);
+    expect(() => seedRepoBundle(null, { projectId: 'missing-project' })).toThrow(
+      'Project missing-project not found',
+    );
+
+    mockIsRepoSkillBundleKey.mockReturnValueOnce(false);
+    expect(() =>
+      seedRepoBundle(null, { projectId: 'project-1', bundle: 'unknown-bundle' }),
+    ).toThrow('Unknown repo skill bundle: unknown-bundle');
+    expect(mockSeedRepoSkillBundle).not.toHaveBeenCalledWith(
+      expect.objectContaining({ bundle: 'unknown-bundle' }),
+    );
   });
 });

@@ -32,6 +32,7 @@ The `shipcode onboard` command runs a doctor pass against all of these and fails
 | Command | Description |
 |---------|-------------|
 | `shipcode onboard` | Doctor check + initialize ShipCode in the current repo (verifies tools, gh/claude auth, GitHub labels, writes project row) |
+| `shipcode skills seed [bundle]` | Seed curated ShipCode-compatible repo skills into `./skills` (`dev-loop` by default; skips existing files unless `--force`) |
 | `shipcode status` | Show active pipelines and recent threads |
 | `shipcode run <issue>` | Process a single GitHub issue end-to-end through the plan → review → execute → verify → ship pipeline |
 | `shipcode start` | Interactive mode — prompt for an issue number |

@@ -60,6 +60,8 @@ import type {
   RecentTask,
   RepoMemoryStatus,
   RepoSetupContract,
+  RepoSkillBundleKey,
+  RepoSkillSeedResult,
   ReviewFindingRecord,
   ReviewFindingStatus,
   ReviewRecord,
@@ -695,6 +697,10 @@ export interface IpcInvokeChannels {
     result: WritingPrdsSkillInfo;
   };
   'skills:open-writing-prds': { args: { projectId: string }; result: undefined };
+  'skills:seed-repo-bundle': {
+    args: { projectId: string; bundle?: RepoSkillBundleKey; force?: boolean };
+    result: RepoSkillSeedResult;
+  };
 
   // Instant Fix — direct CLI runs without pipeline
   'instant:run': {
