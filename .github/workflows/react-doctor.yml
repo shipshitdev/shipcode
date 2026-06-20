@@ -24,3 +24,9 @@ jobs:
         with:
           fetch-depth: 0
       - uses: millionco/react-doctor@v2
+        with:
+          # Report via the sticky summary comment + commit status only.
+          # Inline review comments create unresolved PR review threads that
+          # block merges via the ruleset's required_review_thread_resolution,
+          # even though `blocking: none` keeps this check itself advisory/green.
+          review-comments: false

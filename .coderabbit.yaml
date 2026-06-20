@@ -1,9 +1,17 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 language: en-US
 reviews:
+  # `chill` only surfaces substantive findings (skips nitpicks), so CodeRabbit
+  # speaks when it has something useful to say. There is no summary-only mode:
+  # genuine inline findings still post as review threads (desired signal) and
+  # auto-resolve once addressed. CodeRabbit self-throttles when over quota.
+  profile: chill
+  high_level_summary: true   # keep the non-blocking PR summary
+  review_status: false       # drop "review skipped" status-comment noise
+  poem: false                # signal only — no poem
   auto_review:
+    # Trunk-based: feature PRs target master (the repo default), which CodeRabbit
+    # auto-reviews without an explicit base_branches list. The old `develop`
+    # integration branch was deleted (PR #235).
     enabled: true
-    # Auto-review PRs targeting these branches in addition to the repo default.
-    # `develop` is our integration branch where feature PRs land.
-    base_branches:
-      - develop
+    drafts: false            # don't spend review quota on draft PRs
