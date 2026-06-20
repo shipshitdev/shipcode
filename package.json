@@ -46,7 +46,7 @@
     "lint:repo": "bun run lint",
     "lint:fix": "bunx biome check --write .",
     "lint:staged": "sh scripts/lint-staged-biome.sh",
-    "postinstall": "sh scripts/fix-node-pty-permissions.sh && sh scripts/setup-git-hooks.sh && sh scripts/setup-skills.sh",
+    "postinstall": "sh scripts/fix-node-pty-permissions.sh && sh scripts/setup-git-hooks.sh && bash scripts/setup-skills.sh",
     "skills:sync": "sh scripts/setup-skills.sh --sync",
     "sync:docs": "sh scripts/sync-docs-to-web.sh",
     "test": "turbo run test",
