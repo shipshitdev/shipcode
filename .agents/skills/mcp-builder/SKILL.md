@@ -1,9 +1,22 @@
 ---
 name: mcp-builder
-description: Guide for creating high-quality MCP (Model Context Protocol) servers that enable LLMs to interact with external services through well-designed tools. Use when building MCP servers to integrate external APIs or services, whether in Python (FastMCP) or Node/TypeScript (MCP SDK).
+description: >-
+  Creates high-quality MCP (Model Context Protocol) servers that enable LLMs to interact with
+  external services through well-designed tools. Activates on: "build an MCP server", "create
+  MCP tools", "integrate API via MCP", "write a FastMCP server", "add MCP to Claude", or any
+  request to wrap an external API as LLM-callable tools in Python or Node/TypeScript.
+disable-model-invocation: true
 license: Complete terms in LICENSE.txt
+metadata:
+  version: "1.0.0"
+  source: https://github.com/anthropics/skills/blob/main/skills/mcp-builder/SKILL.md
+  upstream_repo: anthropics/skills
+  upstream_ref: main
+  upstream_commit: ef740771ac90
+  last_synced: "2026-06-12"
+  license: Apache-2.0
+  tags: "mcp, tools, agents"
 ---
-
 # MCP Server Development Guide
 
 ## Overview
@@ -58,31 +71,31 @@ Before diving into implementation, understand how to design tools for AI agents 
 - Let agent feedback drive tool improvements
 - Prototype quickly and iterate based on actual agent performance
 
-#### 1.3 Study MCP Protocol Documentation
+#### 1.2 Study MCP Protocol Documentation
 
 **Fetch the latest MCP protocol documentation:**
 
 Use WebFetch to load: `https://modelcontextprotocol.io/llms-full.txt`
 
-This comprehensive document contains the complete MCP specification and guidelines.
+This document contains the complete MCP specification. Note: the URL may change as the spec evolves — if the fetch fails, search for the current MCP docs URL.
 
-#### 1.4 Study Framework Documentation
+#### 1.3 Study Framework Documentation
 
 **Load and read the following reference files:**
 
-- **MCP Best Practices**: [📋 View Best Practices](./reference/mcp_best_practices.md) - Core guidelines for all MCP servers
+- **MCP Best Practices**: [📋 View Best Practices](./references/mcp_best_practices.md) - Core guidelines for all MCP servers
 
 **For Python implementations, also load:**
 
-- **Python SDK Documentation**: Use WebFetch to load `https://raw.githubusercontent.com/modelcontextprotocol/python-sdk/main/README.md`
-- [🐍 Python Implementation Guide](./reference/python_mcp_server.md) - Python-specific best practices and examples
+- **Python SDK Documentation**: Use WebFetch to load `https://py.sdk.modelcontextprotocol.io/`
+- [🐍 Python Implementation Guide](./references/python_mcp_server.md) - Python-specific best practices and examples
 
 **For Node/TypeScript implementations, also load:**
 
-- **TypeScript SDK Documentation**: Use WebFetch to load `https://raw.githubusercontent.com/modelcontextprotocol/typescript-sdk/main/README.md`
-- [⚡ TypeScript Implementation Guide](./reference/node_mcp_server.md) - Node/TypeScript-specific best practices and examples
+- **TypeScript SDK Documentation**: Use WebFetch to load `https://ts.sdk.modelcontextprotocol.io/`
+- [⚡ TypeScript Implementation Guide](./references/node_mcp_server.md) - Node/TypeScript-specific best practices and examples
 
-#### 1.5 Exhaustively Study API Documentation
+#### 1.4 Exhaustively Study API Documentation
 
 To integrate a service, read through **ALL** available API documentation:
 
@@ -95,7 +108,7 @@ To integrate a service, read through **ALL** available API documentation:
 
 **To gather comprehensive information, use web search and the WebFetch tool as needed.**
 
-#### 1.6 Create a Comprehensive Implementation Plan
+#### 1.5 Create a Comprehensive Implementation Plan
 
 Based on your research, create a detailed plan that includes:
 
@@ -136,13 +149,13 @@ Now that you have a comprehensive plan, begin implementation following language-
 
 **For Python:**
 
-- Create a single `.py` file or organize into modules if complex (see [🐍 Python Guide](./reference/python_mcp_server.md))
+- Create a single `.py` file or organize into modules if complex (see [🐍 Python Guide](./references/python_mcp_server.md))
 - Use the MCP Python SDK for tool registration
 - Define Pydantic models for input validation
 
 **For Node/TypeScript:**
 
-- Create proper project structure (see [⚡ TypeScript Guide](./reference/node_mcp_server.md))
+- Create proper project structure (see [⚡ TypeScript Guide](./references/node_mcp_server.md))
 - Set up `package.json` and `tsconfig.json`
 - Use MCP TypeScript SDK
 - Define Zod schemas for input validation
@@ -197,7 +210,7 @@ For each tool in the plan:
 
 **At this point, load the appropriate language guide:**
 
-**For Python: Load [🐍 Python Implementation Guide](./reference/python_mcp_server.md) and ensure the following:**
+**For Python: Load [🐍 Python Implementation Guide](./references/python_mcp_server.md) and ensure the following:**
 
 - Using MCP Python SDK with proper tool registration
 - Pydantic v2 models with `model_config`
@@ -206,14 +219,14 @@ For each tool in the plan:
 - Proper imports organization
 - Module-level constants (CHARACTER_LIMIT, API_BASE_URL)
 
-**For Node/TypeScript: Load [⚡ TypeScript Implementation Guide](./reference/node_mcp_server.md) and ensure the following:**
+**For Node/TypeScript: Load [⚡ TypeScript Implementation Guide](./references/node_mcp_server.md) and ensure the following:**
 
 - Using `server.registerTool` properly
 - Zod schemas with `.strict()`
 - TypeScript strict mode enabled
 - No `any` types - use proper types
 - Explicit Promise<T> return types
-- Build process configured (`npm run build`)
+- Build process configured (`bun run build`)
 
 ---
 
@@ -251,7 +264,7 @@ To ensure quality, review the code for:
 
 **For Node/TypeScript:**
 
-- Run `npm run build` and ensure it completes without errors
+- Run `bun run build` and ensure it completes without errors
 - Verify dist/index.js is created
 - To manually test: Run server in tmux, then test with evaluation harness in main process
 - Or use the evaluation harness directly (it manages the server for stdio transport)
@@ -260,8 +273,8 @@ To ensure quality, review the code for:
 
 To verify implementation quality, load the appropriate checklist from the language-specific guide:
 
-- Python: see "Quality Checklist" in [🐍 Python Guide](./reference/python_mcp_server.md)
-- Node/TypeScript: see "Quality Checklist" in [⚡ TypeScript Guide](./reference/node_mcp_server.md)
+- Python: see "Quality Checklist" in [🐍 Python Guide](./references/python_mcp_server.md)
+- Node/TypeScript: see "Quality Checklist" in [⚡ TypeScript Guide](./references/node_mcp_server.md)
 
 ---
 
@@ -269,7 +282,7 @@ To verify implementation quality, load the appropriate checklist from the langua
 
 After implementing your MCP server, create comprehensive evaluations to test its effectiveness.
 
-**Load [✅ Evaluation Guide](./reference/evaluation.md) for complete evaluation guidelines.**
+**Load [✅ Evaluation Guide](./references/evaluation.md) for complete evaluation guidelines.**
 
 #### 4.1 Understand Evaluation Purpose
 
@@ -311,6 +324,15 @@ Create an XML file with this structure:
 
 ---
 
+## Gotchas
+
+- **Running the server directly hangs the process.** MCP servers block on stdio/stdin waiting for requests indefinitely. Never run `python server.py` or `node dist/index.js` in your main process. Use `tmux` to background the server, or use the evaluation harness which manages the server subprocess.
+- **Live URL references can go stale.** The MCP protocol documentation URL (`modelcontextprotocol.io/llms-full.txt`) and the GitHub SDK README URLs may move between versions. If a WebFetch fails, search for the current URL rather than assuming the skill path is correct.
+- **TypeScript builds must be re-run after every source change.** `dist/index.js` is the artifact the MCP runtime loads. Editing `.ts` files without running `bun run build` means the runtime is still running the old version.
+- **Tool annotations are hints, not enforced contracts.** `readOnlyHint: true` does not prevent a tool from writing data — it only signals intent to the LLM. Enforce safety in the tool implementation itself.
+
+---
+
 # Reference Files
 
 ## 📚 Documentation Library
@@ -320,7 +342,7 @@ Load these resources as needed during development:
 ### Core MCP Documentation (Load First)
 
 - **MCP Protocol**: Fetch from `https://modelcontextprotocol.io/llms-full.txt` - Complete MCP specification
-- [📋 MCP Best Practices](./reference/mcp_best_practices.md) - Universal MCP guidelines including:
+- [📋 MCP Best Practices](./references/mcp_best_practices.md) - Universal MCP guidelines including:
   - Server and tool naming conventions
   - Response format guidelines (JSON vs Markdown)
   - Pagination best practices
@@ -330,19 +352,19 @@ Load these resources as needed during development:
 
 ### SDK Documentation (Load During Phase 1/2)
 
-- **Python SDK**: Fetch from `https://raw.githubusercontent.com/modelcontextprotocol/python-sdk/main/README.md`
-- **TypeScript SDK**: Fetch from `https://raw.githubusercontent.com/modelcontextprotocol/typescript-sdk/main/README.md`
+- **Python SDK**: Fetch from `https://py.sdk.modelcontextprotocol.io/`
+- **TypeScript SDK**: Fetch from `https://ts.sdk.modelcontextprotocol.io/`
 
 ### Language-Specific Implementation Guides (Load During Phase 2)
 
-- [🐍 Python Implementation Guide](./reference/python_mcp_server.md) - Complete Python/FastMCP guide with:
+- [🐍 Python Implementation Guide](./references/python_mcp_server.md) - Complete Python/FastMCP guide with:
   - Server initialization patterns
   - Pydantic model examples
   - Tool registration with `@mcp.tool`
   - Complete working examples
   - Quality checklist
 
-- [⚡ TypeScript Implementation Guide](./reference/node_mcp_server.md) - Complete TypeScript guide with:
+- [⚡ TypeScript Implementation Guide](./references/node_mcp_server.md) - Complete TypeScript guide with:
   - Project structure
   - Zod schema patterns
   - Tool registration with `server.registerTool`
@@ -351,7 +373,7 @@ Load these resources as needed during development:
 
 ### Evaluation Guide (Load During Phase 4)
 
-- [✅ Evaluation Guide](./reference/evaluation.md) - Complete evaluation creation guide with:
+- [✅ Evaluation Guide](./references/evaluation.md) - Complete evaluation creation guide with:
   - Question creation guidelines
   - Answer verification strategies
   - XML format specifications

@@ -81,17 +81,18 @@ Brief explanation of WHY this matters.
 
 **Incorrect (what's wrong):**
 
-\`\`\`tsx
+```tsx
 // Bad code example
-\`\`\`
+```
 
 **Correct (what's right):**
 
-\`\`\`tsx
+```tsx
 // Good code example
-\`\`\`
+```
 
 Reference: [Source](URL)
+
 ```
 
 ## File Naming Convention

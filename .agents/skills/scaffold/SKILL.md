@@ -1,14 +1,49 @@
 ---
 name: scaffold
-description: Generate new code modules following existing codebase patterns. Use when user says 'scaffold', 'generate', 'create new endpoint', 'new component', or 'new module'.
+description: Generate incremental local code modules following existing codebase patterns. Use for endpoints, components, packages, collections, or modules inside an existing repo; not for full project scaffolds.
 metadata:
-  version: 1.0.0
+  version: "1.0.0"
   tags: scaffolding, code-generation, boilerplate, productivity
 ---
 
 # Scaffold
 
-Generate new code following existing codebase patterns.
+Generate incremental code inside an existing repository, following local
+codebase patterns.
+
+## Contract
+
+Inputs:
+
+- Scaffold target type and name
+- Repository root
+- Existing examples to follow
+
+Outputs:
+
+- Files created or modified
+- Patterns copied from existing code
+- Manual follow-up steps and tests to run
+
+Creates/Modifies:
+
+- Local source, test, and export files for the requested module/component/package
+- Does not create a full product repo
+
+External Side Effects:
+
+- None
+
+Confirmation Required:
+
+- Before overwriting existing files
+- Before introducing a new pattern when fewer than 3 matching examples exist
+
+Delegates To:
+
+- `project-init-orchestrator` when the user needs a whole new project
+- `fullstack-workspace-init` / `npx @shipshitdev/v0` when the user needs a new Shipshit.dev product repo
+- Framework-specific skills such as `nestjs-expert`, `react-patterns`, `shadcn`, or `typescript-expert`
 
 ## Steps
 
