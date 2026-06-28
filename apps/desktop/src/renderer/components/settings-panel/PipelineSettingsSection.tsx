@@ -4,9 +4,9 @@ import {
   buildAppSettingsModelPresetPatch,
   type ExecutorModel,
   formatReasoningEffortLabel,
+  GLOBAL_MODEL_CONFIG_PRESETS,
   getCapabilitySupportedReasoningEfforts,
   type IntegrationStatus,
-  MODEL_CONFIG_PRESETS,
   type ModelConfigPresetKey,
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
@@ -446,7 +446,7 @@ function pipelineSettingsSection({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="min-w-[260px]">
-                {MODEL_CONFIG_PRESETS.map((preset) => (
+                {GLOBAL_MODEL_CONFIG_PRESETS.map((preset) => (
                   <DropdownMenuItem
                     key={preset.key}
                     onSelect={() => applyPreset(preset.key)}
