@@ -205,6 +205,42 @@ describe('CreateAutomationModal', () => {
     });
   });
 
+  it('creates a multi-repo automation with all selected targets', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'project:list-visible')
+        return [makeProject(), makeProject({ id: 'project-2', name: 'Other Repo' })];
+      if (channel === 'automations:create') {
+        return { id: 'auto-new', projectId: 'project-1', targets: ['project-1', 'project-2'] };
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    // Second repo chip appears once projects load; primary is pre-selected.
+    fireEvent.click(await screen.findByRole('button', { name: 'Other Repo' }));
+    fireEvent.change(screen.getByPlaceholderText(/Daily smoke test/), {
+      target: { value: 'Smoke' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/What should this run do\?/), {
+      target: { value: 'do thing' },
+    });
+
+    const create = screen.getByRole('button', { name: /Create/ });
+    await waitFor(() => expect(create).not.toBeDisabled());
+    fireEvent.click(create);
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        'automations:create',
+        expect.objectContaining({
+          projectId: 'project-1',
+          targets: ['project-1', 'project-2'],
+        }),
+      );
+    });
+  });
+
   it('submits edits for an existing automation', async () => {
     act(() => {
       useAppStore.setState({ editingAutomationId: 'auto-1' });
