@@ -12,6 +12,7 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
     id: 'auto-1',
     projectId: 'project-1',
+    targets: ['project-1'],
     name: 'Daily smoke',
     prompt:
       '# Automation: Daily smoke\n\n## Goal\nRun the smoke test.\n\n## Verification\n- `bun test` passes',

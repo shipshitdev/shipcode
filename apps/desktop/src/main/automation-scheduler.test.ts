@@ -15,6 +15,7 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
     id: 'auto-1',
     projectId: 'project-1',
+    targets: ['project-1'],
     name: 'Hourly smoke',
     prompt: 'List 3 files',
     cronExpr: '0 * * * *',

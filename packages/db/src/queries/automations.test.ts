@@ -324,4 +324,114 @@ describe('AutomationQueries', () => {
     );
     getById.mockRestore();
   });
+
+  it('create backfills a single target equal to the primary project', () => {
+    const { dataDir, automations, project } = setup();
+    tempDirs.push(dataDir);
+
+    const a = automations.create({
+      projectId: project.id,
+      name: 'A',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+
+    expect(a.projectId).toBe(project.id);
+    expect(a.targets).toEqual([project.id]);
+    expect(automations.listTargets(a.id)).toEqual([project.id]);
+  });
+
+  it('create with explicit targets stores all and lists under any target', () => {
+    const { dataDir, projects, automations, project } = setup();
+    tempDirs.push(dataDir);
+    const projectB = projects.add(path.join(dataDir, 'project-b'));
+
+    const a = automations.create({
+      projectId: project.id,
+      targets: [project.id, projectB.id, project.id], // duplicate is deduped
+      name: 'Multi',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+
+    expect(a.projectId).toBe(project.id);
+    expect(a.targets).toEqual([project.id, projectB.id]);
+    expect(automations.list(project.id).map((x) => x.id)).toContain(a.id);
+    expect(automations.list(projectB.id).map((x) => x.id)).toContain(a.id);
+  });
+
+  it('addTarget and removeTarget mutate the set idempotently', () => {
+    const { dataDir, projects, automations, project } = setup();
+    tempDirs.push(dataDir);
+    const projectB = projects.add(path.join(dataDir, 'project-b'));
+
+    const a = automations.create({
+      projectId: project.id,
+      name: 'A',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+
+    automations.addTarget(a.id, projectB.id);
+    automations.addTarget(a.id, projectB.id); // idempotent
+    expect(automations.listTargets(a.id)).toEqual([project.id, projectB.id]);
+
+    automations.removeTarget(a.id, projectB.id);
+    expect(automations.listTargets(a.id)).toEqual([project.id]);
+  });
+
+  it('setTargets replaces the set and realigns the primary projectId', () => {
+    const { dataDir, projects, automations, project } = setup();
+    tempDirs.push(dataDir);
+    const projectB = projects.add(path.join(dataDir, 'project-b'));
+
+    const a = automations.create({
+      projectId: project.id,
+      name: 'A',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+
+    automations.setTargets(a.id, [projectB.id, project.id]);
+    const reloaded = automations.getById(a.id);
+    if (!reloaded) throw new Error('Expected automation after setTargets');
+    expect(reloaded.targets).toEqual([projectB.id, project.id]);
+    expect(reloaded.projectId).toBe(projectB.id);
+
+    expect(() => automations.setTargets(a.id, [])).toThrow('at least one target');
+  });
+
+  it('hydrates targets to [projectId] when no target rows exist', () => {
+    const { dataDir, db, automations, project } = setup();
+    tempDirs.push(dataDir);
+
+    const a = automations.create({
+      projectId: project.id,
+      name: 'A',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+    db.prepare('DELETE FROM automation_targets WHERE automation_id = ?').run(a.id);
+
+    expect(automations.getById(a.id)?.targets).toEqual([project.id]);
+  });
+
+  it('CASCADE: deleting an automation removes its targets', () => {
+    const { dataDir, db, automations, project } = setup();
+    tempDirs.push(dataDir);
+
+    const a = automations.create({
+      projectId: project.id,
+      name: 'A',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+    expect(automations.listTargets(a.id)).toHaveLength(1);
+
+    automations.delete(a.id);
+    const remaining = db
+      .prepare('SELECT COUNT(*) AS n FROM automation_targets WHERE automation_id = ?')
+      .get(a.id) as { n: number };
+    expect(remaining.n).toBe(0);
+  });
 });
