@@ -21,6 +21,8 @@ export interface FanOutCandidate {
   resolvedModel?: string;
   /** Output tokens attributed to this worker, for telemetry summing. */
   outputTokens?: number;
+  /** The worker's working-tree diff, shown to the judge to compare candidates. */
+  diff?: string;
 }
 
 export interface FanOutJudgeOutcome {
@@ -56,6 +58,45 @@ export interface RunFanOutArgs {
   runJudge: (candidates: FanOutCandidate[]) => Promise<FanOutJudgeOutcome>;
   /** Promote the chosen candidate's changes onto the primary worktree. */
   promoteWinner: (winner: FanOutCandidate) => Promise<void>;
+}
+
+/** Build the judge prompt: the original task + each candidate's diff. */
+export function buildFanOutJudgePrompt(basePrompt: string, candidates: FanOutCandidate[]): string {
+  const blocks = candidates
+    .map(
+      (c) =>
+        `### ${c.label}\n<diff>\n${(c.diff ?? '(no changes)').trim()}\n</diff>\n\nSummary:\n${c.rawOutput.trim()}`,
+    )
+    .join('\n\n');
+  return [
+    'You are judging competing implementations of the SAME task. Do not write code.',
+    'Pick the single best candidate by correctness, completeness, and adherence to the task.',
+    `Reply with exactly one line: \`WINNER: <label>\` (one of: ${candidates
+      .map((c) => c.label)
+      .join(', ')}).`,
+    '',
+    '## Task',
+    basePrompt,
+    '',
+    '## Candidates',
+    blocks,
+  ].join('\n');
+}
+
+/** Parse the judge's `WINNER: <label>` line; null if no known label is named. */
+export function parseWinnerLabel(
+  judgeOutput: string,
+  candidates: FanOutCandidate[],
+): string | null {
+  const labels = new Set(candidates.map((c) => c.label));
+  const explicit = judgeOutput.match(/WINNER:\s*([A-Za-z0-9_-]+)/i);
+  if (explicit?.[1] && labels.has(explicit[1])) return explicit[1];
+  // Fallback: last mentioned known label anywhere in the output.
+  let found: string | null = null;
+  for (const m of judgeOutput.matchAll(/worker-\d+/gi)) {
+    if (labels.has(m[0])) found = m[0];
+  }
+  return found;
 }
 
 function clampWorkerCount(requested: number): number {

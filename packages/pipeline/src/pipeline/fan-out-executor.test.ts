@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type FanOutCandidate, runFanOut } from './fan-out-executor';
+import {
+  buildFanOutJudgePrompt,
+  type FanOutCandidate,
+  parseWinnerLabel,
+  runFanOut,
+} from './fan-out-executor';
 
 function candidate(label: string, over: Partial<FanOutCandidate> = {}): FanOutCandidate {
   return { label, rawOutput: `${label} output`, exitCode: 0, outputTokens: 100, ...over };
@@ -109,6 +114,27 @@ describe('runFanOut', () => {
 
     expect(runWorker).toHaveBeenCalledTimes(8); // MAX_FAN_OUT_WORKER_COUNT
     expect(result.workersRun).toBe(8);
+  });
+
+  it('parses the judge winner from a WINNER: line and falls back to last mention', () => {
+    const cands = [candidate('worker-1'), candidate('worker-2')];
+    expect(parseWinnerLabel('Analysis...\nWINNER: worker-2', cands)).toBe('worker-2');
+    expect(parseWinnerLabel('worker-1 is weak, worker-2 is best', cands)).toBe('worker-2');
+    expect(parseWinnerLabel('WINNER: worker-9', cands)).toBeNull(); // unknown label
+    expect(parseWinnerLabel('no clear pick', cands)).toBeNull();
+  });
+
+  it('builds a judge prompt embedding each candidate diff + the label set', () => {
+    const cands = [
+      candidate('worker-1', { diff: 'diff-A' }),
+      candidate('worker-2', { diff: 'diff-B' }),
+    ];
+    const prompt = buildFanOutJudgePrompt('Do the task', cands);
+    expect(prompt).toContain('Do the task');
+    expect(prompt).toContain('diff-A');
+    expect(prompt).toContain('diff-B');
+    expect(prompt).toContain('worker-1, worker-2');
+    expect(prompt).toContain('WINNER:');
   });
 
   it('respects the concurrency limit (never more than maxConcurrent in flight)', async () => {
