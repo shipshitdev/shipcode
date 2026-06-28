@@ -67,7 +67,7 @@ test.describe('project board', () => {
 
     await harness.callStore('selectProject', harness.seed.projectId);
 
-    // The Todo column should be present (all seeded issues have todo status by default)
+    // The Backlog column should be present (all seeded issues have todo status by default)
     await expect(page.getByTestId('kanban-column-todo')).toBeVisible({ timeout: 15_000 });
   });
 

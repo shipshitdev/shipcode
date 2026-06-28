@@ -7,7 +7,7 @@ const features = [
   {
     title: 'Automations and scheduling',
     description:
-      'Run cron-like recurring prompts, auto-run Todo work, and drain queued jobs through workspace and project capacity caps.',
+      'Run cron-like recurring prompts, auto-run Backlog work, and drain queued jobs through workspace and project capacity caps.',
   },
   {
     title: 'Task graph execution',

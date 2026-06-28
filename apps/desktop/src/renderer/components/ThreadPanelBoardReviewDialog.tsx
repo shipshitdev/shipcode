@@ -31,7 +31,7 @@ export function ThreadPanelBoardReviewDialog({
     >
       <div className="space-y-3">
         <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
-          Warning: ShipCode will ask the triage model to review {count} unclaimed Todo {noun} and
+          Warning: ShipCode will ask the triage model to review {count} unclaimed Backlog {noun} and
           may update GitHub labels for each one that meets the auto-apply confidence threshold.
         </div>
         <p className="text-sm text-secondary">

@@ -719,7 +719,7 @@ function useKanbanBoardView({
         resumeFromKeyboard(focusedIssue);
         return;
       }
-      showKeyboardActionToast('Pipeline can only start from Todo cards.');
+      showKeyboardActionToast('Pipeline can only start from Backlog cards.');
     };
 
     window.addEventListener('keydown', handler);

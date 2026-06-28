@@ -23,7 +23,7 @@ export function StepGitHubReadiness() {
         {[
           ['Labels', 'shipcode:* only'],
           ['Issue type', 'Feature'],
-          ['Status', 'Todo, In Progress, Human Review, Done, Deferred'],
+          ['Status', 'Backlog, In Progress, Human Review, Done, Deferred'],
           ['Priority', 'P0, P1, P2, P3'],
           ['Complexity', 'Low, Medium, High'],
           ['Blast radius', 'Contained, Cross-Package, Cross-App, Infra'],

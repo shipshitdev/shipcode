@@ -347,13 +347,13 @@ describe('KanbanBoard keyboard navigation', () => {
 
     pressKey('j');
     pressKey('e');
-    expect(view.container.textContent).toContain('Pipeline can only start from Todo cards.');
+    expect(view.container.textContent).toContain('Pipeline can only start from Backlog cards.');
 
     act(() => {
       vi.advanceTimersByTime(2_000);
     });
 
-    expect(view.container.textContent).not.toContain('Pipeline can only start from Todo cards.');
+    expect(view.container.textContent).not.toContain('Pipeline can only start from Backlog cards.');
     vi.useRealTimers();
     view.cleanup();
   });
@@ -441,7 +441,7 @@ describe('KanbanBoard keyboard navigation', () => {
     pressKey('e');
 
     expect(focusedCard(view.container).textContent).toContain('Todo top');
-    expect(view.container.textContent).toContain('Pipeline can only start from Todo cards.');
+    expect(view.container.textContent).toContain('Pipeline can only start from Backlog cards.');
     view.cleanup();
   });
 
@@ -586,7 +586,7 @@ describe('KanbanBoard keyboard navigation', () => {
     pressKey('e');
 
     expect(onStartPipeline).not.toHaveBeenCalled();
-    expect(view.container.textContent).toContain('Pipeline can only start from Todo cards.');
+    expect(view.container.textContent).toContain('Pipeline can only start from Backlog cards.');
 
     view.cleanup();
   });

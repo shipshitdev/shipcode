@@ -395,7 +395,7 @@ describe('IssueListView coverage states', () => {
     expect(todoDot).not.toBeNull();
 
     const todoToggle = Array.from(view.container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('Todo'),
+      button.textContent?.includes('Backlog'),
     );
     if (!(todoToggle instanceof HTMLButtonElement)) throw new Error('Expected Todo toggle');
     act(() => todoToggle.click());

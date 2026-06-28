@@ -406,7 +406,7 @@ function AutoRunControls({
         disabled={autoRunning || autoRunCount === 0}
         title={
           autoRunCount === 0
-            ? 'No eligible todo issues'
+            ? 'No eligible backlog issues'
             : `Start ${autoRunCount} issue${autoRunCount === 1 ? '' : 's'} through the pipeline`
         }
       >
@@ -477,8 +477,8 @@ function TriageButton({
       disabled={triagingIssues || triageCandidateCount === 0}
       title={
         triageCandidateCount === 0
-          ? 'No unclaimed Todo issues to review'
-          : `Review and align ${triageCandidateCount} Todo issue${triageCandidateCount === 1 ? '' : 's'}`
+          ? 'No unclaimed Backlog issues to review'
+          : `Review and align ${triageCandidateCount} Backlog issue${triageCandidateCount === 1 ? '' : 's'}`
       }
       aria-label="Review and align board issues"
     >

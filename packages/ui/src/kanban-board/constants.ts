@@ -4,7 +4,7 @@ import type { BoardColumn, BoardSortOrder, ColumnKey } from './types';
 export const COLUMNS: BoardColumn[] = [
   {
     key: 'todo',
-    label: 'Todo',
+    label: 'Backlog',
     droppable: true,
     statuses: [ISSUE_PIPELINE_STATUS.todo],
   },
@@ -192,7 +192,7 @@ export const PHASE_ELAPSED_STATUSES: IssuePipelineStatus[] = [
 ];
 
 export const LIST_COLUMN_LABEL: Record<ColumnKey, string> = {
-  todo: 'Todo',
+  todo: 'Backlog',
   agent: 'Agent',
   human: 'Attention',
   done: 'Done',

@@ -510,7 +510,7 @@ describe('checkProjectReadiness', () => {
     expect(wrongShapeReport.ok).toBe(false);
     expect(
       wrongShapeReport.items.find((item) => item.key === 'project-field:status')?.missing,
-    ).toEqual(['Todo', 'In Progress', 'Human Review', 'Done', 'Deferred']);
+    ).toEqual(['Backlog', 'In Progress', 'Human Review', 'Done', 'Deferred']);
     expect(
       wrongShapeReport.items.find((item) => item.key === 'project-field:priority')?.message,
     ).toBe('"Priority" must be a single-select field.');
@@ -599,7 +599,7 @@ describe('checkProjectReadiness', () => {
       (item) => item.key === 'project-field:status',
     );
     expect(statusItem?.present).toEqual(['In Progress', 'Human Review', 'Deferred']);
-    expect(statusItem?.missing).toEqual(['Todo', 'Done']);
+    expect(statusItem?.missing).toEqual(['Backlog', 'Done']);
   });
 
   it('keeps the first detected done status when duplicate done-like options exist', async () => {
@@ -679,7 +679,7 @@ describe('checkProjectReadiness', () => {
 
     expect(
       missingOptionsReport.items.find((item) => item.key === 'project-field:status')?.missing,
-    ).toEqual(['Todo', 'In Progress', 'Human Review', 'Done', 'Deferred']);
+    ).toEqual(['Backlog', 'In Progress', 'Human Review', 'Done', 'Deferred']);
     expect(
       missingOptionsReport.items.find((item) => item.key === 'project-field:priority')?.present,
     ).toEqual([]);

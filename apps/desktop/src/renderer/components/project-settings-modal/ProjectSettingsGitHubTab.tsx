@@ -58,7 +58,7 @@ const MACRO_COLUMNS: Array<{
   label: string;
   description: string;
 }> = [
-  { key: 'todo', label: 'Todo', description: 'Backlog / not started' },
+  { key: 'todo', label: 'Backlog', description: 'Not started' },
   { key: 'inProgress', label: 'In Progress', description: 'Agent loop running' },
   { key: 'humanReview', label: 'Human Review', description: 'Awaiting manual review' },
   { key: 'done', label: 'Done', description: 'Completed / shipped' },

@@ -667,7 +667,7 @@ function pipelineSettingsSection({
 
           <SettingsSection
             title="Issue triage"
-            description="Board review model for classifying Todo issues and applying high-confidence labels."
+            description="Board review model for classifying Backlog issues and applying high-confidence labels."
           >
             <SettingsRow label="Triage provider" htmlFor="triage-provider">
               <Select

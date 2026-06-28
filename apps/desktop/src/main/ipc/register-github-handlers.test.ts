@@ -3084,7 +3084,7 @@ describe('registerGitHubHandlers', () => {
       projectUrl: 'https://github.com/orgs/acme/projects/1',
       metadata: {
         issueType: 'Feature',
-        status: 'Todo',
+        status: 'Backlog',
         priority: 'P3',
         complexity: 'medium',
         blastRadius: 'contained',
