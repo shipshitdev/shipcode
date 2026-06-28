@@ -68,7 +68,7 @@ interface FormatAutomationVariables {
 }
 
 interface AutomationFormState {
-  projectId: string;
+  projectIds: string[];
   name: string;
   prompt: string;
   presetId: string;
@@ -90,7 +90,7 @@ type AutomationFormAction =
     };
 
 const INITIAL_AUTOMATION_FORM_STATE: AutomationFormState = {
-  projectId: '',
+  projectIds: [],
   name: '',
   prompt: '',
   presetId: 'hourly',
@@ -110,7 +110,7 @@ function automationFormReducer(
     case 'load':
       return action.form;
     case 'ensure-project':
-      return state.projectId ? state : { ...state, projectId: action.projectId };
+      return state.projectIds.length > 0 ? state : { ...state, projectIds: [action.projectId] };
     case 'field':
       return { ...state, [action.field]: action.value };
   }
@@ -161,7 +161,7 @@ function useCreateAutomationModalView() {
 
   const [form, dispatchForm] = useReducer(automationFormReducer, INITIAL_AUTOMATION_FORM_STATE);
   const {
-    projectId,
+    projectIds,
     name,
     prompt,
     presetId,
@@ -194,7 +194,7 @@ function useCreateAutomationModalView() {
       dispatchForm({
         type: 'load',
         form: {
-          projectId: existing.projectId,
+          projectIds: existing.targets?.length ? existing.targets : [existing.projectId],
           name: existing.name,
           prompt: existing.prompt,
           presetId: pid,
@@ -210,7 +210,10 @@ function useCreateAutomationModalView() {
     } else if (!isEdit) {
       dispatchForm({
         type: 'load',
-        form: { ...INITIAL_AUTOMATION_FORM_STATE, projectId: fallbackProjectId },
+        form: {
+          ...INITIAL_AUTOMATION_FORM_STATE,
+          projectIds: fallbackProjectId ? [fallbackProjectId] : [],
+        },
       });
       initializedFormKeyRef.current = currentFormKey;
     }
@@ -240,7 +243,8 @@ function useCreateAutomationModalView() {
         return window.shipcode.invoke<Automation>('automations:update', patch);
       }
       const input: CreateAutomationInput = {
-        projectId,
+        projectId: projectIds[0],
+        targets: projectIds,
         name: name.trim(),
         prompt: prompt.trim(),
         cronExpr,
@@ -311,12 +315,15 @@ function useCreateAutomationModalView() {
   const submitDisabled =
     createOrUpdate.isPending ||
     formatPendingForCurrentForm ||
-    !projectId ||
+    projectIds.length === 0 ||
     !name.trim() ||
     !prompt.trim() ||
     !!cronError;
   const formatDisabled =
-    formatPendingForCurrentForm || createOrUpdate.isPending || !projectId || !prompt.trim();
+    formatPendingForCurrentForm ||
+    createOrUpdate.isPending ||
+    projectIds.length === 0 ||
+    !prompt.trim();
 
   const handleSubmit = () => {
     dispatchForm({ type: 'field', field: 'error', value: null });
@@ -333,7 +340,7 @@ function useCreateAutomationModalView() {
     formatAutomation.mutate({
       requestId,
       formKey: currentFormKey,
-      projectId,
+      projectId: projectIds[0],
       prompt,
       provider,
       modelId: executorModelId,
@@ -382,24 +389,35 @@ function useCreateAutomationModalView() {
 
         {!isEdit && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="auto-project" className="text-xs text-secondary">
-              Project
-            </Label>
-            <Select
-              value={projectId}
-              onValueChange={(value) => dispatchForm({ type: 'field', field: 'projectId', value })}
-            >
-              <SelectTrigger id="auto-project" className="bg-transparent">
-                <SelectValue placeholder="Select a project…" />
-              </SelectTrigger>
-              <SelectContent>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
+            <Label className="text-xs text-secondary">Target repos</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {projects.map((p) => {
+                const selected = projectIds.includes(p.id);
+                return (
+                  <Button
+                    key={p.id}
+                    type="button"
+                    variant={selected ? 'default' : 'outline'}
+                    size="xs"
+                    aria-pressed={selected}
+                    onClick={() =>
+                      dispatchForm({
+                        type: 'field',
+                        field: 'projectIds',
+                        value: selected
+                          ? projectIds.filter((id) => id !== p.id)
+                          : [...projectIds, p.id],
+                      })
+                    }
+                  >
                     {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  </Button>
+                );
+              })}
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              Runs once per selected repo, each in its own worktree.
+            </div>
           </div>
         )}
 

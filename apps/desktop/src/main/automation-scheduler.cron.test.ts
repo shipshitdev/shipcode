@@ -74,6 +74,7 @@ describe('AutomationScheduler cron callback coverage', () => {
       listEnabled: vi.fn(() => [] as Automation[]),
       listDue: vi.fn(() => [makeAutomation({ id: 'overdue' })]),
       setNextRunAt: vi.fn(),
+      getById: vi.fn((id: string) => makeAutomation({ id })),
     };
     const pipelineScheduler = {
       startOrQueueAutomation: vi.fn(async () => {
@@ -93,7 +94,7 @@ describe('AutomationScheduler cron callback coverage', () => {
     await Promise.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(pipelineScheduler.startOrQueueAutomation).toHaveBeenCalledWith('auto-1');
+    expect(pipelineScheduler.startOrQueueAutomation).toHaveBeenCalledWith('auto-1', 'project-1');
     expect(loggerMock.error).toHaveBeenCalledWith(
       '[automation:auto-1] fire failed:',
       expect.any(Error),

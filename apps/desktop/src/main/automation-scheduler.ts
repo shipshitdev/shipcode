@@ -29,7 +29,10 @@ export interface AutomationSchedulerDeps {
  */
 export class AutomationScheduler implements AutomationSchedulerLike {
   private jobs = new Map<string, Cron>();
-  private inFlight = new Map<string, Promise<{ queued: boolean }>>();
+  // automationId -> (targetProjectId -> in-flight dispatch). Keyed per target so
+  // a multi-repo automation can dispatch each repo independently while still
+  // guarding against double-firing the same (automation, target) pair.
+  private inFlight = new Map<string, Map<string, Promise<{ queued: boolean }>>>();
 
   constructor(private readonly deps: AutomationSchedulerDeps) {}
 
@@ -96,18 +99,44 @@ export class AutomationScheduler implements AutomationSchedulerLike {
     this.jobs.clear();
   }
 
+  private _advanceNextRun(automationId: string): void {
+    const job = this.jobs.get(automationId);
+    const next = job?.nextRun() ?? null;
+    this.deps.automations.setNextRunAt(automationId, next ? next.toISOString() : null);
+  }
+
   private _fire(automationId: string): Promise<{ queued: boolean }> {
-    const existing = this.inFlight.get(automationId);
-    if (existing) return existing;
+    const automation = this.deps.automations.getById(automationId);
+    if (!automation?.enabled) {
+      this._advanceNextRun(automationId);
+      return Promise.resolve({ queued: false });
+    }
 
-    const promise = this.deps.pipelineScheduler.startOrQueueAutomation(automationId).finally(() => {
-      this.inFlight.delete(automationId);
-      const job = this.jobs.get(automationId);
-      const next = job?.nextRun() ?? null;
-      this.deps.automations.setNextRunAt(automationId, next ? next.toISOString() : null);
-    });
+    const targets = automation.targets.length > 0 ? automation.targets : [automation.projectId];
+    const inner =
+      this.inFlight.get(automationId) ?? new Map<string, Promise<{ queued: boolean }>>();
+    this.inFlight.set(automationId, inner);
 
-    this.inFlight.set(automationId, promise);
-    return promise;
+    const dispatched: Array<Promise<{ queued: boolean }>> = [];
+    for (const projectId of targets) {
+      if (inner.has(projectId)) continue; // per-target in-flight guard
+      const promise = this.deps.pipelineScheduler
+        .startOrQueueAutomation(automationId, projectId)
+        .finally(() => {
+          inner.delete(projectId);
+          if (inner.size === 0) this.inFlight.delete(automationId);
+        });
+      inner.set(projectId, promise);
+      dispatched.push(promise);
+    }
+
+    // Advance the cron cursor once targets are dispatched (not awaited), so the
+    // missed-tick skip logic at startup sees the next future occurrence.
+    this._advanceNextRun(automationId);
+
+    if (dispatched.length === 0) return Promise.resolve({ queued: false });
+    return Promise.all(dispatched).then((results) => ({
+      queued: results.every((r) => r.queued),
+    }));
   }
 }

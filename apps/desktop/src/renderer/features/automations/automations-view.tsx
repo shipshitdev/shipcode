@@ -84,7 +84,12 @@ export function AutomationsView() {
               <AutomationCard
                 key={automation.id}
                 automation={automation}
-                projectName={projectById.get(automation.projectId)?.name ?? 'Unknown project'}
+                projectName={(automation.targets.length > 0
+                  ? automation.targets
+                  : [automation.projectId]
+                )
+                  .map((id) => projectById.get(id)?.name ?? 'Unknown project')
+                  .join(', ')}
                 onEdit={() => openCreateAutomationModal(automation.id)}
                 onToggleEnabled={(enabled) => setEnabled.mutate({ id: automation.id, enabled })}
                 onDelete={() => {

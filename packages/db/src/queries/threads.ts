@@ -84,7 +84,17 @@ export class ThreadQueries {
     return asRows<ThreadRow>(rows).map(mapThread);
   }
 
-  hasActiveForAutomation(automationId: string): boolean {
+  hasActiveForAutomation(automationId: string, projectId?: string): boolean {
+    // When projectId is given, the guard is scoped to one target repo so a
+    // multi-repo automation can run a different target concurrently.
+    if (projectId !== undefined) {
+      const row = this.db
+        .prepare(
+          "SELECT 1 FROM threads WHERE automation_id = ? AND project_id = ? AND status NOT IN ('idle', 'completed', 'failed') LIMIT 1",
+        )
+        .get(automationId, projectId);
+      return !!row;
+    }
     const row = this.db
       .prepare(
         "SELECT 1 FROM threads WHERE automation_id = ? AND status NOT IN ('idle', 'completed', 'failed') LIMIT 1",
