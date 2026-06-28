@@ -648,6 +648,7 @@ describe('PipelineScheduler', () => {
     const automation = {
       id: 'auto-1',
       projectId: 'project-1',
+      targets: ['project-1'],
       name: 'Hourly smoke',
       prompt: 'List 3 files',
       cronExpr: '0 * * * *',
@@ -733,7 +734,7 @@ describe('PipelineScheduler', () => {
       queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 1 }));
       queries.automations.getById.mockReturnValue(automation);
 
-      await scheduler.startOrQueueAutomation('auto-1');
+      await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
       pipeline.listActiveInPhases.mockReturnValue([]);
       queries.githubIssues.getNextQueued.mockReturnValue(makeIssue());
@@ -756,7 +757,7 @@ describe('PipelineScheduler', () => {
       queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 1 }));
       queries.automations.getById.mockReturnValue(null);
 
-      await scheduler.startOrQueueAutomation('missing-auto');
+      await scheduler.startOrQueueAutomation('missing-auto', 'project-1');
 
       pipeline.listActiveInPhases.mockReturnValue([]);
       scheduler.onSlotFreed();
@@ -806,7 +807,7 @@ describe('PipelineScheduler', () => {
       queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 1 }));
       queries.automations.getById.mockReturnValue(automation);
 
-      await scheduler.startOrQueueAutomation('auto-1');
+      await scheduler.startOrQueueAutomation('auto-1', 'project-1');
       scheduler.onSlotFreed();
 
       expect(pipeline.startFromAutomation).not.toHaveBeenCalled();
@@ -826,7 +827,7 @@ describe('PipelineScheduler', () => {
       queries.automations.getById.mockReturnValue(automation);
       pipeline.startFromAutomation.mockRejectedValueOnce(new Error('automation failed'));
 
-      await scheduler.startOrQueueAutomation('auto-1');
+      await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
       pipeline.listActiveInPhases.mockReturnValue([]);
       scheduler.onSlotFreed();
@@ -1204,6 +1205,7 @@ describe('PipelineScheduler', () => {
     const automation = {
       id: 'auto-1',
       projectId: 'project-1',
+      targets: ['project-1'],
       name: 'Hourly smoke',
       prompt: 'List 3 files',
       cronExpr: '0 * * * *',
@@ -1224,7 +1226,7 @@ describe('PipelineScheduler', () => {
       pipeline.listActiveInPhases.mockReturnValue([]);
       queries.automations.getById.mockReturnValue(automation);
 
-      const result = await scheduler.startOrQueueAutomation('auto-1');
+      const result = await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
       expect(result.queued).toBe(false);
       expect(pipeline.startFromAutomation).toHaveBeenCalledWith(
@@ -1245,7 +1247,7 @@ describe('PipelineScheduler', () => {
       queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 3 }));
       queries.automations.getById.mockReturnValue(automation);
 
-      const result = await scheduler.startOrQueueAutomation('auto-1');
+      const result = await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
       expect(result.queued).toBe(true);
       expect(pipeline.startFromAutomation).not.toHaveBeenCalled();
@@ -1262,8 +1264,8 @@ describe('PipelineScheduler', () => {
       queries.automations.getById.mockReturnValue(automation);
 
       const [r1, r2] = await Promise.all([
-        scheduler.startOrQueueAutomation('auto-1'),
-        scheduler.startOrQueueAutomation('auto-1'),
+        scheduler.startOrQueueAutomation('auto-1', 'project-1'),
+        scheduler.startOrQueueAutomation('auto-1', 'project-1'),
       ]);
 
       expect(r1.queued).toBe(true);
@@ -1274,7 +1276,7 @@ describe('PipelineScheduler', () => {
       queries.automations.getById.mockReturnValue(automation);
       queries.threads.hasActiveForAutomation.mockReturnValue(true);
 
-      const result = await scheduler.startOrQueueAutomation('auto-1');
+      const result = await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
       expect(result.queued).toBe(false);
       expect(pipeline.startFromAutomation).not.toHaveBeenCalled();
@@ -1282,12 +1284,12 @@ describe('PipelineScheduler', () => {
 
     it('returns without launching when the automation is missing or disabled', async () => {
       queries.automations.getById.mockReturnValueOnce(null);
-      await expect(scheduler.startOrQueueAutomation('missing-auto')).resolves.toEqual({
+      await expect(scheduler.startOrQueueAutomation('missing-auto', 'project-1')).resolves.toEqual({
         queued: false,
       });
 
       queries.automations.getById.mockReturnValueOnce({ ...automation, enabled: false });
-      await expect(scheduler.startOrQueueAutomation('auto-1')).resolves.toEqual({
+      await expect(scheduler.startOrQueueAutomation('auto-1', 'project-1')).resolves.toEqual({
         queued: false,
       });
 
@@ -1297,7 +1299,7 @@ describe('PipelineScheduler', () => {
     it('skips disabled automations after dispatch capacity is available', async () => {
       queries.automations.getById.mockReturnValue({ ...automation, enabled: false });
 
-      const result = await scheduler.startOrQueueAutomation('auto-1');
+      const result = await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
       expect(result.queued).toBe(false);
       expect(pipeline.startFromAutomation).not.toHaveBeenCalled();
@@ -1308,7 +1310,7 @@ describe('PipelineScheduler', () => {
       queries.automations.getById.mockReturnValue(automation);
       queries.projects.getById.mockReturnValue(null);
 
-      await scheduler.startOrQueueAutomation('auto-1');
+      await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
       expect(queries.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'failed');
 
@@ -1316,7 +1318,7 @@ describe('PipelineScheduler', () => {
       queries.projects.getById.mockReturnValue(makeProject());
       vi.mocked(fs.existsSync).mockReturnValueOnce(false);
 
-      await scheduler.startOrQueueAutomation('auto-1');
+      await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
       expect(queries.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'failed');
       expect(pipeline.startFromAutomation).not.toHaveBeenCalled();
@@ -1326,7 +1328,7 @@ describe('PipelineScheduler', () => {
       queries.automations.getById.mockReturnValue(automation);
       vi.mocked(assertCliPhaseModelsSupported).mockRejectedValueOnce(new Error('unsupported'));
 
-      await scheduler.startOrQueueAutomation('auto-1');
+      await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
       expect(queries.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'failed');
       expect(pipeline.startFromAutomation).not.toHaveBeenCalled();
@@ -1336,7 +1338,7 @@ describe('PipelineScheduler', () => {
       queries.automations.getById.mockReturnValue(automation);
       pipeline.startFromAutomation.mockRejectedValueOnce(new Error('automation dispatch failed'));
 
-      await expect(scheduler.startOrQueueAutomation('auto-1')).rejects.toThrow(
+      await expect(scheduler.startOrQueueAutomation('auto-1', 'project-1')).rejects.toThrow(
         'automation dispatch failed',
       );
 

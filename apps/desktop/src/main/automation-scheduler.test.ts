@@ -39,6 +39,7 @@ describe('AutomationScheduler', () => {
     listEnabled: ReturnType<typeof vi.fn>;
     listDue: ReturnType<typeof vi.fn>;
     setNextRunAt: ReturnType<typeof vi.fn>;
+    getById: ReturnType<typeof vi.fn>;
   };
   let pipelineScheduler: {
     startOrQueueAutomation: ReturnType<typeof vi.fn>;
@@ -50,6 +51,7 @@ describe('AutomationScheduler', () => {
       listEnabled: vi.fn(() => [] as Automation[]),
       listDue: vi.fn(() => [] as Automation[]),
       setNextRunAt: vi.fn(),
+      getById: vi.fn((id: string) => makeAutomation({ id })),
     };
     pipelineScheduler = {
       startOrQueueAutomation: vi.fn(async () => ({ queued: false })),
@@ -127,7 +129,7 @@ describe('AutomationScheduler', () => {
     const result = await scheduler.fireNow('auto-1');
 
     expect(result).toEqual({ queued: false });
-    expect(pipelineScheduler.startOrQueueAutomation).toHaveBeenCalledWith('auto-1');
+    expect(pipelineScheduler.startOrQueueAutomation).toHaveBeenCalledWith('auto-1', 'project-1');
     expect(queries.setNextRunAt).toHaveBeenCalledWith('auto-1', null);
   });
 
@@ -173,5 +175,45 @@ describe('AutomationScheduler', () => {
     scheduler.schedule(makeAutomation({ id: 'b' }));
     scheduler.stop();
     expect(() => scheduler.unschedule('a')).not.toThrow();
+  });
+
+  it('fans out one dispatch per target project', async () => {
+    queries.getById.mockReturnValue(makeAutomation({ id: 'multi', targets: ['p1', 'p2', 'p3'] }));
+
+    await scheduler.fireNow('multi');
+
+    expect(pipelineScheduler.startOrQueueAutomation).toHaveBeenCalledTimes(3);
+    expect(pipelineScheduler.startOrQueueAutomation).toHaveBeenCalledWith('multi', 'p1');
+    expect(pipelineScheduler.startOrQueueAutomation).toHaveBeenCalledWith('multi', 'p2');
+    expect(pipelineScheduler.startOrQueueAutomation).toHaveBeenCalledWith('multi', 'p3');
+  });
+
+  it('per-target guard: a second fire only dispatches not-yet-running targets', async () => {
+    queries.getById.mockReturnValue(makeAutomation({ id: 'multi', targets: ['p1', 'p2'] }));
+    const resolvers: Array<() => void> = [];
+    pipelineScheduler.startOrQueueAutomation.mockImplementation(
+      () =>
+        new Promise<{ queued: boolean }>((resolve) =>
+          resolvers.push(() => resolve({ queued: false })),
+        ),
+    );
+
+    const first = scheduler.fireNow('multi'); // dispatches p1, p2 (pending)
+    const second = scheduler.fireNow('multi'); // both in-flight → no new dispatch
+
+    expect(pipelineScheduler.startOrQueueAutomation).toHaveBeenCalledTimes(2);
+    await expect(second).resolves.toEqual({ queued: false });
+    for (const r of resolvers) r();
+    await first;
+  });
+
+  it('skips a disabled automation without dispatching', async () => {
+    queries.getById.mockReturnValue(makeAutomation({ id: 'off', enabled: false }));
+
+    const result = await scheduler.fireNow('off');
+
+    expect(result).toEqual({ queued: false });
+    expect(pipelineScheduler.startOrQueueAutomation).not.toHaveBeenCalled();
+    expect(queries.setNextRunAt).toHaveBeenCalledWith('off', null);
   });
 });

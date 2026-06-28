@@ -63,12 +63,13 @@ const REUSABLE_THREAD_STATUSES = new Set<PipelinePhase>([
  */
 export class PipelineScheduler {
   /**
-   * In-memory FIFO queue for automations that fired while all pipeline
-   * slots were occupied. Drained one at a time by `onSlotFreed`.
-   * Lost on app restart by design — automation cron resumes from
-   * `next_run_at` so a missed tick is simply skipped.
+   * In-memory FIFO queue for automation targets that fired while all pipeline
+   * slots were occupied. Each entry is one (automation, target project) pair,
+   * so a multi-repo automation queues per target independently. Drained one at
+   * a time by `onSlotFreed`. Lost on app restart by design — automation cron
+   * resumes from `next_run_at` so a missed tick is simply skipped.
    */
-  private pendingAutomations: string[] = [];
+  private pendingAutomations: Array<{ automationId: string; projectId: string }> = [];
 
   constructor(private readonly deps: PipelineSchedulerDeps) {}
 
@@ -200,20 +201,21 @@ export class PipelineScheduler {
       // Drain one pending automation before queued issues — automations
       // already fired their cron tick and should not wait behind issues
       // that can simply re-queue.
-      const pendingAutomationId = this.pendingAutomations.shift();
-      if (pendingAutomationId) {
-        const automation = queries.automations.getById(pendingAutomationId);
-        const project = automation ? queries.projects.getById(automation.projectId) : null;
+      const pending = this.pendingAutomations.shift();
+      if (pending) {
+        const project = queries.projects.getById(pending.projectId);
         if (
           project &&
           (activeCount >= this._getProjectPipelineCap(project.path) ||
             !this._isPerStateSlotAvailable(project.path, PIPELINE_PHASE.planning))
         ) {
-          this.pendingAutomations.unshift(pendingAutomationId);
+          this.pendingAutomations.unshift(pending);
           return;
         }
-        log.info(`[scheduler] auto-promoting automation ${pendingAutomationId}`);
-        this._launchAutomation(pendingAutomationId).catch((err) => {
+        log.info(
+          `[scheduler] auto-promoting automation ${pending.automationId} → project ${pending.projectId}`,
+        );
+        this._launchAutomation(pending.automationId, pending.projectId).catch((err) => {
           log.error('[scheduler] automation promote failed:', err);
         });
         return;
@@ -241,16 +243,22 @@ export class PipelineScheduler {
   }
 
   /**
-   * Cron-driven entry: tries to launch an automation now or queues it
-   * in-memory if pipeline slots are full. Called by AutomationScheduler.
+   * Cron-driven entry: tries to launch one automation target now or queues it
+   * in-memory if pipeline slots are full. Called per target by
+   * AutomationScheduler so a multi-repo automation fans out across repos.
    */
-  async startOrQueueAutomation(automationId: string): Promise<{ queued: boolean }> {
+  async startOrQueueAutomation(
+    automationId: string,
+    targetProjectId: string,
+  ): Promise<{ queued: boolean }> {
     const { queries } = this.deps;
-    const automation = queries.automations.getById(automationId);
-    const project = automation ? queries.projects.getById(automation.projectId) : null;
+    const project = queries.projects.getById(targetProjectId);
 
-    if (queries.threads.hasActiveForAutomation(automationId)) {
-      log.info(`[scheduler] skipping automation ${automationId} — already has an active pipeline`);
+    // Per-target guard: this automation can still run a different target repo.
+    if (queries.threads.hasActiveForAutomation(automationId, targetProjectId)) {
+      log.info(
+        `[scheduler] skipping automation ${automationId} → ${targetProjectId} — target already active`,
+      );
       return { queued: false };
     }
 
@@ -265,16 +273,19 @@ export class PipelineScheduler {
       : false;
 
     if (activeCount >= pipelineCap || perStateBlocked) {
-      if (!this.pendingAutomations.includes(automationId)) {
-        this.pendingAutomations.push(automationId);
+      const alreadyQueued = this.pendingAutomations.some(
+        (p) => p.automationId === automationId && p.projectId === targetProjectId,
+      );
+      if (!alreadyQueued) {
+        this.pendingAutomations.push({ automationId, projectId: targetProjectId });
       }
       log.info(
-        `[scheduler] queued automation ${automationId} (${activeCount}/${pipelineCap} slots used)`,
+        `[scheduler] queued automation ${automationId} → ${targetProjectId} (${activeCount}/${pipelineCap} slots used)`,
       );
       return { queued: true };
     }
 
-    await this._launchAutomation(automationId);
+    await this._launchAutomation(automationId, targetProjectId);
     return { queued: false };
   }
 
@@ -515,7 +526,7 @@ export class PipelineScheduler {
     }
   }
 
-  private async _launchAutomation(automationId: string): Promise<void> {
+  private async _launchAutomation(automationId: string, targetProjectId: string): Promise<void> {
     const { queries, pipeline, emitter, getMainWindow } = this.deps;
 
     const automation = queries.automations.getById(automationId);
@@ -528,9 +539,9 @@ export class PipelineScheduler {
       return;
     }
 
-    const project = queries.projects.getById(automation.projectId);
+    const project = queries.projects.getById(targetProjectId);
     if (!project) {
-      log.warn(`[automation] project ${automation.projectId} not found`);
+      log.warn(`[automation] target project ${targetProjectId} not found`);
       queries.automations.recordRunFinished(automation.id, 'failed');
       return;
     }
@@ -562,11 +573,13 @@ export class PipelineScheduler {
       return;
     }
 
-    const thread = queries.threads.create(
-      project.id,
-      automation.prompt,
-      `[Auto] ${automation.name}`,
-    );
+    // Distinguish sibling runs of a multi-repo automation by target repo.
+    const projectLabel = project.path.split(/[\\/]/).filter(Boolean).pop() ?? project.path;
+    const title =
+      automation.targets.length > 1
+        ? `[Auto] ${automation.name} — ${projectLabel}`
+        : `[Auto] ${automation.name}`;
+    const thread = queries.threads.create(project.id, automation.prompt, title);
     queries.threads.setAutomationId(thread.id, automation.id);
     queries.threads.setPhaseModels(thread.id, mergedPhaseModels);
 
