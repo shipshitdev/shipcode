@@ -136,6 +136,19 @@ describe('reasoning-effort', () => {
     );
   });
 
+  it('treats OpenRouter Claude Opus 4.8 as adaptive like the 4.6 models', () => {
+    expect(normalizeReasoningModelId('openrouter', 'anthropic/claude-opus-4-8')).toBe(
+      'anthropic/claude-opus-4.8',
+    );
+    expect(getSupportedReasoningEfforts('openrouter', 'anthropic/claude-opus-4.8')).toEqual([
+      'none',
+      'high',
+    ]);
+    expect(formatProviderReasoningEffort('openrouter', 'xhigh', 'anthropic/claude-opus-4-8')).toBe(
+      'high',
+    );
+  });
+
   it('disables reasoning entirely for OpenRouter models without reasoning support', () => {
     expect(getSupportedReasoningEfforts('openrouter', 'qwen/qwen3-coder:free')).toEqual(['none']);
     expect(resolveProviderReasoningEffort('openrouter', 'none', 'qwen/qwen3-coder:free')).toEqual({

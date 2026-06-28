@@ -35,7 +35,7 @@ export function executorModelPlaceholder(provider: 'inherit' | AgentType): strin
     case 'codex':
       return 'e.g. gpt-5-codex';
     case 'claude':
-      return 'e.g. anthropic/claude-opus-4-7';
+      return 'e.g. claude-opus-4-8';
     default:
       return 'Inherit from project default';
   }

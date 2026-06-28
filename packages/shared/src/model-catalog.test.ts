@@ -5,7 +5,9 @@ import {
   GEMINI_FALLBACK_MODEL_OPTIONS,
   getKnownModelLabel,
   OPENROUTER_MODEL_IDS,
+  OPENROUTER_MODEL_OPTIONS,
   PINNED_MODEL_DEFAULTS,
+  resolveModelAlias,
 } from './model-catalog';
 
 describe('model-catalog', () => {
@@ -65,5 +67,40 @@ describe('model-catalog', () => {
     expect(getKnownModelLabel(undefined)).toBeNull();
     expect(getKnownModelLabel('')).toBeNull();
     expect(getKnownModelLabel('provider/not-curated')).toBeNull();
+  });
+
+  it('exposes Opus 4.8 as a selectable Claude and OpenRouter option', () => {
+    expect(CLAUDE_MODEL_OPTIONS.map((option) => option.value)).toContain('claude-opus-4-8');
+    expect(OPENROUTER_MODEL_OPTIONS.map((option) => option.value)).toContain(
+      'anthropic/claude-opus-4.8',
+    );
+    expect(getKnownModelLabel('claude-opus-4-8')).toBe('Opus 4.8');
+    expect(getKnownModelLabel('anthropic/claude-opus-4.8')).toBe('Claude Opus 4.8');
+    expect(getKnownModelLabel('anthropic/claude-opus-4-8')).toBe('Claude Opus 4.8');
+  });
+
+  describe('resolveModelAlias', () => {
+    it('resolves bare family shorthands to the pinned generation', () => {
+      expect(resolveModelAlias('opus')).toBe('claude-opus-4-8');
+      expect(resolveModelAlias('sonnet')).toBe('claude-sonnet-4-6');
+      expect(resolveModelAlias('haiku')).toBe('claude-haiku-4-5-20251001');
+      expect(resolveModelAlias('5.5')).toBe('gpt-5.5');
+      expect(resolveModelAlias('5.4-mini')).toBe('gpt-5.4-mini');
+    });
+
+    it('is case-insensitive and trims whitespace', () => {
+      expect(resolveModelAlias('  OPUS  ')).toBe('claude-opus-4-8');
+    });
+
+    it('passes already-canonical ids through unchanged', () => {
+      expect(resolveModelAlias('claude-opus-4-8')).toBe('claude-opus-4-8');
+      expect(resolveModelAlias('openrouter/auto')).toBe('openrouter/auto');
+    });
+
+    it('returns null for nullish or blank input', () => {
+      expect(resolveModelAlias(null)).toBeNull();
+      expect(resolveModelAlias(undefined)).toBeNull();
+      expect(resolveModelAlias('   ')).toBeNull();
+    });
   });
 });

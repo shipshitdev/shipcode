@@ -7,6 +7,7 @@ export const CLAUDE_MODEL_IDS = {
   sonnet46: 'claude-sonnet-4-6',
   opus46: 'claude-opus-4-6',
   opus47: 'claude-opus-4-7',
+  opus48: 'claude-opus-4-8',
   haiku45: 'claude-haiku-4-5-20251001',
 } as const;
 
@@ -43,6 +44,7 @@ export const OPENROUTER_MODEL_IDS = {
   autoFree: 'openrouter/free',
   claudeSonnet46: 'anthropic/claude-sonnet-4.6',
   claudeOpus46: 'anthropic/claude-opus-4.6',
+  claudeOpus48: 'anthropic/claude-opus-4.8',
   qwen36Plus: 'qwen/qwen3.6-plus',
   qwen3CoderFree: 'qwen/qwen3-coder:free',
 } as const;
@@ -53,6 +55,7 @@ export const CLAUDE_MODEL_OPTIONS = [
   { value: CLAUDE_MODEL_IDS.sonnet46, label: 'Sonnet 4.6' },
   { value: CLAUDE_MODEL_IDS.opus46, label: 'Opus 4.6' },
   { value: CLAUDE_MODEL_IDS.opus47, label: 'Opus 4.7' },
+  { value: CLAUDE_MODEL_IDS.opus48, label: 'Opus 4.8' },
   { value: CLAUDE_MODEL_IDS.haiku45, label: 'Haiku 4.5' },
 ] as const satisfies readonly KnownModelOption<ClaudeModelId>[];
 
@@ -77,6 +80,7 @@ export const OPENROUTER_MODEL_OPTIONS = [
   { value: OPENROUTER_MODEL_IDS.autoPaid, label: 'Auto (paid)' },
   { value: OPENROUTER_MODEL_IDS.autoFree, label: 'Auto (free)' },
   { value: OPENROUTER_MODEL_IDS.claudeSonnet46, label: 'Claude Sonnet 4.6' },
+  { value: OPENROUTER_MODEL_IDS.claudeOpus48, label: 'Claude Opus 4.8' },
   { value: OPENROUTER_MODEL_IDS.qwen36Plus, label: 'Qwen 3.6 Plus' },
   { value: OPENROUTER_MODEL_IDS.qwen3CoderFree, label: 'Qwen 3 Coder Free' },
 ] as const satisfies readonly KnownModelOption<OpenRouterModelId>[];
@@ -132,10 +136,43 @@ export const KNOWN_MODEL_LABELS: Record<string, string> = {
   'anthropic/claude-sonnet-4-6': CURATED_MODEL_LABELS[OPENROUTER_MODEL_IDS.claudeSonnet46],
   [OPENROUTER_MODEL_IDS.claudeOpus46]: 'Claude Opus 4.6',
   'anthropic/claude-opus-4-6': 'Claude Opus 4.6',
+  'anthropic/claude-opus-4-8': 'Claude Opus 4.8',
   'openai/gpt-5-codex': 'GPT-5 Codex',
 };
 
 export function getKnownModelLabel(modelId: string | null | undefined): string | null {
   if (!modelId) return null;
   return KNOWN_MODEL_LABELS[modelId] ?? null;
+}
+
+// Human-friendly shorthands a user can type in a model field instead of an
+// exact id. Normalized at the input boundary so everything downstream sees a
+// canonical id. Keys are matched case-insensitively. Bare family names
+// (`opus`/`sonnet`/`haiku`) resolve to the current pinned generation.
+export const MODEL_SLUG_ALIASES: Record<string, string> = {
+  opus: CLAUDE_MODEL_IDS.opus48,
+  'opus-4.8': CLAUDE_MODEL_IDS.opus48,
+  'opus4.8': CLAUDE_MODEL_IDS.opus48,
+  'opus-4.7': CLAUDE_MODEL_IDS.opus47,
+  'opus-4.6': CLAUDE_MODEL_IDS.opus46,
+  sonnet: CLAUDE_MODEL_IDS.sonnet46,
+  'sonnet-4.6': CLAUDE_MODEL_IDS.sonnet46,
+  haiku: CLAUDE_MODEL_IDS.haiku45,
+  'haiku-4.5': CLAUDE_MODEL_IDS.haiku45,
+  '5.5': CODEX_FALLBACK_MODEL_IDS.gpt55,
+  '5.4': CODEX_FALLBACK_MODEL_IDS.gpt54,
+  '5.4-mini': CODEX_FALLBACK_MODEL_IDS.gpt54Mini,
+  mini: CODEX_FALLBACK_MODEL_IDS.gpt54Mini,
+};
+
+/**
+ * Resolve a user-typed model shorthand to its canonical id. Unknown values
+ * (including already-canonical ids) are trimmed and returned unchanged.
+ * Returns null only for nullish/blank input.
+ */
+export function resolveModelAlias(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return MODEL_SLUG_ALIASES[trimmed.toLowerCase()] ?? trimmed;
 }
