@@ -66,3 +66,4 @@ export {
   migrateV61,
   migrateV62,
 } from './migrations/v41-v62';
+export { migrateV63 } from './migrations/v63-v80';

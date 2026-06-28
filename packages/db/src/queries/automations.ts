@@ -9,7 +9,7 @@ import {
   type UpdateAutomationInput,
 } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
-import { asRow, asRows } from '../utils';
+import { asRow, asRows, transaction } from '../utils';
 
 interface AutomationRow {
   id: string;
@@ -30,10 +30,11 @@ interface AutomationRow {
   updated_at: string;
 }
 
-function mapAutomation(row: AutomationRow): Automation {
+function mapAutomation(row: AutomationRow, targets: string[]): Automation {
   return {
     id: row.id,
     projectId: row.project_id,
+    targets: targets.length > 0 ? targets : [row.project_id],
     name: row.name,
     prompt: row.prompt,
     cronExpr: row.cron_expr,
@@ -54,23 +55,43 @@ function mapAutomation(row: AutomationRow): Automation {
 export class AutomationQueries {
   constructor(private db: DatabaseSync) {}
 
-  list(projectId: string): Automation[] {
+  /** Target project ids for an automation, oldest first (primary first). */
+  listTargets(automationId: string): string[] {
     const rows = this.db
-      .prepare('SELECT * FROM automations WHERE project_id = ? ORDER BY created_at DESC')
+      .prepare(
+        'SELECT project_id FROM automation_targets WHERE automation_id = ? ORDER BY created_at ASC',
+      )
+      .all(automationId);
+    return asRows<{ project_id: string }>(rows).map((r) => r.project_id);
+  }
+
+  private hydrate(row: AutomationRow): Automation {
+    return mapAutomation(row, this.listTargets(row.id));
+  }
+
+  list(projectId: string): Automation[] {
+    // Automations that target this project (multi-repo aware), newest first.
+    const rows = this.db
+      .prepare(
+        `SELECT a.* FROM automations a
+            JOIN automation_targets t ON t.automation_id = a.id
+           WHERE t.project_id = ?
+           ORDER BY a.created_at DESC`,
+      )
       .all(projectId);
-    return asRows<AutomationRow>(rows).map(mapAutomation);
+    return asRows<AutomationRow>(rows).map((row) => this.hydrate(row));
   }
 
   listAll(): Automation[] {
     const rows = this.db.prepare('SELECT * FROM automations ORDER BY created_at DESC').all();
-    return asRows<AutomationRow>(rows).map(mapAutomation);
+    return asRows<AutomationRow>(rows).map((row) => this.hydrate(row));
   }
 
   listEnabled(): Automation[] {
     const rows = this.db
       .prepare('SELECT * FROM automations WHERE enabled = 1 ORDER BY created_at DESC')
       .all();
-    return asRows<AutomationRow>(rows).map(mapAutomation);
+    return asRows<AutomationRow>(rows).map((row) => this.hydrate(row));
   }
 
   /**
@@ -84,38 +105,91 @@ export class AutomationQueries {
         'SELECT * FROM automations WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ?',
       )
       .all(nowIso);
-    return asRows<AutomationRow>(rows).map(mapAutomation);
+    return asRows<AutomationRow>(rows).map((row) => this.hydrate(row));
   }
 
   getById(id: string): Automation | null {
     const row = this.db.prepare('SELECT * FROM automations WHERE id = ?').get(id);
-    return row ? mapAutomation(asRow<AutomationRow>(row)) : null;
+    return row ? this.hydrate(asRow<AutomationRow>(row)) : null;
   }
 
   create(input: CreateAutomationInput): Automation {
     const id = nanoid();
-    this.db
-      .prepare(
-        `INSERT INTO automations (
-           id, project_id, name, prompt, cron_expr, enabled,
-           executor_provider, executor_model_id, executor_reasoning_effort,
-           run_count, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ${ISO_NOW_SQL}, ${ISO_NOW_SQL})`,
-      )
-      .run(
-        id,
-        input.projectId,
-        input.name,
-        input.prompt,
-        input.cronExpr,
-        input.enabled === false ? 0 : 1,
-        input.executorProvider ?? null,
-        input.executorModelId ?? null,
-        input.executorReasoningEffort ?? null,
+    // Dedupe while preserving order; the first target becomes the primary
+    // project_id so single-project callers keep working unchanged.
+    const targets = [...new Set(input.targets?.length ? input.targets : [input.projectId])];
+    const primary = targets[0] ?? input.projectId;
+
+    transaction(this.db, () => {
+      this.db
+        .prepare(
+          `INSERT INTO automations (
+             id, project_id, name, prompt, cron_expr, enabled,
+             executor_provider, executor_model_id, executor_reasoning_effort,
+             run_count, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ${ISO_NOW_SQL}, ${ISO_NOW_SQL})`,
+        )
+        .run(
+          id,
+          primary,
+          input.name,
+          input.prompt,
+          input.cronExpr,
+          input.enabled === false ? 0 : 1,
+          input.executorProvider ?? null,
+          input.executorModelId ?? null,
+          input.executorReasoningEffort ?? null,
+        );
+
+      const insertTarget = this.db.prepare(
+        `INSERT OR IGNORE INTO automation_targets (id, automation_id, project_id, created_at)
+         VALUES (?, ?, ?, ${ISO_NOW_SQL})`,
       );
+      for (const projectId of targets) {
+        insertTarget.run(nanoid(), id, projectId);
+      }
+    });
+
     const automation = this.getById(id);
     if (!automation) throw new Error(`Failed to create automation ${id}`);
     return automation;
+  }
+
+  /** Add a target project (idempotent on the automation×project pair). */
+  addTarget(automationId: string, projectId: string): void {
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO automation_targets (id, automation_id, project_id, created_at)
+         VALUES (?, ?, ?, ${ISO_NOW_SQL})`,
+      )
+      .run(nanoid(), automationId, projectId);
+  }
+
+  /** Remove a target project. */
+  removeTarget(automationId: string, projectId: string): void {
+    this.db
+      .prepare('DELETE FROM automation_targets WHERE automation_id = ? AND project_id = ?')
+      .run(automationId, projectId);
+  }
+
+  /** Replace the full target set, keeping `project_id` aligned to the first. */
+  setTargets(automationId: string, projectIds: string[]): void {
+    const targets = [...new Set(projectIds)];
+    if (targets.length === 0) throw new Error('An automation must have at least one target');
+
+    transaction(this.db, () => {
+      this.db.prepare('DELETE FROM automation_targets WHERE automation_id = ?').run(automationId);
+      const insertTarget = this.db.prepare(
+        `INSERT OR IGNORE INTO automation_targets (id, automation_id, project_id, created_at)
+         VALUES (?, ?, ?, ${ISO_NOW_SQL})`,
+      );
+      for (const projectId of targets) {
+        insertTarget.run(nanoid(), automationId, projectId);
+      }
+      this.db
+        .prepare(`UPDATE automations SET project_id = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
+        .run(targets[0], automationId);
+    });
   }
 
   update(id: string, patch: UpdateAutomationInput): Automation {

@@ -16,6 +16,7 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
     id: 'auto-1',
     projectId: 'project-1',
+    targets: ['project-1'],
     name: 'Nightly cleanup',
     prompt: 'Clean up stale worktrees',
     cronExpr: '0 0 * * *',

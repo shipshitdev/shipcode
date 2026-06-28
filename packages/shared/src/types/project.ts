@@ -65,7 +65,10 @@ export type AutomationLastStatus = 'running' | 'completed' | 'failed';
 
 export interface Automation {
   id: string;
+  /** Primary target project. Retained for back-compat; equals `targets[0]`. */
   projectId: string;
+  /** All target projects this automation fans out to (includes the primary). */
+  targets: string[];
   name: string;
   prompt: string;
   cronExpr: string;
@@ -83,7 +86,10 @@ export interface Automation {
 }
 
 export interface CreateAutomationInput {
+  /** Primary target project. Used as `targets[0]` when `targets` is omitted. */
   projectId: string;
+  /** Optional full target set. Defaults to `[projectId]` when omitted. */
+  targets?: string[];
   name: string;
   prompt: string;
   cronExpr: string;
