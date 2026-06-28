@@ -1,9 +1,16 @@
-import { CLAUDE_MODEL_IDS, PINNED_MODEL_DEFAULTS } from './model-catalog';
+import { CLAUDE_MODEL_IDS, CODEX_FALLBACK_MODEL_IDS, PINNED_MODEL_DEFAULTS } from './model-catalog';
 import type { ResolvedPhaseModel } from './model-resolution';
 import { resolveProviderReasoningEffort } from './reasoning-effort';
 import type { AppSettings, ExecutorModel, Project, ReasoningEffort } from './types';
 
-export type ModelConfigPresetKey = 'claude' | 'codex' | 'hybrid';
+export type ModelConfigPresetKey = 'claude' | 'codex' | 'hybrid' | 'opus-combo';
+
+// Where a preset can be applied. The global AppSettings path only carries a
+// phase *provider* (the concrete claude/codex model stays pinned), so a preset
+// whose value comes from per-phase model ids — like opus-combo running Opus 4.8
+// for planning — is only honored through per-project overrides. 'project'-scoped
+// presets are therefore hidden from the global settings preset list.
+export type ModelPresetScope = 'all' | 'project';
 
 interface PhasePreset {
   provider: ExecutorModel;
@@ -15,6 +22,7 @@ export interface ModelConfigPreset {
   key: ModelConfigPresetKey;
   label: string;
   description: string;
+  appliesTo: ModelPresetScope;
   phases: Record<ResolvedPhaseModel, PhasePreset>;
   prdRewrite: {
     cli: AppSettings['prdRewriteCli'];
@@ -73,6 +81,7 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
     key: 'claude',
     label: 'Claude',
     description: 'Anthropic across planning, review, execution, and verification.',
+    appliesTo: 'all',
     phases: {
       planner: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'planner'),
       reviewer: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'reviewer'),
@@ -89,6 +98,7 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
     key: 'codex',
     label: 'Codex',
     description: 'OpenAI across planning, review, execution, and verification.',
+    appliesTo: 'all',
     phases: {
       planner: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'planner'),
       reviewer: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'reviewer'),
@@ -105,6 +115,7 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
     key: 'hybrid',
     label: 'Hybrid',
     description: 'Claude plans, Codex reviews, executes, and verifies.',
+    appliesTo: 'all',
     phases: {
       planner: makePhasePreset('claude', SHARED_PHASE_MODELS.claude, 'planner'),
       reviewer: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'reviewer'),
@@ -117,7 +128,35 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
       reasoningEffort: 'none',
     },
   },
+  {
+    // Budget combo: Opus 4.8 plans on the Claude subscription (the one step
+    // that benefits from deep reasoning), then GPT-5.5 reviews + executes and
+    // GPT-5.4 Mini verifies — keeping the token-heavy lanes off the Claude
+    // weekly quota. Project-scoped because the Opus/Mini model ids are only
+    // honored through per-project overrides (the global path pins the model).
+    key: 'opus-combo',
+    label: 'Opus combo',
+    description: 'Opus 4.8 plans, GPT-5.5 reviews and executes, GPT-5.4 Mini verifies.',
+    appliesTo: 'project',
+    phases: {
+      planner: makePhasePreset('claude', CLAUDE_MODEL_IDS.opus48, 'planner'),
+      reviewer: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'reviewer'),
+      executor: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'executor'),
+      verifier: makePhasePreset('codex', CODEX_FALLBACK_MODEL_IDS.gpt54Mini, 'verifier'),
+    },
+    prdRewrite: {
+      cli: 'codex',
+      modelId: SHARED_PRD_MODELS.codex,
+      reasoningEffort: 'low',
+    },
+  },
 ] as const;
+
+// Presets offered in the global settings preset picker. Project-scoped presets
+// (whose per-phase model ids only resolve through project overrides) are
+// excluded so the global picker never silently applies a pinned-model downgrade.
+export const GLOBAL_MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] =
+  MODEL_CONFIG_PRESETS.filter((preset) => preset.appliesTo === 'all');
 
 const PRESET_BY_KEY = Object.fromEntries(
   MODEL_CONFIG_PRESETS.map((preset) => [preset.key, preset]),
