@@ -1,6 +1,7 @@
 import {
   type CreateAutomationInput,
   clampError,
+  resolveModelAlias,
   type UpdateAutomationInput,
 } from '@shipcode/shared';
 import { Cron } from 'croner';
@@ -47,7 +48,13 @@ export function registerAutomationHandlers(
 
   handleAutomation('automations:create', async (_e, input: CreateAutomationInput) => {
     validateCron(input.cronExpr);
-    const automation = queries.automations.create(input);
+    // Canonicalize friendly model shorthands (e.g. "opus", "5.5") on save so
+    // every downstream consumer sees a concrete model id.
+    const normalized: CreateAutomationInput =
+      input.executorModelId == null
+        ? input
+        : { ...input, executorModelId: resolveModelAlias(input.executorModelId) };
+    const automation = queries.automations.create(normalized);
     automationScheduler.schedule(automation);
     return automation;
   });
@@ -57,7 +64,11 @@ export function registerAutomationHandlers(
     async (_e, payload: { id: string } & UpdateAutomationInput) => {
       const { id, ...patch } = payload;
       if (patch.cronExpr !== undefined) validateCron(patch.cronExpr);
-      const automation = queries.automations.update(id, patch);
+      const normalized: UpdateAutomationInput =
+        patch.executorModelId == null
+          ? patch
+          : { ...patch, executorModelId: resolveModelAlias(patch.executorModelId) };
+      const automation = queries.automations.update(id, normalized);
       automationScheduler.schedule(automation);
       return automation;
     },

@@ -42,11 +42,13 @@ const OPENROUTER_DISABLED_REASONING_EFFORTS = [
 const OPENROUTER_MODEL_ALIASES: Record<string, string> = {
   'anthropic/claude-sonnet-4-6': OPENROUTER_MODEL_IDS.claudeSonnet46,
   'anthropic/claude-opus-4-6': OPENROUTER_MODEL_IDS.claudeOpus46,
+  'anthropic/claude-opus-4-8': OPENROUTER_MODEL_IDS.claudeOpus48,
 };
 
 const OPENROUTER_ADAPTIVE_CLAUDE_MODELS = new Set<string>([
   OPENROUTER_MODEL_IDS.claudeSonnet46,
   OPENROUTER_MODEL_IDS.claudeOpus46,
+  OPENROUTER_MODEL_IDS.claudeOpus48,
 ]);
 
 const OPENROUTER_NO_REASONING_MODELS = new Set<string>([OPENROUTER_MODEL_IDS.qwen3CoderFree]);
