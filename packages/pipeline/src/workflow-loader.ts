@@ -5,6 +5,10 @@ import { DEFAULT_MAX_RETRY_BACKOFF_MS } from './retry-scheduler';
 
 export const DEFAULT_MAX_CONCURRENT_AGENTS = 10;
 export const DEFAULT_MAX_TURNS = 20;
+export const DEFAULT_FAN_OUT_WORKER_COUNT = 3;
+export const MAX_FAN_OUT_WORKER_COUNT = 8;
+
+export type ExecuteOrchestration = 'single' | 'fan-out';
 
 export type WorkflowLoadWarningCode =
   | 'workflow_file_unreadable'
@@ -32,6 +36,20 @@ export interface WorkflowAgentPolicy {
    * pipeline gives up. Default 20 (matching Symphony §7.1).
    */
   maxTurns: number;
+  /**
+   * Execute-phase orchestration. `single` (default) runs one executor agent.
+   * `fan-out` runs `fanOutWorkerCount` cheap workers in isolated worktrees and
+   * has a judge (Opus by default) pick/merge the best result — opt-in per repo
+   * via `agent.execute_orchestration: fan-out` in WORKFLOW.md.
+   */
+  executeOrchestration: ExecuteOrchestration;
+  /** Number of parallel workers when `executeOrchestration` is `fan-out`. */
+  fanOutWorkerCount: number;
+  /**
+   * Model id for the fan-out judge. `null` falls back to the verifier phase
+   * model. Set to an Opus id to spend the expensive reasoning only on judging.
+   */
+  fanOutJudgeModel: string | null;
 }
 
 export interface WorkflowPolicy {
@@ -58,6 +76,9 @@ export const DEFAULT_WORKFLOW_POLICY: WorkflowPolicy = {
     maxRetryBackoffMs: DEFAULT_MAX_RETRY_BACKOFF_MS,
     maxConcurrentAgentsByState: {},
     maxTurns: DEFAULT_MAX_TURNS,
+    executeOrchestration: 'single',
+    fanOutWorkerCount: DEFAULT_FAN_OUT_WORKER_COUNT,
+    fanOutJudgeModel: null,
   },
   warning: null,
 };
@@ -85,6 +106,21 @@ export function formatUnknownError(error: unknown): string {
  * Parse `agent.max_concurrent_agents_by_state` from front matter.
  * Keys normalized to lowercase; non-positive/non-numeric values silently dropped.
  */
+function parseExecuteOrchestration(raw: unknown): ExecuteOrchestration {
+  return raw === 'fan-out' ? 'fan-out' : 'single';
+}
+
+/** Clamp the fan-out worker count to [1, MAX_FAN_OUT_WORKER_COUNT]. */
+function parseFanOutWorkerCount(raw: unknown): number {
+  const n = positiveInteger(raw);
+  if (n === null) return DEFAULT_FAN_OUT_WORKER_COUNT;
+  return Math.min(n, MAX_FAN_OUT_WORKER_COUNT);
+}
+
+function parseFanOutJudgeModel(raw: unknown): string | null {
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
 function parsePerStateCaps(raw: unknown): Record<string, number> {
   if (!isRecord(raw)) return {};
   const result: Record<string, number> = {};
@@ -173,6 +209,9 @@ export function parseWorkflowPolicy(raw: string, sourcePath: string): WorkflowPo
         positiveInteger(agent.max_retry_backoff_ms) ?? DEFAULT_MAX_RETRY_BACKOFF_MS,
       maxConcurrentAgentsByState: parsePerStateCaps(agent.max_concurrent_agents_by_state),
       maxTurns: positiveInteger(agent.max_turns) ?? DEFAULT_MAX_TURNS,
+      executeOrchestration: parseExecuteOrchestration(agent.execute_orchestration),
+      fanOutWorkerCount: parseFanOutWorkerCount(agent.fan_out_worker_count),
+      fanOutJudgeModel: parseFanOutJudgeModel(agent.fan_out_judge_model),
     },
     warning: null,
   };
