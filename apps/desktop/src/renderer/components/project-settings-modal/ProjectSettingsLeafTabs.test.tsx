@@ -762,7 +762,7 @@ describe('project settings leaf tabs', () => {
       labelSync: { created: [], alreadyPresent: [], failed: [] },
       labelNames: SHIPCODE_DEFAULT_LABELS.map((label) => label.name),
       statusMapping: {
-        todo: { name: 'Todo', color: null },
+        todo: { name: 'Backlog', color: null },
         inProgress: { name: 'In Progress', color: null },
         humanReview: null,
         done: { name: 'Done', color: null },
@@ -794,7 +794,7 @@ describe('project settings leaf tabs', () => {
       />,
     );
 
-    await waitFor(() => expect(screen.getAllByText('Todo').length).toBeGreaterThan(1));
+    await waitFor(() => expect(screen.getAllByText('Backlog').length).toBeGreaterThan(1));
     expect(screen.getAllByText('In Progress').length).toBeGreaterThan(1);
     expect(screen.getAllByText('Done').length).toBeGreaterThan(1);
     expect(screen.getAllByText('not mapped')).toHaveLength(2);

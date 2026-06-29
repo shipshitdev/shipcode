@@ -143,7 +143,7 @@ describe('BoardToolbar', () => {
     expect(onViewChange).toHaveBeenNthCalledWith(2, 'graph');
     expect(onViewChange).toHaveBeenNthCalledWith(3, 'kanban');
 
-    clickButton(view.container, 'Review and align 2 Todo issues');
+    clickButton(view.container, 'Review and align 2 Backlog issues');
     expect(onTriageIssues).toHaveBeenCalledTimes(1);
 
     clickButton(view.container, 'Refresh board');
@@ -214,14 +214,14 @@ describe('BoardToolbar', () => {
     expect(view.container.querySelectorAll('.animate-spin').length).toBeGreaterThan(0);
     expect(view.container.querySelector('.animate-pulse')).not.toBeNull();
 
-    const run = view.container.querySelector('button[title="No eligible todo issues"]');
+    const run = view.container.querySelector('button[title="No eligible backlog issues"]');
     if (!(run instanceof HTMLButtonElement)) throw new Error('Expected disabled run button');
     expect(run.disabled).toBe(true);
     act(() => run.click());
     expect(onAutoRun).not.toHaveBeenCalled();
 
     const triage = view.container.querySelector(
-      'button[title="No unclaimed Todo issues to review"]',
+      'button[title="No unclaimed Backlog issues to review"]',
     );
     if (!(triage instanceof HTMLButtonElement)) throw new Error('Expected disabled triage button');
     expect(triage.disabled).toBe(true);
@@ -253,7 +253,7 @@ describe('BoardToolbar', () => {
       triageCandidateCount: 1,
     });
 
-    clickButton(view.container, 'Review and align 1 Todo issue');
+    clickButton(view.container, 'Review and align 1 Backlog issue');
     expect(onTriageIssues).toHaveBeenCalledTimes(1);
     view.cleanup();
   });

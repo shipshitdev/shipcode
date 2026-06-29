@@ -1,6 +1,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
+  GH_STATUS_OPTION_NAME,
+  GH_STATUS_OPTION_NAMES,
   type GhStatusMapping,
   type GhStatusOption,
   type ProjectReadinessItem,
@@ -259,7 +261,7 @@ function detectStatusMapping(statusField: ProjectFieldNode | undefined): {
   if (statusField?.__typename !== 'ProjectV2SingleSelectField') {
     return {
       mapping: null,
-      missing: ['Todo', 'In Progress', 'Human Review', 'Done', 'Deferred'],
+      missing: [...GH_STATUS_OPTION_NAMES],
       options: [],
     };
   }
@@ -286,11 +288,11 @@ function detectStatusMapping(statusField: ProjectFieldNode | undefined): {
   }
 
   const missing: string[] = [];
-  if (!todo) missing.push('Todo');
-  if (!inProgress) missing.push('In Progress');
-  if (!humanReview) missing.push('Human Review');
-  if (!done) missing.push('Done');
-  if (!deferred) missing.push('Deferred');
+  if (!todo) missing.push(GH_STATUS_OPTION_NAME.todo);
+  if (!inProgress) missing.push(GH_STATUS_OPTION_NAME.in_progress);
+  if (!humanReview) missing.push(GH_STATUS_OPTION_NAME.human_review);
+  if (!done) missing.push(GH_STATUS_OPTION_NAME.done);
+  if (!deferred) missing.push(GH_STATUS_OPTION_NAME.deferred);
   return { mapping: { todo, inProgress, humanReview, deferred, done }, missing, options };
 }
 

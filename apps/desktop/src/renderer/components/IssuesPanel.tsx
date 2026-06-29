@@ -313,7 +313,7 @@ function useIssuesPanelView() {
         tone: 'success',
         message:
           result.consideredCount === 0
-            ? 'No Todo issues need triage.'
+            ? 'No Backlog issues need triage.'
             : `Triaged ${result.consideredCount} issue${result.consideredCount === 1 ? '' : 's'}; applied ${result.appliedCount}.`,
       });
     },
@@ -1091,7 +1091,7 @@ function useIssuesPanelView() {
           setBoardReviewConfirmOpen(false);
           setArchiveFeedback({
             tone: 'pending',
-            message: `Reviewing ${triageCandidateCount} Todo issue${triageCandidateCount === 1 ? '' : 's'} with the triage model…`,
+            message: `Reviewing ${triageCandidateCount} Backlog issue${triageCandidateCount === 1 ? '' : 's'} with the triage model…`,
           });
           triageIssues.mutate(activeProjectId);
         }}

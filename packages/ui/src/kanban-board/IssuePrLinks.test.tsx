@@ -766,7 +766,7 @@ describe('linked PR affordances', () => {
 
     expect(view.container.textContent).toContain('Todo list issue');
     const todoToggle = Array.from(view.container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('Todo'),
+      button.textContent?.includes('Backlog'),
     );
     if (!(todoToggle instanceof HTMLButtonElement)) {
       throw new Error('Expected todo column toggle');

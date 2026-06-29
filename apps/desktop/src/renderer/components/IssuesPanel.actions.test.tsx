@@ -476,7 +476,7 @@ describe('IssuesPanel board actions', () => {
     expect(await screen.findByText('Needs no-op sort')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Trigger triage' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm triage' }));
-    expect(await screen.findByText('No Todo issues need triage.')).toBeInTheDocument();
+    expect(await screen.findByText('No Backlog issues need triage.')).toBeInTheDocument();
 
     failTriage = true;
     fireEvent.click(screen.getByRole('button', { name: 'Trigger triage' }));

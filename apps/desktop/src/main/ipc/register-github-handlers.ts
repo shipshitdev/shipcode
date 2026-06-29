@@ -21,6 +21,7 @@ import {
   buildPrdMetadataLabels,
   clampError,
   deriveGithubIssueUrl,
+  GH_STATUS_OPTION_NAME,
   ISSUE_PIPELINE_STATUS,
   isAgentRoutingLabel,
   isRealGithubIssueNumber,
@@ -1016,7 +1017,7 @@ export function registerGitHubHandlers({
               projectUrl: project.githubProjectUrl,
               metadata: {
                 issueType: 'Feature',
-                status: 'Todo',
+                status: GH_STATUS_OPTION_NAME.todo,
                 priority: 'P3',
                 complexity: prdMetadata.estimatedComplexity,
                 blastRadius: prdMetadata.blastRadius,

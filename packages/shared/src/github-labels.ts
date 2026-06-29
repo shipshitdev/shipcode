@@ -253,6 +253,32 @@ const DONE_STATUSES = new Set<IssuePipelineStatus>([
   ISSUE_PIPELINE_STATUS.closed,
 ]);
 
+// ---------------------------------------------------------------------------
+// Canonical GitHub Projects v2 `Status` single-select option names.
+// Single source of truth for the board-facing column names ShipCode writes and
+// expects. The internal `todo` macro column surfaces as "Backlog" on the board,
+// matching the dev-loop / gh-project-board setup tooling and the label-sync
+// skill. App-side Kanban labels (Agent/Attention) deliberately differ and live
+// in the UI package — these names are the GitHub board vocabulary only.
+// ---------------------------------------------------------------------------
+
+export const GH_STATUS_OPTION_NAME: Record<GhMacroColumn, string> = {
+  todo: 'Backlog',
+  in_progress: 'In Progress',
+  human_review: 'Human Review',
+  done: 'Done',
+  deferred: 'Deferred',
+};
+
+/** Canonical GitHub Status option names in board order. */
+export const GH_STATUS_OPTION_NAMES: readonly string[] = [
+  GH_STATUS_OPTION_NAME.todo,
+  GH_STATUS_OPTION_NAME.in_progress,
+  GH_STATUS_OPTION_NAME.human_review,
+  GH_STATUS_OPTION_NAME.done,
+  GH_STATUS_OPTION_NAME.deferred,
+];
+
 /**
  * Maps an IssuePipelineStatus to the corresponding macro column on the
  * GH Projects v2 Status field.

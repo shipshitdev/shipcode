@@ -6,7 +6,7 @@ The Kanban board lives under the project **Issues** tab. Each column corresponds
 
 | Column | Pipeline state | Contents |
 |--------|----------------|----------|
-| Todo | `todo` | Unclaimed issues with a `shipcode:agent:*` label but no active pipeline |
+| Backlog | `todo` | Unclaimed issues with a `shipcode:agent:*` label but no active pipeline |
 | Agent | `queued`, `planning`, `reviewing`, `revising`, `approval`, `executing`, `testing`, `verifying`, `shipping` | Work the runtime can continue without a new human decision. Approved-but-capacity-limited runs appear in the `Waiting` section. |
 | Attention | `clarifying`, `approval`, `paused`, `failed` | Work that needs a human decision, answer, resume, or retry. |
 | Done | `completed`, `closed` | `completed`: ShipCode finished and the PR path is ready. `closed`: the issue is explicitly closed/finalized and ready to archive. |
@@ -28,21 +28,21 @@ After you approve a run, it no longer stays under the human approval section. If
 
 ## Drag to launch
 
-Drag any Todo card into **Planning** to start the pipeline on that issue. The drag honors the `shipcode:agent:*` label on the GitHub issue and spawns the correct executor unless a narrower project or issue override applies.
+Drag any Backlog card into **Planning** to start the pipeline on that issue. The drag honors the `shipcode:agent:*` label on the GitHub issue and spawns the correct executor unless a narrower project or issue override applies.
 
 The Kanban component lives in [`packages/ui/src/KanbanBoard.tsx`](https://github.com/shipshitdev/shipcode/blob/master/packages/ui/src/KanbanBoard.tsx) and is mounted by [`apps/desktop/src/renderer/components/IssuesPanel.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/components/IssuesPanel.tsx).
 
 ## List view
 
-Click the toggle in the Kanban header to switch to a flat list view. The list mirrors the same column structure as Todo / Agent / Attention / Done / Deferred, including the Done column's `Completed` and `Closed` sub-sections. Use list view when you have more than a handful of concurrent runs and want a denser layout.
+Click the toggle in the Kanban header to switch to a flat list view. The list mirrors the same column structure as Backlog / Agent / Attention / Done / Deferred, including the Done column's `Completed` and `Closed` sub-sections. Use list view when you have more than a handful of concurrent runs and want a denser layout.
 
 The header also has a `Needs approval` filter. Enable it to show only issues whose effective workflow will pause for human approval before execution. Approved runs that are only waiting for execution capacity are excluded from this filter.
 
 ## Board review and auto-run
 
-The board can run model-assisted triage over Todo issues. The triage model classifies priority and can auto-apply high-confidence labels using the threshold configured in **Settings → Pipeline → Models → Issue triage**.
+The board can run model-assisted triage over Backlog issues. The triage model classifies priority and can auto-apply high-confidence labels using the threshold configured in **Settings → Pipeline → Models → Issue triage**.
 
-Auto-run starts matching Todo issues without manually dragging each card. The global GitHub settings control priority filters and max tasks per run, while the project runtime capacity controls how many executions can run at once.
+Auto-run starts matching Backlog issues without manually dragging each card. The global GitHub settings control priority filters and max tasks per run, while the project runtime capacity controls how many executions can run at once.
 
 ## Card actions
 
