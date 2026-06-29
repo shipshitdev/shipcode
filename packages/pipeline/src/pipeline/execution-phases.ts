@@ -19,6 +19,7 @@ import {
 import { WorktreeManager } from '@shipcode/git';
 import {
   EXECUTION_PHASES,
+  inferProviderFromModel,
   isRealGithubIssueNumber,
   MAX_NODE_VERIFICATION_RETRIES,
   MAX_TEST_RETRIES,
@@ -48,6 +49,7 @@ import {
   worktreeHasChanges,
 } from './execution-phase-utils';
 import { createShippingPhaseHandlers } from './execution-shipping-phases';
+import { buildFanOutJudgePrompt, parseWinnerLabel, runFanOut } from './fan-out-executor';
 
 export {
   buildContinuationPrompt,
@@ -95,6 +97,139 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
     contextHelpers,
     runtime,
   });
+
+  /**
+   * Dynamic-workflow (fan-out) execute: run `fanOutWorkerCount` workers, each in
+   * its own isolated worktree off the base branch, have a judge pick the best,
+   * then worktree-swap — the winner's worktree becomes the thread's and the
+   * losers (plus the original primary worktree) are torn down. Returns the same
+   * shape as `runProviderPhase` so the caller is unchanged.
+   *
+   * EXPERIMENTAL, opt-in via `agent.execute_orchestration: fan-out` in
+   * WORKFLOW.md (default `single`). Certify on a real run before relying on it.
+   */
+  async function runFanOutExecute(
+    context: PipelineContext,
+    executionPrompt: string,
+    executeMaterials: PromptMaterial[],
+    phaseHints: { reasoningEffort?: PipelineContext['plannerReasoningEffort'] },
+  ): Promise<{ rawOutput: string; exitCode: number; resolvedModel?: string }> {
+    const agentPolicy = context.workflowPolicy.agent;
+    const appSettings = deps.settings.get();
+    const wm = new WorktreeManager(context.projectPath, {
+      worktreeRoot: appSettings.worktreeRoot,
+      branchFormat: appSettings.worktreeBranchFormat,
+    });
+    const baseBranch = context.baseBranch || undefined;
+    const signal = context.abort.signal;
+    const judgeModelId = agentPolicy.fanOutJudgeModel;
+    const created: Array<{ label: string; worktreePath: string; branch: string }> = [];
+
+    const captureDiff = async (cwd: string): Promise<string> => {
+      await runShellCommand(context.threadId, cwd, 'git add -A', signal).catch(() => undefined);
+      const r = await runShellCommand(context.threadId, cwd, 'git diff --cached', signal).catch(
+        () => ({ output: '' }),
+      );
+      return r.output ?? '';
+    };
+
+    const result = await runFanOut({
+      workerCount: agentPolicy.fanOutWorkerCount,
+      maxConcurrent: Math.max(1, agentPolicy.maxConcurrentAgents),
+      runWorker: async (i) => {
+        const label = `worker-${i + 1}`;
+        const wt = await wm.create(
+          `${context.threadId}-fan-${i + 1}`,
+          `[fan-out] ${context.threadId} ${label}`,
+          baseBranch,
+        );
+        created.push({ label, worktreePath: wt.worktreePath, branch: wt.branch });
+        const workerCtx: PipelineContext = { ...context, worktreePath: wt.worktreePath };
+        const prep = await prepareWorktree(workerCtx, 'execute');
+        if (!prep.ok)
+          return { label, rawOutput: `worker setup failed: ${prep.error}`, exitCode: 1 };
+        const resp = await runProviderPhase(
+          workerCtx,
+          buildPhasePayload(workerCtx, 'execute'),
+          executionPrompt,
+          executeMaterials,
+          phaseHints,
+        );
+        return {
+          label,
+          rawOutput: resp.rawOutput,
+          exitCode: resp.exitCode,
+          resolvedModel: resp.resolvedModel,
+          diff: await captureDiff(wt.worktreePath),
+        };
+      },
+      runJudge: async (candidates) => {
+        // Judge in a throwaway worktree so any stray edits never touch a winner.
+        const judgeWt = await wm.create(
+          `${context.threadId}-fan-judge`,
+          `[fan-out] ${context.threadId} judge`,
+          baseBranch,
+        );
+        try {
+          const judgeCtx: PipelineContext = {
+            ...context,
+            worktreePath: judgeWt.worktreePath,
+            ...(judgeModelId
+              ? {
+                  executorModel: (inferProviderFromModel(judgeModelId) ??
+                    context.executorModel) as PipelineContext['executorModel'],
+                  executorModelOverride: null,
+                  executorModelIdOverride: judgeModelId,
+                }
+              : {}),
+          };
+          // With an explicit judge model use the execute payload (carries the
+          // override); otherwise judge as the verifier phase (its configured model).
+          const payload = buildPhasePayload(judgeCtx, judgeModelId ? 'execute' : 'verify');
+          const resp = await runProviderPhase(
+            judgeCtx,
+            payload,
+            buildFanOutJudgePrompt(executionPrompt, candidates),
+            [],
+            phaseHints,
+          );
+          return {
+            rawOutput: resp.rawOutput,
+            exitCode: resp.exitCode,
+            resolvedModel: resp.resolvedModel,
+            winnerLabel: parseWinnerLabel(resp.rawOutput, candidates),
+          };
+        } finally {
+          await wm.remove(judgeWt.worktreePath, judgeWt.branch).catch(() => undefined);
+        }
+      },
+      promoteWinner: async (winner) => {
+        const chosen = created.find((c) => c.label === winner.label);
+        if (!chosen) return;
+        const prior = deps.threads.getById(context.threadId);
+        context.worktreePath = chosen.worktreePath;
+        deps.threads.setWorktree(context.threadId, chosen.branch, chosen.worktreePath);
+        for (const c of created) {
+          if (c.label !== winner.label) {
+            await wm.remove(c.worktreePath, c.branch).catch(() => undefined);
+          }
+        }
+        if (
+          prior?.worktreePath &&
+          prior.worktreeBranch &&
+          prior.worktreePath !== chosen.worktreePath
+        ) {
+          await wm.remove(prior.worktreePath, prior.worktreeBranch).catch(() => undefined);
+        }
+      },
+    });
+
+    return {
+      rawOutput: result.rawOutput,
+      exitCode: result.exitCode,
+      resolvedModel: result.resolvedModel,
+    };
+  }
 
   function isSameProject(
     summary: ReturnType<typeof contextHelpers.listActive>[number],
@@ -798,10 +933,20 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
 
     try {
-      const response = await runProviderPhase(context, payload, executionPrompt, executeMaterials, {
+      const executeHints = {
         reasoningEffort:
           activeTaskNode?.suggestedReasoningEffort ?? context.phaseReasoningEfforts.execute,
-      });
+      };
+      const response =
+        context.workflowPolicy.agent.executeOrchestration === 'fan-out'
+          ? await runFanOutExecute(context, executionPrompt, executeMaterials, executeHints)
+          : await runProviderPhase(
+              context,
+              payload,
+              executionPrompt,
+              executeMaterials,
+              executeHints,
+            );
 
       if (context.cancelled) return { next: 'paused' };
 

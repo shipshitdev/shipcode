@@ -120,6 +120,48 @@ Plan {{ issue.title }} now.
     expect(policy.agent.maxRetryBackoffMs).toBe(45_000);
   });
 
+  describe('execute_orchestration (fan-out)', () => {
+    it('defaults to single execution with no fan-out config', () => {
+      const policy = parseWorkflowPolicy(
+        '---\nagent:\n  max_turns: 3\n---\nbody',
+        '/repo/WORKFLOW.md',
+      );
+      expect(policy.agent.executeOrchestration).toBe('single');
+      expect(policy.agent.fanOutWorkerCount).toBe(3);
+      expect(policy.agent.fanOutJudgeModel).toBeNull();
+    });
+
+    it('parses an opt-in fan-out block', () => {
+      const policy = parseWorkflowPolicy(
+        `---
+agent:
+  execute_orchestration: fan-out
+  fan_out_worker_count: 5
+  fan_out_judge_model: claude-opus-4-8
+---
+body`,
+        '/repo/WORKFLOW.md',
+      );
+      expect(policy.agent.executeOrchestration).toBe('fan-out');
+      expect(policy.agent.fanOutWorkerCount).toBe(5);
+      expect(policy.agent.fanOutJudgeModel).toBe('claude-opus-4-8');
+    });
+
+    it('clamps an excessive worker count and ignores unknown orchestration values', () => {
+      const policy = parseWorkflowPolicy(
+        `---
+agent:
+  execute_orchestration: wat
+  fan_out_worker_count: 99
+---
+body`,
+        '/repo/WORKFLOW.md',
+      );
+      expect(policy.agent.executeOrchestration).toBe('single');
+      expect(policy.agent.fanOutWorkerCount).toBe(8); // MAX_FAN_OUT_WORKER_COUNT
+    });
+  });
+
   it('returns null promptTemplate when front matter has no body', () => {
     const policy = parseWorkflowPolicy(
       `---
