@@ -67,56 +67,6 @@ Edit those files, then run: bash scripts/sync-agent-memory.sh
 - If you honestly can't find 3 examples, that means you're introducing a new pattern — flag it explicitly before writing.
 
 ---
-### genfeed_console_project.md
-# genfeedai/console — project brief
-
-last_verified: 2026-06-20
-status: stable
-
-## One-liner
-
-`genfeedai/console` is Vincent's **private operator console** for running his
-LoRA-powered content business. It is **NOT** a duplicate of the monorepo
-`genfeed.ai/apps/admin`.
-
-## The boundary (important — these are two different products)
-
-- **console** = operator surface for **LoRA / fleet / model delivery**. Two sides of
-  the same machine:
-  1. **Customer done-for-you delivery** — customers who bought a trained LoRA / DFY
-     content (managed via CRM).
-  2. **Own AI influencers** — Vincent's own Instagram personas (e.g. Shayla), each
-     with its own LoRA, set up + run from console on the same AWS fleet.
-  Everything it manages is backed by a trained LoRA on AWS EC2 fleet instances.
-- **genfeed.ai/apps/admin** = the **SaaS platform management + community/self-hosted
-  admin** for open-source users running their own Genfeed. Stays in the monorepo.
-
-Boundary test: operating LoRA/fleet/model delivery → **console**; managing the
-Genfeed SaaS product itself → **monorepo admin**.
-
-## Facts
-
-- Hosted at `console.genfeed.ai`, **email-allowlist gated** (`CONSOLE_ALLOWED_EMAILS`,
-  enforced in `apps/admin/proxy.ts`), Vincent-only by default. Repo stays **private**.
-- Active scope (PR #20/#21, 2026-06-20): **Customers/CRM + LoRA + Fleet**.
-  `HOME_ROUTE = /crm/leads`. SaaS-admin surfaces were cut.
-- **Standalone**: `apps/admin` was vendored from genfeed.ai checkpoint `b3ed62cb6`;
-  0 genfeed refs in lockfile. No symlinks back into `../genfeed.ai`. `bunfig.toml`
-  `linker = "hoisted"`.
-- Business model behind it: DFY "operated content engine" — see
-  `console/docs/business/genfeed-cloud-offer.md`.
-- v1 milestone: **"v1 — Sell-ready: Fleet + LoRA delivery"** (#16 Fleet P0,
-  #22 finish standalone, LoRA delivery issues).
-
-## Authoritative docs in the repo
-
-- `console/CLAUDE.md` — agent-facing scope + boundary (source of truth)
-- `console/docs/console-launch.md` — domains, access gate, launch order
-- Do **not** trust `console/README.md` history or
-  `.agents/memory/codebase-analysis.md` (2026-06-18 audit) where they say
-  "localhost-only" or "remove CRM" — both reversed; banners added.
-
----
 ### local_verification_scope.md
 
 **Rule:** Never run full or heavy test suites locally — on ANY machine, including the Mac Studio. Long verification (full package test suites, workspace typecheck/build gates, baseline comparison runs) goes through GitHub Actions: push the branch and use PR CI, or dispatch the relevant workflow (`gh workflow run full-suite.yml --ref <branch>`, `ci.yml`, `e2e.yml`, etc.).
@@ -128,20 +78,6 @@ Genfeed SaaS product itself → **monorepo admin**.
 - Everything heavier (package-wide `bun run test --filter=...`, workspace `bun type-check`, `bunx turbo lint`, full builds, suite baselines): push and let GitHub Actions run it, or `gh workflow run` a dispatchable workflow on the branch.
 - Need a master baseline for failure triage? Dispatch the same workflow on `master` (or read its most recent run) instead of building a local baseline worktree.
 - Poll CI results with `gh run watch` / `gh pr checks` rather than re-running anything locally.
-
----
-### plan_agents_use_opus.md
-
-Planning is judgment-dense and token-light — route it to the strongest reasoner available:
-
-- **Session model is the strongest available** (Fable 5 until 2026-07-07; **Opus 4.8 from 2026-07-08** — Fable goes API-only and Vincent isn't paying API prices): plan in main context at `high` effort. Delegating planning to a subagent is a reasoning downgrade. Spawn `Plan` subagents only to compare independent plans in parallel, and pin them `model="opus"`.
-- **Session model weaker than Opus** (e.g., a Sonnet session): always pass `model="opus"` on `Agent(subagent_type="Plan", ...)` calls (original rule, confirmed by Vincent 2026-04-10).
-
-**Why:** Plan agents do the heavy architectural thinking — implementations, tradeoffs, edge cases. Sonnet produces shallower plans; under a Fable session, so does Opus relative to just planning in main context.
-
-**Enforcement:** CLAUDE.md guidance only. (An earlier version of this memory claimed a `PreToolUse` hook enforced this in `~/.claude/settings.json` — verified 2026-07-02 that no such hook exists.)
-
-See also: "Model routing & orchestration" in `~/.claude/CLAUDE.md`.
 
 ---
 ### user_cost_awareness.md
@@ -206,6 +142,12 @@ Building toward fully autonomous AI dev — agents that ship without human inter
 - When intent is clear, implement — don't stall on "would you like me to…".
 - "Add more guardrails / more tests / more validation" is always welcome — it's the path to autonomy.
 - Never suggest "you could write this yourself" — that's the opposite of the goal.
+
+---
+### Read on demand (low-priority — open the file when the topic comes up)
+
+- `~/.agents/memory/genfeed_console_project.md` — genfeedai/console = private operator console for LoRA/fleet/model delivery (console.genfeed.ai, email-gated) — NOT the monorepo genfeed.ai/apps/admin (SaaS/community admin). Boundary test — operating LoRA/fleet/delivery → console; managing the Genfeed SaaS product → monorepo admin
+- `~/.agents/memory/plan_agents_use_opus.md` — Planning model routing (Claude Code only — Codex spawns no Claude subagents) — strongest-model sessions plan in main context; Plan subagents pin model="opus"
 
 
 ## Repo memory (from .agents/memory/)
