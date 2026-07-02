@@ -12,6 +12,13 @@
 # respective CLAUDE.md / GEMINI.md bootstrap files, so this script is only
 # needed for the Codex side of the triangle.
 #
+# Size control (Codex hard-truncates AGENTS.md at 32 KiB):
+#   - YAML frontmatter is stripped from inlined bodies (metadata stays in the
+#     source files; Codex doesn't need name/type/last_verified).
+#   - A memory file with `priority: low` in its frontmatter is NOT inlined —
+#     it gets a one-line description + path pointer under "Read on demand",
+#     and Codex reads the source file when the topic comes up.
+#
 # Idempotent: running twice produces identical output.
 
 set -euo pipefail
@@ -40,11 +47,32 @@ Edit those files, then run: bash scripts/sync-agent-memory.sh
 EOF
 }
 
+# Read a scalar field from a file's YAML frontmatter (empty if absent).
+fm_field() {
+  local file="$1" key="$2"
+  awk -v key="$key" '
+    NR == 1 { if ($0 != "---") exit; next }
+    $0 == "---" { exit }
+    index($0, key ": ") == 1 { print substr($0, length(key) + 3); exit }
+  ' "$file"
+}
+
+# Print a file's body with its YAML frontmatter block removed.
+strip_frontmatter() {
+  awk '
+    NR == 1 && $0 == "---" { fm = 1; next }
+    fm == 1 { if ($0 == "---") fm = 2; next }
+    { print }
+  ' "$1"
+}
+
 concat_memory_dir() {
   local dir="$1"
   local section_label="$2"
+  local pointer_root="$3"  # path prefix shown in "read on demand" pointers
   [[ -d "$dir" ]] || return 0
   local count=0
+  local pointers=()
   for f in "$dir"/*.md; do
     [[ -e "$f" ]] || continue
     local base
@@ -57,11 +85,22 @@ concat_memory_dir() {
     if [[ $count -eq 0 ]]; then
       printf '\n## %s\n\n' "$section_label"
     fi
-    printf -- '---\n### %s\n\n' "$base"
-    cat "$f"
-    printf '\n'
     count=$((count + 1))
+    if [[ "$(fm_field "$f" priority)" == "low" ]]; then
+      local desc
+      desc="$(fm_field "$f" description)"
+      pointers+=("- \`${pointer_root}/${base}\` — ${desc:-no description}")
+      continue
+    fi
+    printf -- '---\n### %s\n' "$base"
+    strip_frontmatter "$f"
+    printf '\n'
   done
+  if [[ ${#pointers[@]} -gt 0 ]]; then
+    printf -- '---\n### Read on demand (low-priority — open the file when the topic comes up)\n\n'
+    printf '%s\n' "${pointers[@]}"
+    printf '\n'
+  fi
 }
 
 size_check() {
@@ -82,14 +121,14 @@ size_check() {
 mkdir -p "$(dirname "$GLOBAL_OUTPUT")"
 {
   write_header "global (Vincent)"
-  concat_memory_dir "$GLOBAL_MEMORY_DIR" "Global memory"
+  concat_memory_dir "$GLOBAL_MEMORY_DIR" "Global memory" "~/.agents/memory"
 } > "$GLOBAL_OUTPUT"
 
 # Repo → <repo>/AGENTS.md (global first, then repo)
 {
   write_header "shipcode"
-  concat_memory_dir "$GLOBAL_MEMORY_DIR" "Global memory (from ~/.agents/memory/)"
-  concat_memory_dir "$REPO_MEMORY_DIR" "Repo memory (from .agents/memory/)"
+  concat_memory_dir "$GLOBAL_MEMORY_DIR" "Global memory (from ~/.agents/memory/)" "~/.agents/memory"
+  concat_memory_dir "$REPO_MEMORY_DIR" "Repo memory (from .agents/memory/)" ".agents/memory"
 } > "$REPO_OUTPUT"
 
 size_check "$GLOBAL_OUTPUT" "~/.codex/AGENTS.md"

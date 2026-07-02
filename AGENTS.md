@@ -13,16 +13,7 @@ Edit those files, then run: bash scripts/sync-agent-memory.sh
 ## Global memory (from ~/.agents/memory/)
 
 ---
-### feedback_action_over_talk.md
-
----
-name: feedback_action_over_talk
-description: Direct, no fluff — implement when intent is clear, don't over-ask
-type: feedback
-status: active
-last_verified: 2026-04-10
-topics: [communication, workflow]
----
+### action_over_talk.md
 
 **Rule:** Direct, no fluff. Implement when intent is clear. Don't over-ask.
 
@@ -36,16 +27,20 @@ topics: [communication, workflow]
 - When instinct says "I should check one more time" but the intent is obvious, don't check — just act.
 
 ---
-### feedback_do_not_ask_to_run.md
+### auto_pr_after_completion.md
+
+**Rule:** When a coding task reaches completed implementation + focused verification, open the GitHub PR automatically. Do not wait for a separate "make a PR" prompt.
+
+**Why:** Vincent wants autonomous completion. Requiring a second instruction to publish review-ready work creates avoidable friction and contradicts the zero-code / agent-ships-the-work operating model.
+
+**How to apply:**
+- After finishing code, tests, and checks, create or reuse a scoped branch, commit intentional changes, push, and open a ready-for-review PR.
+- If the work is stacked on another open PR, open a stacked PR against that branch to keep the diff reviewable.
+- Still do not deploy, run destructive commands, or push directly to protected/default branches unless explicitly instructed.
+- If the working tree contains unrelated user changes, stage only the intended scope; ask only if the PR scope cannot be separated safely.
 
 ---
-name: feedback_do_not_ask_to_run
-description: Just run read-only commands — no "would you like me to…?" for reads
-type: feedback
-status: active
-last_verified: 2026-04-10
-topics: [communication, autonomy]
----
+### do_not_ask_to_run.md
 
 **Rule:** If read-only access exists (local filesystem, SSH, git status, curl to an API), **just run the command**. Don't ask permission for reads.
 
@@ -58,16 +53,7 @@ topics: [communication, autonomy]
 - "I need to read Y to understand" → read Y, don't announce the read first.
 
 ---
-### feedback_follow_codebase_patterns.md
-
----
-name: feedback_follow_codebase_patterns
-description: Find 3+ real examples before writing new code — match the existing shape
-type: feedback
-status: active
-last_verified: 2026-04-10
-topics: [code-quality, conventions]
----
+### follow_codebase_patterns.md
 
 **Rule:** Find at least 3 real examples of similar code in the codebase before writing anything new. Match their shape (naming, structure, error handling, test layout, import style).
 
@@ -81,77 +67,135 @@ topics: [code-quality, conventions]
 - If you honestly can't find 3 examples, that means you're introducing a new pattern — flag it explicitly before writing.
 
 ---
-### feedback_plan_agents_use_opus.md
+### genfeed_console_project.md
+# genfeedai/console — project brief
+
+last_verified: 2026-06-20
+status: stable
+
+## One-liner
+
+`genfeedai/console` is Vincent's **private operator console** for running his
+LoRA-powered content business. It is **NOT** a duplicate of the monorepo
+`genfeed.ai/apps/admin`.
+
+## The boundary (important — these are two different products)
+
+- **console** = operator surface for **LoRA / fleet / model delivery**. Two sides of
+  the same machine:
+  1. **Customer done-for-you delivery** — customers who bought a trained LoRA / DFY
+     content (managed via CRM).
+  2. **Own AI influencers** — Vincent's own Instagram personas (e.g. Shayla), each
+     with its own LoRA, set up + run from console on the same AWS fleet.
+  Everything it manages is backed by a trained LoRA on AWS EC2 fleet instances.
+- **genfeed.ai/apps/admin** = the **SaaS platform management + community/self-hosted
+  admin** for open-source users running their own Genfeed. Stays in the monorepo.
+
+Boundary test: operating LoRA/fleet/model delivery → **console**; managing the
+Genfeed SaaS product itself → **monorepo admin**.
+
+## Facts
+
+- Hosted at `console.genfeed.ai`, **email-allowlist gated** (`CONSOLE_ALLOWED_EMAILS`,
+  enforced in `apps/admin/proxy.ts`), Vincent-only by default. Repo stays **private**.
+- Active scope (PR #20/#21, 2026-06-20): **Customers/CRM + LoRA + Fleet**.
+  `HOME_ROUTE = /crm/leads`. SaaS-admin surfaces were cut.
+- **Standalone**: `apps/admin` was vendored from genfeed.ai checkpoint `b3ed62cb6`;
+  0 genfeed refs in lockfile. No symlinks back into `../genfeed.ai`. `bunfig.toml`
+  `linker = "hoisted"`.
+- Business model behind it: DFY "operated content engine" — see
+  `console/docs/business/genfeed-cloud-offer.md`.
+- v1 milestone: **"v1 — Sell-ready: Fleet + LoRA delivery"** (#16 Fleet P0,
+  #22 finish standalone, LoRA delivery issues).
+
+## Authoritative docs in the repo
+
+- `console/CLAUDE.md` — agent-facing scope + boundary (source of truth)
+- `console/docs/console-launch.md` — domains, access gate, launch order
+- Do **not** trust `console/README.md` history or
+  `.agents/memory/codebase-analysis.md` (2026-06-18 audit) where they say
+  "localhost-only" or "remove CRM" — both reversed; banners added.
 
 ---
-name: feedback_plan_agents_use_opus
-description: Always use model="opus" when spawning Plan subagents via the Agent tool
-type: feedback
-last_verified: 2026-04-10
-topics: [model-selection, planning, subagents]
----
+### local_verification_scope.md
 
-When dispatching an `Agent` tool call with `subagent_type="Plan"`, always pass `model="opus"`.
+**Rule:** Never run full or heavy test suites locally — on ANY machine, including the Mac Studio. Long verification (full package test suites, workspace typecheck/build gates, baseline comparison runs) goes through GitHub Actions: push the branch and use PR CI, or dispatch the relevant workflow (`gh workflow run full-suite.yml --ref <branch>`, `ci.yml`, `e2e.yml`, etc.).
 
-**Why:** Plan agents do the heavy architectural thinking — they design implementations, evaluate tradeoffs, and identify edge cases. Sonnet produces shallower plans. Vincent confirmed this as the desired default on 2026-04-10. A `PreToolUse` hook in `~/.claude/settings.json` also enforces this automatically as a backstop.
+**Why:** Vincent corrected this on 2026-07-02 after a session ran the full `@genfeedai/api` suite locally multiple times plus master-baseline worktree reruns ("do not run tests on local!!! you are killing my CPU!!! use gh actions!"). This supersedes the earlier Mac-Studio exception — heavy local runs are no longer allowed anywhere.
 
 **How to apply:**
-- `Agent(subagent_type="Plan", model="opus", prompt="...")` — always
-- Explore agents stay on Sonnet (fast lookups, no architecture decisions needed)
-- General-purpose agents default to session model unless heavy reasoning is needed
+- Locally allowed: running a SINGLE spec file you are actively iterating on, package-scoped lint on changed files, quick static checks.
+- Everything heavier (package-wide `bun run test --filter=...`, workspace `bun type-check`, `bunx turbo lint`, full builds, suite baselines): push and let GitHub Actions run it, or `gh workflow run` a dispatchable workflow on the branch.
+- Need a master baseline for failure triage? Dispatch the same workflow on `master` (or read its most recent run) instead of building a local baseline worktree.
+- Poll CI results with `gh run watch` / `gh pr checks` rather than re-running anything locally.
+
+---
+### plan_agents_use_opus.md
+
+Planning is judgment-dense and token-light — route it to the strongest reasoner available:
+
+- **Session model is the strongest available** (Fable 5 until 2026-07-07; **Opus 4.8 from 2026-07-08** — Fable goes API-only and Vincent isn't paying API prices): plan in main context at `high` effort. Delegating planning to a subagent is a reasoning downgrade. Spawn `Plan` subagents only to compare independent plans in parallel, and pin them `model="opus"`.
+- **Session model weaker than Opus** (e.g., a Sonnet session): always pass `model="opus"` on `Agent(subagent_type="Plan", ...)` calls (original rule, confirmed by Vincent 2026-04-10).
+
+**Why:** Plan agents do the heavy architectural thinking — implementations, tradeoffs, edge cases. Sonnet produces shallower plans; under a Fable session, so does Opus relative to just planning in main context.
+
+**Enforcement:** CLAUDE.md guidance only. (An earlier version of this memory claimed a `PreToolUse` hook enforced this in `~/.claude/settings.json` — verified 2026-07-02 that no such hook exists.)
+
+See also: "Model routing & orchestration" in `~/.claude/CLAUDE.md`.
 
 ---
 ### user_cost_awareness.md
 
----
-name: user_cost_awareness
-description: Cost-constrained — Sonnet for bots, Opus for local heavy work; one account post-consolidation
-type: user
-status: active
-last_verified: 2026-04-10
-topics: [cost, model-selection]
----
+Cost-aware, not cost-starved: dual $200 Max plans (Claude + OpenAI/Codex). Cost = quota impact. Full routing table lives in `~/.claude/CLAUDE.md` ("Model routing & orchestration"); this is the summary:
 
-Survival-mode cost awareness. Usage limits hit regularly.
+- **Main model** (`high` effort) — Fable 5 until 2026-07-07, **Opus 4.8 from 2026-07-08** (Fable goes API-only; not paying API prices). Judgment-dense, token-light work only: plans, architecture, synthesis, review verdicts. Volume work never runs in its context.
+- **Sonnet** — default for implementation subagents, tests, mechanical/context-heavy work, background bots.
+- **Opus** — hard cross-file reasoning subagents, adversarial verifiers.
+- **Haiku** — small lookups, formatting, cheap classification.
+- **Codex/gpt-5.5** (via the official `openai/codex-plugin-cc` plugin) — bulk clear-spec implementation, migrations, data analysis; blind second perspective on high-stakes decisions.
 
-- **Sonnet** for automated/background bots and routine orchestration.
-- **Opus** for local heavy work, architecture, planning, hard debugging.
-- **Haiku** is fine for small lookups, formatting, cheap classification.
-
-Historically there were two Anthropic accounts (`genfeedai` + `shipshitdev`) with a `claudeswitch` helper; Vincent has **one account now**. `claudeswitch` is likely obsolete — verify before recommending.
+Two Anthropic accounts (`ship`/`gen` shell toggles — see `user_profile.md`); use whichever the current session is authed as.
 
 **How to apply:**
-- Don't burn Opus on trivial tasks (file lookups, string replacements, CI output paraphrasing).
-- When delegating to subagents, match model to task: research/exploration → Sonnet is usually enough; architecture/review → Opus.
-- Long-running background tasks should prefer Sonnet by default.
+- Don't burn the main model on trivia (file lookups, string replacements, CI output paraphrasing) — delegate and get a summary back.
+- Defaults, not limits: judge the output, not the price tag. Escalate to a smarter model without asking when a cheaper one misses the bar.
+- Long-running background tasks prefer Sonnet by default.
 
 ---
 ### user_profile.md
 
----
-name: user_profile
-description: Vincent — solo founder at shipshit.dev + genfeed.ai, former startup CTO (1 exit), handle decod3rs
-type: user
-status: active
-last_verified: 2026-04-10
-topics: [identity, background]
----
-
-Vincent is a solo founder running shipshit.dev and genfeed.ai. Former startup studio CTO with one exit. Master's in Computer Science (Project Management). Handle: `decod3rs`. Currently has one Anthropic account (legacy `.claude-genfeedai/` and `.claude-shipshitdev/` dirs are obsolete).
+Vincent is a solo founder running shipshit.dev and genfeed.ai, and builds vitae.ai for client Gateway Ventures. Former startup studio CTO with one exit. Master's in Computer Science (Project Management). Handle: `decod3rs`. **Two Anthropic accounts** — `~/.claude-shipshitdev` (ship) and `~/.claude-genfeedai` (gen) — toggled with the `ship`/`gen` shell commands. Both symlink skills/commands/settings/CLAUDE.md to `~/.claude`, so shared config lives in `~/.claude`; only the login/auth differs per dir.
 
 **How to apply:** When explaining technical choices, you can go deep — he has CTO-level experience. When weighing trade-offs, frame them in terms of founder concerns (time, cost, shipping velocity) not academic best practices.
 
 ---
-### user_zero_code_goal.md
+### user_tech_stack.md
+
+Shared stack across Vincent's active projects. Source of truth is each repo's `package.json` + `CLAUDE.md`; re-verify against those if this file is >30 days old.
+
+## Active projects
+
+- **shipshit.dev** — skills marketplace + agent tooling.
+- **genfeed.ai** — `github.com/genfeedai` (workspace monorepo: `genfeed.ai` app, `console`, `crm`, `marketplace`, `agents`, …). **Trunk-based**: short-lived branches → PR → `master` (the trunk). Releases are tags cut from `master` (the `/release` skill); `staging`/`production` are deploy environments, not branches.
+- **vitae.ai** — `github.com/Gateway-Ventures` (client, Gateway Ventures). Bun + Turborepo monorepo (`apps/app|api|workers|admin|web|docs|mcp|cli|desktop`, `packages/ui|db|…`). Deploys to **GCP Cloud Run**. Skills managed via `skills-lock.json` + `bunx skills experimental_install`.
+
+## Stack
+
+- **Runtime / package manager:** Bun (never npm/yarn/pnpm). **Turborepo** monorepos.
+- **Frontend:** Next.js 16, React 19, Tailwind v4, react-hook-form. UI from `packages/ui` + `@shipshitdev/ui` (shadcn primitives where used) — prefer these over raw HTML / app-local primitives.
+- **Backend:** NestJS 11 (BullMQ, websockets, swagger, passport, schedule, cache-manager, terminus).
+- **Database:** **Prisma 7 + PostgreSQL** (pg adapter).
+- **Infra / services:** Redis + BullMQ (queues/workers), Better Auth, Stripe (payments), Sentry (`@sentry/nestjs` + `@sentry/nextjs`).
+- **Pre-push (genfeed):** `biome check --write`, `turbo lint`, `bun type-check`, scoped tests (`bun run test --filter=<changed-pkg>`).
+
+## How to apply
+
+- Assume Prisma/Postgres for data-layer code.
+- Assume Bun + Turbo monorepo layout; find the right `apps/*` or `packages/*` before adding code.
+- Reach for existing UI primitives and codebase patterns before inventing new ones.
 
 ---
-name: user_zero_code_goal
-description: Vincent does not write code — AI writes all code, he architects and reviews
-type: user
-status: active
-last_verified: 2026-04-10
-topics: [working-style, autonomy]
----
+### user_zero_code_goal.md
 
 **Zero-code goal.** Vincent does not write code himself. His job is architect, director, and reviewer. AI (you) writes all the code.
 
@@ -167,75 +211,13 @@ Building toward fully autonomous AI dev — agents that ship without human inter
 ## Repo memory (from .agents/memory/)
 
 ---
-### agents.md
-
----
-name: project_custom_agents
-description: Custom Claude Code sub-agents in .claude/agents/ — routing rules and when to use each
-type: project
-status: active
-last_verified: 2026-05-07
-topics: [agents, workflow, delegation]
----
-
-Nine custom sub-agents live in `.claude/agents/`. Use `subagent_type` matching the agent filename (without `.md`).
-
-## Agent roster
-
-| Agent | Model | Mode | When to use |
-|-------|-------|------|-------------|
-| `planner` | opus | read-only | Architecture decisions, feature scoping, multi-file refactor plans, complex design tradeoffs |
-| `explorer` | haiku | read-only | Quick codebase research, grep, pattern finding, "where is X" / "how does X work" |
-| `implementer` | sonnet | full | General implementation spanning multiple packages or not fitting a specialist |
-| `pipeline-dev` | sonnet | full | Changes to `packages/pipeline`, `packages/agents`, `packages/git`, `packages/db` |
-| `ui-dev` | sonnet | full | Changes to `apps/desktop/src/renderer/` or `packages/ui/` |
-| `web-dev` | sonnet | full | Changes to `apps/web/` or `apps/docs/` |
-| `reviewer` | sonnet | read-only | Code review — runs tests/lint/typecheck, reports findings, never edits |
-| `test-writer` | sonnet | write tests only | Writes Vitest tests — never modifies source files |
-| `debugger` | sonnet | full | Root-cause investigation — systematic diagnosis, then minimal fix |
-
-## Routing rules
-
-- **Start with `planner`** for any non-trivial feature or refactor. It produces a sequenced plan with parallel tracks.
-- **Use `explorer`** for all "find/read/understand" tasks. Cheapest agent — haiku model, read-only.
-- **Pick the specialist** (`pipeline-dev`, `ui-dev`, `web-dev`) when the work is contained to one domain.
-- **Fall back to `implementer`** when work crosses domain boundaries or doesn't fit a specialist.
-- **Pair `test-writer` with any implementer** for parallel test writing during implementation.
-- **Use `reviewer`** after implementation, before committing. Or for reviewing external PRs.
-- **Use `debugger`** when something's broken and the cause isn't obvious.
-
-## Parallel patterns
-
-Common effective pairings:
-- `planner` first → then `ui-dev` + `pipeline-dev` in parallel (frontend + backend simultaneously)
-- `implementer` + `test-writer` in parallel (code + tests simultaneously)
-- `explorer` + `explorer` in parallel (researching two unrelated questions)
-- `debugger` → `test-writer` sequentially (fix then regression test)
-
-## Each agent knows
-
-- ShipCode monorepo layout and package boundaries
-- Hard rules (stdin-not-argv, path-as-truth worktrees, IPC clamping, verification retry routing)
-- Codebase conventions (Tailwind v4, strict TS, Bun, `packages/ui` first)
-- Post-work verification steps (test, typecheck, biome)
-
----
 ### claude-cli.md
-
----
-name: feedback_claude_cli_prompts_via_stdin
-description: Pipe claude -p prompts via stdin, never argv — argparser breaks on --- YAML frontmatter
-type: feedback
-status: active
-last_verified: 2026-04-10
-topics: [ipc, claude-cli, prd-generator, error-handling]
----
 
 **Rule:** When spawning `claude -p` as a subprocess, **pipe the prompt via stdin**, never pass it as an argv argument.
 
-**Why:** Claude CLI's argparser reads `---` as an unknown flag. Any prompt that starts with YAML frontmatter — like the `writing-prds` SKILL.md we pass to the PRD generator — fails with `error: unknown option '---'`. And any `--foo` token inside a markdown code block in the prompt (e.g. `--body-file`, `--output-format`) also gets misparsed. When Claude exits non-zero, it echoes the full command line to stderr, and that stderr used to end up in the Create PRD modal as a giant wall of red text. Real incident, fixed in session 2026-04-10.
+**Why:** Claude CLI's argparser reads `---` (YAML frontmatter) as an unknown flag, and any `--foo` token inside a markdown code block in the prompt gets misparsed too. On non-zero exit Claude echoes the full command line to stderr, which used to land in the Create PRD modal as a wall of red text. Real incident, fixed 2026-04-10.
 
-**The existing pattern:** `packages/agents/src/github/gh-cli.ts` has `spawnWithStdin(command, args, input)` (grep for the identifier). The PRD generator has a private `runClaudeWithStdin(prompt, cwd, timeoutMs)` in `packages/agents/src/prd-generator.ts` that implements the same pattern for Claude.
+**The existing pattern:** `spawnWithStdin(command, args, input)` in `packages/agents/src/github/gh-cli.ts`; `runClaudeWithStdin(prompt, cwd, timeoutMs)` in `packages/agents/src/prd-generator.ts` implements the same shape for Claude.
 
 **How to apply:**
 - Never do `execFile('claude', ['-p', prompt, ...])`. Never do `execa('claude', ['-p', prompt])`.
@@ -243,19 +225,10 @@ topics: [ipc, claude-cli, prd-generator, error-handling]
 - When adding a new spawn site, reuse `runClaudeWithStdin` from `prd-generator.ts` or copy its shape.
 - Wrap the spawn in a `setTimeout` for the timeout.
 - On non-zero exit, build the error message from **stderr only**, clamped to first 3 lines / 300 chars. Never include stdout. Never include the prompt.
-- See also: `.agents/memory/feedback_clamp_ipc_error_messages.md` (when it's promoted to batch 1) — the renderer-side second layer of error clamping.
+- See also: `.agents/memory/ipc-errors.md` — the renderer-side second layer of error clamping.
 
 ---
 ### feedback_no_legacy_support_green_app.md
-
----
-name: feedback_no_legacy_support_green_app
-description: Green app rule — no legacy compatibility shims or dead-code fallbacks
-type: feedback
-status: active
-last_verified: 2026-05-08
-topics: [code-quality, workflow, state-management]
----
 
 **Rule:** The app is green. Do not add legacy support, compatibility shims, or UI fallbacks for stale/impossible states. Cut dry.
 
@@ -268,16 +241,28 @@ topics: [code-quality, workflow, state-management]
 - Tests should assert the desired source-of-truth behavior, not preserve compatibility for invalid legacy states.
 
 ---
-### ipc-errors.md
+### interactive-cli-run-modes.md
+
+**Rule:** `programmatic` (`claude -p --output-format stream-json` / `codex exec - --json`) is the **default** transport for structured reasoning phases — structured events, token/cost telemetry, composes with skills. (Anthropic reverted the 2026 Agent-SDK billing split, so `claude -p` draws from the normal subscription seat.)
+
+**Two transports per agent/phase (`AppSettings.agentRunModes[agent][phase]`):**
+- `programmatic` — headless CLI, structured JSON stream.
+- `interactive` — launches the real provider terminal CLI; ShipCode wraps raw PTY output in its own terminal events (`terminal:start`, `terminal:raw_output`, `terminal:exit`) and completes on process `exit`. Claude interactive args must **not** include `-p`; codex interactive args must **not** include `exec`. Prompt content goes to `.shipcode/runs/<threadId>/<phase>-prompt.md`; the CLI gets a short "read that artifact" instruction. Never pass raw interactive output off as provider-native JSON.
+
+**Defaults (`agentRunModes` in `packages/shared/src/constants.ts`):** `plan/review/revision/verify` → programmatic for both; `execute` → programmatic for codex (sandboxed via `codex exec --sandbox`), interactive for claude; `terminalFix/instant` → interactive for both; `issueTerminal` → always interactive. Default executor/planner/reviewer/verifier are all `codex`, so out-of-box runs fully programmatic.
+
+**Security guard:** programmatic **Claude** `execute`/`terminalFix`/`instant` would spawn `claude -p` with host Edit/Write/Bash and no built-in OS sandbox (the Claude Code Bash sandbox doesn't constrain file tools or MCP). Handling:
+- **execute** → programmatic allowed ONLY wrapped in the `srt` OS sandbox (`@anthropic-ai/sandbox-runtime`, Seatbelt/bubblewrap — contains the whole claude process). Runtime sets `phaseHints.osSandbox` (from `claudeExecuteSandboxEnabled`); `cli-provider` spawns `srt -s <policy> claude -p …`. Hint absent or `srt` unresolvable → execute **fails closed**, never runs unsandboxed. Policy (`sandbox/srt.ts`): allowWrite = worktree/tmp/`~/.claude`; denyRead = `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh`, `~/.npmrc`, `~/.netrc`; network deny-by-default with `anthropic-only`|`anthropic-github` presets.
+- **terminalFix / instant** → no srt path; `getRunMode` in `register-instant-handlers.ts` coerces claude programmatic → interactive. Codex runs programmatic everywhere (own sandbox).
+- Structured claude phases are safe: `buildClaudeCommand` passes `--disallowedTools` for every host tool — pure prompt→JSON.
+- Settings UI enables the Claude execute programmatic row only when `claudeExecuteSandboxEnabled`; Claude terminalFix/instant rows stay disabled.
+
+**Safety net:** `markPoolExhausted`/`isPoolExhausted` (`agent-sdk-pool-state.ts`) flips programmatic claude → interactive at runtime if the Agent-SDK pool is ever re-rationed; `AppSettings.forceInteractiveClaude` forces interactive globally.
+
+**Grep-stable anchors:** `agentRunModes` (constants), `AgentRunModeConfig` (`packages/shared/src/types/pipeline-core.ts`), `osSandbox` in `packages/agents/src/providers/cli-provider.ts`, `buildSrtPolicy` in `packages/agents/src/sandbox/srt.ts`, `PHASE_TOOL_POLICIES` in `packages/agents/src/providers/types.ts`, `getAgentPhaseRunMode` in `packages/pipeline/src/pipeline/runtime.ts`, `RunModeSelect` in `PipelineSettingsSection.tsx`.
 
 ---
-name: ipc-errors
-description: Clamp IPC error messages to first-line + ~280 chars; log full trace to main-process console
-type: feedback
-status: active
-last_verified: 2026-04-21
-topics: [ipc, errors, ux]
----
+### ipc-errors.md
 
 **Rule:** Clamp all IPC error messages to first-line + ~280 chars before sending to renderer. Log the full stack trace to the main-process console only.
 
@@ -291,15 +276,6 @@ topics: [ipc, errors, ux]
 
 ---
 ### overview.md
-
----
-name: project_shipcode_overview
-description: Electron app orchestrating AI dev pipelines on GitHub issues; Turborepo + Bun monorepo; pre-release
-type: project
-status: active
-last_verified: 2026-04-10
-topics: [architecture, monorepo, electron]
----
 
 **ShipCode** is an Electron desktop app that orchestrates AI-driven development pipelines on GitHub issues.
 
@@ -318,19 +294,10 @@ topics: [architecture, monorepo, electron]
 - **Runtime:** Electron main process owns IPC, DB, GitHub polling, file I/O. Renderer is a React SPA. Pipeline work runs as spawned subprocesses (`claude -p`, `codex exec`) in git worktrees.
 - **Pre-release:** No backward-compat concerns when refactoring defaults. Breaking changes are fine if they improve correctness.
 
-**How to apply:** When adding features, pick the right package — don't drop app-specific logic into `shared`, don't dump orchestration logic into `ui`. See `.agents/memory/feedback_path_as_truth_worktrees.md` and other repo-specific rules.
+**How to apply:** When adding features, pick the right package — don't drop app-specific logic into `shared`, don't dump orchestration logic into `ui`. See `.agents/memory/worktrees.md` and other repo-specific rules.
 
 ---
 ### pipeline.md
-
----
-name: project_pipeline_flow
-description: GitHub issue → plan → review → execute → verify state machine in packages/pipeline
-type: project
-status: active
-last_verified: 2026-04-10
-topics: [pipeline, architecture, state-machine]
----
 
 The core ShipCode pipeline turns a GitHub issue into a shipped PR.
 
@@ -352,76 +319,7 @@ The core ShipCode pipeline turns a GitHub issue into a shipped PR.
 - Reviewer and verifier models are configurable separately (`reviewerModel`, `verifierModel` in `AppSettings`).
 
 ---
-### skills.md
-
-# Skills and Memory Architecture — shipcode
-
-`last_verified: 2026-04-21`
-
-## Pattern (applies to skills AND memory — never repeat this)
-
-`.agents/` is the source of truth for everything. Tool-specific dirs are always relative within-repo symlinks into `.agents/`. Works for every contributor on clone, open-source safe.
-
-| Source (committed) | Claude Code | Codex |
-|--------------------|-------------|-------|
-| `.agents/skills/` | `.claude/skills → ../.agents/skills` | `.codex/skills → ../.agents/skills` |
-| `.agents/memory/` | `.claude/memory → ../.agents/memory` | `.codex/memory → ../.agents/memory` |
-
-**Never** point outside the repo.
-
----
-
-## Skills rule (never repeat this)
-
-**Source of truth:** `.agents/skills/<skill-name>/` — committed to repo, open-source safe.
-
-**Claude Code discovery:** `.claude/skills/<skill-name>` — relative symlink within the repo pointing to `../../.agents/skills/<skill-name>`. Contributors get working skills on clone, no external deps.
-
-**Never:** symlinks that point outside the repo (e.g. `~/www/shipshitdev/public/skills/...`). Breaks for every contributor.
-
-## Three buckets — never mix them
-
-| Dir | Who uses it | Contents |
-|-----|------------|----------|
-| `skills/` | ShipCode app at runtime | Pipeline phase prompts + `writing-prds` + `github-label-sync` |
-| `.agents/skills/` | Claude Code (devs building ShipCode) | 34 dev workflow skills (React, TS, Tailwind, etc.) |
-| `.claude/skills` | → symlink to `../.agents/skills` | Discovery shim only |
-
-`writing-prds` path: `skills/writing-prds/SKILL.md` — read by `register-github-handlers.ts` and `register-skills-handlers.ts`. Was `.agents/skills/` — moved 2026-04-21.
-
-`github-label-sync` path: `skills/github-label-sync/SKILL.md` — read by ShipCode skill loader.
-
-## Adding a new skill
-
-```bash
-# 1. Copy/create real files in .agents/skills/
-cp -r ~/source/my-skill .agents/skills/my-skill
-
-# 2. Add within-repo symlink for Claude Code discovery
-cd .claude/skills && ln -sf ../../.agents/skills/my-skill my-skill
-```
-
-## What `.claude/skills/` must never contain
-
-- Absolute symlinks (break on other machines)
-- Symlinks pointing outside the repo root
-- Real directories (defeats the single-source-of-truth in `.agents/skills/`)
-
-## GitHub / open-source
-
-`.agents/skills/` is committed. `.claude/skills/` symlinks are committed (git tracks symlinks). Any contributor who clones the repo gets all skills working immediately.
-
----
 ### ui-components-first.md
-
----
-name: feedback_packages_ui_components_first
-description: Renderer UI should use packages/ui components first; add reusable pieces there before app-local markup
-type: feedback
-status: active
-last_verified: 2026-04-23
-topics: [ui, components, renderer, conventions]
----
 
 **Rule:** In the renderer, **use `packages/ui` components first**. If the needed UI pattern does not exist yet, add a reusable component or primitive to `packages/ui` before hand-rolling it inside `apps/desktop`.
 
@@ -436,15 +334,6 @@ topics: [ui, components, renderer, conventions]
 ---
 ### verification-retries.md
 
----
-name: feedback_verification_failures_retry_execution
-description: Structured verification failures should retry execution, not verification; preserve test output and verifier feedback
-type: feedback
-status: active
-last_verified: 2026-04-23
-topics: [pipeline, verification, retry, execution]
----
-
 **Rule:** When the latest verification for the current plan failed **with structured findings**, resume from **execution**, not `verify`.
 
 **Why:** Re-running verification on the same worktree does not address the verifier's findings. This bug showed up in the desktop retry flow on 2026-04-23: the UI offered `Resume verification`, the IPC retry path called `startVerification(...)`, and the verifier could also complain about missing test evidence because `context.testOutput` had been cleared before prompt construction.
@@ -456,21 +345,13 @@ topics: [pipeline, verification, retry, execution]
 - Do **not** clear `context.testOutput` before building the verification prompt; the verifier needs actual test output as evidence.
 
 ---
-### worktree-defaults.md
-
----
-name: project_worktree_defaults
-description: Default worktree root is ~/.shipcode/worktrees/<slug>/<threadId>; path-as-truth API
-type: project
-status: active
-last_verified: 2026-04-10
-topics: [worktrees, git, settings]
----
+### worktrees.md
 
 Every pipeline run happens in its own git worktree to isolate AI-generated changes from the user's current branch.
 
 **Default location:** `~/.shipcode/worktrees/<projectSlug>/<threadId>`
 - `projectSlug` = `<basename>-<sha256[:6]>`, deterministic, collision-safe.
+- Global-by-default because project-local worktrees bleed into iCloud/Dropbox-synced project dirs.
 
 **Setting:** `AppSettings.worktreeRoot`
 - `null` → default (`~/.shipcode/worktrees`)
@@ -478,40 +359,24 @@ Every pipeline run happens in its own git worktree to isolate AI-generated chang
 - absolute path or `~`-prefix → custom root
 - relative paths and `~user/…` are **rejected at `settings:set` time**, not at worktree creation
 
-**Grep-stable anchors:** `projectSlug` and `resolveWorktreeParent` in `packages/shared/src/worktree-path.ts`. `expandWorktreeRoot` is the validator.
+**Grep-stable anchors:** `projectSlug` and `resolveWorktreeParent` in `packages/shared/src/worktree-path.ts`; `expandWorktreeRoot` is the validator. Don't hardcode `.shipcode/worktrees` anywhere — always go through `resolveWorktreeParent`.
 
-**Why global-by-default:** project-local worktrees bleed into iCloud/Dropbox-synced project dirs. The global default keeps project trees clean and gives one central inspection dir.
+## Path-as-truth rule (hard rule)
 
-**Cleanup:** `WorktreeManager.remove(path, branch)` takes concrete values — **never recompute path from threadId**. See `.agents/memory/worktrees.md` for the full incident that drove this design.
+`WorktreeManager.remove(path, branch)` accepts concrete values. **Never recompute the worktree path from `threadId`** at cleanup time.
 
-**How to apply:**
-- When passing worktree paths around, use the persisted `Thread.worktreePath` as the source of truth, not a re-derivation.
-- Don't hardcode `.shipcode/worktrees` anywhere; always go through `resolveWorktreeParent` with the user's current `worktreeRoot` setting.
-- When deleting a project, iterate its threads and clean up each worktree before removing the project row.
-
----
-### worktrees.md
-
----
-name: feedback_path_as_truth_worktrees
-description: WorktreeManager.remove(path, branch) takes concrete values — never recompute from threadId
-type: feedback
-status: active
-last_verified: 2026-04-10
-topics: [worktrees, git, cleanup, api-design]
----
-
-**Rule:** `WorktreeManager.remove(path, branch)` accepts concrete values. **Never recompute the worktree path from `threadId`** at cleanup time.
-
-**Why:** The worktree path is derived from `worktreeRoot` + `projectSlug` + `threadId`. If the user toggles `worktreeRoot` in Settings mid-session (e.g. changes from default to a custom location), and then a pipeline finishes and tries to clean up, a `remove(threadId)` API would recompute the path using the **new** setting and delete the wrong directory — or more commonly, silently fail to find the actual worktree, leaving it orphaned on disk.
-
-The fix is **path-as-truth**: when a worktree is created, its path is persisted (to `Thread.worktreePath`). Cleanup reads the persisted path and passes it directly to `remove`, so the cleanup is insulated from any mid-flight setting changes.
-
-Same logic applies to `list()` — it parses `git worktree list --porcelain` and filters by `shipcode/*` branch prefix, not by substring match on the current `worktreeRoot` path.
+**Why:** the path derives from `worktreeRoot` + `projectSlug` + `threadId`. If the user changes `worktreeRoot` in Settings mid-session, a `remove(threadId)` API would recompute with the **new** setting — deleting the wrong directory or silently orphaning the real worktree. So the path is persisted at creation (`Thread.worktreePath`) and cleanup reads the persisted value.
 
 **How to apply:**
-- When calling `WorktreeManager.remove()`, always pass `thread.worktreePath` directly from the DB — do not re-derive it from `resolveWorktreeParent(projectPath, settings.worktreeRoot)`.
-- Anywhere that needs to enumerate worktrees, use `WorktreeManager.list()` — don't glob the filesystem.
-- When adding any new worktree operation, follow the same pattern: concrete values in the API, derive-once at creation, persist.
-- When deleting a project, iterate its threads via DB query, call `remove(thread.worktreePath, thread.branch)` for each, **then** delete the project row.
+- Pass `thread.worktreePath` from the DB directly to `remove()` — never re-derive via `resolveWorktreeParent`.
+- Enumerate worktrees with `WorktreeManager.list()` (parses `git worktree list --porcelain`, filters by `shipcode/*` branch prefix) — don't glob the filesystem or substring-match the current `worktreeRoot`.
+- New worktree operations follow the same pattern: concrete values in the API, derive-once at creation, persist.
+- When deleting a project: iterate its threads via DB query, `remove(thread.worktreePath, thread.branch)` for each, **then** delete the project row.
+
+---
+### Read on demand (low-priority — open the file when the topic comes up)
+
+- `.agents/memory/agents.md` — Custom Claude Code sub-agents in .claude/agents/ — roster, routing rules, parallel patterns (Claude Code only; not used by Codex)
+- `.agents/memory/e2e-ci.md` — CI + E2E GitHub Actions wiring on the master trunk — trust gate, affected scoping, pinned gitleaks, build ordering, Electron binary step, caching. MUST read before editing anything under .github/
+- `.agents/memory/skills.md` — Skills/memory folder layout — .agents/ is source of truth; .claude/skills and .codex/skills are relative within-repo symlinks; app-runtime skills live in top-level skills/
 
