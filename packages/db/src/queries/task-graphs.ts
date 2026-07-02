@@ -10,7 +10,7 @@ import {
   type TaskGraphWithNodes,
   type TaskNodeRecord,
   type TaskNodeStatus,
-} from '@shipcode/shared/source';
+} from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows, transaction } from '../utils';
 

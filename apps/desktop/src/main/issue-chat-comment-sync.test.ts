@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   logError: vi.fn(),
 }));
 
-vi.mock('@shipcode/agents/source', () => ({
+vi.mock('@shipcode/agents', () => ({
   GhCli: vi.fn(function GhCli() {
     return {
       listIssueComments: mocks.listIssueComments,

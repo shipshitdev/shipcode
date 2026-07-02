@@ -64,7 +64,7 @@ import {
   createProviderRegistry,
   GhCli,
   ProcessManager,
-} from '@shipcode/agents/source';
+} from '@shipcode/agents';
 import {
   ActivityQueries,
   AgentConversationQueries,
@@ -95,12 +95,12 @@ import {
   SettingsQueries,
   SkillResolutionLogQueries,
   SkillsQueries,
+  TaskGraphQueries,
   TerminalEventQueries,
   ThreadQueries,
   TriageRuleQueries,
   VerificationQueries,
 } from '@shipcode/db';
-import { TaskGraphQueries } from '@shipcode/db/source';
 import { createPipeline, createReconciliationLoop } from '@shipcode/pipeline';
 import {
   HEARTBEAT_TIMEOUT_MS,

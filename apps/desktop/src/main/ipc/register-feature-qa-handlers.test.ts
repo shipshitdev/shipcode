@@ -17,7 +17,7 @@ vi.mock('electron', () => ({
   },
 }));
 
-vi.mock('@shipcode/agents/source', () => ({
+vi.mock('@shipcode/agents', () => ({
   inspectProjectSetup: mockInspectProjectSetup,
   ServerLifecycleManager: class {
     readonly logger: (message: string) => void;

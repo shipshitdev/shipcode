@@ -1,10 +1,6 @@
 import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
-import {
-  inspectProjectSetup,
-  type RunningServer,
-  ServerLifecycleManager,
-} from '@shipcode/agents/source';
+import { inspectProjectSetup, type RunningServer, ServerLifecycleManager } from '@shipcode/agents';
 import { shell } from 'electron';
 import type { IpcHandlerDeps } from './types';
 

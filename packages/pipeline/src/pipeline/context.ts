@@ -3,7 +3,7 @@ import {
   resolvePhaseReasoningEffort,
   type SkillValidationError,
   toPipelinePromptScope,
-} from '@shipcode/agents/source';
+} from '@shipcode/agents';
 import {
   type PhaseSkillKey,
   type PromptTelemetryPhase,

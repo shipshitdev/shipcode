@@ -10,7 +10,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./source": "./src/index.ts",
     "./worktree-path": {
       "types": "./dist/worktree-path.d.ts",
       "import": "./dist/worktree-path.js"

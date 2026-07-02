@@ -54,8 +54,8 @@ vi.mock('node:child_process', async (importOriginal) => {
   };
 });
 
-vi.mock('@shipcode/agents/source', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shipcode/agents/source')>();
+vi.mock('@shipcode/agents', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/agents')>();
   return {
     ...actual,
     GhCli: vi.fn(function GhCli() {

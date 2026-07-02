@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { buildIssueRunPrompt, buildWorkpadProtocol } from '@shipcode/agents/source';
+import { buildIssueRunPrompt, buildWorkpadProtocol } from '@shipcode/agents';
 import {
   type PipelinePhase,
   resolvePipelineSpeedProfile,

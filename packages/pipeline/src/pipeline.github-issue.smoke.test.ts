@@ -8,13 +8,13 @@
  */
 
 import type { EventEmitter as NodeEventEmitter } from 'node:events';
-import type { AgentProvider, ProcessManager } from '@shipcode/agents/source';
+import type { AgentProvider, ProcessManager } from '@shipcode/agents';
 import {
   createClaudeCliProvider,
   createCodexCliProvider,
   createGeminiCliProvider,
   createProviderRegistry,
-} from '@shipcode/agents/source';
+} from '@shipcode/agents';
 import { DEFAULT_SETTINGS, type GitHubIssueCacheRecord } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPipeline } from './pipeline';

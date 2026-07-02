@@ -11,7 +11,8 @@ import {
   StreamParser,
   selectPromptMaterials,
   summarizePromptMaterials,
-} from '@shipcode/agents/source';
+} from '@shipcode/agents';
+import type { TaskGraphWithNodes } from '@shipcode/shared';
 import {
   type AnsweredClarification,
   buildQaStateGapMessage,
@@ -29,7 +30,6 @@ import {
   resolveRevisionCountForIssue,
   type ShipCodePlan,
 } from '@shipcode/shared';
-import type { TaskGraphWithNodes } from '@shipcode/shared/source';
 import { computeRetryDelayMs } from '../retry-scheduler';
 import type { PipelineContext, PlanPhaseCarry } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';

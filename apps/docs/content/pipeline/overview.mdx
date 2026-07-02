@@ -6,11 +6,11 @@ The ShipCode pipeline is a state machine that processes GitHub issues through mu
 
 | Phase | Default model | Description |
 |-------|---------------|-------------|
-| Plan | Opus 4.6 | Rewrites issue into spec + structured plan |
+| Plan | Claude (Sonnet 4.6 default) | Rewrites issue into spec + structured plan |
 | Review | Codex (high reasoning) — set during onboarding | Adversarial critique during configured revision rounds |
 | Execute | Routed per `shipcode:agent:*` label (claude / codex / openrouter) — configurable in Settings | Implements in isolated git worktree |
 | Test / Runtime QA | Repo setup contract + generated QA | Runs setup, test commands, browser/runtime QA, and optional visual QA evidence |
-| Verify | Opus 4.6 — set during onboarding | Checks diff, test output, runtime QA evidence, and acceptance criteria |
+| Verify | Claude (Sonnet 4.6 default) — set during onboarding | Checks diff, test output, runtime QA evidence, and acceptance criteria |
 | Ship | gh CLI | Push branch, create PR, link to issue |
 
 All four phase defaults can be changed after onboarding from the desktop **Settings → Pipeline** panel. Project and issue overrides can further replace those defaults per repository or per issue.

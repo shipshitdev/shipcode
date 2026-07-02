@@ -9,21 +9,19 @@ import {
   type ProviderPhase,
   type ProviderRequest,
   toPersistedPromptTelemetryMaterials,
-} from '@shipcode/agents/source';
+} from '@shipcode/agents';
 import {
   type AppSettings,
+  formatTaskGraphChecklist,
+  formatTaskNodeIssueBody,
   isPipelineStateLabel,
   isRealGithubIssueNumber,
   macroColumnForStatus,
   type ProviderRunMode,
   pipelineLabelForStatus,
-} from '@shipcode/shared';
-import {
-  formatTaskGraphChecklist,
-  formatTaskNodeIssueBody,
   TASK_GRAPH_COMMENT_MARKER,
   type TaskGraphWithNodes,
-} from '@shipcode/shared/source';
+} from '@shipcode/shared';
 import { GhSyncQueue, type GhSyncWriteOpts } from '../gh-sync-queue';
 import { syncThreadAndIssuePhase } from '../phase-sync';
 import type {
@@ -273,7 +271,7 @@ export function createPipelineRuntime(
     rawOutput: string;
     exitCode: number;
     resolvedModel?: string;
-    promptTelemetry?: import('@shipcode/agents/source').PhasePromptTelemetry;
+    promptTelemetry?: import('@shipcode/agents').PhasePromptTelemetry;
     clarificationRequest?: import('@shipcode/shared').ClarificationRequest;
     deltas: ProviderPhaseDeltas;
   }> {
@@ -588,7 +586,7 @@ export function createPipelineRuntime(
     rawOutput: string;
     exitCode: number;
     resolvedModel?: string;
-    promptTelemetry?: import('@shipcode/agents/source').PhasePromptTelemetry;
+    promptTelemetry?: import('@shipcode/agents').PhasePromptTelemetry;
     clarificationRequest?: import('@shipcode/shared').ClarificationRequest;
   }> {
     let phaseProcessId: string | null = null;

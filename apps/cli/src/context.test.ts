@@ -68,16 +68,13 @@ vi.mock('@shipcode/db', () => ({
   ReviewQueries: mocks.Query,
   SettingsQueries: mocks.SettingsQueries,
   SkillsQueries: mocks.Query,
+  TaskGraphQueries: mocks.Query,
   TerminalEventQueries: mocks.Query,
   ThreadQueries: mocks.Query,
   VerificationQueries: mocks.Query,
 }));
 
-vi.mock('@shipcode/db/source', () => ({
-  TaskGraphQueries: mocks.Query,
-}));
-
-vi.mock('@shipcode/agents/source', () => ({
+vi.mock('@shipcode/agents', () => ({
   createClaudeCliProvider: mocks.createClaudeCliProvider,
   createCodexCliProvider: mocks.createCodexCliProvider,
   createOpenRouterProvider: mocks.createOpenRouterProvider,

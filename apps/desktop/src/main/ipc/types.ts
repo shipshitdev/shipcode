@@ -1,4 +1,4 @@
-import type { ProcessManager } from '@shipcode/agents/source';
+import type { ProcessManager } from '@shipcode/agents';
 import type {
   ActivityQueries,
   AgentConversationQueries,
@@ -27,12 +27,12 @@ import type {
   SettingsQueries,
   SkillResolutionLogQueries,
   SkillsQueries,
+  TaskGraphQueries,
   TerminalEventQueries,
   ThreadQueries,
   TriageRuleQueries,
   VerificationQueries,
 } from '@shipcode/db';
-import type { TaskGraphQueries } from '@shipcode/db/source';
 import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import type { BrowserWindow, IpcMain } from 'electron';
 import type { ChatNotificationService } from '../chat-notification-service';

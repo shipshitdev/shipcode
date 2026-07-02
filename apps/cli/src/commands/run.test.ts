@@ -44,26 +44,11 @@ vi.mock('@shipcode/db', async (importOriginal) => {
     SettingsQueries: class {
       get = settingsGetMock;
     },
+    TaskGraphQueries: EmptyQuery,
   };
 });
 
-vi.mock('@shipcode/db/source', () => ({
-  TaskGraphQueries: EmptyQuery,
-}));
-
 vi.mock('@shipcode/agents', () => ({
-  ProcessManager: class {},
-  GhCli: class {
-    getIssue = getIssueMock;
-  },
-  routeFromLabels: routeFromLabelsMock,
-  createClaudeCliProvider: vi.fn(() => ({ id: 'claude' })),
-  createCodexCliProvider: vi.fn(() => ({ id: 'codex' })),
-  createOpenRouterProvider: vi.fn(() => ({ id: 'openrouter' })),
-  createProviderRegistry: vi.fn((providers) => providers),
-}));
-
-vi.mock('@shipcode/agents/source', () => ({
   ProcessManager: class {},
   GhCli: class {
     getIssue = getIssueMock;

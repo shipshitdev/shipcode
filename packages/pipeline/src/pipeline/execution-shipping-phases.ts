@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { buildPRBody, GhCli } from '@shipcode/agents/source';
+import { buildPRBody, GhCli } from '@shipcode/agents';
 import {
   clampError,
   type GitHubPrCheckSummary,

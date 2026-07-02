@@ -36,6 +36,15 @@ The `shipcode onboard` command runs a doctor pass against all of these and fails
 | `shipcode status` | Show active pipelines and recent threads |
 | `shipcode run <issue>` | Process a single GitHub issue end-to-end through the plan → review → execute → verify → ship pipeline |
 | `shipcode start` | Interactive mode — prompt for an issue number |
+| `shipcode plan <issue>` | Generate and review a plan, stopping at the approval gate |
+| `shipcode approve <issue>` | Approve a plan awaiting approval and start execution |
+| `shipcode review <issue>` | Run plan + adversarial review and print the findings as JSON |
+| `shipcode retry <issue>` | Resume a pipeline from its last checkpoint |
+| `shipcode logs <issue>` | Show recorded terminal events for an issue's pipeline |
+| `shipcode terminal <issue>` | Open an official Claude/Codex interactive CLI inside the issue's worktree (`--provider`, `--model`) |
+| `shipcode terminal-summary <issue>` | Show the latest interactive terminal session summary for an issue |
+| `shipcode terminal-comment <issue>` | Preview (or `--post`) a GitHub comment built from the latest terminal summary |
+| `shipcode prd <keywords...>` | Generate or enhance a PRD from keywords, using `skills/writing-prds` when present |
 
 Pass `--help` to any subcommand for its flags.
 

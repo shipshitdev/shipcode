@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { StreamParser } from '@shipcode/agents/source';
+import { StreamParser } from '@shipcode/agents';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineContext } from '../types';
 import {

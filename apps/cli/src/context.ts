@@ -8,7 +8,7 @@ import {
   createProviderRegistry,
   GhCli,
   ProcessManager,
-} from '@shipcode/agents/source';
+} from '@shipcode/agents';
 import {
   AgentConversationQueries,
   CheckpointQueries,
@@ -24,11 +24,11 @@ import {
   ReviewQueries,
   SettingsQueries,
   SkillsQueries,
+  TaskGraphQueries,
   TerminalEventQueries,
   ThreadQueries,
   VerificationQueries,
 } from '@shipcode/db';
-import { TaskGraphQueries } from '@shipcode/db/source';
 import type { createPipeline } from '@shipcode/pipeline';
 import type { Project } from '@shipcode/shared';
 import { createCliEmitter } from './adapters/cli-emitter';

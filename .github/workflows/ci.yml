@@ -124,6 +124,35 @@ jobs:
             bun run typecheck
           fi
 
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [trust, lint, typecheck]
+    if: needs.trust.outputs.is-trusted == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-bun-env
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          node-version: ${{ env.NODE_VERSION }}
+          turbo-key-prefix: build
+      # Desktop's `build` script runs electron-builder (installer packaging), so it is
+      # excluded from the turbo sweep and compiled via its `build:code` script instead.
+      - name: Build packages and apps (affected on PRs, full otherwise)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            TURBO_SCM_BASE="${{ github.event.pull_request.base.sha }}" bunx turbo run build --filter='!@shipcode/desktop' --affected
+          else
+            bunx turbo run build --filter='!@shipcode/desktop'
+          fi
+      - name: Build desktop app code (no installer)
+        run: |
+          bunx turbo run build --filter='@shipcode/desktop^...'
+          bun run --filter @shipcode/desktop build:code
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -162,10 +191,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           turbo-key-prefix: coverage
           install-ripgrep: 'true'
+      # Floors match the release contract in scripts/coverage-summary.mjs defaults
+      # (docs/coverage-leftovers.md): lines/statements/functions 95, branches 90.
       - name: Run sharded full-repo coverage
         env:
-          COVERAGE_MIN: '80'
-          COVERAGE_BRANCH_MIN: '80'
+          COVERAGE_MIN: '95'
+          COVERAGE_BRANCH_MIN: '90'
         shell: bash
         run: |
           set -euo pipefail

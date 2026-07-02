@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { type AgentProvider, GhCli } from '@shipcode/agents/source';
+import { type AgentProvider, GhCli } from '@shipcode/agents';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineContext, PipelineDeps } from '../types';
@@ -32,8 +32,8 @@ vi.mock('node:child_process', async (importOriginal) => {
   };
 });
 
-vi.mock('@shipcode/agents/source', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shipcode/agents/source')>();
+vi.mock('@shipcode/agents', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/agents')>();
   return {
     ...actual,
     loadRepoSetupContract: mockLoadRepoSetupContract,

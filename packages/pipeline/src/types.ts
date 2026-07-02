@@ -6,7 +6,7 @@ import type {
   PromptMaterialSummary,
   ProviderRegistry,
   TerminalEvent,
-} from '@shipcode/agents/source';
+} from '@shipcode/agents';
 import type {
   AgentConversationQueries,
   CheckpointQueries,
@@ -41,13 +41,11 @@ import type {
   ProjectFailureRecord,
   ReasoningEffort,
   ShipCodePlan,
-  VerificationResult,
-} from '@shipcode/shared';
-import type {
   TaskGraphBuildOptions,
   TaskGraphWithNodes,
   TaskNodeStatus,
-} from '@shipcode/shared/source';
+  VerificationResult,
+} from '@shipcode/shared';
 import type { WorkflowLoadWarning, WorkflowPolicy } from './workflow-loader';
 
 // Temporary alias while pipeline adopts the shared executor-model type directly.
