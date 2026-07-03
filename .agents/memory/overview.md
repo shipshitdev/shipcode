@@ -24,4 +24,4 @@ topics: [architecture, monorepo, electron]
 - **Runtime:** Electron main process owns IPC, DB, GitHub polling, file I/O. Renderer is a React SPA. Pipeline work runs as spawned subprocesses (`claude -p`, `codex exec`) in git worktrees.
 - **Pre-release:** No backward-compat concerns when refactoring defaults. Breaking changes are fine if they improve correctness.
 
-**How to apply:** When adding features, pick the right package — don't drop app-specific logic into `shared`, don't dump orchestration logic into `ui`. See `.agents/memory/feedback_path_as_truth_worktrees.md` and other repo-specific rules.
+**How to apply:** When adding features, pick the right package — don't drop app-specific logic into `shared`, don't dump orchestration logic into `ui`. See `.agents/memory/worktrees.md` and other repo-specific rules.

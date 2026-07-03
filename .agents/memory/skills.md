@@ -1,6 +1,14 @@
-# Skills and Memory Architecture — shipcode
+---
+name: project_skills_memory_layout
+description: Skills/memory folder layout — .agents/ is source of truth; .claude/skills and .codex/skills are relative within-repo symlinks; app-runtime skills live in top-level skills/
+type: project
+status: active
+priority: low
+last_verified: 2026-04-21
+topics: [skills, memory, symlinks, layout]
+---
 
-`last_verified: 2026-04-21`
+# Skills and Memory Architecture — shipcode
 
 ## Pattern (applies to skills AND memory — never repeat this)
 

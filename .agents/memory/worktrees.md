@@ -1,22 +1,34 @@
 ---
-name: feedback_path_as_truth_worktrees
-description: WorktreeManager.remove(path, branch) takes concrete values — never recompute from threadId
-type: feedback
+name: project_worktrees
+description: Worktree defaults (~/.shipcode/worktrees/<slug>/<threadId>, AppSettings.worktreeRoot) + path-as-truth rule — WorktreeManager.remove(path, branch) takes concrete values, never recompute from threadId
+type: project
 status: active
-last_verified: 2026-04-10
-topics: [worktrees, git, cleanup, api-design]
+last_verified: 2026-07-02
+topics: [worktrees, git, cleanup, settings, api-design]
 ---
 
-**Rule:** `WorktreeManager.remove(path, branch)` accepts concrete values. **Never recompute the worktree path from `threadId`** at cleanup time.
+Every pipeline run happens in its own git worktree to isolate AI-generated changes from the user's current branch.
 
-**Why:** The worktree path is derived from `worktreeRoot` + `projectSlug` + `threadId`. If the user toggles `worktreeRoot` in Settings mid-session (e.g. changes from default to a custom location), and then a pipeline finishes and tries to clean up, a `remove(threadId)` API would recompute the path using the **new** setting and delete the wrong directory — or more commonly, silently fail to find the actual worktree, leaving it orphaned on disk.
+**Default location:** `~/.shipcode/worktrees/<projectSlug>/<threadId>`
+- `projectSlug` = `<basename>-<sha256[:6]>`, deterministic, collision-safe.
+- Global-by-default because project-local worktrees bleed into iCloud/Dropbox-synced project dirs.
 
-The fix is **path-as-truth**: when a worktree is created, its path is persisted (to `Thread.worktreePath`). Cleanup reads the persisted path and passes it directly to `remove`, so the cleanup is insulated from any mid-flight setting changes.
+**Setting:** `AppSettings.worktreeRoot`
+- `null` → default (`~/.shipcode/worktrees`)
+- `''` (empty string) → legacy project-local (`<project>/.shipcode/worktrees`)
+- absolute path or `~`-prefix → custom root
+- relative paths and `~user/…` are **rejected at `settings:set` time**, not at worktree creation
 
-Same logic applies to `list()` — it parses `git worktree list --porcelain` and filters by `shipcode/*` branch prefix, not by substring match on the current `worktreeRoot` path.
+**Grep-stable anchors:** `projectSlug` and `resolveWorktreeParent` in `packages/shared/src/worktree-path.ts`; `expandWorktreeRoot` is the validator. Don't hardcode `.shipcode/worktrees` anywhere — always go through `resolveWorktreeParent`.
+
+## Path-as-truth rule (hard rule)
+
+`WorktreeManager.remove(path, branch)` accepts concrete values. **Never recompute the worktree path from `threadId`** at cleanup time.
+
+**Why:** the path derives from `worktreeRoot` + `projectSlug` + `threadId`. If the user changes `worktreeRoot` in Settings mid-session, a `remove(threadId)` API would recompute with the **new** setting — deleting the wrong directory or silently orphaning the real worktree. So the path is persisted at creation (`Thread.worktreePath`) and cleanup reads the persisted value.
 
 **How to apply:**
-- When calling `WorktreeManager.remove()`, always pass `thread.worktreePath` directly from the DB — do not re-derive it from `resolveWorktreeParent(projectPath, settings.worktreeRoot)`.
-- Anywhere that needs to enumerate worktrees, use `WorktreeManager.list()` — don't glob the filesystem.
-- When adding any new worktree operation, follow the same pattern: concrete values in the API, derive-once at creation, persist.
-- When deleting a project, iterate its threads via DB query, call `remove(thread.worktreePath, thread.branch)` for each, **then** delete the project row.
+- Pass `thread.worktreePath` from the DB directly to `remove()` — never re-derive via `resolveWorktreeParent`.
+- Enumerate worktrees with `WorktreeManager.list()` (parses `git worktree list --porcelain`, filters by `shipcode/*` branch prefix) — don't glob the filesystem or substring-match the current `worktreeRoot`.
+- New worktree operations follow the same pattern: concrete values in the API, derive-once at creation, persist.
+- When deleting a project: iterate its threads via DB query, `remove(thread.worktreePath, thread.worktreeBranch)` for each, **then** delete the project row.
