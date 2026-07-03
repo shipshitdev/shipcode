@@ -1,6 +1,15 @@
 # 02 — Open-work triage: PRs + issue backlog (2026-07-03)
 
-Reviewed: 3 open PRs, 74 open issues. Every claim below was verified against master (`5d8065a8`) or the PR head branches on 2026-07-03. This doc is the implementation handoff — issue bodies carry the specs; this carries ordering, dependencies, staleness corrections, and decisions still owed.
+Reviewed: 3 open PRs, 74 open issues. Every claim below was verified against master (`5d8065a8`) or the PR head branches on 2026-07-03. This doc is the implementation handoff — issue bodies carry the specs; this carries ordering, dependencies, staleness corrections, and decisions.
+
+> **Decisions log (Vincent, 2026-07-03) — all applied to the issues; comments there are authoritative:**
+>
+> - **#309**: canonical fallback = `symbolic-ref` → `main` → `master` → current → `'main'` (git-service order). Table-driven test first.
+> - **#306**: auth-row fix — add `model_deprecated` to the shared union; desktop copy: *"Model deprecated — pick a replacement in Settings → Models"* (warning tone).
+> - **#311**: deferred (labeled), no implementation now; #307 still proceeds.
+> - **#312**: root-cause fix — extract phase-model routing to a shared package consumed by desktop **and** CLI (after #298). Not scheduled yet.
+> - **Hygiene applied**: #75, #249 closed as done; #314 closed as stale; #159 closed as dup of #277; #124 folded into #125 (now a two-phase spike); #250 split into #317 (bugs) / #318 (IPC hardening) / #319 (narrowing+plumbing) / #320 (QA-carry verification) and closed; stale-body corrections posted on #194, #211, #91, #93; deferral-scope clarification on #242.
+> - **Ruleset**: keep required thread resolution; agent workflow rule added to repo `CLAUDE.md` (resolve threads before ending a PR turn).
 
 ---
 
