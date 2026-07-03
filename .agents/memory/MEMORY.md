@@ -24,7 +24,7 @@ Loaded after `~/.agents/memory/MEMORY.md` (global). Project-scoped facts only. D
 - **Default:** `~/.shipcode/worktrees/<projectSlug>/<threadId>` where `projectSlug = <basename>-<sha256[:6]>`.
 - **`AppSettings.worktreeRoot`:** `null`=default, `''`=legacy project-local, absolute/tilde=custom. Validation at `settings:set`.
 - **Grep-stable anchors:** `projectSlug`, `resolveWorktreeParent` in `packages/shared/src/worktree-path.ts`.
-- See: `worktree-defaults.md`, `worktrees.md`.
+- See: `worktrees.md`.
 
 ## Skills and memory layout
 
@@ -74,8 +74,7 @@ Where things live:
 
 - `overview.md` — app shape, packages, tech stack
 - `pipeline.md` — phase flow, state machine, provider routing
-- `worktree-defaults.md` — default paths, settings, validation
-- `worktrees.md` — path-as-truth rule, cleanup pattern
+- `worktrees.md` — default paths, settings, path-as-truth rule, cleanup pattern
 - `claude-cli.md` — stdin-not-argv rule for claude CLI
 - `interactive-cli-run-modes.md` — interactive-vs-programmatic terminal routing and event model
 - `ipc-errors.md` — clamp IPC errors at main-process boundary

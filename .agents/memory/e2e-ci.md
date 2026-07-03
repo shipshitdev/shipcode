@@ -1,8 +1,9 @@
 ---
 name: e2e_ci_architecture
-description: How the CI + E2E GitHub Actions workflows are wired on the master trunk — trust gate, affected scoping, weekly crons, build ordering, and the macstudio relationship
+description: CI + E2E GitHub Actions wiring on the master trunk — trust gate, affected scoping, pinned gitleaks, build ordering, Electron binary step, caching. MUST read before editing anything under .github/
 type: architecture
 status: active
+priority: low
 last_verified: 2026-06-16
 topics: [e2e, ci, github-actions, workflow, trunk, branches, cron]
 ---

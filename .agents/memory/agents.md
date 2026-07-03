@@ -1,8 +1,9 @@
 ---
 name: project_custom_agents
-description: Custom Claude Code sub-agents in .claude/agents/ — routing rules and when to use each
+description: Custom Claude Code sub-agents in .claude/agents/ — roster, routing rules, parallel patterns (Claude Code only; not used by Codex)
 type: project
 status: active
+priority: low
 last_verified: 2026-05-07
 topics: [agents, workflow, delegation]
 ---
