@@ -86,6 +86,7 @@ Ordering constraints inside Wave 1:
 - #303 blocked-by #282; #297 blocked-by #285/#286.
 
 ### Phase 3 — DRY Wave 3 (#306–#313) — **4 of 8 need Vincent's decision first**
+
 | Issue | Decision owed |
 |---|---|
 | #306 | Desired user-visible copy for `model_deprecated` in desktop UI (bug fix itself is unambiguous). |
