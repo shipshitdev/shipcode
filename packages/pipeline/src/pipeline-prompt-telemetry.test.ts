@@ -1,4 +1,4 @@
-import type { AgentProvider, ProviderRegistry } from '@shipcode/agents/source';
+import type { AgentProvider, ProviderRegistry } from '@shipcode/agents';
 import { DEFAULT_SETTINGS, type ShipCodePlan } from '@shipcode/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { createPipeline } from './pipeline';

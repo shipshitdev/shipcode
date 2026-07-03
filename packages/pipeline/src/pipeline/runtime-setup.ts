@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
-import { loadRepoSetupContract } from '@shipcode/agents/source';
+import { loadRepoSetupContract } from '@shipcode/agents';
 
 import type { PipelineContext, PipelineDeps } from '../types';
 import type { PipelineRuntime } from './shared';

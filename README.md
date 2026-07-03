@@ -29,7 +29,7 @@ npx @shipshitdev/shipcode                      # CLI
 GitHub Issue (labeled shipcode:agent:claude / codex / openrouter)
        |
        v
-    PLAN (Opus 4.6) --- rewrite issue into spec + structured plan
+    PLAN (configured model) --- rewrite issue into spec + structured plan
        |
        v
     REVIEW (configured model) --- adversarial critique

@@ -1,5 +1,5 @@
 import os from 'node:os';
-import type { ProcessManager } from '@shipcode/agents/source';
+import type { ProcessManager } from '@shipcode/agents';
 import type { Pipeline } from '@shipcode/pipeline';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';

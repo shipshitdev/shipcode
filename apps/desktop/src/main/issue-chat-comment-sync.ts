@@ -1,4 +1,4 @@
-import { GhCli } from '@shipcode/agents/source';
+import { GhCli } from '@shipcode/agents';
 import { clampError, GITHUB_POLL_INTERVAL_MS, type GitHubIssueComment } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
 import type { IpcHandlerDeps, Queries } from './ipc/types';

@@ -179,7 +179,7 @@ function installMocks() {
   vi.doMock('./splash-screen', () => ({
     SplashScreen: construct(splashScreenMock),
   }));
-  vi.doMock('@shipcode/agents/source', () => ({
+  vi.doMock('@shipcode/agents', () => ({
     createClaudeCliProvider: vi.fn(() => ({ key: 'claude' })),
     createCodexCliProvider: vi.fn(() => ({ key: 'codex' })),
     createGeminiCliProvider: vi.fn(() => ({ key: 'gemini' })),
@@ -221,13 +221,11 @@ function installMocks() {
     SettingsQueries: QueryMock,
     SkillResolutionLogQueries: QueryMock,
     SkillsQueries: QueryMock,
+    TaskGraphQueries: QueryMock,
     TerminalEventQueries: QueryMock,
     ThreadQueries: QueryMock,
     TriageRuleQueries: QueryMock,
     VerificationQueries: QueryMock,
-  }));
-  vi.doMock('@shipcode/db/source', () => ({
-    TaskGraphQueries: QueryMock,
   }));
   vi.doMock('@shipcode/pipeline', () => ({
     createPipeline: createPipelineMock,

@@ -1,12 +1,13 @@
 import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { AgentProvider, ProcessManager } from '@shipcode/agents/source';
+import type { AgentProvider, ProcessManager } from '@shipcode/agents';
 import {
   createClaudeCliProvider,
   createCodexCliProvider,
   createProviderRegistry,
-} from '@shipcode/agents/source';
+} from '@shipcode/agents';
+import type { TaskGraphAssessment, TaskGraphWithNodes } from '@shipcode/shared';
 import {
   DEFAULT_SETTINGS,
   type GitHubIssueCacheRecord,
@@ -23,7 +24,6 @@ import {
   type Thread,
   type VerificationRecord,
 } from '@shipcode/shared';
-import type { TaskGraphAssessment, TaskGraphWithNodes } from '@shipcode/shared/source';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPipeline } from './pipeline';
 import type { PipelineContext, PipelineDeps, PipelineEvent } from './types';

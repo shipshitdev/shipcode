@@ -1,4 +1,4 @@
-import { GhCli } from '@shipcode/agents/source';
+import { GhCli } from '@shipcode/agents';
 import {
   buildIssueTerminalGithubComment,
   startIssueTerminalSession,

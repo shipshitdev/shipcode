@@ -15,10 +15,12 @@ import {
   selectPromptMaterials,
   shellExecEnv,
   summarizePromptMaterials,
-} from '@shipcode/agents/source';
+} from '@shipcode/agents';
 import { WorktreeManager } from '@shipcode/git';
 import {
+  buildTaskNodePlan,
   EXECUTION_PHASES,
+  formatTaskGraphExecutionContract,
   inferProviderFromModel,
   isRealGithubIssueNumber,
   MAX_NODE_VERIFICATION_RETRIES,
@@ -27,13 +29,9 @@ import {
   PIPELINE_PHASE,
   parseUnifiedDiff,
   type ShipCodePlan,
+  type TaskNodeRecord,
   VERIFICATION_FENCE_TAG,
 } from '@shipcode/shared';
-import {
-  buildTaskNodePlan,
-  formatTaskGraphExecutionContract,
-  type TaskNodeRecord,
-} from '@shipcode/shared/source';
 import { computeRetryDelayMs } from '../retry-scheduler';
 import type { ExecutePhaseCarry, PipelineContext, VerifyPhaseCarry } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';

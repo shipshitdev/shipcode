@@ -3,7 +3,7 @@ import type {
   ProviderPhase,
   ResolveResult,
   SkillValidationError,
-} from '@shipcode/agents/source';
+} from '@shipcode/agents';
 import type {
   ClarificationRequest,
   GitHubPrCheckSummary,
@@ -11,8 +11,8 @@ import type {
   PhaseSkillKey,
   PipelinePhase,
   ShipCodePlan,
+  TaskGraphWithNodes,
 } from '@shipcode/shared';
-import type { TaskGraphWithNodes } from '@shipcode/shared/source';
 import type {
   ActivePipelineSummary,
   ExecutePhaseCarry,

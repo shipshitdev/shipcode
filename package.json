@@ -5,6 +5,7 @@
     "@types/node": "25.9.1",
     "@vitest/coverage-v8": "4.1.8",
     "clawpatch": "0.5.0",
+    "knip": "6.23.0",
     "turbo": "2.9.16",
     "typescript": "6.0.3",
     "vitest": "4.1.8"
@@ -62,5 +63,8 @@
   "patchedDependencies": {
     "nextra@4.6.1": "patches/nextra@4.6.1.patch",
     "nextra-theme-docs@4.6.1": "patches/nextra-theme-docs@4.6.1.patch"
+  },
+  "engines": {
+    "node": ">=22.5.0"
   }
 }

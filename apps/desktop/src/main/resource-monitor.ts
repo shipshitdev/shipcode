@@ -1,5 +1,5 @@
 import os from 'node:os';
-import type { ProcessManager } from '@shipcode/agents/source';
+import type { ProcessManager } from '@shipcode/agents';
 import type { CpuTaskGateDecision, Pipeline } from '@shipcode/pipeline';
 import type { PipelinePhase, ProcessResourceTask, SystemResourceSnapshot } from '@shipcode/shared';
 import type { Queries } from './ipc/types';
