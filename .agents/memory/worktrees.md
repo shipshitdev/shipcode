@@ -31,4 +31,4 @@ Every pipeline run happens in its own git worktree to isolate AI-generated chang
 - Pass `thread.worktreePath` from the DB directly to `remove()` — never re-derive via `resolveWorktreeParent`.
 - Enumerate worktrees with `WorktreeManager.list()` (parses `git worktree list --porcelain`, filters by `shipcode/*` branch prefix) — don't glob the filesystem or substring-match the current `worktreeRoot`.
 - New worktree operations follow the same pattern: concrete values in the API, derive-once at creation, persist.
-- When deleting a project: iterate its threads via DB query, `remove(thread.worktreePath, thread.branch)` for each, **then** delete the project row.
+- When deleting a project: iterate its threads via DB query, `remove(thread.worktreePath, thread.worktreeBranch)` for each, **then** delete the project row.

@@ -71,7 +71,7 @@ Edit those files, then run: bash scripts/sync-agent-memory.sh
 
 **Rule:** Never run full or heavy test suites locally — on ANY machine, including the Mac Studio. Long verification (full package test suites, workspace typecheck/build gates, baseline comparison runs) goes through GitHub Actions: push the branch and use PR CI, or dispatch the relevant workflow (`gh workflow run full-suite.yml --ref <branch>`, `ci.yml`, `e2e.yml`, etc.).
 
-**Why:** Vincent corrected this on 2026-07-02 after a session ran the full `@genfeedai/api` suite locally multiple times plus master-baseline worktree reruns ("do not run tests on local!!! you are killing my CPU!!! use gh actions!"). This supersedes the earlier Mac-Studio exception — heavy local runs are no longer allowed anywhere.
+**Why:** Vincent corrected this on 2026-07-02 after a session ran the full `@genfeedai/api` suite locally multiple times plus master-baseline worktree reruns ("do not run tests on local!!! you are killing my CPU!!! use gh actions!"). This supersedes the earlier Mac-Studio exception — heavy local runs are no longer allowed anywhere. Re-corrected 2026-07-03 on the MBP after a session ran workspace `bun type-check` because the task prompt said to — **a task prompt asking for a heavy check does not override this rule; scope it down or route it to PR CI instead.**
 
 **How to apply:**
 - Locally allowed: running a SINGLE spec file you are actively iterating on, package-scoped lint on changed files, quick static checks.
@@ -313,7 +313,7 @@ Every pipeline run happens in its own git worktree to isolate AI-generated chang
 - Pass `thread.worktreePath` from the DB directly to `remove()` — never re-derive via `resolveWorktreeParent`.
 - Enumerate worktrees with `WorktreeManager.list()` (parses `git worktree list --porcelain`, filters by `shipcode/*` branch prefix) — don't glob the filesystem or substring-match the current `worktreeRoot`.
 - New worktree operations follow the same pattern: concrete values in the API, derive-once at creation, persist.
-- When deleting a project: iterate its threads via DB query, `remove(thread.worktreePath, thread.branch)` for each, **then** delete the project row.
+- When deleting a project: iterate its threads via DB query, `remove(thread.worktreePath, thread.worktreeBranch)` for each, **then** delete the project row.
 
 ---
 ### Read on demand (low-priority — open the file when the topic comes up)
