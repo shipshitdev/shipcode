@@ -539,7 +539,8 @@ export function registerPipelineHandlers({
           role: 'prompt',
           content: text,
         });
-      } catch {
+      } catch (error) {
+        console.error('[ipc] pipeline:steer-execution failed to persist steering turn', error);
         return {
           threadId,
           status: 'rejected',
