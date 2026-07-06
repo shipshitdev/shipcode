@@ -218,7 +218,7 @@ export interface IpcInvokeChannels {
     args: { threadId: string; instruction: string };
     result: {
       threadId: string;
-      status: 'delivered' | 'stale' | 'rejected';
+      status: 'delivered' | 'queued' | 'stale' | 'rejected';
       message: string;
       processId: string | null;
     };

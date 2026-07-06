@@ -1,5 +1,7 @@
 import type { PipelinePhase } from '@shipcode/shared';
+import { PIPELINE_PHASE } from '@shipcode/shared';
 import { Button, Textarea } from '@shipshitdev/ui';
+import { useQueryClient } from '@tanstack/react-query';
 import { SendHorizontal } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { toast } from '../../stores/toast-store';
@@ -11,14 +13,31 @@ interface ConsoleTabProps {
   threadPhase: PipelinePhase | 'idle';
 }
 
+const STEERABLE_PHASES = new Set<PipelinePhase>([
+  PIPELINE_PHASE.planning,
+  PIPELINE_PHASE.clarifying,
+  PIPELINE_PHASE.reviewing,
+  PIPELINE_PHASE.revising,
+  PIPELINE_PHASE.approval,
+  PIPELINE_PHASE.executing,
+  PIPELINE_PHASE.testing,
+  PIPELINE_PHASE.verifying,
+  PIPELINE_PHASE.shipping,
+  PIPELINE_PHASE.paused,
+]);
+
 export function ConsoleTab({
   activeThreadId,
   approvedAwaitingExecution,
   threadPhase,
 }: ConsoleTabProps) {
+  const queryClient = useQueryClient();
   const [instruction, setInstruction] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const canSteer = activeThreadId !== null && threadPhase === 'executing';
+  const canSteer =
+    activeThreadId !== null &&
+    threadPhase !== 'idle' &&
+    STEERABLE_PHASES.has(threadPhase as PipelinePhase);
 
   const handleSubmit = useCallback(async () => {
     if (!activeThreadId || isSending) return;
@@ -28,7 +47,7 @@ export function ConsoleTab({
     setIsSending(true);
     try {
       const result = await window.shipcode.invoke<{
-        status: 'delivered' | 'stale' | 'rejected';
+        status: 'delivered' | 'queued' | 'stale' | 'rejected';
         message: string;
       }>('pipeline:steer-execution', {
         threadId: activeThreadId,
@@ -37,6 +56,11 @@ export function ConsoleTab({
       if (result.status === 'delivered') {
         setInstruction('');
         toast.success('Instruction delivered');
+        queryClient.invalidateQueries({ queryKey: ['agent-conversations', activeThreadId] });
+      } else if (result.status === 'queued') {
+        setInstruction('');
+        toast.success('Instruction saved', result.message);
+        queryClient.invalidateQueries({ queryKey: ['agent-conversations', activeThreadId] });
       } else {
         toast.error(
           result.status === 'stale' ? 'Instruction stale' : 'Instruction rejected',
@@ -48,7 +72,7 @@ export function ConsoleTab({
     } finally {
       setIsSending(false);
     }
-  }, [activeThreadId, instruction, isSending]);
+  }, [activeThreadId, instruction, isSending, queryClient]);
 
   if (!activeThreadId) {
     return (
@@ -70,11 +94,11 @@ export function ConsoleTab({
         <div className="border-t border-border bg-elevated/95 p-3">
           <div className="flex items-end gap-2">
             <Textarea
-              aria-label="Steer executor"
+              aria-label="Steer workflow"
               value={instruction}
               rows={2}
               className="min-h-[44px] flex-1 resize-none font-mono text-[12px]"
-              placeholder="Inject an instruction into the running executor..."
+              placeholder="Add a steering instruction..."
               disabled={isSending}
               onChange={(event) => setInstruction(event.target.value)}
               onKeyDown={(event) => {

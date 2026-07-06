@@ -513,7 +513,7 @@ export function registerPipelineHandlers({
       { threadId, instruction }: { threadId: string; instruction: string },
     ): {
       threadId: string;
-      status: 'delivered' | 'stale' | 'rejected';
+      status: 'delivered' | 'queued' | 'stale' | 'rejected';
       message: string;
       processId: string | null;
     } => {
@@ -530,12 +530,32 @@ export function registerPipelineHandlers({
       const thread = queries.threads.getById(threadId);
       if (!thread) throw new Error(`Thread ${threadId} not found`);
 
+      try {
+        queries.agentConversations.insert({
+          threadId,
+          runId: thread.currentRunId ?? null,
+          phase: 'steering',
+          speaker: 'human',
+          role: 'prompt',
+          content: text,
+        });
+      } catch {
+        return {
+          threadId,
+          status: 'rejected',
+          message: 'Instruction could not be saved to the conversation thread.',
+          processId: null,
+        };
+      }
+
+      emitTerminalEvent(threadId, { kind: 'user_input', content: text });
+
       const active = pipeline.listActive().find((summary) => summary.threadId === threadId);
       if (!active || active.phase !== PIPELINE_PHASE.executing) {
         return {
           threadId,
-          status: 'stale',
-          message: `Task is not currently executing. Current phase: ${thread.status}.`,
+          status: 'queued',
+          message: `Instruction saved for the next model turn. Current phase: ${thread.status}.`,
           processId: null,
         };
       }
@@ -547,8 +567,9 @@ export function registerPipelineHandlers({
       if (liveProcess?.state !== 'running') {
         return {
           threadId,
-          status: 'stale',
-          message: 'Executor process is no longer running.',
+          status: 'queued',
+          message:
+            'Instruction saved for the next model turn. Executor process is no longer running.',
           processId: liveProcess?.id ?? active.activeProcessId ?? null,
         };
       }
@@ -556,8 +577,9 @@ export function registerPipelineHandlers({
       if (liveProcess.type !== 'claude') {
         return {
           threadId,
-          status: 'rejected',
-          message: 'Mid-execution steering currently supports Claude executor sessions only.',
+          status: 'queued',
+          message:
+            'Instruction saved for the next model turn. Live stdin delivery supports Claude executor sessions only.',
           processId: liveProcess.id,
         };
       }
@@ -566,13 +588,13 @@ export function registerPipelineHandlers({
       if (!delivered) {
         return {
           threadId,
-          status: 'rejected',
-          message: 'Executor stdin is no longer writable.',
+          status: 'queued',
+          message:
+            'Instruction saved for the next model turn. Executor stdin is no longer writable.',
           processId: liveProcess.id,
         };
       }
 
-      emitTerminalEvent(threadId, { kind: 'user_input', content: text });
       return {
         threadId,
         status: 'delivered',

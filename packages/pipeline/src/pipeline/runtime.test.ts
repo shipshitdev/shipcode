@@ -189,6 +189,7 @@ function makeDeps(provider?: AgentProvider) {
     },
     agentConversations: {
       insert: vi.fn(() => ({ id: 'conv-1' })),
+      listByThread: vi.fn(() => []),
     },
   } as unknown as PipelineDeps;
 
@@ -979,6 +980,68 @@ describe('createPipelineRuntime', () => {
     );
     expect(deps.promptTelemetry?.create).toHaveBeenCalledWith(
       expect.objectContaining({ threadId: 'thread-1', runId: 'run-1', phase: 'plan' }),
+    );
+  });
+
+  it('appends human steering turns to provider prompts', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan']),
+      generate: vi.fn(async () => ({
+        rawOutput: 'done',
+        exitCode: 0,
+      })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    const agentConversations = deps.agentConversations as NonNullable<
+      PipelineDeps['agentConversations']
+    >;
+    vi.mocked(agentConversations.listByThread).mockReturnValue([
+      {
+        id: 'steer-1',
+        threadId: 'thread-1',
+        runId: 'run-1',
+        phase: 'steering',
+        round: 0,
+        speaker: 'human',
+        role: 'prompt',
+        parentId: null,
+        provider: null,
+        model: null,
+        content: 'Prefer the shared IPC helper.',
+        tokensIn: null,
+        tokensOut: null,
+        costUsd: null,
+        createdAt: '2026-07-06T10:00:00.000Z',
+      },
+    ] as never);
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext({ runId: 'run-1' });
+
+    await runtime.runProviderPhase(
+      context,
+      buildPhasePayload(context, 'plan'),
+      'base prompt',
+      [],
+      {},
+    );
+
+    expect(provider.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('<human_steering>'),
+      }),
+    );
+    expect(provider.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('Prefer the shared IPC helper.'),
+      }),
+    );
+    expect(deps.agentConversations?.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: 'prompt',
+        content: expect.stringContaining('Prefer the shared IPC helper.'),
+      }),
     );
   });
 

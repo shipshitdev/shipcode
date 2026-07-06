@@ -200,6 +200,10 @@ describe('registerPipelineHandlers', () => {
     promptTelemetry: {
       listByThread: ReturnType<typeof vi.fn>;
     };
+    agentConversations: {
+      insert: ReturnType<typeof vi.fn>;
+      listByThread: ReturnType<typeof vi.fn>;
+    };
     pipelineAnalytics: {
       getOverview: ReturnType<typeof vi.fn>;
       getThread: ReturnType<typeof vi.fn>;
@@ -372,6 +376,10 @@ describe('registerPipelineHandlers', () => {
         listByThread: vi.fn(() => []),
       },
       promptTelemetry: {
+        listByThread: vi.fn(() => []),
+      },
+      agentConversations: {
+        insert: vi.fn(() => ({ id: 'conversation-1' })),
         listByThread: vi.fn(() => []),
       },
       pipelineAnalytics: {
@@ -2080,6 +2088,14 @@ describe('registerPipelineHandlers', () => {
         'proc-1',
         '\n\n[USER INSTRUCTION]: Use the shared helper.\n\n',
       );
+      expect(queries.agentConversations.insert).toHaveBeenCalledWith({
+        threadId: 'thread-1',
+        runId: null,
+        phase: 'steering',
+        speaker: 'human',
+        role: 'prompt',
+        content: 'Use the shared helper.',
+      });
       expect(queries.terminalEvents.create).toHaveBeenCalledWith('thread-1', {
         kind: 'user_input',
         content: 'Use the shared helper.',
@@ -2087,7 +2103,7 @@ describe('registerPipelineHandlers', () => {
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('terminal:event', createdEvent);
     });
 
-    it('returns stale when the thread is no longer executing', () => {
+    it('queues steering when the thread is active but not executing', () => {
       queries.threads.getById.mockReturnValue(makeThread({ status: 'reviewing' }));
       pipeline.listActive.mockReturnValue([]);
 
@@ -2096,15 +2112,27 @@ describe('registerPipelineHandlers', () => {
 
       expect(handler(undefined, { threadId: 'thread-1', instruction: 'Try this' })).toEqual({
         threadId: 'thread-1',
-        status: 'stale',
-        message: 'Task is not currently executing. Current phase: reviewing.',
+        status: 'queued',
+        message: 'Instruction saved for the next model turn. Current phase: reviewing.',
         processId: null,
       });
+      expect(queries.agentConversations.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: 'thread-1',
+          phase: 'steering',
+          speaker: 'human',
+          role: 'prompt',
+          content: 'Try this',
+        }),
+      );
       expect(processManager.write).not.toHaveBeenCalled();
-      expect(queries.terminalEvents.create).not.toHaveBeenCalled();
+      expect(queries.terminalEvents.create).toHaveBeenCalledWith('thread-1', {
+        kind: 'user_input',
+        content: 'Try this',
+      });
     });
 
-    it('rejects steering for non-Claude executor transports', () => {
+    it('queues steering for non-Claude executor transports', () => {
       queries.threads.getById.mockReturnValue(makeThread({ status: 'executing' }));
       pipeline.listActive.mockReturnValue([
         {
@@ -2127,11 +2155,21 @@ describe('registerPipelineHandlers', () => {
 
       expect(handler(undefined, { threadId: 'thread-1', instruction: 'Try this' })).toEqual({
         threadId: 'thread-1',
-        status: 'rejected',
-        message: 'Mid-execution steering currently supports Claude executor sessions only.',
+        status: 'queued',
+        message:
+          'Instruction saved for the next model turn. Live stdin delivery supports Claude executor sessions only.',
         processId: 'proc-1',
       });
       expect(processManager.write).not.toHaveBeenCalled();
+      expect(queries.agentConversations.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: 'thread-1',
+          phase: 'steering',
+          speaker: 'human',
+          role: 'prompt',
+          content: 'Try this',
+        }),
+      );
     });
   });
 

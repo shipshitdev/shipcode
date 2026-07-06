@@ -12,16 +12,26 @@ const PHASE_COLORS: Record<string, string> = {
   execute: 'bg-green-500/15 text-green-400',
   verify: 'bg-cyan-500/15 text-cyan-400',
   issue_chat: 'bg-sky-500/15 text-sky-400',
+  steering: 'bg-rose-500/15 text-rose-400',
 };
 
 const SPEAKER_COLORS: Record<string, string> = {
   pipeline: 'bg-zinc-500/15 text-zinc-400',
+  human: 'bg-rose-500/15 text-rose-400',
   claude: 'bg-orange-500/15 text-orange-400',
   codex: 'bg-emerald-500/15 text-emerald-400',
   openrouter: 'bg-violet-500/15 text-violet-400',
 };
 
-const ALL_PHASES = ['plan', 'review', 'revision', 'execute', 'verify', 'issue_chat'] as const;
+const ALL_PHASES = [
+  'plan',
+  'review',
+  'revision',
+  'execute',
+  'verify',
+  'steering',
+  'issue_chat',
+] as const;
 const COLLAPSE_LINE_THRESHOLD = 30;
 type GithubPostState = 'hidden' | 'idle' | 'posting' | 'posted';
 
