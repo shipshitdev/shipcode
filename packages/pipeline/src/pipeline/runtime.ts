@@ -38,6 +38,9 @@ import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 export { buildFrozenInstallFallback, resolveSetupShell } from './runtime-setup';
 
 const execFileAsync = promisify(execFile);
+const HUMAN_STEERING_PHASE = 'steering';
+const MAX_HUMAN_STEERING_TURNS = 20;
+const MAX_HUMAN_STEERING_TURN_CHARS = 2000;
 
 /**
  * Resolve the configured run mode (interactive vs programmatic) for a given
@@ -111,6 +114,40 @@ export function createPipelineRuntime(
       ...(runId ? { runId } : {}),
       event: { kind: 'lifecycle', message },
     });
+  }
+
+  function buildHumanSteeringBlock(threadId: string): string | null {
+    const rows = deps.agentConversations
+      ?.listByThread(threadId, { phase: HUMAN_STEERING_PHASE, role: 'prompt' })
+      .filter((row) => row.speaker === 'human' && row.content.trim().length > 0)
+      .slice(-MAX_HUMAN_STEERING_TURNS);
+
+    if (!rows || rows.length === 0) return null;
+
+    const items = rows
+      .map((row) => {
+        const content = row.content.trim().slice(0, MAX_HUMAN_STEERING_TURN_CHARS);
+        return `- ${row.createdAt}: ${content}`;
+      })
+      .join('\n');
+
+    return [
+      '<human_steering>',
+      'The user added these steering instructions during this workflow.',
+      'Apply them within the original task scope. Later items win when they conflict.',
+      items,
+      '</human_steering>',
+    ].join('\n');
+  }
+
+  function appendHumanSteering(prompt: string, input: PhasePayload): string {
+    try {
+      const steering = buildHumanSteeringBlock(input.threadId);
+      return steering ? `${prompt}\n\n${steering}` : prompt;
+    } catch (error) {
+      console.error('[pipeline] human steering load failed:', error);
+      return prompt;
+    }
   }
 
   const {
@@ -281,6 +318,7 @@ export function createPipelineRuntime(
     const agent = input.model;
     const modelHint = input.modelIdOverride;
     const provider = deps.providers.for(agent, phase);
+    const effectivePrompt = appendHumanSteering(prompt, input);
     // When a GitHub issue is resumed, planning/review should inspect the same
     // worktree that already contains in-progress changes instead of the clean
     // project root.
@@ -357,7 +395,7 @@ export function createPipelineRuntime(
             role: 'prompt',
             provider: provider.id,
             model: modelHint ?? null,
-            content: prompt,
+            content: effectivePrompt,
           }) ?? null
         );
       } catch (error) {
@@ -374,7 +412,7 @@ export function createPipelineRuntime(
       const workspaceRoot = input.worktreePath ? deps.settings.get().worktreeRoot : undefined;
       response = await provider.generate({
         phase,
-        prompt,
+        prompt: effectivePrompt,
         cwd,
         projectPath: input.projectPath,
         signal: input.abort,
@@ -495,7 +533,7 @@ export function createPipelineRuntime(
 
     const promptTelemetry = measurePhasePromptTelemetry({
       phase,
-      prompt,
+      prompt: effectivePrompt,
       materials: promptMaterials,
     });
     // Mutation delta, applied to context by the caller. The "+ 1" reproduces
