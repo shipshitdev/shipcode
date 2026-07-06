@@ -225,6 +225,7 @@ function useProjectSidebarView() {
 
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const unsubFire = window.shipcode.on('notification:fire', () => {
@@ -242,6 +243,8 @@ function useProjectSidebarView() {
   const handleResizeMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
+      resizeCleanupRef.current?.();
+      resizeCleanupRef.current = null;
       dragRef.current = { startX: e.clientX, startW: sidebarWidth };
       const onMove = (ev: MouseEvent) => {
         const drag = dragRef.current;
@@ -250,18 +253,31 @@ function useProjectSidebarView() {
         const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, drag.startW + delta));
         setSidebarWidth(next);
       };
-      const onUp = () => {
-        dragRef.current = null;
+      const cleanupResizeDrag = () => {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         document.body.classList.remove('cursor-col-resize', 'select-none');
       };
+      const onUp = () => {
+        dragRef.current = null;
+        cleanupResizeDrag();
+        resizeCleanupRef.current = null;
+      };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
       document.body.classList.add('cursor-col-resize', 'select-none');
+      resizeCleanupRef.current = cleanupResizeDrag;
     },
     [sidebarWidth],
   );
+
+  useEffect(() => {
+    return () => {
+      resizeCleanupRef.current?.();
+      resizeCleanupRef.current = null;
+      dragRef.current = null;
+    };
+  }, []);
 
   // Pinned projects always float to top and remain alphabetical; unpinned
   // projects keep the user's selected sort order.

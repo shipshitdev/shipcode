@@ -717,6 +717,39 @@ describe('ProjectSidebar', () => {
     expect(document.body).not.toHaveClass('cursor-col-resize', 'select-none');
   });
 
+  it('cleans up active resize listeners and body classes on unmount', async () => {
+    mockSidebarData(invokeMock);
+    const addListenerSpy = vi.spyOn(document, 'addEventListener');
+    const removeListenerSpy = vi.spyOn(document, 'removeEventListener');
+    const { unmount } = renderWithProviders();
+
+    const resizeHandle = await screen.findByRole('button', { name: 'Resize project sidebar' });
+    addListenerSpy.mockClear();
+    removeListenerSpy.mockClear();
+
+    fireEvent.mouseDown(resizeHandle, { clientX: 256 });
+
+    const mouseMoveListener = addListenerSpy.mock.calls.find(([type]) => type === 'mousemove')?.[1];
+    const mouseUpListener = addListenerSpy.mock.calls.find(([type]) => type === 'mouseup')?.[1];
+    expect(mouseMoveListener).toBeDefined();
+    expect(mouseUpListener).toBeDefined();
+    expect(document.body).toHaveClass('cursor-col-resize', 'select-none');
+
+    unmount();
+
+    expect(
+      removeListenerSpy.mock.calls.some(
+        ([type, listener]) => type === 'mousemove' && listener === mouseMoveListener,
+      ),
+    ).toBe(true);
+    expect(
+      removeListenerSpy.mock.calls.some(
+        ([type, listener]) => type === 'mouseup' && listener === mouseUpListener,
+      ),
+    ).toBe(true);
+    expect(document.body).not.toHaveClass('cursor-col-resize', 'select-none');
+  });
+
   it('handles missing project relink, pin, archive, remove confirmation, and unavailable open target', async () => {
     const missingProject: Project = {
       ...project,

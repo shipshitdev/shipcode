@@ -658,6 +658,45 @@ describe('migrateV27', () => {
     expect(truncatedPlan.raw_output).toContain('suffix');
     expect(truncatedPlan.raw_output).toContain('[truncated historical raw_output]');
   });
+
+  it('preserves existing raw output when structured artifacts are fenced', () => {
+    db.prepare("INSERT INTO projects (id, name, path) VALUES ('p1', 'test', '/tmp/test')").run();
+    db.prepare(
+      "INSERT INTO threads (id, project_id, title, prompt) VALUES ('t1', 'p1', 'Issue', 'Prompt')",
+    ).run();
+
+    db.prepare(
+      `INSERT INTO plans (id, thread_id, version, raw_output, structured, status)
+       VALUES ('plan-raw', 't1', 1, 'planner transcript before JSON', '{"id":"p","threadId":"t1","version":1,"objective":"obj","files":[],"steps":[],"acceptanceCriteria":[],"outOfScope":[],"estimatedComplexity":"low","dependencies":[]}', 'draft')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO reviews (id, plan_id, decision, confidence, raw_output, structured)
+       VALUES ('review-raw', 'plan-raw', 'approve', 'high', 'reviewer transcript before JSON', '{"planId":"plan-raw","decision":"approve","confidence":"high","summary":"ok","findings":[],"suggestedChanges":[]}')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO verifications (id, thread_id, plan_id, raw_output, structured, result, retry_count)
+       VALUES ('verification-raw', 't1', 'plan-raw', 'verifier transcript before JSON', '{"threadId":"t1","planId":"plan-raw","result":"passed","summary":"ok","criteriaResults":[],"issues":[]}', 'passed', 0)`,
+    ).run();
+
+    migrateV27(db);
+
+    const plan = db.prepare('SELECT raw_output FROM plans WHERE id = ?').get('plan-raw') as {
+      raw_output: string;
+    };
+    const review = db.prepare('SELECT raw_output FROM reviews WHERE id = ?').get('review-raw') as {
+      raw_output: string;
+    };
+    const verification = db
+      .prepare('SELECT raw_output FROM verifications WHERE id = ?')
+      .get('verification-raw') as { raw_output: string };
+
+    expect(plan.raw_output).toContain('planner transcript before JSON');
+    expect(plan.raw_output).toContain('```shipcode-plan');
+    expect(review.raw_output).toContain('reviewer transcript before JSON');
+    expect(review.raw_output).toContain('```shipcode-review');
+    expect(verification.raw_output).toContain('verifier transcript before JSON');
+    expect(verification.raw_output).toContain('```shipcode-verification');
+  });
 });
 
 describe('migrateV30', () => {

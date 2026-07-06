@@ -141,22 +141,24 @@ export function migrateV27(db: DatabaseSync): void {
     const reviewFencePrefix = `\`\`\`${REVIEW_FENCE_TAG}\n`;
     const verificationFencePrefix = `\`\`\`${VERIFICATION_FENCE_TAG}\n`;
     const fenceSuffix = '\n```';
+    const rawStructuredSeparator = '\n\n';
+    const appendStructuredArtifact = (
+      table: 'plans' | 'reviews' | 'verifications',
+      fencePrefix: string,
+    ) => {
+      db.prepare(
+        `UPDATE ${table}
+            SET raw_output = CASE
+              WHEN COALESCE(raw_output, '') = '' THEN ? || structured || ?
+              ELSE raw_output || ? || ? || structured || ?
+            END
+          WHERE structured IS NOT NULL`,
+      ).run(fencePrefix, fenceSuffix, rawStructuredSeparator, fencePrefix, fenceSuffix);
+    };
 
-    db.prepare(
-      `UPDATE plans
-          SET raw_output = ? || structured || ?
-        WHERE structured IS NOT NULL`,
-    ).run(planFencePrefix, fenceSuffix);
-    db.prepare(
-      `UPDATE reviews
-          SET raw_output = ? || structured || ?
-        WHERE structured IS NOT NULL`,
-    ).run(reviewFencePrefix, fenceSuffix);
-    db.prepare(
-      `UPDATE verifications
-          SET raw_output = ? || structured || ?
-        WHERE structured IS NOT NULL`,
-    ).run(verificationFencePrefix, fenceSuffix);
+    appendStructuredArtifact('plans', planFencePrefix);
+    appendStructuredArtifact('reviews', reviewFencePrefix);
+    appendStructuredArtifact('verifications', verificationFencePrefix);
 
     db.prepare(
       `UPDATE plans

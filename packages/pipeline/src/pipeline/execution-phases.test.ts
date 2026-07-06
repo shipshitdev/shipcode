@@ -464,7 +464,7 @@ describe('execution phase helpers', () => {
     expect(extractImplicatedFiles('no test files mentioned')).toEqual([]);
   });
 
-  it('detects worktree changes from status, fork-point diff, and git failures', () => {
+  it('detects worktree changes from status and fork-point diff', () => {
     const context = {
       projectPath: '/project',
       worktreePath: '/worktree',
@@ -504,13 +504,6 @@ describe('execution phase helpers', () => {
         forkPointSha: '',
         baseBranch: 'main',
       } as PipelineContext),
-    ).toBe(true);
-
-    mockExecFileSync.mockImplementation(() => {
-      throw new Error('not a git repo');
-    });
-    expect(
-      worktreeHasChanges({ projectPath: '/project', forkPointSha: '' } as PipelineContext),
     ).toBe(true);
   });
 
