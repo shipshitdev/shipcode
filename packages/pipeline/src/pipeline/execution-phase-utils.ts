@@ -212,9 +212,20 @@ export function worktreeHasChanges(context: PipelineContext): boolean {
     }
 
     return false;
-  } catch {
-    return true;
+  } catch (error) {
+    // A failed git probe is not evidence of a dirty tree; report no confirmed
+    // changes and leave the infrastructure failure visible in the process log.
+    const message = formatWorktreeProbeError(error);
+    console.warn(
+      `[pipeline] worktree change probe failed; treating as no confirmed changes for thread ${context.threadId}: ${message}`,
+    );
+    return false;
   }
+}
+
+function formatWorktreeProbeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.split('\n')[0].slice(0, 280) || 'unknown error';
 }
 
 /**
