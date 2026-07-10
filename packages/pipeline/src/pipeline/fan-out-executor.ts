@@ -104,6 +104,22 @@ function clampWorkerCount(requested: number): number {
   return Math.min(Math.floor(requested), MAX_FAN_OUT_WORKER_COUNT);
 }
 
+/**
+ * Resolve the concurrency ceiling for an in-phase fan-out worker pool.
+ *
+ * The pool must be bounded by its OWN worker count — never by
+ * `agentPolicy.maxConcurrentAgents`, which is the scheduler's project-wide cap
+ * on concurrently running pipeline THREADS (see `pipeline-scheduler.ts`).
+ * Reusing that value here conflated two different concurrency semantics: with
+ * N threads each in fan-out execute, real concurrent agent processes reached
+ * N × fanOutWorkerCount (plus judges), overshooting the ceiling the setting is
+ * meant to enforce. `fanOutWorkerCount` is already clamped to
+ * [1, MAX_FAN_OUT_WORKER_COUNT], so the pool can never exceed that bound.
+ */
+export function resolveFanOutMaxConcurrent(fanOutWorkerCount: number): number {
+  return clampWorkerCount(fanOutWorkerCount);
+}
+
 /** Run `thunks` with at most `limit` in flight at once, preserving order. */
 async function mapWithConcurrency<T>(
   count: number,
