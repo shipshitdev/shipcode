@@ -1,6 +1,6 @@
 ---
 name: react-component-performance
-description: Diagnose slow React components and suggest targeted performance fixes.
+description: Diagnose slow React components and suggest targeted performance fixes. Use when profiling or improving a slow React component, or reducing re-renders, list lag, or expensive render work.
 metadata:
   version: "1.0.0"
   source: https://github.com/Dimillian/Skills/blob/main/react-component-performance/SKILL.md
@@ -14,8 +14,6 @@ metadata:
   date_added: "2026-03-25"
 ---
 # React Component Performance
-
-## Overview
 
 Identify render hotspots, isolate expensive updates, and apply targeted optimizations without changing UI behavior.
 

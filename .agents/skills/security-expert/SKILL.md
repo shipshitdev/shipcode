@@ -1,16 +1,14 @@
 ---
 name: security-expert
-description: Expert in application security, OWASP Top 10, authentication, authorization, data protection, and security best practices for React, Next.js, and NestJS applications
+description: Expert in application security, OWASP Top 10, authentication, authorization, data protection, and security best practices for React, Next.js, and NestJS applications. Use when implementing authentication or authorization, reviewing code for vulnerabilities, handling sensitive data, or implementing encryption or hashing.
 metadata:
-  version: "1.0.0"
+  version: "1.0.1"
   tags: "security, owasp, application-security"
 ---
 
 # Security Expert Skill
 
-Expert in application security for React, Next.js, and NestJS applications.
-
-## When to Use This Skill
+## When to Use
 
 - Implementing authentication or authorization
 - Reviewing code for security vulnerabilities
@@ -24,7 +22,7 @@ Expert in application security for React, Next.js, and NestJS applications.
 ## Project Context Discovery
 
 1. Check `.agents/memory/` for security architecture notes and project facts
-2. Review `CLAUDE.md` (repo-level and global) for security rules and "never do" constraints
+2. Review the agent instruction files (`AGENTS.md`/`CLAUDE.md`/`CODEX.md`, repo-level and global) for security rules and "never do" constraints
 3. Identify security patterns and tools
 4. Check for `[project]-security-expert` skill
 
