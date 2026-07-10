@@ -93,6 +93,10 @@ export interface AppSettings {
   // When true, pipeline pauses at approval after review loop for human sign-off.
   // When false (default), it proceeds directly to execution.
   requireApproval: boolean;
+  // When true (default), the plan comment is posted/updated on the GitHub issue
+  // whenever a plan is approved (autonomous or manual). When false, plan comments
+  // are suppressed; task-graph and review comments are unaffected.
+  postPlanCommentsEnabled: boolean;
   // Per-phase reasoning effort. Applied as:
   //   Claude: mapped to a supported thinking-token budget
   //   Codex:  mapped to supported low|medium|high levels

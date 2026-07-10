@@ -314,6 +314,10 @@ export class SettingsQueries {
         ? stored.pipelineSpeedProfile
         : DEFAULT_SETTINGS.pipelineSpeedProfile,
       requireApproval: parseBool(stored.requireApproval, DEFAULT_SETTINGS.requireApproval),
+      postPlanCommentsEnabled: parseBool(
+        stored.postPlanCommentsEnabled,
+        DEFAULT_SETTINGS.postPlanCommentsEnabled,
+      ),
       plannerReasoningEffort: isReasoningEffort(stored.plannerReasoningEffort)
         ? (stored.plannerReasoningEffort as AppSettings['plannerReasoningEffort'])
         : DEFAULT_SETTINGS.plannerReasoningEffort,
