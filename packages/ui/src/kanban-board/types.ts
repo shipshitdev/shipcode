@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type {
   AppSettings,
+  ExecutorModel,
   GitHubIssueCacheRecord,
   IssuePipelineStatus,
   Project,
@@ -80,7 +81,7 @@ export type BoardColumn = {
 
 export type IssuePhaseChip = {
   phase: ResolvedPhaseModel;
-  provider: 'claude' | 'codex' | 'gemini' | 'cursor' | 'openrouter';
+  provider: ExecutorModel;
   model: string;
   effort: string | null;
 };
