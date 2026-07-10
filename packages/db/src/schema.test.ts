@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  MIGRATIONS,
   migrate,
   migrateV2,
   migrateV3,
@@ -55,16 +56,11 @@ import {
   migrateV52,
   migrateV53,
   migrateV54,
-  migrateV55,
-  migrateV56,
-  migrateV57,
   migrateV58,
   migrateV59,
   migrateV60,
   migrateV61,
   migrateV62,
-  migrateV63,
-  migrateV64,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -102,75 +98,11 @@ function indexExists(db: DatabaseSync, name: string): boolean {
   return !!row;
 }
 
-const migrations = [
-  migrate,
-  migrateV2,
-  migrateV3,
-  migrateV4,
-  migrateV5,
-  migrateV6,
-  migrateV7,
-  migrateV8,
-  migrateV9,
-  migrateV10,
-  migrateV11,
-  migrateV12,
-  migrateV13,
-  migrateV14,
-  migrateV15,
-  migrateV16,
-  migrateV17,
-  migrateV18,
-  migrateV19,
-  migrateV20,
-  migrateV21,
-  migrateV22,
-  migrateV23,
-  migrateV24,
-  migrateV25,
-  migrateV26,
-  migrateV27,
-  migrateV28,
-  migrateV29,
-  migrateV30,
-  migrateV31,
-  migrateV32,
-  migrateV33,
-  migrateV34,
-  migrateV35,
-  migrateV36,
-  migrateV37,
-  migrateV38,
-  migrateV39,
-  migrateV40,
-  migrateV41,
-  migrateV42,
-  migrateV43,
-  migrateV44,
-  migrateV45,
-  migrateV46,
-  migrateV47,
-  migrateV48,
-  migrateV49,
-  migrateV50,
-  migrateV51,
-  migrateV52,
-  migrateV53,
-  migrateV54,
-  migrateV55,
-  migrateV56,
-  migrateV57,
-  migrateV58,
-  migrateV59,
-  migrateV60,
-  migrateV61,
-  migrateV62,
-  migrateV63,
-  migrateV64,
-] as const;
-
+// Iterate the canonical MIGRATIONS registry (the same list the production runner
+// and createTestDb consume) so this helper can never fall behind the real
+// migration chain. Runs each migration in order and stops after `target`.
 function migrateThrough(db: DatabaseSync, target: (db: DatabaseSync) => void): void {
-  for (const migration of migrations) {
+  for (const migration of MIGRATIONS) {
     migration(db);
     if (migration === target) return;
   }
