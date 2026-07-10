@@ -94,7 +94,7 @@ export class AgentConversationQueries {
 
   listByThread(
     threadId: string,
-    filters?: { phase?: string; role?: 'prompt' | 'response' },
+    filters?: { phase?: string; role?: 'prompt' | 'response'; runId?: string },
   ): AgentConversationRecord[] {
     let sql = 'SELECT * FROM agent_conversations WHERE thread_id = ?';
     const params: (string | number | null)[] = [threadId];
@@ -106,6 +106,17 @@ export class AgentConversationQueries {
     if (filters?.role) {
       sql += ' AND role = ?';
       params.push(filters.role);
+    }
+    // Scope to a single run when requested. Rows with a NULL run_id (legacy
+    // turns written before run tracking populated the column) are intentionally
+    // excluded here: matching them into an `AND run_id = ?` query is impossible,
+    // and treating NULL as "belongs to every run" would re-leak the same rows
+    // into later runs on the thread — exactly the cross-run bleed this filter
+    // exists to prevent. Callers that omit runId keep the prior thread-wide
+    // behavior, so legacy rows remain visible in unscoped queries.
+    if (filters?.runId) {
+      sql += ' AND run_id = ?';
+      params.push(filters.runId);
     }
 
     sql += ' ORDER BY created_at ASC LIMIT 1000';

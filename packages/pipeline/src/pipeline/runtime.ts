@@ -117,9 +117,18 @@ export function createPipelineRuntime(
     });
   }
 
-  function buildHumanSteeringBlock(threadId: string): string | null {
+  function buildHumanSteeringBlock(threadId: string, runId: string | null): string | null {
+    // Scope steering to the run it was given in ("during this workflow"). Without
+    // the runId filter, an instruction from run A would be silently re-injected
+    // into every later run B/C on the same thread until it aged out of the row
+    // window. A null runId (thread with no active run tracking) falls back to the
+    // thread-wide window rather than dropping all steering.
     const rows = deps.agentConversations
-      ?.listByThread(threadId, { phase: HUMAN_STEERING_PHASE, role: 'prompt' })
+      ?.listByThread(threadId, {
+        phase: HUMAN_STEERING_PHASE,
+        role: 'prompt',
+        ...(runId ? { runId } : {}),
+      })
       .filter((row) => row.speaker === 'human' && row.content.trim().length > 0)
       .slice(-MAX_HUMAN_STEERING_TURNS);
 
@@ -143,7 +152,7 @@ export function createPipelineRuntime(
 
   function appendHumanSteering(prompt: string, input: PhasePayload): string {
     try {
-      const steering = buildHumanSteeringBlock(input.threadId);
+      const steering = buildHumanSteeringBlock(input.threadId, input.runId);
       return steering ? `${prompt}\n\n${steering}` : prompt;
     } catch (error) {
       console.error('[pipeline] human steering load failed:', error);
