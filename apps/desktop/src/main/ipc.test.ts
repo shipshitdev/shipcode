@@ -118,6 +118,8 @@ describe('registerIpcHandlers', () => {
     vi.clearAllMocks();
   });
 
+  const ghSync = { getProject: vi.fn(), syncToGithub: vi.fn() };
+
   function register() {
     registerIpcHandlers(
       ipcMain,
@@ -131,6 +133,8 @@ describe('registerIpcHandlers', () => {
       { id: 7 } as never,
       { id: 8 } as never,
       { id: 9 } as never,
+      () => {},
+      ghSync as never,
     );
   }
 
@@ -146,6 +150,7 @@ describe('registerIpcHandlers', () => {
         phase: 'failed',
         errorMessage: 'interrupted',
       },
+      ghSync,
     );
     expect(mocks.logger.info).toHaveBeenCalledWith(
       '[startup] reset orphaned thread thread-1 → failed',
