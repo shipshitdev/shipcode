@@ -689,15 +689,14 @@ export async function checkGrokAuth(): Promise<boolean> {
     return true;
   }
 
-  // Otherwise rely on the CLI's own stored credentials. The exact status
-  // subcommand should be confirmed against the installed Grok Build CLI; this
-  // probe fails closed (reports unauthenticated) if the command differs.
-  try {
-    await execAsync('grok auth status', { timeout: 10_000, env: shellExecEnv() });
-    return true;
-  } catch {
-    return false;
-  }
+  // Otherwise rely on the CLI's own stored credentials. Grok Build has no
+  // `grok auth status` subcommand — its command surface is `grok login` /
+  // `grok logout`, which read/write `~/.grok/auth.json` (mode 0600). Probing a
+  // nonexistent subcommand exits non-zero and would fail closed even when the
+  // user is logged in, so we check for the credential file directly, mirroring
+  // `checkCodexAuth`'s `~/.codex/auth.json` check.
+  const grokAuthPath = join(homedir(), '.grok', 'auth.json');
+  return fileExists(grokAuthPath);
 }
 
 export type OpenRouterAuthStatus =
