@@ -39,7 +39,15 @@ describe('grok-cli-provider', () => {
 
   it('adds --always-approve only for execute and keeps the prompt in stdin', () => {
     expect(_internals.buildGrokCommand(req({ phase: 'execute', modelHint: 'grok-4.5' }))).toEqual({
-      args: ['-p', '--output-format', 'json', '--no-auto-update', '--model', 'grok-4.5', '--always-approve'],
+      args: [
+        '-p',
+        '--output-format',
+        'json',
+        '--no-auto-update',
+        '--model',
+        'grok-4.5',
+        '--always-approve',
+      ],
       stdin: 'PROMPT',
     });
   });
