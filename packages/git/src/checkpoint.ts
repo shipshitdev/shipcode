@@ -85,6 +85,18 @@ export async function listCheckpointRefs(
   return refs.sort((a, b) => a.turn - b.turn);
 }
 
+export interface CaptureCheckpointOptions {
+  /**
+   * Highest turn already recorded for this thread in the caller's durable store
+   * (the SQLite checkpoint rows). When provided, the next turn is derived as
+   * `lastKnownTurn + 1` and the live `for-each-ref` scan is skipped entirely
+   * (#328): the DB is the monotonic high-water mark, so a turn is never reused
+   * even after older refs were pruned on rollback. Pass `null`/omit for legacy
+   * threads with no DB turn — capture then falls back to scanning live refs.
+   */
+  lastKnownTurn?: number | null;
+}
+
 /**
  * Snapshot the worktree's current filesystem state into a hidden checkpoint
  * ref. Uses a temporary index under the repo's common git dir so the real
@@ -94,6 +106,7 @@ export async function listCheckpointRefs(
 export async function captureCheckpoint(
   worktreePath: string,
   threadId: string,
+  options: CaptureCheckpointOptions = {},
 ): Promise<CheckpointRef> {
   const commonDirRaw = await runGit(worktreePath, ['rev-parse', '--git-common-dir']);
   const commonDir = path.resolve(worktreePath, commonDirRaw);
@@ -119,8 +132,17 @@ export async function captureCheckpoint(
     await runGit(worktreePath, ['add', '-A', '--', '.'], indexEnv);
     const treeSha = await runGit(worktreePath, ['write-tree'], indexEnv);
 
-    const existing = await listCheckpointRefs(worktreePath, threadId);
-    const turn = existing.length > 0 ? existing[existing.length - 1].turn + 1 : 0;
+    // Prefer the caller's durable high-water mark (DB rows) so a turn is never
+    // reused after older refs were pruned, and skip the O(refs) for-each-ref
+    // scan the caller already paid for via getLatest (#328). Fall back to the
+    // live-ref scan only for legacy threads with no known DB turn.
+    let turn: number;
+    if (typeof options.lastKnownTurn === 'number' && Number.isFinite(options.lastKnownTurn)) {
+      turn = options.lastKnownTurn + 1;
+    } else {
+      const existing = await listCheckpointRefs(worktreePath, threadId);
+      turn = existing.length > 0 ? existing[existing.length - 1].turn + 1 : 0;
+    }
     const refName = checkpointRefName(threadId, turn);
 
     const commitSha = await runGit(
@@ -183,20 +205,24 @@ export async function restoreCheckpoint(worktreePath: string, refName: string): 
 }
 
 /**
- * Delete a thread's checkpoint refs, optionally only those with a turn
- * strictly greater than `newerThanTurn` (post-rollback pruning). Best-effort:
+ * Delete a thread's checkpoint refs, optionally filtered by turn:
+ * `newerThanTurn` keeps turns ≤ N (post-rollback pruning), `olderThanTurn`
+ * keeps turns ≥ N (capture-time GC that retains only the most recent turns,
+ * #328). With neither, every ref for the thread is deleted. Best-effort:
  * individual delete failures are skipped. Returns the number deleted.
  */
 export async function deleteThreadCheckpointRefs(
   repoPath: string,
   threadId: string,
-  options: { newerThanTurn?: number } = {},
+  options: { newerThanTurn?: number; olderThanTurn?: number } = {},
 ): Promise<number> {
   const refs = await listCheckpointRefs(repoPath, threadId);
-  const targets =
-    options.newerThanTurn === undefined
-      ? refs
-      : refs.filter((ref) => ref.turn > (options.newerThanTurn as number));
+  const { newerThanTurn, olderThanTurn } = options;
+  const targets = refs.filter(
+    (ref) =>
+      (newerThanTurn === undefined || ref.turn > newerThanTurn) &&
+      (olderThanTurn === undefined || ref.turn < olderThanTurn),
+  );
   let deleted = 0;
   for (const ref of targets) {
     try {

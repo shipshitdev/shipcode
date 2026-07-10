@@ -16,7 +16,13 @@ import {
   shellExecEnv,
   summarizePromptMaterials,
 } from '@shipcode/agents';
-import { captureCheckpoint, WorktreeManager } from '@shipcode/git';
+import {
+  captureCheckpoint,
+  type CheckpointRef,
+  deleteThreadCheckpointRefs,
+  parseCheckpointTurn,
+  WorktreeManager,
+} from '@shipcode/git';
 import {
   buildTaskNodePlan,
   EXECUTION_PHASES,
@@ -33,7 +39,12 @@ import {
   VERIFICATION_FENCE_TAG,
 } from '@shipcode/shared';
 import { computeRetryDelayMs } from '../retry-scheduler';
-import type { ExecutePhaseCarry, PipelineContext, VerifyPhaseCarry } from '../types';
+import type {
+  ExecutePhaseCarry,
+  PipelineContext,
+  PipelineDeps,
+  VerifyPhaseCarry,
+} from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { buildPhasePayload, resetPhaseState } from './context';
 import {
@@ -72,6 +83,38 @@ import {
   toQaStatus,
   writeVisualQaRuntimeTest,
 } from './visual-qa';
+
+/** Retain at most this many recent checkpoint turns per thread. Older refs and
+ *  their DB rows are pruned at capture time so a long-lived thread doesn't
+ *  accumulate one ref + one permanent row per execute attempt forever (#328). */
+const CHECKPOINT_HISTORY_LIMIT = 25;
+
+/** Highest checkpoint turn durably recorded for this thread, or null when the
+ *  latest row predates ref-backed checkpoints (legacy). captureCheckpoint uses
+ *  this as its monotonic high-water mark so a turn is never reused, and skips
+ *  the live-ref scan when it is known (#328). */
+function latestKnownCheckpointTurn(deps: PipelineDeps, threadId: string): number | null {
+  const latest = deps.checkpoints.getLatest(threadId);
+  return latest?.refName ? parseCheckpointTurn(latest.refName) : null;
+}
+
+/** Capture-time GC of checkpoint refs and their DB rows outside the retained
+ *  window. Best-effort — checkpoint bookkeeping must never fail the phase. */
+async function pruneStaleCheckpoints(
+  deps: PipelineDeps,
+  cwd: string,
+  threadId: string,
+  newestTurn: number,
+): Promise<void> {
+  const minKeptTurn = newestTurn - CHECKPOINT_HISTORY_LIMIT + 1;
+  if (minKeptTurn <= 0) return;
+  try {
+    await deleteThreadCheckpointRefs(cwd, threadId, { olderThanTurn: minKeptTurn });
+    deps.checkpoints.deleteOlderThan(threadId, minKeptTurn);
+  } catch (pruneError) {
+    console.error(`[pipeline] checkpoint GC failed for thread ${threadId}:`, pruneError);
+  }
+}
 
 export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: PipelineHelperEnv) {
   const { activePipelines, skillCallSite } = contextHelpers;
@@ -775,9 +818,13 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         // Hidden checkpoint ref (#212): snapshot the full worktree state so
         // restore/resume can recover uncommitted work. Ref capture failure
         // must never block execution — fall back to a metadata-only row.
-        let refName: string | null = null;
+        // The already-fetched `latest` row is the turn high-water mark, so
+        // captureCheckpoint skips the redundant for-each-ref scan (#328).
+        let captured: CheckpointRef | null = null;
         try {
-          refName = (await captureCheckpoint(cwd, threadId)).refName;
+          captured = await captureCheckpoint(cwd, threadId, {
+            lastKnownTurn: latest?.refName ? parseCheckpointTurn(latest.refName) : null,
+          });
         } catch (captureError) {
           console.error(
             `[pipeline] checkpoint ref capture failed for thread ${threadId}:`,
@@ -792,8 +839,9 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           label,
           branch,
           commitSha,
-          refName,
+          refName: captured?.refName ?? null,
         });
+        if (captured) await pruneStaleCheckpoints(deps, cwd, threadId, captured.turn);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -966,7 +1014,9 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       // task-graph-node attempt. Best-effort — never fails the phase.
       try {
         const attemptCwd = context.worktreePath ?? context.projectPath;
-        const captured = await captureCheckpoint(attemptCwd, threadId);
+        const captured = await captureCheckpoint(attemptCwd, threadId, {
+          lastKnownTurn: latestKnownCheckpointTurn(deps, threadId),
+        });
         const attemptCommitSha = execFileSync('git', ['rev-parse', 'HEAD'], {
           cwd: attemptCwd,
           encoding: 'utf-8',
@@ -992,6 +1042,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           commitSha: attemptCommitSha,
           refName: captured.refName,
         });
+        await pruneStaleCheckpoints(deps, attemptCwd, threadId, captured.turn);
       } catch (captureError) {
         console.error(
           `[pipeline] post-attempt checkpoint capture failed for thread ${threadId}:`,

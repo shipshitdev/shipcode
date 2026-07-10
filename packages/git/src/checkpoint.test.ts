@@ -91,6 +91,67 @@ describe('checkpoint refs', () => {
     expect(refs.map((ref) => ref.turn)).toEqual([0, 1]);
   });
 
+  it('derives the next turn from lastKnownTurn without scanning refs', async () => {
+    const repo = makeRepo();
+    // Only turn 0 exists on disk, but the DB high-water mark is 5. The hint
+    // must win so a turn is never reused after prior refs were pruned (#328).
+    await captureCheckpoint(repo, 'thread-1');
+    const hinted = await captureCheckpoint(repo, 'thread-1', { lastKnownTurn: 5 });
+    expect(hinted.turn).toBe(6);
+    expect(hinted.refName).toBe('refs/shipcode/checkpoints/thread-1/turn/6');
+
+    // A null hint falls back to the live-ref scan (legacy threads, no DB turn).
+    const scanned = await captureCheckpoint(repo, 'thread-1', { lastKnownTurn: null });
+    expect(scanned.turn).toBe(7);
+  });
+
+  it('never reuses a turn after a rollback prune, leaving surviving refs intact', async () => {
+    const repo = makeRepo();
+    // Turns 0..3, each capturing distinct content.
+    for (let i = 0; i < 4; i++) {
+      writeFileSync(path.join(repo, `f${i}.txt`), `content-${i}\n`);
+      await captureCheckpoint(repo, 'thread-1', { lastKnownTurn: i - 1 });
+    }
+    const turn1Sha = git(repo, ['rev-parse', 'refs/shipcode/checkpoints/thread-1/turn/1']);
+
+    // Restore to turn 1: refs 2 and 3 are stale and get pruned.
+    await deleteThreadCheckpointRefs(repo, 'thread-1', { newerThanTurn: 1 });
+    expect((await listCheckpointRefs(repo, 'thread-1')).map((ref) => ref.turn)).toEqual([0, 1]);
+
+    // Next capture uses the DB high-water (turn 1) hint → turn 2, fresh content.
+    writeFileSync(path.join(repo, 'reused.txt'), 'brand-new\n');
+    const recaptured = await captureCheckpoint(repo, 'thread-1', { lastKnownTurn: 1 });
+    expect(recaptured.turn).toBe(2);
+
+    // Surviving turn/1 ref is untouched (no silent clobber of older content).
+    expect(git(repo, ['rev-parse', 'refs/shipcode/checkpoints/thread-1/turn/1'])).toBe(turn1Sha);
+    // The reused turn/2 ref points at the brand-new content, not stale content.
+    const reusedTree = git(repo, [
+      'ls-tree',
+      '-r',
+      '--name-only',
+      'refs/shipcode/checkpoints/thread-1/turn/2',
+    ]);
+    expect(reusedTree).toContain('reused.txt');
+    expect((await listCheckpointRefs(repo, 'thread-1')).map((ref) => ref.turn)).toEqual([0, 1, 2]);
+  });
+
+  it('prunes refs older than a turn for capture-time GC', async () => {
+    const repo = makeRepo();
+    for (let i = 0; i < 4; i++) {
+      writeFileSync(path.join(repo, `g${i}.txt`), `g-${i}\n`);
+      await captureCheckpoint(repo, 'thread-1', { lastKnownTurn: i - 1 });
+    }
+    await captureCheckpoint(repo, 'thread-2');
+
+    // Keep the two most recent turns (2, 3): drop everything with turn < 2.
+    const pruned = await deleteThreadCheckpointRefs(repo, 'thread-1', { olderThanTurn: 2 });
+    expect(pruned).toBe(2);
+    expect((await listCheckpointRefs(repo, 'thread-1')).map((ref) => ref.turn)).toEqual([2, 3]);
+    // Other threads untouched.
+    expect(await listCheckpointRefs(repo, 'thread-2')).toHaveLength(1);
+  });
+
   it('restores the captured filesystem state and removes post-checkpoint files', async () => {
     const repo = makeRepo();
     writeFileSync(path.join(repo, 'keep.txt'), 'modified\n');

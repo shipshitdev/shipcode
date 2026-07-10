@@ -939,12 +939,16 @@ export function registerProjectHandlers({
             timeout: 15_000,
           });
         }
-        // Rollback pruning (#212): refs newer than the restored turn are stale.
+        // Rollback pruning (#212, #328): refs AND their DB rows newer than the
+        // restored turn are stale and must be dropped together. Leaving the
+        // rows behind lets a later capture reuse the turn number and silently
+        // resolve the stale row to unrelated content on a future restore.
         const restoredTurn = checkpoint.refName ? parseCheckpointTurn(checkpoint.refName) : null;
         if (restoredTurn !== null) {
           await deleteThreadCheckpointRefs(thread.worktreePath, threadId, {
             newerThanTurn: restoredTurn,
           });
+          queries.checkpoints.deleteNewerThan(threadId, restoredTurn);
         }
       } catch (error) {
         throw new Error(clampError(error));
