@@ -26,6 +26,10 @@ const GEMINI_REASONING_EFFORTS = [
 // model decides. ShipCode therefore offers only `none` (send nothing).
 const CURSOR_REASONING_EFFORTS = ['none'] as const satisfies readonly ReasoningEffort[];
 
+// Grok Build's headless mode exposes no reasoning-effort flag either; Grok picks
+// its own reasoning depth, so ShipCode offers only `none` (send nothing).
+const GROK_REASONING_EFFORTS = ['none'] as const satisfies readonly ReasoningEffort[];
+
 const CLAUDE_REASONING_EFFORTS = [
   'none',
   'medium',
@@ -118,6 +122,10 @@ export function getSupportedReasoningEfforts(
 
   if (provider === 'cursor') {
     return CURSOR_REASONING_EFFORTS;
+  }
+
+  if (provider === 'grok') {
+    return GROK_REASONING_EFFORTS;
   }
 
   if (normalizedModelId && OPENROUTER_ADAPTIVE_CLAUDE_MODELS.has(normalizedModelId)) {
@@ -231,6 +239,19 @@ export function resolveProviderReasoningEffort(
       exact: false,
       message:
         'Cursor selects reasoning automatically per model; ShipCode does not send a reasoning effort.',
+    };
+  }
+
+  if (provider === 'grok') {
+    if (configured === 'none') {
+      return { configured, effective: 'none', exact: true, message: null };
+    }
+    return {
+      configured,
+      effective: 'none',
+      exact: false,
+      message:
+        'Grok selects reasoning automatically per model; ShipCode does not send a reasoning effort.',
     };
   }
 

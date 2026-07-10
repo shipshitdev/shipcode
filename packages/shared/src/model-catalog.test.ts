@@ -4,6 +4,7 @@ import {
   CODEX_FALLBACK_MODEL_OPTIONS,
   GEMINI_FALLBACK_MODEL_OPTIONS,
   getKnownModelLabel,
+  GROK_FALLBACK_MODEL_OPTIONS,
   OPENROUTER_MODEL_IDS,
   OPENROUTER_MODEL_OPTIONS,
   PINNED_MODEL_DEFAULTS,
@@ -28,6 +29,9 @@ describe('model-catalog', () => {
       },
       cursor: {
         phase: 'auto',
+      },
+      grok: {
+        phase: 'grok-4.5',
       },
       openrouter: {
         paid: 'openrouter/auto',
@@ -93,6 +97,11 @@ describe('model-catalog', () => {
     expect(getKnownModelLabel('gpt-5.6-luna')).toBe('GPT-5.6 Luna');
   });
 
+  it('exposes Grok 4.5 as a selectable Grok fallback option', () => {
+    expect(GROK_FALLBACK_MODEL_OPTIONS.map((option) => option.value)).toEqual(['grok-4.5']);
+    expect(getKnownModelLabel('grok-4.5')).toBe('Grok 4.5');
+  });
+
   describe('resolveModelAlias', () => {
     it('resolves bare family shorthands to the pinned generation', () => {
       expect(resolveModelAlias('opus')).toBe('claude-opus-4-8');
@@ -115,6 +124,13 @@ describe('model-catalog', () => {
       expect(resolveModelAlias('5.6-terra')).toBe('gpt-5.6-terra');
       expect(resolveModelAlias('luna')).toBe('gpt-5.6-luna');
       expect(resolveModelAlias('5.6-luna')).toBe('gpt-5.6-luna');
+    });
+
+    it('resolves Grok shorthands', () => {
+      expect(resolveModelAlias('grok')).toBe('grok-4.5');
+      expect(resolveModelAlias('grok-4.5')).toBe('grok-4.5');
+      expect(resolveModelAlias('grok4.5')).toBe('grok-4.5');
+      expect(resolveModelAlias('GROK')).toBe('grok-4.5');
     });
 
     it('is case-insensitive and trims whitespace', () => {

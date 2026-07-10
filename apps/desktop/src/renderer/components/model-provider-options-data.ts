@@ -11,6 +11,7 @@ export const PROVIDER_DISPLAY: Record<ExecutorModel, string> = {
   codex: 'OpenAI',
   gemini: 'Google',
   cursor: 'Cursor',
+  grok: 'xAI',
   openrouter: 'OpenRouter',
 };
 
@@ -22,7 +23,8 @@ export function getModelOptions(
     provider === 'claude' ||
     provider === 'codex' ||
     provider === 'gemini' ||
-    provider === 'cursor'
+    provider === 'cursor' ||
+    provider === 'grok'
   ) {
     return getCapabilityModelOptions(integrationStatus, provider);
   }

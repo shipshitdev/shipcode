@@ -56,6 +56,7 @@ vi.mock('@shipcode/agents', () => ({
   routeFromLabels: routeFromLabelsMock,
   createClaudeCliProvider: vi.fn(() => ({ id: 'claude' })),
   createCodexCliProvider: vi.fn(() => ({ id: 'codex' })),
+  createGrokCliProvider: vi.fn(() => ({ id: 'grok' })),
   createOpenRouterProvider: vi.fn(() => ({ id: 'openrouter' })),
   createProviderRegistry: vi.fn((providers) => providers),
 }));

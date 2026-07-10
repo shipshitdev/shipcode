@@ -28,6 +28,7 @@ export interface RegistryProviders {
   codex: AgentProvider;
   gemini?: AgentProvider;
   cursor?: AgentProvider;
+  grok?: AgentProvider;
   openrouter: AgentProvider;
 }
 
@@ -39,6 +40,7 @@ export function createProviderRegistry(providers: RegistryProviders): ProviderRe
   ]);
   if (providers.gemini) byId.set(providers.gemini.id, providers.gemini);
   if (providers.cursor) byId.set(providers.cursor.id, providers.cursor);
+  if (providers.grok) byId.set(providers.grok.id, providers.grok);
 
   function forAgent(agent: AgentType): AgentProvider {
     switch (agent) {
@@ -56,6 +58,11 @@ export function createProviderRegistry(providers: RegistryProviders): ProviderRe
           throw new Error("ProviderRegistry: provider for agent 'cursor' is not registered");
         }
         return providers.cursor;
+      case 'grok':
+        if (!providers.grok) {
+          throw new Error("ProviderRegistry: provider for agent 'grok' is not registered");
+        }
+        return providers.grok;
       case 'openrouter':
         return providers.openrouter;
       case 'gh':

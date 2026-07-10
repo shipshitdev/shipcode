@@ -15,9 +15,10 @@ describe('createProviderRegistry', () => {
   const claude = makeProvider('claude-cli', ['plan', 'review', 'revision', 'verify', 'execute']);
   const codex = makeProvider('codex-cli', ['plan', 'review', 'revision', 'verify', 'execute']);
   const gemini = makeProvider('gemini-cli', ['plan', 'review', 'revision', 'verify', 'execute']);
-  // Cursor is execute-only: it has no read-only mode, so it must not drive the
-  // pipeline's read-only phases.
+  // Cursor and Grok are execute-only: they have no read-only mode, so they must
+  // not drive the pipeline's read-only phases.
   const cursor = makeProvider('cursor-cli', ['execute']);
+  const grok = makeProvider('grok-cli', ['execute']);
   const openrouter = makeProvider('openrouter', [
     'plan',
     'review',
@@ -25,7 +26,7 @@ describe('createProviderRegistry', () => {
     'verify',
     'execute',
   ]);
-  const registry = createProviderRegistry({ claude, codex, gemini, cursor, openrouter });
+  const registry = createProviderRegistry({ claude, codex, gemini, cursor, grok, openrouter });
 
   it('dispatches claude agent to claude-cli provider', () => {
     expect(registry.for('claude', 'plan')).toBe(claude);
@@ -59,6 +60,22 @@ describe('createProviderRegistry', () => {
     expect(() => registry.for('cursor', 'plan')).toThrow(/does not support phase 'plan'/);
     expect(() => registry.for('cursor', 'review')).toThrow(/does not support phase 'review'/);
     expect(() => registry.for('cursor', 'verify')).toThrow(/does not support phase 'verify'/);
+  });
+
+  it('dispatches grok agent to grok-cli provider for execute only', () => {
+    expect(registry.for('grok', 'execute')).toBe(grok);
+    expect(() => registry.for('grok', 'plan')).toThrow(/does not support phase 'plan'/);
+    expect(() => registry.for('grok', 'review')).toThrow(/does not support phase 'review'/);
+    expect(() => registry.for('grok', 'verify')).toThrow(/does not support phase 'verify'/);
+  });
+
+  it('throws when grok is requested but no grok provider is registered', () => {
+    const withoutGrok = createProviderRegistry({ claude, codex, gemini, cursor, openrouter });
+
+    expect(() => withoutGrok.for('grok', 'execute')).toThrow(
+      /provider for agent 'grok' is not registered/,
+    );
+    expect(withoutGrok.all().has('grok-cli')).toBe(false);
   });
 
   it('throws when cursor is requested but no cursor provider is registered', () => {
@@ -104,7 +121,8 @@ describe('createProviderRegistry', () => {
     expect(all.get('codex-cli')).toBe(codex);
     expect(all.get('gemini-cli')).toBe(gemini);
     expect(all.get('cursor-cli')).toBe(cursor);
+    expect(all.get('grok-cli')).toBe(grok);
     expect(all.get('openrouter')).toBe(openrouter);
-    expect(all.size).toBe(5);
+    expect(all.size).toBe(6);
   });
 });
