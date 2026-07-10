@@ -270,6 +270,31 @@ export class AutomationQueries {
       .run(status, id);
   }
 
+  /**
+   * Ids of automations that will be fully cascade-deleted when `projectId` is
+   * removed: their primary `project_id` is this project AND they have no other
+   * target to fall back to. Callers must `unschedule` these so no in-memory cron
+   * job keeps firing no-ops after the row is gone.
+   *
+   * Read-only — call BEFORE the project delete (afterwards the rows are gone).
+   * Automations that merely list `projectId` as a secondary target are NOT
+   * included: the FK cascade drops only their target row and they survive.
+   */
+  listCascadingProjectRemoval(projectId: string): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id FROM automations
+          WHERE project_id = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM automation_targets t
+               WHERE t.automation_id = automations.id
+                 AND t.project_id != ?
+            )`,
+      )
+      .all(projectId, projectId);
+    return asRows<{ id: string }>(rows).map((r) => r.id);
+  }
+
   delete(id: string): void {
     this.db.prepare('DELETE FROM automations WHERE id = ?').run(id);
   }

@@ -91,6 +91,7 @@ export function registerIpcHandlers(
     notificationService,
     chatNotificationService,
     resourceMonitor,
+    automationScheduler,
     onProjectsChanged,
   } as const;
 
