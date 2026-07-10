@@ -53,6 +53,70 @@ describe('reasoning-effort', () => {
     });
   });
 
+  it('never offers none for Fable 5, whose thinking cannot be disabled', () => {
+    expect(getSupportedReasoningEfforts('claude', 'claude-fable-5')).toEqual(['medium', 'high']);
+    expect(getSupportedReasoningEfforts('claude', ' claude-fable-5 ')).toEqual(['medium', 'high']);
+  });
+
+  it('maps unsupported Fable 5 efforts to the nearest thinking budget', () => {
+    for (const configured of ['none', 'minimal', 'low'] as const) {
+      expect(resolveProviderReasoningEffort('claude', configured, 'claude-fable-5')).toEqual({
+        configured,
+        effective: 'medium',
+        exact: false,
+        message:
+          'Fable 5 always uses adaptive thinking; ShipCode supports Medium and High thinking budgets for it. Using Medium.',
+      });
+    }
+    expect(resolveProviderReasoningEffort('claude', 'xhigh', 'claude-fable-5')).toEqual({
+      configured: 'xhigh',
+      effective: 'high',
+      exact: false,
+      message:
+        'Fable 5 always uses adaptive thinking; ShipCode supports Medium and High thinking budgets for it. Using High.',
+    });
+    expect(resolveProviderReasoningEffort('claude', 'medium', 'claude-fable-5')).toEqual({
+      configured: 'medium',
+      effective: 'medium',
+      exact: true,
+      message: null,
+    });
+    expect(resolveProviderReasoningEffort('claude', 'high', 'claude-fable-5')).toEqual({
+      configured: 'high',
+      effective: 'high',
+      exact: true,
+      message: null,
+    });
+    // Other Claude models keep the legacy none/medium/high behavior.
+    expect(resolveProviderReasoningEffort('claude', 'none', 'claude-opus-4-8')).toEqual({
+      configured: 'none',
+      effective: 'none',
+      exact: true,
+      message: null,
+    });
+  });
+
+  it('keeps supported Codex efforts exact across GPT-5.6 tiers', () => {
+    for (const modelId of ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']) {
+      expect(getSupportedReasoningEfforts('codex', modelId)).toEqual([
+        'low',
+        'medium',
+        'high',
+        'xhigh',
+      ]);
+      expect(resolveProviderReasoningEffort('codex', 'xhigh', modelId)).toEqual({
+        configured: 'xhigh',
+        effective: 'xhigh',
+        exact: true,
+        message: null,
+      });
+      expect(resolveProviderReasoningEffort('codex', 'none', modelId)).toMatchObject({
+        effective: 'low',
+        exact: false,
+      });
+    }
+  });
+
   it('keeps supported Codex efforts exact across GPT-5.5 and GPT-5.4 models', () => {
     expect(resolveProviderReasoningEffort('codex', 'xhigh', 'gpt-5.5')).toEqual({
       configured: 'xhigh',

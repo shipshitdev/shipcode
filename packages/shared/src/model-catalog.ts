@@ -8,12 +8,16 @@ export const CLAUDE_MODEL_IDS = {
   opus46: 'claude-opus-4-6',
   opus47: 'claude-opus-4-7',
   opus48: 'claude-opus-4-8',
+  fable5: 'claude-fable-5',
   haiku45: 'claude-haiku-4-5-20251001',
 } as const;
 
 export type ClaudeModelId = (typeof CLAUDE_MODEL_IDS)[keyof typeof CLAUDE_MODEL_IDS];
 
 export const CODEX_FALLBACK_MODEL_IDS = {
+  gpt56Sol: 'gpt-5.6-sol',
+  gpt56Terra: 'gpt-5.6-terra',
+  gpt56Luna: 'gpt-5.6-luna',
   gpt55: 'gpt-5.5',
   gpt54: 'gpt-5.4',
   gpt54Mini: 'gpt-5.4-mini',
@@ -56,12 +60,16 @@ export const CLAUDE_MODEL_OPTIONS = [
   { value: CLAUDE_MODEL_IDS.opus46, label: 'Opus 4.6' },
   { value: CLAUDE_MODEL_IDS.opus47, label: 'Opus 4.7' },
   { value: CLAUDE_MODEL_IDS.opus48, label: 'Opus 4.8' },
+  { value: CLAUDE_MODEL_IDS.fable5, label: 'Fable 5' },
   { value: CLAUDE_MODEL_IDS.haiku45, label: 'Haiku 4.5' },
 ] as const satisfies readonly KnownModelOption<ClaudeModelId>[];
 
 // Codex publishes the real model catalog via `codex debug models`. These are
 // conservative fallbacks only, used when an old CLI cannot report capabilities.
 export const CODEX_FALLBACK_MODEL_OPTIONS = [
+  { value: CODEX_FALLBACK_MODEL_IDS.gpt56Sol, label: 'GPT-5.6 Sol' },
+  { value: CODEX_FALLBACK_MODEL_IDS.gpt56Terra, label: 'GPT-5.6 Terra' },
+  { value: CODEX_FALLBACK_MODEL_IDS.gpt56Luna, label: 'GPT-5.6 Luna' },
   { value: CODEX_FALLBACK_MODEL_IDS.gpt55, label: 'GPT-5.5' },
   { value: CODEX_FALLBACK_MODEL_IDS.gpt54, label: 'GPT-5.4' },
   { value: CODEX_FALLBACK_MODEL_IDS.gpt54Mini, label: 'GPT-5.4 Mini' },
@@ -157,8 +165,20 @@ export const MODEL_SLUG_ALIASES: Record<string, string> = {
   'opus-4.6': CLAUDE_MODEL_IDS.opus46,
   sonnet: CLAUDE_MODEL_IDS.sonnet46,
   'sonnet-4.6': CLAUDE_MODEL_IDS.sonnet46,
+  fable: CLAUDE_MODEL_IDS.fable5,
+  'fable-5': CLAUDE_MODEL_IDS.fable5,
+  fable5: CLAUDE_MODEL_IDS.fable5,
   haiku: CLAUDE_MODEL_IDS.haiku45,
   'haiku-4.5': CLAUDE_MODEL_IDS.haiku45,
+  // Bare 5.6 routes to Sol (the flagship tier) upstream.
+  '5.6': CODEX_FALLBACK_MODEL_IDS.gpt56Sol,
+  'gpt-5.6': CODEX_FALLBACK_MODEL_IDS.gpt56Sol,
+  '5.6-sol': CODEX_FALLBACK_MODEL_IDS.gpt56Sol,
+  sol: CODEX_FALLBACK_MODEL_IDS.gpt56Sol,
+  '5.6-terra': CODEX_FALLBACK_MODEL_IDS.gpt56Terra,
+  terra: CODEX_FALLBACK_MODEL_IDS.gpt56Terra,
+  '5.6-luna': CODEX_FALLBACK_MODEL_IDS.gpt56Luna,
+  luna: CODEX_FALLBACK_MODEL_IDS.gpt56Luna,
   '5.5': CODEX_FALLBACK_MODEL_IDS.gpt55,
   '5.4': CODEX_FALLBACK_MODEL_IDS.gpt54,
   '5.4-mini': CODEX_FALLBACK_MODEL_IDS.gpt54Mini,
