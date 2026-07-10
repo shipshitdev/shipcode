@@ -96,6 +96,22 @@ describe('reasoning-effort', () => {
     });
   });
 
+  it('offers only none for Grok, which exposes no reasoning-effort control', () => {
+    expect(getSupportedReasoningEfforts('grok', 'grok-4.5')).toEqual(['none']);
+    expect(resolveProviderReasoningEffort('grok', 'none', 'grok-4.5')).toEqual({
+      configured: 'none',
+      effective: 'none',
+      exact: true,
+      message: null,
+    });
+    expect(resolveProviderReasoningEffort('grok', 'high', 'grok-4.5')).toMatchObject({
+      effective: 'none',
+      exact: false,
+      message:
+        'Grok selects reasoning automatically per model; ShipCode does not send a reasoning effort.',
+    });
+  });
+
   it('keeps supported Codex efforts exact across GPT-5.6 tiers', () => {
     for (const modelId of ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']) {
       expect(getSupportedReasoningEfforts('codex', modelId)).toEqual([

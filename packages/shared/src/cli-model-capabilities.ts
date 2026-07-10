@@ -3,6 +3,7 @@ import {
   CODEX_FALLBACK_MODEL_OPTIONS,
   CURSOR_FALLBACK_MODEL_OPTIONS,
   GEMINI_FALLBACK_MODEL_OPTIONS,
+  GROK_FALLBACK_MODEL_OPTIONS,
   type KnownModelOption,
 } from './model-catalog';
 import { getSupportedReasoningEfforts } from './reasoning-effort';
@@ -44,7 +45,9 @@ export function fallbackCliModelCapabilities(
         ? CODEX_FALLBACK_MODEL_OPTIONS
         : provider === 'gemini'
           ? GEMINI_FALLBACK_MODEL_OPTIONS
-          : CURSOR_FALLBACK_MODEL_OPTIONS;
+          : provider === 'grok'
+            ? GROK_FALLBACK_MODEL_OPTIONS
+            : CURSOR_FALLBACK_MODEL_OPTIONS;
   return {
     provider,
     source: 'fallback',
@@ -130,7 +133,9 @@ export function assessCliModelAvailabilityFromCapabilities(
         ? 'Codex CLI'
         : provider === 'gemini'
           ? 'Gemini CLI'
-          : 'Cursor CLI';
+          : provider === 'grok'
+            ? 'Grok CLI'
+            : 'Cursor CLI';
   const sourceDetail =
     capabilities.source === 'catalog'
       ? 'installed CLI catalog'
@@ -181,7 +186,9 @@ export function assessCliReasoningEffortAvailabilityFromCapabilities(
           ? 'Codex CLI'
           : provider === 'gemini'
             ? 'Gemini CLI'
-            : 'Cursor CLI'
+            : provider === 'grok'
+              ? 'Grok CLI'
+              : 'Cursor CLI'
     } does not report ${effort} effort${modelLabel}. Choose a supported effort or update the CLI.`,
   };
 }

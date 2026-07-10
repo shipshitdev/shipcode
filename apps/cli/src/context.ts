@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   createClaudeCliProvider,
   createCodexCliProvider,
+  createGrokCliProvider,
   createOpenRouterProvider,
   createProviderRegistry,
   GhCli,
@@ -95,6 +96,7 @@ export function createCliContext(cwd: string): CliContext {
   const providers = createProviderRegistry({
     claude: createClaudeCliProvider(processManager),
     codex: createCodexCliProvider(processManager),
+    grok: createGrokCliProvider(processManager),
     openrouter: createOpenRouterProvider({
       getApiKey: () => process.env.OPENROUTER_API_KEY,
       getSettings: () => settings.get(),

@@ -7,6 +7,7 @@ export const PROVIDER_DISPLAY: Record<ExecutorModel, string> = {
   codex: 'Codex',
   gemini: 'Gemini',
   cursor: 'Cursor',
+  grok: 'Grok',
   openrouter: 'OpenRouter',
 };
 
@@ -15,6 +16,7 @@ export const MODEL_DISPLAY: Record<string, string> = { ...KNOWN_MODEL_LABELS };
 const CODEX_MODEL_PATTERN = /^gpt-5(?:[.-]|$)/i;
 const GEMINI_MODEL_PATTERN = /^gemini(?:[.-]|$)/i;
 const CURSOR_MODEL_PATTERN = /^cursor(?:[.-]|$)/i;
+const GROK_MODEL_PATTERN = /^grok(?:[.-]|$)/i;
 
 function normalizeModel(value: string | null | undefined): string | null {
   const sanitized = sanitizeResolvedModel(value);
@@ -52,6 +54,10 @@ export function inferProviderFromModel(
 
     if (normalized === 'cursor' || CURSOR_MODEL_PATTERN.test(normalized)) {
       return 'cursor';
+    }
+
+    if (normalized === 'grok' || GROK_MODEL_PATTERN.test(normalized)) {
+      return 'grok';
     }
 
     if (

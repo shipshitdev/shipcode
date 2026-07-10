@@ -258,7 +258,7 @@ export interface ProviderResponse {
 }
 
 export interface AgentProvider {
-  readonly id: 'claude-cli' | 'codex-cli' | 'gemini-cli' | 'cursor-cli' | 'openrouter';
+  readonly id: 'claude-cli' | 'codex-cli' | 'gemini-cli' | 'cursor-cli' | 'grok-cli' | 'openrouter';
   readonly supports: ReadonlySet<ProviderPhase>;
   generate(req: ProviderRequest): Promise<ProviderResponse>;
   healthCheck(): Promise<{ ok: boolean; reason?: string }>;

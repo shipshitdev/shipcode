@@ -60,6 +60,7 @@ import {
   createCodexCliProvider,
   createCursorCliProvider,
   createGeminiCliProvider,
+  createGrokCliProvider,
   createOpenRouterProvider,
   createProviderRegistry,
   GhCli,
@@ -300,6 +301,7 @@ function createWindow() {
     codex: createCodexCliProvider(processManager),
     gemini: createGeminiCliProvider(processManager),
     cursor: createCursorCliProvider(processManager),
+    grok: createGrokCliProvider(processManager),
     openrouter: createOpenRouterProvider({
       getApiKey: () => process.env.OPENROUTER_API_KEY,
       getSettings: () => queries.settings.get(),
