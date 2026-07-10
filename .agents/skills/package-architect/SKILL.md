@@ -1,6 +1,6 @@
 ---
 name: package-architect
-description: Design and maintain TypeScript packages in a monorepo, including exports and build configuration.
+description: Design and maintain TypeScript packages in a monorepo, including exports and build configuration. Use when creating or restructuring monorepo packages, defining package.json exports, or setting up tsconfig references.
 metadata:
   version: "1.0.0"
   tags: "packages, monorepo, typescript"
@@ -8,7 +8,7 @@ metadata:
 
 # Package Architect
 
-You design reusable TypeScript packages in monorepos (Bun, pnpm, or npm workspaces).
+Design reusable TypeScript packages in monorepos (Bun, pnpm, or npm workspaces).
 
 ## When to Use
 
