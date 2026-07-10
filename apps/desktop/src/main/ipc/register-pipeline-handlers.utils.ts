@@ -93,6 +93,18 @@ function formatTerminalResumeLine(record: TerminalEventRecord): string | null {
   }
 }
 
+async function isGitRefResolvable(cwd: string, refName: string): Promise<boolean> {
+  try {
+    await execFileAsync('git', ['rev-parse', '--verify', `${refName}^{commit}`], {
+      cwd,
+      encoding: 'utf8',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function readGitResumeOutput(cwd: string, args: string[], label: string): Promise<string> {
   try {
     const { stdout } = await execFileAsync('git', args, {
@@ -116,7 +128,15 @@ export async function buildExecutionResumeContext(
   const isPaused = thread.status === PIPELINE_PHASE.paused;
   const interruptedPhase = isPaused ? thread.pausedPhase : (thread.failurePhase ?? thread.status);
   const checkpoint = queries.checkpoints.getLatest(thread.id);
-  const diffBase = checkpoint?.commitSha ?? 'HEAD';
+  // Prefer the hidden checkpoint ref (#212): its tree snapshots the full
+  // worktree state at capture (including then-uncommitted changes), so the
+  // resume diff shows exactly what changed since the checkpoint — the commit
+  // SHA alone would misattribute pre-existing dirty state to the resumed run.
+  const refBase =
+    checkpoint?.refName && (await isGitRefResolvable(thread.worktreePath, checkpoint.refName))
+      ? checkpoint.refName
+      : null;
+  const diffBase = refBase ?? checkpoint?.commitSha ?? 'HEAD';
   const [status, changedFiles, diffStat, diffExcerpt] = await Promise.all([
     readGitResumeOutput(thread.worktreePath, ['status', '--short'], 'git status'),
     readGitResumeOutput(
@@ -145,8 +165,8 @@ export async function buildExecutionResumeContext(
     `Last error: ${thread.lastError ?? (isPaused ? 'Paused by user' : 'Unknown interruption')}`,
     `Worktree: ${thread.worktreePath}`,
     checkpoint
-      ? `Checkpoint before execution: ${checkpoint.label} (${checkpoint.commitSha.slice(0, 12)})`
-      : 'Checkpoint before execution: none recorded; using HEAD as the diff base.',
+      ? `Last checkpoint: ${checkpoint.label} (${checkpoint.commitSha.slice(0, 12)})`
+      : 'Last checkpoint: none recorded; using HEAD as the diff base.',
     '',
     '<current_git_status>',
     status || 'Clean',

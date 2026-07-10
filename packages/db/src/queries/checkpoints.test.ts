@@ -36,6 +36,7 @@ describe('CheckpointQueries', () => {
       label: 'Before execute attempt 1',
       branch: 'ship/1-demo',
       commitSha: 'abc123',
+      refName: `refs/shipcode/checkpoints/${thread.id}/turn/0`,
     });
     const second = checkpoints.create({
       threadId: thread.id,
@@ -45,9 +46,14 @@ describe('CheckpointQueries', () => {
       label: 'Before execute attempt 2',
       branch: 'ship/1-demo',
       commitSha: 'def456',
+      refName: null,
     });
 
     expect(checkpoints.getById(first.id)?.commitSha).toBe('abc123');
+    expect(checkpoints.getById(first.id)?.refName).toBe(
+      `refs/shipcode/checkpoints/${thread.id}/turn/0`,
+    );
+    expect(checkpoints.getById(second.id)?.refName).toBeNull();
     expect(checkpoints.getLatest(thread.id)?.id).toBe(second.id);
     expect(checkpoints.list(thread.id).map((checkpoint) => checkpoint.id)).toEqual([
       second.id,
@@ -78,6 +84,7 @@ describe('CheckpointQueries', () => {
     expect(row).toMatchObject({
       id: 'checkpoint-invalid-date',
       branch: null,
+      refName: null,
       createdAt: '',
     });
     expect(checkpoints.getById('missing')).toBeNull();
@@ -94,6 +101,7 @@ describe('CheckpointQueries', () => {
         label: 'Before verify',
         branch: null,
         commitSha: 'def456',
+        refName: null,
       }),
     ).toThrow(/Failed to load checkpoint after insert/);
   });

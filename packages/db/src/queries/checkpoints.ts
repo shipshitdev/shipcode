@@ -13,6 +13,7 @@ interface PipelineCheckpointRow {
   label: string;
   branch: string | null;
   commit_sha: string;
+  ref_name: string | null;
   created_at: string;
 }
 
@@ -26,6 +27,7 @@ function mapRow(row: PipelineCheckpointRow): PipelineCheckpoint {
     label: row.label,
     branch: row.branch ?? null,
     commitSha: row.commit_sha,
+    refName: row.ref_name ?? null,
     createdAt: toIsoUtc(row.created_at) ?? row.created_at,
   };
 }
@@ -69,6 +71,7 @@ export class CheckpointQueries {
     label: string;
     branch: string | null;
     commitSha: string;
+    refName: string | null;
   }): PipelineCheckpoint {
     const id = nanoid();
     this.db
@@ -81,8 +84,9 @@ export class CheckpointQueries {
            reason,
            label,
            branch,
-           commit_sha
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           commit_sha,
+           ref_name
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -93,6 +97,7 @@ export class CheckpointQueries {
         input.label,
         input.branch,
         input.commitSha,
+        input.refName,
       );
     const checkpoint = this.getById(id);
     if (!checkpoint) {

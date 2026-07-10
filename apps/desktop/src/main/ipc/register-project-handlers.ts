@@ -17,7 +17,14 @@ import {
   validateProjectStatusField,
   writeProjectSetup,
 } from '@shipcode/agents';
-import { GitService, WorktreeManager } from '@shipcode/git';
+import {
+  deleteAllCheckpointRefs,
+  deleteThreadCheckpointRefs,
+  GitService,
+  parseCheckpointTurn,
+  restoreCheckpoint,
+  WorktreeManager,
+} from '@shipcode/git';
 import type {
   AppSettings,
   DesktopAppHealthMap,
@@ -553,6 +560,14 @@ export function registerProjectHandlers({
       )
     ).flatMap((failure) => (failure ? [failure] : []));
 
+    // Checkpoint refs are meaningless once the project's worktrees are gone
+    // (#212). Best-effort: a stale ref must never block project teardown.
+    try {
+      await deleteAllCheckpointRefs(project.path);
+    } catch (error) {
+      log.warn(`[cleanup] checkpoint ref cleanup failed for ${project.path}:`, error);
+    }
+
     if (failures.length > 0) {
       throw new Error(`Failed to clean up ${failures.length} worktree(s):\n${failures.join('\n')}`);
     }
@@ -898,14 +913,42 @@ export function registerProjectHandlers({
         throw new Error('Stop the active pipeline before restoring a checkpoint');
       }
 
-      await execAsync(`git reset --hard ${checkpoint.commitSha}`, {
-        cwd: thread.worktreePath,
-        timeout: 15_000,
-      });
-      await execAsync('git clean -fd', {
-        cwd: thread.worktreePath,
-        timeout: 15_000,
-      });
+      try {
+        // Ref-backed restore (#212): reproduce the checkpoint's full captured
+        // filesystem state (including then-uncommitted work). Legacy rows and
+        // missing refs fall back to the commit-SHA hard reset.
+        let restoredFromRef = false;
+        if (checkpoint.refName) {
+          try {
+            await restoreCheckpoint(thread.worktreePath, checkpoint.refName);
+            restoredFromRef = true;
+          } catch (refError) {
+            log.warn(
+              `[checkpoint:restore] ref restore failed for ${checkpoint.refName}; falling back to commit SHA:`,
+              refError,
+            );
+          }
+        }
+        if (!restoredFromRef) {
+          await execAsync(`git reset --hard ${checkpoint.commitSha}`, {
+            cwd: thread.worktreePath,
+            timeout: 15_000,
+          });
+          await execAsync('git clean -fd', {
+            cwd: thread.worktreePath,
+            timeout: 15_000,
+          });
+        }
+        // Rollback pruning (#212): refs newer than the restored turn are stale.
+        const restoredTurn = checkpoint.refName ? parseCheckpointTurn(checkpoint.refName) : null;
+        if (restoredTurn !== null) {
+          await deleteThreadCheckpointRefs(thread.worktreePath, threadId, {
+            newerThanTurn: restoredTurn,
+          });
+        }
+      } catch (error) {
+        throw new Error(clampError(error));
+      }
 
       queries.threads.updateStatus(threadId, 'idle');
 
@@ -1262,12 +1305,40 @@ export function registerProjectHandlers({
             .list(project.id)
             .flatMap((thread) => (thread.worktreeBranch ? [thread.worktreeBranch] : [])),
         });
-        return await runCleanupApply({
+        const applied = await runCleanupApply({
           project,
           items: analyzed.items,
           itemIds,
           lockFor: withWorktreeLock,
         });
+        // Checkpoint refs for removed worktrees are stale (#212). CleanupItem
+        // carries no threadId, so match worktreePath back to its thread.
+        // Best-effort — ref cleanup must never fail the apply result.
+        const succeededIds = new Set(applied.succeeded);
+        const removedWorktreePaths = new Set(
+          analyzed.items.flatMap((item) =>
+            succeededIds.has(item.id) &&
+            (item.kind === 'worktree-merged-pr' ||
+              item.kind === 'worktree-closed-pr' ||
+              item.kind === 'worktree-no-pr-clean')
+              ? [item.worktreePath]
+              : [],
+          ),
+        );
+        if (removedWorktreePaths.size > 0) {
+          for (const thread of queries.threads.list(project.id)) {
+            if (!thread.worktreePath || !removedWorktreePaths.has(thread.worktreePath)) continue;
+            try {
+              await deleteThreadCheckpointRefs(project.path, thread.id);
+            } catch (error) {
+              log.warn(
+                `[git:cleanup-apply] checkpoint ref cleanup failed for ${thread.id}:`,
+                error,
+              );
+            }
+          }
+        }
+        return applied;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         log.warn(`[git:cleanup-apply] failed: ${message}`);

@@ -100,5 +100,7 @@ export interface PipelineCheckpoint {
   label: string;
   branch: string | null;
   commitSha: string;
+  /** Hidden ShipCode checkpoint ref (refs/shipcode/checkpoints/<threadId>/turn/<n>); null on legacy rows or when ref capture failed. */
+  refName: string | null;
   createdAt: string;
 }

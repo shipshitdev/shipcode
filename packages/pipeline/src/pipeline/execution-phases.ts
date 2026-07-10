@@ -16,7 +16,7 @@ import {
   shellExecEnv,
   summarizePromptMaterials,
 } from '@shipcode/agents';
-import { WorktreeManager } from '@shipcode/git';
+import { captureCheckpoint, WorktreeManager } from '@shipcode/git';
 import {
   buildTaskNodePlan,
   EXECUTION_PHASES,
@@ -772,6 +772,18 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         latest.phase !== PIPELINE_PHASE.executing ||
         latest.reason !== reason
       ) {
+        // Hidden checkpoint ref (#212): snapshot the full worktree state so
+        // restore/resume can recover uncommitted work. Ref capture failure
+        // must never block execution — fall back to a metadata-only row.
+        let refName: string | null = null;
+        try {
+          refName = (await captureCheckpoint(cwd, threadId)).refName;
+        } catch (captureError) {
+          console.error(
+            `[pipeline] checkpoint ref capture failed for thread ${threadId}:`,
+            captureError,
+          );
+        }
         deps.checkpoints.create({
           threadId,
           projectId: context.projectId,
@@ -780,6 +792,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           label,
           branch,
           commitSha,
+          refName,
         });
       }
     } catch (error) {
@@ -947,6 +960,44 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             );
 
       if (context.cancelled) return { next: 'paused' };
+
+      // Post-attempt checkpoint ref (#212): snapshot the attempt's worktree
+      // state (including uncommitted executor changes) after every execute /
+      // task-graph-node attempt. Best-effort — never fails the phase.
+      try {
+        const attemptCwd = context.worktreePath ?? context.projectPath;
+        const captured = await captureCheckpoint(attemptCwd, threadId);
+        const attemptCommitSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: attemptCwd,
+          encoding: 'utf-8',
+        }).trim();
+        let attemptBranch: string | null = null;
+        try {
+          attemptBranch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+            cwd: attemptCwd,
+            encoding: 'utf-8',
+          }).trim();
+        } catch {
+          attemptBranch = null;
+        }
+        deps.checkpoints.create({
+          threadId,
+          projectId: context.projectId,
+          phase: PIPELINE_PHASE.executing,
+          reason: 'after_execute',
+          label: activeTaskNode
+            ? `After node ${activeTaskNode.stableKey} attempt (turn ${captured.turn})`
+            : `After execute attempt (turn ${captured.turn})`,
+          branch: attemptBranch,
+          commitSha: attemptCommitSha,
+          refName: captured.refName,
+        });
+      } catch (captureError) {
+        console.error(
+          `[pipeline] post-attempt checkpoint capture failed for thread ${threadId}:`,
+          captureError,
+        );
+      }
 
       if (response.exitCode === 0) {
         if (activeTaskNode && deps.taskGraphs) {
