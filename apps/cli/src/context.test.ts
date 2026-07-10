@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => {
     createCliEmitter: vi.fn(() => ({ emit: vi.fn() })),
     createClaudeCliProvider: vi.fn(() => ({ kind: 'claude' })),
     createCodexCliProvider: vi.fn(() => ({ kind: 'codex' })),
+    createGrokCliProvider: vi.fn(() => ({ kind: 'grok' })),
     createOpenRouterProvider: vi.fn((options) => {
       state.openRouterOptions = options;
       return { kind: 'openrouter' };
@@ -77,6 +78,7 @@ vi.mock('@shipcode/db', () => ({
 vi.mock('@shipcode/agents', () => ({
   createClaudeCliProvider: mocks.createClaudeCliProvider,
   createCodexCliProvider: mocks.createCodexCliProvider,
+  createGrokCliProvider: mocks.createGrokCliProvider,
   createOpenRouterProvider: mocks.createOpenRouterProvider,
   createProviderRegistry: mocks.createProviderRegistry,
   GhCli: mocks.GhCli,
@@ -107,6 +109,7 @@ describe('createCliContext', () => {
     expect(mocks.createProviderRegistry).toHaveBeenCalledWith({
       claude: { kind: 'claude' },
       codex: { kind: 'codex' },
+      grok: { kind: 'grok' },
       openrouter: { kind: 'openrouter' },
     });
     expect(context.pipelineDeps.projects).toBe(context.projects);
