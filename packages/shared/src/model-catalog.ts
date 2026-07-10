@@ -1,3 +1,5 @@
+import type { PhaseCliProvider } from './types/agents';
+
 export interface KnownModelOption<T extends string = string> {
   value: T;
   label: string;
@@ -105,6 +107,27 @@ export const OPENROUTER_MODEL_OPTIONS = [
   { value: OPENROUTER_MODEL_IDS.qwen36Plus, label: 'Qwen 3.6 Plus' },
   { value: OPENROUTER_MODEL_IDS.qwen3CoderFree, label: 'Qwen 3 Coder Free' },
 ] as const satisfies readonly KnownModelOption<OpenRouterModelId>[];
+
+// Human-readable CLI names surfaced in availability / reasoning-effort warnings.
+// Keyed by PhaseCliProvider so adding a provider is a compile error until a
+// label is supplied here rather than a silently-wrong fallback elsewhere.
+export const CLI_PROVIDER_LABELS: Record<PhaseCliProvider, string> = {
+  claude: 'Claude CLI',
+  codex: 'Codex CLI',
+  gemini: 'Gemini CLI',
+  cursor: 'Cursor CLI',
+  grok: 'Grok CLI',
+};
+
+// Conservative model presets used when a CLI cannot report its own catalog.
+// Keyed by PhaseCliProvider for the same exhaustiveness guarantee as the labels.
+export const CLI_PROVIDER_FALLBACK_OPTIONS: Record<PhaseCliProvider, readonly KnownModelOption[]> = {
+  claude: CLAUDE_MODEL_OPTIONS,
+  codex: CODEX_FALLBACK_MODEL_OPTIONS,
+  gemini: GEMINI_FALLBACK_MODEL_OPTIONS,
+  cursor: CURSOR_FALLBACK_MODEL_OPTIONS,
+  grok: GROK_FALLBACK_MODEL_OPTIONS,
+};
 
 export type CuratedModelId =
   | (typeof CLAUDE_MODEL_OPTIONS)[number]['value']
