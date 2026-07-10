@@ -542,12 +542,12 @@ export class PipelineScheduler {
     const project = queries.projects.getById(targetProjectId);
     if (!project) {
       log.warn(`[automation] target project ${targetProjectId} not found`);
-      queries.automations.recordRunFinished(automation.id, 'failed');
+      queries.automations.recordRunFinished(automation.id, targetProjectId, 'failed');
       return;
     }
     if (!fs.existsSync(project.path)) {
       log.warn(`[automation] project path missing: ${project.path}`);
-      queries.automations.recordRunFinished(automation.id, 'failed');
+      queries.automations.recordRunFinished(automation.id, targetProjectId, 'failed');
       return;
     }
 
@@ -569,7 +569,7 @@ export class PipelineScheduler {
       await assertCliPhaseModelsSupported(mergedPhaseModels);
     } catch (err) {
       log.error('[automation] CLI phase model unsupported:', err);
-      queries.automations.recordRunFinished(automation.id, 'failed');
+      queries.automations.recordRunFinished(automation.id, targetProjectId, 'failed');
       return;
     }
 
@@ -617,7 +617,7 @@ export class PipelineScheduler {
       verifiedSha: null,
     });
 
-    queries.automations.recordRunStarted(automation.id, thread.id);
+    queries.automations.recordRunStarted(automation.id, targetProjectId, thread.id);
 
     try {
       await pipeline.startFromAutomation(
@@ -633,7 +633,7 @@ export class PipelineScheduler {
         phase: PIPELINE_PHASE.failed,
         errorMessage: clampError(err),
       });
-      queries.automations.recordRunFinished(automation.id, 'failed');
+      queries.automations.recordRunFinished(automation.id, targetProjectId, 'failed');
       throw err;
     }
   }

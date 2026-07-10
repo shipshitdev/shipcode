@@ -30,11 +30,84 @@ interface AutomationRow {
   updated_at: string;
 }
 
-function mapAutomation(row: AutomationRow, targets: string[]): Automation {
+/** Per-target run bookkeeping row (the source of truth for run lifecycle). */
+interface AutomationTargetRow {
+  project_id: string;
+  last_started_at: string | null;
+  last_completed_at: string | null;
+  last_status: AutomationLastStatus | null;
+  run_count: number;
+}
+
+interface RunStateAggregate {
+  lastStartedAt: string | null;
+  lastCompletedAt: string | null;
+  lastStatus: AutomationLastStatus | null;
+  runCount: number;
+}
+
+// Worst-of ordering for the rollup badge: an in-flight target dominates (there
+// is still a run happening), then a failure, then success. ISO timestamps
+// compare correctly as strings (same UTC millisecond format everywhere).
+const RUN_STATUS_PRIORITY: Record<AutomationLastStatus, number> = {
+  running: 3,
+  failed: 2,
+  completed: 1,
+};
+
+/**
+ * Collapse per-target run bookkeeping into the automation-level summary the UI
+ * renders. Multi-repo automations dispatch one pipeline per target, so the
+ * badge/counter must aggregate rather than reflect whichever target's write
+ * landed last: worst-of status, most-recent timestamps, summed run counts.
+ */
+function aggregateRunState(targets: AutomationTargetRow[]): RunStateAggregate {
+  let lastStartedAt: string | null = null;
+  let lastCompletedAt: string | null = null;
+  let lastStatus: AutomationLastStatus | null = null;
+  let bestPriority = 0;
+  let runCount = 0;
+
+  for (const target of targets) {
+    runCount += target.run_count;
+    if (target.last_started_at && (!lastStartedAt || target.last_started_at > lastStartedAt)) {
+      lastStartedAt = target.last_started_at;
+    }
+    if (
+      target.last_completed_at &&
+      (!lastCompletedAt || target.last_completed_at > lastCompletedAt)
+    ) {
+      lastCompletedAt = target.last_completed_at;
+    }
+    if (target.last_status) {
+      const priority = RUN_STATUS_PRIORITY[target.last_status];
+      if (priority > bestPriority) {
+        bestPriority = priority;
+        lastStatus = target.last_status;
+      }
+    }
+  }
+
+  return { lastStartedAt, lastCompletedAt, lastStatus, runCount };
+}
+
+function mapAutomation(row: AutomationRow, targetRows: AutomationTargetRow[]): Automation {
+  // Fall back to the (legacy) automation-level columns only when no target
+  // rows exist — e.g. rows whose target set was externally deleted.
+  const agg: RunStateAggregate =
+    targetRows.length > 0
+      ? aggregateRunState(targetRows)
+      : {
+          lastStartedAt: row.last_started_at,
+          lastCompletedAt: row.last_completed_at,
+          lastStatus: row.last_status,
+          runCount: row.run_count,
+        };
+
   return {
     id: row.id,
     projectId: row.project_id,
-    targets: targets.length > 0 ? targets : [row.project_id],
+    targets: targetRows.length > 0 ? targetRows.map((t) => t.project_id) : [row.project_id],
     name: row.name,
     prompt: row.prompt,
     cronExpr: row.cron_expr,
@@ -42,11 +115,11 @@ function mapAutomation(row: AutomationRow, targets: string[]): Automation {
     executorProvider: row.executor_provider,
     executorModelId: row.executor_model_id,
     executorReasoningEffort: row.executor_reasoning_effort,
-    lastStartedAt: row.last_started_at,
-    lastCompletedAt: row.last_completed_at,
-    lastStatus: row.last_status,
+    lastStartedAt: agg.lastStartedAt,
+    lastCompletedAt: agg.lastCompletedAt,
+    lastStatus: agg.lastStatus,
     nextRunAt: row.next_run_at,
-    runCount: row.run_count,
+    runCount: agg.runCount,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -55,18 +128,26 @@ function mapAutomation(row: AutomationRow, targets: string[]): Automation {
 export class AutomationQueries {
   constructor(private db: DatabaseSync) {}
 
-  /** Target project ids for an automation, oldest first (primary first). */
-  listTargets(automationId: string): string[] {
+  /** Full target rows (with per-target run bookkeeping), oldest first. */
+  private listTargetRows(automationId: string): AutomationTargetRow[] {
     const rows = this.db
       .prepare(
-        'SELECT project_id FROM automation_targets WHERE automation_id = ? ORDER BY created_at ASC',
+        `SELECT project_id, last_started_at, last_completed_at, last_status, run_count
+           FROM automation_targets
+          WHERE automation_id = ?
+          ORDER BY created_at ASC`,
       )
       .all(automationId);
-    return asRows<{ project_id: string }>(rows).map((r) => r.project_id);
+    return asRows<AutomationTargetRow>(rows);
+  }
+
+  /** Target project ids for an automation, oldest first (primary first). */
+  listTargets(automationId: string): string[] {
+    return this.listTargetRows(automationId).map((r) => r.project_id);
   }
 
   private hydrate(row: AutomationRow): Automation {
-    return mapAutomation(row, this.listTargets(row.id));
+    return mapAutomation(row, this.listTargetRows(row.id));
   }
 
   list(projectId: string): Automation[] {
@@ -245,29 +326,49 @@ export class AutomationQueries {
       .run(nextRunAt, id);
   }
 
-  recordRunStarted(id: string, _threadId: string): void {
-    this.db
-      .prepare(
-        `UPDATE automations
-            SET last_started_at = ${ISO_NOW_SQL},
-                last_status = 'running',
-                run_count = run_count + 1,
-                updated_at = ${ISO_NOW_SQL}
-          WHERE id = ?`,
-      )
-      .run(id);
+  /**
+   * Record that a run started for one target of an automation. Bookkeeping is
+   * per (automation, target) so a multi-repo fan-out increments each target's
+   * own counter instead of racing on a shared automation-level row. No-op when
+   * `projectId` is not a target of the automation.
+   */
+  recordRunStarted(id: string, projectId: string, _threadId: string): void {
+    transaction(this.db, () => {
+      this.db
+        .prepare(
+          `UPDATE automation_targets
+              SET last_started_at = ${ISO_NOW_SQL},
+                  last_status = 'running',
+                  run_count = run_count + 1
+            WHERE automation_id = ? AND project_id = ?`,
+        )
+        .run(id, projectId);
+      this.db
+        .prepare(`UPDATE automations SET updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
+        .run(id);
+    });
   }
 
-  recordRunFinished(id: string, status: AutomationLastStatus): void {
-    this.db
-      .prepare(
-        `UPDATE automations
-            SET last_completed_at = ${ISO_NOW_SQL},
-                last_status = ?,
-                updated_at = ${ISO_NOW_SQL}
-          WHERE id = ?`,
-      )
-      .run(status, id);
+  /**
+   * Record that a run finished for one target of an automation. The
+   * automation-level status the UI shows is derived worst-of across targets
+   * (see `aggregateRunState`), so a sibling target failing is never masked by
+   * this one completing later. No-op when `projectId` is not a target.
+   */
+  recordRunFinished(id: string, projectId: string, status: AutomationLastStatus): void {
+    transaction(this.db, () => {
+      this.db
+        .prepare(
+          `UPDATE automation_targets
+              SET last_completed_at = ${ISO_NOW_SQL},
+                  last_status = ?
+            WHERE automation_id = ? AND project_id = ?`,
+        )
+        .run(status, id, projectId);
+      this.db
+        .prepare(`UPDATE automations SET updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
+        .run(id);
+    });
   }
 
   delete(id: string): void {
