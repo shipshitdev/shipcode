@@ -20,10 +20,15 @@ two projects: `desktop` (real Electron via `_electron.launch`, macOS) and `web-s
 Matches genfeed.ai / vitae.ai. PRs target `master`; squash-merge after the gates pass;
 post-merge push to `master` runs the full suite. Release = tag / dispatch.
 
-`master` is the GitHub **default branch** and is branch-protected: required checks
-`Trust Check`, `Lint`, `Design System`, `Typecheck`, `Test`, `Secret Scan`,
-`React Doctor`; strict up-to-date; linear history; no force-push; no deletion.
-`enforce_admins` is **false** so admin squash-merge still works.
+`master` is the GitHub **default branch** and is branch-protected: **8** required checks
+(ruleset `17729072`, "Passing CI on master") — `Trust Check`, `Lint`, `Design System`,
+`Typecheck`, `Build`, `Test`, `Secret Scan`, `react-doctor`; linear history; no force-push;
+no deletion. Context names are the **exact** job names (`react-doctor`, not "React Doctor").
+`strict_required_status_checks_policy` is **false** (no up-to-date/rebase requirement) and
+`enforce_admins` is effectively off (admin bypass) so admin squash-merge still works.
+`Build` was added to the required list on 2026-07-10 (PR #272 introduced the job but left it
+non-required, so a red bundler/`build:code` failure stayed mergeable — audit gap, now closed).
+`Coverage` is deliberately **not** required (decoupled; see below).
 
 ## CI backbone — ci.yml (PR #235)
 
@@ -39,10 +44,16 @@ workflow_call`. Jobs:
 - **`typecheck` (Typecheck):** on PRs `TURBO_SCM_BASE=<pr base sha> bunx turbo run
   typecheck --affected`; full `bun run typecheck` otherwise. `fetch-depth: 0` for the SCM
   diff.
+- **`build` (Build):** `needs: [trust, lint, typecheck]`. Compiles all packages/apps
+  (`turbo run build --filter='!@shipcode/desktop' --affected` on PRs, full otherwise) plus
+  the desktop bundle via `build:code` (electron-vite `tsc && vite build`; the desktop
+  `build` script is excluded from the turbo sweep because it runs electron-builder/installer
+  packaging). Added in PR #272; made a **required** check 2026-07-10. Catches bundler-only /
+  `build:code` / package-export breaks that lint+typecheck+test miss.
 - **`test` (Test):** same affected-on-PR pattern for `turbo run test`; full `test:ci`
   otherwise. `fetch-depth: 0`, ripgrep installed.
 - **`coverage` (Coverage):** decoupled — `schedule || workflow_dispatch || push-to-master`
-  only, never blocks a PR. `COVERAGE_MIN=80`.
+  only, never blocks a PR (intentionally **not** a required check). `COVERAGE_MIN=80`.
 
 Shared setup lives in the **`.github/actions/setup-bun-env`** composite action (Bun
 1.3.14 + Node 22, Bun module store + Turbo cache, optional ripgrep,
