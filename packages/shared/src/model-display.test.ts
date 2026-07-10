@@ -12,6 +12,10 @@ describe('modelDisplay', () => {
     expect(modelDisplay('claude')).toBe('Sonnet 4.6');
     expect(modelDisplay('codex')).toBe('GPT-5.5');
     expect(modelDisplay('claude-opus-4-6')).toBe('Opus 4.6');
+    expect(modelDisplay('claude-fable-5')).toBe('Fable 5');
+    expect(modelDisplay('gpt-5.6-sol')).toBe('GPT-5.6 Sol');
+    expect(modelDisplay('gpt-5.6-terra')).toBe('GPT-5.6 Terra');
+    expect(modelDisplay('gpt-5.6-luna')).toBe('GPT-5.6 Luna');
   });
 
   it('falls back to the raw model id for unknown entries', () => {
@@ -25,7 +29,9 @@ describe('inferProviderFromModel', () => {
     expect(inferProviderFromModel(undefined, '<synthetic>', '  ', 'claude-opus-4-6')).toBe(
       'claude',
     );
+    expect(inferProviderFromModel('claude-fable-5')).toBe('claude');
     expect(inferProviderFromModel('gpt-5.4')).toBe('codex');
+    expect(inferProviderFromModel('gpt-5.6-sol')).toBe('codex');
     expect(inferProviderFromModel('codex')).toBe('codex');
     expect(inferProviderFromModel('gemini')).toBe('gemini');
     expect(inferProviderFromModel('gemini-2.5-pro')).toBe('gemini');

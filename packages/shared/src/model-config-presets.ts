@@ -3,7 +3,7 @@ import type { ResolvedPhaseModel } from './model-resolution';
 import { resolveProviderReasoningEffort } from './reasoning-effort';
 import type { AppSettings, ExecutorModel, Project, ReasoningEffort } from './types';
 
-export type ModelConfigPresetKey = 'claude' | 'codex' | 'hybrid' | 'opus-combo';
+export type ModelConfigPresetKey = 'claude' | 'codex' | 'hybrid' | 'opus-combo' | 'fable-combo';
 
 // Where a preset can be applied. The global AppSettings path only carries a
 // phase *provider* (the concrete claude/codex model stays pinned), so a preset
@@ -143,6 +143,29 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
       reviewer: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'reviewer'),
       executor: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'executor'),
       verifier: makePhasePreset('codex', CODEX_FALLBACK_MODEL_IDS.gpt54Mini, 'verifier'),
+    },
+    prdRewrite: {
+      cli: 'codex',
+      modelId: SHARED_PRD_MODELS.codex,
+      reasoningEffort: 'low',
+    },
+  },
+  {
+    // Frontier combo: Fable 5 plans on the Claude subscription (the deepest
+    // reasoner for the one judgment-dense step), then the GPT-5.6 tiers map to
+    // phase demands — Sol (flagship) reviews, Terra (balanced) executes the
+    // bulk work, Luna (fast/cheap) verifies — keeping the token-heavy lanes on
+    // the Codex quota. Project-scoped because the per-phase model ids are only
+    // honored through per-project overrides (the global path pins the model).
+    key: 'fable-combo',
+    label: 'Fable combo',
+    description: 'Fable 5 plans, GPT-5.6 Sol reviews, Terra executes, Luna verifies.',
+    appliesTo: 'project',
+    phases: {
+      planner: makePhasePreset('claude', CLAUDE_MODEL_IDS.fable5, 'planner'),
+      reviewer: makePhasePreset('codex', CODEX_FALLBACK_MODEL_IDS.gpt56Sol, 'reviewer'),
+      executor: makePhasePreset('codex', CODEX_FALLBACK_MODEL_IDS.gpt56Terra, 'executor'),
+      verifier: makePhasePreset('codex', CODEX_FALLBACK_MODEL_IDS.gpt56Luna, 'verifier'),
     },
     prdRewrite: {
       cli: 'codex',

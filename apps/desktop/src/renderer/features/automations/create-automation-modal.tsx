@@ -30,7 +30,11 @@ import log from 'electron-log/renderer';
 import { Wand2 } from 'lucide-react';
 import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { useAppStore } from '../../stores/app-store';
-import { executorModelPlaceholder, executorModelSuggestions } from './executor-model-options';
+import {
+  executorModelPlaceholder,
+  executorModelSuggestions,
+  executorReasoningOptions,
+} from './executor-model-options';
 
 const PRESETS: Array<{ id: string; label: string; cron: string | null }> = [
   { id: 'hourly', label: 'Every hour', cron: '0 * * * *' },
@@ -45,16 +49,6 @@ const PROVIDER_OPTIONS: Array<{ value: 'inherit' | AgentType; label: string }> =
   { value: 'claude', label: 'Claude' },
   { value: 'codex', label: 'Codex' },
   { value: 'openrouter', label: 'OpenRouter' },
-];
-
-const REASONING_OPTIONS: Array<{ value: 'inherit' | ReasoningEffort; label: string }> = [
-  { value: 'inherit', label: 'Inherit' },
-  { value: 'none', label: 'None' },
-  { value: 'minimal', label: 'Minimal' },
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'Extra high' },
 ];
 
 interface FormatAutomationVariables {
@@ -172,6 +166,20 @@ function useCreateAutomationModalView() {
     reasoning,
     error,
   } = form;
+
+  const reasoningOptions = useMemo(
+    () => executorReasoningOptions(provider, executorModelId),
+    [provider, executorModelId],
+  );
+
+  // A provider/model change can strand a previously valid effort (e.g. None
+  // after switching to Fable 5, whose thinking cannot be disabled) — fall back
+  // to inherit instead of persisting a selection the pipeline would reject.
+  useEffect(() => {
+    if (reasoning !== 'inherit' && !reasoningOptions.some((option) => option.value === reasoning)) {
+      dispatchForm({ type: 'field', field: 'reasoning', value: 'inherit' });
+    }
+  }, [reasoning, reasoningOptions]);
 
   useEffect(() => {
     if (!open) {
@@ -580,7 +588,7 @@ function useCreateAutomationModalView() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {REASONING_OPTIONS.map((o) => (
+                {reasoningOptions.map((o) => (
                   <SelectItem key={o.value} value={o.value}>
                     {o.label}
                   </SelectItem>

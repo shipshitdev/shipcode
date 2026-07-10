@@ -72,9 +72,34 @@ describe('model config presets', () => {
     });
   });
 
+  it('builds fable-combo overrides: Fable 5 plans, Sol reviews, Terra executes, Luna verifies', () => {
+    const preset = getModelConfigPreset('fable-combo');
+    expect(preset.label).toBe('Fable combo');
+    expect(preset.appliesTo).toBe('project');
+
+    expect(buildProjectModelPresetOverrides('fable-combo')).toEqual({
+      plannerModelOverride: 'claude',
+      reviewerModelOverride: 'codex',
+      executorModelOverride: 'codex',
+      verifierModelOverride: 'codex',
+      plannerModelIdOverride: 'claude-fable-5',
+      reviewerModelIdOverride: 'gpt-5.6-sol',
+      executorModelIdOverride: 'gpt-5.6-terra',
+      verifierModelIdOverride: 'gpt-5.6-luna',
+      // Fable 5 clamps xhigh -> high (always-on adaptive thinking); the
+      // GPT-5.6 tiers keep the codex effort ladder.
+      plannerReasoningEffortOverride: 'high',
+      reviewerReasoningEffortOverride: 'high',
+      executorReasoningEffortOverride: 'medium',
+      verifierReasoningEffortOverride: 'high',
+    });
+  });
+
   it('hides project-only presets from the global preset picker', () => {
     expect(MODEL_CONFIG_PRESETS.map((p) => p.key)).toContain('opus-combo');
+    expect(MODEL_CONFIG_PRESETS.map((p) => p.key)).toContain('fable-combo');
     expect(GLOBAL_MODEL_CONFIG_PRESETS.map((p) => p.key)).not.toContain('opus-combo');
+    expect(GLOBAL_MODEL_CONFIG_PRESETS.map((p) => p.key)).not.toContain('fable-combo');
     expect(GLOBAL_MODEL_CONFIG_PRESETS.every((p) => p.appliesTo === 'all')).toBe(true);
   });
 
