@@ -220,6 +220,15 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
           await wm.remove(prior.worktreePath, prior.worktreeBranch).catch(() => undefined);
         }
       },
+      onAllFailed: async () => {
+        // Every worker failed, so promoteWinner never runs and the worker
+        // worktrees/branches would otherwise leak on disk. Tear each down using
+        // its concrete persisted path+branch (never recomputed from threadId —
+        // see .agents/memory/worktrees.md path-as-truth rule).
+        for (const c of created) {
+          await wm.remove(c.worktreePath, c.branch).catch(() => undefined);
+        }
+      },
     });
 
     return {
