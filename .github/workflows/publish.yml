@@ -341,7 +341,7 @@ jobs:
             zap trash: [
               "~/Library/Application Support/ShipCode",
               "~/Library/Logs/ShipCode",
-              "~/Library/Preferences/com.shipcode.app.plist",
+              "~/Library/Preferences/dev.shipshit.shipcode.plist",
             ]
           end
           RUBY
