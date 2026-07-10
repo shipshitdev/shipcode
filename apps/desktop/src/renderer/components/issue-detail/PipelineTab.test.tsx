@@ -938,6 +938,7 @@ describe('PipelineTab', () => {
       label: 'Before verifier retry',
       commitSha: 'abcdef1234567890',
       branch: 'ship/42-issue-title',
+      refName: null,
       createdAt: '2026-05-01T10:00:00.000Z',
     };
     const onRestoreCheckpoint = vi.fn();

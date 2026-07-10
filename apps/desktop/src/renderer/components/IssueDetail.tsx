@@ -1118,8 +1118,11 @@ function useIssueDetailView() {
 
   const handleRestoreCheckpoint = async (checkpoint: PipelineCheckpoint) => {
     if (!activeThreadId) return;
+    const restoreDescription = checkpoint.refName
+      ? `This will restore the worktree to this checkpoint's snapshot (including its uncommitted changes) and remove files created after it.`
+      : `This will hard-reset the worktree to ${checkpoint.commitSha.slice(0, 12)} and remove untracked files in that worktree.`;
     const confirmed = window.confirm(
-      `Restore checkpoint "${checkpoint.label}"?\n\nThis will hard-reset the worktree to ${checkpoint.commitSha.slice(0, 12)} and remove untracked files in that worktree.\n\nThis restores code state only. It does not resume the same planner session.`,
+      `Restore checkpoint "${checkpoint.label}"?\n\n${restoreDescription}\n\nThis restores code state only. It does not resume the same planner session.`,
     );
     if (!confirmed) return;
     setIsSubmitting(true);

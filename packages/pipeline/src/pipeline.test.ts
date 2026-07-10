@@ -44,7 +44,15 @@ vi.mock('@shipcode/git', () => {
     listBranches = vi.fn().mockResolvedValue([]);
     getDefaultBranch = vi.fn().mockResolvedValue('main');
   }
-  return { WorktreeManager, GitService };
+  return {
+    WorktreeManager,
+    GitService,
+    captureCheckpoint: vi.fn().mockResolvedValue({
+      refName: 'refs/shipcode/checkpoints/t1/turn/0',
+      turn: 0,
+      commitSha: 'snapshot-sha',
+    }),
+  };
 });
 
 const { mockExecSync } = vi.hoisted(() => ({ mockExecSync: vi.fn() }));
@@ -2129,12 +2137,15 @@ Custom prompt`,
         label: 'Before execute attempt 1',
         branch: 'feat/test-branch',
         commitSha: 'abc123',
+        refName: null,
         createdAt: '',
       });
       const pipeline = createPipeline(mock.deps);
       pipeline.initializeContext('t1', { projectPath: '/proj', worktreePath: '/worktree' });
 
       await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await flush();
+      await flush();
       await flush();
 
       expect(mock.deps.checkpoints.create).not.toHaveBeenCalled();

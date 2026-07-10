@@ -363,6 +363,7 @@ describe('registerPipelineHandlers', () => {
           label: 'Before execute',
           branch: 'shipcode/thread-1',
           commitSha: 'abc123def456',
+          refName: null,
           createdAt: new Date().toISOString(),
         })),
       },
@@ -1373,7 +1374,7 @@ describe('registerPipelineHandlers', () => {
       expect(lastExecutionResumeContext()).toContain(
         'The previous execution was paused by the user',
       );
-      expect(lastExecutionResumeContext()).toContain('Checkpoint before execution: Before execute');
+      expect(lastExecutionResumeContext()).toContain('Last checkpoint: Before execute');
       expect(lastExecutionResumeContext()).toContain('apps/desktop/src/renderer/App.tsx');
       expect(lastExecutionResumeContext()).toContain('considering the fix');
       expect(lastExecutionResumeContext()).toContain('[error] command failed');

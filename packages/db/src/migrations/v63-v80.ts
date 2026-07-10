@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { transaction } from '../utils';
+import { execAlterTableIfMissing } from './schema-helpers';
 
 export function migrateV63(db: DatabaseSync): void {
   const row = db
@@ -48,5 +49,23 @@ export function migrateV63(db: DatabaseSync): void {
     `);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (63)`);
+  });
+}
+
+export function migrateV64(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 64) return;
+
+  transaction(db, () => {
+    // Checkpoint refs (#212): each pipeline checkpoint can carry a hidden
+    // ShipCode-owned git ref (refs/shipcode/checkpoints/<threadId>/turn/<n>)
+    // snapshotting the full dirty worktree state at capture time. Nullable —
+    // legacy rows and rows whose ref capture failed keep commit-sha-only
+    // restore semantics.
+    execAlterTableIfMissing(db, 'ALTER TABLE pipeline_checkpoints ADD COLUMN ref_name TEXT');
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (64)`);
   });
 }

@@ -46,6 +46,9 @@ const {
   worktreeMoveMock,
   worktreeRepairMock,
   worktreeRemoveMock,
+  restoreCheckpointMock,
+  deleteThreadCheckpointRefsMock,
+  deleteAllCheckpointRefsMock,
 } = vi.hoisted(() => ({
   createIssueMock: vi.fn(),
   execMock: vi.fn((_command: string, optionsOrCallback?: unknown, maybeCallback?: unknown) => {
@@ -102,6 +105,9 @@ const {
   worktreeMoveMock: vi.fn(async () => undefined),
   worktreeRepairMock: vi.fn(async () => undefined),
   worktreeRemoveMock: vi.fn(async () => ({ success: true, error: null })),
+  restoreCheckpointMock: vi.fn(async () => undefined),
+  deleteThreadCheckpointRefsMock: vi.fn(async () => 0),
+  deleteAllCheckpointRefsMock: vi.fn(async () => 0),
 }));
 
 vi.mock('../logger.service', () => ({
@@ -186,6 +192,13 @@ vi.mock('@shipcode/git', () => ({
     move = worktreeMoveMock;
     repair = worktreeRepairMock;
     remove = worktreeRemoveMock;
+  },
+  restoreCheckpoint: restoreCheckpointMock,
+  deleteThreadCheckpointRefs: deleteThreadCheckpointRefsMock,
+  deleteAllCheckpointRefs: deleteAllCheckpointRefsMock,
+  parseCheckpointTurn: (refName: string) => {
+    const match = /\/turn\/(\d+)$/.exec(refName);
+    return match ? Number.parseInt(match[1], 10) : null;
   },
 }));
 
@@ -2808,6 +2821,125 @@ describe('registerProjectHandlers', () => {
       threadId: 'thread-1',
       phase: 'idle',
     });
+  });
+
+  it('restores from the checkpoint ref when present and prunes newer refs', async () => {
+    const checkpoint = {
+      id: 'checkpoint-1',
+      threadId: 'thread-1',
+      commitSha: 'abc1234',
+      refName: 'refs/shipcode/checkpoints/thread-1/turn/2',
+    };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor' })),
+      },
+      checkpoints: {
+        getById: vi.fn(() => checkpoint),
+      },
+      threads: {
+        getById: vi.fn(() => ({ id: 'thread-1', worktreePath: '/tmp/worktree' })),
+        updateStatus: vi.fn(),
+      },
+      githubIssues: {
+        getByThreadId: vi.fn(() => null),
+      },
+    };
+    const pipeline = {
+      listActive: vi.fn(() => []),
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: pipeline as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const restore = handlers.get('checkpoint:restore');
+    if (!restore) throw new Error('checkpoint:restore handler not registered');
+
+    execMock.mockClear();
+    await expect(
+      restore(undefined, { threadId: 'thread-1', checkpointId: checkpoint.id }),
+    ).resolves.toEqual({ restored: true, checkpoint });
+    expect(restoreCheckpointMock).toHaveBeenCalledWith(
+      '/tmp/worktree',
+      'refs/shipcode/checkpoints/thread-1/turn/2',
+    );
+    // Ref restore replaces the legacy hard reset entirely.
+    expect(execMock).not.toHaveBeenCalled();
+    expect(deleteThreadCheckpointRefsMock).toHaveBeenCalledWith('/tmp/worktree', 'thread-1', {
+      newerThanTurn: 2,
+    });
+  });
+
+  it('falls back to the commit SHA when ref restore fails', async () => {
+    const checkpoint = {
+      id: 'checkpoint-1',
+      threadId: 'thread-1',
+      commitSha: 'abc1234',
+      refName: 'refs/shipcode/checkpoints/thread-1/turn/1',
+    };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor' })),
+      },
+      checkpoints: {
+        getById: vi.fn(() => checkpoint),
+      },
+      threads: {
+        getById: vi.fn(() => ({ id: 'thread-1', worktreePath: '/tmp/worktree' })),
+        updateStatus: vi.fn(),
+      },
+      githubIssues: {
+        getByThreadId: vi.fn(() => null),
+      },
+    };
+    const pipeline = {
+      listActive: vi.fn(() => []),
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: pipeline as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const restore = handlers.get('checkpoint:restore');
+    if (!restore) throw new Error('checkpoint:restore handler not registered');
+
+    execMock.mockClear();
+    restoreCheckpointMock.mockRejectedValueOnce(new Error('missing ref'));
+    await expect(
+      restore(undefined, { threadId: 'thread-1', checkpointId: checkpoint.id }),
+    ).resolves.toEqual({ restored: true, checkpoint });
+    expect(restoreCheckpointMock).toHaveBeenCalled();
+    expect(execMock).toHaveBeenCalledWith(
+      'git reset --hard abc1234',
+      { cwd: '/tmp/worktree', timeout: 15_000 },
+      expect.any(Function),
+    );
+    expect(execMock).toHaveBeenCalledWith(
+      'git clean -fd',
+      { cwd: '/tmp/worktree', timeout: 15_000 },
+      expect.any(Function),
+    );
   });
 
   it('runs auto-commit with locks and clamps workflow failures', async () => {
