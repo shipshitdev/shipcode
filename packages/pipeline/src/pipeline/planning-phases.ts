@@ -291,6 +291,7 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
       hasCriticalOrMajor: false,
       reasons,
     });
+    void postPlanComment(context, structuredPlan);
     resetPhaseState(context);
     return { next: 'execute', plan: structuredPlan };
   }
@@ -674,6 +675,7 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
           hasCriticalOrMajor: false,
           reasons,
         });
+        void postPlanComment(context, latestStructuredPlan);
         resetPhaseState(context);
         return { next: 'execute', plan: latestStructuredPlan };
       }
@@ -739,6 +741,7 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
           hasCriticalOrMajor,
           reasons,
         });
+        void postPlanComment(context, latestStructuredPlan);
         resetPhaseState(context);
         return { next: 'execute', plan: latestStructuredPlan };
       }

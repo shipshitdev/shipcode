@@ -309,6 +309,19 @@ function pipelineSettingsSection({
               />
             </SettingsRow>
             <SettingsRow
+              label="Post plan comments to GitHub"
+              htmlFor="post-plan-comments-enabled"
+              description="When on, the approved plan is posted (and kept up to date) as a comment on the GitHub issue. When off, plan comments are skipped — task-graph and review comments are unaffected."
+            >
+              <Switch
+                id="post-plan-comments-enabled"
+                checked={settings.postPlanCommentsEnabled}
+                onCheckedChange={(checked: boolean) =>
+                  onUpdate({ postPlanCommentsEnabled: checked })
+                }
+              />
+            </SettingsRow>
+            <SettingsRow
               label="Max concurrent pipelines"
               htmlFor="max-concurrent-pipelines"
               description="How many pipelines can run at once. Extras are queued."

@@ -1,6 +1,6 @@
 import type { ShipCodePlan } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
-import { formatPlanComment } from './plan-comment';
+import { formatPlanComment, PLAN_COMMENT_MARKER } from './plan-comment';
 
 function makePlan(overrides: Partial<ShipCodePlan> = {}): ShipCodePlan {
   return {
@@ -26,6 +26,13 @@ function makePlan(overrides: Partial<ShipCodePlan> = {}): ShipCodePlan {
 }
 
 describe('formatPlanComment', () => {
+  it('starts with the plan comment marker as the literal first line', () => {
+    const body = formatPlanComment(makePlan());
+
+    expect(body.startsWith(PLAN_COMMENT_MARKER)).toBe(true);
+    expect(body.split('\n')[0]).toBe(PLAN_COMMENT_MARKER);
+  });
+
   it('renders files, steps, out-of-scope items, and dependencies', () => {
     const body = formatPlanComment(
       makePlan({

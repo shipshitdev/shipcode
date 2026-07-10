@@ -173,7 +173,7 @@ export {
   measurePhasePromptTelemetry,
   toPersistedPromptTelemetryMaterials,
 } from './prompts/phase-prompt-telemetry';
-export { formatPlanComment } from './prompts/plan-comment';
+export { formatPlanComment, PLAN_COMMENT_MARKER } from './prompts/plan-comment';
 export type {
   PlanPromptContext,
   PlanPromptDeps,

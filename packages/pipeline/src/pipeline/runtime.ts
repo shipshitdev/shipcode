@@ -5,6 +5,7 @@ import {
   GhCli,
   isPoolExhausted,
   measurePhasePromptTelemetry,
+  PLAN_COMMENT_MARKER,
   type PromptMaterial,
   type ProviderPhase,
   type ProviderRequest,
@@ -872,9 +873,14 @@ export function createPipelineRuntime(
     plan: import('@shipcode/shared').ShipCodePlan,
   ): Promise<void> {
     if (!isRealGithubIssueNumber(context.githubIssueNumber)) return;
+    if (!deps.settings.get().postPlanCommentsEnabled) return;
     try {
       const ghCli = new GhCli(context.projectPath);
-      await ghCli.addIssueComment(context.githubIssueNumber, formatPlanComment(plan));
+      await ghCli.upsertIssueCommentByMarker(
+        context.githubIssueNumber,
+        PLAN_COMMENT_MARKER,
+        formatPlanComment(plan),
+      );
     } catch (error) {
       console.error('[pipeline] Failed to post plan comment:', error);
     }

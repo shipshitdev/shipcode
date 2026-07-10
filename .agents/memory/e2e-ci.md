@@ -4,7 +4,7 @@ description: CI + E2E GitHub Actions wiring on the master trunk — trust gate, 
 type: architecture
 status: active
 priority: low
-last_verified: 2026-06-16
+last_verified: 2026-07-10
 topics: [e2e, ci, github-actions, workflow, trunk, branches, cron]
 ---
 
@@ -185,6 +185,12 @@ Fix: build workspace packages first, mirroring the repo's `coverage` script idio
 
 Verified locally: clearing `packages/*/dist` reproduces the failure; the two-step sequence
 builds clean (exit 0). The TS errors were 100% cascade — no source bug.
+
+Local-dev corollary (hit 2026-07-10): the same `exports → ./dist/*` resolution applies under
+`vitest run` and `tsc --noEmit`. After adding an export or a new `DEFAULT_SETTINGS` field to an
+internal package, rebuild that package (`bun run build`) before running dependents' tests — a
+stale dist fails **silently** (missing field reads as `undefined`, so e.g. a boolean gate
+short-circuits instead of throwing).
 
 ## Job graph: lint-typecheck → desktop-e2e
 

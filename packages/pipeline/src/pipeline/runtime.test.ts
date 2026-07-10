@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { type AgentProvider, GhCli } from '@shipcode/agents';
+import { type AgentProvider, GhCli, PLAN_COMMENT_MARKER } from '@shipcode/agents';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineContext, PipelineDeps } from '../types';
@@ -1983,7 +1983,11 @@ describe('createPipelineRuntime', () => {
     });
     await runtime.postTaskGraphComment(context, graph as never);
 
-    expect(mockGhCli.addIssueComment).toHaveBeenCalledWith(42, expect.stringContaining('Ship it'));
+    expect(mockGhCli.upsertIssueCommentByMarker).toHaveBeenCalledWith(
+      42,
+      PLAN_COMMENT_MARKER,
+      expect.stringContaining('Ship it'),
+    );
     expect(mockGhCli.createIssue).toHaveBeenCalledWith(
       expect.objectContaining({ title: '[step-1] Done node' }),
     );
@@ -2105,9 +2109,9 @@ describe('createPipelineRuntime', () => {
       estimatedComplexity: 'low',
       dependencies: [],
     });
-    expect(mockGhCli.addIssueComment).not.toHaveBeenCalled();
+    expect(mockGhCli.upsertIssueCommentByMarker).not.toHaveBeenCalled();
 
-    mockGhCli.addIssueComment.mockRejectedValue(new Error('comment failed'));
+    mockGhCli.upsertIssueCommentByMarker.mockRejectedValue(new Error('comment failed'));
     await expect(
       runtime.postPlanComment(makeContext(), {
         id: 'plan-1',
@@ -2144,6 +2148,32 @@ describe('createPipelineRuntime', () => {
         edges: [],
       } as never),
     ).resolves.toBeUndefined();
+  });
+
+  it('suppresses plan comment posting when postPlanCommentsEnabled is false', async () => {
+    const { deps } = makeDeps();
+    deps.settings.get = vi.fn(() => ({
+      ...DEFAULT_SETTINGS,
+      testCommand: ' bun test ',
+      testingContext: 'unit',
+      postPlanCommentsEnabled: false,
+    })) as never;
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    await runtime.postPlanComment(makeContext(), {
+      id: 'plan-1',
+      threadId: 'thread-1',
+      version: 1,
+      objective: 'Suppressed',
+      files: [],
+      steps: [],
+      acceptanceCriteria: [],
+      outOfScope: [],
+      estimatedComplexity: 'low',
+      dependencies: [],
+    });
+
+    expect(mockGhCli.upsertIssueCommentByMarker).not.toHaveBeenCalled();
   });
 
   it('records provider failures without Error instances or provider metadata', async () => {

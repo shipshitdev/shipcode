@@ -699,4 +699,86 @@ describe('planning phase helpers', () => {
       expect.stringContaining('Revision error'),
     );
   });
+
+  it('posts the plan comment when planning auto-executes in autonomous mode', async () => {
+    const harness = makePlanningHarness();
+    const schemaValidPlan = {
+      id: 'plan-1',
+      threadId: 'thread-1',
+      version: 1,
+      objective: 'Ship it',
+      files: [{ path: 'src/a.ts', action: 'modify', description: 'Update A' }],
+      steps: [
+        { order: 1, description: 'Step one', files: ['src/a.ts'], rationale: 'Needed' },
+        { order: 2, description: 'Step two', files: ['src/a.ts'], rationale: 'Needed' },
+        { order: 3, description: 'Step three', files: ['src/a.ts'], rationale: 'Needed' },
+      ],
+      acceptanceCriteria: ['works'],
+      outOfScope: ['redesign'],
+      estimatedComplexity: 'low',
+      dependencies: [],
+    };
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: ['```shipcode-plan', JSON.stringify(schemaValidPlan, null, 2), '```'].join('\n'),
+      exitCode: 0,
+    });
+
+    const outcome = await harness.handlers.startPlanGeneration(
+      'thread-1',
+      'do stuff',
+      process.cwd(),
+      null,
+    );
+
+    expect(outcome).toEqual({
+      next: 'execute',
+      plan: expect.objectContaining({ objective: schemaValidPlan.objective }),
+    });
+    expect(harness.runtime.postPlanComment).toHaveBeenCalledWith(
+      harness.context,
+      expect.objectContaining({ objective: schemaValidPlan.objective }),
+    );
+  });
+
+  it('still posts the plan comment when an approved review lands on the approval gate', async () => {
+    const harness = makePlanningHarness(makePlanningContext({ autonomous: true }));
+    vi.mocked(harness.deps.settings.get).mockReturnValue({ requireApproval: true } as never);
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: reviewBlock({
+        planId: 'plan-record-1',
+        decision: 'approve',
+        confidence: 'high',
+        summary: 'Looks good',
+        findings: [],
+        suggestedChanges: [],
+      }),
+      exitCode: 0,
+    });
+
+    const outcome = await harness.handlers.startReview('thread-1', plan as never);
+
+    expect(outcome).toEqual({ next: 'paused' });
+    expect(harness.runtime.emitPhase).toHaveBeenCalledWith('thread-1', 'approval');
+    expect(harness.runtime.postPlanComment).toHaveBeenCalledWith(harness.context, plan);
+  });
+
+  it('posts the plan comment when a review approval auto-executes in autonomous mode', async () => {
+    const harness = makePlanningHarness(makePlanningContext({ autonomous: true }));
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: reviewBlock({
+        planId: 'plan-record-1',
+        decision: 'approve',
+        confidence: 'high',
+        summary: 'Looks good',
+        findings: [],
+        suggestedChanges: [],
+      }),
+      exitCode: 0,
+    });
+
+    const outcome = await harness.handlers.startReview('thread-1', plan as never);
+
+    expect(outcome).toEqual({ next: 'execute', plan });
+    expect(harness.runtime.postPlanComment).toHaveBeenCalledWith(harness.context, plan);
+  });
 });
