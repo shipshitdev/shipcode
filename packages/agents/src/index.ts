@@ -76,6 +76,8 @@ export {
   checkGeminiAuth,
   checkGeminiModelCapabilities,
   checkGhAuth,
+  checkGrokAuth,
+  checkGrokModelCapabilities,
   checkIntegrationStatus,
   checkOpenRouterAuth,
   checkOpenRouterHealth,

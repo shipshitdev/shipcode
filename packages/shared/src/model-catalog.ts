@@ -8,12 +8,16 @@ export const CLAUDE_MODEL_IDS = {
   opus46: 'claude-opus-4-6',
   opus47: 'claude-opus-4-7',
   opus48: 'claude-opus-4-8',
+  fable5: 'claude-fable-5',
   haiku45: 'claude-haiku-4-5-20251001',
 } as const;
 
 export type ClaudeModelId = (typeof CLAUDE_MODEL_IDS)[keyof typeof CLAUDE_MODEL_IDS];
 
 export const CODEX_FALLBACK_MODEL_IDS = {
+  gpt56Sol: 'gpt-5.6-sol',
+  gpt56Terra: 'gpt-5.6-terra',
+  gpt56Luna: 'gpt-5.6-luna',
   gpt55: 'gpt-5.5',
   gpt54: 'gpt-5.4',
   gpt54Mini: 'gpt-5.4-mini',
@@ -39,6 +43,15 @@ export const CURSOR_FALLBACK_MODEL_IDS = {
 export type CursorFallbackModelId =
   (typeof CURSOR_FALLBACK_MODEL_IDS)[keyof typeof CURSOR_FALLBACK_MODEL_IDS];
 
+// Grok Build (xAI's terminal agent) selects its model via `--model`. Grok 4.5
+// is the CLI's default; these are conservative fallbacks for the picker.
+export const GROK_FALLBACK_MODEL_IDS = {
+  grok45: 'grok-4.5',
+} as const;
+
+export type GrokFallbackModelId =
+  (typeof GROK_FALLBACK_MODEL_IDS)[keyof typeof GROK_FALLBACK_MODEL_IDS];
+
 export const OPENROUTER_MODEL_IDS = {
   autoPaid: 'openrouter/auto',
   autoFree: 'openrouter/free',
@@ -56,12 +69,16 @@ export const CLAUDE_MODEL_OPTIONS = [
   { value: CLAUDE_MODEL_IDS.opus46, label: 'Opus 4.6' },
   { value: CLAUDE_MODEL_IDS.opus47, label: 'Opus 4.7' },
   { value: CLAUDE_MODEL_IDS.opus48, label: 'Opus 4.8' },
+  { value: CLAUDE_MODEL_IDS.fable5, label: 'Fable 5' },
   { value: CLAUDE_MODEL_IDS.haiku45, label: 'Haiku 4.5' },
 ] as const satisfies readonly KnownModelOption<ClaudeModelId>[];
 
 // Codex publishes the real model catalog via `codex debug models`. These are
 // conservative fallbacks only, used when an old CLI cannot report capabilities.
 export const CODEX_FALLBACK_MODEL_OPTIONS = [
+  { value: CODEX_FALLBACK_MODEL_IDS.gpt56Sol, label: 'GPT-5.6 Sol' },
+  { value: CODEX_FALLBACK_MODEL_IDS.gpt56Terra, label: 'GPT-5.6 Terra' },
+  { value: CODEX_FALLBACK_MODEL_IDS.gpt56Luna, label: 'GPT-5.6 Luna' },
   { value: CODEX_FALLBACK_MODEL_IDS.gpt55, label: 'GPT-5.5' },
   { value: CODEX_FALLBACK_MODEL_IDS.gpt54, label: 'GPT-5.4' },
   { value: CODEX_FALLBACK_MODEL_IDS.gpt54Mini, label: 'GPT-5.4 Mini' },
@@ -75,6 +92,10 @@ export const GEMINI_FALLBACK_MODEL_OPTIONS = [
 export const CURSOR_FALLBACK_MODEL_OPTIONS = [
   { value: CURSOR_FALLBACK_MODEL_IDS.auto, label: 'Auto' },
 ] as const satisfies readonly KnownModelOption<CursorFallbackModelId>[];
+
+export const GROK_FALLBACK_MODEL_OPTIONS = [
+  { value: GROK_FALLBACK_MODEL_IDS.grok45, label: 'Grok 4.5' },
+] as const satisfies readonly KnownModelOption<GrokFallbackModelId>[];
 
 export const OPENROUTER_MODEL_OPTIONS = [
   { value: OPENROUTER_MODEL_IDS.autoPaid, label: 'Auto (paid)' },
@@ -90,6 +111,7 @@ export type CuratedModelId =
   | (typeof CODEX_FALLBACK_MODEL_OPTIONS)[number]['value']
   | (typeof GEMINI_FALLBACK_MODEL_OPTIONS)[number]['value']
   | (typeof CURSOR_FALLBACK_MODEL_OPTIONS)[number]['value']
+  | (typeof GROK_FALLBACK_MODEL_OPTIONS)[number]['value']
   | (typeof OPENROUTER_MODEL_OPTIONS)[number]['value'];
 
 const CURATED_MODEL_LABELS = Object.fromEntries(
@@ -98,6 +120,7 @@ const CURATED_MODEL_LABELS = Object.fromEntries(
     ...CODEX_FALLBACK_MODEL_OPTIONS,
     ...GEMINI_FALLBACK_MODEL_OPTIONS,
     ...CURSOR_FALLBACK_MODEL_OPTIONS,
+    ...GROK_FALLBACK_MODEL_OPTIONS,
     ...OPENROUTER_MODEL_OPTIONS,
   ].map((option) => [option.value, option.label]),
 ) as Record<CuratedModelId, string>;
@@ -119,6 +142,9 @@ export const PINNED_MODEL_DEFAULTS = {
   cursor: {
     phase: CURSOR_FALLBACK_MODEL_IDS.auto,
   },
+  grok: {
+    phase: GROK_FALLBACK_MODEL_IDS.grok45,
+  },
   openrouter: {
     paid: OPENROUTER_MODEL_IDS.autoPaid,
     free: OPENROUTER_MODEL_IDS.autoFree,
@@ -131,6 +157,7 @@ export const KNOWN_MODEL_LABELS: Record<string, string> = {
   codex: CURATED_MODEL_LABELS[PINNED_MODEL_DEFAULTS.codex.phase],
   gemini: CURATED_MODEL_LABELS[PINNED_MODEL_DEFAULTS.gemini.phase],
   cursor: CURATED_MODEL_LABELS[PINNED_MODEL_DEFAULTS.cursor.phase],
+  grok: CURATED_MODEL_LABELS[PINNED_MODEL_DEFAULTS.grok.phase],
   openrouter: 'OpenRouter',
   ...CURATED_MODEL_LABELS,
   'anthropic/claude-sonnet-4-6': CURATED_MODEL_LABELS[OPENROUTER_MODEL_IDS.claudeSonnet46],
@@ -157,8 +184,23 @@ export const MODEL_SLUG_ALIASES: Record<string, string> = {
   'opus-4.6': CLAUDE_MODEL_IDS.opus46,
   sonnet: CLAUDE_MODEL_IDS.sonnet46,
   'sonnet-4.6': CLAUDE_MODEL_IDS.sonnet46,
+  fable: CLAUDE_MODEL_IDS.fable5,
+  'fable-5': CLAUDE_MODEL_IDS.fable5,
+  fable5: CLAUDE_MODEL_IDS.fable5,
   haiku: CLAUDE_MODEL_IDS.haiku45,
   'haiku-4.5': CLAUDE_MODEL_IDS.haiku45,
+  grok: GROK_FALLBACK_MODEL_IDS.grok45,
+  'grok-4.5': GROK_FALLBACK_MODEL_IDS.grok45,
+  'grok4.5': GROK_FALLBACK_MODEL_IDS.grok45,
+  // Bare 5.6 routes to Sol (the flagship tier) upstream.
+  '5.6': CODEX_FALLBACK_MODEL_IDS.gpt56Sol,
+  'gpt-5.6': CODEX_FALLBACK_MODEL_IDS.gpt56Sol,
+  '5.6-sol': CODEX_FALLBACK_MODEL_IDS.gpt56Sol,
+  sol: CODEX_FALLBACK_MODEL_IDS.gpt56Sol,
+  '5.6-terra': CODEX_FALLBACK_MODEL_IDS.gpt56Terra,
+  terra: CODEX_FALLBACK_MODEL_IDS.gpt56Terra,
+  '5.6-luna': CODEX_FALLBACK_MODEL_IDS.gpt56Luna,
+  luna: CODEX_FALLBACK_MODEL_IDS.gpt56Luna,
   '5.5': CODEX_FALLBACK_MODEL_IDS.gpt55,
   '5.4': CODEX_FALLBACK_MODEL_IDS.gpt54,
   '5.4-mini': CODEX_FALLBACK_MODEL_IDS.gpt54Mini,

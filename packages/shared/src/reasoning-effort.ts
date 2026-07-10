@@ -1,4 +1,4 @@
-import { OPENROUTER_MODEL_IDS } from './model-catalog';
+import { CLAUDE_MODEL_IDS, OPENROUTER_MODEL_IDS } from './model-catalog';
 import type { ExecutorModel, ReasoningEffort } from './types';
 
 const ALL_REASONING_EFFORTS = [
@@ -26,11 +26,23 @@ const GEMINI_REASONING_EFFORTS = [
 // model decides. ShipCode therefore offers only `none` (send nothing).
 const CURSOR_REASONING_EFFORTS = ['none'] as const satisfies readonly ReasoningEffort[];
 
+// Grok Build's headless mode exposes no reasoning-effort flag either; Grok picks
+// its own reasoning depth, so ShipCode offers only `none` (send nothing).
+const GROK_REASONING_EFFORTS = ['none'] as const satisfies readonly ReasoningEffort[];
+
 const CLAUDE_REASONING_EFFORTS = [
   'none',
   'medium',
   'high',
 ] as const satisfies readonly ReasoningEffort[];
+
+// Fable 5's thinking is always on (adaptive) and cannot be disabled, so `none`
+// must never be offered or selected for it — only Medium and High budgets.
+const CLAUDE_ALWAYS_THINKING_EFFORTS = [
+  'medium',
+  'high',
+] as const satisfies readonly ReasoningEffort[];
+const CLAUDE_ALWAYS_THINKING_MODELS = new Set<string>([CLAUDE_MODEL_IDS.fable5]);
 const OPENROUTER_ADAPTIVE_CLAUDE_EFFORTS = [
   'none',
   'high',
@@ -62,6 +74,8 @@ const REASONING_EFFORT_LABELS: Record<ReasoningEffort, string> = {
 };
 const CLAUDE_REASONING_SUPPORT_MESSAGE =
   'Claude in ShipCode supports None, Medium, and High thinking budgets.';
+const FABLE_REASONING_SUPPORT_MESSAGE =
+  'Fable 5 always uses adaptive thinking; ShipCode supports Medium and High thinking budgets for it.';
 
 export interface ProviderReasoningEffortResolution {
   configured: ReasoningEffort;
@@ -92,6 +106,9 @@ export function getSupportedReasoningEfforts(
   const normalizedModelId = normalizeReasoningModelId(provider, modelId);
 
   if (provider === 'claude') {
+    if (normalizedModelId && CLAUDE_ALWAYS_THINKING_MODELS.has(normalizedModelId)) {
+      return CLAUDE_ALWAYS_THINKING_EFFORTS;
+    }
     return CLAUDE_REASONING_EFFORTS;
   }
 
@@ -105,6 +122,10 @@ export function getSupportedReasoningEfforts(
 
   if (provider === 'cursor') {
     return CURSOR_REASONING_EFFORTS;
+  }
+
+  if (provider === 'grok') {
+    return GROK_REASONING_EFFORTS;
   }
 
   if (normalizedModelId && OPENROUTER_ADAPTIVE_CLAUDE_MODELS.has(normalizedModelId)) {
@@ -126,6 +147,29 @@ export function resolveProviderReasoningEffort(
   const normalizedModelId = normalizeReasoningModelId(provider, modelId);
 
   if (provider === 'claude') {
+    if (normalizedModelId && CLAUDE_ALWAYS_THINKING_MODELS.has(normalizedModelId)) {
+      switch (configured) {
+        case 'none':
+        case 'minimal':
+        case 'low':
+          return {
+            configured,
+            effective: 'medium',
+            exact: false,
+            message: `${FABLE_REASONING_SUPPORT_MESSAGE} Using ${formatReasoningEffortLabel('medium')}.`,
+          };
+        case 'xhigh':
+          return {
+            configured,
+            effective: 'high',
+            exact: false,
+            message: `${FABLE_REASONING_SUPPORT_MESSAGE} Using ${formatReasoningEffortLabel('high')}.`,
+          };
+        default:
+          return { configured, effective: configured, exact: true, message: null };
+      }
+    }
+
     switch (configured) {
       case 'minimal':
         return {
@@ -195,6 +239,19 @@ export function resolveProviderReasoningEffort(
       exact: false,
       message:
         'Cursor selects reasoning automatically per model; ShipCode does not send a reasoning effort.',
+    };
+  }
+
+  if (provider === 'grok') {
+    if (configured === 'none') {
+      return { configured, effective: 'none', exact: true, message: null };
+    }
+    return {
+      configured,
+      effective: 'none',
+      exact: false,
+      message:
+        'Grok selects reasoning automatically per model; ShipCode does not send a reasoning effort.',
     };
   }
 

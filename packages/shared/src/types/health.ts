@@ -112,6 +112,7 @@ export interface SystemHealth {
   codex: CliHealth;
   gemini?: CliHealth;
   cursor?: CliHealth;
+  grok?: CliHealth;
   git: CliHealth;
   gh: CliHealth;
 }

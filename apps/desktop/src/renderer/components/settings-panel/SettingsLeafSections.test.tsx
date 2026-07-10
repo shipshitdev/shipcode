@@ -166,6 +166,13 @@ const integrationStatus: IntegrationStatus = {
       error: null,
       checkedAt: '2026-05-08T10:00:00.000Z',
     },
+    grok: {
+      provider: 'grok',
+      source: 'fallback',
+      models: [],
+      error: null,
+      checkedAt: '2026-05-08T10:00:00.000Z',
+    },
   },
   ghAuth: {
     installed: true,

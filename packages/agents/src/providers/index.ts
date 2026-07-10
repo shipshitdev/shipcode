@@ -1,6 +1,7 @@
 export { createClaudeCliProvider, createCodexCliProvider } from './cli-provider';
 export { createCursorCliProvider } from './cursor-cli-provider';
 export { createGeminiCliProvider } from './gemini-cli-provider';
+export { createGrokCliProvider } from './grok-cli-provider';
 export type {
   OpenRouterChatMessage,
   OpenRouterChatRequest,

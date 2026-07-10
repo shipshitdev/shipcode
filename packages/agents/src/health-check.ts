@@ -74,10 +74,10 @@ let systemHealthInFlight: Promise<SystemHealth> | null = null;
 let systemHealthWithAuthCache: TimedCacheEntry<SystemHealth> | null = null;
 let systemHealthWithAuthInFlight: Promise<SystemHealth> | null = null;
 let cliModelCapabilitiesCache: TimedCacheEntry<
-  Record<'claude' | 'codex' | 'gemini' | 'cursor', CliModelCapabilities>
+  Record<'claude' | 'codex' | 'gemini' | 'cursor' | 'grok', CliModelCapabilities>
 > | null = null;
 let cliModelCapabilitiesInFlight: Promise<
-  Record<'claude' | 'codex' | 'gemini' | 'cursor', CliModelCapabilities>
+  Record<'claude' | 'codex' | 'gemini' | 'cursor' | 'grok', CliModelCapabilities>
 > | null = null;
 const providerUsageCache = new Map<
   CliProviderUsageProvider,
@@ -683,6 +683,23 @@ export async function checkCursorAuth(): Promise<boolean> {
   }
 }
 
+export async function checkGrokAuth(): Promise<boolean> {
+  // Headless fallback: xAI's standard env var authenticates without a login.
+  if (await readEnvVar('XAI_API_KEY')) {
+    return true;
+  }
+
+  // Otherwise rely on the CLI's own stored credentials. The exact status
+  // subcommand should be confirmed against the installed Grok Build CLI; this
+  // probe fails closed (reports unauthenticated) if the command differs.
+  try {
+    await execAsync('grok auth status', { timeout: 10_000, env: shellExecEnv() });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export type OpenRouterAuthStatus =
   | { ok: true; label?: string }
   | {
@@ -1004,16 +1021,17 @@ export async function checkSystemHealth(options: CacheOptions = {}): Promise<Sys
   }
 
   systemHealthInFlight = (async () => {
-    const [claude, codex, gemini, cursor, git, gh] = await Promise.all([
+    const [claude, codex, gemini, cursor, grok, git, gh] = await Promise.all([
       checkCli('claude', '--version'),
       checkCli('codex', '--version'),
       checkCli('gemini', '--version'),
       checkCli('cursor-agent', '--version'),
+      checkCli('grok', '--version'),
       checkCli('git', '--version'),
       checkCli('gh', '--version'),
     ]);
 
-    const result = { claude, codex, gemini, cursor, git, gh };
+    const result = { claude, codex, gemini, cursor, grok, git, gh };
     systemHealthCache = createTimedCacheEntry(result);
     return result;
   })();
@@ -1036,22 +1054,25 @@ export async function checkSystemHealthWithAuth(options: CacheOptions = {}): Pro
   }
 
   systemHealthWithAuthInFlight = (async () => {
-    const [health, claudeAuth, codexAuth, geminiAuth, cursorAuth] = await Promise.all([
+    const [health, claudeAuth, codexAuth, geminiAuth, cursorAuth, grokAuth] = await Promise.all([
       checkSystemHealth(options),
       checkClaudeAuth(),
       checkCodexAuth(),
       checkGeminiAuth(),
       checkCursorAuth(),
+      checkGrokAuth(),
     ]);
 
     const gemini = health.gemini;
     const cursor = health.cursor;
+    const grok = health.grok;
     const result: SystemHealth = {
       ...health,
       claude: { ...health.claude, authenticated: health.claude.available && claudeAuth },
       codex: { ...health.codex, authenticated: health.codex.available && codexAuth },
       ...(gemini ? { gemini: { ...gemini, authenticated: gemini.available && geminiAuth } } : {}),
       ...(cursor ? { cursor: { ...cursor, authenticated: cursor.available && cursorAuth } } : {}),
+      ...(grok ? { grok: { ...grok, authenticated: grok.available && grokAuth } } : {}),
     };
     systemHealthWithAuthCache = createTimedCacheEntry(result);
     return result;
@@ -1205,21 +1226,44 @@ export async function checkCursorModelCapabilities(): Promise<CliModelCapabiliti
   }
 }
 
+export async function checkGrokModelCapabilities(): Promise<CliModelCapabilities> {
+  const checkedAt = new Date().toISOString();
+  try {
+    await execAsync('grok --help', {
+      timeout: CLI_MODEL_CATALOG_TIMEOUT_MS,
+      maxBuffer: 512_000,
+      env: shellExecEnv(),
+    });
+    // Grok Build has no queryable model catalog; ShipCode exposes the pinned
+    // default (`grok-4.5`).
+    return fallbackCliModelCapabilities('grok', checkedAt);
+  } catch (error) {
+    return {
+      provider: 'grok',
+      source: 'unavailable',
+      models: [],
+      error: `Grok CLI unavailable: ${summarizeExecFailure(error)}`,
+      checkedAt,
+    };
+  }
+}
+
 export async function checkCliModelCapabilities(
   options: CacheOptions = {},
-): Promise<Record<'claude' | 'codex' | 'gemini' | 'cursor', CliModelCapabilities>> {
+): Promise<Record<'claude' | 'codex' | 'gemini' | 'cursor' | 'grok', CliModelCapabilities>> {
   const cached = getFreshCachedValue(cliModelCapabilitiesCache, CLI_MODEL_CAPABILITIES_TTL_MS);
   if (!options.force && cached) return cached;
   if (cliModelCapabilitiesInFlight) return cliModelCapabilitiesInFlight;
 
   cliModelCapabilitiesInFlight = (async () => {
-    const [claude, codex, gemini, cursor] = await Promise.all([
+    const [claude, codex, gemini, cursor, grok] = await Promise.all([
       checkClaudeModelCapabilities(),
       checkCodexModelCapabilities(),
       checkGeminiModelCapabilities(),
       checkCursorModelCapabilities(),
+      checkGrokModelCapabilities(),
     ]);
-    const result = { claude, codex, gemini, cursor };
+    const result = { claude, codex, gemini, cursor, grok };
     cliModelCapabilitiesCache = createTimedCacheEntry(result);
     return result;
   })();
