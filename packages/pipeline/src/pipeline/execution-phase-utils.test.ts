@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineContext } from '../types';
-import { worktreeHasChanges } from './execution-phase-utils';
+import { probeWorktreeChanges } from './execution-phase-utils';
 
 const { mockExecFileSync } = vi.hoisted(() => ({
   mockExecFileSync: vi.fn(),
@@ -25,13 +25,13 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
   } as PipelineContext;
 }
 
-describe('worktreeHasChanges', () => {
+describe('probeWorktreeChanges', () => {
   beforeEach(() => {
     mockExecFileSync.mockReset();
     vi.restoreAllMocks();
   });
 
-  it('returns false for a clean worktree with no fork-point diff', () => {
+  it("reports 'clean' for a clean worktree with no fork-point diff", () => {
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
       if (args[0] === 'status') return '';
       if (args[0] === 'rev-parse' && args[2] === 'base^{commit}') return 'base\n';
@@ -39,30 +39,59 @@ describe('worktreeHasChanges', () => {
       return '';
     });
 
-    expect(worktreeHasChanges(makeContext())).toBe(false);
+    expect(probeWorktreeChanges(makeContext())).toBe('clean');
   });
 
-  it('returns true for a dirty worktree', () => {
+  it("reports 'dirty' for an unstaged/uncommitted worktree", () => {
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
       if (args[0] === 'status') return ' M src/a.ts\n';
       return '';
     });
 
-    expect(worktreeHasChanges(makeContext())).toBe(true);
+    expect(probeWorktreeChanges(makeContext())).toBe('dirty');
   });
 
-  it('logs probe failures and falls back to no confirmed changes', () => {
+  it("reports 'dirty' when only the fork-point diff shows changes", () => {
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'status') return '';
+      if (args[0] === 'rev-parse' && args[2] === 'base^{commit}') return 'base\n';
+      if (args[0] === 'diff') return 'src/a.ts\n';
+      return '';
+    });
+
+    expect(probeWorktreeChanges(makeContext())).toBe('dirty');
+  });
+
+  it("reports 'unknown' when the diff against a resolved base is a bad revision", () => {
+    // Simulates a rebased/pruned base: `git status` is clean and the base SHA
+    // resolves, but `git diff <base>..HEAD` fails with `fatal: bad revision`
+    // because the SHA was pruned. This must NOT be reported as confirmed-clean —
+    // real changes may sit committed in the worktree, invisible without a base.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'status') return '';
+      if (args[0] === 'rev-parse' && args[2] === 'base^{commit}') return 'base\n';
+      if (args[0] === 'diff') throw new Error("fatal: bad revision 'base..HEAD'");
+      return '';
+    });
+
+    expect(probeWorktreeChanges(makeContext())).toBe('unknown');
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[pipeline] worktree change probe failed'),
+    );
+  });
+
+  it("reports 'unknown' when a git probe throws ENOENT", () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     mockExecFileSync.mockImplementation(() => {
       throw new Error('git unavailable\nfull stack should stay out of renderer-sized logs');
     });
 
-    expect(worktreeHasChanges(makeContext())).toBe(false);
+    expect(probeWorktreeChanges(makeContext())).toBe('unknown');
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining(
-        '[pipeline] worktree change probe failed; treating as no confirmed changes',
-      ),
+      expect.stringContaining('[pipeline] worktree change probe failed'),
     );
+    // Error is clamped to the first line — full stack never reaches renderer logs.
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('git unavailable'));
     expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('full stack'));
   });

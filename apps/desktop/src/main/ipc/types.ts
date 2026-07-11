@@ -33,7 +33,7 @@ import type {
   TriageRuleQueries,
   VerificationQueries,
 } from '@shipcode/db';
-import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
+import type { GhSyncDeps, Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import type { BrowserWindow, IpcMain } from 'electron';
 import type { AutomationSchedulerLike } from '../automation-scheduler';
 import type { ChatNotificationService } from '../chat-notification-service';
@@ -98,4 +98,12 @@ export interface IpcHandlerDeps {
    * to the new project set. Optional: defaults to a no-op in tests.
    */
   onProjectsChanged?: () => void;
+  /**
+   * Shared GH Status/label sync service deps. When provided, all pipeline
+   * label + Status write paths (manual transitions, board sync, PR
+   * feedback) route through the single shared queue instead of writing
+   * to GitHub independently. Optional: falls back to a no-op sync in
+   * tests / when GitHub sync isn't wired up.
+   */
+  ghSync?: GhSyncDeps;
 }
