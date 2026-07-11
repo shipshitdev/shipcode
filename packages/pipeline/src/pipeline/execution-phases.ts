@@ -47,7 +47,12 @@ import {
   resolveWorktreeDiffBase,
 } from './execution-phase-utils';
 import { createShippingPhaseHandlers } from './execution-shipping-phases';
-import { buildFanOutJudgePrompt, parseWinnerLabel, runFanOut } from './fan-out-executor';
+import {
+  buildFanOutJudgePrompt,
+  parseWinnerLabel,
+  resolveFanOutMaxConcurrent,
+  runFanOut,
+} from './fan-out-executor';
 
 export {
   buildContinuationPrompt,
@@ -133,7 +138,11 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
 
     const result = await runFanOut({
       workerCount: agentPolicy.fanOutWorkerCount,
-      maxConcurrent: Math.max(1, agentPolicy.maxConcurrentAgents),
+      // Bound the in-phase worker pool by its own worker count — NOT by
+      // `maxConcurrentAgents`, which is the scheduler's project-wide cap on
+      // concurrently running pipeline THREADS. Sharing that value overshot the
+      // real agent-process ceiling (N threads × fanOutWorkerCount).
+      maxConcurrent: resolveFanOutMaxConcurrent(agentPolicy.fanOutWorkerCount),
       runWorker: async (i) => {
         const label = `worker-${i + 1}`;
         const wt = await wm.create(

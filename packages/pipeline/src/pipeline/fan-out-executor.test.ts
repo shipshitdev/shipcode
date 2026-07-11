@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import { DEFAULT_MAX_CONCURRENT_AGENTS, MAX_FAN_OUT_WORKER_COUNT } from '../workflow-loader';
 import {
   buildFanOutJudgePrompt,
   type FanOutCandidate,
   parseWinnerLabel,
+  resolveFanOutMaxConcurrent,
   runFanOut,
 } from './fan-out-executor';
 
@@ -171,6 +173,25 @@ describe('runFanOut', () => {
     expect(prompt).toContain('diff-B');
     expect(prompt).toContain('worker-1, worker-2');
     expect(prompt).toContain('WINNER:');
+  });
+
+  it('bounds the worker pool by the fan-out worker count, never the thread cap', () => {
+    // Regression: the call site in execution-phases previously passed
+    // `agentPolicy.maxConcurrentAgents` — the scheduler's project-wide cap on
+    // concurrently running pipeline THREADS — as this in-phase pool ceiling. With
+    // N threads each in fan-out execute that yielded N × fanOutWorkerCount live
+    // agents at once, overshooting the ceiling the setting exists to enforce. The
+    // pool must be bounded by its own worker count instead.
+    expect(resolveFanOutMaxConcurrent(3)).toBe(3);
+    expect(resolveFanOutMaxConcurrent(3)).not.toBe(DEFAULT_MAX_CONCURRENT_AGENTS);
+  });
+
+  it('clamps the fan-out pool bound to [1, MAX_FAN_OUT_WORKER_COUNT]', () => {
+    expect(resolveFanOutMaxConcurrent(99)).toBe(MAX_FAN_OUT_WORKER_COUNT);
+    expect(resolveFanOutMaxConcurrent(0)).toBe(1);
+    expect(resolveFanOutMaxConcurrent(-5)).toBe(1);
+    expect(resolveFanOutMaxConcurrent(Number.NaN)).toBe(1);
+    expect(resolveFanOutMaxConcurrent(2.9)).toBe(2);
   });
 
   it('respects the concurrency limit (never more than maxConcurrent in flight)', async () => {
