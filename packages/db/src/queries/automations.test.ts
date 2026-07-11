@@ -380,6 +380,107 @@ describe('AutomationQueries', () => {
     expect(automations.listTargets(a.id)).toEqual([project.id]);
   });
 
+  it('removeTarget realigns the primary projectId when the primary is removed', () => {
+    const { dataDir, projects, automations, project } = setup();
+    tempDirs.push(dataDir);
+    const projectB = projects.add(path.join(dataDir, 'project-b'));
+
+    const a = automations.create({
+      projectId: project.id,
+      targets: [project.id, projectB.id],
+      name: 'A',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+    expect(a.projectId).toBe(project.id);
+
+    // Removing the primary must not leave project_id pointing at a de-targeted
+    // project — it realigns to the next remaining target (oldest first).
+    automations.removeTarget(a.id, project.id);
+    const reloaded = automations.getById(a.id);
+    if (!reloaded) throw new Error('Expected automation after removeTarget');
+    expect(reloaded.targets).toEqual([projectB.id]);
+    expect(reloaded.projectId).toBe(projectB.id);
+  });
+
+  it('removeTarget refuses to empty the target set', () => {
+    const { dataDir, automations, project } = setup();
+    tempDirs.push(dataDir);
+
+    const a = automations.create({
+      projectId: project.id,
+      name: 'A',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+
+    // Removing the only target would strand the automation: zero rows makes
+    // mapAutomation resurrect the removed project and the scheduler fire against
+    // it forever, while list()'s INNER JOIN hides it from every project UI.
+    expect(() => automations.removeTarget(a.id, project.id)).toThrow('at least one target');
+    expect(automations.listTargets(a.id)).toEqual([project.id]);
+    expect(automations.getById(a.id)?.projectId).toBe(project.id);
+  });
+
+  it('removeTarget of a non-target is a harmless no-op', () => {
+    const { dataDir, projects, automations, project } = setup();
+    tempDirs.push(dataDir);
+    const projectB = projects.add(path.join(dataDir, 'project-b'));
+
+    const a = automations.create({
+      projectId: project.id,
+      name: 'A',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+
+    automations.removeTarget(a.id, projectB.id);
+    expect(automations.listTargets(a.id)).toEqual([project.id]);
+    expect(automations.getById(a.id)?.projectId).toBe(project.id);
+  });
+
+  it('update applies a new target set atomically and realigns the primary', () => {
+    const { dataDir, projects, automations, project } = setup();
+    tempDirs.push(dataDir);
+    const projectB = projects.add(path.join(dataDir, 'project-b'));
+
+    const a = automations.create({
+      projectId: project.id,
+      name: 'A',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+
+    const updated = automations.update(a.id, {
+      name: 'B',
+      targets: [projectB.id, project.id],
+    });
+    expect(updated.name).toBe('B');
+    expect(updated.targets).toEqual([projectB.id, project.id]);
+    expect(updated.projectId).toBe(projectB.id);
+    expect(automations.list(projectB.id).map((x) => x.id)).toContain(a.id);
+  });
+
+  it('update rejects an empty target set and rolls back column changes', () => {
+    const { dataDir, automations, project } = setup();
+    tempDirs.push(dataDir);
+
+    const a = automations.create({
+      projectId: project.id,
+      name: 'A',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+
+    expect(() => automations.update(a.id, { name: 'B', targets: [] })).toThrow(
+      'at least one target',
+    );
+    // The column change must not survive a rejected target set.
+    const reloaded = automations.getById(a.id);
+    expect(reloaded?.name).toBe('A');
+    expect(reloaded?.targets).toEqual([project.id]);
+  });
+
   it('setTargets replaces the set and realigns the primary projectId', () => {
     const { dataDir, projects, automations, project } = setup();
     tempDirs.push(dataDir);
