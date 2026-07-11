@@ -297,6 +297,99 @@ describe('CreateAutomationModal', () => {
     });
   });
 
+  it('renders the target picker in edit mode pre-populated from current targets', async () => {
+    act(() => {
+      useAppStore.setState({ editingAutomationId: 'auto-1' });
+    });
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'project:list-visible')
+        return [makeProject(), makeProject({ id: 'project-2', name: 'Other Repo' })];
+      if (channel === 'automations:get') {
+        return {
+          id: 'auto-1',
+          projectId: 'project-1',
+          targets: ['project-1', 'project-2'],
+          name: 'Existing automation',
+          prompt: 'existing prompt',
+          cronExpr: '0 * * * *',
+          enabled: true,
+          executorProvider: null,
+          executorModelId: null,
+          executorReasoningEffort: null,
+          lastStartedAt: null,
+          lastCompletedAt: null,
+          lastStatus: null,
+          nextRunAt: null,
+          runCount: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    const primary = await screen.findByRole('button', { name: 'My Repo' });
+    const other = screen.getByRole('button', { name: 'Other Repo' });
+    // Both current targets are pre-selected in edit mode.
+    expect(primary).toHaveAttribute('aria-pressed', 'true');
+    expect(other).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('submits edited targets in the update payload', async () => {
+    act(() => {
+      useAppStore.setState({ editingAutomationId: 'auto-1' });
+    });
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'project:list-visible')
+        return [makeProject(), makeProject({ id: 'project-2', name: 'Other Repo' })];
+      if (channel === 'automations:get') {
+        return {
+          id: 'auto-1',
+          projectId: 'project-1',
+          targets: ['project-1'],
+          name: 'Existing automation',
+          prompt: 'existing prompt',
+          cronExpr: '0 * * * *',
+          enabled: true,
+          executorProvider: null,
+          executorModelId: null,
+          executorReasoningEffort: null,
+          lastStartedAt: null,
+          lastCompletedAt: null,
+          lastStatus: null,
+          nextRunAt: null,
+          runCount: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      if (channel === 'automations:update') return null;
+      return null;
+    });
+
+    renderWithProviders();
+
+    const other = await screen.findByRole('button', { name: 'Other Repo' });
+    expect(other).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(other);
+
+    const save = screen.getByRole('button', { name: /Save/ });
+    await waitFor(() => expect(save).not.toBeDisabled());
+    fireEvent.click(save);
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        'automations:update',
+        expect.objectContaining({
+          id: 'auto-1',
+          targets: ['project-1', 'project-2'],
+        }),
+      );
+    });
+  });
+
   it('shows submit failures and keeps the modal open', async () => {
     invokeMock.mockImplementation(async (channel: string) => {
       if (channel === 'project:list-visible') return [makeProject()];

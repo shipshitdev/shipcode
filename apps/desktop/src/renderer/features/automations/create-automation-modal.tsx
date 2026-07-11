@@ -244,6 +244,7 @@ function useCreateAutomationModalView() {
           prompt: prompt.trim(),
           cronExpr,
           enabled,
+          targets: projectIds,
           executorProvider: provider === 'inherit' ? null : provider,
           executorModelId: executorModelId.trim() || null,
           executorReasoningEffort: reasoning === 'inherit' ? null : reasoning,
@@ -395,39 +396,37 @@ function useCreateAutomationModalView() {
           />
         </div>
 
-        {!isEdit && (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-secondary">Target repos</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {projects.map((p) => {
-                const selected = projectIds.includes(p.id);
-                return (
-                  <Button
-                    key={p.id}
-                    type="button"
-                    variant={selected ? 'default' : 'outline'}
-                    size="xs"
-                    aria-pressed={selected}
-                    onClick={() =>
-                      dispatchForm({
-                        type: 'field',
-                        field: 'projectIds',
-                        value: selected
-                          ? projectIds.filter((id) => id !== p.id)
-                          : [...projectIds, p.id],
-                      })
-                    }
-                  >
-                    {p.name}
-                  </Button>
-                );
-              })}
-            </div>
-            <div className="text-[11px] text-muted-foreground">
-              Runs once per selected repo, each in its own worktree.
-            </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-secondary">Target repos</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {projects.map((p) => {
+              const selected = projectIds.includes(p.id);
+              return (
+                <Button
+                  key={p.id}
+                  type="button"
+                  variant={selected ? 'default' : 'outline'}
+                  size="xs"
+                  aria-pressed={selected}
+                  onClick={() =>
+                    dispatchForm({
+                      type: 'field',
+                      field: 'projectIds',
+                      value: selected
+                        ? projectIds.filter((id) => id !== p.id)
+                        : [...projectIds, p.id],
+                    })
+                  }
+                >
+                  {p.name}
+                </Button>
+              );
+            })}
           </div>
-        )}
+          <div className="text-[11px] text-muted-foreground">
+            Runs once per selected repo, each in its own worktree.
+          </div>
+        </div>
 
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between gap-2">

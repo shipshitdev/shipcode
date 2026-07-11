@@ -593,7 +593,9 @@ export function createElectronEmitter(
         try {
           const thread = deps.threads.getById(event.threadId);
           if (thread?.automationId) {
-            deps.automations.recordRunFinished(thread.automationId, event.phase);
+            // Scope the finish to this thread's target repo so a multi-repo
+            // automation's per-target status is not clobbered by a sibling.
+            deps.automations.recordRunFinished(thread.automationId, thread.projectId, event.phase);
           }
         } catch (err) {
           log.error('[pipeline-bridge] automation finish-record error:', err);

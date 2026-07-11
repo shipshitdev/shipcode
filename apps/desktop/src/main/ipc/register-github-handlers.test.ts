@@ -1,3 +1,4 @@
+import { createGhSyncService } from '@shipcode/pipeline';
 import type { IpcMain } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerGitHubHandlers } from './register-github-handlers';
@@ -786,6 +787,10 @@ describe('registerGitHubHandlers', () => {
       },
     };
 
+    const ghSync = createGhSyncService({
+      getProject: () => queries.projects.getById() as never,
+    }).deps;
+
     registerGitHubHandlers({
       ipcMain,
       mainWindow: mainWindow as never,
@@ -795,6 +800,7 @@ describe('registerGitHubHandlers', () => {
       notificationService: {} as never,
       chatNotificationService: {} as never,
       processManager: {} as never,
+      ghSync,
     });
 
     const refresh = handlers.get('github:refresh-issues');

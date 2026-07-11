@@ -15,15 +15,12 @@ import {
   type AppSettings,
   formatTaskGraphChecklist,
   formatTaskNodeIssueBody,
-  isPipelineStateLabel,
   isRealGithubIssueNumber,
-  macroColumnForStatus,
   type ProviderRunMode,
-  pipelineLabelForStatus,
   TASK_GRAPH_COMMENT_MARKER,
   type TaskGraphWithNodes,
 } from '@shipcode/shared';
-import { GhSyncQueue, type GhSyncWriteOpts } from '../gh-sync-queue';
+import { createGhSyncService, type GhSyncService } from '../gh-sync';
 import { syncThreadAndIssuePhase } from '../phase-sync';
 import type {
   OrchestratorState,
@@ -84,8 +81,12 @@ export function createPipelineRuntime(
   deps: PipelineDeps,
   _contextHelpers: PipelineContextHelpers,
 ): PipelineRuntime {
-  // Late-initialized after performGhSync is defined below.
-  let ghSyncQueue: GhSyncQueue;
+  // Use the shared GH sync service when the host (desktop main) provides
+  // one so runtime, manual/board-driven, and refresh-triggered GH writes
+  // all serialize through the same per-issue queue. Fall back to a
+  // runtime-owned instance for callers (e.g. tests) that don't inject one.
+  const ghSync: GhSyncService =
+    deps.ghSync ?? createGhSyncService({ getProject: (pid) => deps.projects.getById(pid) });
 
   function getCurrentRunIdForThread(threadId: string): string | null {
     const activeRunId = _contextHelpers.activePipelines?.get(threadId)?.runId ?? null;
@@ -117,9 +118,18 @@ export function createPipelineRuntime(
     });
   }
 
-  function buildHumanSteeringBlock(threadId: string): string | null {
+  function buildHumanSteeringBlock(threadId: string, runId: string | null): string | null {
+    // Scope steering to the run it was given in ("during this workflow"). Without
+    // the runId filter, an instruction from run A would be silently re-injected
+    // into every later run B/C on the same thread until it aged out of the row
+    // window. A null runId (thread with no active run tracking) falls back to the
+    // thread-wide window rather than dropping all steering.
     const rows = deps.agentConversations
-      ?.listByThread(threadId, { phase: HUMAN_STEERING_PHASE, role: 'prompt' })
+      ?.listByThread(threadId, {
+        phase: HUMAN_STEERING_PHASE,
+        role: 'prompt',
+        ...(runId ? { runId } : {}),
+      })
       .filter((row) => row.speaker === 'human' && row.content.trim().length > 0)
       .slice(-MAX_HUMAN_STEERING_TURNS);
 
@@ -143,7 +153,7 @@ export function createPipelineRuntime(
 
   function appendHumanSteering(prompt: string, input: PhasePayload): string {
     try {
-      const steering = buildHumanSteeringBlock(input.threadId);
+      const steering = buildHumanSteeringBlock(input.threadId, input.runId);
       return steering ? `${prompt}\n\n${steering}` : prompt;
     } catch (error) {
       console.error('[pipeline] human steering load failed:', error);
@@ -654,57 +664,6 @@ export function createPipelineRuntime(
     }
   }
 
-  /** Perform the actual GH write for a single state snapshot. */
-  async function performGhSync(opts: GhSyncWriteOpts): Promise<void> {
-    const ghCli = new GhCli(opts.projectPath);
-
-    // 1. Write GH Projects v2 Status field when configured.
-    if (opts.projectUrl && opts.statusMapping) {
-      const macroCol = macroColumnForStatus(opts.pipelineStatus);
-      const ghStatusName =
-        macroCol === 'todo'
-          ? opts.statusMapping.todo?.name
-          : macroCol === 'in_progress'
-            ? opts.statusMapping.inProgress?.name
-            : macroCol === 'human_review'
-              ? opts.statusMapping.humanReview?.name
-              : opts.statusMapping.done?.name;
-      if (ghStatusName) {
-        try {
-          await ghCli.setIssueProjectMetadata({
-            issueNumber: opts.issueNumber,
-            projectUrl: opts.projectUrl,
-            metadata: { status: ghStatusName },
-          });
-        } catch (err) {
-          console.warn('[gh-status-sync] setIssueProjectMetadata failed', err);
-        }
-      }
-    }
-
-    // 2. Toggle pipeline labels on every state update — remove stale, set current.
-    const targetLabel = pipelineLabelForStatus(opts.pipelineStatus);
-    try {
-      const issue = await ghCli.getIssue(opts.issueNumber);
-      const currentPipelineLabels = issue.labels.filter(isPipelineStateLabel);
-      for (const old of currentPipelineLabels) {
-        if (old !== targetLabel) {
-          await ghCli.setIssueLabelPresence(opts.issueNumber, old, false);
-        }
-      }
-      if (targetLabel) {
-        await ghCli.setIssueLabelPresence(opts.issueNumber, targetLabel, true);
-      }
-    } catch (err) {
-      console.warn('[gh-status-sync] pipeline label sync failed', err);
-    }
-  }
-
-  // Initialize the serializer now that performGhSync is defined.
-  ghSyncQueue = new GhSyncQueue(performGhSync, (err) => {
-    console.warn('[gh-status-sync] queued write failed', err);
-  });
-
   function inferRunSource(context: PipelineContext): string {
     if (isRealGithubIssueNumber(context.githubIssueNumber)) return 'github:resume';
     return context.autonomous ? 'automation:resume' : 'pipeline:resume';
@@ -857,14 +816,9 @@ export function createPipelineRuntime(
     } catch (logError) {
       console.error(`[pipeline] phase log transition failed for thread ${threadId}:`, logError);
     }
-    syncThreadAndIssuePhase(deps.threads, deps.githubIssues, threadId, phase, error, {
-      getProject: (pid) => deps.projects.getById(pid),
-      syncToGithub: async (opts) => {
-        // Route through the serializer — collapses rapid phase transitions
-        // into the latest desired state per issue.
-        ghSyncQueue.enqueue(opts);
-      },
-    });
+    // Route through the shared service's serializer — collapses rapid phase
+    // transitions into the latest desired state per issue.
+    syncThreadAndIssuePhase(deps.threads, deps.githubIssues, threadId, phase, error, ghSync.deps);
     deps.emitter.emit({ type: 'pipeline:phase', threadId, phase, ...(runId ? { runId } : {}) });
   }
 

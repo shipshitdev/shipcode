@@ -18,8 +18,8 @@ import {
   writeProjectSetup,
 } from '@shipcode/agents';
 import {
-  captureCheckpoint,
   type CheckpointRef,
+  captureCheckpoint,
   deleteAllCheckpointRefs,
   deleteThreadCheckpointRefs,
   GitService,
@@ -531,6 +531,7 @@ export function registerProjectHandlers({
   queries,
   pipeline,
   chatNotificationService,
+  automationScheduler,
   onProjectsChanged,
 }: IpcHandlerDeps): void {
   registerProjectCodeBrowserHandlers({
@@ -736,6 +737,14 @@ export function registerProjectHandlers({
       }
     }
 
+    // Snapshot which automations will be fully cascade-deleted by this project
+    // removal (their only target is this project) BEFORE the delete — afterwards
+    // the rows are gone. Multi-repo automations whose primary is this project are
+    // reassigned to a surviving target inside removeIfIdle, so they are NOT in
+    // this list. Read is race-free with the delete below: both are synchronous
+    // and adjacent, and the reassignment never touches these cascade-only rows.
+    const cascadingAutomationIds = queries.automations.listCascadingProjectRemoval(projectId);
+
     const removed = queries.projects.removeIfIdle(projectId, { ignoreAttentionOnly });
     if (!removed) {
       throw new Error(
@@ -743,6 +752,11 @@ export function registerProjectHandlers({
           ? 'A pipeline became active during cleanup. Project not removed. Retry after it stops.'
           : 'New work appeared during cleanup. Project not removed. Retry after stopping pipelines.',
       );
+    }
+    // Cancel in-memory cron jobs for automations that cascaded away, so no zombie
+    // job keeps firing no-ops until the app restarts.
+    for (const automationId of cascadingAutomationIds) {
+      automationScheduler?.unschedule(automationId);
     }
     // Stop watching the removed project's WORKFLOW.md.
     onProjectsChanged?.();

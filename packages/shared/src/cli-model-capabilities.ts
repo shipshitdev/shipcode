@@ -1,9 +1,6 @@
 import {
-  CLAUDE_MODEL_OPTIONS,
-  CODEX_FALLBACK_MODEL_OPTIONS,
-  CURSOR_FALLBACK_MODEL_OPTIONS,
-  GEMINI_FALLBACK_MODEL_OPTIONS,
-  GROK_FALLBACK_MODEL_OPTIONS,
+  CLI_PROVIDER_FALLBACK_OPTIONS,
+  CLI_PROVIDER_LABELS,
   type KnownModelOption,
 } from './model-catalog';
 import { getSupportedReasoningEfforts } from './reasoning-effort';
@@ -38,16 +35,7 @@ export function fallbackCliModelCapabilities(
   provider: PhaseCliProvider,
   checkedAt = new Date(0).toISOString(),
 ): CliModelCapabilities {
-  const options =
-    provider === 'claude'
-      ? CLAUDE_MODEL_OPTIONS
-      : provider === 'codex'
-        ? CODEX_FALLBACK_MODEL_OPTIONS
-        : provider === 'gemini'
-          ? GEMINI_FALLBACK_MODEL_OPTIONS
-          : provider === 'grok'
-            ? GROK_FALLBACK_MODEL_OPTIONS
-            : CURSOR_FALLBACK_MODEL_OPTIONS;
+  const options = CLI_PROVIDER_FALLBACK_OPTIONS[provider];
   return {
     provider,
     source: 'fallback',
@@ -126,16 +114,7 @@ export function assessCliModelAvailabilityFromCapabilities(
     return { available: true, message: null };
   }
 
-  const providerLabel =
-    provider === 'claude'
-      ? 'Claude CLI'
-      : provider === 'codex'
-        ? 'Codex CLI'
-        : provider === 'gemini'
-          ? 'Gemini CLI'
-          : provider === 'grok'
-            ? 'Grok CLI'
-            : 'Cursor CLI';
+  const providerLabel = CLI_PROVIDER_LABELS[provider];
   const sourceDetail =
     capabilities.source === 'catalog'
       ? 'installed CLI catalog'
@@ -179,17 +158,7 @@ export function assessCliReasoningEffortAvailabilityFromCapabilities(
   const modelLabel = modelId ? ` for ${modelId}` : '';
   return {
     available: false,
-    message: `${
-      provider === 'claude'
-        ? 'Claude CLI'
-        : provider === 'codex'
-          ? 'Codex CLI'
-          : provider === 'gemini'
-            ? 'Gemini CLI'
-            : provider === 'grok'
-              ? 'Grok CLI'
-              : 'Cursor CLI'
-    } does not report ${effort} effort${modelLabel}. Choose a supported effort or update the CLI.`,
+    message: `${CLI_PROVIDER_LABELS[provider]} does not report ${effort} effort${modelLabel}. Choose a supported effort or update the CLI.`,
   };
 }
 

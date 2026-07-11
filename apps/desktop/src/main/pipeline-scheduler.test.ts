@@ -501,6 +501,52 @@ describe('PipelineScheduler', () => {
     });
   });
 
+  describe('_syncPipelineLabel (ghSync routing)', () => {
+    it('routes the GitHub label/status sync through the injected ghSync service', async () => {
+      const ghSync = {
+        getProject: vi.fn(),
+        syncToGithub: vi.fn(async () => undefined),
+      };
+      scheduler = new PipelineScheduler({
+        queries: queries as never,
+        pipeline: pipeline as never,
+        emitter: { emit: vi.fn() } as never,
+        getMainWindow: () => mainWindow as never,
+        ghSync,
+      });
+      pipeline.listActiveInPhases.mockReturnValue([
+        { threadId: 'a', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
+        { threadId: 'b', phase: 'planning', startedAt: Date.now(), activeProcessId: null },
+        { threadId: 'c', phase: 'reviewing', startedAt: Date.now(), activeProcessId: null },
+      ]);
+      queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 3 }));
+
+      const result = await scheduler.startOrQueue('project-1', 42);
+
+      expect(result.queued).toBe(true);
+      expect(ghSync.syncToGithub).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectPath: '/tmp/project',
+          issueNumber: 42,
+          pipelineStatus: 'queued',
+        }),
+      );
+    });
+
+    it('is a no-op when no ghSync service is configured', async () => {
+      pipeline.listActiveInPhases.mockReturnValue([
+        { threadId: 'a', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
+        { threadId: 'b', phase: 'planning', startedAt: Date.now(), activeProcessId: null },
+        { threadId: 'c', phase: 'reviewing', startedAt: Date.now(), activeProcessId: null },
+      ]);
+      queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 3 }));
+
+      await expect(scheduler.startOrQueue('project-1', 42)).resolves.toEqual(
+        expect.objectContaining({ queued: true }),
+      );
+    });
+  });
+
   describe('startQuickTaskOrQueue', () => {
     const quickIssue = () =>
       makeIssue({
@@ -640,6 +686,7 @@ describe('PipelineScheduler', () => {
           phase: 'failed',
           errorMessage: 'quick failed',
         }),
+        undefined,
       );
     });
   });
@@ -853,6 +900,7 @@ describe('PipelineScheduler', () => {
           phase: 'failed',
           errorMessage: 'launch failed',
         }),
+        undefined,
       );
     });
 
@@ -1057,6 +1105,7 @@ describe('PipelineScheduler', () => {
           phase: 'failed',
           errorMessage: 'execute failed',
         }),
+        undefined,
       );
     });
 
@@ -1235,7 +1284,11 @@ describe('PipelineScheduler', () => {
         '/tmp/project',
         automation.name,
       );
-      expect(queries.automations.recordRunStarted).toHaveBeenCalledWith('auto-1', 'thread-new');
+      expect(queries.automations.recordRunStarted).toHaveBeenCalledWith(
+        'auto-1',
+        'project-1',
+        'thread-new',
+      );
     });
 
     it('queues the automation durably when at capacity', async () => {
@@ -1312,7 +1365,11 @@ describe('PipelineScheduler', () => {
 
       await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
-      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'failed');
+      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith(
+        'auto-1',
+        'project-1',
+        'failed',
+      );
 
       queries.automations.recordRunFinished.mockClear();
       queries.projects.getById.mockReturnValue(makeProject());
@@ -1320,7 +1377,11 @@ describe('PipelineScheduler', () => {
 
       await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
-      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'failed');
+      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith(
+        'auto-1',
+        'project-1',
+        'failed',
+      );
       expect(pipeline.startFromAutomation).not.toHaveBeenCalled();
     });
 
@@ -1330,7 +1391,11 @@ describe('PipelineScheduler', () => {
 
       await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
-      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'failed');
+      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith(
+        'auto-1',
+        'project-1',
+        'failed',
+      );
       expect(pipeline.startFromAutomation).not.toHaveBeenCalled();
     });
 
@@ -1351,8 +1416,13 @@ describe('PipelineScheduler', () => {
           phase: 'failed',
           errorMessage: 'automation dispatch failed',
         }),
+        undefined,
       );
-      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'failed');
+      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith(
+        'auto-1',
+        'project-1',
+        'failed',
+      );
     });
   });
 });

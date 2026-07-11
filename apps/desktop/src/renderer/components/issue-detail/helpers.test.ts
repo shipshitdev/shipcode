@@ -1,5 +1,5 @@
 import type { PipelineCheckpoint, PlanRecord, ReviewRecord } from '@shipcode/shared';
-import { clampTextBlock } from '@shipcode/shared';
+import { clampTextBlock, PIPELINE_EXECUTOR_PROVIDERS } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
 import {
   buildRestoreCheckpointConfirmMessage,
@@ -148,6 +148,21 @@ describe('phase option helpers', () => {
     expect(decodePhaseOption('unknown::model-x')).toEqual({
       provider: 'claude',
       modelId: 'model-x',
+    });
+  });
+
+  it('decodes every shipped executor provider, including grok', () => {
+    // Guards against the whitelist drifting out of sync with
+    // PIPELINE_EXECUTOR_PROVIDERS when a new provider ships (PR #327: grok).
+    for (const provider of PIPELINE_EXECUTOR_PROVIDERS) {
+      expect(decodePhaseOption(`${provider}::some-model`)).toEqual({
+        provider,
+        modelId: 'some-model',
+      });
+    }
+    expect(decodePhaseOption('grok::grok-4.5')).toEqual({
+      provider: 'grok',
+      modelId: 'grok-4.5',
     });
   });
 });
