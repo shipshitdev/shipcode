@@ -1284,7 +1284,11 @@ describe('PipelineScheduler', () => {
         '/tmp/project',
         automation.name,
       );
-      expect(queries.automations.recordRunStarted).toHaveBeenCalledWith('auto-1', 'thread-new');
+      expect(queries.automations.recordRunStarted).toHaveBeenCalledWith(
+        'auto-1',
+        'project-1',
+        'thread-new',
+      );
     });
 
     it('queues the automation durably when at capacity', async () => {
@@ -1361,7 +1365,11 @@ describe('PipelineScheduler', () => {
 
       await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
-      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'failed');
+      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith(
+        'auto-1',
+        'project-1',
+        'failed',
+      );
 
       queries.automations.recordRunFinished.mockClear();
       queries.projects.getById.mockReturnValue(makeProject());
@@ -1369,7 +1377,11 @@ describe('PipelineScheduler', () => {
 
       await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
-      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'failed');
+      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith(
+        'auto-1',
+        'project-1',
+        'failed',
+      );
       expect(pipeline.startFromAutomation).not.toHaveBeenCalled();
     });
 
@@ -1379,7 +1391,11 @@ describe('PipelineScheduler', () => {
 
       await scheduler.startOrQueueAutomation('auto-1', 'project-1');
 
-      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'failed');
+      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith(
+        'auto-1',
+        'project-1',
+        'failed',
+      );
       expect(pipeline.startFromAutomation).not.toHaveBeenCalled();
     });
 
@@ -1402,7 +1418,11 @@ describe('PipelineScheduler', () => {
         }),
         undefined,
       );
-      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'failed');
+      expect(queries.automations.recordRunFinished).toHaveBeenCalledWith(
+        'auto-1',
+        'project-1',
+        'failed',
+      );
     });
   });
 });

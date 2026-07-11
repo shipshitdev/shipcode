@@ -18,6 +18,8 @@ import {
   writeProjectSetup,
 } from '@shipcode/agents';
 import {
+  type CheckpointRef,
+  captureCheckpoint,
   deleteAllCheckpointRefs,
   deleteThreadCheckpointRefs,
   GitService,
@@ -529,6 +531,7 @@ export function registerProjectHandlers({
   queries,
   pipeline,
   chatNotificationService,
+  automationScheduler,
   onProjectsChanged,
 }: IpcHandlerDeps): void {
   registerProjectCodeBrowserHandlers({
@@ -734,6 +737,14 @@ export function registerProjectHandlers({
       }
     }
 
+    // Snapshot which automations will be fully cascade-deleted by this project
+    // removal (their only target is this project) BEFORE the delete — afterwards
+    // the rows are gone. Multi-repo automations whose primary is this project are
+    // reassigned to a surviving target inside removeIfIdle, so they are NOT in
+    // this list. Read is race-free with the delete below: both are synchronous
+    // and adjacent, and the reassignment never touches these cascade-only rows.
+    const cascadingAutomationIds = queries.automations.listCascadingProjectRemoval(projectId);
+
     const removed = queries.projects.removeIfIdle(projectId, { ignoreAttentionOnly });
     if (!removed) {
       throw new Error(
@@ -741,6 +752,11 @@ export function registerProjectHandlers({
           ? 'A pipeline became active during cleanup. Project not removed. Retry after it stops.'
           : 'New work appeared during cleanup. Project not removed. Retry after stopping pipelines.',
       );
+    }
+    // Cancel in-memory cron jobs for automations that cascaded away, so no zombie
+    // job keeps firing no-ops until the app restarts.
+    for (const automationId of cascadingAutomationIds) {
+      automationScheduler?.unschedule(automationId);
     }
     // Stop watching the removed project's WORKFLOW.md.
     onProjectsChanged?.();
@@ -914,6 +930,56 @@ export function registerProjectHandlers({
       }
 
       try {
+        // Rollback pruning (#212, #328): refs AND their DB rows newer than the
+        // restored turn represent an abandoned future timeline and must be
+        // dropped together — leaving rows behind lets a later capture reuse the
+        // turn number and silently resolve the stale row to unrelated content.
+        // Prune BEFORE the pre-restore snapshot below so the snapshot's ref
+        // (which claims the next free turn, i.e. one higher than everything
+        // remaining) is never caught by this prune and stays recoverable.
+        const restoredTurn = checkpoint.refName ? parseCheckpointTurn(checkpoint.refName) : null;
+        if (restoredTurn !== null) {
+          await deleteThreadCheckpointRefs(thread.worktreePath, threadId, {
+            newerThanTurn: restoredTurn,
+          });
+          queries.checkpoints.deleteNewerThan(threadId, restoredTurn);
+        }
+
+        // Pre-restore safety snapshot: the restore below runs `git reset --hard`,
+        // which reverts EVERY uncommitted change in the worktree — including
+        // manual edits the user made between attempts — not just the files
+        // created after the target checkpoint. Snapshot the current worktree
+        // state first so nothing is silently lost; it surfaces in the checkpoint
+        // list as "Before restore" and is restorable like any other checkpoint.
+        // Best-effort: a snapshot failure must never block the restore the user
+        // explicitly asked for, so ref capture and row insert each fail soft.
+        let preRestore: CheckpointRef | null = null;
+        try {
+          preRestore = await captureCheckpoint(thread.worktreePath, threadId);
+        } catch (snapshotError) {
+          log.warn(
+            `[checkpoint:restore] pre-restore snapshot failed for thread ${threadId}:`,
+            snapshotError,
+          );
+        }
+        try {
+          queries.checkpoints.create({
+            threadId,
+            projectId: thread.projectId,
+            phase: checkpoint.phase,
+            reason: 'pre_restore',
+            label: 'Before restore',
+            branch: thread.worktreeBranch,
+            commitSha: preRestore?.commitSha ?? checkpoint.commitSha,
+            refName: preRestore?.refName ?? null,
+          });
+        } catch (rowError) {
+          log.warn(
+            `[checkpoint:restore] failed to record pre-restore checkpoint for thread ${threadId}:`,
+            rowError,
+          );
+        }
+
         // Ref-backed restore (#212): reproduce the checkpoint's full captured
         // filesystem state (including then-uncommitted work). Legacy rows and
         // missing refs fall back to the commit-SHA hard reset.
@@ -937,13 +1003,6 @@ export function registerProjectHandlers({
           await execAsync('git clean -fd', {
             cwd: thread.worktreePath,
             timeout: 15_000,
-          });
-        }
-        // Rollback pruning (#212): refs newer than the restored turn are stale.
-        const restoredTurn = checkpoint.refName ? parseCheckpointTurn(checkpoint.refName) : null;
-        if (restoredTurn !== null) {
-          await deleteThreadCheckpointRefs(thread.worktreePath, threadId, {
-            newerThanTurn: restoredTurn,
           });
         }
       } catch (error) {

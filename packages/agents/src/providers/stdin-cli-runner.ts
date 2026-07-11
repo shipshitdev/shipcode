@@ -1,6 +1,7 @@
 import type { AgentType } from '@shipcode/shared';
 import type { ProcessManager } from '../process-manager';
 import { measurePromptPayload } from '../prompt-scope';
+import { firstString } from './output-summary';
 import type { ProviderRequest, ProviderResponse } from './types';
 
 export interface StdinCliCommand {
@@ -28,6 +29,70 @@ type ProcessManagerWithStdin = ProcessManager & {
 
 export function stripAnsi(value: string): string {
   return value.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g'), '');
+}
+
+export interface JsonResultEnvelope {
+  /** Object keys, in priority order, that may carry the final text. */
+  resultFieldNames: readonly string[];
+  /** Object keys, in priority order, that may carry the resolved model id. */
+  modelFieldNames: readonly string[];
+}
+
+function extractFromJsonResult(
+  parsed: Record<string, unknown>,
+  envelope: JsonResultEnvelope,
+): { text: string; resolvedModel?: string } | null {
+  const text = firstString(...envelope.resultFieldNames.map((name) => parsed[name]));
+  if (text === null) return null;
+  const resolvedModel = firstString(...envelope.modelFieldNames.map((name) => parsed[name]));
+  return resolvedModel ? { text, resolvedModel } : { text };
+}
+
+/**
+ * Parse the JSON output shared by the execute-only stdin CLIs (cursor, grok).
+ * Their `--output-format json` emits a single result object
+ * (`{ type: 'result', result: '<final text>', model, ... }`). If the CLI
+ * instead streamed NDJSON (one JSON object per line), fall back to the last
+ * extractable line, preferring an explicit `type: 'result'` event. When
+ * nothing parses, return the cleaned raw text so callers still see something.
+ *
+ * The envelope's field names are provider-specific parameters — this stays a
+ * thin, shared parse scaffold rather than a per-provider abstraction, so a fix
+ * here (BOM/CRLF handling, an added envelope key) lands for every caller at
+ * once instead of drifting between near-identical copies.
+ */
+export function parseJsonResultWithNdjsonFallback(
+  rawOutput: string,
+  envelope: JsonResultEnvelope,
+): { text: string; resolvedModel?: string } {
+  const cleaned = stripAnsi(rawOutput).trim();
+  if (!cleaned) return { text: '' };
+
+  try {
+    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+    const extracted = extractFromJsonResult(parsed, envelope);
+    if (extracted) return extracted;
+  } catch {
+    // Not a single JSON object — try NDJSON (streaming-json) below.
+  }
+
+  let fallback: { text: string; resolvedModel?: string } | null = null;
+  for (const line of cleaned.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{')) continue;
+    try {
+      const obj = JSON.parse(trimmed) as Record<string, unknown>;
+      const extracted = extractFromJsonResult(obj, envelope);
+      if (!extracted) continue;
+      // Prefer an explicit result event; otherwise keep the last extractable line.
+      if (obj.type === 'result') return extracted;
+      fallback = extracted;
+    } catch {
+      // Ignore non-JSON lines.
+    }
+  }
+
+  return fallback ?? { text: cleaned };
 }
 
 export async function runStdinCli(
@@ -132,7 +197,7 @@ export function clampCliFailure(rawOutput: string, prompt: string, fallback: str
 
 /**
  * Assemble the canonical `ProviderResponse` shared by stdin-based CLI providers
- * (gemini, cursor). They run identically through {@link runStdinCli} and differ
+ * (gemini, cursor, grok). They run identically through {@link runStdinCli} and differ
  * only in how output is parsed plus their binary name / failure label, so the
  * telemetry block, parsed-text/resolvedModel forwarding, and the exit-code →
  * `providerError` cascade are factored out here:

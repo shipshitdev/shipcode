@@ -189,9 +189,22 @@ export function extractImplicatedFiles(value: string): string[] {
 }
 
 /**
+ * Result of probing a worktree for pipeline-produced changes.
+ *
+ * - `'dirty'`  — changes are confirmed present (uncommitted status or a diff
+ *   against the fork point).
+ * - `'clean'`  — the probe ran to completion and found no changes. This is the
+ *   only state that should fail an otherwise-successful run.
+ * - `'unknown'` — a git probe errored (bad revision from a rebased/pruned base,
+ *   transient ENOENT, index lock contention, …). We could neither confirm nor
+ *   deny changes, so callers must NOT treat this as clean.
+ */
+export type WorktreeChangeStatus = 'clean' | 'dirty' | 'unknown';
+
+/**
  * @knipignore
  */
-export function worktreeHasChanges(context: PipelineContext): boolean {
+export function probeWorktreeChanges(context: PipelineContext): WorktreeChangeStatus {
   const cwd = context.worktreePath ?? context.projectPath;
   try {
     const status = execFileSync('git', ['status', '--porcelain'], {
@@ -199,7 +212,7 @@ export function worktreeHasChanges(context: PipelineContext): boolean {
       encoding: 'utf-8',
       maxBuffer: 1024 * 1024,
     }).trim();
-    if (status.length > 0) return true;
+    if (status.length > 0) return 'dirty';
 
     const baseRef = resolveWorktreeDiffBase(context);
     if (baseRef) {
@@ -208,18 +221,19 @@ export function worktreeHasChanges(context: PipelineContext): boolean {
         encoding: 'utf-8',
         maxBuffer: 1024 * 1024,
       }).trim();
-      if (diff.length > 0) return true;
+      if (diff.length > 0) return 'dirty';
     }
 
-    return false;
+    return 'clean';
   } catch (error) {
-    // A failed git probe is not evidence of a dirty tree; report no confirmed
-    // changes and leave the infrastructure failure visible in the process log.
+    // A failed git probe is NOT evidence of a clean tree — real changes may sit
+    // in the worktree. Report 'unknown' so callers proceed instead of failing an
+    // otherwise-successful run, and leave the infrastructure failure in the log.
     const message = formatWorktreeProbeError(error);
     console.warn(
-      `[pipeline] worktree change probe failed; treating as no confirmed changes for thread ${context.threadId}: ${message}`,
+      `[pipeline] worktree change probe failed; treating as unknown for thread ${context.threadId}: ${message}`,
     );
-    return false;
+    return 'unknown';
   }
 }
 

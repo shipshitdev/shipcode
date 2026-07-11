@@ -1,5 +1,6 @@
 import type {
   ExecutorModel,
+  PipelineCheckpoint,
   PipelinePhase,
   PlanRecord,
   ReviewRecord,
@@ -122,14 +123,11 @@ export function decodePhaseOption(value: string): {
   modelId: string | null;
 } {
   const [providerRaw, modelIdRaw] = value.split('::');
-  const provider =
-    providerRaw === 'claude' ||
-    providerRaw === 'codex' ||
-    providerRaw === 'gemini' ||
-    providerRaw === 'cursor' ||
-    providerRaw === 'openrouter'
-      ? providerRaw
-      : 'claude';
+  // Validate against the shared source of truth so a newly shipped provider
+  // (e.g. PR #327 'grok') can never regress this decode into a Claude fallback.
+  const provider = (PIPELINE_EXECUTOR_PROVIDERS as readonly string[]).includes(providerRaw)
+    ? (providerRaw as ExecutorModel)
+    : 'claude';
   return { provider, modelId: modelIdRaw === '__default__' ? null : modelIdRaw };
 }
 
@@ -325,6 +323,27 @@ export function resolveIssueRetryPresentation({
               : null;
 
   return { retryAction, retryButtonLabel, retrySummary };
+}
+
+/**
+ * Confirmation copy for restoring a pipeline checkpoint. Restore runs
+ * `git reset --hard` under the hood, so it reverts EVERY uncommitted change in
+ * the worktree — including hand edits the user made between attempts — not just
+ * the files created after the checkpoint. The old copy ("remove files created
+ * after it") understated that, so a user could hard-tweak a tracked file and
+ * silently lose it on restore. State the true blast radius plainly, and note
+ * that a "Before restore" safety snapshot is captured first so the current
+ * state stays recoverable from the checkpoint list.
+ */
+export function buildRestoreCheckpointConfirmMessage(checkpoint: PipelineCheckpoint): string {
+  const target = checkpoint.refName
+    ? "this checkpoint's snapshot, including the uncommitted changes captured with it"
+    : `commit ${checkpoint.commitSha.slice(0, 12)}`;
+  return [
+    `Restore checkpoint "${checkpoint.label}"?`,
+    `This reverts ALL uncommitted changes in the worktree — including any manual edits you made — and resets it to ${target}. A "Before restore" snapshot is saved first, so you can recover the current state from the checkpoint list.`,
+    `This restores code state only. It does not resume the same planner session.`,
+  ].join('\n\n');
 }
 
 export function safeErrorMessage(raw: string): string {

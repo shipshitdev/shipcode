@@ -47,6 +47,7 @@ const {
   worktreeRepairMock,
   worktreeRemoveMock,
   restoreCheckpointMock,
+  captureCheckpointMock,
   deleteThreadCheckpointRefsMock,
   deleteAllCheckpointRefsMock,
 } = vi.hoisted(() => ({
@@ -106,6 +107,11 @@ const {
   worktreeRepairMock: vi.fn(async () => undefined),
   worktreeRemoveMock: vi.fn(async () => ({ success: true, error: null })),
   restoreCheckpointMock: vi.fn(async () => undefined),
+  captureCheckpointMock: vi.fn(async () => ({
+    refName: 'refs/shipcode/checkpoints/thread-1/turn/3',
+    turn: 3,
+    commitSha: 'preresto1234',
+  })),
   deleteThreadCheckpointRefsMock: vi.fn(async () => 0),
   deleteAllCheckpointRefsMock: vi.fn(async () => 0),
 }));
@@ -194,6 +200,7 @@ vi.mock('@shipcode/git', () => ({
     remove = worktreeRemoveMock;
   },
   restoreCheckpoint: restoreCheckpointMock,
+  captureCheckpoint: captureCheckpointMock,
   deleteThreadCheckpointRefs: deleteThreadCheckpointRefsMock,
   deleteAllCheckpointRefs: deleteAllCheckpointRefsMock,
   parseCheckpointTurn: (refName: string) => {
@@ -1976,6 +1983,9 @@ describe('registerProjectHandlers', () => {
         hasLiveWork: vi.fn(() => false),
         removeIfIdle: vi.fn(() => true),
       },
+      automations: {
+        listCascadingProjectRemoval: vi.fn(() => []),
+      },
       settings: {
         get: vi.fn(() => ({ worktreeRoot: '/tmp/worktrees' })),
       },
@@ -2015,6 +2025,99 @@ describe('registerProjectHandlers', () => {
     expect(queries.projects.removeIfIdle).toHaveBeenCalledWith(baseProject.id, {
       ignoreAttentionOnly: false,
     });
+
+    existsSpy.mockRestore();
+  });
+
+  it('unschedules automations that cascade away when their only target project is removed', async () => {
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+        hasLiveWork: vi.fn(() => false),
+        removeIfIdle: vi.fn(() => true),
+      },
+      automations: {
+        // Two automations whose only target was this project cascade away.
+        listCascadingProjectRemoval: vi.fn(() => ['auto-1', 'auto-2']),
+      },
+      settings: {
+        get: vi.fn(() => ({ worktreeRoot: '/tmp/worktrees' })),
+      },
+      threads: {
+        list: vi.fn(() => []),
+      },
+    };
+    const automationScheduler = { unschedule: vi.fn() };
+    const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+      automationScheduler: automationScheduler as never,
+    });
+
+    const remove = handlers.get('project:remove');
+    if (!remove) throw new Error('project:remove handler not registered');
+
+    await expect(remove(undefined, { projectId: baseProject.id })).resolves.toBeUndefined();
+
+    // Snapshot must be taken before the delete, then each cascaded automation
+    // unscheduled so no zombie cron survives.
+    expect(queries.automations.listCascadingProjectRemoval).toHaveBeenCalledWith(baseProject.id);
+    expect(automationScheduler.unschedule).toHaveBeenCalledTimes(2);
+    expect(automationScheduler.unschedule).toHaveBeenCalledWith('auto-1');
+    expect(automationScheduler.unschedule).toHaveBeenCalledWith('auto-2');
+
+    existsSpy.mockRestore();
+  });
+
+  it('does not unschedule automations when removal is blocked (project not idle)', async () => {
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+        hasLiveWork: vi.fn(() => false),
+        removeIfIdle: vi.fn(() => false),
+      },
+      automations: {
+        listCascadingProjectRemoval: vi.fn(() => ['auto-1']),
+      },
+      settings: {
+        get: vi.fn(() => ({ worktreeRoot: '/tmp/worktrees' })),
+      },
+      threads: {
+        list: vi.fn(() => []),
+      },
+    };
+    const automationScheduler = { unschedule: vi.fn() };
+    const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+      automationScheduler: automationScheduler as never,
+    });
+
+    const remove = handlers.get('project:remove');
+    if (!remove) throw new Error('project:remove handler not registered');
+
+    await expect(remove(undefined, { projectId: baseProject.id })).rejects.toThrow(
+      'New work appeared during cleanup. Project not removed. Retry after stopping pipelines.',
+    );
+
+    // Removal was blocked, so nothing must be unscheduled.
+    expect(automationScheduler.unschedule).not.toHaveBeenCalled();
 
     existsSpy.mockRestore();
   });
@@ -2124,6 +2227,9 @@ describe('registerProjectHandlers', () => {
         getById: vi.fn(() => baseProject),
         hasLiveWork: vi.fn(() => false),
         removeIfIdle: vi.fn(() => false),
+      },
+      automations: {
+        listCascadingProjectRemoval: vi.fn(() => []),
       },
       settings: {
         get: vi.fn(() => ({ worktreeRoot: '/tmp/worktrees' })),
@@ -2773,6 +2879,8 @@ describe('registerProjectHandlers', () => {
       },
       checkpoints: {
         getById: vi.fn(() => checkpoint),
+        create: vi.fn(),
+        deleteNewerThan: vi.fn(),
       },
       threads: {
         getById: vi.fn(() => ({ id: 'thread-1', worktreePath: '/tmp/worktree' })),
@@ -2823,6 +2931,91 @@ describe('registerProjectHandlers', () => {
     });
   });
 
+  it('captures a pre-restore safety snapshot before the destructive reset', async () => {
+    const checkpoint = {
+      id: 'checkpoint-1',
+      threadId: 'thread-1',
+      projectId: 'project-1',
+      phase: 'executing',
+      commitSha: 'abc1234',
+      refName: 'refs/shipcode/checkpoints/thread-1/turn/2',
+    };
+    const createMock = vi.fn();
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor' })),
+      },
+      checkpoints: {
+        getById: vi.fn(() => checkpoint),
+        create: createMock,
+        deleteNewerThan: vi.fn(),
+      },
+      threads: {
+        getById: vi.fn(() => ({
+          id: 'thread-1',
+          projectId: 'project-1',
+          worktreePath: '/tmp/worktree',
+          worktreeBranch: 'shipcode/thread-1',
+        })),
+        updateStatus: vi.fn(),
+      },
+      githubIssues: {
+        getByThreadId: vi.fn(() => null),
+      },
+    };
+    const pipeline = {
+      listActive: vi.fn(() => []),
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: pipeline as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const restore = handlers.get('checkpoint:restore');
+    if (!restore) throw new Error('checkpoint:restore handler not registered');
+
+    captureCheckpointMock.mockClear();
+    createMock.mockClear();
+    restoreCheckpointMock.mockClear();
+
+    await restore(undefined, { threadId: 'thread-1', checkpointId: checkpoint.id });
+
+    // A "Before restore" checkpoint row is written from the captured snapshot,
+    // so the user's pre-restore worktree state is recoverable.
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: 'thread-1',
+        projectId: 'project-1',
+        reason: 'pre_restore',
+        label: 'Before restore',
+        refName: 'refs/shipcode/checkpoints/thread-1/turn/3',
+        commitSha: 'preresto1234',
+        branch: 'shipcode/thread-1',
+        phase: 'executing',
+      }),
+    );
+    // The snapshot must be taken and recorded BEFORE the destructive restore.
+    const captureOrder = captureCheckpointMock.mock.invocationCallOrder[0];
+    const createOrder = createMock.mock.invocationCallOrder[0];
+    const restoreOrder = restoreCheckpointMock.mock.invocationCallOrder[0];
+    expect(captureOrder).toBeLessThan(restoreOrder);
+    expect(createOrder).toBeLessThan(restoreOrder);
+    // Pruning the abandoned future timeline runs before the snapshot so the
+    // snapshot ref (next turn up) survives.
+    const pruneOrder = deleteThreadCheckpointRefsMock.mock.invocationCallOrder[0];
+    expect(pruneOrder).toBeLessThan(captureOrder);
+  });
+
   it('restores from the checkpoint ref when present and prunes newer refs', async () => {
     const checkpoint = {
       id: 'checkpoint-1',
@@ -2839,6 +3032,8 @@ describe('registerProjectHandlers', () => {
       },
       checkpoints: {
         getById: vi.fn(() => checkpoint),
+        create: vi.fn(),
+        deleteNewerThan: vi.fn(),
       },
       threads: {
         getById: vi.fn(() => ({ id: 'thread-1', worktreePath: '/tmp/worktree' })),
@@ -2897,6 +3092,8 @@ describe('registerProjectHandlers', () => {
       },
       checkpoints: {
         getById: vi.fn(() => checkpoint),
+        create: vi.fn(),
+        deleteNewerThan: vi.fn(),
       },
       threads: {
         getById: vi.fn(() => ({ id: 'thread-1', worktreePath: '/tmp/worktree' })),
@@ -3807,6 +4004,9 @@ describe('registerProjectHandlers', () => {
         hasLiveWork: vi.fn(() => false),
         removeIfIdle: vi.fn(() => true),
         archiveIfIdle: vi.fn(() => true),
+      },
+      automations: {
+        listCascadingProjectRemoval: vi.fn(() => []),
       },
       settings: {
         get: vi.fn(() => ({

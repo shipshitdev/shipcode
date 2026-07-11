@@ -12,8 +12,8 @@ import {
   extractImplicatedFiles,
   extractTestFailureSummary,
   normalizeFeatureQaResults,
+  probeWorktreeChanges,
   resolveWorktreeDiffBase,
-  worktreeHasChanges,
 } from './execution-phases';
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
@@ -51,6 +51,26 @@ vi.mock('node:child_process', async (importOriginal) => {
   return {
     ...actual,
     execFileSync: mockExecFileSync,
+  };
+});
+
+// Stub checkpoint capture: several tests here run under vi.useFakeTimers()
+// with worktreePath: process.cwd(), and real capture git (simple-git) awaits
+// internal promises that fake timers starve, hanging the suite. Checkpoint
+// bookkeeping is not under test in this file.
+vi.mock('@shipcode/git', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/git')>();
+  return {
+    ...actual,
+    captureCheckpoint: vi.fn(async () => ({
+      refName: 'refs/shipcode/checkpoints/thread-1/turn/0',
+      turn: 0,
+      commitSha: 'snapshot-sha',
+      headSha: 'head-sha',
+      branch: 'main',
+    })),
+    resolveHeadCommit: vi.fn(async () => 'head-sha'),
+    resolveCurrentBranch: vi.fn(async () => 'main'),
   };
 });
 
@@ -475,7 +495,7 @@ describe('execution phase helpers', () => {
       if (args[0] === 'status') return ' M src/a.ts\n';
       return '';
     });
-    expect(worktreeHasChanges(context)).toBe(true);
+    expect(probeWorktreeChanges(context)).toBe('dirty');
 
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
       if (args[0] === 'status') return '';
@@ -483,14 +503,14 @@ describe('execution phase helpers', () => {
       if (args[0] === 'diff') return 'src/a.ts\n';
       return '';
     });
-    expect(worktreeHasChanges(context)).toBe(true);
+    expect(probeWorktreeChanges(context)).toBe('dirty');
 
     mockExecFileSync.mockImplementation(() => '');
-    expect(worktreeHasChanges(context)).toBe(false);
-    expect(worktreeHasChanges({ projectPath: '/project' } as PipelineContext)).toBe(false);
+    expect(probeWorktreeChanges(context)).toBe('clean');
+    expect(probeWorktreeChanges({ projectPath: '/project' } as PipelineContext)).toBe('clean');
     expect(
-      worktreeHasChanges({ projectPath: '/project', forkPointSha: 'base' } as PipelineContext),
-    ).toBe(false);
+      probeWorktreeChanges({ projectPath: '/project', forkPointSha: 'base' } as PipelineContext),
+    ).toBe('clean');
 
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
       if (args[0] === 'status') return '';
@@ -499,12 +519,12 @@ describe('execution phase helpers', () => {
       return '';
     });
     expect(
-      worktreeHasChanges({
+      probeWorktreeChanges({
         projectPath: '/project',
         forkPointSha: '',
         baseBranch: 'main',
       } as PipelineContext),
-    ).toBe(true);
+    ).toBe('dirty');
   });
 
   it('resolves a diff base from fork point, base branch merge-base, then previous commit', () => {

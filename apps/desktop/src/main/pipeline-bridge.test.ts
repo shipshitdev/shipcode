@@ -434,7 +434,11 @@ describe('createElectronEmitter event forwarding and terminal bookkeeping', () =
     } as PipelineEvent);
 
     expect(deps.onExecutionSlotFreed).toHaveBeenCalledTimes(1);
-    expect(deps.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'completed');
+    expect(deps.automations.recordRunFinished).toHaveBeenCalledWith(
+      'auto-1',
+      'project-1',
+      'completed',
+    );
     expect(deps.notifications.fire).toHaveBeenCalledWith(
       'completed',
       expect.objectContaining({ id: 'thread-1' }),
@@ -890,7 +894,11 @@ describe('createElectronEmitter event forwarding and terminal bookkeeping', () =
 
     expect(deps.onPipelineTerminal).toHaveBeenCalled();
     expect(deps.onExecutionSlotFreed).toHaveBeenCalled();
-    expect(deps.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'completed');
+    expect(deps.automations.recordRunFinished).toHaveBeenCalledWith(
+      'auto-1',
+      'project-1',
+      'completed',
+    );
   });
 
   it('swallows terminal persistence and model terminal write errors', () => {
