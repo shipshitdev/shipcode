@@ -1,7 +1,8 @@
-import type { PlanRecord, ReviewRecord } from '@shipcode/shared';
+import type { PipelineCheckpoint, PlanRecord, ReviewRecord } from '@shipcode/shared';
 import { clampTextBlock, PIPELINE_EXECUTOR_PROVIDERS } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
 import {
+  buildRestoreCheckpointConfirmMessage,
   decodePhaseOption,
   diagnosePlanParseFailure,
   encodePhaseOption,
@@ -323,6 +324,44 @@ describe('safeErrorMessage', () => {
     expect(safeErrorMessage(JSON.stringify({ type: 'event', ignored: true }))).toBe(
       'Pipeline failed in the target project/worktree. See terminal output for details.',
     );
+  });
+});
+
+describe('buildRestoreCheckpointConfirmMessage', () => {
+  const baseCheckpoint: PipelineCheckpoint = {
+    id: 'checkpoint-1',
+    threadId: 'thread-1',
+    projectId: 'project-1',
+    phase: 'executing',
+    reason: 'before_execute',
+    label: 'Before execute attempt 1',
+    branch: 'shipcode/thread-1',
+    commitSha: 'abcdef1234567890',
+    refName: 'refs/shipcode/checkpoints/thread-1/turn/2',
+    createdAt: '2026-07-10T00:00:00.000Z',
+  };
+
+  it('states the full blast radius of restore, not just newly-created files', () => {
+    const message = buildRestoreCheckpointConfirmMessage(baseCheckpoint);
+    expect(message).toContain('Before execute attempt 1');
+    // The whole point of the fix: restore reverts ALL uncommitted work, so the
+    // copy must say so and must not imply it only removes new files.
+    expect(message).toContain('reverts ALL uncommitted changes');
+    expect(message).toContain('manual edits');
+    expect(message).not.toMatch(/remove files created after/i);
+    // Reassures the user their current state is recoverable.
+    expect(message).toContain('Before restore');
+    // Ref-backed checkpoints restore the captured dirty snapshot.
+    expect(message).toContain('uncommitted changes captured with it');
+    expect(message).toContain('does not resume the same planner session');
+  });
+
+  it('names the commit for legacy rows that have no checkpoint ref', () => {
+    const legacy: PipelineCheckpoint = { ...baseCheckpoint, refName: null };
+    const message = buildRestoreCheckpointConfirmMessage(legacy);
+    expect(message).toContain('reverts ALL uncommitted changes');
+    expect(message).toContain('commit abcdef123456');
+    expect(message).toContain('Before restore');
   });
 });
 

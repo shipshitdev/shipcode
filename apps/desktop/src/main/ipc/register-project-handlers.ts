@@ -18,6 +18,8 @@ import {
   writeProjectSetup,
 } from '@shipcode/agents';
 import {
+  type CheckpointRef,
+  captureCheckpoint,
   deleteAllCheckpointRefs,
   deleteThreadCheckpointRefs,
   GitService,
@@ -928,6 +930,56 @@ export function registerProjectHandlers({
       }
 
       try {
+        // Rollback pruning (#212, #328): refs AND their DB rows newer than the
+        // restored turn represent an abandoned future timeline and must be
+        // dropped together — leaving rows behind lets a later capture reuse the
+        // turn number and silently resolve the stale row to unrelated content.
+        // Prune BEFORE the pre-restore snapshot below so the snapshot's ref
+        // (which claims the next free turn, i.e. one higher than everything
+        // remaining) is never caught by this prune and stays recoverable.
+        const restoredTurn = checkpoint.refName ? parseCheckpointTurn(checkpoint.refName) : null;
+        if (restoredTurn !== null) {
+          await deleteThreadCheckpointRefs(thread.worktreePath, threadId, {
+            newerThanTurn: restoredTurn,
+          });
+          queries.checkpoints.deleteNewerThan(threadId, restoredTurn);
+        }
+
+        // Pre-restore safety snapshot: the restore below runs `git reset --hard`,
+        // which reverts EVERY uncommitted change in the worktree — including
+        // manual edits the user made between attempts — not just the files
+        // created after the target checkpoint. Snapshot the current worktree
+        // state first so nothing is silently lost; it surfaces in the checkpoint
+        // list as "Before restore" and is restorable like any other checkpoint.
+        // Best-effort: a snapshot failure must never block the restore the user
+        // explicitly asked for, so ref capture and row insert each fail soft.
+        let preRestore: CheckpointRef | null = null;
+        try {
+          preRestore = await captureCheckpoint(thread.worktreePath, threadId);
+        } catch (snapshotError) {
+          log.warn(
+            `[checkpoint:restore] pre-restore snapshot failed for thread ${threadId}:`,
+            snapshotError,
+          );
+        }
+        try {
+          queries.checkpoints.create({
+            threadId,
+            projectId: thread.projectId,
+            phase: checkpoint.phase,
+            reason: 'pre_restore',
+            label: 'Before restore',
+            branch: thread.worktreeBranch,
+            commitSha: preRestore?.commitSha ?? checkpoint.commitSha,
+            refName: preRestore?.refName ?? null,
+          });
+        } catch (rowError) {
+          log.warn(
+            `[checkpoint:restore] failed to record pre-restore checkpoint for thread ${threadId}:`,
+            rowError,
+          );
+        }
+
         // Ref-backed restore (#212): reproduce the checkpoint's full captured
         // filesystem state (including then-uncommitted work). Legacy rows and
         // missing refs fall back to the commit-SHA hard reset.
@@ -952,17 +1004,6 @@ export function registerProjectHandlers({
             cwd: thread.worktreePath,
             timeout: 15_000,
           });
-        }
-        // Rollback pruning (#212, #328): refs AND their DB rows newer than the
-        // restored turn are stale and must be dropped together. Leaving the
-        // rows behind lets a later capture reuse the turn number and silently
-        // resolve the stale row to unrelated content on a future restore.
-        const restoredTurn = checkpoint.refName ? parseCheckpointTurn(checkpoint.refName) : null;
-        if (restoredTurn !== null) {
-          await deleteThreadCheckpointRefs(thread.worktreePath, threadId, {
-            newerThanTurn: restoredTurn,
-          });
-          queries.checkpoints.deleteNewerThan(threadId, restoredTurn);
         }
       } catch (error) {
         throw new Error(clampError(error));
