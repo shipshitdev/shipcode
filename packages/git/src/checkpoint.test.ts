@@ -10,6 +10,8 @@ import {
   deleteThreadCheckpointRefs,
   listCheckpointRefs,
   parseCheckpointTurn,
+  resolveCurrentBranch,
+  resolveHeadCommit,
   restoreCheckpoint,
 } from './checkpoint';
 
@@ -150,6 +152,33 @@ describe('checkpoint refs', () => {
     expect((await listCheckpointRefs(repo, 'thread-1')).map((ref) => ref.turn)).toEqual([2, 3]);
     // Other threads untouched.
     expect(await listCheckpointRefs(repo, 'thread-2')).toHaveLength(1);
+  });
+
+  it('returns the worktree HEAD sha and branch so callers need no extra rev-parse', async () => {
+    const repo = makeRepo();
+    const headSha = git(repo, ['rev-parse', 'HEAD']);
+    const branch = git(repo, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    writeFileSync(path.join(repo, 'fresh.txt'), 'untracked\n');
+
+    const captured = await captureCheckpoint(repo, 'thread-1');
+
+    // headSha is the worktree HEAD the checkpoint parents onto — NOT the
+    // checkpoint commit sha — so it is the correct diff base to persist.
+    expect(captured.headSha).toBe(headSha);
+    expect(captured.commitSha).not.toBe(headSha);
+    expect(git(repo, ['rev-parse', `${captured.refName}^`])).toBe(captured.headSha);
+    expect(captured.branch).toBe(branch);
+
+    // The standalone async resolvers agree with the captured metadata.
+    expect(await resolveHeadCommit(repo)).toBe(headSha);
+    expect(await resolveCurrentBranch(repo)).toBe(branch);
+  });
+
+  it('resolvers return null on a non-repo path instead of throwing', async () => {
+    const notRepo = mkdtempSync(path.join(os.tmpdir(), 'shipcode-notrepo-'));
+    tempDirs.push(notRepo);
+    expect(await resolveHeadCommit(notRepo)).toBeNull();
+    expect(await resolveCurrentBranch(notRepo)).toBeNull();
   });
 
   it('restores the captured filesystem state and removes post-checkpoint files', async () => {

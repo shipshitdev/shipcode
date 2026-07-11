@@ -29,6 +29,15 @@ export interface CheckpointRef {
   turn: number;
   /** SHA of the checkpoint commit the ref points at (not the worktree HEAD). */
   commitSha: string;
+  /**
+   * Worktree HEAD commit the checkpoint parents onto (the base for restore/
+   * resume diffs), or `null` on an unborn HEAD. This is the sha callers should
+   * persist as the checkpoint's `commitSha` DB column — reuse it instead of a
+   * second `rev-parse HEAD` subprocess.
+   */
+  headSha: string | null;
+  /** Abbreviated current branch (`HEAD` when detached), or `null` if unresolved. */
+  branch: string | null;
 }
 
 async function runGit(cwd: string, args: string[], env?: Record<string, string>): Promise<string> {
@@ -39,6 +48,28 @@ async function runGit(cwd: string, args: string[], env?: Record<string, string>)
     ...(env ? { env: { ...process.env, ...env } } : {}),
   });
   return stdout.trim();
+}
+
+/**
+ * Async worktree HEAD commit resolver (peeled to a commit), `null` on failure
+ * or an unborn HEAD. Shared by capture and by callers that need the base sha
+ * when a full capture failed — never use synchronous git on hot pipeline paths.
+ */
+export async function resolveHeadCommit(cwd: string): Promise<string | null> {
+  try {
+    return await runGit(cwd, ['rev-parse', '--verify', 'HEAD^{commit}']);
+  } catch {
+    return null;
+  }
+}
+
+/** Async current-branch resolver (`HEAD` when detached), `null` on failure. */
+export async function resolveCurrentBranch(cwd: string): Promise<string | null> {
+  try {
+    return await runGit(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -79,7 +110,9 @@ export async function listCheckpointRefs(
     const [refName, commitSha] = line.trim().split(' ');
     const turn = refName ? parseCheckpointTurn(refName) : null;
     if (refName && commitSha && turn !== null) {
-      refs.push({ refName, turn, commitSha });
+      // headSha/branch are capture-time worktree metadata not recoverable from
+      // a read-back ref; list consumers only use refName/turn.
+      refs.push({ refName, turn, commitSha, headSha: null, branch: null });
     }
   }
   return refs.sort((a, b) => a.turn - b.turn);
@@ -116,12 +149,9 @@ export async function captureCheckpoint(
   );
   const indexEnv = { GIT_INDEX_FILE: tempIndex };
 
-  let headSha: string | null = null;
-  try {
-    headSha = await runGit(worktreePath, ['rev-parse', '--verify', 'HEAD^{commit}']);
-  } catch {
-    headSha = null; // Unborn HEAD — capture still works, but has no parent.
-  }
+  // Unborn HEAD → null: capture still works, but the checkpoint has no parent.
+  const headSha = await resolveHeadCommit(worktreePath);
+  const branch = await resolveCurrentBranch(worktreePath);
 
   try {
     if (headSha) {
@@ -162,7 +192,7 @@ export async function captureCheckpoint(
       },
     );
     await runGit(worktreePath, ['update-ref', refName, commitSha]);
-    return { refName, turn, commitSha };
+    return { refName, turn, commitSha, headSha, branch };
   } finally {
     rmSync(tempIndex, { force: true });
   }

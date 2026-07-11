@@ -1,11 +1,11 @@
 import type { ProcessManager } from '../process-manager';
-import { firstString } from './output-summary';
 import {
   buildStdinCliResponse,
   clampCliFailure,
+  type JsonResultEnvelope,
+  parseJsonResultWithNdjsonFallback,
   runStdinCli,
   type StdinCliCommand,
-  stripAnsi,
 } from './stdin-cli-runner';
 import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
 
@@ -40,57 +40,16 @@ function buildGrokCommand(req: ProviderRequest): StdinCliCommand {
   return { args, stdin: req.prompt };
 }
 
-function extractFromResultObject(
-  parsed: Record<string, unknown>,
-): { text: string; resolvedModel?: string } | null {
-  const text = firstString(
-    parsed.result,
-    parsed.text,
-    parsed.response,
-    parsed.content,
-    parsed.output,
-  );
-  if (text === null) return null;
-  const resolvedModel = firstString(parsed.model, parsed.modelId, parsed.resolvedModel);
-  return resolvedModel ? { text, resolvedModel } : { text };
-}
+// Grok Build's `--output-format json` result envelope. Field names are the
+// only thing that differs from the other execute-only stdin CLIs; the parse
+// scaffold lives in stdin-cli-runner so a fix lands for every provider at once.
+const GROK_RESULT_ENVELOPE: JsonResultEnvelope = {
+  resultFieldNames: ['result', 'text', 'response', 'content', 'output'],
+  modelFieldNames: ['model', 'modelId', 'resolvedModel'],
+};
 
-/**
- * Parse Grok Build output. `--output-format json` returns a single result
- * object (`{ type: 'result', result: '<final text>', model, ... }`). If the
- * CLI instead streamed NDJSON (`streaming-json`), fall back to the last
- * `result` line. When nothing parses, return the cleaned raw text so callers
- * still see something.
- */
 function parseGrokOutput(rawOutput: string): { text: string; resolvedModel?: string } {
-  const cleaned = stripAnsi(rawOutput).trim();
-  if (!cleaned) return { text: '' };
-
-  try {
-    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
-    const extracted = extractFromResultObject(parsed);
-    if (extracted) return extracted;
-  } catch {
-    // Not a single JSON object — try NDJSON (streaming-json) below.
-  }
-
-  let fallback: { text: string; resolvedModel?: string } | null = null;
-  for (const line of cleaned.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('{')) continue;
-    try {
-      const obj = JSON.parse(trimmed) as Record<string, unknown>;
-      const extracted = extractFromResultObject(obj);
-      if (!extracted) continue;
-      // Prefer an explicit result event; otherwise keep the last extractable line.
-      if (obj.type === 'result') return extracted;
-      fallback = extracted;
-    } catch {
-      // Ignore non-JSON lines.
-    }
-  }
-
-  return fallback ?? { text: cleaned };
+  return parseJsonResultWithNdjsonFallback(rawOutput, GROK_RESULT_ENVELOPE);
 }
 
 function clampGrokFailure(rawOutput: string, prompt: string): string {

@@ -1043,6 +1043,77 @@ describe('createPipelineRuntime', () => {
         content: expect.stringContaining('Prefer the shared IPC helper.'),
       }),
     );
+    // Steering must be scoped to the current run, not the whole thread.
+    expect(agentConversations.listByThread).toHaveBeenCalledWith(
+      'thread-1',
+      expect.objectContaining({ phase: 'steering', role: 'prompt', runId: 'run-1' }),
+    );
+  });
+
+  it("does not re-inject a prior run's steering into a later run on the same thread", async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan']),
+      generate: vi.fn(async () => ({
+        rawOutput: 'done',
+        exitCode: 0,
+      })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    const agentConversations = deps.agentConversations as NonNullable<
+      PipelineDeps['agentConversations']
+    >;
+    // Steering was given during run-1 only. Model real DB scoping: an unscoped
+    // query (the pre-fix path) returns it thread-wide, a query scoped to run-1
+    // returns it, and a query scoped to any other run returns nothing.
+    const run1Steer = [
+      {
+        id: 'steer-1',
+        threadId: 'thread-1',
+        runId: 'run-1',
+        phase: 'steering',
+        round: 0,
+        speaker: 'human',
+        role: 'prompt',
+        parentId: null,
+        provider: null,
+        model: null,
+        content: 'skip the auth refactor',
+        tokensIn: null,
+        tokensOut: null,
+        costUsd: null,
+        createdAt: '2026-07-06T10:00:00.000Z',
+      },
+    ] as never;
+    vi.mocked(agentConversations.listByThread).mockImplementation(
+      (_threadId: string, filters?: { runId?: string }) =>
+        !filters?.runId || filters.runId === 'run-1' ? run1Steer : [],
+    );
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    // Later run (run-2) on the same thread must not carry run-1's steering.
+    const laterContext = makeContext({ runId: 'run-2' });
+    await runtime.runProviderPhase(
+      laterContext,
+      buildPhasePayload(laterContext, 'plan'),
+      'base prompt',
+      [],
+      {},
+    );
+
+    expect(provider.generate).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: 'base prompt' }),
+    );
+    expect(provider.generate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('skip the auth refactor'),
+      }),
+    );
+    expect(agentConversations.listByThread).toHaveBeenCalledWith(
+      'thread-1',
+      expect.objectContaining({ runId: 'run-2' }),
+    );
   });
 
   it('sets activeProcessId only while a provider phase is running', async () => {

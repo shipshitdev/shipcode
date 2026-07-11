@@ -11,6 +11,7 @@ import {
   normalizeStatusOption,
   triageGitHubIssues,
 } from '@shipcode/agents';
+import type { GhSyncDeps } from '@shipcode/pipeline';
 import type {
   GitHubIssueCacheRecord,
   GitHubIssueComment,
@@ -32,7 +33,6 @@ import {
   pipelineStatusFromLabels,
   SHIPCODE_DEFAULT_LABELS,
 } from '@shipcode/shared';
-import { syncIssuePipelineLabelSoon } from '../github-pipeline-label-sync';
 import { stopIssueChatSessionIfLive } from '../issue-chat-session';
 import log, { logEvent } from '../logger.service';
 import { PipelineScheduler } from '../pipeline-scheduler';
@@ -102,25 +102,33 @@ function resolveOpenIssuePipelineStatus(
 }
 
 function updateIssuePipelineStatus(
-  projectPath: string,
+  project: import('@shipcode/shared').Project,
   queries: IpcHandlerDeps['queries'],
   issue: Pick<GitHubIssueCacheRecord, 'id' | 'issueNumber'>,
   status: IssuePipelineStatus,
   source: string,
+  ghSync: GhSyncDeps | undefined,
 ): void {
   queries.githubIssues.updatePipelineStatus(issue.id, status);
-  syncIssuePipelineLabelSoon({
-    projectPath,
-    issueNumber: issue.issueNumber,
-    status,
-    source,
-  });
+  if (!ghSync) return;
+  void ghSync
+    .syncToGithub({
+      projectPath: project.path,
+      projectUrl: project.githubProjectUrl,
+      issueNumber: issue.issueNumber,
+      pipelineStatus: status,
+      statusMapping: project.githubStatusMapping,
+    })
+    .catch((err) => {
+      log.warn(`[${source}] pipeline label sync failed`, err);
+    });
 }
 
 function syncOpenIssueState(
   queries: IpcHandlerDeps['queries'],
   issue: GitHubIssueCacheRecord,
-  projectPath?: string,
+  ghSync: GhSyncDeps | undefined,
+  project?: import('@shipcode/shared').Project,
 ): GitHubIssueCacheRecord | null {
   const labelStatus = pipelineStatusFromLabels(issue.labels);
   const thread = resolveCanonicalIssueThread(queries, issue);
@@ -134,13 +142,18 @@ function syncOpenIssueState(
   queries.githubIssues.updatePipelineStatus(issue.id, pipelineStatus);
   queries.githubIssues.clearArchivedAt(issue.id);
 
-  if (projectPath && labelStatus !== null) {
-    syncIssuePipelineLabelSoon({
-      projectPath,
-      issueNumber: issue.issueNumber,
-      status: pipelineStatus,
-      source: 'github:refresh-issues',
-    });
+  if (project && labelStatus !== null && ghSync) {
+    void ghSync
+      .syncToGithub({
+        projectPath: project.path,
+        projectUrl: project.githubProjectUrl,
+        issueNumber: issue.issueNumber,
+        pipelineStatus,
+        statusMapping: project.githubStatusMapping,
+      })
+      .catch((err) => {
+        log.warn('[github:refresh-issues] pipeline label sync failed', err);
+      });
   }
 
   return queries.githubIssues.getByNumber(issue.projectId, issue.issueNumber);
@@ -180,12 +193,14 @@ export function registerGitHubHandlers({
   processManager,
   notificationService,
   chatNotificationService,
+  ghSync,
 }: IpcHandlerDeps): void {
   const scheduler = new PipelineScheduler({
     queries,
     pipeline,
     emitter,
     getMainWindow: () => mainWindow,
+    ghSync,
   });
   const stopLinkedIssueChat = (issue: GitHubIssueCacheRecord) => {
     if (!issue.threadId) return;
@@ -284,7 +299,7 @@ export function registerGitHubHandlers({
             if (record.state === 'closed') {
               queries.githubIssues.markClosedOnClose(record.id);
             } else if (record.state === 'open') {
-              syncOpenIssueState(queries, record, project.path);
+              syncOpenIssueState(queries, record, ghSync, project);
             }
 
             if (!existingIssue && record.state === 'open' && !record.rulesAppliedAt) {
@@ -445,11 +460,12 @@ export function registerGitHubHandlers({
 
                 if (targetStatus && targetStatus !== cachedIssue.pipelineStatus) {
                   updateIssuePipelineStatus(
-                    project.path,
+                    project,
                     queries,
                     cachedIssue,
                     targetStatus,
                     'github:refresh-issues',
+                    ghSync,
                   );
                 }
               }
@@ -488,6 +504,7 @@ export function registerGitHubHandlers({
                 queries,
                 notificationService,
                 chatNotificationService,
+                ghSync,
               ).catch((err) => {
                 log.warn(
                   `[github:refresh-issues] PR feedback sync failed for #${issue.issueNumber}:`,
@@ -652,11 +669,12 @@ export function registerGitHubHandlers({
 
       try {
         updateIssuePipelineStatus(
-          project.path,
+          project,
           queries,
           issue,
           ISSUE_PIPELINE_STATUS.closed,
           'github:archive-issue',
+          ghSync,
         );
         queries.githubIssues.archiveIssues([issue.id]);
         stopLinkedIssueChat(issue);
@@ -707,11 +725,12 @@ export function registerGitHubHandlers({
       }
 
       updateIssuePipelineStatus(
-        project.path,
+        project,
         queries,
         issue,
         ISSUE_PIPELINE_STATUS.closed,
         'issue:mark-done',
+        ghSync,
       );
       stopLinkedIssueChat(issue);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
@@ -734,32 +753,35 @@ export function registerGitHubHandlers({
       if (issue.state === 'closed') {
         queries.githubIssues.updateState(issue.id, 'closed');
         updateIssuePipelineStatus(
-          project.path,
+          project,
           queries,
           issue,
           ISSUE_PIPELINE_STATUS.closed,
           'github:mark-done',
+          ghSync,
         );
         stopLinkedIssueChat(issue);
       } else if (hasCompletionEvidence) {
         queries.githubIssues.updateState(issue.id, 'open');
         updateIssuePipelineStatus(
-          project.path,
+          project,
           queries,
           issue,
           ISSUE_PIPELINE_STATUS.completed,
           'github:mark-done',
+          ghSync,
         );
       } else {
         const ghCli = new GhCli(project.path);
         await ghCli.closeIssue(issueNumber);
         queries.githubIssues.updateState(issue.id, 'closed');
         updateIssuePipelineStatus(
-          project.path,
+          project,
           queries,
           issue,
           ISSUE_PIPELINE_STATUS.closed,
           'github:mark-done',
+          ghSync,
         );
         stopLinkedIssueChat(issue);
       }
@@ -785,11 +807,12 @@ export function registerGitHubHandlers({
 
       queries.githubIssues.updateState(issue.id, 'closed');
       updateIssuePipelineStatus(
-        project.path,
+        project,
         queries,
         issue,
         ISSUE_PIPELINE_STATUS.closed,
         'github:close-issue',
+        ghSync,
       );
       stopLinkedIssueChat(issue);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
@@ -811,7 +834,7 @@ export function registerGitHubHandlers({
         await ghCli.reopenIssue(issueNumber);
       }
 
-      syncOpenIssueState(queries, issue, project.path);
+      syncOpenIssueState(queries, issue, ghSync, project);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );

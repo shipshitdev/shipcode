@@ -154,6 +154,26 @@ describe('registerAutomationHandlers', () => {
     expect(automations.delete).toHaveBeenCalledWith('auto-1');
   });
 
+  it('forwards an edited target set through to update', async () => {
+    const updated = makeAutomation({ targets: ['project-1', 'project-2'] });
+    automations.update.mockReturnValue(updated);
+
+    await expect(
+      getHandler('automations:update')(null, {
+        id: 'auto-1',
+        name: 'Multi-repo',
+        targets: ['project-1', 'project-2'],
+      }),
+    ).resolves.toEqual(updated);
+    // `update` applies targets atomically with the column change (setTargets is
+    // nested inside its transaction), so the handler just forwards them.
+    expect(automations.update).toHaveBeenCalledWith('auto-1', {
+      name: 'Multi-repo',
+      targets: ['project-1', 'project-2'],
+    });
+    expect(automationScheduler.schedule).toHaveBeenCalledWith(updated);
+  });
+
   it('schedules enabled automations and unschedules disabled automations', async () => {
     const automation = makeAutomation();
     automations.setEnabled.mockReturnValue(automation);
