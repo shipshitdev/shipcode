@@ -246,10 +246,3 @@ version-agnostically and verifies the path resolves (throws loudly if not):
 `path.txt` must have **no trailing newline** (`getElectronPath` does
 `join(__dirname,'dist', readFileSync(path.txt))`); install.js writes it correctly. The
 lint-typecheck gate does **not** need this step (types come from the tarball).
-
-## macstudio (still authoritative for now)
-
-The weekly E2E currently runs on Vincent's Mac Studio (manual / local — **no launchd plist
-or crontab in the repo**). GitHub Actions is "always ready to trigger" (free macOS compute,
-public repo) and the weekly cron now fires natively from master, but the macstudio process
-is **not disabled** yet. Cut over only once the GH weekly is reliably green on master.

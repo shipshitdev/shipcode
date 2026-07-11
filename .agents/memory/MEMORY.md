@@ -6,7 +6,7 @@ Loaded after `~/.agents/memory/MEMORY.md` (global). Project-scoped facts only. D
 
 - **ShipCode** is an Electron desktop app orchestrating AI-driven dev pipelines on GitHub issues.
 - **Monorepo:** Turborepo + Bun workspaces.
-- **Apps:** `apps/desktop` (Electron), `apps/docs` (Nextra 4, static), `apps/web` (Vercel `shipcode-web`).
+- **Apps:** `apps/cli` (published `@shipshitdev/shipcode` CLI), `apps/desktop` (Electron), `apps/docs` (Nextra 4, static), `apps/web` (Vercel `shipcode-web`).
 - **Packages:** `agents`, `pipeline`, `git`, `db`, `shared`, `ui`.
 - **Pre-release** — no backward-compat concerns when refactoring defaults.
 - See: `overview.md`.
@@ -80,4 +80,4 @@ Where things live:
 - `ipc-errors.md` — clamp IPC errors at main-process boundary
 - `skills.md` — skills/memory folder layout, symlink rules
 - `agents.md` — custom sub-agent roster, routing rules, parallel patterns
-- `e2e-ci.md` — trunk-based CI+E2E backbone: single master trunk, trust gate, affected scoping, weekly crons, build ordering, macstudio cutover
+- `e2e-ci.md` — trunk-based CI+E2E backbone: single master trunk, trust gate, affected scoping, weekly crons, build ordering

@@ -4,7 +4,7 @@ description: Custom Claude Code sub-agents in .claude/agents/ — roster, routin
 type: project
 status: active
 priority: low
-last_verified: 2026-05-07
+last_verified: 2026-07-11
 topics: [agents, workflow, delegation]
 ---
 
@@ -20,7 +20,7 @@ Nine custom sub-agents live in `.claude/agents/`. Use `subagent_type` matching t
 | `pipeline-dev` | sonnet | full | Changes to `packages/pipeline`, `packages/agents`, `packages/git`, `packages/db` |
 | `ui-dev` | sonnet | full | Changes to `apps/desktop/src/renderer/` or `packages/ui/` |
 | `web-dev` | sonnet | full | Changes to `apps/web/` or `apps/docs/` |
-| `reviewer` | sonnet | read-only | Code review — runs tests/lint/typecheck, reports findings, never edits |
+| `reviewer` | sonnet | read-only | Code review — inspects changes and available CI evidence, reports findings, never edits |
 | `test-writer` | sonnet | write tests only | Writes Vitest tests — never modifies source files |
 | `debugger` | sonnet | full | Root-cause investigation — systematic diagnosis, then minimal fix |
 
@@ -47,4 +47,4 @@ Common effective pairings:
 - ShipCode monorepo layout and package boundaries
 - Hard rules (stdin-not-argv, path-as-truth worktrees, IPC clamping, verification retry routing)
 - Codebase conventions (Tailwind v4, strict TS, Bun, `packages/ui` first)
-- Post-work verification steps (test, typecheck, biome)
+- Review expectations and CI evidence requirements
