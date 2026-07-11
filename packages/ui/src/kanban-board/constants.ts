@@ -1,4 +1,8 @@
-import { GH_STATUS_OPTION_NAME, ISSUE_PIPELINE_STATUS, type IssuePipelineStatus } from '@/lib/shipcode';
+import {
+  GH_STATUS_OPTION_NAME,
+  ISSUE_PIPELINE_STATUS,
+  type IssuePipelineStatus,
+} from '@/lib/shipcode';
 import type { BoardColumn, BoardSortOrder, ColumnKey } from './types';
 
 export const COLUMNS: BoardColumn[] = [

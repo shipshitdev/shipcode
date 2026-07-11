@@ -63,14 +63,22 @@ const MACRO_COLUMNS: Array<{
   // truth lives in @shipcode/shared (GH_STATUS_OPTION_NAME). Keys stay camelCase
   // to index GhStatusMapping.
   { key: 'todo', label: GH_STATUS_OPTION_NAME.todo, description: 'Not started' },
-  { key: 'inProgress', label: GH_STATUS_OPTION_NAME.in_progress, description: 'Agent loop running' },
+  {
+    key: 'inProgress',
+    label: GH_STATUS_OPTION_NAME.in_progress,
+    description: 'Agent loop running',
+  },
   {
     key: 'humanReview',
     label: GH_STATUS_OPTION_NAME.human_review,
     description: 'Awaiting manual review',
   },
   { key: 'done', label: GH_STATUS_OPTION_NAME.done, description: 'Completed / shipped' },
-  { key: 'deferred', label: GH_STATUS_OPTION_NAME.deferred, description: 'Intentionally postponed' },
+  {
+    key: 'deferred',
+    label: GH_STATUS_OPTION_NAME.deferred,
+    description: 'Intentionally postponed',
+  },
 ];
 
 function StatusColumnMapping({
