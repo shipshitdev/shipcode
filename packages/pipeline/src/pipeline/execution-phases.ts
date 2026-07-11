@@ -16,7 +16,7 @@ import {
   shellExecEnv,
   summarizePromptMaterials,
 } from '@shipcode/agents';
-import { captureCheckpoint, WorktreeManager } from '@shipcode/git';
+import { WorktreeManager } from '@shipcode/git';
 import {
   buildTaskNodePlan,
   EXECUTION_PHASES,
@@ -36,6 +36,7 @@ import { computeRetryDelayMs } from '../retry-scheduler';
 import type { ExecutePhaseCarry, PipelineContext, VerifyPhaseCarry } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { buildPhasePayload, resetPhaseState } from './context';
+import { captureExecutionCheckpoint } from './execution-checkpoint';
 import {
   buildContinuationPrompt,
   buildTestFailureFingerprint,
@@ -767,58 +768,30 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       return { next: 'failed' };
     }
 
-    try {
-      const cwd = context.worktreePath ?? context.projectPath;
-      const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd,
-        encoding: 'utf-8',
-      }).trim();
-      const commitSha = execFileSync('git', ['rev-parse', 'HEAD'], {
-        cwd,
-        encoding: 'utf-8',
-      }).trim();
-      const latest = deps.checkpoints.getLatest(threadId);
-      const retryOrdinal =
-        1 + context.reviewRound + context.testRetries + context.verificationRetries;
-      const reason = retryOrdinal > 1 ? 'before_retry' : 'before_execute';
-      const label =
-        retryOrdinal > 1 ? `Before execute retry ${retryOrdinal}` : 'Before execute attempt 1';
-
-      if (
-        !latest ||
-        latest.commitSha !== commitSha ||
-        latest.phase !== PIPELINE_PHASE.executing ||
-        latest.reason !== reason
-      ) {
-        // Hidden checkpoint ref (#212): snapshot the full worktree state so
-        // restore/resume can recover uncommitted work. Ref capture failure
-        // must never block execution — fall back to a metadata-only row.
-        let refName: string | null = null;
-        try {
-          refName = (await captureCheckpoint(cwd, threadId)).refName;
-        } catch (captureError) {
-          console.error(
-            `[pipeline] checkpoint ref capture failed for thread ${threadId}:`,
-            captureError,
-          );
-        }
-        deps.checkpoints.create({
-          threadId,
-          projectId: context.projectId,
-          phase: PIPELINE_PHASE.executing,
-          reason,
-          label,
-          branch,
-          commitSha,
-          refName,
-        });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      emitPhase(threadId, 'failed', `Checkpoint creation failed: ${message}`);
-      activePipelines.delete(threadId);
-      return { next: 'failed' };
-    }
+    const preExecuteRetryOrdinal =
+      1 + context.reviewRound + context.testRetries + context.verificationRetries;
+    const preExecuteReason = preExecuteRetryOrdinal > 1 ? 'before_retry' : 'before_execute';
+    const preExecuteLabel =
+      preExecuteRetryOrdinal > 1
+        ? `Before execute retry ${preExecuteRetryOrdinal}`
+        : 'Before execute attempt 1';
+    // Snapshot the pre-execute worktree state (#212) so restore/resume can
+    // recover uncommitted work. `dedupe` skips a redundant row when the latest
+    // checkpoint already pins this commit/phase/reason. Capture is best-effort
+    // and async — it MUST NEVER block execution (see captureExecutionCheckpoint
+    // for the single failure policy shared with the post-attempt site below).
+    await captureExecutionCheckpoint(
+      context.worktreePath ?? context.projectPath,
+      threadId,
+      {
+        projectId: context.projectId,
+        phase: PIPELINE_PHASE.executing,
+        reason: preExecuteReason,
+        label: () => preExecuteLabel,
+        dedupe: true,
+      },
+      deps,
+    );
 
     const skill = skillCallSite(context);
     const latestPlanRecord = deps.plans.getLatest(threadId);
@@ -984,41 +957,33 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
       // Post-attempt checkpoint ref (#212): snapshot the attempt's worktree
       // state (including uncommitted executor changes) after every execute /
-      // task-graph-node attempt. Best-effort — never fails the phase.
-      try {
-        const attemptCwd = context.worktreePath ?? context.projectPath;
-        const captured = await captureCheckpoint(attemptCwd, threadId);
-        const attemptCommitSha = execFileSync('git', ['rev-parse', 'HEAD'], {
-          cwd: attemptCwd,
-          encoding: 'utf-8',
-        }).trim();
-        let attemptBranch: string | null = null;
-        try {
-          attemptBranch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-            cwd: attemptCwd,
-            encoding: 'utf-8',
-          }).trim();
-        } catch {
-          attemptBranch = null;
-        }
-        deps.checkpoints.create({
-          threadId,
+      // task-graph-node attempt. Runs on the per-attempt hot path (× task-graph
+      // nodes × retries), so it shares captureExecutionCheckpoint's single
+      // async, best-effort, never-blocks-the-phase policy with the pre-execute
+      // site — no synchronous git that would freeze the Electron main loop.
+      //
+      // Note (#3, fan-out): when execute ran fan-out, the winner's worktree was
+      // already `git add -A`-staged by captureDiff for the judge; captureCheckpoint
+      // then stages the identical tree once more into an isolated temp index. That
+      // double full-tree stage is one extra `git add -A` per fan-out attempt on the
+      // winner only — accepted here rather than reused via a trusted pre-staged
+      // index, whose correctness would hinge on a fragile cross-function invariant
+      // (a stale real index would silently drop uncommitted work from the snapshot).
+      // Fan-out is experimental/opt-in, so the cost is bounded and localized.
+      await captureExecutionCheckpoint(
+        context.worktreePath ?? context.projectPath,
+        threadId,
+        {
           projectId: context.projectId,
           phase: PIPELINE_PHASE.executing,
           reason: 'after_execute',
-          label: activeTaskNode
-            ? `After node ${activeTaskNode.stableKey} attempt (turn ${captured.turn})`
-            : `After execute attempt (turn ${captured.turn})`,
-          branch: attemptBranch,
-          commitSha: attemptCommitSha,
-          refName: captured.refName,
-        });
-      } catch (captureError) {
-        console.error(
-          `[pipeline] post-attempt checkpoint capture failed for thread ${threadId}:`,
-          captureError,
-        );
-      }
+          label: (turn) =>
+            activeTaskNode
+              ? `After node ${activeTaskNode.stableKey} attempt${turn !== null ? ` (turn ${turn})` : ''}`
+              : `After execute attempt${turn !== null ? ` (turn ${turn})` : ''}`,
+        },
+        deps,
+      );
 
       if (response.exitCode === 0) {
         if (activeTaskNode && deps.taskGraphs) {

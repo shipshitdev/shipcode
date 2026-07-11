@@ -29,7 +29,19 @@ vi.mock('@shipcode/git', () => {
     listBranches = vi.fn().mockResolvedValue([]);
     getDefaultBranch = vi.fn().mockResolvedValue('main');
   }
-  return { WorktreeManager, GitService };
+  return {
+    WorktreeManager,
+    GitService,
+    captureCheckpoint: vi.fn().mockResolvedValue({
+      refName: 'refs/shipcode/checkpoints/t1/turn/0',
+      turn: 0,
+      commitSha: 'snapshot-sha',
+      headSha: 'head-sha',
+      branch: 'main',
+    }),
+    resolveHeadCommit: vi.fn().mockResolvedValue('head-sha'),
+    resolveCurrentBranch: vi.fn().mockResolvedValue('main'),
+  };
 });
 
 const { mockExecSync } = vi.hoisted(() => ({ mockExecSync: vi.fn() }));
