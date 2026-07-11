@@ -1,5 +1,5 @@
-import { GH_STATUS_OPTION_NAME } from '@/lib/shipcode';
 import { describe, expect, it } from 'vitest';
+import { GH_STATUS_OPTION_NAME } from '@/lib/shipcode';
 import { ACTIVE_STATUSES, COLUMNS, LIST_COLUMN_LABEL, PHASE_ELAPSED_STATUSES } from './constants';
 
 describe('kanban board phase constants', () => {

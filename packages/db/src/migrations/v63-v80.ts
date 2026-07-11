@@ -69,3 +69,47 @@ export function migrateV64(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (64)`);
   });
 }
+
+export function migrateV65(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 65) return;
+
+  transaction(db, () => {
+    // Per-target run bookkeeping. A multi-repo automation dispatches one
+    // pipeline per target project (PR #268 fan-out), so run lifecycle state
+    // must live per (automation, target). The old automation-level counters
+    // raced: every target bumped the same run_count, and concurrent finishes
+    // clobbered last_status via `UPDATE automations ... WHERE id = ?` — the
+    // status badge showed whichever target finished last, not a meaningful
+    // rollup. These columns are the source of truth; automation-level
+    // lastStatus/runCount/timestamps are now derived aggregates (worst-of
+    // status, most-recent timestamps, summed counts).
+    execAlterTableIfMissing(db, 'ALTER TABLE automation_targets ADD COLUMN last_started_at TEXT');
+    execAlterTableIfMissing(db, 'ALTER TABLE automation_targets ADD COLUMN last_completed_at TEXT');
+    execAlterTableIfMissing(db, 'ALTER TABLE automation_targets ADD COLUMN last_status TEXT');
+    execAlterTableIfMissing(
+      db,
+      'ALTER TABLE automation_targets ADD COLUMN run_count INTEGER NOT NULL DEFAULT 0',
+    );
+
+    // Backfill losslessly: every pre-v65 automation has exactly one target row
+    // (v63 backfilled one target = project_id), so copy the automation-level
+    // counters into it. Multi-target automations did not exist before this, so
+    // there is no aggregate to split.
+    db.exec(`
+      UPDATE automation_targets
+         SET last_started_at   = (SELECT a.last_started_at   FROM automations a WHERE a.id = automation_targets.automation_id),
+             last_completed_at = (SELECT a.last_completed_at FROM automations a WHERE a.id = automation_targets.automation_id),
+             last_status       = (SELECT a.last_status       FROM automations a WHERE a.id = automation_targets.automation_id),
+             run_count         = COALESCE(
+               (SELECT a.run_count FROM automations a WHERE a.id = automation_targets.automation_id),
+               0
+             )
+       WHERE EXISTS (SELECT 1 FROM automations a WHERE a.id = automation_targets.automation_id);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (65)`);
+  });
+}

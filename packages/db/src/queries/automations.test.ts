@@ -185,7 +185,7 @@ describe('AutomationQueries', () => {
       cronExpr: '0 * * * *',
     });
 
-    automations.recordRunStarted(a.id, 'thread-1');
+    automations.recordRunStarted(a.id, project.id, 'thread-1');
     const after = automations.getById(a.id);
     if (!after) throw new Error('Expected automation after run started');
     expect(after.runCount).toBe(1);
@@ -204,16 +204,119 @@ describe('AutomationQueries', () => {
       prompt: 'p',
       cronExpr: '0 * * * *',
     });
-    automations.recordRunStarted(a.id, 'thread-1');
+    automations.recordRunStarted(a.id, project.id, 'thread-1');
 
-    automations.recordRunFinished(a.id, 'completed');
+    automations.recordRunFinished(a.id, project.id, 'completed');
     const completed = automations.getById(a.id);
     if (!completed) throw new Error('Expected automation after run finished');
     expect(completed.lastStatus).toBe('completed');
     expect(completed.lastCompletedAt).not.toBeNull();
 
-    automations.recordRunFinished(a.id, 'failed');
+    automations.recordRunFinished(a.id, project.id, 'failed');
     expect(automations.getById(a.id)?.lastStatus).toBe('failed');
+  });
+
+  it('multi-target: run bookkeeping is scoped per target and aggregated worst-of', () => {
+    const { dataDir, projects, automations, project } = setup();
+    tempDirs.push(dataDir);
+    const projectB = projects.add(path.join(dataDir, 'project-b'));
+
+    const a = automations.create({
+      projectId: project.id,
+      targets: [project.id, projectB.id],
+      name: 'Multi',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+
+    // One cron tick fans out to both targets.
+    automations.recordRunStarted(a.id, project.id, 'thread-a');
+    automations.recordRunStarted(a.id, projectB.id, 'thread-b');
+
+    const running = automations.getById(a.id);
+    if (!running) throw new Error('Expected automation while running');
+    // Two dispatches → two runs, not a doubly-incremented single counter that
+    // the old shared-row UPDATE would also produce; the point is the count is
+    // the sum of independent per-target counters.
+    expect(running.runCount).toBe(2);
+    expect(running.lastStatus).toBe('running');
+
+    // Targets finish in the order that previously clobbered the shared row:
+    // the failing target lands FIRST, the succeeding one lands LAST. The old
+    // `UPDATE ... WHERE id = ?` would leave last_status = 'completed'.
+    automations.recordRunFinished(a.id, projectB.id, 'failed');
+    automations.recordRunFinished(a.id, project.id, 'completed');
+
+    const finished = automations.getById(a.id);
+    if (!finished) throw new Error('Expected automation after finishes');
+    // Worst-of across targets: one target failed, so the rollup is 'failed'.
+    expect(finished.lastStatus).toBe('failed');
+    expect(finished.runCount).toBe(2);
+    expect(finished.lastCompletedAt).not.toBeNull();
+  });
+
+  it('multi-target: running target dominates the aggregate status', () => {
+    const { dataDir, projects, automations, project } = setup();
+    tempDirs.push(dataDir);
+    const projectB = projects.add(path.join(dataDir, 'project-b'));
+
+    const a = automations.create({
+      projectId: project.id,
+      targets: [project.id, projectB.id],
+      name: 'Multi',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+
+    automations.recordRunStarted(a.id, project.id, 'thread-a');
+    automations.recordRunStarted(a.id, projectB.id, 'thread-b');
+    // One target settles while the other is still running → in-flight wins.
+    automations.recordRunFinished(a.id, project.id, 'completed');
+
+    expect(automations.getById(a.id)?.lastStatus).toBe('running');
+  });
+
+  it('multi-target: a fresh tick increments the counter per target again', () => {
+    const { dataDir, projects, automations, project } = setup();
+    tempDirs.push(dataDir);
+    const projectB = projects.add(path.join(dataDir, 'project-b'));
+
+    const a = automations.create({
+      projectId: project.id,
+      targets: [project.id, projectB.id],
+      name: 'Multi',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+
+    automations.recordRunStarted(a.id, project.id, 't1');
+    automations.recordRunStarted(a.id, projectB.id, 't2');
+    automations.recordRunFinished(a.id, project.id, 'completed');
+    automations.recordRunFinished(a.id, projectB.id, 'completed');
+    expect(automations.getById(a.id)?.runCount).toBe(2);
+
+    // Second tick.
+    automations.recordRunStarted(a.id, project.id, 't3');
+    automations.recordRunStarted(a.id, projectB.id, 't4');
+    expect(automations.getById(a.id)?.runCount).toBe(4);
+  });
+
+  it('recordRunStarted on an unknown target is a no-op', () => {
+    const { dataDir, automations, project } = setup();
+    tempDirs.push(dataDir);
+
+    const a = automations.create({
+      projectId: project.id,
+      name: 'A',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+
+    automations.recordRunStarted(a.id, 'not-a-target', 'thread-x');
+    const after = automations.getById(a.id);
+    if (!after) throw new Error('Expected automation');
+    expect(after.runCount).toBe(0);
+    expect(after.lastStatus).toBeNull();
   });
 
   it('delete removes the row', () => {
