@@ -31,6 +31,7 @@ function baseOpts(overrides: Partial<GhSyncWriteOpts> = {}): GhSyncWriteOpts {
       todo: { name: 'Todo', color: 'GRAY' },
       inProgress: { name: 'In Progress', color: 'BLUE' },
       humanReview: { name: 'Human Review', color: 'YELLOW' },
+      deferred: { name: 'Deferred', color: 'PURPLE' },
       done: { name: 'Done', color: 'GREEN' },
     },
     ...overrides,
@@ -82,6 +83,7 @@ describe('createGhSyncService', () => {
   it.each([
     ['todo', 'Todo'],
     ['approval', 'Human Review'],
+    ['deferred', 'Deferred'],
     ['completed', 'Done'],
   ] as const)('maps pipeline status %s to GH Status column %s', async (pipelineStatus, name) => {
     const service = createGhSyncService({ getProject: () => null });
@@ -121,6 +123,21 @@ describe('createGhSyncService', () => {
 
     expect(mockGhCli.setIssueProjectMetadata).toHaveBeenCalled();
     expect(mockGhCli.getIssue).toHaveBeenCalledWith(42);
+  });
+
+  it.each([
+    [-1],
+    [0],
+    [-999],
+  ])('skips all GitHub writes for local-only quick-task sentinel issue number %i', async (issueNumber) => {
+    const service = createGhSyncService({ getProject: () => null });
+
+    service.enqueue(baseOpts({ issueNumber }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(mockGhCli.setIssueProjectMetadata).not.toHaveBeenCalled();
+    expect(mockGhCli.getIssue).not.toHaveBeenCalled();
+    expect(mockGhCli.setIssueLabelPresence).not.toHaveBeenCalled();
   });
 
   it('routes deps.syncToGithub (the syncThreadAndIssuePhase contract) through the same queue', async () => {

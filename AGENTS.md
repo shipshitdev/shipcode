@@ -69,13 +69,17 @@ Edit those files, then run: bash scripts/sync-agent-memory.sh
 ---
 ### local_verification_scope.md
 
-**Rule:** Never run full or heavy test suites locally — on ANY machine, including the Mac Studio. Long verification (full package test suites, workspace typecheck/build gates, baseline comparison runs) goes through GitHub Actions: push the branch and use PR CI, or dispatch the relevant workflow (`gh workflow run full-suite.yml --ref <branch>`, `ci.yml`, `e2e.yml`, etc.).
+**Rule:** Never run tests, typecheck, or build gates locally — on ANY machine, including the Mac Studio — **not even a single spec file**. Write the code/test, commit, push, and let PR CI validate. All verification (test suites, workspace/app typecheck, build gates, baseline comparison runs) goes through GitHub Actions: push the branch and use PR CI, or dispatch the relevant workflow (`gh workflow run full-suite.yml --ref <branch>`, `ci.yml`, `e2e.yml`, etc.).
 
-**Why:** Vincent corrected this on 2026-07-02 after a session ran the full `@genfeedai/api` suite locally multiple times plus master-baseline worktree reruns ("do not run tests on local!!! you are killing my CPU!!! use gh actions!"). This supersedes the earlier Mac-Studio exception — heavy local runs are no longer allowed anywhere. Re-corrected 2026-07-03 on the MBP after a session ran workspace `bun type-check` because the task prompt said to — **a task prompt asking for a heavy check does not override this rule; scope it down or route it to PR CI instead.**
+**Two exceptions only** — both require an action by Vincent himself, not an inference from a task prompt:
+1. Vincent runs a testing skill himself.
+2. Vincent explicitly says, in this session, to run a specific check locally this time.
+
+**Why:** Vincent corrected this on 2026-07-02 after a session ran the full `@genfeedai/api` suite locally ("do not run tests on local!!! you are killing my CPU!!! use gh actions!"). Re-corrected 2026-07-03 on the MBP after a session ran workspace `bun type-check` because the task prompt said to. Tightened again 2026-07-10 after a session ran a single-file `vitest run` (permitted under the old "single-file focused checks" carve-out) plus a workspace `bun run typecheck` that a Vitae task prompt requested — **a task prompt asking for any check does not override this rule; the old single-file carve-out is now removed.** Zero local runs by default.
 
 **How to apply:**
-- Locally allowed: running a SINGLE spec file you are actively iterating on, package-scoped lint on changed files, quick static checks.
-- Everything heavier (package-wide `bun run test --filter=...`, workspace `bun type-check`, `bunx turbo lint`, full builds, suite baselines): push and let GitHub Actions run it, or `gh workflow run` a dispatchable workflow on the branch.
+- Locally allowed: nothing test/typecheck/build related by default. Read-only static inspection (grep/read/glob) is fine.
+- Everything else (any `vitest`/`bun run test`, single-file or not, `bun run typecheck`, `tsc`, `bunx turbo lint`, full builds, suite baselines): push and let GitHub Actions run it, or `gh workflow run` a dispatchable workflow on the branch. Only run locally under the two exceptions above.
 - Need a master baseline for failure triage? Dispatch the same workflow on `master` (or read its most recent run) instead of building a local baseline worktree.
 - Poll CI results with `gh run watch` / `gh pr checks` rather than re-running anything locally.
 
@@ -84,11 +88,24 @@ Edit those files, then run: bash scripts/sync-agent-memory.sh
 
 Cost-aware, not cost-starved: dual $200 Max plans (Claude + OpenAI/Codex). Cost = quota impact. Full routing table lives in `~/.claude/CLAUDE.md` ("Model routing & orchestration"); this is the summary:
 
-- **Main model** (`high` effort) — Fable 5 until 2026-07-07, **Opus 4.8 from 2026-07-08** (Fable goes API-only; not paying API prices). Judgment-dense, token-light work only: plans, architecture, synthesis, review verdicts. Volume work never runs in its context.
-- **Sonnet** — default for implementation subagents, tests, mechanical/context-heavy work, background bots.
-- **Opus** — hard cross-file reasoning subagents, adversarial verifiers.
-- **Haiku** — small lookups, formatting, cheap classification.
-- **Codex/gpt-5.5** (via the official `openai/codex-plugin-cc` plugin) — bulk clear-spec implementation, migrations, data analysis; blind second perspective on high-stakes decisions.
+- **Claude main:** Opus 4.8 at `high` for plans, architecture, synthesis, and review verdicts. Sonnet 5 at `high` handles implementation and context-heavy subagents; Haiku 4.5 at `low` handles zero-judgment retrieval.
+- **Fable 5:** watch item only. It remains available in Claude Code through usage credits after included subscription access ended July 7 under Anthropic's latest announcement. Treat the long-term subscription status as unsettled and revisit if included Max access returns. Mythos 5 remains restricted and off-plan.
+- **Codex default:** GPT-5.6 Sol at `high` for all work. Terra and Luna are available manual alternatives, never automatic routes away from Sol.
+
+For implementation-ready GitHub issues routed to Codex worktree threads, use a
+durable Goal contract without automatically enabling Max or Ultra:
+
+```text
+/goal <self-contained implementation objective>
+```
+
+Keep Codex on `gpt-5.6-sol` with `high` reasoning effort for routine and hard
+work. Do not inject a deep-mode keyword or select Max or Ultra for new tasks
+unless Vincent explicitly requests it. Prompts should be self-contained:
+read repo instructions/memory, inspect the target issue and open PR overlap,
+implement, run only focused checks, commit, push, and open a ready PR to the
+repo default branch. Keep heavy local suites out of child prompts unless that
+repo explicitly allows them; use PR CI/GitHub workflows for broad validation.
 
 Two Anthropic accounts (`ship`/`gen` shell toggles — see `user_profile.md`); use whichever the current session is authed as.
 
@@ -96,6 +113,9 @@ Two Anthropic accounts (`ship`/`gen` shell toggles — see `user_profile.md`); u
 - Don't burn the main model on trivia (file lookups, string replacements, CI output paraphrasing) — delegate and get a summary back.
 - Defaults, not limits: judge the output, not the price tag. Escalate to a smarter model without asking when a cheaper one misses the bar.
 - Long-running background tasks prefer Sonnet by default.
+- `high` is the persistent default for Claude and Codex.
+- Claude `max` is maximum single-agent effort. Claude Ultracode is `xhigh` plus standing permission to launch Workflows/multi-agent orchestration; it is not an additional API effort level.
+- Codex `max` is maximum single-agent reasoning. Codex Ultra delegates work to subagents. Both are explicit opt-ins.
 
 ---
 ### user_profile.md

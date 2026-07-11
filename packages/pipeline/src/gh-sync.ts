@@ -1,6 +1,7 @@
 import { GhCli } from '@shipcode/agents';
 import {
   isPipelineStateLabel,
+  isRealGithubIssueNumber,
   macroColumnForStatus,
   type Project,
   pipelineLabelForStatus,
@@ -25,6 +26,11 @@ export interface GhSyncService {
 
 /** Perform the actual GH write for a single state snapshot. */
 async function performGhSync(opts: GhSyncWriteOpts): Promise<void> {
+  // Local-only quick tasks carry negative sentinel issue numbers — never write
+  // them to GitHub. Guarding at the shared writer protects every caller
+  // (runtime, scheduler, manual transitions, refresh), not just one call site.
+  if (!isRealGithubIssueNumber(opts.issueNumber)) return;
+
   const ghCli = new GhCli(opts.projectPath);
 
   // 1. Write GH Projects v2 Status field when configured.
@@ -37,7 +43,9 @@ async function performGhSync(opts: GhSyncWriteOpts): Promise<void> {
           ? opts.statusMapping.inProgress?.name
           : macroCol === 'human_review'
             ? opts.statusMapping.humanReview?.name
-            : opts.statusMapping.done?.name;
+            : macroCol === 'deferred'
+              ? opts.statusMapping.deferred?.name
+              : opts.statusMapping.done?.name;
     if (ghStatusName) {
       try {
         await ghCli.setIssueProjectMetadata({
