@@ -107,4 +107,10 @@ export interface UpdateAutomationInput {
   executorProvider?: AgentType | null;
   executorModelId?: string | null;
   executorReasoningEffort?: ReasoningEffort | null;
+  /**
+   * Optional full target set. When present, replaces the automation's targets
+   * (deduped, non-empty) and realigns the primary `projectId` to `targets[0]`,
+   * applied atomically with the column update. Omit to leave targets unchanged.
+   */
+  targets?: string[];
 }

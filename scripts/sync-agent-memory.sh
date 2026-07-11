@@ -20,15 +20,29 @@
 #     and Codex reads the source file when the topic comes up.
 #
 # Idempotent: running twice produces identical output.
+#
+# --check mode (CI): does not write anything. Verifies the two invariants CI can
+# reproduce without Vincent's private ~/.agents/memory (which is not in the repo
+# and drifts with local notes, so a full-file diff is impossible here):
+#   1. AGENTS.md's repo-memory section matches a fresh render of .agents/memory/.
+#   2. AGENTS.md is at or under the Codex 32 KiB hard-truncation limit.
+# Exits non-zero with an actionable message if either fails. See ci.yml (Lint).
 
 set -euo pipefail
+
+# Force byte-wise, locale-independent glob ordering so the generated file is
+# identical on macOS (local) and Linux (CI). Without this, LC_COLLATE could sort
+# memory filenames differently across machines and break the --check diff.
+export LC_ALL=C
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GLOBAL_MEMORY_DIR="${HOME}/.agents/memory"
 REPO_MEMORY_DIR="${REPO_ROOT}/.agents/memory"
 GLOBAL_OUTPUT="${HOME}/.codex/AGENTS.md"
 REPO_OUTPUT="${REPO_ROOT}/AGENTS.md"
+REPO_SECTION_LABEL="Repo memory (from .agents/memory/)"
 SIZE_WARN_BYTES=28672  # 28 KiB = 80% of Codex's 32 KiB default
+SIZE_HARD_BYTES=32768  # 32 KiB = Codex's hard AGENTS.md truncation point
 
 write_header() {
   local label="$1"
@@ -117,21 +131,71 @@ size_check() {
   fi
 }
 
-# Global → ~/.codex/AGENTS.md
-mkdir -p "$(dirname "$GLOBAL_OUTPUT")"
-{
-  write_header "global (Vincent)"
-  concat_memory_dir "$GLOBAL_MEMORY_DIR" "Global memory" "~/.agents/memory"
-} > "$GLOBAL_OUTPUT"
+generate() {
+  # Global → ~/.codex/AGENTS.md
+  mkdir -p "$(dirname "$GLOBAL_OUTPUT")"
+  {
+    write_header "global (Vincent)"
+    concat_memory_dir "$GLOBAL_MEMORY_DIR" "Global memory" "~/.agents/memory"
+  } > "$GLOBAL_OUTPUT"
 
-# Repo → <repo>/AGENTS.md (global first, then repo)
-{
-  write_header "shipcode"
-  concat_memory_dir "$GLOBAL_MEMORY_DIR" "Global memory (from ~/.agents/memory/)" "~/.agents/memory"
-  concat_memory_dir "$REPO_MEMORY_DIR" "Repo memory (from .agents/memory/)" ".agents/memory"
-} > "$REPO_OUTPUT"
+  # Repo → <repo>/AGENTS.md (global first, then repo)
+  {
+    write_header "shipcode"
+    concat_memory_dir "$GLOBAL_MEMORY_DIR" "Global memory (from ~/.agents/memory/)" "~/.agents/memory"
+    concat_memory_dir "$REPO_MEMORY_DIR" "$REPO_SECTION_LABEL" ".agents/memory"
+  } > "$REPO_OUTPUT"
 
-size_check "$GLOBAL_OUTPUT" "~/.codex/AGENTS.md"
-size_check "$REPO_OUTPUT"   "<repo>/AGENTS.md"
+  size_check "$GLOBAL_OUTPUT" "~/.codex/AGENTS.md"
+  size_check "$REPO_OUTPUT"   "<repo>/AGENTS.md"
 
-printf '\nDone. Regenerated:\n  %s\n  %s\n' "$GLOBAL_OUTPUT" "$REPO_OUTPUT"
+  printf '\nDone. Regenerated:\n  %s\n  %s\n' "$GLOBAL_OUTPUT" "$REPO_OUTPUT"
+}
+
+# CI gate. Writes nothing. Verifies the repo-controllable invariants only — the
+# global section of AGENTS.md comes from Vincent's private ~/.agents/memory,
+# which is not on the CI runner, so it is deliberately out of scope here.
+run_check() {
+  local status=0
+
+  if [[ ! -f "$REPO_OUTPUT" ]]; then
+    printf 'CHECK FAIL: %s does not exist.\n' "$REPO_OUTPUT" >&2
+    return 1
+  fi
+
+  # (1) Hard size ceiling — past this Codex silently truncates mid-content.
+  local bytes
+  bytes="$(wc -c < "$REPO_OUTPUT" | tr -d ' ')"
+  if [[ "$bytes" -gt "$SIZE_HARD_BYTES" ]]; then
+    printf 'CHECK FAIL: AGENTS.md is %s bytes (>%s hard limit); Codex truncates at 32 KiB.\n' \
+      "$bytes" "$SIZE_HARD_BYTES" >&2
+    printf '  Shrink a memory file or add `priority: low` to its frontmatter so it becomes a pointer.\n' >&2
+    status=1
+  elif [[ "$bytes" -gt "$SIZE_WARN_BYTES" ]]; then
+    printf 'WARN: AGENTS.md is %s bytes (>%s soft limit; hard limit %s).\n' \
+      "$bytes" "$SIZE_WARN_BYTES" "$SIZE_HARD_BYTES" >&2
+  fi
+
+  # (2) Repo-memory section must match a fresh render of .agents/memory/.
+  # Both sides go through concat_memory_dir, so this catches a memory file that
+  # was edited (or added/removed) in a PR without re-running the sync script.
+  local expected actual
+  expected="$(concat_memory_dir "$REPO_MEMORY_DIR" "$REPO_SECTION_LABEL" ".agents/memory" | sed -e '/./,$!d')"
+  actual="$(awk -v h="## $REPO_SECTION_LABEL" 'index($0, h) == 1 { f = 1 } f' "$REPO_OUTPUT")"
+  if [[ "$expected" != "$actual" ]]; then
+    printf 'CHECK FAIL: AGENTS.md repo-memory section is out of sync with .agents/memory/.\n' >&2
+    printf '  Re-run: bash scripts/sync-agent-memory.sh   then commit the updated AGENTS.md.\n' >&2
+    status=1
+  fi
+
+  if [[ "$status" -eq 0 ]]; then
+    printf 'OK: AGENTS.md is %s bytes and its repo-memory section is in sync.\n' "$bytes"
+  fi
+  return "$status"
+}
+
+case "${1:-}" in
+  --check) run_check ;;
+  "")      generate ;;
+  *)       printf 'usage: %s [--check]\n' "$0" >&2; exit 2 ;;
+esac

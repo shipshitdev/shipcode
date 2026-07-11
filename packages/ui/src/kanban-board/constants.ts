@@ -1,10 +1,16 @@
-import { ISSUE_PIPELINE_STATUS, type IssuePipelineStatus } from '@/lib/shipcode';
+import {
+  GH_STATUS_OPTION_NAME,
+  ISSUE_PIPELINE_STATUS,
+  type IssuePipelineStatus,
+} from '@/lib/shipcode';
 import type { BoardColumn, BoardSortOrder, ColumnKey } from './types';
 
 export const COLUMNS: BoardColumn[] = [
   {
     key: 'todo',
-    label: 'Backlog',
+    // Backlog is the GitHub Projects v2 Status option name — single source of
+    // truth lives in @shipcode/shared. Keep the board column in lockstep.
+    label: GH_STATUS_OPTION_NAME.todo,
     droppable: true,
     statuses: [ISSUE_PIPELINE_STATUS.todo],
   },
@@ -192,7 +198,7 @@ export const PHASE_ELAPSED_STATUSES: IssuePipelineStatus[] = [
 ];
 
 export const LIST_COLUMN_LABEL: Record<ColumnKey, string> = {
-  todo: 'Backlog',
+  todo: GH_STATUS_OPTION_NAME.todo,
   agent: 'Agent',
   human: 'Attention',
   done: 'Done',

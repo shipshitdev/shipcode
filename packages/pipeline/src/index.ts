@@ -1,9 +1,11 @@
+export { createGhSyncService, type GhSyncService } from './gh-sync';
 export { GhSyncQueue, type GhSyncWriteOpts } from './gh-sync-queue';
 export {
   buildIssueGroupExecutionPreview,
   createIssueGroupRunState,
   IssueGroupSchedulerError,
 } from './issue-group-scheduler';
+export type { GhSyncDeps } from './phase-sync';
 export { mapPhaseToIssuePipelineStatus, syncThreadAndIssuePhase } from './phase-sync';
 export { createPipeline } from './pipeline';
 export { resetPhaseState, snapshotPhaseInput } from './pipeline/context';

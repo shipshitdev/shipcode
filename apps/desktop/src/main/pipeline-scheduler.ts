@@ -1,10 +1,12 @@
 import fs from 'node:fs';
+import type { GhSyncDeps } from '@shipcode/pipeline';
 import { loadWorkflowPolicy } from '@shipcode/pipeline';
 import type {
   ExecutorModel,
   GitHubIssueCacheRecord,
   IssuePipelineStatus,
   PipelinePhase,
+  Project,
 } from '@shipcode/shared';
 import {
   clampError,
@@ -17,7 +19,6 @@ import {
   resolvePhaseModelIdForIssue,
 } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
-import { syncIssuePipelineLabelSoon } from './github-pipeline-label-sync';
 import {
   assertCliPhaseModelsSupported,
   resolveProjectPhaseModels,
@@ -31,6 +32,7 @@ export interface PipelineSchedulerDeps {
   pipeline: IpcHandlerDeps['pipeline'];
   emitter: IpcHandlerDeps['emitter'];
   getMainWindow: () => BrowserWindow;
+  ghSync?: GhSyncDeps;
 }
 
 const RUNNING_PIPELINE_PHASES = [
@@ -136,7 +138,7 @@ export class PipelineScheduler {
       !this._isPerStateSlotAvailable(project.path, PIPELINE_PHASE.planning)
     ) {
       queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.queued);
-      this._syncPipelineLabel(project.path, issue.issueNumber, ISSUE_PIPELINE_STATUS.queued);
+      this._syncPipelineLabel(project, issue.issueNumber, ISSUE_PIPELINE_STATUS.queued);
       this._sendIssuesUpdated(projectId);
       log.info(
         `[scheduler] queued issue #${issueNumber} (${activeCount}/${pipelineCap} slots used)`,
@@ -177,7 +179,7 @@ export class PipelineScheduler {
       !this._isPerStateSlotAvailable(project.path, PIPELINE_PHASE.planning)
     ) {
       queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.queued);
-      this._syncPipelineLabel(project.path, issue.issueNumber, ISSUE_PIPELINE_STATUS.queued);
+      this._syncPipelineLabel(project, issue.issueNumber, ISSUE_PIPELINE_STATUS.queued);
       this._sendIssuesUpdated(projectId);
       log.info(
         `[scheduler] queued quick task ${issueNumber} (${activeCount}/${pipelineCap} slots used)`,
@@ -318,11 +320,17 @@ export class PipelineScheduler {
         log.info(`[execution-queue] promoting thread ${thread.id} "${thread.title}"`);
 
         pipeline.startExecution(thread.id, latestPlan.structured).catch((err) => {
-          transitionThreadPhase(getMainWindow(), queries, emitter, {
-            threadId: thread.id,
-            phase: PIPELINE_PHASE.failed,
-            errorMessage: clampError(err),
-          });
+          transitionThreadPhase(
+            getMainWindow(),
+            queries,
+            emitter,
+            {
+              threadId: thread.id,
+              phase: PIPELINE_PHASE.failed,
+              errorMessage: clampError(err),
+            },
+            this.deps.ghSync,
+          );
           log.error('[execution-queue] promotion failed:', err);
         });
         return true;
@@ -400,7 +408,7 @@ export class PipelineScheduler {
     }
 
     queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.planning);
-    this._syncPipelineLabel(project.path, issue.issueNumber, ISSUE_PIPELINE_STATUS.planning);
+    this._syncPipelineLabel(project, issue.issueNumber, ISSUE_PIPELINE_STATUS.planning);
     const thread =
       reusableThread && REUSABLE_THREAD_STATUSES.has(reusableThread.status)
         ? reusableThread
@@ -450,11 +458,17 @@ export class PipelineScheduler {
       );
     } catch (err) {
       const win = getMainWindow();
-      transitionThreadPhase(win, queries, emitter, {
-        threadId: thread.id,
-        phase: PIPELINE_PHASE.failed,
-        errorMessage: clampError(err),
-      });
+      transitionThreadPhase(
+        win,
+        queries,
+        emitter,
+        {
+          threadId: thread.id,
+          phase: PIPELINE_PHASE.failed,
+          errorMessage: clampError(err),
+        },
+        this.deps.ghSync,
+      );
       throw err;
     }
   }
@@ -475,7 +489,7 @@ export class PipelineScheduler {
     }
 
     queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.planning);
-    this._syncPipelineLabel(project.path, issue.issueNumber, ISSUE_PIPELINE_STATUS.planning);
+    this._syncPipelineLabel(project, issue.issueNumber, ISSUE_PIPELINE_STATUS.planning);
     this._sendIssuesUpdated(issue.projectId);
 
     const phaseModels = this._resolvePhaseModels(settings, project, issue);
@@ -517,11 +531,17 @@ export class PipelineScheduler {
       );
     } catch (err) {
       const win = getMainWindow();
-      transitionThreadPhase(win, queries, emitter, {
-        threadId: thread.id,
-        phase: PIPELINE_PHASE.failed,
-        errorMessage: clampError(err),
-      });
+      transitionThreadPhase(
+        win,
+        queries,
+        emitter,
+        {
+          threadId: thread.id,
+          phase: PIPELINE_PHASE.failed,
+          errorMessage: clampError(err),
+        },
+        this.deps.ghSync,
+      );
       throw err;
     }
   }
@@ -628,11 +648,17 @@ export class PipelineScheduler {
       );
     } catch (err) {
       const win = getMainWindow();
-      transitionThreadPhase(win, queries, emitter, {
-        threadId: thread.id,
-        phase: PIPELINE_PHASE.failed,
-        errorMessage: clampError(err),
-      });
+      transitionThreadPhase(
+        win,
+        queries,
+        emitter,
+        {
+          threadId: thread.id,
+          phase: PIPELINE_PHASE.failed,
+          errorMessage: clampError(err),
+        },
+        this.deps.ghSync,
+      );
       queries.automations.recordRunFinished(automation.id, targetProjectId, 'failed');
       throw err;
     }
@@ -653,15 +679,21 @@ export class PipelineScheduler {
   }
 
   private _syncPipelineLabel(
-    projectPath: string,
+    project: Project,
     issueNumber: number,
     status: IssuePipelineStatus,
   ): void {
-    syncIssuePipelineLabelSoon({
-      projectPath,
-      issueNumber,
-      status,
-      source: 'scheduler',
-    });
+    if (!this.deps.ghSync) return;
+    void this.deps.ghSync
+      .syncToGithub({
+        projectPath: project.path,
+        projectUrl: project.githubProjectUrl,
+        issueNumber,
+        pipelineStatus: status,
+        statusMapping: project.githubStatusMapping,
+      })
+      .catch((err) => {
+        log.warn('[scheduler] pipeline label sync failed', err);
+      });
   }
 }

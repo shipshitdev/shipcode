@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ACTIVE_STATUSES, COLUMNS, PHASE_ELAPSED_STATUSES } from './constants';
+import { GH_STATUS_OPTION_NAME } from '@/lib/shipcode';
+import { ACTIVE_STATUSES, COLUMNS, LIST_COLUMN_LABEL, PHASE_ELAPSED_STATUSES } from './constants';
 
 describe('kanban board phase constants', () => {
   it('includes testing in the agent loop column and section list', () => {
@@ -40,5 +41,14 @@ describe('kanban board phase constants', () => {
     expect(PHASE_ELAPSED_STATUSES).toEqual(ACTIVE_STATUSES);
     expect(PHASE_ELAPSED_STATUSES).not.toContain('approval');
     expect(PHASE_ELAPSED_STATUSES).not.toContain('clarifying');
+  });
+
+  it('derives the todo column label from the shared GH Status option name', () => {
+    // Guards the DRY link: renaming the GH "Backlog" status option in
+    // @shipcode/shared must propagate to the board without a stray literal here.
+    const todoColumn = COLUMNS.find((column) => column.key === 'todo');
+
+    expect(todoColumn?.label).toBe(GH_STATUS_OPTION_NAME.todo);
+    expect(LIST_COLUMN_LABEL.todo).toBe(GH_STATUS_OPTION_NAME.todo);
   });
 });

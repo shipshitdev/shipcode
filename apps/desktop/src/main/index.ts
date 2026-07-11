@@ -102,7 +102,7 @@ import {
   TriageRuleQueries,
   VerificationQueries,
 } from '@shipcode/db';
-import { createPipeline, createReconciliationLoop } from '@shipcode/pipeline';
+import { createGhSyncService, createPipeline, createReconciliationLoop } from '@shipcode/pipeline';
 import {
   HEARTBEAT_TIMEOUT_MS,
   PIPELINE_PHASE,
@@ -308,9 +308,18 @@ function createWindow() {
     }),
   });
 
+  // Single shared GH Status/label sync service — injected into the pipeline
+  // runtime, the pipeline scheduler, manual/board-driven phase transitions
+  // (via registerIpcHandlers), and the startup/watchdog reset paths below,
+  // so every GitHub write for a given issue serializes through one queue.
+  const ghSyncService = createGhSyncService({
+    getProject: (projectId) => queries.projects.getById(projectId),
+  });
+
   const pipelineDeps = {
     emitter,
     processManager,
+    ghSync: ghSyncService,
     threads: queries.threads,
     plans: queries.plans,
     reviews: queries.reviews,
@@ -346,6 +355,7 @@ function createWindow() {
     pipeline: activePipeline,
     emitter,
     getMainWindow: requireMainWindow,
+    ghSync: ghSyncService.deps,
   });
 
   const automationScheduler = new AutomationScheduler({
@@ -433,11 +443,17 @@ function createWindow() {
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send('terminal:event', record);
     }
-    transitionThreadPhase(requireMainWindow(), queries, emitter, {
-      threadId: thread.id,
-      phase: PIPELINE_PHASE.failed,
-      errorMessage: errorMsg,
-    });
+    transitionThreadPhase(
+      requireMainWindow(),
+      queries,
+      emitter,
+      {
+        threadId: thread.id,
+        phase: PIPELINE_PHASE.failed,
+        errorMessage: errorMsg,
+      },
+      ghSyncService.deps,
+    );
     log.info(`[startup] marked orphaned active thread ${thread.id} as interrupted`);
   }
 
@@ -476,6 +492,7 @@ function createWindow() {
     automationScheduler,
     resourceMonitor,
     resyncWorkflowWatchers,
+    ghSyncService.deps,
   );
 
   // Watchdog: reset threads stuck in active phases (handles renderer refresh + crash scenarios).
@@ -492,11 +509,17 @@ function createWindow() {
             if (activeIds.has(thread.id)) continue;
             const errorMsg =
               'Pipeline timed out — process was likely interrupted by an app refresh.';
-            transitionThreadPhase(requireMainWindow(), queries, emitter, {
-              threadId: thread.id,
-              phase: PIPELINE_PHASE.failed,
-              errorMessage: errorMsg,
-            });
+            transitionThreadPhase(
+              requireMainWindow(),
+              queries,
+              emitter,
+              {
+                threadId: thread.id,
+                phase: PIPELINE_PHASE.failed,
+                errorMessage: errorMsg,
+              },
+              ghSyncService.deps,
+            );
             log.info(`[watchdog] reset stuck thread ${thread.id} → failed`);
           }
 
@@ -508,11 +531,17 @@ function createWindow() {
               `[watchdog] killed stalled ${proc?.type ?? 'process'} ${procId} (thread=${tid ?? 'n/a'})`,
             );
             if (!tid) continue;
-            transitionThreadPhase(requireMainWindow(), queries, emitter, {
-              threadId: tid,
-              phase: PIPELINE_PHASE.failed,
-              errorMessage: formatStalledProcessMessage(PROCESS_STALL_TIMEOUT_MS),
-            });
+            transitionThreadPhase(
+              requireMainWindow(),
+              queries,
+              emitter,
+              {
+                threadId: tid,
+                phase: PIPELINE_PHASE.failed,
+                errorMessage: formatStalledProcessMessage(PROCESS_STALL_TIMEOUT_MS),
+              },
+              ghSyncService.deps,
+            );
           }
         } catch (err) {
           log.error('[watchdog] error during stuck-thread check:', err);

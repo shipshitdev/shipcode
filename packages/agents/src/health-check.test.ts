@@ -63,6 +63,7 @@ import {
   checkGeminiAuth,
   checkGeminiModelCapabilities,
   checkGhAuth,
+  checkGrokAuth,
   checkIntegrationStatus,
   checkOpenRouterAuth,
   checkOpenRouterHealth,
@@ -419,6 +420,53 @@ describe('checkCodexAuth', () => {
     mockAccess.mockRejectedValue(new Error('ENOENT'));
     const result = await checkCodexAuth();
     expect(result).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkGrokAuth
+//
+// Contract pinned against the real Grok Build CLI: there is NO `grok auth
+// status` subcommand (the surface is `grok login` / `grok logout`), so auth is
+// detected via env var (`XAI_API_KEY`) or the credential file `~/.grok/auth.json`
+// written by `grok login`. Probing a nonexistent subcommand exits non-zero and
+// would fail closed even for a logged-in user.
+// ---------------------------------------------------------------------------
+describe('checkGrokAuth', () => {
+  it('returns true when XAI_API_KEY is set', async () => {
+    execRouted({ 'printenv XAI_API_KEY': { stdout: 'xai-key\n' } });
+    mockAccess.mockRejectedValue(new Error('ENOENT'));
+    const result = await checkGrokAuth();
+    expect(result).toBe(true);
+  });
+
+  it('returns true when env var is unset but ~/.grok/auth.json exists', async () => {
+    execRouted({ 'printenv XAI_API_KEY': { stdout: '' } });
+    mockAccess.mockResolvedValue(undefined);
+    const result = await checkGrokAuth();
+    expect(result).toBe(true);
+  });
+
+  it('returns false when both env var and credential file are absent', async () => {
+    execRouted({ 'printenv XAI_API_KEY': { stdout: '' } });
+    mockAccess.mockRejectedValue(new Error('ENOENT'));
+    const result = await checkGrokAuth();
+    expect(result).toBe(false);
+  });
+
+  it('checks the ~/.grok/auth.json credential path (homedir mocked)', async () => {
+    execRouted({ 'printenv XAI_API_KEY': { stdout: '' } });
+    mockAccess.mockResolvedValue(undefined);
+    await checkGrokAuth();
+    expect(mockAccess).toHaveBeenCalledWith('/mock/home/.grok/auth.json');
+  });
+
+  it('never probes the nonexistent `grok auth status` subcommand', async () => {
+    execRouted({ 'printenv XAI_API_KEY': { stdout: '' } });
+    mockAccess.mockRejectedValue(new Error('ENOENT'));
+    await checkGrokAuth();
+    const invokedGrokAuth = mockExec.mock.calls.some(([cmd]) => String(cmd).includes('grok auth'));
+    expect(invokedGrokAuth).toBe(false);
   });
 });
 

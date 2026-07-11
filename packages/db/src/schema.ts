@@ -1,5 +1,6 @@
-export { migrate } from './migrations/base-schema';
-export {
+import type { DatabaseSync } from 'node:sqlite';
+import { migrate } from './migrations/base-schema';
+import {
   migrateV2,
   migrateV3,
   migrateV4,
@@ -20,7 +21,7 @@ export {
   migrateV19,
   migrateV20,
 } from './migrations/v02-v20';
-export {
+import {
   migrateV21,
   migrateV22,
   migrateV23,
@@ -42,7 +43,7 @@ export {
   migrateV39,
   migrateV40,
 } from './migrations/v21-v40';
-export {
+import {
   migrateV41,
   migrateV42,
   migrateV43,
@@ -66,4 +67,163 @@ export {
   migrateV61,
   migrateV62,
 } from './migrations/v41-v62';
-export { migrateV63, migrateV64, migrateV65 } from './migrations/v63-v80';
+import { migrateV63, migrateV64, migrateV65 } from './migrations/v63-v80';
+
+export {
+  migrate,
+  migrateV2,
+  migrateV3,
+  migrateV4,
+  migrateV5,
+  migrateV6,
+  migrateV7,
+  migrateV8,
+  migrateV9,
+  migrateV10,
+  migrateV11,
+  migrateV12,
+  migrateV13,
+  migrateV14,
+  migrateV15,
+  migrateV16,
+  migrateV17,
+  migrateV18,
+  migrateV19,
+  migrateV20,
+  migrateV21,
+  migrateV22,
+  migrateV23,
+  migrateV24,
+  migrateV25,
+  migrateV26,
+  migrateV27,
+  migrateV28,
+  migrateV29,
+  migrateV30,
+  migrateV31,
+  migrateV32,
+  migrateV33,
+  migrateV34,
+  migrateV35,
+  migrateV36,
+  migrateV37,
+  migrateV38,
+  migrateV39,
+  migrateV40,
+  migrateV41,
+  migrateV42,
+  migrateV43,
+  migrateV44,
+  migrateV45,
+  migrateV46,
+  migrateV47,
+  migrateV48,
+  migrateV49,
+  migrateV50,
+  migrateV51,
+  migrateV52,
+  migrateV53,
+  migrateV54,
+  migrateV55,
+  migrateV56,
+  migrateV57,
+  migrateV58,
+  migrateV59,
+  migrateV60,
+  migrateV61,
+  migrateV62,
+  migrateV63,
+  migrateV64,
+};
+
+/**
+ * Canonical, ordered list of every schema migration. This is the single source
+ * of truth for migration order: the production runner (getDatabase), the test
+ * DB factory (createTestDb), and the schema test harness all iterate THIS array
+ * rather than maintaining their own hand-copied call sequences. Adding a
+ * migration means appending exactly one entry here — nothing else re-lists the
+ * order, so the runners cannot drift out of sync.
+ *
+ * Order is significance: index 0 must be the base schema and each subsequent
+ * entry the next version. Every migration is self-guarding (it checks
+ * schema_version and no-ops if already applied), so re-running the full list on
+ * an up-to-date database is safe and cheap.
+ */
+export const MIGRATIONS = [
+  migrate,
+  migrateV2,
+  migrateV3,
+  migrateV4,
+  migrateV5,
+  migrateV6,
+  migrateV7,
+  migrateV8,
+  migrateV9,
+  migrateV10,
+  migrateV11,
+  migrateV12,
+  migrateV13,
+  migrateV14,
+  migrateV15,
+  migrateV16,
+  migrateV17,
+  migrateV18,
+  migrateV19,
+  migrateV20,
+  migrateV21,
+  migrateV22,
+  migrateV23,
+  migrateV24,
+  migrateV25,
+  migrateV26,
+  migrateV27,
+  migrateV28,
+  migrateV29,
+  migrateV30,
+  migrateV31,
+  migrateV32,
+  migrateV33,
+  migrateV34,
+  migrateV35,
+  migrateV36,
+  migrateV37,
+  migrateV38,
+  migrateV39,
+  migrateV40,
+  migrateV41,
+  migrateV42,
+  migrateV43,
+  migrateV44,
+  migrateV45,
+  migrateV46,
+  migrateV47,
+  migrateV48,
+  migrateV49,
+  migrateV50,
+  migrateV51,
+  migrateV52,
+  migrateV53,
+  migrateV54,
+  migrateV55,
+  migrateV56,
+  migrateV57,
+  migrateV58,
+  migrateV59,
+  migrateV60,
+  migrateV61,
+  migrateV62,
+  migrateV63,
+  migrateV64,
+  migrateV65,
+] as const satisfies ReadonlyArray<(db: DatabaseSync) => void>;
+
+/**
+ * Run every migration in {@link MIGRATIONS} in order, bringing a fresh or
+ * partially-migrated database fully up to date. Safe to call on an already-current
+ * database — each migration no-ops when its version is already recorded.
+ */
+export function runMigrations(db: DatabaseSync): void {
+  for (const migration of MIGRATIONS) {
+    migration(db);
+  }
+}

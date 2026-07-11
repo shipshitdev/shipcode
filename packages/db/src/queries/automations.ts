@@ -150,6 +150,37 @@ export class AutomationQueries {
     return mapAutomation(row, this.listTargetRows(row.id));
   }
 
+  /**
+   * Batch-hydrate a set of automations with their full target rows (including
+   * per-target run bookkeeping) using a single `automation_id IN (...)`
+   * lookup, instead of one query per row (N+1). Ordering within each
+   * automation matches {@link listTargetRows} (created_at ASC, primary first).
+   */
+  private hydrateMany(rows: AutomationRow[]): Automation[] {
+    if (rows.length === 0) return [];
+
+    const placeholders = rows.map(() => '?').join(', ');
+    const targetRows = asRows<AutomationTargetRow & { automation_id: string }>(
+      this.db
+        .prepare(
+          `SELECT automation_id, project_id, last_started_at, last_completed_at, last_status, run_count
+            FROM automation_targets
+            WHERE automation_id IN (${placeholders})
+            ORDER BY created_at ASC`,
+        )
+        .all(...rows.map((row) => row.id)),
+    );
+
+    const targetsByAutomation = new Map<string, AutomationTargetRow[]>();
+    for (const { automation_id, ...target } of targetRows) {
+      const existing = targetsByAutomation.get(automation_id);
+      if (existing) existing.push(target);
+      else targetsByAutomation.set(automation_id, [target]);
+    }
+
+    return rows.map((row) => mapAutomation(row, targetsByAutomation.get(row.id) ?? []));
+  }
+
   list(projectId: string): Automation[] {
     // Automations that target this project (multi-repo aware), newest first.
     const rows = this.db
@@ -160,19 +191,19 @@ export class AutomationQueries {
            ORDER BY a.created_at DESC`,
       )
       .all(projectId);
-    return asRows<AutomationRow>(rows).map((row) => this.hydrate(row));
+    return this.hydrateMany(asRows<AutomationRow>(rows));
   }
 
   listAll(): Automation[] {
     const rows = this.db.prepare('SELECT * FROM automations ORDER BY created_at DESC').all();
-    return asRows<AutomationRow>(rows).map((row) => this.hydrate(row));
+    return this.hydrateMany(asRows<AutomationRow>(rows));
   }
 
   listEnabled(): Automation[] {
     const rows = this.db
       .prepare('SELECT * FROM automations WHERE enabled = 1 ORDER BY created_at DESC')
       .all();
-    return asRows<AutomationRow>(rows).map((row) => this.hydrate(row));
+    return this.hydrateMany(asRows<AutomationRow>(rows));
   }
 
   /**
@@ -186,7 +217,7 @@ export class AutomationQueries {
         'SELECT * FROM automations WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ?',
       )
       .all(nowIso);
-    return asRows<AutomationRow>(rows).map((row) => this.hydrate(row));
+    return this.hydrateMany(asRows<AutomationRow>(rows));
   }
 
   getById(id: string): Automation | null {
@@ -246,11 +277,41 @@ export class AutomationQueries {
       .run(nanoid(), automationId, projectId);
   }
 
-  /** Remove a target project. */
+  /**
+   * Remove a target project. Refuses to empty the target set (mirrors
+   * `setTargets`' floor-of-one guard) and, when the removed target is the
+   * primary, realigns `project_id` to the next remaining target (oldest first).
+   * Without this, dropping the primary would leave `project_id` pointing at a
+   * de-targeted project, and dropping the last target would leave zero rows —
+   * making the scheduler fire against the removed project forever while the
+   * automation vanishes from every project-scoped (INNER JOIN) UI.
+   */
   removeTarget(automationId: string, projectId: string): void {
-    this.db
-      .prepare('DELETE FROM automation_targets WHERE automation_id = ? AND project_id = ?')
-      .run(automationId, projectId);
+    transaction(this.db, () => {
+      const current = this.listTargets(automationId);
+      const isTarget = current.includes(projectId);
+      const remaining = current.filter((id) => id !== projectId);
+      if (isTarget && remaining.length === 0) {
+        throw new Error('An automation must have at least one target');
+      }
+
+      this.db
+        .prepare('DELETE FROM automation_targets WHERE automation_id = ? AND project_id = ?')
+        .run(automationId, projectId);
+
+      if (!isTarget) return; // no-op removal of a non-target: nothing to realign
+
+      const row = asRow<{ project_id: string } | undefined>(
+        this.db.prepare('SELECT project_id FROM automations WHERE id = ?').get(automationId),
+      );
+      if (row?.project_id === projectId) {
+        this.db
+          .prepare(
+            `UPDATE automations SET project_id = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+          )
+          .run(remaining[0], automationId);
+      }
+    });
   }
 
   /** Replace the full target set, keeping `project_id` aligned to the first. */
@@ -309,7 +370,14 @@ export class AutomationQueries {
     }
     sets.push(`updated_at = ${ISO_NOW_SQL}`);
 
-    this.db.prepare(`UPDATE automations SET ${sets.join(', ')} WHERE id = ?`).run(...values, id);
+    // Column changes and any target-set replacement land in one transaction so
+    // a rejected target set (e.g. empty) rolls back the column update too.
+    transaction(this.db, () => {
+      this.db.prepare(`UPDATE automations SET ${sets.join(', ')} WHERE id = ?`).run(...values, id);
+      // `setTargets` self-wraps in a transaction; the nested call runs inline
+      // (see `transaction`'s isTransaction short-circuit) and realigns project_id.
+      if (patch.targets !== undefined) this.setTargets(id, patch.targets);
+    });
 
     const updated = this.getById(id);
     if (!updated) throw new Error(`Automation ${id} disappeared after update`);
@@ -365,6 +433,31 @@ export class AutomationQueries {
         .run(status, id, projectId);
       this.db.prepare(`UPDATE automations SET updated_at = ${ISO_NOW_SQL} WHERE id = ?`).run(id);
     });
+  }
+
+  /**
+   * Ids of automations that will be fully cascade-deleted when `projectId` is
+   * removed: their primary `project_id` is this project AND they have no other
+   * target to fall back to. Callers must `unschedule` these so no in-memory cron
+   * job keeps firing no-ops after the row is gone.
+   *
+   * Read-only — call BEFORE the project delete (afterwards the rows are gone).
+   * Automations that merely list `projectId` as a secondary target are NOT
+   * included: the FK cascade drops only their target row and they survive.
+   */
+  listCascadingProjectRemoval(projectId: string): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id FROM automations
+          WHERE project_id = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM automation_targets t
+               WHERE t.automation_id = automations.id
+                 AND t.project_id != ?
+            )`,
+      )
+      .all(projectId, projectId);
+    return asRows<{ id: string }>(rows).map((r) => r.id);
   }
 
   delete(id: string): void {

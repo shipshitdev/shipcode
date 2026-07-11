@@ -87,6 +87,13 @@ jobs:
           cache-turbo: 'false'
       # Biome scans the whole repo in well under a minute — no affected scoping needed.
       - run: bun run lint
+      # AGENTS.md is generated from .agents/memory/ by scripts/sync-agent-memory.sh.
+      # This gate fails if the committed AGENTS.md's repo-memory section drifted
+      # from those files (author forgot to re-run the script) or if AGENTS.md grew
+      # past Codex's 32 KiB hard-truncation limit. The global section is derived
+      # from a private, non-repo memory dir and is intentionally not checked here.
+      - name: Verify AGENTS.md is in sync and under the Codex size limit
+        run: bash scripts/sync-agent-memory.sh --check
 
   design:
     name: Design System
