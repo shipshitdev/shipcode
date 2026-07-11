@@ -17,8 +17,8 @@ import {
   summarizePromptMaterials,
 } from '@shipcode/agents';
 import {
-  captureCheckpoint,
   type CheckpointRef,
+  captureCheckpoint,
   deleteThreadCheckpointRefs,
   parseCheckpointTurn,
   WorktreeManager,
@@ -39,12 +39,7 @@ import {
   VERIFICATION_FENCE_TAG,
 } from '@shipcode/shared';
 import { computeRetryDelayMs } from '../retry-scheduler';
-import type {
-  ExecutePhaseCarry,
-  PipelineContext,
-  PipelineDeps,
-  VerifyPhaseCarry,
-} from '../types';
+import type { ExecutePhaseCarry, PipelineContext, PipelineDeps, VerifyPhaseCarry } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { buildPhasePayload, resetPhaseState } from './context';
 import {

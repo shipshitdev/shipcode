@@ -2773,6 +2773,7 @@ describe('registerProjectHandlers', () => {
       },
       checkpoints: {
         getById: vi.fn(() => checkpoint),
+        deleteNewerThan: vi.fn(),
       },
       threads: {
         getById: vi.fn(() => ({ id: 'thread-1', worktreePath: '/tmp/worktree' })),
@@ -2839,6 +2840,7 @@ describe('registerProjectHandlers', () => {
       },
       checkpoints: {
         getById: vi.fn(() => checkpoint),
+        deleteNewerThan: vi.fn(),
       },
       threads: {
         getById: vi.fn(() => ({ id: 'thread-1', worktreePath: '/tmp/worktree' })),
@@ -2897,6 +2899,7 @@ describe('registerProjectHandlers', () => {
       },
       checkpoints: {
         getById: vi.fn(() => checkpoint),
+        deleteNewerThan: vi.fn(),
       },
       threads: {
         getById: vi.fn(() => ({ id: 'thread-1', worktreePath: '/tmp/worktree' })),
