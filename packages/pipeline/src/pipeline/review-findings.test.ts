@@ -1,3 +1,4 @@
+import type { ReviewFindingRecord } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
 import {
   buildPullRequestFeedbackFindingInputs,
@@ -271,5 +272,80 @@ describe('review finding helpers', () => {
     expect(comment.startsWith(REVIEW_FINDINGS_PR_COMMENT_MARKER)).toBe(true);
     expect(comment).toContain('1 open ShipCode review finding remains');
     expect(comment).toContain('**blocker / ci**: CI failed');
+  });
+
+  it('returns an empty prompt when there are no open findings', () => {
+    const resolved: ReviewFindingRecord = {
+      id: 'finding-1',
+      projectId: 'project-1',
+      threadId: 'thread-1',
+      planId: 'plan-1',
+      reviewId: null,
+      verificationId: null,
+      runId: null,
+      phase: 'verify',
+      source: 'verification',
+      severity: 'blocker',
+      status: 'fixed',
+      title: 'Build failed',
+      description: 'Typecheck failed',
+      suggestion: 'Fix types',
+      filePath: 'src/app.ts',
+      fingerprint: 'abc',
+      sourceModel: 'claude',
+      commitSha: null,
+      prNumber: null,
+      worktreePath: null,
+      branch: null,
+      metadata: null,
+      resolvedByRunId: null,
+      resolvedAt: null,
+      createdAt: '2026-05-31T00:00:00.000Z',
+      updatedAt: '2026-05-31T00:00:00.000Z',
+    };
+
+    // A non-open finding is not actionable, so the executor prompt block collapses
+    // to the empty string rather than emitting an empty <open_review_findings> tag.
+    expect(formatOpenFindingsForPrompt([resolved])).toBe('');
+    expect(formatOpenFindingsForPrompt([])).toBe('');
+  });
+
+  it('lists resolved findings and reports zero open in the PR comment', () => {
+    const comment = formatReviewFindingsPrComment([
+      {
+        id: 'finding-1',
+        projectId: 'project-1',
+        threadId: 'thread-1',
+        planId: 'plan-1',
+        reviewId: null,
+        verificationId: null,
+        runId: null,
+        phase: 'verify',
+        source: 'verification',
+        severity: 'blocker',
+        status: 'fixed',
+        title: 'Flaky test fixed',
+        description: 'Stabilized',
+        suggestion: null,
+        filePath: null,
+        fingerprint: 'abc',
+        sourceModel: null,
+        commitSha: null,
+        prNumber: 12,
+        worktreePath: null,
+        branch: null,
+        metadata: null,
+        resolvedByRunId: null,
+        resolvedAt: '2026-05-31T00:00:00.000Z',
+        createdAt: '2026-05-31T00:00:00.000Z',
+        updatedAt: '2026-05-31T00:00:00.000Z',
+      },
+    ]);
+
+    expect(comment).toContain('No open ShipCode review findings.');
+    expect(comment).toContain('### Recently Resolved');
+    expect(comment).toContain('**fixed**: Flaky test fixed');
+    // No open findings → no "### Open" section.
+    expect(comment).not.toContain('### Open');
   });
 });

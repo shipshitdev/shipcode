@@ -62,6 +62,8 @@ describe('captureExecutionCheckpoint', () => {
     mockCapture.mockReset();
     mockResolveHead.mockReset();
     mockResolveBranch.mockReset();
+    mockDeleteRefs.mockReset();
+    mockDeleteRefs.mockResolvedValue(0);
   });
 
   it('reuses the captured HEAD sha/branch on success and spawns no extra resolver call', async () => {
@@ -175,6 +177,66 @@ describe('captureExecutionCheckpoint', () => {
 
     expect(mockCapture).toHaveBeenCalledTimes(1);
     expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('prunes refs and rows older than the retention window once the turn exceeds it', async () => {
+    // Retention window is 25 turns; a captured turn of 30 leaves turns < 6 stale.
+    mockCapture.mockResolvedValue({
+      refName: 'refs/shipcode/checkpoints/t/turn/30',
+      turn: 30,
+      commitSha: 'ck',
+      headSha: 'head-sha',
+      branch: 'main',
+    });
+    const { deps, deleteOlderThan } = makeDeps();
+
+    await captureExecutionCheckpoint(CWD, 'thread-1', meta(), deps);
+
+    const minKeptTurn = 30 - 25 + 1; // 6
+    expect(mockDeleteRefs).toHaveBeenCalledWith(CWD, 'thread-1', { olderThanTurn: minKeptTurn });
+    expect(deleteOlderThan).toHaveBeenCalledWith('thread-1', minKeptTurn);
+  });
+
+  it('does not prune when the captured turn is within the retention window', async () => {
+    mockCapture.mockResolvedValue({
+      refName: 'refs/shipcode/checkpoints/t/turn/3',
+      turn: 3, // minKeptTurn = 3 - 25 + 1 = -21 → nothing to prune
+      commitSha: 'ck',
+      headSha: 'head-sha',
+      branch: 'main',
+    });
+    const { deps, deleteOlderThan } = makeDeps();
+
+    await captureExecutionCheckpoint(CWD, 'thread-1', meta(), deps);
+
+    expect(mockDeleteRefs).not.toHaveBeenCalled();
+    expect(deleteOlderThan).not.toHaveBeenCalled();
+  });
+
+  it('swallows a prune failure — checkpoint GC never fails the phase', async () => {
+    mockCapture.mockResolvedValue({
+      refName: 'refs/shipcode/checkpoints/t/turn/40',
+      turn: 40,
+      commitSha: 'ck',
+      headSha: 'head-sha',
+      branch: 'main',
+    });
+    mockDeleteRefs.mockRejectedValue(new Error('ref GC exploded'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { deps, create, deleteOlderThan } = makeDeps();
+
+    await expect(
+      captureExecutionCheckpoint(CWD, 'thread-1', meta(), deps),
+    ).resolves.toBeUndefined();
+
+    // The row was still written; only the best-effort GC failed and was logged.
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(deleteOlderThan).not.toHaveBeenCalled(); // ref delete threw before the row prune
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('checkpoint GC failed for thread thread-1'),
+      expect.any(Error),
+    );
+    errorSpy.mockRestore();
   });
 
   it('performs no synchronous git on the capture path', () => {
