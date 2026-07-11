@@ -7,6 +7,7 @@ import {
   createCodexCliProvider,
   createProviderRegistry,
 } from '@shipcode/agents';
+import { captureCheckpoint, resolveHeadCommit } from '@shipcode/git';
 import type { TaskGraphAssessment, TaskGraphWithNodes } from '@shipcode/shared';
 import {
   DEFAULT_SETTINGS,
@@ -51,7 +52,11 @@ vi.mock('@shipcode/git', () => {
       refName: 'refs/shipcode/checkpoints/t1/turn/0',
       turn: 0,
       commitSha: 'snapshot-sha',
+      headSha: 'head-sha',
+      branch: 'main',
     }),
+    resolveHeadCommit: vi.fn().mockResolvedValue('head-sha'),
+    resolveCurrentBranch: vi.fn().mockResolvedValue('main'),
   };
 });
 
@@ -2105,26 +2110,23 @@ Custom prompt`,
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
-    it('fails execution when checkpoint creation throws', async () => {
-      mockExecSync.mockImplementation((cmd: string) => {
-        if (cmd === 'git rev-parse --abbrev-ref HEAD') {
-          throw new Error('rev-parse offline');
-        }
-        return '';
-      });
+    it('continues execution when checkpoint capture fails entirely', async () => {
+      // Failure policy: checkpoint capture is best-effort and must never fail
+      // the execute phase. Ref capture throws AND HEAD is unresolvable → the
+      // row is skipped, but the executor still runs.
+      vi.mocked(captureCheckpoint).mockRejectedValueOnce(new Error('capture offline'));
+      vi.mocked(resolveHeadCommit)
+        .mockResolvedValueOnce(null) // dedupe probe
+        .mockResolvedValueOnce(null); // commitSha fallback after capture failure
       const pipeline = createPipeline(mock.deps);
       pipeline.initializeContext('t1', { projectPath: '/proj', worktreePath: '/worktree' });
 
       await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
       await flush();
 
-      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
-        't1',
-        expect.any(String),
-        'Checkpoint creation failed: rev-parse offline',
-      );
-      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
-      expect(pipeline.getContext('t1')).toBeUndefined();
+      expect(mock.deps.checkpoints.create).not.toHaveBeenCalled();
+      expect(mock.deps.threads.recordFailure).not.toHaveBeenCalled();
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
     });
 
     it('skips duplicate checkpoint creation for the same execute attempt', async () => {
@@ -2136,7 +2138,9 @@ Custom prompt`,
         reason: 'before_execute',
         label: 'Before execute attempt 1',
         branch: 'feat/test-branch',
-        commitSha: 'abc123',
+        // Dedupe compares the latest row's commitSha against the worktree's
+        // resolved HEAD ('head-sha' from the module mock above).
+        commitSha: 'head-sha',
         refName: null,
         createdAt: '',
       });
