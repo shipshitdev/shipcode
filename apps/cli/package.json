@@ -1,6 +1,6 @@
 {
   "name": "@shipshitdev/shipcode",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Autonomous AI coding pipeline. GitHub issues in, pull requests out.",
   "type": "module",
   "repository": {
