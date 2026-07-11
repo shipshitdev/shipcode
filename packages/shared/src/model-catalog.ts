@@ -121,13 +121,14 @@ export const CLI_PROVIDER_LABELS: Record<PhaseCliProvider, string> = {
 
 // Conservative model presets used when a CLI cannot report its own catalog.
 // Keyed by PhaseCliProvider for the same exhaustiveness guarantee as the labels.
-export const CLI_PROVIDER_FALLBACK_OPTIONS: Record<PhaseCliProvider, readonly KnownModelOption[]> = {
-  claude: CLAUDE_MODEL_OPTIONS,
-  codex: CODEX_FALLBACK_MODEL_OPTIONS,
-  gemini: GEMINI_FALLBACK_MODEL_OPTIONS,
-  cursor: CURSOR_FALLBACK_MODEL_OPTIONS,
-  grok: GROK_FALLBACK_MODEL_OPTIONS,
-};
+export const CLI_PROVIDER_FALLBACK_OPTIONS: Record<PhaseCliProvider, readonly KnownModelOption[]> =
+  {
+    claude: CLAUDE_MODEL_OPTIONS,
+    codex: CODEX_FALLBACK_MODEL_OPTIONS,
+    gemini: GEMINI_FALLBACK_MODEL_OPTIONS,
+    cursor: CURSOR_FALLBACK_MODEL_OPTIONS,
+    grok: GROK_FALLBACK_MODEL_OPTIONS,
+  };
 
 export type CuratedModelId =
   | (typeof CLAUDE_MODEL_OPTIONS)[number]['value']

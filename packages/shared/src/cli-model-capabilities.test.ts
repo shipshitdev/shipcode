@@ -15,7 +15,13 @@ import {
 } from './model-catalog';
 import type { PhaseCliProvider, ReasoningEffort } from './types';
 
-const PROVIDERS = ['claude', 'codex', 'gemini', 'cursor', 'grok'] as const satisfies readonly PhaseCliProvider[];
+const PROVIDERS = [
+  'claude',
+  'codex',
+  'gemini',
+  'cursor',
+  'grok',
+] as const satisfies readonly PhaseCliProvider[];
 
 describe('CLI provider mappings', () => {
   it('pins a display label for every phase CLI provider', () => {
