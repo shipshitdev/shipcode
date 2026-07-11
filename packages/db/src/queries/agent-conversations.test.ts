@@ -16,6 +16,12 @@ describe('AgentConversationQueries', () => {
     db.prepare(
       "INSERT INTO threads (id, project_id, prompt, title, status, created_at, updated_at) VALUES ('t1', 'proj-1', 'go', 'Test', 'idle', datetime('now'), datetime('now'))",
     ).run();
+    // Runs referenced by run_id FK on agent_conversations.
+    for (const runId of ['run-a', 'run-b']) {
+      db.prepare(
+        "INSERT INTO pipeline_runs (id, thread_id, project_id, source, status, created_at, updated_at) VALUES (?, 't1', 'proj-1', 'github_issue', 'running', datetime('now'), datetime('now'))",
+      ).run(runId);
+    }
     conversations = new AgentConversationQueries(db);
   });
 
@@ -140,6 +146,94 @@ describe('AgentConversationQueries', () => {
     const filtered = conversations.listByThread('t1', { role: 'response' });
     expect(filtered).toHaveLength(1);
     expect(filtered[0].role).toBe('response');
+  });
+
+  it('filters by runId, scoping turns to a single run', () => {
+    conversations.insert({
+      threadId: 't1',
+      runId: 'run-a',
+      phase: 'steering',
+      speaker: 'human',
+      role: 'prompt',
+      content: 'skip the auth refactor',
+    });
+    conversations.insert({
+      threadId: 't1',
+      runId: 'run-b',
+      phase: 'steering',
+      speaker: 'human',
+      role: 'prompt',
+      content: 'use the shared helper',
+    });
+
+    const runA = conversations.listByThread('t1', { runId: 'run-a' });
+    expect(runA).toHaveLength(1);
+    expect(runA[0].content).toBe('skip the auth refactor');
+
+    const runB = conversations.listByThread('t1', { runId: 'run-b' });
+    expect(runB).toHaveLength(1);
+    expect(runB[0].content).toBe('use the shared helper');
+  });
+
+  it('excludes legacy NULL run_id rows when a runId filter is provided', () => {
+    // Legacy row written before run tracking populated run_id.
+    db.prepare(
+      `INSERT INTO agent_conversations
+        (id, thread_id, run_id, phase, round, speaker, role, content, created_at)
+       VALUES ('legacy-1', 't1', NULL, 'steering', 0, 'human', 'prompt', 'legacy steer', datetime('now'))`,
+    ).run();
+    conversations.insert({
+      threadId: 't1',
+      runId: 'run-a',
+      phase: 'steering',
+      speaker: 'human',
+      role: 'prompt',
+      content: 'scoped steer',
+    });
+
+    // Scoped query drops the NULL row (prevents cross-run bleed of legacy rows).
+    const scoped = conversations.listByThread('t1', { runId: 'run-a' });
+    expect(scoped).toHaveLength(1);
+    expect(scoped[0].content).toBe('scoped steer');
+
+    // Unscoped query is unchanged and still returns everything.
+    const all = conversations.listByThread('t1');
+    expect(all).toHaveLength(2);
+  });
+
+  it('combines runId with phase and role filters', () => {
+    conversations.insert({
+      threadId: 't1',
+      runId: 'run-a',
+      phase: 'steering',
+      speaker: 'human',
+      role: 'prompt',
+      content: 'steer a',
+    });
+    conversations.insert({
+      threadId: 't1',
+      runId: 'run-a',
+      phase: 'plan',
+      speaker: 'planner',
+      role: 'prompt',
+      content: 'plan a',
+    });
+    conversations.insert({
+      threadId: 't1',
+      runId: 'run-b',
+      phase: 'steering',
+      speaker: 'human',
+      role: 'prompt',
+      content: 'steer b',
+    });
+
+    const filtered = conversations.listByThread('t1', {
+      runId: 'run-a',
+      phase: 'steering',
+      role: 'prompt',
+    });
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].content).toBe('steer a');
   });
 
   it('counts turns by thread', () => {
