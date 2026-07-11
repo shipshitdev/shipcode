@@ -53,7 +53,7 @@ workflow_call`. Jobs:
 - **`test` (Test):** same affected-on-PR pattern for `turbo run test`; full `test:ci`
   otherwise. `fetch-depth: 0`, ripgrep installed.
 - **`coverage` (Coverage):** decoupled — `schedule || workflow_dispatch || push-to-master`
-  only, never blocks a PR (intentionally **not** a required check). `COVERAGE_MIN=80`.
+  only, never blocks a PR (intentionally **not** a required check). `COVERAGE_MIN=95`, `COVERAGE_BRANCH_MIN=90`.
 
 Shared setup lives in the **`.github/actions/setup-bun-env`** composite action (Bun
 1.3.14 + Node 22, Bun module store + Turbo cache, optional ripgrep,
