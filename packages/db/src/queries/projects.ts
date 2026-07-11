@@ -10,7 +10,18 @@ import {
   toIsoUtc,
 } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
-import { asRow, asRows } from '../utils';
+import { asRow, asRows, transaction } from '../utils';
+
+/**
+ * Internal sentinel used to roll back `removeIfIdle`'s transaction when the
+ * project is not idle. Never escapes the class — caught and mapped to `false`.
+ */
+class ProjectNotIdleRollback extends Error {
+  constructor() {
+    super('project not idle');
+    this.name = 'ProjectNotIdleRollback';
+  }
+}
 
 interface ProjectIdleGuardOptions {
   /**
@@ -180,7 +191,63 @@ export class ProjectQueries {
   }
 
   remove(id: string): void {
-    this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
+    transaction(this.db, () => {
+      this.reassignPrimaryAutomationsAwayFromProject(id);
+      this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
+    });
+  }
+
+  /**
+   * Multi-repo automations keep `automations.project_id` as their "primary"
+   * target while `automation_targets` holds the real fan-out list. That primary
+   * FK is still `ON DELETE CASCADE` (the FK-aware rebuild is deferred, see
+   * migrations/v63-v80.ts), so deleting the primary project would otherwise
+   * destroy the whole automation row — and the automation_targets cascade would
+   * then wipe every remaining target for OTHER, still-existing projects.
+   *
+   * This reassigns any automation whose primary is `projectId` but which still
+   * targets another project to its next remaining target (oldest first, matching
+   * `listTargets` ordering) and drops the doomed target row, so the automation
+   * survives on its other repos. Automations whose ONLY target is `projectId`
+   * are left untouched: the FK cascade correctly removes them when the project
+   * row is deleted (callers must `unschedule` those — see
+   * `AutomationQueries.listCascadingProjectRemoval`).
+   *
+   * MUST run in the same transaction as the project DELETE so a survivor's
+   * target list is never left pointing at a project that still exists.
+   */
+  private reassignPrimaryAutomationsAwayFromProject(projectId: string): void {
+    // Point each survivor's primary at its oldest remaining (non-doomed) target.
+    this.db
+      .prepare(
+        `UPDATE automations
+            SET project_id = (
+                  SELECT t.project_id FROM automation_targets t
+                   WHERE t.automation_id = automations.id
+                     AND t.project_id != ?
+                   ORDER BY t.created_at ASC, t.rowid ASC
+                   LIMIT 1
+                ),
+                updated_at = ${ISO_NOW_SQL}
+          WHERE project_id = ?
+            AND EXISTS (
+                  SELECT 1 FROM automation_targets t
+                   WHERE t.automation_id = automations.id
+                     AND t.project_id != ?
+                )`,
+      )
+      .run(projectId, projectId, projectId);
+
+    // Drop the doomed target row for reassigned survivors (their project_id is
+    // now the new primary, so this excludes cascade-only automations, which keep
+    // their single doomed target row for the FK cascade to remove).
+    this.db
+      .prepare(
+        `DELETE FROM automation_targets
+          WHERE project_id = ?
+            AND automation_id IN (SELECT id FROM automations WHERE project_id != ?)`,
+      )
+      .run(projectId, projectId);
   }
 
   /**
@@ -202,17 +269,35 @@ export class ProjectQueries {
           WHERE project_id = ? AND claimed_at IS NOT NULL
         )
       `;
-    const stmt = this.db.prepare(`
-      DELETE FROM projects
-      WHERE id = ?
-        AND NOT EXISTS (
-          SELECT 1 FROM threads
-          WHERE project_id = ? AND status NOT IN ('completed','failed','idle')
-        )
-        ${attentionOnlyGuards}
-    `);
-    const result = options.ignoreAttentionOnly ? stmt.run(id, id) : stmt.run(id, id, id, id);
-    return result.changes > 0;
+    // Reassign multi-repo automations off this project BEFORE the conditional
+    // DELETE, then roll the whole thing back if the project turns out not to be
+    // idle. The conditional DELETE stays the atomic idle gate (it acquires the
+    // write lock, so no concurrent thread/notification insert can slip in
+    // between the reassignment and the guard), and a non-idle project leaves the
+    // reassignment undone.
+    try {
+      return transaction(this.db, () => {
+        this.reassignPrimaryAutomationsAwayFromProject(id);
+        const stmt = this.db.prepare(`
+          DELETE FROM projects
+          WHERE id = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM threads
+              WHERE project_id = ? AND status NOT IN ('completed','failed','idle')
+            )
+            ${attentionOnlyGuards}
+        `);
+        const result = options.ignoreAttentionOnly ? stmt.run(id, id) : stmt.run(id, id, id, id);
+        if (result.changes === 0) {
+          // Not idle: undo the speculative reassignment by rolling back.
+          throw new ProjectNotIdleRollback();
+        }
+        return true;
+      });
+    } catch (err) {
+      if (err instanceof ProjectNotIdleRollback) return false;
+      throw err;
+    }
   }
 
   pin(id: string, pinned: boolean): void {
