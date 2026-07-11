@@ -58,6 +58,13 @@ export interface RunFanOutArgs {
   runJudge: (candidates: FanOutCandidate[]) => Promise<FanOutJudgeOutcome>;
   /** Promote the chosen candidate's changes onto the primary worktree. */
   promoteWinner: (winner: FanOutCandidate) => Promise<void>;
+  /**
+   * Tear down every worker worktree/branch when no worker passed. The winner
+   * paths clean up losers via `promoteWinner`; this is the ONLY cleanup hook
+   * for the all-fail path, without which the caller's worker worktrees leak on
+   * disk on every failed fan-out attempt. Must not throw.
+   */
+  onAllFailed?: () => Promise<void>;
 }
 
 /** Build the judge prompt: the original task + each candidate's diff. */
@@ -169,7 +176,10 @@ export async function runFanOut(args: RunFanOutArgs): Promise<FanOutResult> {
 
   // No worker passed → surface the first candidate's output (or a synthetic
   // failure) without promoting anything. The caller treats non-zero as failure.
+  // Nothing gets promoted here, so `onAllFailed` is the sole opportunity to tear
+  // down the worker worktrees the caller created — skip it and they leak.
   if (passing.length === 0) {
+    await args.onAllFailed?.();
     const fallback = candidates[0];
     return {
       rawOutput: fallback?.rawOutput ?? 'fan-out: all workers failed',

@@ -67,6 +67,42 @@ describe('runFanOut', () => {
     expect(result.workersSucceeded).toBe(0);
   });
 
+  it('cleans up worker worktrees via onAllFailed when every worker fails', async () => {
+    const runWorker = vi.fn(async (i: number) => candidate(`worker-${i}`, { exitCode: 1 }));
+    const runJudge = vi.fn();
+    const promoteWinner = vi.fn();
+    const onAllFailed = vi.fn(async () => {});
+
+    const result = await runFanOut({
+      workerCount: 3,
+      runWorker,
+      runJudge,
+      promoteWinner,
+      onAllFailed,
+    });
+
+    // The all-fail branch never promotes, so onAllFailed is the ONLY cleanup
+    // hook for the worker worktrees created by the caller.
+    expect(promoteWinner).not.toHaveBeenCalled();
+    expect(onAllFailed).toHaveBeenCalledTimes(1);
+    expect(result.winnerLabel).toBeNull();
+  });
+
+  it('does not call onAllFailed when at least one worker passes', async () => {
+    const runWorker = vi.fn(async (i: number) =>
+      i === 0 ? candidate('worker-0') : candidate(`worker-${i}`, { exitCode: 1 }),
+    );
+    const runJudge = vi.fn();
+    const promoteWinner = vi.fn(async () => {});
+    const onAllFailed = vi.fn(async () => {});
+
+    await runFanOut({ workerCount: 3, runWorker, runJudge, promoteWinner, onAllFailed });
+
+    // A promoted winner cleans up via promoteWinner; onAllFailed must stay dormant.
+    expect(promoteWinner).toHaveBeenCalledTimes(1);
+    expect(onAllFailed).not.toHaveBeenCalled();
+  });
+
   it('treats a thrown worker as a non-candidate without failing the run', async () => {
     const runWorker = vi.fn(async (i: number) => {
       if (i === 0) throw new Error('worker crashed');

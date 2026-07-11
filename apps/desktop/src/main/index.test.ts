@@ -121,6 +121,14 @@ const createOpenRouterProviderMock = vi.fn(() => ({ key: 'openrouter' }));
 const createPipelineMock = vi.fn(() => pipelineMock);
 const createReconciliationLoopMock = vi.fn(() => reconciliationLoopMock);
 const createWorkflowWatcherMock = vi.fn(() => ({ close: vi.fn() }));
+const ghSyncServiceMock = {
+  enqueue: vi.fn(),
+  deps: {
+    getProject: vi.fn(() => null),
+    syncToGithub: vi.fn(async () => undefined),
+  },
+};
+const createGhSyncServiceMock = vi.fn(() => ghSyncServiceMock);
 const createElectronEmitterMock = vi.fn(() => ({ emit: vi.fn() }));
 const notifyIssueGraphPipelinePhaseChangeMock = vi.fn();
 const transitionThreadPhaseMock = vi.fn();
@@ -232,6 +240,7 @@ function installMocks() {
     createPipeline: createPipelineMock,
     createReconciliationLoop: createReconciliationLoopMock,
     createWorkflowWatcher: createWorkflowWatcherMock,
+    createGhSyncService: createGhSyncServiceMock,
   }));
   vi.doMock('./automation-scheduler', () => ({
     AutomationScheduler: construct(automationSchedulerMock),
@@ -468,12 +477,14 @@ describe('main index bootstrap', () => {
       expect.anything(),
       expect.anything(),
       expect.objectContaining({ threadId: 'stuck-thread' }),
+      expect.anything(),
     );
     expect(transitionThreadPhaseMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
       expect.anything(),
       expect.objectContaining({ threadId: 'stalled-thread' }),
+      expect.anything(),
     );
   });
 
@@ -514,6 +525,7 @@ describe('main index bootstrap', () => {
       expect.anything(),
       expect.anything(),
       expect.objectContaining({ threadId: 'orphan-thread', phase: 'failed' }),
+      expect.anything(),
     );
   });
 

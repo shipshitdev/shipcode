@@ -69,6 +69,36 @@ export class AutomationQueries {
     return mapAutomation(row, this.listTargets(row.id));
   }
 
+  /**
+   * Batch-hydrate a set of automations with their target project ids using a
+   * single `automation_id IN (...)` lookup, instead of one query per row
+   * (N+1). Ordering within each automation matches {@link listTargets}
+   * (created_at ASC, primary first).
+   */
+  private hydrateMany(rows: AutomationRow[]): Automation[] {
+    if (rows.length === 0) return [];
+
+    const placeholders = rows.map(() => '?').join(', ');
+    const targetRows = asRows<{ automation_id: string; project_id: string }>(
+      this.db
+        .prepare(
+          `SELECT automation_id, project_id FROM automation_targets
+            WHERE automation_id IN (${placeholders})
+            ORDER BY created_at ASC`,
+        )
+        .all(...rows.map((row) => row.id)),
+    );
+
+    const targetsByAutomation = new Map<string, string[]>();
+    for (const { automation_id, project_id } of targetRows) {
+      const existing = targetsByAutomation.get(automation_id);
+      if (existing) existing.push(project_id);
+      else targetsByAutomation.set(automation_id, [project_id]);
+    }
+
+    return rows.map((row) => mapAutomation(row, targetsByAutomation.get(row.id) ?? []));
+  }
+
   list(projectId: string): Automation[] {
     // Automations that target this project (multi-repo aware), newest first.
     const rows = this.db
@@ -79,19 +109,19 @@ export class AutomationQueries {
            ORDER BY a.created_at DESC`,
       )
       .all(projectId);
-    return asRows<AutomationRow>(rows).map((row) => this.hydrate(row));
+    return this.hydrateMany(asRows<AutomationRow>(rows));
   }
 
   listAll(): Automation[] {
     const rows = this.db.prepare('SELECT * FROM automations ORDER BY created_at DESC').all();
-    return asRows<AutomationRow>(rows).map((row) => this.hydrate(row));
+    return this.hydrateMany(asRows<AutomationRow>(rows));
   }
 
   listEnabled(): Automation[] {
     const rows = this.db
       .prepare('SELECT * FROM automations WHERE enabled = 1 ORDER BY created_at DESC')
       .all();
-    return asRows<AutomationRow>(rows).map((row) => this.hydrate(row));
+    return this.hydrateMany(asRows<AutomationRow>(rows));
   }
 
   /**
@@ -105,7 +135,7 @@ export class AutomationQueries {
         'SELECT * FROM automations WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ?',
       )
       .all(nowIso);
-    return asRows<AutomationRow>(rows).map((row) => this.hydrate(row));
+    return this.hydrateMany(asRows<AutomationRow>(rows));
   }
 
   getById(id: string): Automation | null {
@@ -268,6 +298,31 @@ export class AutomationQueries {
           WHERE id = ?`,
       )
       .run(status, id);
+  }
+
+  /**
+   * Ids of automations that will be fully cascade-deleted when `projectId` is
+   * removed: their primary `project_id` is this project AND they have no other
+   * target to fall back to. Callers must `unschedule` these so no in-memory cron
+   * job keeps firing no-ops after the row is gone.
+   *
+   * Read-only — call BEFORE the project delete (afterwards the rows are gone).
+   * Automations that merely list `projectId` as a secondary target are NOT
+   * included: the FK cascade drops only their target row and they survive.
+   */
+  listCascadingProjectRemoval(projectId: string): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id FROM automations
+          WHERE project_id = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM automation_targets t
+               WHERE t.automation_id = automations.id
+                 AND t.project_id != ?
+            )`,
+      )
+      .all(projectId, projectId);
+    return asRows<{ id: string }>(rows).map((r) => r.id);
   }
 
   delete(id: string): void {
