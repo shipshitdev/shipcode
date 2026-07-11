@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineContext } from '../types';
-import { probeWorktreeChanges } from './execution-phase-utils';
+import { probeWorktreeChanges, resolveWorktreeDiffBase } from './execution-phase-utils';
 
 const { mockExecFileSync } = vi.hoisted(() => ({
   mockExecFileSync: vi.fn(),
@@ -94,5 +94,44 @@ describe('probeWorktreeChanges', () => {
     // Error is clamped to the first line — full stack never reaches renderer logs.
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('git unavailable'));
     expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('full stack'));
+  });
+});
+
+describe('resolveWorktreeDiffBase', () => {
+  beforeEach(() => {
+    mockExecFileSync.mockReset();
+  });
+
+  it('returns the verified fork-point SHA when it resolves', () => {
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--verify') return 'base\n';
+      return '';
+    });
+
+    expect(resolveWorktreeDiffBase(makeContext({ forkPointSha: 'base' }))).toBe('base');
+  });
+
+  it('falls back to the branch merge-base when the fork point is missing', () => {
+    // No fork point → skip verify; the first merge-base candidate resolves.
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'merge-base') return 'merge-base-sha\n';
+      throw new Error('unexpected');
+    });
+
+    expect(
+      resolveWorktreeDiffBase(makeContext({ forkPointSha: undefined, baseBranch: 'main' })),
+    ).toBe('merge-base-sha');
+  });
+
+  it('returns null when no fork point, base branch, or HEAD~1 is resolvable', () => {
+    // Every git probe throws and there is no base branch, so the final HEAD~1
+    // fallback also fails — the diff base is genuinely unknown.
+    mockExecFileSync.mockImplementation(() => {
+      throw new Error('fatal: ambiguous argument');
+    });
+
+    expect(
+      resolveWorktreeDiffBase(makeContext({ forkPointSha: undefined, baseBranch: undefined })),
+    ).toBeNull();
   });
 });

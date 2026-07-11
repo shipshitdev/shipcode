@@ -355,6 +355,12 @@ describe('createPipelineRuntime', () => {
       ).toBe('pnpm install');
     });
 
+    it('returns null when pnpm output does not match a known signature', () => {
+      expect(
+        buildFrozenInstallFallback('pnpm install --frozen-lockfile', 'ENOSPC: no space left'),
+      ).toBeNull();
+    });
+
     it('strips --frozen-lockfile from yarn install on YN0028', () => {
       expect(
         buildFrozenInstallFallback(
@@ -364,6 +370,12 @@ describe('createPipelineRuntime', () => {
       ).toBe('yarn install');
     });
 
+    it('returns null when yarn output does not match a known signature', () => {
+      expect(
+        buildFrozenInstallFallback('yarn install --frozen-lockfile', 'network timeout'),
+      ).toBeNull();
+    });
+
     it('rewrites npm ci → npm install on EUSAGE', () => {
       expect(
         buildFrozenInstallFallback(
@@ -371,6 +383,10 @@ describe('createPipelineRuntime', () => {
           'EUSAGE The `npm ci` command can only install with an existing package-lock.json',
         ),
       ).toBe('npm install');
+    });
+
+    it('returns null when npm ci output does not match a known signature', () => {
+      expect(buildFrozenInstallFallback('npm ci', 'ETIMEDOUT registry request failed')).toBeNull();
     });
 
     it('returns null for unrelated commands', () => {

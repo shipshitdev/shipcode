@@ -6,10 +6,14 @@ import {
   _internals,
   DEFAULT_MAX_CONCURRENT_AGENTS,
   DEFAULT_MAX_TURNS,
+  DEFAULT_WORKFLOW_POLICY,
   formatUnknownError,
   loadWorkflowPolicy,
+  loadWorkflowPolicyUncached,
   parseWorkflowPolicy,
+  peekWorkflowPolicyCache,
   resolveWorkflowPath,
+  setWorkflowPolicyCache,
 } from './workflow-loader';
 
 const tempDirs: string[] = [];
@@ -397,5 +401,45 @@ body`,
         ).continuationPromptTemplate,
       ).toBeNull();
     });
+  });
+});
+
+// The watcher-facing cache seams (loadWorkflowPolicyUncached / peekWorkflowPolicyCache
+// / setWorkflowPolicyCache) let the workflow watcher compute a candidate policy and
+// commit or revert it without waiting out the TTL. Exercise them directly.
+describe('workflow policy cache seams', () => {
+  afterEach(() => {
+    _internals.policyCache.clear();
+    vi.useRealTimers();
+
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('loadWorkflowPolicyUncached resolves without touching the cache', () => {
+    const repo = tempRepo();
+
+    const policy = loadWorkflowPolicyUncached(repo);
+
+    expect(policy.path).toBeNull();
+    // Uncached load must NOT seed the cache — that is the whole point of the seam.
+    expect(_internals.policyCache.has(repo)).toBe(false);
+  });
+
+  it('peekWorkflowPolicyCache returns null when nothing is cached', () => {
+    const repo = tempRepo();
+
+    expect(peekWorkflowPolicyCache(repo)).toBeNull();
+  });
+
+  it('setWorkflowPolicyCache overwrites the entry and peek reads it back', () => {
+    const repo = tempRepo();
+    const policy = { ...DEFAULT_WORKFLOW_POLICY, path: '/repo/WORKFLOW.md' };
+
+    setWorkflowPolicyCache(repo, policy, 1_000);
+
+    expect(peekWorkflowPolicyCache(repo)).toBe(policy);
+    expect(_internals.policyCache.get(repo)?.expiresAt).toBe(1_000 + _internals.policyCacheTtlMs);
   });
 });

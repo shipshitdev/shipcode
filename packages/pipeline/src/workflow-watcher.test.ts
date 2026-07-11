@@ -1,5 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_WORKFLOW_POLICY, type WorkflowPolicy } from './workflow-loader';
 import {
   createWorkflowWatcher,
@@ -325,6 +327,63 @@ describe('createWorkflowWatcher', () => {
     root.change?.();
     timers.flush();
     expect(shipcodeAttaches).toBe(2);
+  });
+
+  it('ignores watch events fired after close()', () => {
+    const watch = fakeWatch();
+    const timers = fakeTimers();
+    const loadUncached = vi.fn(() => validPolicy());
+
+    const watcher = createWorkflowWatcher({
+      repoPath: REPO,
+      onReload: vi.fn(),
+      watchFactory: watch.factory,
+      pathExists: () => true,
+      loadUncached,
+      peekCache: vi.fn(() => null),
+      setCache: vi.fn(),
+      setTimeoutFn: timers.setTimeoutFn,
+      clearTimeoutFn: timers.clearTimeoutFn,
+    });
+
+    watcher.close();
+    // A late fs event (the underlying watch had already queued it) must be a
+    // no-op: onChange returns early because the watcher is closed.
+    watch.trigger();
+
+    expect(timers.pendingCount()).toBe(0);
+    timers.flush();
+    expect(loadUncached).not.toHaveBeenCalled();
+  });
+
+  describe('default fs.watch factory', () => {
+    const tempDirs: string[] = [];
+
+    afterEach(() => {
+      for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('watches a real directory and returns null for a missing one', () => {
+      const repo = mkdtempSync(path.join(os.tmpdir(), 'shipcode-watcher-'));
+      tempDirs.push(repo);
+      const timers = fakeTimers();
+
+      // No injected watchFactory → exercises the real fs.watch-backed default:
+      // the repo root exists (watch attaches) while `.shipcode` is absent (the
+      // factory's try/catch returns null instead of crashing).
+      const watcher = createWorkflowWatcher({
+        repoPath: repo,
+        onReload: vi.fn(),
+        loadUncached: vi.fn(() => validPolicy()),
+        peekCache: vi.fn(() => null),
+        setCache: vi.fn(),
+        setTimeoutFn: timers.setTimeoutFn,
+        clearTimeoutFn: timers.clearTimeoutFn,
+      });
+
+      // Tearing down a real watcher must not throw.
+      expect(() => watcher.close()).not.toThrow();
+    });
   });
 
   it('close() is idempotent', () => {
