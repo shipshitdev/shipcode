@@ -17,6 +17,13 @@ interface PipelineCheckpointRow {
   created_at: string;
 }
 
+/** Extract the checkpoint turn encoded in a ref name; null for legacy/no ref. */
+function refTurn(refName: string | null): number | null {
+  if (!refName) return null;
+  const match = /\/turn\/(\d+)$/.exec(refName);
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
 function mapRow(row: PipelineCheckpointRow): PipelineCheckpoint {
   return {
     id: row.id,
@@ -104,5 +111,43 @@ export class CheckpointQueries {
       throw new Error(`Failed to load checkpoint after insert: ${id}`);
     }
     return checkpoint;
+  }
+
+  /**
+   * Prune a thread's checkpoint rows whose ref turn is strictly greater than
+   * `turn` (post-rollback cleanup, #328). Rows must be deleted alongside their
+   * git refs — a surviving row whose turn is later reused would otherwise
+   * resolve to unrelated content on restore. Legacy rows without a ref name
+   * carry no turn and are never touched. Returns the number deleted.
+   */
+  deleteNewerThan(threadId: string, turn: number): number {
+    return this.deleteByRefTurn(threadId, (t) => t > turn);
+  }
+
+  /**
+   * Prune a thread's checkpoint rows whose ref turn is strictly less than
+   * `turn` (capture-time GC that keeps only the most recent turns, #328).
+   * Legacy rows without a ref name carry no turn and are never touched.
+   * Returns the number deleted.
+   */
+  deleteOlderThan(threadId: string, turn: number): number {
+    return this.deleteByRefTurn(threadId, (t) => t < turn);
+  }
+
+  private deleteByRefTurn(threadId: string, matches: (turn: number) => boolean): number {
+    const rows = this.db
+      .prepare('SELECT id, ref_name FROM pipeline_checkpoints WHERE thread_id = ?')
+      .all(threadId);
+    const ids = asRows<Pick<PipelineCheckpointRow, 'id' | 'ref_name'>>(rows).flatMap((row) => {
+      const turn = refTurn(row.ref_name);
+      return turn !== null && matches(turn) ? [row.id] : [];
+    });
+    if (ids.length === 0) return 0;
+    const stmt = this.db.prepare('DELETE FROM pipeline_checkpoints WHERE id = ?');
+    let deleted = 0;
+    for (const id of ids) {
+      deleted += Number(stmt.run(id).changes);
+    }
+    return deleted;
   }
 }

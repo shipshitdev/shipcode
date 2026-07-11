@@ -8,18 +8,22 @@ import {
   type ExecutionCheckpointMeta,
 } from './execution-checkpoint';
 
-const { mockCapture, mockResolveHead, mockResolveBranch } = vi.hoisted(() => ({
+const { mockCapture, mockResolveHead, mockResolveBranch, mockDeleteRefs } = vi.hoisted(() => ({
   mockCapture: vi.fn(),
   mockResolveHead: vi.fn(),
   mockResolveBranch: vi.fn(),
+  mockDeleteRefs: vi.fn(async () => 0),
 }));
 
-// The helper depends only on these three async git primitives — replace the
-// whole module so no real git runs and the failure paths are deterministic.
-vi.mock('@shipcode/git', () => ({
+// The helper depends only on these async git primitives — replace them so no
+// real git runs and the failure paths are deterministic. parseCheckpointTurn
+// stays real (pure string parsing, used to derive the lastKnownTurn hint).
+vi.mock('@shipcode/git', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shipcode/git')>()),
   captureCheckpoint: mockCapture,
   resolveHeadCommit: mockResolveHead,
   resolveCurrentBranch: mockResolveBranch,
+  deleteThreadCheckpointRefs: mockDeleteRefs,
 }));
 
 type Created = Parameters<ExecutionCheckpointDeps['checkpoints']['create']>[0];
@@ -31,7 +35,14 @@ function makeDeps(latest: PipelineCheckpoint | null = null) {
     created.push(row);
     return { id: 'ck', createdAt: '', ...row } as unknown as PipelineCheckpoint;
   });
-  return { created, deps: { checkpoints: { getLatest, create } }, getLatest, create };
+  const deleteOlderThan = vi.fn(() => 0);
+  return {
+    created,
+    deps: { checkpoints: { getLatest, create, deleteOlderThan } },
+    getLatest,
+    create,
+    deleteOlderThan,
+  };
 }
 
 const CWD = '/tmp/worktree';

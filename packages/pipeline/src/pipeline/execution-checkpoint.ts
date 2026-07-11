@@ -1,10 +1,17 @@
 import {
   type CheckpointRef,
   captureCheckpoint,
+  deleteThreadCheckpointRefs,
+  parseCheckpointTurn,
   resolveCurrentBranch,
   resolveHeadCommit,
 } from '@shipcode/git';
 import type { PipelineCheckpoint, PipelineCheckpointPhase } from '@shipcode/shared';
+
+/** Retain at most this many recent checkpoint turns per thread. Older refs and
+ *  their DB rows are pruned at capture time so a long-lived thread doesn't
+ *  accumulate one ref + one permanent row per execute attempt forever (#328). */
+const CHECKPOINT_HISTORY_LIMIT = 25;
 
 /** Narrowed checkpoint-DB surface the capture helper needs. */
 export interface ExecutionCheckpointDeps {
@@ -20,6 +27,7 @@ export interface ExecutionCheckpointDeps {
       commitSha: string;
       refName: string | null;
     }): PipelineCheckpoint;
+    deleteOlderThan(threadId: string, turn: number): number;
   };
 }
 
@@ -38,6 +46,24 @@ export interface ExecutionCheckpointMeta {
    * a distinct checkpoint.
    */
   dedupe?: boolean;
+}
+
+/** Capture-time GC of checkpoint refs and their DB rows outside the retained
+ *  window. Best-effort — checkpoint bookkeeping must never fail the phase. */
+async function pruneStaleCheckpoints(
+  deps: ExecutionCheckpointDeps,
+  cwd: string,
+  threadId: string,
+  newestTurn: number,
+): Promise<void> {
+  const minKeptTurn = newestTurn - CHECKPOINT_HISTORY_LIMIT + 1;
+  if (minKeptTurn <= 0) return;
+  try {
+    await deleteThreadCheckpointRefs(cwd, threadId, { olderThanTurn: minKeptTurn });
+    deps.checkpoints.deleteOlderThan(threadId, minKeptTurn);
+  } catch (pruneError) {
+    console.error(`[pipeline] checkpoint GC failed for thread ${threadId}:`, pruneError);
+  }
 }
 
 /**
@@ -59,6 +85,12 @@ export interface ExecutionCheckpointMeta {
  * retries). On the hot success path the helper reuses the HEAD sha and branch
  * `captureCheckpoint` already computed, so it spawns no redundant `rev-parse`
  * subprocess; the async fallbacks fire only when ref capture failed.
+ *
+ * Turn bookkeeping (#328): the latest row's ref encodes the durable turn
+ * high-water mark — passing it as `lastKnownTurn` lets captureCheckpoint mint
+ * `turn + 1` without a live `for-each-ref` scan, and guarantees a turn number
+ * is never reused even after refs were pruned. After a successful capture,
+ * refs and rows older than {@link CHECKPOINT_HISTORY_LIMIT} turns are GC'd.
  */
 export async function captureExecutionCheckpoint(
   cwd: string,
@@ -66,12 +98,14 @@ export async function captureExecutionCheckpoint(
   meta: ExecutionCheckpointMeta,
   deps: ExecutionCheckpointDeps,
 ): Promise<void> {
+  // The latest row is both the dedupe reference and the turn high-water mark.
+  const latest = deps.checkpoints.getLatest(threadId);
+
   // Pre-execute dedupe runs before capture so an identical consecutive entry
   // never mints an orphan ref. This path executes once per execute entry (cold),
   // so the extra async HEAD resolve is negligible.
   if (meta.dedupe) {
     const headForDedupe = await resolveHeadCommit(cwd);
-    const latest = deps.checkpoints.getLatest(threadId);
     if (
       headForDedupe &&
       latest &&
@@ -85,7 +119,9 @@ export async function captureExecutionCheckpoint(
 
   let captured: CheckpointRef | null = null;
   try {
-    captured = await captureCheckpoint(cwd, threadId);
+    captured = await captureCheckpoint(cwd, threadId, {
+      lastKnownTurn: latest?.refName ? parseCheckpointTurn(latest.refName) : null,
+    });
   } catch (captureError) {
     console.error(`[pipeline] checkpoint ref capture failed for thread ${threadId}:`, captureError);
   }
@@ -112,4 +148,6 @@ export async function captureExecutionCheckpoint(
     commitSha,
     refName: captured?.refName ?? null,
   });
+
+  if (captured) await pruneStaleCheckpoints(deps, cwd, threadId, captured.turn);
 }
