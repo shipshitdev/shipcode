@@ -35,6 +35,7 @@ import type {
 } from '@shipcode/db';
 import type { GhSyncDeps, Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import type { BrowserWindow, IpcMain } from 'electron';
+import type { AutomationSchedulerLike } from '../automation-scheduler';
 import type { ChatNotificationService } from '../chat-notification-service';
 import type { NotificationService } from '../notification-service';
 import type { ResourceMonitor } from '../resource-monitor';
@@ -84,6 +85,13 @@ export interface IpcHandlerDeps {
   notificationService: NotificationService;
   chatNotificationService: ChatNotificationService;
   resourceMonitor?: ResourceMonitor;
+  /**
+   * In-memory cron scheduler for Automations. `project:remove` uses it to cancel
+   * jobs for automations that cascade away when their only target project is
+   * deleted, so no zombie job keeps firing after the row is gone. Optional:
+   * absent in tests that don't exercise the removal path.
+   */
+  automationScheduler?: AutomationSchedulerLike;
   /**
    * Invoked after a project is added, relinked, removed, or archived so the
    * main process can re-sync per-project resources (e.g. WORKFLOW.md watchers)
