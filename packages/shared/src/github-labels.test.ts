@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   agentLabelForExecutor,
   displayAgentLabel,
+  GH_STATUS_OPTION_NAME,
+  GH_STATUS_OPTION_NAMES,
   isAgentRoutingLabel,
   isPipelineStateLabel,
   macroColumnForStatus,
@@ -230,5 +232,27 @@ describe('macroColumnForStatus', () => {
 
   it('falls back to todo for unknown statuses', () => {
     expect(macroColumnForStatus('unknown' as never)).toBe('todo');
+  });
+});
+
+describe('GH_STATUS_OPTION_NAME', () => {
+  it('is the single source of truth for GH Projects v2 Status option names', () => {
+    expect(GH_STATUS_OPTION_NAME).toEqual({
+      todo: 'Backlog',
+      in_progress: 'In Progress',
+      human_review: 'Human Review',
+      done: 'Done',
+      deferred: 'Deferred',
+    });
+  });
+
+  it('exposes the option names in board order', () => {
+    expect(GH_STATUS_OPTION_NAMES).toEqual([
+      GH_STATUS_OPTION_NAME.todo,
+      GH_STATUS_OPTION_NAME.in_progress,
+      GH_STATUS_OPTION_NAME.human_review,
+      GH_STATUS_OPTION_NAME.done,
+      GH_STATUS_OPTION_NAME.deferred,
+    ]);
   });
 });
