@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import { DEFAULT_MAX_CONCURRENT_AGENTS, MAX_FAN_OUT_WORKER_COUNT } from '../workflow-loader';
 import {
   buildFanOutJudgePrompt,
   type FanOutCandidate,
   parseWinnerLabel,
+  resolveFanOutMaxConcurrent,
   runFanOut,
 } from './fan-out-executor';
 
@@ -63,6 +65,42 @@ describe('runFanOut', () => {
     expect(result.exitCode).not.toBe(0);
     expect(result.winnerLabel).toBeNull();
     expect(result.workersSucceeded).toBe(0);
+  });
+
+  it('cleans up worker worktrees via onAllFailed when every worker fails', async () => {
+    const runWorker = vi.fn(async (i: number) => candidate(`worker-${i}`, { exitCode: 1 }));
+    const runJudge = vi.fn();
+    const promoteWinner = vi.fn();
+    const onAllFailed = vi.fn(async () => {});
+
+    const result = await runFanOut({
+      workerCount: 3,
+      runWorker,
+      runJudge,
+      promoteWinner,
+      onAllFailed,
+    });
+
+    // The all-fail branch never promotes, so onAllFailed is the ONLY cleanup
+    // hook for the worker worktrees created by the caller.
+    expect(promoteWinner).not.toHaveBeenCalled();
+    expect(onAllFailed).toHaveBeenCalledTimes(1);
+    expect(result.winnerLabel).toBeNull();
+  });
+
+  it('does not call onAllFailed when at least one worker passes', async () => {
+    const runWorker = vi.fn(async (i: number) =>
+      i === 0 ? candidate('worker-0') : candidate(`worker-${i}`, { exitCode: 1 }),
+    );
+    const runJudge = vi.fn();
+    const promoteWinner = vi.fn(async () => {});
+    const onAllFailed = vi.fn(async () => {});
+
+    await runFanOut({ workerCount: 3, runWorker, runJudge, promoteWinner, onAllFailed });
+
+    // A promoted winner cleans up via promoteWinner; onAllFailed must stay dormant.
+    expect(promoteWinner).toHaveBeenCalledTimes(1);
+    expect(onAllFailed).not.toHaveBeenCalled();
   });
 
   it('treats a thrown worker as a non-candidate without failing the run', async () => {
@@ -135,6 +173,25 @@ describe('runFanOut', () => {
     expect(prompt).toContain('diff-B');
     expect(prompt).toContain('worker-1, worker-2');
     expect(prompt).toContain('WINNER:');
+  });
+
+  it('bounds the worker pool by the fan-out worker count, never the thread cap', () => {
+    // Regression: the call site in execution-phases previously passed
+    // `agentPolicy.maxConcurrentAgents` — the scheduler's project-wide cap on
+    // concurrently running pipeline THREADS — as this in-phase pool ceiling. With
+    // N threads each in fan-out execute that yielded N × fanOutWorkerCount live
+    // agents at once, overshooting the ceiling the setting exists to enforce. The
+    // pool must be bounded by its own worker count instead.
+    expect(resolveFanOutMaxConcurrent(3)).toBe(3);
+    expect(resolveFanOutMaxConcurrent(3)).not.toBe(DEFAULT_MAX_CONCURRENT_AGENTS);
+  });
+
+  it('clamps the fan-out pool bound to [1, MAX_FAN_OUT_WORKER_COUNT]', () => {
+    expect(resolveFanOutMaxConcurrent(99)).toBe(MAX_FAN_OUT_WORKER_COUNT);
+    expect(resolveFanOutMaxConcurrent(0)).toBe(1);
+    expect(resolveFanOutMaxConcurrent(-5)).toBe(1);
+    expect(resolveFanOutMaxConcurrent(Number.NaN)).toBe(1);
+    expect(resolveFanOutMaxConcurrent(2.9)).toBe(2);
   });
 
   it('respects the concurrency limit (never more than maxConcurrent in flight)', async () => {
