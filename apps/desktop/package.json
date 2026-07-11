@@ -63,6 +63,7 @@
     "build:code": "tsc && vite build",
     "build:installer:linux": "bun run build:code && electron-builder --linux",
     "build:installer:mac": "bun run build:code && electron-builder --mac",
+    "build:installer:mac:signed": "bun run build:code && electron-builder --mac --config electron-builder.signed.yml",
     "clean": "rm -rf dist out",
     "coverage": "vitest run --coverage",
     "dev": "vite",

@@ -122,14 +122,11 @@ export function decodePhaseOption(value: string): {
   modelId: string | null;
 } {
   const [providerRaw, modelIdRaw] = value.split('::');
-  const provider =
-    providerRaw === 'claude' ||
-    providerRaw === 'codex' ||
-    providerRaw === 'gemini' ||
-    providerRaw === 'cursor' ||
-    providerRaw === 'openrouter'
-      ? providerRaw
-      : 'claude';
+  // Validate against the shared source of truth so a newly shipped provider
+  // (e.g. PR #327 'grok') can never regress this decode into a Claude fallback.
+  const provider = (PIPELINE_EXECUTOR_PROVIDERS as readonly string[]).includes(providerRaw)
+    ? (providerRaw as ExecutorModel)
+    : 'claude';
   return { provider, modelId: modelIdRaw === '__default__' ? null : modelIdRaw };
 }
 

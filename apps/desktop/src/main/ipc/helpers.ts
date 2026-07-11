@@ -8,6 +8,7 @@ import {
 } from '@shipcode/agents';
 import {
   buildPullRequestFeedbackFindingInputs,
+  type GhSyncDeps,
   type PipelineEmitter,
   syncThreadAndIssuePhase,
 } from '@shipcode/pipeline';
@@ -226,7 +227,8 @@ export function resolveLinkedPullRequestPipelineStatus(
 }
 
 async function syncCachedIssuePipelineLabel(
-  ghCli: GhCli,
+  ghSync: GhSyncDeps | undefined,
+  project: import('@shipcode/shared').Project,
   issue: GitHubIssueCacheRecord,
   queries: Queries,
   status: import('@shipcode/shared').IssuePipelineStatus,
@@ -236,16 +238,26 @@ async function syncCachedIssuePipelineLabel(
   const currentStatusLabel = pipelineLabelForStatus(issue.pipelineStatus);
   if (currentStatusLabel) staleLabels.add(currentStatusLabel);
 
+  // Update the local SQLite cache synchronously for instant UI feedback;
+  // the actual GitHub write (labels + Projects v2 Status field) is
+  // delegated to the shared gh-sync queue below so it never races other
+  // writers for the same issue.
   for (const label of staleLabels) {
     if (label === targetLabel) continue;
     queries.githubIssues.setCachedLabelPresence(issue.id, label, false);
-    await ghCli.setIssueLabelPresence(issue.issueNumber, label, false);
   }
-
   if (targetLabel) {
     queries.githubIssues.setCachedLabelPresence(issue.id, targetLabel, true);
-    await ghCli.setIssueLabelPresence(issue.issueNumber, targetLabel, true);
   }
+
+  if (!ghSync) return;
+  await ghSync.syncToGithub({
+    projectPath: project.path,
+    projectUrl: project.githubProjectUrl,
+    issueNumber: issue.issueNumber,
+    pipelineStatus: status,
+    statusMapping: project.githubStatusMapping,
+  });
 }
 
 export async function syncLinkedPullRequestFeedback(
@@ -254,6 +266,7 @@ export async function syncLinkedPullRequestFeedback(
   queries: Queries,
   notificationService: NotificationService,
   chatNotificationService: ChatNotificationService,
+  ghSync?: GhSyncDeps,
 ): Promise<void> {
   const thread = issue.threadId ? queries.threads.getById(issue.threadId) : null;
   const ghCli = new GhCli(project.path);
@@ -282,7 +295,13 @@ export async function syncLinkedPullRequestFeedback(
     queries.githubIssues.reconcileCompletedFromEvidence(issue.id);
     if (PR_REVIEW_PIPELINE_STATUSES.has(issue.pipelineStatus)) {
       queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.completed);
-      await syncCachedIssuePipelineLabel(ghCli, issue, queries, ISSUE_PIPELINE_STATUS.completed);
+      await syncCachedIssuePipelineLabel(
+        ghSync,
+        project,
+        issue,
+        queries,
+        ISSUE_PIPELINE_STATUS.completed,
+      );
     }
     return;
   }
@@ -301,7 +320,7 @@ export async function syncLinkedPullRequestFeedback(
   if (issue.pipelineStatus !== reviewStatus) {
     queries.githubIssues.updatePipelineStatus(issue.id, reviewStatus);
   }
-  await syncCachedIssuePipelineLabel(ghCli, issue, queries, reviewStatus);
+  await syncCachedIssuePipelineLabel(ghSync, project, issue, queries, reviewStatus);
   if (queries.reviewFindings) {
     const latestPlan = queries.plans.getLatest(thread.id);
     const findings = buildPullRequestFeedbackFindingInputs({
@@ -397,6 +416,7 @@ export function transitionThreadPhase(
     phase: AttentionPhase;
     errorMessage?: string | null;
   },
+  ghSync?: GhSyncDeps,
 ) {
   syncThreadAndIssuePhase(
     queries.threads,
@@ -404,6 +424,7 @@ export function transitionThreadPhase(
     threadId,
     phase,
     errorMessage ?? undefined,
+    ghSync,
   );
 
   const issue = queries.githubIssues.getByThreadId(threadId);

@@ -1,5 +1,5 @@
 import type { ProcessManager } from '@shipcode/agents';
-import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
+import type { GhSyncDeps, Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import { PIPELINE_PHASE } from '@shipcode/shared';
 import type { BrowserWindow, IpcMain } from 'electron';
 import type { AutomationSchedulerLike } from './automation-scheduler';
@@ -40,13 +40,20 @@ export function registerIpcHandlers(
   automationScheduler: AutomationSchedulerLike,
   resourceMonitor: ResourceMonitor,
   onProjectsChanged: () => void = () => {},
+  ghSync?: GhSyncDeps,
 ): void {
   for (const thread of queries.threads.getOrphaned()) {
-    transitionThreadPhase(mainWindow, queries, emitter, {
-      threadId: thread.id,
-      phase: PIPELINE_PHASE.failed,
-      errorMessage: thread.lastError,
-    });
+    transitionThreadPhase(
+      mainWindow,
+      queries,
+      emitter,
+      {
+        threadId: thread.id,
+        phase: PIPELINE_PHASE.failed,
+        errorMessage: thread.lastError,
+      },
+      ghSync,
+    );
     log.info(`[startup] reset orphaned thread ${thread.id} → failed`);
   }
 
@@ -91,7 +98,9 @@ export function registerIpcHandlers(
     notificationService,
     chatNotificationService,
     resourceMonitor,
+    automationScheduler,
     onProjectsChanged,
+    ghSync,
   } as const;
 
   ipcMain.on('diagnostics:renderer-ipc', (_event, payload: unknown) => {

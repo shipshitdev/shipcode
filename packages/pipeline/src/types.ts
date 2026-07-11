@@ -46,6 +46,7 @@ import type {
   TaskNodeStatus,
   VerificationResult,
 } from '@shipcode/shared';
+import type { GhSyncService } from './gh-sync';
 import type { WorkflowLoadWarning, WorkflowPolicy } from './workflow-loader';
 
 // Temporary alias while pipeline adopts the shared executor-model type directly.
@@ -531,6 +532,14 @@ export interface PipelineDeps {
   featureQaResults?: FeatureQaResultQueries;
   /** Optional host-resource gate for local shell test/runtime QA commands. */
   cpuTaskGate?: CpuTaskGate;
+  /**
+   * Shared GH Status/label sync service. When provided (desktop main
+   * process), the runtime enqueues onto this single shared queue so
+   * runtime, manual/board-driven, and refresh-triggered GH writes all
+   * serialize together. When absent, the runtime falls back to
+   * constructing its own service internally.
+   */
+  ghSync?: GhSyncService;
 }
 
 export interface Pipeline {
