@@ -87,10 +87,7 @@ export function migrateV65(db: DatabaseSync): void {
     // lastStatus/runCount/timestamps are now derived aggregates (worst-of
     // status, most-recent timestamps, summed counts).
     execAlterTableIfMissing(db, 'ALTER TABLE automation_targets ADD COLUMN last_started_at TEXT');
-    execAlterTableIfMissing(
-      db,
-      'ALTER TABLE automation_targets ADD COLUMN last_completed_at TEXT',
-    );
+    execAlterTableIfMissing(db, 'ALTER TABLE automation_targets ADD COLUMN last_completed_at TEXT');
     execAlterTableIfMissing(db, 'ALTER TABLE automation_targets ADD COLUMN last_status TEXT');
     execAlterTableIfMissing(
       db,

@@ -595,11 +595,7 @@ export function createElectronEmitter(
           if (thread?.automationId) {
             // Scope the finish to this thread's target repo so a multi-repo
             // automation's per-target status is not clobbered by a sibling.
-            deps.automations.recordRunFinished(
-              thread.automationId,
-              thread.projectId,
-              event.phase,
-            );
+            deps.automations.recordRunFinished(thread.automationId, thread.projectId, event.phase);
           }
         } catch (err) {
           log.error('[pipeline-bridge] automation finish-record error:', err);

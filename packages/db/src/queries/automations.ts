@@ -343,9 +343,7 @@ export class AutomationQueries {
             WHERE automation_id = ? AND project_id = ?`,
         )
         .run(id, projectId);
-      this.db
-        .prepare(`UPDATE automations SET updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
-        .run(id);
+      this.db.prepare(`UPDATE automations SET updated_at = ${ISO_NOW_SQL} WHERE id = ?`).run(id);
     });
   }
 
@@ -365,9 +363,7 @@ export class AutomationQueries {
             WHERE automation_id = ? AND project_id = ?`,
         )
         .run(status, id, projectId);
-      this.db
-        .prepare(`UPDATE automations SET updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
-        .run(id);
+      this.db.prepare(`UPDATE automations SET updated_at = ${ISO_NOW_SQL} WHERE id = ?`).run(id);
     });
   }
 
