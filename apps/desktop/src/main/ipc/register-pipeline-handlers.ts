@@ -50,6 +50,7 @@ export function registerPipelineHandlers({
   pipeline,
   emitter,
   notificationService,
+  ghSync,
 }: IpcHandlerDeps): void {
   const resolveEffectiveRequireApproval = (threadId: string) => {
     const thread = queries.threads.getById(threadId);
@@ -403,11 +404,17 @@ export function registerPipelineHandlers({
     } else {
       const errorMessage = 'No plan available to approve';
       notificationService.dismissByThread(threadId);
-      transitionThreadPhase(mainWindow, queries, emitter, {
-        threadId,
-        phase: PIPELINE_PHASE.failed,
-        errorMessage,
-      });
+      transitionThreadPhase(
+        mainWindow,
+        queries,
+        emitter,
+        {
+          threadId,
+          phase: PIPELINE_PHASE.failed,
+          errorMessage,
+        },
+        ghSync,
+      );
       throw new Error(errorMessage);
     }
   });
@@ -1001,10 +1008,16 @@ export function registerPipelineHandlers({
       hasCriticalOrMajor: false,
       reasons: ['manualSkipReview'],
     });
-    transitionThreadPhase(mainWindow, queries, emitter, {
-      threadId,
-      phase: PIPELINE_PHASE.approval,
-    });
+    transitionThreadPhase(
+      mainWindow,
+      queries,
+      emitter,
+      {
+        threadId,
+        phase: PIPELINE_PHASE.approval,
+      },
+      ghSync,
+    );
   });
 
   const GH_TIMEOUT_MS = 30_000;
