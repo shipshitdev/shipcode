@@ -195,11 +195,41 @@ export class AutomationQueries {
       .run(nanoid(), automationId, projectId);
   }
 
-  /** Remove a target project. */
+  /**
+   * Remove a target project. Refuses to empty the target set (mirrors
+   * `setTargets`' floor-of-one guard) and, when the removed target is the
+   * primary, realigns `project_id` to the next remaining target (oldest first).
+   * Without this, dropping the primary would leave `project_id` pointing at a
+   * de-targeted project, and dropping the last target would leave zero rows —
+   * making the scheduler fire against the removed project forever while the
+   * automation vanishes from every project-scoped (INNER JOIN) UI.
+   */
   removeTarget(automationId: string, projectId: string): void {
-    this.db
-      .prepare('DELETE FROM automation_targets WHERE automation_id = ? AND project_id = ?')
-      .run(automationId, projectId);
+    transaction(this.db, () => {
+      const current = this.listTargets(automationId);
+      const isTarget = current.includes(projectId);
+      const remaining = current.filter((id) => id !== projectId);
+      if (isTarget && remaining.length === 0) {
+        throw new Error('An automation must have at least one target');
+      }
+
+      this.db
+        .prepare('DELETE FROM automation_targets WHERE automation_id = ? AND project_id = ?')
+        .run(automationId, projectId);
+
+      if (!isTarget) return; // no-op removal of a non-target: nothing to realign
+
+      const row = asRow<{ project_id: string } | undefined>(
+        this.db.prepare('SELECT project_id FROM automations WHERE id = ?').get(automationId),
+      );
+      if (row?.project_id === projectId) {
+        this.db
+          .prepare(
+            `UPDATE automations SET project_id = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+          )
+          .run(remaining[0], automationId);
+      }
+    });
   }
 
   /** Replace the full target set, keeping `project_id` aligned to the first. */
@@ -258,7 +288,14 @@ export class AutomationQueries {
     }
     sets.push(`updated_at = ${ISO_NOW_SQL}`);
 
-    this.db.prepare(`UPDATE automations SET ${sets.join(', ')} WHERE id = ?`).run(...values, id);
+    // Column changes and any target-set replacement land in one transaction so
+    // a rejected target set (e.g. empty) rolls back the column update too.
+    transaction(this.db, () => {
+      this.db.prepare(`UPDATE automations SET ${sets.join(', ')} WHERE id = ?`).run(...values, id);
+      // `setTargets` self-wraps in a transaction; the nested call runs inline
+      // (see `transaction`'s isTransaction short-circuit) and realigns project_id.
+      if (patch.targets !== undefined) this.setTargets(id, patch.targets);
+    });
 
     const updated = this.getById(id);
     if (!updated) throw new Error(`Automation ${id} disappeared after update`);
