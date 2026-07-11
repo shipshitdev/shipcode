@@ -1102,7 +1102,9 @@ describe('createPipelineRuntime', () => {
       {},
     );
 
-    expect(provider.generate).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'base prompt' }));
+    expect(provider.generate).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: 'base prompt' }),
+    );
     expect(provider.generate).not.toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: expect.stringContaining('skip the auth refactor'),
