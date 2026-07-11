@@ -1,10 +1,7 @@
-import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import path from 'node:path';
-import { promisify } from 'node:util';
-
-const execFileAsync = promisify(execFile);
+import { simpleGit } from 'simple-git';
 
 /**
  * ShipCode-owned hidden checkpoint refs (issue #212).
@@ -22,7 +19,6 @@ export const CHECKPOINT_REF_ROOT = 'refs/shipcode/checkpoints';
 
 const CHECKPOINT_IDENTITY_NAME = 'ShipCode';
 const CHECKPOINT_IDENTITY_EMAIL = 'shipcode@users.noreply.github.com';
-const GIT_MAX_BUFFER = 10 * 1024 * 1024;
 
 export interface CheckpointRef {
   refName: string;
@@ -40,13 +36,75 @@ export interface CheckpointRef {
   branch: string | null;
 }
 
+/**
+ * Env vars simple-git's block-unsafe-operations guard rejects the moment they
+ * appear in an explicit `.env()` object — the editor / pager / askpass / ssh /
+ * external-diff / proxy / template knobs plus the config-path overrides a
+ * hostile repo could turn into code execution. simple-git flags them even when
+ * they merely rode in from the user's ambient shell, so we drop them from the
+ * spread below. Checkpoint runs only non-interactive local plumbing
+ * (read-tree / write-tree / commit-tree / update-ref / for-each-ref / ls-tree /
+ * restore / reset / clean) that never consults any of these, making the removal
+ * behavior-neutral. Names mirror simple-git@3.36.0's guard list and are matched
+ * case-insensitively (the guard lowercases before comparing).
+ */
+const SIMPLE_GIT_UNSAFE_ENV_KEYS = new Set([
+  'EDITOR',
+  'GIT_ASKPASS',
+  'GIT_CONFIG',
+  'GIT_CONFIG_COUNT',
+  'GIT_CONFIG_GLOBAL',
+  'GIT_CONFIG_SYSTEM',
+  'GIT_EDITOR',
+  'GIT_EXEC_PATH',
+  'GIT_EXTERNAL_DIFF',
+  'GIT_PAGER',
+  'GIT_PROXY_COMMAND',
+  'GIT_SEQUENCE_EDITOR',
+  'GIT_SSH',
+  'GIT_SSH_COMMAND',
+  'GIT_TEMPLATE_DIR',
+  'PAGER',
+  'PREFIX',
+  'SSH_ASKPASS',
+]);
+
+/**
+ * Build the child environment for an env-scoped git call: inherit the ambient
+ * environment (PATH, HOME, GIT_DIR, alternates, …) minus the keys simple-git's
+ * safety guard blocks, then layer the caller's overrides on top. The overrides
+ * (GIT_INDEX_FILE for the temp-index trick, the ShipCode author/committer
+ * identity) are never in the blocked set, so the resulting object passes the
+ * guard cleanly.
+ */
+function buildScopedGitEnv(overrides: Record<string, string>): Record<string, string> {
+  const childEnv: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined && !SIMPLE_GIT_UNSAFE_ENV_KEYS.has(key.toUpperCase())) {
+      childEnv[key] = value;
+    }
+  }
+  return Object.assign(childEnv, overrides);
+}
+
+/**
+ * Run a git command in `cwd` and return its trimmed stdout.
+ *
+ * Routes through simple-git — the transport every other module in this package
+ * (git-service, worktree) already uses — so a failed git command surfaces as
+ * simple-git's parsed GitError (stderr / exitCode) rather than a raw execFile
+ * Error. Callers wrapping checkpoint ops and git-service ops in one try/catch
+ * then see a single, consistent error shape.
+ *
+ * With no `env`, simple-git inherits the ambient environment untouched (the
+ * guard only scans an explicit `.env()` object), matching the prior execFile
+ * transport exactly. With overrides, `.env()` replaces the child environment
+ * wholesale, so we hand it a sanitized copy of the ambient env plus the
+ * overrides — see buildScopedGitEnv.
+ */
 async function runGit(cwd: string, args: string[], env?: Record<string, string>): Promise<string> {
-  const { stdout } = await execFileAsync('git', args, {
-    cwd,
-    encoding: 'utf-8',
-    maxBuffer: GIT_MAX_BUFFER,
-    ...(env ? { env: { ...process.env, ...env } } : {}),
-  });
+  const git = env ? simpleGit(cwd).env(buildScopedGitEnv(env)) : simpleGit(cwd);
+  const stdout = await git.raw(args);
   return stdout.trim();
 }
 
