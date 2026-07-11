@@ -33,7 +33,7 @@ import {
   VERIFICATION_FENCE_TAG,
 } from '@shipcode/shared';
 import { computeRetryDelayMs } from '../retry-scheduler';
-import type { ExecutePhaseCarry, PipelineContext, PipelineDeps, VerifyPhaseCarry } from '../types';
+import type { ExecutePhaseCarry, PipelineContext, VerifyPhaseCarry } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { buildPhasePayload, resetPhaseState } from './context';
 import { captureExecutionCheckpoint } from './execution-checkpoint';
