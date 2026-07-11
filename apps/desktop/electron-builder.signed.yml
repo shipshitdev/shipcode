@@ -1,0 +1,44 @@
+# Signed + notarized macOS distribution build.
+# Opt-in path: `bun run build:installer:mac:signed`.
+# The base electron-builder.yml stays ad-hoc for local/CI builds with no cert.
+#
+# Requires these env vars (App Store Connect API key — see README/notarization):
+#   APPLE_API_KEY     path to (or base64 of) the .p8 key file
+#   APPLE_API_KEY_ID  the Key ID
+#   APPLE_API_ISSUER  the Issuer ID
+#   APPLE_TEAM_ID     C76R5DRH64
+appId: dev.shipshit.shipcode
+productName: ShipCode
+artifactName: "${productName}-${version}-${arch}.${ext}"
+directories:
+  output: out
+  buildResources: resources
+files:
+  - dist/**/*
+  - package.json
+# The srt sandbox CLI (and its native seccomp helper) must live on the real
+# filesystem so it can be spawned as a subprocess — it cannot run from inside
+# app.asar. resolveSrt() rewrites the resolved path to app.asar.unpacked.
+asarUnpack:
+  - node_modules/@anthropic-ai/sandbox-runtime/**
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.developer-tools
+  # Real Developer ID signing (auto-discovered from keychain by this identity).
+  identity: "Developer ID Application: Vincent Tellier (C76R5DRH64)"
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.inherit.plist
+  # electron-builder drives notarytool with the APPLE_API_* env vars.
+  notarize:
+    teamId: C76R5DRH64
+  # NOTE: no ad-hoc afterPack here — real signing replaces it.
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Development
+  maintainer: shipshit.dev <hello@shipshit.dev>
