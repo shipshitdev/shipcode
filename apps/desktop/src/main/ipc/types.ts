@@ -33,8 +33,9 @@ import type {
   TriageRuleQueries,
   VerificationQueries,
 } from '@shipcode/db';
-import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
+import type { GhSyncDeps, Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import type { BrowserWindow, IpcMain } from 'electron';
+import type { AutomationSchedulerLike } from '../automation-scheduler';
 import type { ChatNotificationService } from '../chat-notification-service';
 import type { NotificationService } from '../notification-service';
 import type { ResourceMonitor } from '../resource-monitor';
@@ -85,9 +86,24 @@ export interface IpcHandlerDeps {
   chatNotificationService: ChatNotificationService;
   resourceMonitor?: ResourceMonitor;
   /**
+   * In-memory cron scheduler for Automations. `project:remove` uses it to cancel
+   * jobs for automations that cascade away when their only target project is
+   * deleted, so no zombie job keeps firing after the row is gone. Optional:
+   * absent in tests that don't exercise the removal path.
+   */
+  automationScheduler?: AutomationSchedulerLike;
+  /**
    * Invoked after a project is added, relinked, removed, or archived so the
    * main process can re-sync per-project resources (e.g. WORKFLOW.md watchers)
    * to the new project set. Optional: defaults to a no-op in tests.
    */
   onProjectsChanged?: () => void;
+  /**
+   * Shared GH Status/label sync service deps. When provided, all pipeline
+   * label + Status write paths (manual transitions, board sync, PR
+   * feedback) route through the single shared queue instead of writing
+   * to GitHub independently. Optional: falls back to a no-op sync in
+   * tests / when GitHub sync isn't wired up.
+   */
+  ghSync?: GhSyncDeps;
 }

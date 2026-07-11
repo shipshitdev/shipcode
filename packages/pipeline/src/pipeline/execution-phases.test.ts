@@ -12,8 +12,8 @@ import {
   extractImplicatedFiles,
   extractTestFailureSummary,
   normalizeFeatureQaResults,
+  probeWorktreeChanges,
   resolveWorktreeDiffBase,
-  worktreeHasChanges,
 } from './execution-phases';
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
@@ -475,7 +475,7 @@ describe('execution phase helpers', () => {
       if (args[0] === 'status') return ' M src/a.ts\n';
       return '';
     });
-    expect(worktreeHasChanges(context)).toBe(true);
+    expect(probeWorktreeChanges(context)).toBe('dirty');
 
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
       if (args[0] === 'status') return '';
@@ -483,14 +483,14 @@ describe('execution phase helpers', () => {
       if (args[0] === 'diff') return 'src/a.ts\n';
       return '';
     });
-    expect(worktreeHasChanges(context)).toBe(true);
+    expect(probeWorktreeChanges(context)).toBe('dirty');
 
     mockExecFileSync.mockImplementation(() => '');
-    expect(worktreeHasChanges(context)).toBe(false);
-    expect(worktreeHasChanges({ projectPath: '/project' } as PipelineContext)).toBe(false);
+    expect(probeWorktreeChanges(context)).toBe('clean');
+    expect(probeWorktreeChanges({ projectPath: '/project' } as PipelineContext)).toBe('clean');
     expect(
-      worktreeHasChanges({ projectPath: '/project', forkPointSha: 'base' } as PipelineContext),
-    ).toBe(false);
+      probeWorktreeChanges({ projectPath: '/project', forkPointSha: 'base' } as PipelineContext),
+    ).toBe('clean');
 
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
       if (args[0] === 'status') return '';
@@ -499,12 +499,12 @@ describe('execution phase helpers', () => {
       return '';
     });
     expect(
-      worktreeHasChanges({
+      probeWorktreeChanges({
         projectPath: '/project',
         forkPointSha: '',
         baseBranch: 'main',
       } as PipelineContext),
-    ).toBe(true);
+    ).toBe('dirty');
   });
 
   it('resolves a diff base from fork point, base branch merge-base, then previous commit', () => {

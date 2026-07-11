@@ -43,11 +43,16 @@ import {
   DEFAULT_CPU_QUEUE_RETRY_MS,
   extractExecutionErrorSnippet,
   extractTestFailureSummary,
+  probeWorktreeChanges,
   resolveWorktreeDiffBase,
-  worktreeHasChanges,
 } from './execution-phase-utils';
 import { createShippingPhaseHandlers } from './execution-shipping-phases';
-import { buildFanOutJudgePrompt, parseWinnerLabel, runFanOut } from './fan-out-executor';
+import {
+  buildFanOutJudgePrompt,
+  parseWinnerLabel,
+  resolveFanOutMaxConcurrent,
+  runFanOut,
+} from './fan-out-executor';
 
 export {
   buildContinuationPrompt,
@@ -56,8 +61,8 @@ export {
   extractImplicatedFiles,
   extractTestFailureSummary,
   normalizeFeatureQaResults,
+  probeWorktreeChanges,
   resolveWorktreeDiffBase,
-  worktreeHasChanges,
 } from './execution-phase-utils';
 
 import { extractQaFlowResults } from './qa-result-parser';
@@ -133,7 +138,11 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
 
     const result = await runFanOut({
       workerCount: agentPolicy.fanOutWorkerCount,
-      maxConcurrent: Math.max(1, agentPolicy.maxConcurrentAgents),
+      // Bound the in-phase worker pool by its own worker count — NOT by
+      // `maxConcurrentAgents`, which is the scheduler's project-wide cap on
+      // concurrently running pipeline THREADS. Sharing that value overshot the
+      // real agent-process ceiling (N threads × fanOutWorkerCount).
+      maxConcurrent: resolveFanOutMaxConcurrent(agentPolicy.fanOutWorkerCount),
       runWorker: async (i) => {
         const label = `worker-${i + 1}`;
         const wt = await wm.create(
@@ -218,6 +227,15 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
           prior.worktreePath !== chosen.worktreePath
         ) {
           await wm.remove(prior.worktreePath, prior.worktreeBranch).catch(() => undefined);
+        }
+      },
+      onAllFailed: async () => {
+        // Every worker failed, so promoteWinner never runs and the worker
+        // worktrees/branches would otherwise leak on disk. Tear each down using
+        // its concrete persisted path+branch (never recomputed from threadId —
+        // see .agents/memory/worktrees.md path-as-truth rule).
+        for (const c of created) {
+          await wm.remove(c.worktreePath, c.branch).catch(() => undefined);
         }
       },
     });
@@ -841,8 +859,11 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             resetPhaseState(context);
             return { next: 'testing' };
           }
-          // Check if any code was actually changed
-          if (!worktreeHasChanges(context)) {
+          // Check if any code was actually changed. Only a confirmed-clean tree
+          // fails the run; an 'unknown' probe (bad diff base, transient git
+          // error) must not fail an otherwise-successful task graph — the probe
+          // failure is already logged inside probeWorktreeChanges.
+          if (probeWorktreeChanges(context) === 'clean') {
             emitPhase(
               threadId,
               'failed',
@@ -1069,9 +1090,11 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           resetPhaseState(context);
           return { next: 'testing' };
         }
-        // Check if executor actually produced code changes
-        const hasChanges = worktreeHasChanges(context);
-        if (!hasChanges) {
+        // Check if executor actually produced code changes. Only a
+        // confirmed-clean tree fails; an 'unknown' probe result (bad diff base,
+        // transient git error) proceeds, since real changes may sit in the
+        // worktree — the probe failure is already logged.
+        if (probeWorktreeChanges(context) === 'clean') {
           const errSnippet = extractExecutionErrorSnippet(response.rawOutput);
           emitPhase(
             threadId,

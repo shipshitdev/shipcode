@@ -58,6 +58,13 @@ export interface RunFanOutArgs {
   runJudge: (candidates: FanOutCandidate[]) => Promise<FanOutJudgeOutcome>;
   /** Promote the chosen candidate's changes onto the primary worktree. */
   promoteWinner: (winner: FanOutCandidate) => Promise<void>;
+  /**
+   * Tear down every worker worktree/branch when no worker passed. The winner
+   * paths clean up losers via `promoteWinner`; this is the ONLY cleanup hook
+   * for the all-fail path, without which the caller's worker worktrees leak on
+   * disk on every failed fan-out attempt. Must not throw.
+   */
+  onAllFailed?: () => Promise<void>;
 }
 
 /** Build the judge prompt: the original task + each candidate's diff. */
@@ -102,6 +109,22 @@ export function parseWinnerLabel(
 function clampWorkerCount(requested: number): number {
   if (!Number.isFinite(requested) || requested < 1) return 1;
   return Math.min(Math.floor(requested), MAX_FAN_OUT_WORKER_COUNT);
+}
+
+/**
+ * Resolve the concurrency ceiling for an in-phase fan-out worker pool.
+ *
+ * The pool must be bounded by its OWN worker count — never by
+ * `agentPolicy.maxConcurrentAgents`, which is the scheduler's project-wide cap
+ * on concurrently running pipeline THREADS (see `pipeline-scheduler.ts`).
+ * Reusing that value here conflated two different concurrency semantics: with
+ * N threads each in fan-out execute, real concurrent agent processes reached
+ * N × fanOutWorkerCount (plus judges), overshooting the ceiling the setting is
+ * meant to enforce. `fanOutWorkerCount` is already clamped to
+ * [1, MAX_FAN_OUT_WORKER_COUNT], so the pool can never exceed that bound.
+ */
+export function resolveFanOutMaxConcurrent(fanOutWorkerCount: number): number {
+  return clampWorkerCount(fanOutWorkerCount);
 }
 
 /** Run `thunks` with at most `limit` in flight at once, preserving order. */
@@ -153,7 +176,10 @@ export async function runFanOut(args: RunFanOutArgs): Promise<FanOutResult> {
 
   // No worker passed → surface the first candidate's output (or a synthetic
   // failure) without promoting anything. The caller treats non-zero as failure.
+  // Nothing gets promoted here, so `onAllFailed` is the sole opportunity to tear
+  // down the worker worktrees the caller created — skip it and they leak.
   if (passing.length === 0) {
+    await args.onAllFailed?.();
     const fallback = candidates[0];
     return {
       rawOutput: fallback?.rawOutput ?? 'fan-out: all workers failed',
