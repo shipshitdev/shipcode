@@ -28,9 +28,9 @@ describe('parseJsonResultWithNdjsonFallback', () => {
   });
 
   it('honors result-field priority order', () => {
-    expect(parseJsonResultWithNdjsonFallback(JSON.stringify({ text: 'from text' }), ENVELOPE)).toEqual(
-      { text: 'from text' },
-    );
+    expect(
+      parseJsonResultWithNdjsonFallback(JSON.stringify({ text: 'from text' }), ENVELOPE),
+    ).toEqual({ text: 'from text' });
     // `result` outranks `text` when both are present.
     expect(
       parseJsonResultWithNdjsonFallback(
