@@ -930,16 +930,19 @@ export function registerProjectHandlers({
       }
 
       try {
-        // Rollback pruning (#212): refs newer than the restored turn represent
-        // an abandoned future timeline. Prune them BEFORE the pre-restore
-        // snapshot below so the snapshot's ref (which claims the next free turn,
-        // i.e. one higher than everything remaining) is never caught by this
-        // prune and stays recoverable.
+        // Rollback pruning (#212, #328): refs AND their DB rows newer than the
+        // restored turn represent an abandoned future timeline and must be
+        // dropped together — leaving rows behind lets a later capture reuse the
+        // turn number and silently resolve the stale row to unrelated content.
+        // Prune BEFORE the pre-restore snapshot below so the snapshot's ref
+        // (which claims the next free turn, i.e. one higher than everything
+        // remaining) is never caught by this prune and stays recoverable.
         const restoredTurn = checkpoint.refName ? parseCheckpointTurn(checkpoint.refName) : null;
         if (restoredTurn !== null) {
           await deleteThreadCheckpointRefs(thread.worktreePath, threadId, {
             newerThanTurn: restoredTurn,
           });
+          queries.checkpoints.deleteNewerThan(threadId, restoredTurn);
         }
 
         // Pre-restore safety snapshot: the restore below runs `git reset --hard`,

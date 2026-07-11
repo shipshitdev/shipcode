@@ -54,6 +54,26 @@ vi.mock('node:child_process', async (importOriginal) => {
   };
 });
 
+// Stub checkpoint capture: several tests here run under vi.useFakeTimers()
+// with worktreePath: process.cwd(), and real capture git (simple-git) awaits
+// internal promises that fake timers starve, hanging the suite. Checkpoint
+// bookkeeping is not under test in this file.
+vi.mock('@shipcode/git', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/git')>();
+  return {
+    ...actual,
+    captureCheckpoint: vi.fn(async () => ({
+      refName: 'refs/shipcode/checkpoints/thread-1/turn/0',
+      turn: 0,
+      commitSha: 'snapshot-sha',
+      headSha: 'head-sha',
+      branch: 'main',
+    })),
+    resolveHeadCommit: vi.fn(async () => 'head-sha'),
+    resolveCurrentBranch: vi.fn(async () => 'main'),
+  };
+});
+
 vi.mock('@shipcode/agents', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shipcode/agents')>();
   return {
