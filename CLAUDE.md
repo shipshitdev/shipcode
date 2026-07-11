@@ -5,7 +5,7 @@
 
 ## Working directory
 
-Primary: `/Users/decod3rs/www/shipshitdev/public/shipcode`
+Work from the repository root or the assigned worktree.
 
 ## Session ritual
 
@@ -23,4 +23,5 @@ Primary: `/Users/decod3rs/www/shipshitdev/public/shipcode`
 - Repo memory detail: `.agents/memory/` (committed)
 - Global memory detail: `~/.agents/memory/` (uncommitted, cross-project)
 - PRD style guide: `.agents/skills/writing-prds/SKILL.md`
-- Plans: `~/.claude-genfeedai/plans/<slug>.md`
+- Implementation plans: `docs/superpowers/plans/`. The local Claude setting
+  `plansDirectory` points both account profiles at this repo-owned directory.

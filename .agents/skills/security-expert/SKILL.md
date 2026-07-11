@@ -22,7 +22,7 @@ metadata:
 ## Project Context Discovery
 
 1. Check `.agents/memory/` for security architecture notes and project facts
-2. Review the agent instruction files (`AGENTS.md`/`CLAUDE.md`/`CODEX.md`, repo-level and global) for security rules and "never do" constraints
+2. Review the agent instruction files (`AGENTS.md`/`CLAUDE.md`, repo-level and global) for security rules and "never do" constraints
 3. Identify security patterns and tools
 4. Check for `[project]-security-expert` skill
 
