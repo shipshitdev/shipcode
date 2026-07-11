@@ -27,12 +27,14 @@ export function registerQuickTaskHandlers({
   queries,
   pipeline,
   emitter,
+  ghSync,
 }: IpcHandlerDeps): void {
   const scheduler = new PipelineScheduler({
     queries,
     pipeline,
     emitter,
     getMainWindow: () => mainWindow,
+    ghSync,
   });
 
   ipcMain.handle(
