@@ -462,6 +462,7 @@ describe('syncLinkedPullRequestFeedback', () => {
       labels: ['shipcode:pipeline:needs_review'],
       linkedPrNumber: 12,
     });
+    const ghSync = { getProject: vi.fn(), syncToGithub: vi.fn(async () => undefined) };
 
     await syncLinkedPullRequestFeedback(
       makeProject() as never,
@@ -469,6 +470,7 @@ describe('syncLinkedPullRequestFeedback', () => {
       queries,
       notificationService as never,
       chatNotificationService as never,
+      ghSync as never,
     );
 
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'completed');
@@ -477,10 +479,11 @@ describe('syncLinkedPullRequestFeedback', () => {
       'shipcode:pipeline:needs_review',
       false,
     );
-    expect(ghCliInstances[0]?.setIssueLabelPresence).toHaveBeenCalledWith(
-      42,
-      'shipcode:pipeline:needs_review',
-      false,
+    expect(ghSync.syncToGithub).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issueNumber: 42,
+        pipelineStatus: 'completed',
+      }),
     );
   });
 
@@ -635,6 +638,7 @@ describe('syncLinkedPullRequestFeedback', () => {
         reviewRequestCount: 1,
       }),
     );
+    const ghSync = { getProject: vi.fn(), syncToGithub: vi.fn(async () => undefined) };
 
     await syncLinkedPullRequestFeedback(
       makeProject() as never,
@@ -642,6 +646,7 @@ describe('syncLinkedPullRequestFeedback', () => {
       queries,
       notificationService as never,
       chatNotificationService as never,
+      ghSync as never,
     );
 
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
@@ -653,10 +658,11 @@ describe('syncLinkedPullRequestFeedback', () => {
       'shipcode:pipeline:needs_review',
       true,
     );
-    expect(ghCliInstances[0]?.setIssueLabelPresence).toHaveBeenCalledWith(
-      42,
-      'shipcode:pipeline:needs_review',
-      true,
+    expect(ghSync.syncToGithub).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issueNumber: 42,
+        pipelineStatus: 'needs_review',
+      }),
     );
   });
 
@@ -670,6 +676,7 @@ describe('syncLinkedPullRequestFeedback', () => {
         reviewDecision: 'APPROVED',
       }),
     );
+    const ghSync = { getProject: vi.fn(), syncToGithub: vi.fn(async () => undefined) };
 
     await syncLinkedPullRequestFeedback(
       makeProject() as never,
@@ -680,6 +687,7 @@ describe('syncLinkedPullRequestFeedback', () => {
       queries,
       notificationService as never,
       chatNotificationService as never,
+      ghSync as never,
     );
 
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
@@ -696,15 +704,11 @@ describe('syncLinkedPullRequestFeedback', () => {
       'shipcode:pipeline:ready_to_merge',
       true,
     );
-    expect(ghCliInstances[0]?.setIssueLabelPresence).toHaveBeenCalledWith(
-      42,
-      'shipcode:pipeline:needs_review',
-      false,
-    );
-    expect(ghCliInstances[0]?.setIssueLabelPresence).toHaveBeenCalledWith(
-      42,
-      'shipcode:pipeline:ready_to_merge',
-      true,
+    expect(ghSync.syncToGithub).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issueNumber: 42,
+        pipelineStatus: 'ready_to_merge',
+      }),
     );
   });
 });

@@ -416,6 +416,60 @@ describe('AutomationQueries', () => {
     expect(automations.getById(a.id)?.targets).toEqual([project.id]);
   });
 
+  it('list paths batch target hydration into a single query (no N+1)', () => {
+    const { dataDir, db, projects, automations, project } = setup();
+    tempDirs.push(dataDir);
+    const projectB = projects.add(path.join(dataDir, 'project-b'));
+
+    automations.create({ projectId: project.id, name: 'A', prompt: 'p', cronExpr: '0 * * * *' });
+    automations.create({
+      projectId: project.id,
+      targets: [project.id, projectB.id],
+      name: 'B',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+    automations.create({ projectId: project.id, name: 'C', prompt: 'p', cronExpr: '0 * * * *' });
+
+    const prepareSpy = vi.spyOn(db, 'prepare');
+    const all = automations.listAll();
+    const targetQueries = prepareSpy.mock.calls.filter(([sql]) =>
+      /FROM automation_targets/.test(String(sql)),
+    );
+    prepareSpy.mockRestore();
+
+    expect(all).toHaveLength(3);
+    // One batched IN(...) query, not one SELECT per returned row (was 3 pre-refactor).
+    expect(targetQueries).toHaveLength(1);
+  });
+
+  it('listAll hydrates multi-target and zero-target automations correctly', () => {
+    const { dataDir, db, projects, automations, project } = setup();
+    tempDirs.push(dataDir);
+    const projectB = projects.add(path.join(dataDir, 'project-b'));
+
+    const multi = automations.create({
+      projectId: project.id,
+      targets: [project.id, projectB.id],
+      name: 'Multi',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+    const orphan = automations.create({
+      projectId: project.id,
+      name: 'Orphan',
+      prompt: 'p',
+      cronExpr: '0 * * * *',
+    });
+    // Strip the orphan's target rows to exercise the zero-target fallback.
+    db.prepare('DELETE FROM automation_targets WHERE automation_id = ?').run(orphan.id);
+
+    const byId = new Map(automations.listAll().map((a) => [a.id, a]));
+    expect(byId.get(multi.id)?.targets).toEqual([project.id, projectB.id]);
+    // Zero target rows falls back to the primary projectId, matching listTargets/hydrate.
+    expect(byId.get(orphan.id)?.targets).toEqual([project.id]);
+  });
+
   it('CASCADE: deleting an automation removes its targets', () => {
     const { dataDir, db, automations, project } = setup();
     tempDirs.push(dataDir);
