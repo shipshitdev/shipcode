@@ -482,7 +482,7 @@ branch refs/heads/feature/not-ours
       all: ['main', 'master'],
     });
     await manager.merge('ship/42-fix-openrouter');
-    expect(gitMock.checkout).toHaveBeenCalledWith('release');
+    expect(gitMock.checkout).toHaveBeenCalledWith('main');
     expect(gitMock.merge).toHaveBeenCalledWith(['ship/42-fix-openrouter', '--no-ff']);
 
     gitMock.raw.mockRejectedValueOnce(new Error('origin head unavailable'));
