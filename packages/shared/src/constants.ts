@@ -109,6 +109,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pipelineSpeedProfile: 'smart_fast',
   requireApproval: false,
   postPlanCommentsEnabled: true,
+  postPipelineTimelineEnabled: true,
   plannerReasoningEffort: 'low',
   reviewerReasoningEffort: 'high',
   executorReasoningEffort: 'medium',

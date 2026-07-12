@@ -178,6 +178,8 @@ describe('PipelineSettingsSection', () => {
 
     fireEvent.click(screen.getByRole('switch', { name: 'Require approval before execution' }));
     expect(onUpdate).toHaveBeenCalledWith({ requireApproval: true });
+    fireEvent.click(screen.getByRole('switch', { name: 'Post pipeline timeline to GitHub' }));
+    expect(onUpdate).toHaveBeenCalledWith({ postPipelineTimelineEnabled: false });
 
     fireEvent.change(screen.getByLabelText('Max concurrent pipelines'), {
       target: { value: '0' },

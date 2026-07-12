@@ -1,10 +1,12 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
+  formatPipelineTimelineComment,
   formatPlanComment,
   GhCli,
   isPoolExhausted,
   measurePhasePromptTelemetry,
+  PIPELINE_TIMELINE_COMMENT_MARKER,
   PLAN_COMMENT_MARKER,
   type PromptMaterial,
   type ProviderPhase,
@@ -807,19 +809,49 @@ export function createPipelineRuntime(
     error?: string,
   ) {
     const runId = syncRunForPhase(threadId, phase, error);
+    let phaseLogged = false;
     try {
       if (runId) {
         deps.phaseLogs?.transition(threadId, phase, error ?? null, runId);
       } else {
         deps.phaseLogs?.transition(threadId, phase, error ?? null);
       }
+      phaseLogged = Boolean(deps.phaseLogs);
     } catch (logError) {
       console.error(`[pipeline] phase log transition failed for thread ${threadId}:`, logError);
     }
     // Route through the shared service's serializer — collapses rapid phase
     // transitions into the latest desired state per issue.
     syncThreadAndIssuePhase(deps.threads, deps.githubIssues, threadId, phase, error, ghSync.deps);
+    if (phaseLogged) void postPipelineTimelineComment(threadId);
     deps.emitter.emit({ type: 'pipeline:phase', threadId, phase, ...(runId ? { runId } : {}) });
+  }
+
+  async function postPipelineTimelineComment(threadId: string): Promise<void> {
+    try {
+      if (!deps.settings.get().postPipelineTimelineEnabled) return;
+
+      const activeContext = _contextHelpers.activePipelines?.get(threadId);
+      const thread = activeContext ? null : deps.threads.getById(threadId);
+      const issueNumber = activeContext?.githubIssueNumber ?? thread?.githubIssueNumber ?? null;
+      if (!isRealGithubIssueNumber(issueNumber)) return;
+
+      const projectPath =
+        activeContext?.projectPath ?? deps.projects.getById(thread?.projectId ?? '')?.path;
+      if (!projectPath) return;
+
+      const entries = deps.phaseLogs?.listByThread(threadId) ?? [];
+      if (entries.length === 0) return;
+
+      const ghCli = new GhCli(projectPath);
+      await ghCli.upsertIssueCommentByMarker(
+        issueNumber,
+        PIPELINE_TIMELINE_COMMENT_MARKER,
+        formatPipelineTimelineComment(entries),
+      );
+    } catch (error) {
+      console.warn('[pipeline] Failed to post pipeline timeline comment:', error);
+    }
   }
 
   async function postPlanComment(

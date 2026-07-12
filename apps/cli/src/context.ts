@@ -17,6 +17,7 @@ import {
   FeatureQaResultQueries,
   GitHubIssueQueries,
   getDatabase,
+  PhaseLogQueries,
   PipelineRunQueries,
   PipelineStepQueries,
   PlanQueries,
@@ -48,6 +49,7 @@ export interface CliContext {
   skills: SkillsQueries;
   checkpoints: CheckpointQueries;
   terminalEvents: TerminalEventQueries;
+  phaseLogs: PhaseLogQueries;
   agentConversations: AgentConversationQueries;
   taskGraphs: TaskGraphQueries;
   ghCli: GhCli;
@@ -78,6 +80,7 @@ export function createCliContext(cwd: string): CliContext {
   const skills = new SkillsQueries(db);
   const checkpoints = new CheckpointQueries(db);
   const terminalEvents = new TerminalEventQueries(db);
+  const phaseLogs = new PhaseLogQueries(db);
   const pipelineRuns = new PipelineRunQueries(db);
   const pipelineSteps = new PipelineStepQueries(db);
   const agentConversations = new AgentConversationQueries(db);
@@ -119,6 +122,7 @@ export function createCliContext(cwd: string): CliContext {
     providers,
     skills,
     taskGraphs,
+    phaseLogs,
     pipelineRuns,
     pipelineSteps,
     agentConversations,
@@ -139,6 +143,7 @@ export function createCliContext(cwd: string): CliContext {
     skills,
     checkpoints,
     terminalEvents,
+    phaseLogs,
     agentConversations,
     taskGraphs,
     ghCli,

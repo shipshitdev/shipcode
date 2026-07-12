@@ -318,6 +318,10 @@ export class SettingsQueries {
         stored.postPlanCommentsEnabled,
         DEFAULT_SETTINGS.postPlanCommentsEnabled,
       ),
+      postPipelineTimelineEnabled: parseBool(
+        stored.postPipelineTimelineEnabled,
+        DEFAULT_SETTINGS.postPipelineTimelineEnabled,
+      ),
       plannerReasoningEffort: isReasoningEffort(stored.plannerReasoningEffort)
         ? (stored.plannerReasoningEffort as AppSettings['plannerReasoningEffort'])
         : DEFAULT_SETTINGS.plannerReasoningEffort,
