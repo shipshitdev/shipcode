@@ -300,19 +300,19 @@ jobs:
       - build-desktop-macos
     runs-on: ubuntu-latest
     steps:
-      - name: Verify HOMEBREW_TAP_TOKEN secret
+      - name: Verify TAP_GITHUB_TOKEN secret
         env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
         run: |
           if [ -z "$TAP_TOKEN" ]; then
-            echo "::error::HOMEBREW_TAP_TOKEN repository secret not set"
+            echo "::error::TAP_GITHUB_TOKEN repository secret not set"
             exit 1
           fi
       - name: Checkout tap repo
         uses: actions/checkout@v4
         with:
           repository: shipshitdev/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
           ref: master
       - name: Download macOS release artifacts
         run: |
