@@ -109,7 +109,7 @@ Pipeline phase model (13 states): `idle, planning, clarifying, reviewing, revisi
 | OpenRouter | `packages/agents/src/providers/openrouter-http.ts` | OpenAI-compatible SSE, native fetch, 429 retry w/ jitter |
 | Sentry | `@sentry/electron` main + renderer (`apps/desktop/src/main/telemetry.ts`, `src/renderer/telemetry.ts`) | DSN only from env (`SHIPCODE_SENTRY_DSN`/`SENTRY_DSN`), user-consent gated (`telemetryEnabled`), no hardcoded DSN in repo |
 | Telegram / Discord | `apps/desktop/src/main/chat-notification-service.ts` | Outbound pipeline-event notifications (bot API / webhooks) |
-| Vercel, Homebrew, npm | publish workflow only | Secrets: `VERCEL_TOKEN`, `HOMEBREW_TAP_TOKEN`, `GITHUB_TOKEN` — the only 3 secrets referenced in all of `.github/` |
+| Vercel, Homebrew, npm | publish workflow only | Secrets: `VERCEL_TOKEN`, `TAP_GITHUB_TOKEN`, `GITHUB_TOKEN` — the only 3 secrets referenced in all of `.github/` |
 
 **Background jobs.** All in-process (no queue infrastructure): `AutomationScheduler` (cron expressions via croner 10), `PipelineScheduler`, `ReconciliationLoop` (`packages/pipeline/src/reconciliation-loop.ts`), `RetryScheduler` with backoff, GitHub issue poller, 30-min update poll, `ResourceMonitor` + CPU-throttle settings. Weekly repo-level crons live in GitHub Actions (see §5).
 
