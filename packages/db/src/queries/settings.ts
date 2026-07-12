@@ -318,6 +318,10 @@ export class SettingsQueries {
         stored.postPlanCommentsEnabled,
         DEFAULT_SETTINGS.postPlanCommentsEnabled,
       ),
+      postFormalPrReviewEnabled: parseBool(
+        stored.postFormalPrReviewEnabled,
+        DEFAULT_SETTINGS.postFormalPrReviewEnabled,
+      ),
       plannerReasoningEffort: isReasoningEffort(stored.plannerReasoningEffort)
         ? (stored.plannerReasoningEffort as AppSettings['plannerReasoningEffort'])
         : DEFAULT_SETTINGS.plannerReasoningEffort,

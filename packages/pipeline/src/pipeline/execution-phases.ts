@@ -65,6 +65,7 @@ export {
   probeWorktreeChanges,
   resolveWorktreeDiffBase,
 } from './execution-phase-utils';
+export { resolveFormalPrReviewEvent } from './execution-shipping-phases';
 
 import { extractQaFlowResults } from './qa-result-parser';
 import { buildVerificationFindingInputs, formatOpenFindingsForPrompt } from './review-findings';

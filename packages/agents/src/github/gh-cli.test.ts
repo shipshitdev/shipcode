@@ -700,6 +700,59 @@ describe('GhCli', () => {
     });
   });
 
+  describe('submitPrReview', () => {
+    it('downgrades self-reviews to comments and pipes the body through stdin', async () => {
+      success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
+      success('ShipCodeBot\n');
+      success(JSON.stringify({ user: { login: 'shipcodebot' }, head: { sha: 'head-sha' } }));
+      success(JSON.stringify([[]]));
+      const fake = createFakeProc();
+      mockSpawn.mockReturnValueOnce(fake.proc);
+
+      const promise = gh.submitPrReview(17, 'request-changes', '---\nreview body');
+      await waitForSpawnCall();
+      fake.complete(0);
+
+      await expect(promise).resolves.toEqual({
+        event: 'comment',
+        downgradedForSelfReview: true,
+        skippedDuplicate: false,
+      });
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'gh',
+        ['pr', 'review', '17', '--comment', '--body-file', '-'],
+        ghSpawnOptions,
+      );
+      expect(fake.stdinWrites).toEqual(['---\nreview body']);
+      expect(fake.isStdinEnded()).toBe(true);
+    });
+
+    it('skips an identical review from the same author and head commit', async () => {
+      success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
+      success('ReviewerBot\n');
+      success(JSON.stringify({ user: { login: 'author' }, head: { sha: 'head-sha' } }));
+      success(
+        JSON.stringify([
+          [
+            {
+              user: { login: 'reviewerbot' },
+              commit_id: 'head-sha',
+              state: 'APPROVED',
+              body: 'looks good',
+            },
+          ],
+        ]),
+      );
+
+      await expect(gh.submitPrReview(17, 'approve', 'looks good')).resolves.toEqual({
+        event: 'approve',
+        downgradedForSelfReview: false,
+        skippedDuplicate: true,
+      });
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+  });
+
   describe('setIssueLabelPresence', () => {
     it('adds the label when missing', async () => {
       success(

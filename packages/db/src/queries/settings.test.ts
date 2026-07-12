@@ -48,6 +48,7 @@ describe('SettingsQueries', () => {
     expect(s.githubPollingEnabled).toBe(false);
     expect(s.githubPollingIntervalMs).toBe(30000);
     expect(s.githubBotUsername).toBe('');
+    expect(s.postFormalPrReviewEnabled).toBe(true);
     expect(s.maxConcurrentCpuTasks).toBe(1);
     expect(s.cpuThrottleThresholdPercent).toBe(85);
     expect(s.shellCommandTimeoutMs).toBe(600_000);
@@ -57,6 +58,12 @@ describe('SettingsQueries', () => {
     expect(s.projectOpenTarget).toBe('cursor');
     expect(s.terminalOpenTarget).toBe('terminal');
     expect(s.updateTrack).toBe('master');
+  });
+
+  it('persists the formal PR review toggle', () => {
+    settings.set({ postFormalPrReviewEnabled: false });
+
+    expect(settings.get().postFormalPrReviewEnabled).toBe(false);
   });
 
   it('normalizes legacy afk run modes to programmatic', () => {

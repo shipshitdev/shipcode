@@ -97,6 +97,9 @@ export interface AppSettings {
   // whenever a plan is approved (autonomous or manual). When false, plan comments
   // are suppressed; task-graph and review comments are unaffected.
   postPlanCommentsEnabled: boolean;
+  // When true (default), ShipCode submits review findings through GitHub's
+  // native PR review surface. When false, it keeps the comment-only behavior.
+  postFormalPrReviewEnabled: boolean;
   // Per-phase reasoning effort. Applied as:
   //   Claude: mapped to a supported thinking-token budget
   //   Codex:  mapped to supported low|medium|high levels
