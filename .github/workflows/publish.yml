@@ -250,6 +250,25 @@ jobs:
           APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER_ID }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
 
+      # electron-builder notarizes + staples the .app, but the DMG container it
+      # then packs never gets its own ticket — Gatekeeper still accepts the app
+      # inside, but the DMG can't be validated offline and `stapler validate`
+      # fails. Submit each DMG for its own notarization and staple it, so the
+      # artifact users (and the Homebrew cask) download is self-contained.
+      - name: Notarize and staple DMGs
+        run: |
+          set -e
+          for dmg in apps/desktop/out/*.dmg; do
+            echo "Notarizing $dmg"
+            xcrun notarytool submit "$dmg" \
+              --key "${{ steps.asc.outputs.key_path }}" \
+              --key-id "${{ vars.APPLE_API_KEY_ID }}" \
+              --issuer "${{ vars.APPLE_API_ISSUER_ID }}" \
+              --team-id "${{ vars.APPLE_TEAM_ID }}" \
+              --wait --timeout 30m
+            xcrun stapler staple "$dmg"
+          done
+
       - name: Verify Developer ID signature + stapled notarization
         run: |
           set -e
@@ -258,6 +277,8 @@ jobs:
           echo "Verifying $APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
           codesign -dvvv "$APP" 2>&1 | grep -i 'Authority=Developer ID Application'
+          echo "Stapler validate $APP"
+          xcrun stapler validate "$APP"
           for dmg in apps/desktop/out/*.dmg; do
             echo "Stapler validate $dmg"
             xcrun stapler validate "$dmg"
