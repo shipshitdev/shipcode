@@ -32,9 +32,10 @@ mac:
   gatekeeperAssess: false
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.inherit.plist
-  # electron-builder drives notarytool with the APPLE_API_* env vars.
-  notarize:
-    teamId: C76R5DRH64
+  # electron-builder 26.x: `notarize` is a boolean; notarytool credentials
+  # (APPLE_API_KEY / APPLE_API_KEY_ID / APPLE_API_ISSUER) and APPLE_TEAM_ID
+  # come from the environment (mapped in publish.yml).
+  notarize: true
   # NOTE: no ad-hoc afterPack here — real signing replaces it.
 linux:
   target:
