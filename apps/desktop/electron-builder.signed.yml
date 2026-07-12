@@ -27,7 +27,9 @@ mac:
     - zip
   category: public.app-category.developer-tools
   # Real Developer ID signing (auto-discovered from keychain by this identity).
-  identity: "Developer ID Application: Vincent Tellier (C76R5DRH64)"
+  # electron-builder 26.x: no "Developer ID Application:" prefix — the
+  # certificate type is chosen automatically from the identity name.
+  identity: "Vincent Tellier (C76R5DRH64)"
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: resources/entitlements.mac.plist
