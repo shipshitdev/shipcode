@@ -62,7 +62,7 @@ export {
   normalizeStatusOption,
   validateProjectStatusField,
 } from './github/project-status';
-export type { CacheOptions, OpenRouterAuthStatus } from './health-check';
+export type { CacheOptions, OpenRouterAuthCheckResult } from './health-check';
 export {
   checkClaudeAuth,
   checkClaudeModelCapabilities,

@@ -117,7 +117,12 @@ export interface SystemHealth {
   gh: CliHealth;
 }
 
-export type OpenRouterAuthStatus = 'missing_key' | 'valid' | 'invalid_key' | 'unreachable';
+export type OpenRouterAuthStatus =
+  | 'missing_key'
+  | 'valid'
+  | 'invalid_key'
+  | 'unreachable'
+  | 'model_deprecated';
 
 export type OpenRouterModelStatus = 'not_configured' | 'valid' | 'invalid' | 'unverified';
 
