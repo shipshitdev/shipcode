@@ -28,12 +28,10 @@ export function Hero() {
         >
           <div className="flex flex-wrap items-center justify-center gap-4">
             <a
-              href="https://github.com/shipshitdev/shipcode/releases/latest"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/download"
               className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#09090b] shadow-[0_0_24px_rgba(255,255,255,0.08)] transition-transform duration-200 hover:scale-[1.03]"
             >
-              Download
+              Download for Mac
             </a>
             <a
               href="https://github.com/shipshitdev/shipcode"
@@ -45,12 +43,20 @@ export function Hero() {
               <span aria-hidden="true">↗</span>
             </a>
           </div>
-          <a
-            href="#pipeline"
-            className="text-sm text-muted transition-colors duration-200 hover:text-secondary"
-          >
-            See the pipeline <span aria-hidden="true">↓</span>
-          </a>
+          <div className="flex flex-col items-center gap-2">
+            <a
+              href="/download?arch=x64"
+              className="text-xs text-muted transition-colors duration-200 hover:text-secondary"
+            >
+              Intel Mac? Download the x64 build
+            </a>
+            <a
+              href="#pipeline"
+              className="text-sm text-muted transition-colors duration-200 hover:text-secondary"
+            >
+              See the pipeline <span aria-hidden="true">↓</span>
+            </a>
+          </div>
         </div>
 
         {/* Product screenshot */}

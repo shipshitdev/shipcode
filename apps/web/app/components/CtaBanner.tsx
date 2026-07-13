@@ -10,9 +10,7 @@ export function CtaBanner() {
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
           <a
-            href="https://github.com/shipshitdev/shipcode/releases/latest"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/download"
             className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#09090b] shadow-[0_0_24px_rgba(255,255,255,0.08)] transition-transform duration-200 hover:scale-[1.03]"
           >
             Download for Mac
