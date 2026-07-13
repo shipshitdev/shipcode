@@ -228,9 +228,7 @@ describe('IntegrationsSettingsSection callback coverage', () => {
 
     expect(screen.getByText('Model deprecated')).toHaveClass('text-amber-300');
     expect(
-      screen.getByText(
-        'Model deprecated — select a replacement in Settings → Pipeline → Models.',
-      ),
+      screen.getByText('Model deprecated — select a replacement in Settings → Pipeline → Models.'),
     ).toBeInTheDocument();
   });
 
