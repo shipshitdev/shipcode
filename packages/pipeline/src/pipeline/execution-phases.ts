@@ -19,6 +19,7 @@ import {
 import { WorktreeManager } from '@shipcode/git';
 import {
   buildTaskNodePlan,
+  clampTextBlock,
   EXECUTION_PHASES,
   formatTaskGraphExecutionContract,
   inferProviderFromModel,
@@ -305,6 +306,14 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
 
     if (issues) {
       lines.push('', 'Issues:', issues);
+    }
+
+    if (structured.testOutput) {
+      lines.push('', 'Prior test output:', clampTextBlock(structured.testOutput, 8192));
+    }
+
+    if (structured.runtimeQaOutput) {
+      lines.push('', 'Prior runtime QA output:', clampTextBlock(structured.runtimeQaOutput, 8192));
     }
 
     lines.push('</previous_verification_failure>');
@@ -1604,11 +1613,16 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         return { next: 'failed' };
       }
 
+      const persistedVerification = {
+        ...result.data,
+        ...(testOutput ? { testOutput } : {}),
+        ...(runtimeQaOutput ? { runtimeQaOutput } : {}),
+      };
       const verificationRecord = deps.verifications.create(
         threadId,
         latestPlan.id,
         result.raw,
-        result.data,
+        persistedVerification,
       );
       if (context.projectId && deps.reviewFindings) {
         if (result.data.result === 'passed') {

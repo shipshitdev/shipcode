@@ -4,6 +4,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AutomationSchedulerLike } from '../automation-scheduler';
 import { registerAutomationHandlers } from './register-automation-handlers';
 
+const { assertCliPhaseModelsSupportedMock, resolveProjectPhaseModelsMock } = vi.hoisted(() => ({
+  assertCliPhaseModelsSupportedMock: vi.fn(async () => undefined),
+  resolveProjectPhaseModelsMock: vi.fn(() => ({
+    plannerModel: 'claude',
+    reviewerModel: 'claude',
+    executorModel: 'codex',
+    verifierModel: 'codex',
+    plannerModelId: 'claude-sonnet-4-6',
+    reviewerModelId: 'claude-sonnet-4-6',
+    executorModelId: 'gpt-5.5',
+    verifierModelId: 'gpt-5.5',
+    plannerReasoningEffort: 'high',
+    reviewerReasoningEffort: 'high',
+    executorReasoningEffort: 'high',
+    verifierReasoningEffort: 'high',
+  })),
+}));
+
+vi.mock('./helpers', () => ({
+  assertCliPhaseModelsSupported: assertCliPhaseModelsSupportedMock,
+  resolveProjectPhaseModels: resolveProjectPhaseModelsMock,
+}));
+
 vi.mock('../logger.service', () => ({
   default: {
     error: vi.fn(),
@@ -58,6 +81,14 @@ describe('registerAutomationHandlers', () => {
     listByAutomationId: vi.fn(),
   };
 
+  const projects = {
+    getById: vi.fn(),
+  };
+
+  const settings = {
+    get: vi.fn(),
+  };
+
   const automationScheduler: AutomationSchedulerLike = {
     start: vi.fn(),
     stop: vi.fn(),
@@ -75,10 +106,14 @@ describe('registerAutomationHandlers', () => {
   beforeEach(() => {
     handlers.clear();
     vi.clearAllMocks();
+    automations.getById.mockReturnValue(makeAutomation());
+    projects.getById.mockImplementation((id: string) => ({ id, name: id }));
+    settings.get.mockReturnValue({});
+    assertCliPhaseModelsSupportedMock.mockResolvedValue(undefined);
     registerAutomationHandlers(
       {
         ipcMain,
-        queries: { automations, threads },
+        queries: { automations, threads, projects, settings },
       } as never,
       automationScheduler,
     );
@@ -205,5 +240,87 @@ describe('registerAutomationHandlers', () => {
     ).rejects.toThrow();
     expect(automations.create).not.toHaveBeenCalled();
     expect(automations.update).not.toHaveBeenCalled();
+  });
+
+  it('validates normalized model selections before creating or updating automations', async () => {
+    const automation = makeAutomation({
+      executorProvider: 'codex',
+      executorModelId: 'gpt-5.6-sol',
+    });
+    automations.create.mockReturnValue(automation);
+    automations.update.mockReturnValue(automation);
+
+    await getHandler('automations:create')(null, {
+      projectId: 'project-1',
+      targets: ['project-1', 'project-2'],
+      name: 'Frontier run',
+      prompt: 'Run it',
+      cronExpr: '0 0 * * *',
+      executorProvider: 'codex',
+      executorModelId: 'sol',
+    });
+
+    expect(projects.getById).toHaveBeenCalledTimes(2);
+    expect(assertCliPhaseModelsSupportedMock).toHaveBeenCalledTimes(2);
+    expect(assertCliPhaseModelsSupportedMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ executorModel: 'codex', executorModelId: 'gpt-5.6-sol' }),
+    );
+    expect(automations.create).toHaveBeenCalledWith(
+      expect.objectContaining({ executorModelId: 'gpt-5.6-sol' }),
+    );
+
+    await getHandler('automations:update')(null, {
+      id: 'auto-1',
+      executorReasoningEffort: 'xhigh',
+    });
+
+    expect(assertCliPhaseModelsSupportedMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        executorModel: 'codex',
+        executorModelId: 'gpt-5.5',
+        executorReasoningEffort: 'xhigh',
+      }),
+    );
+    expect(automations.update).toHaveBeenCalled();
+  });
+
+  it('does not persist an automation when model preflight fails', async () => {
+    assertCliPhaseModelsSupportedMock.mockRejectedValueOnce(
+      new Error('Executor: Codex CLI 1.0.3 cannot serve gpt-5.6-sol'),
+    );
+
+    await expect(
+      getHandler('automations:create')(null, {
+        projectId: 'project-1',
+        name: 'Broken run',
+        prompt: 'Run it',
+        cronExpr: '0 0 * * *',
+        executorProvider: 'codex',
+        executorModelId: 'gpt-5.6-sol',
+      }),
+    ).rejects.toThrow('Executor: Codex CLI 1.0.3 cannot serve gpt-5.6-sol');
+
+    expect(automations.create).not.toHaveBeenCalled();
+    expect(automationScheduler.schedule).not.toHaveBeenCalled();
+  });
+
+  it('preflights a disabled automation before enabling it', async () => {
+    automations.getById.mockReturnValue(
+      makeAutomation({
+        enabled: false,
+        executorProvider: 'codex',
+        executorModelId: 'gpt-5.6-sol',
+      }),
+    );
+    assertCliPhaseModelsSupportedMock.mockRejectedValueOnce(
+      new Error('Executor: Codex CLI cannot serve gpt-5.6-sol'),
+    );
+
+    await expect(
+      getHandler('automations:set-enabled')(null, { id: 'auto-1', enabled: true }),
+    ).rejects.toThrow('Executor: Codex CLI cannot serve gpt-5.6-sol');
+
+    expect(automations.setEnabled).not.toHaveBeenCalled();
+    expect(automationScheduler.schedule).not.toHaveBeenCalled();
   });
 });

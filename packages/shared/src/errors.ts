@@ -1,3 +1,5 @@
+import { truncate } from './truncate';
+
 /**
  * Clamp an error-like value to a single-line string bounded in length so
  * multi-KB stderr, stack traces, or echoed prompts never leak into the
@@ -13,8 +15,7 @@ export function clampError(raw: unknown, max = 280): string {
   else message = 'Unknown error';
 
   const firstLine = message.split('\n')[0];
-  if (firstLine.length <= max) return firstLine;
-  return `${firstLine.slice(0, max - 1)}…`;
+  return truncate(firstLine, max);
 }
 
 /**

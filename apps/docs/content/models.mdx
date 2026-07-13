@@ -1,0 +1,99 @@
+# Models
+
+ShipCode can assign a provider, model, and reasoning effort independently to planning, review, execution, and verification. App settings establish the defaults; project and issue overrides can replace them for a narrower scope.
+
+The source of truth is [`model-catalog.ts`](https://github.com/shipshitdev/shipcode/blob/master/packages/shared/src/model-catalog.ts), [`model-resolution.ts`](https://github.com/shipshitdev/shipcode/blob/master/packages/shared/src/model-resolution.ts), and [`model-config-presets.ts`](https://github.com/shipshitdev/shipcode/blob/master/packages/shared/src/model-config-presets.ts).
+
+## Providers and models
+
+| Provider | Curated models | Plan | Review | Execute | Verify |
+|----------|----------------|:----:|:------:|:-------:|:------:|
+| Claude CLI | `claude-fable-5`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001` | ✓ | ✓ | ✓ | ✓ |
+| Codex CLI | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini` | ✓ | ✓ | ✓ | ✓ |
+| Gemini CLI | `gemini-2.5-pro`, `gemini-2.5-flash` | ✓ | ✓ | ✓ | ✓ |
+| Cursor CLI | `auto` | — | — | ✓ | — |
+| Grok CLI | `grok-4.5` | — | — | ✓ | — |
+| OpenRouter | `openrouter/auto`, `openrouter/free`, `anthropic/claude-sonnet-4.6`, `anthropic/claude-opus-4.8`, `qwen/qwen3.6-plus`, `qwen/qwen3-coder:free` | ✓ | ✓ | ✓ | ✓ |
+
+Codex publishes its installed model catalog through `codex debug models`; the models above are ShipCode's conservative fallback options when an older CLI cannot report capabilities. Cursor and Grok are execute-only because their headless CLIs cannot guarantee a read-only planning, review, or verification run.
+
+The curated OpenRouter list is only a starting point. OpenRouter settings accept other catalog model IDs, and [`openrouter/auto`](https://openrouter.ai/openrouter/auto) can choose the upstream model per request. See [OpenRouter](/openrouter) for authentication and fallback behavior.
+
+## Pinned defaults
+
+Pinned defaults are used when a CLI-backed phase or auxiliary task has no explicit model override. They can lag newly added catalog entries deliberately while fleet compatibility is verified.
+
+| Lane | Provider | Pinned model |
+|------|----------|--------------|
+| Pipeline phases | Claude | `claude-sonnet-4-6` |
+| PRD rewrite | Claude | `claude-sonnet-4-6` |
+| Issue triage | Claude | `claude-haiku-4-5-20251001` |
+| Pipeline phases | Codex | `gpt-5.5` |
+| PRD rewrite | Codex | `gpt-5.4-mini` |
+| Issue triage | Codex | `gpt-5.4-mini` |
+| Pipeline phases | Gemini | `gemini-2.5-pro` |
+| Execution | Cursor | `auto` |
+| Execution | Grok | `grok-4.5` |
+| Paid routing | OpenRouter | `openrouter/auto` |
+| Free routing | OpenRouter | `openrouter/free` |
+| Explicit fallback | OpenRouter | `qwen/qwen3.6-plus` |
+
+The phase provider itself comes from app settings, then project overrides, then issue overrides. A model ID follows the same narrowing order. Use the desktop **Settings → Pipeline** panel for app defaults and project or issue settings for targeted overrides.
+
+## Slug aliases
+
+Model fields accept canonical IDs or these case-insensitive shorthands:
+
+| Family | Aliases | Resolves to |
+|--------|---------|-------------|
+| Opus | `opus`, `opus-4.8`, `opus4.8` | `claude-opus-4-8` |
+| Opus 4.7 | `opus-4.7` | `claude-opus-4-7` |
+| Opus 4.6 | `opus-4.6` | `claude-opus-4-6` |
+| Sonnet | `sonnet`, `sonnet-4.6` | `claude-sonnet-4-6` |
+| Fable | `fable`, `fable-5`, `fable5` | `claude-fable-5` |
+| Haiku | `haiku`, `haiku-4.5` | `claude-haiku-4-5-20251001` |
+| Grok | `grok`, `grok-4.5`, `grok4.5` | `grok-4.5` |
+| GPT-5.6 Sol | `5.6`, `gpt-5.6`, `5.6-sol`, `sol` | `gpt-5.6-sol` |
+| GPT-5.6 Terra | `5.6-terra`, `terra` | `gpt-5.6-terra` |
+| GPT-5.6 Luna | `5.6-luna`, `luna` | `gpt-5.6-luna` |
+| GPT-5.5 | `5.5` | `gpt-5.5` |
+| GPT-5.4 | `5.4` | `gpt-5.4` |
+| GPT-5.4 Mini | `5.4-mini`, `mini` | `gpt-5.4-mini` |
+
+Unknown values are preserved as typed, which allows provider-native model IDs that are not in the curated fallback catalog.
+
+## Presets
+
+| Preset | Scope | Plan | Review | Execute | Verify |
+|--------|-------|------|--------|---------|--------|
+| `claude` | App or project | Sonnet 4.6 | Sonnet 4.6 | Sonnet 4.6 | Sonnet 4.6 |
+| `codex` | App or project | GPT-5.5 | GPT-5.5 | GPT-5.5 | GPT-5.5 |
+| `hybrid` | App or project | Sonnet 4.6 | GPT-5.5 | GPT-5.5 | GPT-5.5 |
+| `opus-combo` | Project only | Opus 4.8 | GPT-5.5 | GPT-5.5 | GPT-5.4 Mini |
+| `fable-combo` | Project only | Fable 5 | GPT-5.6 Sol | GPT-5.6 Terra | GPT-5.6 Luna |
+
+`opus-combo` and `fable-combo` are project-only because their concrete per-phase model IDs require project overrides; the app-wide preset path selects providers while keeping the pinned provider models. The Fable combo intentionally maps the deepest planning work to Fable, flagship review to Sol, sustained implementation to Terra, and fast verification to Luna.
+
+## Reasoning effort
+
+ShipCode normalizes the shared `none`, `minimal`, `low`, `medium`, `high`, and `xhigh` choices to each provider's supported controls.
+
+| Provider or model | Effective choices | Normalization rules |
+|-------------------|-------------------|---------------------|
+| Claude, except Fable 5 | None, Medium, High | Minimal/Low → None; Extra high → High |
+| Fable 5 | Medium, High | None/Minimal/Low → Medium; Extra high → High |
+| Codex | Low, Medium, High, Extra high | None/Minimal → Low |
+| Gemini | Low, Medium, High | None/Minimal → Low; Extra high → High |
+| Cursor | None | The CLI selects reasoning automatically |
+| Grok | None | The CLI selects reasoning automatically |
+| OpenRouter Claude models | None, High | Any non-None value uses adaptive thinking |
+| OpenRouter Qwen 3 Coder Free | None | Reasoning controls are disabled |
+| Other OpenRouter models | Provider-dependent | The requested effort may be remapped upstream |
+
+Fable 5 always uses adaptive thinking, so ShipCode never offers a no-thinking mode for it. A configured effort is normalized before the provider runs, and the effective value is what ShipCode records and displays.
+
+## See also
+
+- [Pipeline overview](/pipeline/overview) — where each model participates in a run
+- [Configuration](/configuration) — GitHub routing labels and repository setup
+- [OpenRouter](/openrouter) — API-key setup, model overrides, and fallback order

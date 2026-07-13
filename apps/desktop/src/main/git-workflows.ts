@@ -8,7 +8,7 @@ import type {
   ExecutorModel,
   Project,
 } from '@shipcode/shared';
-import { stripAnsi } from '@shipcode/shared';
+import { stripAnsi, truncate } from '@shipcode/shared';
 import log from './logger.service';
 
 interface ActiveWorktreeOwner {
@@ -23,7 +23,7 @@ function summarizeCommitFailure(value: string): string {
       return trimmed ? [trimmed] : [];
     });
   const summary = lines.slice(0, 8).join('\n');
-  return summary.length > 800 ? `${summary.slice(0, 797)}...` : summary;
+  return truncate(summary, 800, '...');
 }
 
 function isLikelyHookFailure(message: string): boolean {

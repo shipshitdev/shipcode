@@ -76,7 +76,7 @@ describe('ClaudeNormalizer', () => {
       {
         kind: 'tool_start',
         name: 'Bash',
-        summary: `$ ${longCommand.slice(0, 60)}...`,
+        summary: `$ ${longCommand.slice(0, 57)}...`,
         command: longCommand,
       },
       { kind: 'tool_start', name: 'TodoWrite', summary: 'TodoWrite: 3' },

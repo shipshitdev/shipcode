@@ -14,6 +14,7 @@ import type {
   CliProviderUsageStatus,
   GhAuthStatus,
   IntegrationStatus,
+  OpenRouterAuthStatus,
   OpenRouterHealth,
   OpenRouterModelCheck,
   OpenRouterModelValidation,
@@ -699,7 +700,7 @@ export async function checkGrokAuth(): Promise<boolean> {
   return fileExists(grokAuthPath);
 }
 
-export type OpenRouterAuthStatus =
+export type OpenRouterAuthCheckResult =
   | { ok: true; label?: string }
   | {
       ok: false;
@@ -720,7 +721,7 @@ export type OpenRouterAuthStatus =
 export async function checkOpenRouterAuth(
   apiKey: string | undefined,
   pinnedModel?: string | null,
-): Promise<OpenRouterAuthStatus> {
+): Promise<OpenRouterAuthCheckResult> {
   if (!apiKey) {
     return { ok: false, reason: 'missing_key', message: 'OPENROUTER_API_KEY is not set' };
   }
@@ -796,6 +797,25 @@ export async function checkOpenRouterAuth(
   }
 
   return { ok: true, label };
+}
+
+function openRouterAuthStatusFromFailure(
+  result: Exclude<OpenRouterAuthCheckResult, { ok: true }>,
+): OpenRouterAuthStatus {
+  switch (result.reason) {
+    case 'missing_key':
+      return 'missing_key';
+    case 'invalid_key':
+      return 'invalid_key';
+    case 'unreachable':
+      return 'unreachable';
+    case 'model_deprecated':
+      return 'model_deprecated';
+    default: {
+      const exhaustiveReason: never = result.reason;
+      return exhaustiveReason;
+    }
+  }
 }
 
 async function fetchOpenRouterCatalog(apiKey: string): Promise<Set<string> | null> {
@@ -880,11 +900,10 @@ export async function checkOpenRouterHealth(settings: AppSettings): Promise<Open
 
   const auth = await checkOpenRouterAuth(apiKey);
   if (!auth.ok) {
-    const authStatus = auth.reason === 'invalid_key' ? 'invalid_key' : 'unreachable';
     return {
       enabled: true,
       keyPresent: true,
-      authStatus,
+      authStatus: openRouterAuthStatusFromFailure(auth),
       message: auth.message,
       label: null,
       modelChecks: buildOpenRouterModelChecks(settings, null, auth.message),

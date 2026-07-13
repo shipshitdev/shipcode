@@ -686,6 +686,13 @@ describe('createElectronEmitter event forwarding and terminal bookkeeping', () =
 
     emitter.emit({ type: 'pipeline:start-context', threadId: 'thread-1', source: 'test' } as never);
     emitter.emit({ type: 'pipeline:approval-gate', threadId: 'thread-1' } as never);
+    emitter.emit({ type: 'pipeline:turn-started', threadId: 'thread-1', turnNumber: 2 } as never);
+    emitter.emit({
+      type: 'pipeline:turn-completed',
+      threadId: 'thread-1',
+      turnNumber: 2,
+      result: 'success',
+    } as never);
     emitter.emit({ type: 'skill:fallback', threadId: 'thread-1', skill: 'missing' } as never);
     emitter.emit({ type: 'workflow:warning', threadId: 'thread-1', message: 'warn' } as never);
 
@@ -696,6 +703,14 @@ describe('createElectronEmitter event forwarding and terminal bookkeeping', () =
     expect(mainWindow.webContents.send).toHaveBeenCalledWith(
       'pipeline:approval-gate',
       expect.objectContaining({ type: 'pipeline:approval-gate' }),
+    );
+    expect(logEvent).toHaveBeenCalledWith(
+      'pipeline:turn-started',
+      expect.objectContaining({ turnNumber: 2 }),
+    );
+    expect(logEvent).toHaveBeenCalledWith(
+      'pipeline:turn-completed',
+      expect.objectContaining({ turnNumber: 2, result: 'success' }),
     );
     expect(mainWindow.webContents.send).toHaveBeenCalledWith(
       'skill:fallback',

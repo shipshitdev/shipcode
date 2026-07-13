@@ -49,6 +49,7 @@ describe('SettingsQueries', () => {
     expect(s.githubPollingIntervalMs).toBe(30000);
     expect(s.githubBotUsername).toBe('');
     expect(s.postFormalPrReviewEnabled).toBe(true);
+    expect(s.postPipelineTimelineEnabled).toBe(true);
     expect(s.maxConcurrentCpuTasks).toBe(1);
     expect(s.cpuThrottleThresholdPercent).toBe(85);
     expect(s.shellCommandTimeoutMs).toBe(600_000);
@@ -64,6 +65,11 @@ describe('SettingsQueries', () => {
     settings.set({ postFormalPrReviewEnabled: false });
 
     expect(settings.get().postFormalPrReviewEnabled).toBe(false);
+  });
+
+  it('round-trips the pipeline timeline comment setting', () => {
+    settings.set({ postPipelineTimelineEnabled: false });
+    expect(settings.get().postPipelineTimelineEnabled).toBe(false);
   });
 
   it('normalizes legacy afk run modes to programmatic', () => {

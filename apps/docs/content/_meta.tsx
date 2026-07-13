@@ -4,6 +4,7 @@ export default {
   architecture: 'Architecture',
   desktop: 'Desktop App',
   pipeline: 'Pipeline',
+  models: 'Models',
   cli: 'CLI',
   configuration: 'Configuration',
   openrouter: 'OpenRouter',

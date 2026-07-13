@@ -12,6 +12,7 @@
  * - partial line buffering across PTY chunk boundaries
  */
 
+import { truncate } from '@shipcode/shared';
 import type { TerminalEvent } from '../../terminal-events';
 import { stripAnsi, summarizeTerminalText } from '../output-summary';
 import { FenceStateMachine } from './fence-suppression';
@@ -51,7 +52,7 @@ export class CodexNormalizer {
       this.onEvent({
         kind: 'tool_start',
         name: 'Bash',
-        summary: `$ ${cmd.length > 60 ? `${cmd.slice(0, 60)}...` : cmd}`,
+        summary: `$ ${truncate(cmd, 60, '...')}`,
         ...(cmd ? { command: cmd } : {}),
       });
       return;

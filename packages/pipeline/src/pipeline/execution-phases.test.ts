@@ -907,6 +907,8 @@ describe('execution phase handlers', () => {
   it('feeds structured verification failures back into the next execution prompt', async () => {
     const context = makeContext({ repoPromptMaterials: null, worktreePath: process.cwd() });
     const harness = makeExecutionHarness(context);
+    const testOutput = `test-start-${'t'.repeat(9000)}-test-end`;
+    const runtimeQaOutput = `runtime-start-${'r'.repeat(9000)}-runtime-end`;
     (
       harness.deps as never as { verifications: { getLatest: ReturnType<typeof vi.fn> } }
     ).verifications.getLatest.mockReturnValue({
@@ -916,6 +918,8 @@ describe('execution phase handlers', () => {
         summary: ' Needs   polish ',
         criteriaResults: [{ criterion: ' AC ', passed: false, evidence: ' Missing   proof ' }],
         issues: [{ severity: 'major', description: ' Bad   file ', filePath: 'src/a.ts' }],
+        testOutput,
+        runtimeQaOutput,
       },
     });
 
@@ -926,6 +930,18 @@ describe('execution phase handlers', () => {
     expect(prompt).toContain('<previous_verification_failure>');
     expect(prompt).toContain('- AC: Missing proof');
     expect(prompt).toContain('- [major] src/a.ts: Bad file');
+    const persistedTestOutput = prompt.match(
+      /Prior test output:\n([\s\S]*?)\n\nPrior runtime QA output:/,
+    )?.[1];
+    const persistedRuntimeQaOutput = prompt.match(
+      /Prior runtime QA output:\n([\s\S]*?)\n<\/previous_verification_failure>/,
+    )?.[1];
+    expect(persistedTestOutput).toContain('test-start-');
+    expect(persistedTestOutput).toContain('-test-end');
+    expect(persistedTestOutput?.length).toBeLessThanOrEqual(8192);
+    expect(persistedRuntimeQaOutput).toContain('runtime-start-');
+    expect(persistedRuntimeQaOutput).toContain('-runtime-end');
+    expect(persistedRuntimeQaOutput?.length).toBeLessThanOrEqual(8192);
   });
 
   it('loads repo prompt material content when execution context is initialized lazily', async () => {
@@ -1960,6 +1976,45 @@ describe('execution phase handlers', () => {
       andThen: { next: 'execute', plan },
     });
     expect(harness.runtime.runProviderPhase).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists test and runtime QA output with a failed verification retry', async () => {
+    const context = makeContext({ verificationRetries: 0 });
+    const harness = makeExecutionHarness(context);
+    harness.deps.plans.getLatest.mockReturnValue({
+      id: 'plan-record-1',
+      status: 'approved',
+      structured: plan,
+    });
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: verificationFailed,
+      exitCode: 0,
+    });
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'status') return '';
+      if (args[0] === 'rev-parse') return 'head-sha\n';
+      if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
+      return '';
+    });
+
+    await harness.handlers.startVerification('thread-1', {
+      testOutput: 'PASS unit suite',
+      runtimeQaOutput: 'runtime smoke ok',
+    });
+
+    expect(
+      (harness.deps as never as { verifications: { create: ReturnType<typeof vi.fn> } })
+        .verifications.create,
+    ).toHaveBeenCalledWith(
+      'thread-1',
+      'plan-record-1',
+      expect.any(String),
+      expect.objectContaining({
+        result: 'failed',
+        testOutput: 'PASS unit suite',
+        runtimeQaOutput: 'runtime smoke ok',
+      }),
+    );
   });
 
   it('publishes the durable findings summary to a linked PR during shipping', async () => {

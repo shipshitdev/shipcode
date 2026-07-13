@@ -10,6 +10,7 @@ import {
   formatRelativeTime,
   MODEL_DISPLAY,
   stripAnsi,
+  truncate,
 } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
 import { Badge, Button, Skeleton } from '@shipshitdev/ui';
@@ -55,7 +56,7 @@ function summarizeTerminalEvent(record: TerminalEventRecord): string | null {
   if (!rendered) return null;
   const cleaned = stripAnsi(rendered).trim();
   if (!cleaned) return null;
-  return cleaned.length > 220 ? `${cleaned.slice(0, 220)}...` : cleaned;
+  return truncate(cleaned, 220, '...');
 }
 
 function runTotals(entry: PipelineRunTimelineEntry) {

@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { GitState } from '@shipcode/shared';
 import { normalizeBranches } from '@shipcode/shared';
 import { type SimpleGit, type StatusResult, simpleGit } from 'simple-git';
+import { resolveDefaultBranch } from './default-branch';
 
 function isUnavailableGitRepositoryError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -100,16 +101,7 @@ export class GitService {
   }
 
   async getDefaultBranch(): Promise<string> {
-    try {
-      const result = await this.git.raw(['symbolic-ref', 'refs/remotes/origin/HEAD', '--short']);
-      return result.trim().replace('origin/', '');
-    } catch {
-      // Fallback: check if main or master exists
-      const branches = await this.git.branchLocal();
-      if (branches.all.includes('main')) return 'main';
-      if (branches.all.includes('master')) return 'master';
-      return branches.current ?? 'main';
-    }
+    return resolveDefaultBranch(this.git);
   }
 
   async getRemoteUrl(): Promise<string | null> {

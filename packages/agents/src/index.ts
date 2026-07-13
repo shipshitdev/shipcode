@@ -63,7 +63,7 @@ export {
   normalizeStatusOption,
   validateProjectStatusField,
 } from './github/project-status';
-export type { CacheOptions, OpenRouterAuthStatus } from './health-check';
+export type { CacheOptions, OpenRouterAuthCheckResult } from './health-check';
 export {
   checkClaudeAuth,
   checkClaudeModelCapabilities,
@@ -174,6 +174,10 @@ export {
   measurePhasePromptTelemetry,
   toPersistedPromptTelemetryMaterials,
 } from './prompts/phase-prompt-telemetry';
+export {
+  formatPipelineTimelineComment,
+  PIPELINE_TIMELINE_COMMENT_MARKER,
+} from './prompts/pipeline-timeline-comment';
 export { formatPlanComment, PLAN_COMMENT_MARKER } from './prompts/plan-comment';
 export type {
   PlanPromptContext,

@@ -61,6 +61,7 @@ vi.mock('@shipcode/db', () => ({
   FeatureQaResultQueries: mocks.Query,
   GitHubIssueQueries: mocks.Query,
   getDatabase: mocks.getDatabase,
+  PhaseLogQueries: mocks.Query,
   PipelineRunQueries: mocks.Query,
   PipelineStepQueries: mocks.Query,
   PlanQueries: mocks.Query,
@@ -113,6 +114,7 @@ describe('createCliContext', () => {
       openrouter: { kind: 'openrouter' },
     });
     expect(context.pipelineDeps.projects).toBe(context.projects);
+    expect(context.pipelineDeps.phaseLogs).toBe(context.phaseLogs);
     expect(context.pipelineDeps.emitter).toBe(context.emitter);
     expect(mocks.state.openRouterOptions?.getApiKey()).toBe('openrouter-key');
     expect(mocks.state.openRouterOptions?.getSettings()).toEqual({ telemetryEnabled: true });

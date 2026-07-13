@@ -335,6 +335,19 @@ function pipelineSettingsSection({
               />
             </SettingsRow>
             <SettingsRow
+              label="Post pipeline timeline to GitHub"
+              htmlFor="post-pipeline-timeline-enabled"
+              description="When on, phase transitions update a single timeline comment on the GitHub issue. When off, project status and pipeline labels still sync normally."
+            >
+              <Switch
+                id="post-pipeline-timeline-enabled"
+                checked={settings.postPipelineTimelineEnabled}
+                onCheckedChange={(checked: boolean) =>
+                  onUpdate({ postPipelineTimelineEnabled: checked })
+                }
+              />
+            </SettingsRow>
+            <SettingsRow
               label="Max concurrent pipelines"
               htmlFor="max-concurrent-pipelines"
               description="How many pipelines can run at once. Extras are queued."

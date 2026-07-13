@@ -7,6 +7,10 @@ export interface VerificationResult {
   summary: string;
   criteriaResults: CriteriaCheck[];
   issues: VerificationIssue[];
+  /** Pipeline test evidence supplied to the verifier for this attempt. */
+  testOutput?: string;
+  /** Runtime-QA evidence supplied to the verifier for this attempt. */
+  runtimeQaOutput?: string;
 }
 
 export interface CriteriaCheck {

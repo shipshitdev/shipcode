@@ -100,6 +100,9 @@ export interface AppSettings {
   // When true (default), ShipCode submits review findings through GitHub's
   // native PR review surface. When false, it keeps the comment-only behavior.
   postFormalPrReviewEnabled: boolean;
+  // When true (default), phase transitions are mirrored to a single timeline
+  // comment on the GitHub issue. This does not affect project or label sync.
+  postPipelineTimelineEnabled: boolean;
   // Per-phase reasoning effort. Applied as:
   //   Claude: mapped to a supported thinking-token budget
   //   Codex:  mapped to supported low|medium|high levels

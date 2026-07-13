@@ -7,6 +7,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { truncate } from '@shipcode/shared';
 import { z } from 'zod';
 import { assertPathInWorktree, PathGuardError } from './path-guard';
 import type { Tool, ToolContext, ToolResult } from './types';
@@ -102,9 +103,7 @@ async function runRipgrep(input: GrepInput, rootAbs: string): Promise<ToolResult
       maxBuffer: 2 * 1024 * 1024,
     });
     const lines = stdout.split('\n').filter(Boolean).slice(0, MAX_MATCHES);
-    const cappedLines = lines.map((line) =>
-      line.length > MAX_LINE_LENGTH ? `${line.slice(0, MAX_LINE_LENGTH)}…` : line,
-    );
+    const cappedLines = lines.map((line) => truncate(line, MAX_LINE_LENGTH));
     const truncated = lines.length >= MAX_MATCHES;
     return {
       ok: true,

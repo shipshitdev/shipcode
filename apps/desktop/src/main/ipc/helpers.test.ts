@@ -20,6 +20,7 @@ import type { Queries } from './types';
 
 const {
   checkCliModelCapabilitiesMock,
+  checkSystemHealthMock,
   ghCliGetPullRequestFeedbackMock,
   ghCliSetIssueLabelPresenceMock,
   ghCliInstances,
@@ -28,6 +29,7 @@ const {
   streamParserFeedMock,
 } = vi.hoisted(() => ({
   checkCliModelCapabilitiesMock: vi.fn(),
+  checkSystemHealthMock: vi.fn(),
   ghCliGetPullRequestFeedbackMock: vi.fn(),
   ghCliSetIssueLabelPresenceMock: vi.fn(async () => undefined),
   ghCliInstances: [] as Array<{
@@ -56,6 +58,7 @@ vi.mock('@shipcode/agents', () => {
   };
   return {
     checkCliModelCapabilities: checkCliModelCapabilitiesMock,
+    checkSystemHealth: checkSystemHealthMock,
     DEFAULT_SKILLS: {
       'plan-generation': defaultSkill,
       'adversarial-review': defaultSkill,
@@ -261,6 +264,13 @@ describe('phase model helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     checkCliModelCapabilitiesMock.mockResolvedValue(makeCapabilities());
+    checkSystemHealthMock.mockResolvedValue({
+      claude: { version: '1.2.3' },
+      codex: { version: 'codex-cli 1.0.3' },
+      gemini: { version: '2.0.0' },
+      cursor: { version: '3.0.0' },
+      grok: { version: '4.0.0' },
+    });
   });
 
   it('resolves project and issue phase model providers, model ids, and reasoning effort', () => {
@@ -331,7 +341,37 @@ describe('phase model helpers', () => {
         executorReasoningEffort: 'high',
         verifierReasoningEffort: 'high',
       }),
-    ).rejects.toThrow('Planner: missing-claude-model is not reported');
+    ).rejects.toThrow(
+      'Planner: Claude CLI 1.2.3 cannot serve missing-claude-model. missing-claude-model is not reported',
+    );
+  });
+
+  it('fails closed when Codex cannot return its authoritative model catalog', async () => {
+    checkCliModelCapabilitiesMock.mockResolvedValueOnce({
+      ...makeCapabilities(),
+      codex: {
+        ...makeCapabilities().codex,
+        source: 'fallback',
+        error: 'Codex model catalog unavailable: unknown command debug models',
+      },
+    });
+
+    await expect(
+      assertCliPhaseModelsSupported({
+        plannerModel: 'claude',
+        reviewerModel: 'codex',
+        executorModel: 'codex',
+        verifierModel: 'codex',
+        plannerModelId: 'claude-sonnet-4-5',
+        reviewerModelId: 'gpt-5.2',
+        executorModelId: 'gpt-5.2',
+        verifierModelId: 'gpt-5.2',
+        plannerReasoningEffort: 'medium',
+        reviewerReasoningEffort: 'high',
+        executorReasoningEffort: 'high',
+        verifierReasoningEffort: 'high',
+      }),
+    ).rejects.toThrow('Reviewer: Codex CLI codex-cli 1.0.3 cannot confirm it serves gpt-5.2');
   });
 
   it('validates PRD rewrite CLI model selections', async () => {

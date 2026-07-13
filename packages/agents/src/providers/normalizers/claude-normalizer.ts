@@ -10,6 +10,7 @@
  * - partial line buffering across PTY chunk boundaries
  */
 
+import { truncate } from '@shipcode/shared';
 import type { TerminalEvent } from '../../terminal-events';
 import { FenceStateMachine } from './fence-suppression';
 import { LineBufferedJsonNormalizer } from './line-buffered-json-normalizer';
@@ -43,7 +44,7 @@ function formatToolCall(name: string, input: Record<string, unknown>): ToolCallR
     case 'Bash': {
       const cmd = String(input.command ?? '');
       return {
-        summary: `$ ${cmd.length > 60 ? `${cmd.slice(0, 60)}...` : cmd}`,
+        summary: `$ ${truncate(cmd, 60, '...')}`,
         command: cmd,
       };
     }

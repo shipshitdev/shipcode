@@ -56,6 +56,7 @@ describe('grepTool rg backend formatting', () => {
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.content).toContain('…');
+      expect(res.content.split('\n')[0]).toHaveLength(500);
       expect(res.content).toContain('[truncated at 200 matches]');
       expect(res.data).toEqual({ matches: 200, truncated: true, backend: 'rg' });
     }

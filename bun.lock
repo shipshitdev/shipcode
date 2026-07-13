@@ -104,6 +104,7 @@
         "react-dom": "19.2.7",
       },
       "devDependencies": {
+        "@shipcode/shared": "workspace:*",
         "@types/node": "25.9.1",
         "@types/react": "19.2.16",
       },
