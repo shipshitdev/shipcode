@@ -7,6 +7,7 @@ import type {
   ReviewFindingRecord,
   VerificationResult,
 } from '@shipcode/shared';
+import { truncate } from '@shipcode/shared';
 
 export const REVIEW_FINDINGS_PR_COMMENT_MARKER = '<!-- shipcode:review-findings -->';
 
@@ -15,9 +16,7 @@ function compact(value: string): string {
 }
 
 function truncateCompact(value: string, max = 280): string {
-  const cleaned = compact(value);
-  if (cleaned.length <= max) return cleaned;
-  return `${cleaned.slice(0, max - 1)}…`;
+  return truncate(compact(value), max);
 }
 
 function fingerprint(parts: Array<string | number | null | undefined>): string {

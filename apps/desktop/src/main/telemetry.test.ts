@@ -188,7 +188,7 @@ describe('telemetry', () => {
         extra: {
           terminalOutput: '[redacted]',
           items: expect.arrayContaining([expect.objectContaining({ tokenValue: '[redacted]' })]),
-          longValue: `${'x'.repeat(500)}...`,
+          longValue: `${'x'.repeat(497)}...`,
         },
       }),
     );

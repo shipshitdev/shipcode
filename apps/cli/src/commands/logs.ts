@@ -1,3 +1,4 @@
+import { truncate } from '@shipcode/shared';
 import { sanitizeCliText } from '../adapters/cli-emitter';
 import { createCliContext } from '../context';
 import { requireOnboarding } from './guard';
@@ -34,7 +35,7 @@ export async function logsCommand(issueNumber: string) {
         process.stdout.write(sanitizeCliText(data.content));
         break;
       case 'thinking':
-        console.log(`[${time}] Thinking: ${sanitizeCliText(data.content).slice(0, 120)}...`);
+        console.log(`[${time}] Thinking: ${truncate(sanitizeCliText(data.content), 120, '...')}`);
         break;
       case 'tool_start':
         console.log(

@@ -1,4 +1,4 @@
-import type { AppSettings, TelemetryStatus } from '@shipcode/shared';
+import { type AppSettings, type TelemetryStatus, truncate } from '@shipcode/shared';
 
 const DISABLED_VALUES = new Set(['0', 'false', 'no', 'off']);
 const DEFAULT_CLOSE_TIMEOUT_MS = 2000;
@@ -109,7 +109,7 @@ function scrubValue(key: string, value: unknown): unknown {
     return '[redacted]';
   }
   if (typeof value === 'string') {
-    return value.length > 500 ? `${value.slice(0, 500)}...` : value;
+    return truncate(value, 500, '...');
   }
   if (!value || typeof value !== 'object' || value instanceof Error) return value;
   if (Array.isArray(value)) return value.slice(0, 20).map((entry) => scrubValue(key, entry));
