@@ -1,0 +1,35 @@
+name: Check Tap Token
+
+# Read-only diagnostic: reports whether TAP_GITHUB_TOKEN can WRITE to the
+# Homebrew tap, without mutating the tap or rebuilding anything. GitHub's REST
+# repo endpoint returns .permissions.push for the *authenticated* token, so this
+# is a definitive, side-effect-free test of the publish cask-push credential.
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report tap write permission
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::TAP_GITHUB_TOKEN is empty/unset"; exit 1
+          fi
+          echo "Token identity:"
+          gh api user --jq '"  login: \(.login), type: \(.type)"' || echo "  (gh api user failed — token may be fine-grained; that's fine)"
+          echo "Permissions on shipshitdev/homebrew-tap:"
+          PERMS=$(gh api repos/shipshitdev/homebrew-tap --jq '.permissions' 2>&1) || {
+            echo "::error::cannot read repo with this token: $PERMS"; exit 1;
+          }
+          echo "  $PERMS"
+          PUSH=$(gh api repos/shipshitdev/homebrew-tap --jq '.permissions.push')
+          echo "push=$PUSH"
+          if [ "$PUSH" = "true" ]; then
+            echo "::notice::TAP_GITHUB_TOKEN CAN write to the tap — publish cask job will succeed."
+          else
+            echo "::error::TAP_GITHUB_TOKEN CANNOT write (push=$PUSH). Fix token resource-owner/scope."
+            exit 1
+          fi
