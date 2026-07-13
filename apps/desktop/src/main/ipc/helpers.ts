@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import {
   checkCliModelCapabilities,
+  checkSystemHealth,
   DEFAULT_SKILLS,
   GhCli,
   inspectProjectSetup,
@@ -15,6 +16,8 @@ import {
 import type { ShipCodePlan } from '@shipcode/shared';
 import {
   assessCliSelectionAvailabilityFromCapabilities,
+  CLI_PROVIDER_LABELS,
+  type CliModelCapabilities,
   clampError,
   DEFAULT_SETTINGS,
   type ExecutorModel,
@@ -23,6 +26,7 @@ import {
   ISSUE_PIPELINE_STATUS,
   isPipelineStateLabel,
   type PipelinePhase,
+  type PhaseCliProvider,
   parseGithubProjectUrl,
   pipelineLabelForStatus,
   type ReasoningEffort,
@@ -33,6 +37,7 @@ import {
   resolvePhaseModelId,
   resolvePhaseModelIdForIssue,
   SHIPCODE_CI_BLOCKED_LABEL,
+  type SystemHealth,
 } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
 import type { ChatNotificationService } from '../chat-notification-service';
@@ -128,8 +133,46 @@ export function resolveIssuePhaseModels(
 
 type PhaseModels = ReturnType<typeof resolveProjectPhaseModels>;
 
+function assertCliSelectionSupported(
+  capabilities: Record<PhaseCliProvider, CliModelCapabilities>,
+  systemHealth: SystemHealth,
+  label: string,
+  provider: PhaseCliProvider,
+  modelId: string | null,
+  effort: ReasoningEffort,
+): void {
+  const providerCapabilities = capabilities[provider];
+  const installedVersion = systemHealth[provider]?.version;
+  const versionLabel = installedVersion ? ` ${installedVersion}` : '';
+  const modelLabel = modelId ?? 'the configured default model';
+
+  // Codex publishes an authoritative local catalog. Falling back to ShipCode's
+  // curated list when that command is missing or fails must not be treated as
+  // proof that a stale CLI can serve a newly curated model.
+  if (provider === 'codex' && providerCapabilities.source !== 'catalog') {
+    throw new Error(
+      `${label}: ${CLI_PROVIDER_LABELS.codex}${versionLabel} cannot confirm it serves ${modelLabel}. ${providerCapabilities.error ?? 'The installed CLI did not return a model catalog.'}`,
+    );
+  }
+
+  const selection = assessCliSelectionAvailabilityFromCapabilities(
+    capabilities,
+    provider,
+    modelId,
+    effort,
+  );
+  if (!selection.available) {
+    throw new Error(
+      `${label}: ${CLI_PROVIDER_LABELS[provider]}${versionLabel} cannot serve ${modelLabel}. ${selection.message}`,
+    );
+  }
+}
+
 export async function assertCliPhaseModelsSupported(phaseModels: PhaseModels): Promise<void> {
-  const capabilities = await checkCliModelCapabilities();
+  const [capabilities, systemHealth] = await Promise.all([
+    checkCliModelCapabilities(),
+    checkSystemHealth(),
+  ]);
   const phases = [
     {
       label: 'Planner',
@@ -165,13 +208,14 @@ export async function assertCliPhaseModelsSupported(phaseModels: PhaseModels): P
   for (const phase of phases) {
     const cliProvider = phase.provider;
     if (cliProvider === 'openrouter') continue;
-    const selection = assessCliSelectionAvailabilityFromCapabilities(
+    assertCliSelectionSupported(
       capabilities,
+      systemHealth,
+      phase.label,
       cliProvider,
       phase.modelId,
       phase.effort,
     );
-    if (!selection.available) throw new Error(`${phase.label}: ${selection.message}`);
   }
 }
 
@@ -180,16 +224,18 @@ export async function assertPrdRewriteModelSupported(
   modelId: string | null,
   effort: ReasoningEffort,
 ): Promise<void> {
-  const capabilities = await checkCliModelCapabilities();
-  const selection = assessCliSelectionAvailabilityFromCapabilities(
+  const [capabilities, systemHealth] = await Promise.all([
+    checkCliModelCapabilities(),
+    checkSystemHealth(),
+  ]);
+  assertCliSelectionSupported(
     capabilities,
+    systemHealth,
+    'PRD rewrite',
     cli,
     modelId,
     effort ?? DEFAULT_SETTINGS.prdRewriteReasoningEffort,
   );
-  if (!selection.available) {
-    throw new Error(selection.message ?? `${cli} model selection is unavailable`);
-  }
 }
 
 export function tryParsePlan(rawOutput: string): ShipCodePlan | null {
