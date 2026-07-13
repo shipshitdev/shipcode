@@ -22,7 +22,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MANIFEST_PATH = path.resolve(HERE, '..', '..', '..', 'page-coverage.manifest.json');
 const coverage = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as PageCoverageManifest;
 
-const WEB_ROUTE_IDS = ['web-home'] as const;
+const WEB_ROUTE_IDS = ['web-home', 'web-download'] as const;
 const DOCS_ROUTE_IDS = [
   'docs-index',
   'docs-getting-started',
@@ -53,6 +53,7 @@ type CoveredRouteId = (typeof WEB_ROUTE_IDS)[number] | (typeof DOCS_ROUTE_IDS)[n
 
 const EXPECTED_ROUTE_TEXT: Record<CoveredRouteId, string> = {
   'web-home': 'AI pipeline that plans, reviews, executes, tests, verifies',
+  'web-download': 'Preparing your download',
   'docs-index': 'Autonomous AI coding pipeline',
   'docs-getting-started': 'Which ShipCode do I need?',
   'docs-architecture': 'Turborepo monorepo',
