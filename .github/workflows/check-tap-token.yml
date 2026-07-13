@@ -21,11 +21,13 @@ jobs:
           echo "Token identity:"
           gh api user --jq '"  login: \(.login), type: \(.type)"' || echo "  (gh api user failed — token may be fine-grained; that's fine)"
           echo "Permissions on shipshitdev/homebrew-tap:"
+          # Single request; parse .push from the response so set -e can't abort
+          # before the diagnostic and we don't hit the API twice.
           PERMS=$(gh api repos/shipshitdev/homebrew-tap --jq '.permissions' 2>&1) || {
             echo "::error::cannot read repo with this token: $PERMS"; exit 1;
           }
           echo "  $PERMS"
-          PUSH=$(gh api repos/shipshitdev/homebrew-tap --jq '.permissions.push')
+          PUSH=$(printf '%s' "$PERMS" | jq -r '.push // false')
           echo "push=$PUSH"
           if [ "$PUSH" = "true" ]; then
             echo "::notice::TAP_GITHUB_TOKEN CAN write to the tap — publish cask job will succeed."
