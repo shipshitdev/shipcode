@@ -175,6 +175,41 @@ describe('GhCli', () => {
         ghExecOptions,
       );
     });
+
+    it('dedupes duplicate/blank labels and skips removals absent from the issue', async () => {
+      // 1) listRepoLabels (filterExistingLabels), 2) getIssue, 3) add edit
+      success(JSON.stringify([{ name: 'agent:claude' }]));
+      success(
+        JSON.stringify({
+          number: 12,
+          title: 'Dedup',
+          labels: [{ name: 'stale' }],
+          assignees: [],
+          state: 'open',
+          url: '',
+        }),
+      );
+      success('');
+
+      const result = await gh.applyIssueLabelActions(12, {
+        // Duplicate + whitespace-only entries collapse to a single unique label.
+        addLabels: ['agent:claude', 'agent:claude', '   '],
+        // 'ghost' is not present on the issue, so the removal is a no-op.
+        removeLabels: ['ghost', 'ghost'],
+      });
+
+      expect(result).toEqual({ added: ['agent:claude'], removed: [], skipped: [] });
+      expect(mockExecFileAsync).toHaveBeenCalledWith(
+        'gh',
+        ['issue', 'edit', '12', '--add-label', 'agent:claude'],
+        ghExecOptions,
+      );
+      expect(mockExecFileAsync).not.toHaveBeenCalledWith(
+        'gh',
+        expect.arrayContaining(['--remove-label']),
+        ghExecOptions,
+      );
+    });
   });
 
   describe('listIssues', () => {
