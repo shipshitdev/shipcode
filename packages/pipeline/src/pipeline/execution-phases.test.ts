@@ -892,6 +892,8 @@ describe('execution phase handlers', () => {
         summary: ' Needs   polish ',
         criteriaResults: [{ criterion: ' AC ', passed: false, evidence: ' Missing   proof ' }],
         issues: [{ severity: 'major', description: ' Bad   file ', filePath: 'src/a.ts' }],
+        testOutput: 'PASS unit suite\ncoverage threshold missed',
+        runtimeQaOutput: 'GET /health 500\nserver smoke failed',
       },
     });
 
@@ -902,6 +904,8 @@ describe('execution phase handlers', () => {
     expect(prompt).toContain('<previous_verification_failure>');
     expect(prompt).toContain('- AC: Missing proof');
     expect(prompt).toContain('- [major] src/a.ts: Bad file');
+    expect(prompt).toContain('Prior test output:\nPASS unit suite\ncoverage threshold missed');
+    expect(prompt).toContain('Prior runtime QA output:\nGET /health 500\nserver smoke failed');
   });
 
   it('loads repo prompt material content when execution context is initialized lazily', async () => {
@@ -1936,6 +1940,45 @@ describe('execution phase handlers', () => {
       andThen: { next: 'execute', plan },
     });
     expect(harness.runtime.runProviderPhase).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists test and runtime QA output with a failed verification retry', async () => {
+    const context = makeContext({ verificationRetries: 0 });
+    const harness = makeExecutionHarness(context);
+    harness.deps.plans.getLatest.mockReturnValue({
+      id: 'plan-record-1',
+      status: 'approved',
+      structured: plan,
+    });
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: verificationFailed,
+      exitCode: 0,
+    });
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'status') return '';
+      if (args[0] === 'rev-parse') return 'head-sha\n';
+      if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
+      return '';
+    });
+
+    await harness.handlers.startVerification('thread-1', {
+      testOutput: 'PASS unit suite',
+      runtimeQaOutput: 'runtime smoke ok',
+    });
+
+    expect(
+      (harness.deps as never as { verifications: { create: ReturnType<typeof vi.fn> } })
+        .verifications.create,
+    ).toHaveBeenCalledWith(
+      'thread-1',
+      'plan-record-1',
+      expect.any(String),
+      expect.objectContaining({
+        result: 'failed',
+        testOutput: 'PASS unit suite',
+        runtimeQaOutput: 'runtime smoke ok',
+      }),
+    );
   });
 
   it('publishes the durable findings summary to a linked PR during shipping', async () => {
