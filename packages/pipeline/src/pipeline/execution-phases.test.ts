@@ -883,6 +883,8 @@ describe('execution phase handlers', () => {
   it('feeds structured verification failures back into the next execution prompt', async () => {
     const context = makeContext({ repoPromptMaterials: null, worktreePath: process.cwd() });
     const harness = makeExecutionHarness(context);
+    const testOutput = `test-start-${'t'.repeat(9000)}-test-end`;
+    const runtimeQaOutput = `runtime-start-${'r'.repeat(9000)}-runtime-end`;
     (
       harness.deps as never as { verifications: { getLatest: ReturnType<typeof vi.fn> } }
     ).verifications.getLatest.mockReturnValue({
@@ -892,8 +894,8 @@ describe('execution phase handlers', () => {
         summary: ' Needs   polish ',
         criteriaResults: [{ criterion: ' AC ', passed: false, evidence: ' Missing   proof ' }],
         issues: [{ severity: 'major', description: ' Bad   file ', filePath: 'src/a.ts' }],
-        testOutput: 'PASS unit suite\ncoverage threshold missed',
-        runtimeQaOutput: 'GET /health 500\nserver smoke failed',
+        testOutput,
+        runtimeQaOutput,
       },
     });
 
@@ -904,8 +906,18 @@ describe('execution phase handlers', () => {
     expect(prompt).toContain('<previous_verification_failure>');
     expect(prompt).toContain('- AC: Missing proof');
     expect(prompt).toContain('- [major] src/a.ts: Bad file');
-    expect(prompt).toContain('Prior test output:\nPASS unit suite\ncoverage threshold missed');
-    expect(prompt).toContain('Prior runtime QA output:\nGET /health 500\nserver smoke failed');
+    const persistedTestOutput = prompt.match(
+      /Prior test output:\n([\s\S]*?)\n\nPrior runtime QA output:/,
+    )?.[1];
+    const persistedRuntimeQaOutput = prompt.match(
+      /Prior runtime QA output:\n([\s\S]*?)\n<\/previous_verification_failure>/,
+    )?.[1];
+    expect(persistedTestOutput).toContain('test-start-');
+    expect(persistedTestOutput).toContain('-test-end');
+    expect(persistedTestOutput?.length).toBeLessThanOrEqual(8192);
+    expect(persistedRuntimeQaOutput).toContain('runtime-start-');
+    expect(persistedRuntimeQaOutput).toContain('-runtime-end');
+    expect(persistedRuntimeQaOutput?.length).toBeLessThanOrEqual(8192);
   });
 
   it('loads repo prompt material content when execution context is initialized lazily', async () => {
