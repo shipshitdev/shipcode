@@ -207,6 +207,33 @@ afterEach(() => {
 });
 
 describe('IntegrationsSettingsSection callback coverage', () => {
+  it('shows deprecated OpenRouter models as a distinct warning with replacement guidance', () => {
+    render(
+      <IntegrationsSettingsSection
+        integrationStatus={{
+          ...status,
+          openrouter: {
+            ...status.openrouter,
+            authStatus: 'model_deprecated',
+            message: "OpenRouter model 'retired/model' is not available",
+          },
+        }}
+        integrationsFetching={false}
+        settings={DEFAULT_SETTINGS}
+        onUpdate={vi.fn()}
+        onRefetch={vi.fn()}
+        onTestChat={vi.fn(async (provider: 'discord' | 'telegram') => `${provider} ok`)}
+      />,
+    );
+
+    expect(screen.getByText('Model deprecated')).toHaveClass('text-amber-300');
+    expect(
+      screen.getByText(
+        'Model deprecated — select a replacement in Settings → Pipeline → Models.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('renders all integration status variants and forwards opener select changes', () => {
     const onUpdate = vi.fn();
 

@@ -2,6 +2,8 @@ import type {
   AppSettings,
   DesktopAppHealth,
   IntegrationStatus,
+  OpenRouterAuthStatus,
+  OpenRouterHealth,
   ProjectOpenTarget,
 } from '@shipcode/shared';
 import { SettingsSection } from '@shipcode/ui';
@@ -79,6 +81,56 @@ function StatusPill({
     >
       {children}
     </span>
+  );
+}
+
+function OpenRouterAuthHealthCard({ health }: { health: OpenRouterHealth }) {
+  const presentation = (() => {
+    switch (health.authStatus) {
+      case 'valid':
+        return { label: 'valid', tone: 'success', action: null } as const;
+      case 'model_deprecated':
+        return {
+          label: 'Model deprecated',
+          tone: 'warning',
+          action: 'Model deprecated — select a replacement in Settings → Pipeline → Models.',
+        } as const;
+      case 'missing_key':
+      case 'invalid_key':
+      case 'unreachable':
+        return { label: health.authStatus, tone: 'warning', action: null } as const;
+      default: {
+        const exhaustiveStatus: never = health.authStatus satisfies OpenRouterAuthStatus;
+        return exhaustiveStatus;
+      }
+    }
+  })();
+
+  return (
+    <div className="rounded-md border border-border bg-secondary/40 p-3 text-[12px] text-secondary">
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <span className="text-[13px] font-medium text-primary">OpenRouter</span>
+        <div className="ml-auto flex flex-wrap justify-end gap-2">
+          <StatusPill tone={health.keyPresent ? 'success' : 'warning'}>
+            {health.keyPresent ? 'OPENROUTER_API_KEY detected' : 'OPENROUTER_API_KEY missing'}
+          </StatusPill>
+          <StatusPill tone={presentation.tone}>{presentation.label}</StatusPill>
+        </div>
+      </div>
+      <div className="space-y-1">
+        <div>
+          ShipCode currently reads <code>OPENROUTER_API_KEY</code> from the environment exposed to
+          the desktop app.
+        </div>
+        {health.label ? (
+          <div>
+            Key label: <code>{health.label}</code>
+          </div>
+        ) : null}
+        {presentation.action ? <div className="text-amber-300">{presentation.action}</div> : null}
+        {health.message ? <div className="text-amber-300">{health.message}</div> : null}
+      </div>
+    </div>
   );
 }
 
@@ -370,41 +422,7 @@ function useIntegrationsSettingsSectionView({
 
           <TabsContent value="api-keys" className="mt-0">
             <SettingsSection title="API Keys">
-              <div className="rounded-md border border-border bg-secondary/40 p-3 text-[12px] text-secondary">
-                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                  <span className="text-[13px] font-medium text-primary">OpenRouter</span>
-                  <div className="ml-auto flex flex-wrap justify-end gap-2">
-                    <StatusPill
-                      tone={integrationStatus.openrouter.keyPresent ? 'success' : 'warning'}
-                    >
-                      {integrationStatus.openrouter.keyPresent
-                        ? 'OPENROUTER_API_KEY detected'
-                        : 'OPENROUTER_API_KEY missing'}
-                    </StatusPill>
-                    <StatusPill
-                      tone={
-                        integrationStatus.openrouter.authStatus === 'valid' ? 'success' : 'warning'
-                      }
-                    >
-                      {integrationStatus.openrouter.authStatus}
-                    </StatusPill>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <div>
-                    ShipCode currently reads <code>OPENROUTER_API_KEY</code> from the environment
-                    exposed to the desktop app.
-                  </div>
-                  {integrationStatus.openrouter.label ? (
-                    <div>
-                      Key label: <code>{integrationStatus.openrouter.label}</code>
-                    </div>
-                  ) : null}
-                  {integrationStatus.openrouter.message ? (
-                    <div className="text-amber-300">{integrationStatus.openrouter.message}</div>
-                  ) : null}
-                </div>
-              </div>
+              <OpenRouterAuthHealthCard health={integrationStatus.openrouter} />
             </SettingsSection>
 
             <SettingsSection title="Chat Providers">
