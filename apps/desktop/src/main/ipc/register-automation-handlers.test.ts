@@ -323,4 +323,42 @@ describe('registerAutomationHandlers', () => {
     expect(automations.setEnabled).not.toHaveBeenCalled();
     expect(automationScheduler.schedule).not.toHaveBeenCalled();
   });
+
+  it('rejects updates for automations that no longer exist', async () => {
+    automations.getById.mockReturnValue(null);
+
+    await expect(
+      getHandler('automations:update')(null, { id: 'missing', name: 'Renamed' }),
+    ).rejects.toThrow('Automation missing not found');
+    expect(automations.update).not.toHaveBeenCalled();
+    expect(automationScheduler.schedule).not.toHaveBeenCalled();
+  });
+
+  it('rejects enabling automations that no longer exist', async () => {
+    automations.getById.mockReturnValue(null);
+
+    await expect(
+      getHandler('automations:set-enabled')(null, { id: 'missing', enabled: true }),
+    ).rejects.toThrow('Automation missing not found');
+    expect(automations.setEnabled).not.toHaveBeenCalled();
+  });
+
+  it('rejects updates whose targets reference a missing project', async () => {
+    automations.getById.mockReturnValue(makeAutomation({ targets: ['project-gone'] }));
+    projects.getById.mockReturnValue(null);
+
+    await expect(
+      getHandler('automations:update')(null, { id: 'auto-1', name: 'Renamed' }),
+    ).rejects.toThrow('Automation target project project-gone not found');
+    expect(automations.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects updates that select gh or shell as the automation executor', async () => {
+    automations.getById.mockReturnValue(makeAutomation());
+
+    await expect(
+      getHandler('automations:update')(null, { id: 'auto-1', executorProvider: 'gh' }),
+    ).rejects.toThrow('gh cannot be used as an automation executor');
+    expect(automations.update).not.toHaveBeenCalled();
+  });
 });

@@ -6,6 +6,7 @@ import { ProjectQueries } from './projects';
 import { ReviewFindingQueries } from './review-findings';
 import { ReviewQueries } from './reviews';
 import { ThreadQueries } from './threads';
+import { VerificationQueries } from './verifications';
 
 describe('ReviewFindingQueries', () => {
   let db: DatabaseSync;
@@ -92,6 +93,45 @@ describe('ReviewFindingQueries', () => {
     expect(findings.getById(original.id)?.status).toBe('superseded');
     expect(replacement.status).toBe('open');
     expect(replacement.title).toBe('New');
+  });
+
+  it('replaces verification findings by superseding previous open rows for the plan', () => {
+    const original = findings.createOrUpdateOpen({
+      projectId,
+      threadId,
+      planId,
+      phase: 'verify',
+      source: 'verification',
+      severity: 'major',
+      title: 'Old',
+      description: 'Old verification finding',
+      fingerprint: 'same-verify',
+    });
+    const verificationId = new VerificationQueries(db).create(threadId, planId, 'raw', null).id;
+
+    const [replacement] = findings.replaceOpenForVerification({
+      threadId,
+      planId,
+      verificationId,
+      findings: [
+        {
+          projectId,
+          threadId,
+          planId,
+          phase: 'verify',
+          source: 'verification',
+          severity: 'minor',
+          title: 'New',
+          description: 'New verification finding',
+          fingerprint: 'same-verify',
+        },
+      ],
+    });
+
+    expect(findings.getById(original.id)?.status).toBe('superseded');
+    expect(replacement.status).toBe('open');
+    expect(replacement.title).toBe('New');
+    expect(replacement.verificationId).toBe(verificationId);
   });
 
   it('marks open findings fixed for a plan', () => {
