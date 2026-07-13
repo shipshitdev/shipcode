@@ -35,6 +35,14 @@ export function createCliEmitter(): PipelineEmitter {
         case 'pipeline:verification-exhausted':
           console.log(`[${timestamp}] Verification exhausted after ${event.retries} retries`);
           break;
+        case 'pipeline:turn-started':
+          console.log(`[${timestamp}] Turn ${event.turnNumber} started`);
+          break;
+        case 'pipeline:turn-completed':
+          console.log(
+            `[${timestamp}] Turn ${event.turnNumber} completed: ${sanitizeCliText(event.result)}`,
+          );
+          break;
         case 'pipeline:model-resolved': {
           // Build tokens and cost as independent segments so cost still
           // renders when a provider reports it without token totals.
@@ -84,6 +92,10 @@ export function createCliEmitter(): PipelineEmitter {
         case 'terminal:event':
         case 'pipeline:output':
           break;
+        default: {
+          const _exhaustive: never = event;
+          throw new Error(`CLI emitter: unknown pipeline event ${JSON.stringify(_exhaustive)}`);
+        }
       }
     },
   };

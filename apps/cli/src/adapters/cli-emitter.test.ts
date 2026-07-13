@@ -37,6 +37,12 @@ describe('createCliEmitter', () => {
       reasons: ['clean plan', 'low risk'],
     } as never);
     emitter.emit({ type: 'pipeline:verification-exhausted', retries: 2 } as never);
+    emitter.emit({ type: 'pipeline:turn-started', turnNumber: 2 } as never);
+    emitter.emit({
+      type: 'pipeline:turn-completed',
+      turnNumber: 2,
+      result: 'max_turns_reached',
+    } as never);
 
     expect(logSpy).toHaveBeenCalledWith('[12:34:56] Phase: planning');
     expect(logSpy).toHaveBeenCalledWith(
@@ -49,6 +55,8 @@ describe('createCliEmitter', () => {
       '[12:34:56] Approval gate: approved after approve (clean plan, low risk)',
     );
     expect(logSpy).toHaveBeenCalledWith('[12:34:56] Verification exhausted after 2 retries');
+    expect(logSpy).toHaveBeenCalledWith('[12:34:56] Turn 2 started');
+    expect(logSpy).toHaveBeenCalledWith('[12:34:56] Turn 2 completed: max_turns_reached');
   });
 
   it('prints model routing with optional requested model, tokens, and cost', () => {
