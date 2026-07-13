@@ -293,8 +293,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Runs after a macOS build, OR standalone from the existing release assets
+  # when dispatched with build_macos=false + update_homebrew=true — a cheap
+  # cask re-sync (recompute SHAs, bump the tap) with no 35-min rebuild. The
+  # `always()` guard lets the job proceed when build-desktop-macos is *skipped*
+  # (cask-only dispatch) while still blocking on a build that actually failed.
   update-homebrew-cask:
-    if: ${{ (github.event_name == 'release' && vars.HOMEBREW_PUBLISH_ENABLED == 'true') || (inputs.build_macos && inputs.update_homebrew) }}
+    if: >-
+      ${{ always()
+          && needs.validate-release.result == 'success'
+          && needs.build-desktop-macos.result != 'failure'
+          && needs.build-desktop-macos.result != 'cancelled'
+          && (
+            (github.event_name == 'release' && vars.HOMEBREW_PUBLISH_ENABLED == 'true')
+            || inputs.update_homebrew
+          ) }}
     needs:
       - validate-release
       - build-desktop-macos
