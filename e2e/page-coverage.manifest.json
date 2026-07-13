@@ -236,6 +236,14 @@
       "spec": "src/specs/web/docs-route-coverage.e2e.ts"
     },
     {
+      "id": "web-download",
+      "kind": "web-route",
+      "title": "Download redirect",
+      "path": "/download",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
       "id": "docs-index",
       "kind": "docs-route",
       "title": "Docs index",
