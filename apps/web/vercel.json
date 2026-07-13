@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "cd ../.. && bun run sync:docs && bun run --filter @shipcode/web build",
+  "cleanUrls": true,
   "git": {
     "deploymentEnabled": false
   },
