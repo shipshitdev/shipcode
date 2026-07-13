@@ -16,7 +16,10 @@ const RELEASE = {
   assets: [
     { name: 'ShipCode-0.2.0-arm64.dmg', browser_download_url: ARM },
     { name: 'ShipCode-0.2.0-x64.dmg', browser_download_url: X64 },
-    { name: 'ShipCode-0.2.0-arm64.zip', browser_download_url: `${DL_PREFIX}/ShipCode-0.2.0-arm64.zip` },
+    {
+      name: 'ShipCode-0.2.0-arm64.zip',
+      browser_download_url: `${DL_PREFIX}/ShipCode-0.2.0-arm64.zip`,
+    },
   ],
 };
 
@@ -28,10 +31,8 @@ describe('resolveArch', () => {
   it('defaults to arm64 with no query', () => {
     expect(resolveArch('')).toBe('arm64');
   });
-  it.each(['?arch=x64', '?arch=intel', '?arch=x86_64', '?arch=X64'])(
-    'maps %s to x64',
-    (q) => expect(resolveArch(q)).toBe('x64'),
-  );
+  it.each(['?arch=x64', '?arch=intel', '?arch=x86_64', '?arch=X64'])('maps %s to x64', (q) =>
+    expect(resolveArch(q)).toBe('x64'));
   it('falls back to arm64 for an unknown arch', () => {
     expect(resolveArch('?arch=sparc')).toBe('arm64');
   });
@@ -46,7 +47,9 @@ describe('pickDmgUrl', () => {
     expect(pickDmgUrl({ assets: [RELEASE.assets[1]] }, 'arm64')).toBeNull();
   });
   it('returns null for a non-releases-download url (tamper guard)', () => {
-    const bad = { assets: [{ name: 'ShipCode-0.2.0-arm64.dmg', browser_download_url: 'https://evil/x.dmg' }] };
+    const bad = {
+      assets: [{ name: 'ShipCode-0.2.0-arm64.dmg', browser_download_url: 'https://evil/x.dmg' }],
+    };
     expect(pickDmgUrl(bad, 'arm64')).toBeNull();
   });
   it('returns null when assets is missing entirely', () => {
@@ -62,11 +65,15 @@ describe('resolveLatestDmgUrl', () => {
   });
   it('falls back to the releases page on a non-2xx response', async () => {
     const f = vi.fn(async () => jsonResponse({}, false));
-    await expect(resolveLatestDmgUrl('arm64', f as unknown as typeof fetch)).resolves.toBe(RELEASES_URL);
+    await expect(resolveLatestDmgUrl('arm64', f as unknown as typeof fetch)).resolves.toBe(
+      RELEASES_URL,
+    );
   });
   it('falls back to the releases page when the DMG asset is missing', async () => {
     const f = vi.fn(async () => jsonResponse({ assets: [] }));
-    await expect(resolveLatestDmgUrl('arm64', f as unknown as typeof fetch)).resolves.toBe(RELEASES_URL);
+    await expect(resolveLatestDmgUrl('arm64', f as unknown as typeof fetch)).resolves.toBe(
+      RELEASES_URL,
+    );
   });
   it('falls back to the releases page when fetch throws', async () => {
     const f = vi.fn(async () => {

@@ -54,6 +54,9 @@ export async function resolveLatestDmgUrl(
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
       },
+      // Fail fast to the releases-page fallback if GitHub is slow, rather than
+      // leaving the visitor on "Preparing your download…" indefinitely.
+      signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) return RELEASES_URL;
     const release = (await response.json()) as GitHubRelease;
