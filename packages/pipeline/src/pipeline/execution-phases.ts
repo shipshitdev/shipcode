@@ -19,6 +19,7 @@ import {
 import { WorktreeManager } from '@shipcode/git';
 import {
   buildTaskNodePlan,
+  clampTextBlock,
   EXECUTION_PHASES,
   formatTaskGraphExecutionContract,
   inferProviderFromModel,
@@ -27,7 +28,6 @@ import {
   MAX_TEST_RETRIES,
   MAX_VERIFICATION_RETRIES,
   PIPELINE_PHASE,
-  clampTextBlock,
   parseUnifiedDiff,
   type ShipCodePlan,
   type TaskNodeRecord,
@@ -66,6 +66,7 @@ export {
   probeWorktreeChanges,
   resolveWorktreeDiffBase,
 } from './execution-phase-utils';
+export { resolveFormalPrReviewEvent } from './execution-shipping-phases';
 
 import { extractQaFlowResults } from './qa-result-parser';
 import { buildVerificationFindingInputs, formatOpenFindingsForPrompt } from './review-findings';

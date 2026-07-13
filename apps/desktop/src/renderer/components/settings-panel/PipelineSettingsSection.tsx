@@ -322,6 +322,19 @@ function pipelineSettingsSection({
               />
             </SettingsRow>
             <SettingsRow
+              label="Post formal PR reviews to GitHub"
+              htmlFor="post-formal-pr-review-enabled"
+              description="When on, ShipCode publishes findings in GitHub's native review surface. When off, findings remain a regular PR comment."
+            >
+              <Switch
+                id="post-formal-pr-review-enabled"
+                checked={settings.postFormalPrReviewEnabled}
+                onCheckedChange={(checked: boolean) =>
+                  onUpdate({ postFormalPrReviewEnabled: checked })
+                }
+              />
+            </SettingsRow>
+            <SettingsRow
               label="Post pipeline timeline to GitHub"
               htmlFor="post-pipeline-timeline-enabled"
               description="When on, phase transitions update a single timeline comment on the GitHub issue. When off, project status and pipeline labels still sync normally."

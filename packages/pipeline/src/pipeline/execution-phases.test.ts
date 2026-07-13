@@ -13,6 +13,7 @@ import {
   extractTestFailureSummary,
   normalizeFeatureQaResults,
   probeWorktreeChanges,
+  resolveFormalPrReviewEvent,
   resolveWorktreeDiffBase,
 } from './execution-phases';
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
@@ -34,12 +35,18 @@ type ExecutionHarnessDeps = {
 
 const {
   mockExecFileSync,
+  mockGhSubmitPrReview,
   mockGhUpsertIssueCommentByMarker,
   mockServerLifecycleStart,
   mockServerLifecycleStop,
   mockShellExecEnv,
 } = vi.hoisted(() => ({
   mockExecFileSync: vi.fn(),
+  mockGhSubmitPrReview: vi.fn(async () => ({
+    event: 'approve',
+    downgradedForSelfReview: false,
+    skippedDuplicate: false,
+  })),
   mockGhUpsertIssueCommentByMarker: vi.fn(async () => undefined),
   mockServerLifecycleStart: vi.fn(),
   mockServerLifecycleStop: vi.fn(),
@@ -80,6 +87,7 @@ vi.mock('@shipcode/agents', async (importOriginal) => {
     ...actual,
     GhCli: vi.fn(function GhCli() {
       return {
+        submitPrReview: mockGhSubmitPrReview,
         upsertIssueCommentByMarker: mockGhUpsertIssueCommentByMarker,
       };
     }),
@@ -214,6 +222,7 @@ function makeExecutionHarness(context = makeContext()) {
       get: vi.fn(() => ({
         maxConcurrentExecutions: 1,
         maxConcurrentCpuTasks: 1,
+        postFormalPrReviewEnabled: true,
       })),
     },
     emitter: { emit },
@@ -377,6 +386,15 @@ describe('extractExecutionErrorSnippet', () => {
 describe('execution phase helpers', () => {
   beforeEach(() => {
     mockExecFileSync.mockReset();
+  });
+
+  it.each([
+    ['approve', [], 'approve'],
+    ['approve', [{ status: 'open', severity: 'major' }], 'request-changes'],
+    ['approve', [{ status: 'open', severity: 'critical' }], 'request-changes'],
+    ['request_changes', [], 'request-changes'],
+  ] as const)('maps %s with findings to %s', (decision, findings, expected) => {
+    expect(resolveFormalPrReviewEvent(decision, [...findings])).toBe(expected);
   });
 
   it('builds default and custom continuation prompts', () => {
@@ -573,6 +591,12 @@ describe('execution phase handlers', () => {
   beforeEach(() => {
     vi.useRealTimers();
     mockExecFileSync.mockReset();
+    mockGhSubmitPrReview.mockReset();
+    mockGhSubmitPrReview.mockResolvedValue({
+      event: 'approve',
+      downgradedForSelfReview: false,
+      skippedDuplicate: false,
+    });
     mockGhUpsertIssueCommentByMarker.mockReset();
     mockGhUpsertIssueCommentByMarker.mockResolvedValue(undefined);
     mockServerLifecycleStart.mockReset();
@@ -2052,10 +2076,45 @@ describe('execution phase handlers', () => {
 
     await harness.handlers.startShipping('thread-1');
 
+    expect(mockGhSubmitPrReview).toHaveBeenCalledWith(
+      17,
+      'request-changes',
+      expect.stringContaining('CI failed'),
+    );
+    expect(mockGhUpsertIssueCommentByMarker).not.toHaveBeenCalled();
+  });
+
+  it('keeps comment-only review findings when formal reviews are disabled', async () => {
+    const context = makeContext({ baseBranch: 'develop' });
+    const harness = makeExecutionHarness(context);
+    vi.mocked(harness.deps.settings.get).mockReturnValue({
+      maxConcurrentExecutions: 1,
+      maxConcurrentCpuTasks: 1,
+      postFormalPrReviewEnabled: false,
+    });
+    (harness.deps as never as { reviewFindings: unknown }).reviewFindings = {
+      listByThread: vi.fn(() => []),
+    };
+    (
+      harness.deps as never as { threads: { setGithubPr: ReturnType<typeof vi.fn> } }
+    ).threads.setGithubPr = vi.fn();
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
+      if (args[0] === 'pr' && args[1] === 'list') {
+        return JSON.stringify([
+          { number: 17, url: 'https://github.com/acme/repo/pull/17', isDraft: true },
+        ]);
+      }
+      return '';
+    });
+
+    await harness.handlers.startShipping('thread-1');
+
+    expect(mockGhSubmitPrReview).not.toHaveBeenCalled();
     expect(mockGhUpsertIssueCommentByMarker).toHaveBeenCalledWith(
       17,
       '<!-- shipcode:review-findings -->',
-      expect.stringContaining('CI failed'),
+      expect.stringContaining('No open ShipCode review findings.'),
     );
   });
 

@@ -21,6 +21,14 @@ import { shellExecEnv } from '../health-check';
 
 const execFileAsync = promisify(execFile);
 
+export type PrReviewEvent = 'approve' | 'request-changes' | 'comment';
+
+export interface SubmitPrReviewResult {
+  event: PrReviewEvent;
+  downgradedForSelfReview: boolean;
+  skippedDuplicate: boolean;
+}
+
 /**
  * Detect whether a `gh project item-add` failure is the "already on the
  * board" case, which we treat as success in addIssueToProject. The exact
@@ -916,6 +924,82 @@ export class GhCli {
       ['pr', 'edit', String(options.prNumber), '--title', options.title, '--body-file', '-'],
       options.body,
     );
+  }
+
+  async submitPrReview(
+    prNumber: number,
+    event: PrReviewEvent,
+    body: string,
+  ): Promise<SubmitPrReviewResult> {
+    const { owner, repo } = await this.getRepoCoordinates();
+    const { stdout: viewerStdout } = await execFileAsync('gh', ['api', 'user', '--jq', '.login'], {
+      cwd: this.cwd,
+      env: this.env,
+    });
+    const { stdout: prStdout } = await execFileAsync(
+      'gh',
+      ['api', `repos/${owner}/${repo}/pulls/${prNumber}`],
+      { cwd: this.cwd, env: this.env },
+    );
+    const pr = JSON.parse(prStdout) as {
+      user?: { login?: string } | null;
+      head?: { sha?: string } | null;
+    };
+    const viewer = viewerStdout.trim();
+    const author = pr.user?.login?.trim() ?? '';
+    const headSha = pr.head?.sha?.trim() ?? '';
+    const downgradedForSelfReview =
+      event !== 'comment' && !!viewer && !!author && viewer.toLowerCase() === author.toLowerCase();
+    const submittedEvent = downgradedForSelfReview ? 'comment' : event;
+
+    if (viewer && headSha) {
+      const { stdout: reviewsStdout } = await execFileAsync(
+        'gh',
+        ['api', '--paginate', '--slurp', `repos/${owner}/${repo}/pulls/${prNumber}/reviews`],
+        { cwd: this.cwd, env: this.env },
+      );
+      const reviews = (
+        JSON.parse(reviewsStdout) as Array<
+          Array<{
+            user?: { login?: string } | null;
+            commit_id?: string;
+            state?: string;
+            body?: string;
+          }>
+        >
+      ).flat();
+      const expectedState =
+        submittedEvent === 'approve'
+          ? 'APPROVED'
+          : submittedEvent === 'request-changes'
+            ? 'CHANGES_REQUESTED'
+            : 'COMMENTED';
+      const duplicate = reviews.some(
+        (review) =>
+          review.user?.login?.toLowerCase() === viewer.toLowerCase() &&
+          review.commit_id === headSha &&
+          review.state?.toUpperCase() === expectedState &&
+          (review.body ?? '') === body,
+      );
+      if (duplicate) {
+        return {
+          event: submittedEvent,
+          downgradedForSelfReview,
+          skippedDuplicate: true,
+        };
+      }
+    }
+
+    await this.spawnWithStdin(
+      'gh',
+      ['pr', 'review', String(prNumber), `--${submittedEvent}`, '--body-file', '-'],
+      body,
+    );
+    return {
+      event: submittedEvent,
+      downgradedForSelfReview,
+      skippedDuplicate: false,
+    };
   }
 
   async setIssueLabelPresence(issueNumber: number, label: string, present: boolean): Promise<void> {

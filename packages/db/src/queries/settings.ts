@@ -318,6 +318,10 @@ export class SettingsQueries {
         stored.postPlanCommentsEnabled,
         DEFAULT_SETTINGS.postPlanCommentsEnabled,
       ),
+      postFormalPrReviewEnabled: parseBool(
+        stored.postFormalPrReviewEnabled,
+        DEFAULT_SETTINGS.postFormalPrReviewEnabled,
+      ),
       postPipelineTimelineEnabled: parseBool(
         stored.postPipelineTimelineEnabled,
         DEFAULT_SETTINGS.postPipelineTimelineEnabled,

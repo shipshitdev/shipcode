@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { buildPRBody, GhCli } from '@shipcode/agents';
+import { buildPRBody, GhCli, type PrReviewEvent } from '@shipcode/agents';
 import {
   clampError,
   type GitHubPrCheckSummary,
@@ -15,6 +15,18 @@ import {
 } from './review-findings';
 import type { PhaseOutcome, PipelineHelperEnv } from './shared';
 
+export function resolveFormalPrReviewEvent(
+  decision: 'approve' | 'request_changes' | 'reject' | null,
+  findings: Array<{ status: string; severity: string }>,
+): PrReviewEvent {
+  if (decision === 'request_changes' || decision === 'reject') return 'request-changes';
+  const hasOpenSevereFinding = findings.some(
+    (finding) =>
+      finding.status === 'open' && ['critical', 'major', 'blocker'].includes(finding.severity),
+  );
+  return hasOpenSevereFinding ? 'request-changes' : 'approve';
+}
+
 export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: PipelineHelperEnv) {
   const { activePipelines } = contextHelpers;
   const { emitPhase, formatStabilizationFeedback } = runtime;
@@ -22,17 +34,28 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
   async function publishReviewFindingsComment(
     context: NonNullable<ReturnType<typeof activePipelines.get>>,
     prNumber: number,
+    decision: 'approve' | 'request_changes' | 'reject' | null,
   ): Promise<void> {
     if (!deps.reviewFindings) return;
 
     const findings = deps.reviewFindings.listByThread(context.threadId, { includeClosed: true });
     try {
       const ghCli = new GhCli(context.worktreePath ?? context.projectPath);
-      await ghCli.upsertIssueCommentByMarker(
-        prNumber,
-        REVIEW_FINDINGS_PR_COMMENT_MARKER,
-        formatReviewFindingsPrComment(findings),
-      );
+      const body = formatReviewFindingsPrComment(findings);
+      if (deps.settings.get().postFormalPrReviewEnabled) {
+        const result = await ghCli.submitPrReview(
+          prNumber,
+          resolveFormalPrReviewEvent(decision, findings),
+          body,
+        );
+        if (result.downgradedForSelfReview) {
+          console.info(
+            `[pipeline] Submitted PR #${prNumber} review as a comment because ShipCode authored the PR.`,
+          );
+        }
+      } else {
+        await ghCli.upsertIssueCommentByMarker(prNumber, REVIEW_FINDINGS_PR_COMMENT_MARKER, body);
+      }
     } catch (error) {
       console.warn(
         `[pipeline] Failed to publish review findings to PR #${prNumber}: ${clampError(error)}`,
@@ -252,7 +275,7 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
           }
         }
 
-        await publishReviewFindingsComment(context, prNumber);
+        await publishReviewFindingsComment(context, prNumber, reviews[0]?.decision ?? null);
 
         if (created) {
           try {
