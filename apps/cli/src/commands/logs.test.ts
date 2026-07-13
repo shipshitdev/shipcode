@@ -181,7 +181,7 @@ describe('logsCommand', () => {
     expect(writeSpy).toHaveBeenCalledWith('plain stdout\n');
     expect(writeSpy).toHaveBeenCalledWith('[12:00:05] started\n');
     expect(writeSpy).toHaveBeenCalledWith('{"type":"event"}\n');
-    expect(logSpy).toHaveBeenCalledWith(`[12:00:02] Thinking: ${'x'.repeat(120)}...`);
+    expect(logSpy).toHaveBeenCalledWith(`[12:00:02] Thinking: ${'x'.repeat(117)}...`);
     expect(logSpy).toHaveBeenCalledWith('[12:00:03] Tool: bun test — running tests');
     expect(logSpy).toHaveBeenCalledWith('[12:00:04] Tool done: bun test (exit 1)');
     expect(logSpy).toHaveBeenCalledWith('[12:00:07] Error: command failed');
