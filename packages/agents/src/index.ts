@@ -173,6 +173,10 @@ export {
   measurePhasePromptTelemetry,
   toPersistedPromptTelemetryMaterials,
 } from './prompts/phase-prompt-telemetry';
+export {
+  formatPipelineTimelineComment,
+  PIPELINE_TIMELINE_COMMENT_MARKER,
+} from './prompts/pipeline-timeline-comment';
 export { formatPlanComment, PLAN_COMMENT_MARKER } from './prompts/plan-comment';
 export type {
   PlanPromptContext,

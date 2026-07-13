@@ -1,7 +1,12 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { type AgentProvider, GhCli, PLAN_COMMENT_MARKER } from '@shipcode/agents';
+import {
+  type AgentProvider,
+  GhCli,
+  PIPELINE_TIMELINE_COMMENT_MARKER,
+  PLAN_COMMENT_MARKER,
+} from '@shipcode/agents';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineContext, PipelineDeps } from '../types';
@@ -1923,6 +1928,95 @@ describe('createPipelineRuntime', () => {
 
     expect(phaseLogs.transition).toHaveBeenCalledWith('thread-1', 'executing', null);
     expect(deps.threads.updateStatus).toHaveBeenCalledWith('thread-1', 'executing');
+    expect(deps.emitter.emit).toHaveBeenCalledWith({
+      type: 'pipeline:phase',
+      threadId: 'thread-1',
+      phase: 'executing',
+    });
+  });
+
+  it('upserts the ordered pipeline timeline after a phase transition', async () => {
+    const { deps } = makeDeps();
+    deps.projects.getById = vi.fn(() => ({ path: '/repo' })) as never;
+    deps.phaseLogs = {
+      transition: vi.fn(),
+      listByThread: vi.fn(() => [
+        {
+          id: 'phase-1',
+          threadId: 'thread-1',
+          runId: null,
+          phase: 'planning',
+          startedAt: '2026-07-12T10:00:00.000Z',
+          completedAt: '2026-07-12T10:05:00.000Z',
+          durationMs: 300_000,
+          terminalStatus: 'executing',
+          errorMessage: null,
+          metadata: null,
+        },
+        {
+          id: 'phase-2',
+          threadId: 'thread-1',
+          runId: null,
+          phase: 'executing',
+          startedAt: '2026-07-12T10:05:00.000Z',
+          completedAt: null,
+          durationMs: null,
+          terminalStatus: null,
+          errorMessage: null,
+          metadata: null,
+        },
+      ]),
+    } as never;
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    runtime.emitPhase('thread-1', 'executing');
+    await vi.waitFor(() => expect(mockGhCli.upsertIssueCommentByMarker).toHaveBeenCalled());
+
+    expect(mockGhCli.upsertIssueCommentByMarker).toHaveBeenCalledWith(
+      42,
+      PIPELINE_TIMELINE_COMMENT_MARKER,
+      expect.stringContaining('▶️ **Executing**'),
+    );
+  });
+
+  it('suppresses pipeline timeline writes when the setting is off', async () => {
+    const { deps } = makeDeps();
+    deps.settings.get = vi.fn(() => ({
+      ...DEFAULT_SETTINGS,
+      postPipelineTimelineEnabled: false,
+    })) as never;
+    deps.phaseLogs = {
+      transition: vi.fn(),
+      listByThread: vi.fn(() => []),
+    } as never;
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    runtime.emitPhase('thread-1', 'executing');
+    await Promise.resolve();
+
+    expect(mockGhCli.upsertIssueCommentByMarker).not.toHaveBeenCalled();
+  });
+
+  it('swallows pipeline timeline writer failures', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { deps } = makeDeps();
+    deps.projects.getById = vi.fn(() => ({ path: '/repo' })) as never;
+    deps.phaseLogs = {
+      transition: vi.fn(),
+      listByThread: vi.fn(() => {
+        throw new Error('phase history offline');
+      }),
+    } as never;
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    runtime.emitPhase('thread-1', 'executing');
+    await vi.waitFor(() =>
+      expect(warn).toHaveBeenCalledWith(
+        '[pipeline] Failed to post pipeline timeline comment:',
+        expect.any(Error),
+      ),
+    );
+
     expect(deps.emitter.emit).toHaveBeenCalledWith({
       type: 'pipeline:phase',
       threadId: 'thread-1',

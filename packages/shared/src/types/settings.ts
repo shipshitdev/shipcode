@@ -97,6 +97,9 @@ export interface AppSettings {
   // whenever a plan is approved (autonomous or manual). When false, plan comments
   // are suppressed; task-graph and review comments are unaffected.
   postPlanCommentsEnabled: boolean;
+  // When true (default), phase transitions are mirrored to a single timeline
+  // comment on the GitHub issue. This does not affect project or label sync.
+  postPipelineTimelineEnabled: boolean;
   // Per-phase reasoning effort. Applied as:
   //   Claude: mapped to a supported thinking-token budget
   //   Codex:  mapped to supported low|medium|high levels
