@@ -149,7 +149,7 @@ function assertCliSelectionSupported(
   // Codex publishes an authoritative local catalog. Falling back to ShipCode's
   // curated list when that command is missing or fails must not be treated as
   // proof that a stale CLI can serve a newly curated model.
-  if (provider === 'codex' && providerCapabilities.source !== 'catalog') {
+  if (provider === 'codex' && modelId && providerCapabilities.source !== 'catalog') {
     throw new Error(
       `${label}: ${CLI_PROVIDER_LABELS.codex}${versionLabel} cannot confirm it serves ${modelLabel}. ${providerCapabilities.error ?? 'The installed CLI did not return a model catalog.'}`,
     );
