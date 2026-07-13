@@ -2,6 +2,7 @@ import path from 'node:path';
 import { formatIssueBranch as formatIssueBranchShared, slugifyIssueTitle } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
 import { type SimpleGit, simpleGit } from 'simple-git';
+import { resolveDefaultBranch } from './default-branch';
 import {
   listWorktreeArtifacts,
   pruneWorktreeArtifacts,
@@ -323,16 +324,6 @@ export class WorktreeManager {
   }
 
   private async getDefaultBranch(): Promise<string> {
-    try {
-      const result = await this.git.raw(['symbolic-ref', 'refs/remotes/origin/HEAD', '--short']);
-      return result.trim().replace('origin/', '');
-    } catch {
-      const branches = await this.git.branchLocal();
-      // Check current branch first, then common defaults
-      if (branches.current) return branches.current;
-      if (branches.all.includes('main')) return 'main';
-      if (branches.all.includes('master')) return 'master';
-      return 'main';
-    }
+    return resolveDefaultBranch(this.git);
   }
 }
