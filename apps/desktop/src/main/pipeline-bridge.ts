@@ -222,6 +222,12 @@ export function createElectronEmitter(
       case 'pipeline:verification-exhausted':
         logEvent('pipeline:verification-exhausted', event);
         return;
+      case 'pipeline:turn-started':
+        logEvent('pipeline:turn-started', event);
+        return;
+      case 'pipeline:turn-completed':
+        logEvent('pipeline:turn-completed', event);
+        return;
       case 'pipeline:model-resolved':
         logEvent('pipeline:model-resolved', event);
         return;
@@ -261,6 +267,12 @@ export function createElectronEmitter(
           kind: event.event.kind,
         });
         return;
+      case 'pipeline:output':
+        return;
+      default: {
+        const _exhaustive: never = event;
+        throw new Error(`Pipeline bridge: unknown pipeline event ${JSON.stringify(_exhaustive)}`);
+      }
     }
   }
 
