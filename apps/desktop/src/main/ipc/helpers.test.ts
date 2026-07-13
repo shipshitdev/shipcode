@@ -371,9 +371,7 @@ describe('phase model helpers', () => {
         executorReasoningEffort: 'high',
         verifierReasoningEffort: 'high',
       }),
-    ).rejects.toThrow(
-      'Reviewer: Codex CLI codex-cli 1.0.3 cannot confirm it serves gpt-5.2',
-    );
+    ).rejects.toThrow('Reviewer: Codex CLI codex-cli 1.0.3 cannot confirm it serves gpt-5.2');
   });
 
   it('validates PRD rewrite CLI model selections', async () => {
