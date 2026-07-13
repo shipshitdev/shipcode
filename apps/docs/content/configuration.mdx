@@ -16,6 +16,10 @@ Label a GitHub issue with one of the agent labels below and ShipCode will route 
 
 ShipCode writes transient `shipcode:pipeline:*` labels for agent-loop debugging, but board-level workflow state belongs in a typed GitHub Projects v2 `Status` field, such as `Backlog`, `In Progress`, `Human Review`, `Done`, and `Deferred`.
 
+## WORKFLOW.md
+
+Repos can override the prompt for every pipeline phase and tune agent policy (concurrency, max turns, execute fan-out) with a `WORKFLOW.md` file at `.shipcode/WORKFLOW.md` or the repo root. See [WORKFLOW.md](/workflow) for the full format, template context, and live-reload behavior.
+
 ## Repo Setup Contract
 
 Repos can declare fresh-worktree setup in `.shipcode/setup.json`. This file is read directly from the repo, so desktop and CLI use the same contract.

@@ -1,0 +1,140 @@
+# WORKFLOW.md
+
+Repos can override the prompts ShipCode sends to every pipeline phase — and tune per-repo agent policy — with a single `WORKFLOW.md` file committed to the target repo. Like [`.shipcode/setup.json`](/configuration#repo-setup-contract), the file is read directly from the repo, so desktop and CLI share the same contract and the override travels with the codebase.
+
+The loader lives in [`packages/pipeline/src/workflow-loader.ts`](https://github.com/shipshitdev/shipcode/blob/master/packages/pipeline/src/workflow-loader.ts).
+
+## File location
+
+ShipCode resolves the file per repo, in order:
+
+1. `.shipcode/WORKFLOW.md` (preferred)
+2. `WORKFLOW.md` at the repo root (fallback)
+
+If neither exists, the pipeline uses its defaults: skill-based prompts and the built-in agent policy.
+
+## File format
+
+`WORKFLOW.md` has two parts: optional YAML front matter for agent policy, and a markdown body that becomes the prompt template.
+
+```markdown
+---
+agent:
+  max_concurrent_agents: 4
+  max_turns: 10
+  execute_orchestration: fan-out
+  fan_out_worker_count: 3
+  fan_out_judge_model: claude-opus-4-8
+continuation_prompt: |
+  Verification failed on turn {{ turn_count }}: {{ prior_failure_reason }}
+  Fix only what the verifier flagged. Do not re-read the PRD.
+---
+
+{% case phase %}
+{% when 'plan' %}
+Plan issue #{{ issue.number }}: {{ issue.title }}
+
+{{ issue.body }}
+{% when 'execute' %}
+Implement the approved plan. Objective: {{ plan.objective }}
+{% when 'verify' %}
+Verify the diff against these criteria:
+{% for criterion in acceptanceCriteria %}- {{ criterion }}
+{% endfor %}
+{% else %}
+Phase: {{ phase }} for issue #{{ issue.number }}.
+{% endcase %}
+```
+
+### Agent policy (front matter)
+
+All keys are optional. Invalid or non-positive numbers fall back to the default.
+
+| Key | Default | Effect |
+|-----|---------|--------|
+| `agent.max_concurrent_agents` | `10` | Global cap on concurrently running agents for the repo |
+| `agent.max_concurrent_agents_by_state` | `{}` | Per-phase caps keyed by lowercase phase name; both this and the global cap must pass for dispatch |
+| `agent.max_turns` | `20` | Maximum full plan→review→execute→verify turns before the pipeline gives up |
+| `agent.max_retry_backoff_ms` | built-in | Ceiling for retry backoff between attempts |
+| `agent.execute_orchestration` | `single` | `single` runs one executor. `fan-out` runs parallel workers in isolated worktrees and has a judge pick/merge the best result |
+| `agent.fan_out_worker_count` | `3` | Parallel workers when `execute_orchestration` is `fan-out` (clamped to 8) |
+| `agent.fan_out_judge_model` | `null` | Model id for the fan-out judge; `null` uses the verifier phase model |
+| `continuation_prompt` | built-in | Template for continuation turns after a verify failure (top-level key, not under `agent`) |
+
+If the front matter fails to parse or is not a YAML map, ShipCode logs a warning and falls back to the full defaults — including skill-based prompts — for that repo.
+
+### Prompt template (body)
+
+Everything after the front matter is a [Liquid](https://liquidjs.com) template. When the body is non-empty, it becomes the **first-priority prompt source for every phase**: plan, review, revision, execute, and verify. The [Skills Editor](/desktop/skills) prompts (bundled defaults plus DB overrides) are only used when the body is empty.
+
+Because the same body renders for all five phases, branch on `{{ phase }}` (as in the example above) unless you really want one prompt everywhere.
+
+## Template context
+
+Rendering happens in [`packages/pipeline/src/workflow-prompt.ts`](https://github.com/shipshitdev/shipcode/blob/master/packages/pipeline/src/workflow-prompt.ts) against a typed context:
+
+| Variable | Available in | Contents |
+|----------|--------------|----------|
+| `issue` | all phases | `number`, `title`, `body`, `labels` (array), `state` (`open`/`closed`) |
+| `attempt` | all phases | `number` (1-based, counts retries); `prior_failure_reason` is set only when a previous attempt failed |
+| `phase` | all phases | `plan`, `review`, `revision`, `execute`, or `verify` |
+| `plan` | review, revision, execute, verify | The structured plan: `objective`, `steps`, `files`, `acceptanceCriteria`, `outOfScope`, `estimatedComplexity`, `dependencies` |
+| `diff` | verify | The worktree diff produced by the execute phase |
+| `acceptanceCriteria` | verify | Array of acceptance criteria from the plan |
+| `testOutput` | verify | Raw test command output, or `null` when no tests ran |
+
+The engine is deliberately strict:
+
+- `strictVariables` and `strictFilters` are on — any undefined variable path or unknown filter throws instead of rendering an empty string.
+- No filesystem or network access: `include`/`render` file lookups are disabled and no network filters are registered.
+
+Guard optional data before using it. For example, only reference `attempt.prior_failure_reason` inside an `{% if attempt.number > 1 %}` block, and only reference `plan` in phases that provide it.
+
+## Render errors fail loudly
+
+If the template fails to render for a phase — undefined variable, unknown filter, syntax error — the pipeline **fails that phase** with:
+
+```
+WORKFLOW.md template render error: <engine diagnostic>
+```
+
+It does **not** silently fall back to the skill-based prompt. A permissive renderer would turn a typo like `{{ issue.titel }}` into an empty string and burn agent turns on a malformed prompt, so ShipCode surfaces the error immediately.
+
+## Continuation prompt
+
+When a turn fails verification and the pipeline starts a continuation turn, it uses the `continuation_prompt` front-matter template if present, otherwise a built-in default. Continuation prompts support two placeholders via simple substitution (not the full Liquid engine):
+
+- `{{ prior_failure_reason }}` — why the previous turn failed verification
+- `{{ turn_count }}` — the current turn number
+
+Keep continuation prompts short and do **not** re-send the PRD body — the agent already has it in context.
+
+## Live reload
+
+Edits to `WORKFLOW.md` apply without restarting the app:
+
+- The loader caches each repo's parsed policy for 30 seconds, so at worst an edit is picked up on the next cache expiry.
+- The desktop app additionally watches the repo root and `.shipcode/` directory ([`packages/pipeline/src/workflow-watcher.ts`](https://github.com/shipshitdev/shipcode/blob/master/packages/pipeline/src/workflow-watcher.ts), managed per project by [`apps/desktop/src/main/workflow-watch-manager.ts`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/main/workflow-watch-manager.ts)). File changes are debounced (200 ms), re-parsed, and — when valid — committed to the cache immediately, so the next dispatch tick sees the edit.
+- An invalid edit (broken YAML, unreadable file) preserves the last-known-good policy and reports the warning instead of degrading running dispatch.
+- Every reload emits a `workflow:reloaded` IPC event to the renderer with the resolved path, success flag, and any warning.
+
+In-flight pipelines are unaffected either way: each run snapshots its policy at start, so edits apply to the *next* run.
+
+## How it relates to other config surfaces
+
+ShipCode has several per-repo/per-project configuration surfaces. They compose rather than compete:
+
+| Surface | Lives in | Controls |
+|---------|----------|----------|
+| `WORKFLOW.md` (this page) | Target repo (`.shipcode/` or root) | Phase prompts (first priority) and agent policy: concurrency, turns, execute orchestration, continuation prompt |
+| [Skills Editor](/desktop/skills) | App database (global + project overrides) | Phase prompts used **only when** `WORKFLOW.md` has no template body |
+| [`.shipcode/setup.json`](/configuration#repo-setup-contract) | Target repo | Worktree setup: env files, setup/verify commands, runtime QA |
+| [Settings](/desktop/settings) and [Project Settings](/desktop/project-settings) | App database | Which **models** and reasoning efforts run each phase (global → project → issue override chain) |
+
+In short: `WORKFLOW.md` decides *what the agents are told* and *how many run*; the model-override chain decides *which model* runs each phase; `setup.json` decides *how the worktree is prepared*.
+
+## Related
+
+- [Pipeline Overview](/pipeline/overview) — the phases these prompts feed
+- [Skills Editor](/desktop/skills) — the fallback prompt system
+- [Configuration](/configuration) — labels and the repo setup contract
