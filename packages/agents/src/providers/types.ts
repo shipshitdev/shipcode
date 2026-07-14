@@ -49,10 +49,8 @@ export const PHASE_TOOL_POLICIES: Record<
     disallowedTools: [
       'Edit',
       'Write',
-      'MultiEdit',
       'Bash',
       'NotebookEdit',
-      'NotebookRead',
       'Read',
       'Glob',
       'Grep',
@@ -66,10 +64,8 @@ export const PHASE_TOOL_POLICIES: Record<
     disallowedTools: [
       'Edit',
       'Write',
-      'MultiEdit',
       'Bash',
       'NotebookEdit',
-      'NotebookRead',
       'Read',
       'Glob',
       'Grep',
@@ -83,10 +79,8 @@ export const PHASE_TOOL_POLICIES: Record<
     disallowedTools: [
       'Edit',
       'Write',
-      'MultiEdit',
       'Bash',
       'NotebookEdit',
-      'NotebookRead',
       'Read',
       'Glob',
       'Grep',
@@ -100,10 +94,8 @@ export const PHASE_TOOL_POLICIES: Record<
     disallowedTools: [
       'Edit',
       'Write',
-      'MultiEdit',
       'Bash',
       'NotebookEdit',
-      'NotebookRead',
       'Read',
       'Glob',
       'Grep',

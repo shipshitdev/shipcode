@@ -58,7 +58,7 @@ describe('buildClaudeArgs', () => {
       '32000',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebFetch,WebSearch',
+      'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebFetch,WebSearch',
     ]);
   });
 
@@ -74,7 +74,7 @@ describe('buildClaudeArgs', () => {
       '32000',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebFetch,WebSearch',
+      'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebFetch,WebSearch',
     ]);
   });
 
@@ -90,7 +90,7 @@ describe('buildClaudeArgs', () => {
       '32000',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebFetch,WebSearch',
+      'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebFetch,WebSearch',
     ]);
   });
 
@@ -148,7 +148,7 @@ describe('buildClaudeArgs', () => {
       '32000',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebFetch,WebSearch',
+      'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebFetch,WebSearch',
     ]);
   });
 
@@ -164,7 +164,7 @@ describe('buildClaudeArgs', () => {
       '1',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebFetch,WebSearch',
+      'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebFetch,WebSearch',
     ]);
   });
 
@@ -245,7 +245,7 @@ describe('buildClaudeArgs', () => {
       '32000',
       '--dangerously-skip-permissions',
       '--disallowedTools',
-      'Edit,Write,MultiEdit,Bash,NotebookEdit,NotebookRead,Read,Glob,Grep,Task,WebFetch,WebSearch',
+      'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebFetch,WebSearch',
       '--allowedTools',
       'Read,Grep',
     ]);
