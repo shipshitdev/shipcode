@@ -503,9 +503,9 @@ describe('workspaceVerifiableCriteria', () => {
   });
 
   it('returns a generic fallback when everything was external', () => {
-    expect(workspaceVerifiableCriteria(['Post an issue comment'], 'Implement the exporter')).toEqual(
-      ["The diff implements the node's described change: Implement the exporter"],
-    );
+    expect(
+      workspaceVerifiableCriteria(['Post an issue comment'], 'Implement the exporter'),
+    ).toEqual(["The diff implements the node's described change: Implement the exporter"]);
   });
 });
 

@@ -10,7 +10,12 @@ function makePlan(overrides: Partial<ShipCodePlan> = {}): ShipCodePlan {
     objective: 'Ship the thing',
     files: [{ path: 'src/index.ts', action: 'modify', description: 'wire it up' }],
     steps: [
-      { order: 1, description: 'Foundation', files: ['src/index.ts'], rationale: 'contracts first' },
+      {
+        order: 1,
+        description: 'Foundation',
+        files: ['src/index.ts'],
+        rationale: 'contracts first',
+      },
       { order: 2, description: 'Behavior', files: ['src/index.ts'], rationale: 'the feature' },
       { order: 3, description: 'Hardening', files: ['src/index.ts'], rationale: 'tests + polish' },
     ],
