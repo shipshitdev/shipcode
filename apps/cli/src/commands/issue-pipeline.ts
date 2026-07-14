@@ -1,5 +1,6 @@
 import { routeFromLabels } from '@shipcode/agents';
-import { createPipeline } from '@shipcode/pipeline';
+import { createPipeline, launchIssuePipeline } from '@shipcode/pipeline';
+import { resolveIssuePhaseModels, resolveProviderReasoningEffort } from '@shipcode/shared';
 import type { CliContext } from '../context';
 import { createCliContext } from '../context';
 import { parseIssueNumber } from './issue-helpers';
@@ -30,11 +31,47 @@ export async function startIssuePipeline(
   issue: PipelineIssue,
   route = resolveIssuePipelineRoute(issue.labels),
 ) {
-  return createPipeline(ctx.pipelineDeps).startFromGitHubIssue(
-    ctx.project.id,
-    ctx.project.path,
-    issue,
-    route.executorModel,
-    { baseBranch: ctx.project.defaultBranch, executorModelOverride: route.executorModelOverride },
+  const cachedIssue = ctx.githubIssues.upsert({
+    projectId: ctx.project.id,
+    issueNumber: issue.number,
+    title: issue.title,
+    body: issue.body,
+    labels: issue.labels,
+    assignee: issue.assignee,
+    author: issue.author?.login ?? null,
+    state: issue.state,
+    updatedAt: issue.updatedAt ?? null,
+  });
+
+  const settings = ctx.settings.get();
+  // Resolve the base phase models first so the executor effort override honors any
+  // project-/issue-level executorReasoningEffort normalization, matching the other
+  // phases. Feeding raw settings.executorReasoningEffort here would silently drop
+  // those overrides for CLI-launched issues.
+  const basePhaseModels = resolveIssuePhaseModels(settings, ctx.project, cachedIssue);
+  const phaseModels = {
+    ...basePhaseModels,
+    executorModel: route.executorModel,
+    executorModelId: route.executorModelOverride,
+    executorReasoningEffort: resolveProviderReasoningEffort(
+      route.executorModel,
+      basePhaseModels.executorReasoningEffort,
+      route.executorModelOverride,
+    ).effective,
+  };
+
+  return launchIssuePipeline(
+    {
+      threads: ctx.threads,
+      githubIssues: ctx.githubIssues,
+      plans: ctx.plans,
+      pipeline: createPipeline(ctx.pipelineDeps),
+    },
+    {
+      project: ctx.project,
+      issue: cachedIssue,
+      phaseModels,
+      executorModelOverride: route.executorModelOverride,
+    },
   );
 }

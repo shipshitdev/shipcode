@@ -364,6 +364,62 @@ export function resolveExecutorModelForIssue(
   return resolvePhaseModelForIssue(settings, project, issue, 'executor');
 }
 
+export interface ResolvedIssuePhaseModels {
+  plannerModel: ExecutorModel;
+  reviewerModel: ExecutorModel;
+  verifierModel: ExecutorModel;
+  executorModel: ExecutorModel;
+  plannerModelId: string | null;
+  reviewerModelId: string | null;
+  verifierModelId: string | null;
+  executorModelId: string | null;
+  plannerReasoningEffort: ReasoningEffort;
+  reviewerReasoningEffort: ReasoningEffort;
+  verifierReasoningEffort: ReasoningEffort;
+  executorReasoningEffort: ReasoningEffort;
+}
+
+export function resolveIssuePhaseModels(
+  settings: AppSettings,
+  project: ProjectModelOverrides | null | undefined,
+  issue: IssuePhaseOverrides | null | undefined,
+): ResolvedIssuePhaseModels {
+  return {
+    plannerModel: resolvePhaseModelForIssue(settings, project, issue, 'planner'),
+    reviewerModel: resolvePhaseModelForIssue(settings, project, issue, 'reviewer'),
+    verifierModel: resolvePhaseModelForIssue(settings, project, issue, 'verifier'),
+    executorModel: resolvePhaseModelForIssue(settings, project, issue, 'executor'),
+    plannerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'planner'),
+    reviewerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer'),
+    verifierModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'verifier'),
+    executorModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'executor'),
+    plannerReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
+      settings,
+      project,
+      issue,
+      'planner',
+    ),
+    reviewerReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
+      settings,
+      project,
+      issue,
+      'reviewer',
+    ),
+    verifierReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
+      settings,
+      project,
+      issue,
+      'verifier',
+    ),
+    executorReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
+      settings,
+      project,
+      issue,
+      'executor',
+    ),
+  };
+}
+
 export function resolvePhaseModelForIssue(
   settings: AppSettings,
   project: ProjectModelOverrides | null | undefined,

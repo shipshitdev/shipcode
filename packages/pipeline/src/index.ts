@@ -5,6 +5,12 @@ export {
   createIssueGroupRunState,
   IssueGroupSchedulerError,
 } from './issue-group-scheduler';
+export {
+  type IssuePipelineLaunchDeps,
+  type IssuePipelineLaunchHooks,
+  type LaunchIssuePipelineInput,
+  launchIssuePipeline,
+} from './issue-launch';
 export type { GhSyncDeps } from './phase-sync';
 export { mapPhaseToIssuePipelineStatus, syncThreadAndIssuePhase } from './phase-sync';
 export { createPipeline } from './pipeline';

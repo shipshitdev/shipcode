@@ -5,7 +5,8 @@ const {
   requireOnboardingMock,
   routeFromLabelsMock,
   createPipelineMock,
-  startFromGitHubIssueMock,
+  launchIssuePipelineMock,
+  upsertIssueMock,
   ghGetIssueMock,
   getThreadByIssueMock,
   getLatestPlanMock,
@@ -14,7 +15,8 @@ const {
   requireOnboardingMock: vi.fn(),
   routeFromLabelsMock: vi.fn(),
   createPipelineMock: vi.fn(),
-  startFromGitHubIssueMock: vi.fn(),
+  launchIssuePipelineMock: vi.fn(),
+  upsertIssueMock: vi.fn(),
   ghGetIssueMock: vi.fn(),
   getThreadByIssueMock: vi.fn(),
   getLatestPlanMock: vi.fn(),
@@ -34,7 +36,30 @@ vi.mock('@shipcode/agents', () => ({
 
 vi.mock('@shipcode/pipeline', () => ({
   createPipeline: createPipelineMock,
+  launchIssuePipeline: launchIssuePipelineMock,
 }));
+
+vi.mock('@shipcode/shared', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/shared')>();
+  return {
+    ...actual,
+    resolveIssuePhaseModels: vi.fn(() => ({
+      plannerModel: 'codex',
+      reviewerModel: 'codex',
+      verifierModel: 'codex',
+      executorModel: 'codex',
+      plannerModelId: null,
+      reviewerModelId: null,
+      verifierModelId: null,
+      executorModelId: null,
+      plannerReasoningEffort: 'high',
+      reviewerReasoningEffort: 'high',
+      verifierReasoningEffort: 'high',
+      executorReasoningEffort: 'high',
+    })),
+    resolveProviderReasoningEffort: vi.fn(() => ({ effective: 'high' })),
+  };
+});
 
 import { planCommand } from './plan';
 
@@ -65,9 +90,9 @@ describe('planCommand', () => {
       executorModel: 'openrouter',
       modelOverride: 'openrouter/auto',
     });
-    createPipelineMock.mockReturnValue({
-      startFromGitHubIssue: startFromGitHubIssueMock,
-    });
+    createPipelineMock.mockReturnValue({});
+    launchIssuePipelineMock.mockResolvedValue({ id: 'thread-1' });
+    upsertIssueMock.mockReturnValue({ id: 'issue-cache-42', issueNumber: 42 });
     createCliContextMock.mockReturnValue({
       project: {
         id: 'project-1',
@@ -80,6 +105,12 @@ describe('planCommand', () => {
       },
       threads: {
         getByProjectAndGithubIssue: getThreadByIssueMock,
+      },
+      githubIssues: {
+        upsert: upsertIssueMock,
+      },
+      settings: {
+        get: vi.fn(() => ({ executorReasoningEffort: 'high' })),
       },
       plans: {
         getLatest: getLatestPlanMock,
@@ -99,24 +130,22 @@ describe('planCommand', () => {
       id: 'plan-1',
       structured: structuredPlan,
     });
-    startFromGitHubIssueMock.mockResolvedValue(undefined);
   });
 
   it('fetches the issue, routes labels, starts the pipeline, and prints the generated plan', async () => {
     await planCommand('42');
 
     expect(ghGetIssueMock).toHaveBeenCalledWith(42);
-    expect(startFromGitHubIssueMock).toHaveBeenCalledWith(
-      'project-1',
-      '/repo',
-      {
-        number: 42,
-        title: 'Ship coverage',
-        body: 'Add tests',
-        labels: ['shipcode:agent:openrouter/auto'],
-      },
-      'openrouter',
-      { baseBranch: 'main', executorModelOverride: 'openrouter/auto' },
+    expect(launchIssuePipelineMock).toHaveBeenCalledWith(
+      expect.objectContaining({ pipeline: expect.any(Object) }),
+      expect.objectContaining({
+        issue: { id: 'issue-cache-42', issueNumber: 42 },
+        phaseModels: expect.objectContaining({
+          executorModel: 'openrouter',
+          executorModelId: 'openrouter/auto',
+        }),
+        executorModelOverride: 'openrouter/auto',
+      }),
     );
     expect(logSpy).toHaveBeenCalledWith('\n--- Plan Output ---');
     expect(logSpy).toHaveBeenCalledWith(JSON.stringify(structuredPlan, null, 2));
@@ -136,12 +165,12 @@ describe('planCommand', () => {
 
     await planCommand('42');
 
-    expect(startFromGitHubIssueMock).toHaveBeenCalledWith(
-      'project-1',
-      '/repo',
+    expect(launchIssuePipelineMock).toHaveBeenCalledWith(
       expect.any(Object),
-      'codex',
-      { baseBranch: 'main', executorModelOverride: null },
+      expect.objectContaining({
+        phaseModels: expect.objectContaining({ executorModel: 'codex' }),
+        executorModelOverride: null,
+      }),
     );
   });
 
@@ -150,12 +179,12 @@ describe('planCommand', () => {
 
     await planCommand('42');
 
-    expect(startFromGitHubIssueMock).toHaveBeenCalledWith(
-      'project-1',
-      '/repo',
+    expect(launchIssuePipelineMock).toHaveBeenCalledWith(
       expect.any(Object),
-      'codex',
-      { baseBranch: 'main', executorModelOverride: null },
+      expect.objectContaining({
+        phaseModels: expect.objectContaining({ executorModel: 'codex' }),
+        executorModelOverride: null,
+      }),
     );
   });
 

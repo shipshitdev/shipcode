@@ -31,11 +31,9 @@ import {
   pipelineLabelForStatus,
   type ReasoningEffort,
   resolveEffectivePhaseReasoningEffort,
-  resolveEffectivePhaseReasoningEffortForIssue,
+  resolveIssuePhaseModels,
   resolvePhaseModel,
-  resolvePhaseModelForIssue,
   resolvePhaseModelId,
-  resolvePhaseModelIdForIssue,
   SHIPCODE_CI_BLOCKED_LABEL,
   type SystemHealth,
 } from '@shipcode/shared';
@@ -90,46 +88,7 @@ export function resolveProjectPhaseModels(
   };
 }
 
-export function resolveIssuePhaseModels(
-  settings: ReturnType<Queries['settings']['get']>,
-  project: import('@shipcode/shared').Project,
-  issue: import('@shipcode/shared').GitHubIssueCacheRecord,
-) {
-  return {
-    plannerModel: resolvePhaseModelForIssue(settings, project, issue, 'planner'),
-    reviewerModel: resolvePhaseModelForIssue(settings, project, issue, 'reviewer'),
-    verifierModel: resolvePhaseModelForIssue(settings, project, issue, 'verifier'),
-    executorModel: resolvePhaseModelForIssue(settings, project, issue, 'executor'),
-    plannerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'planner'),
-    reviewerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer'),
-    verifierModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'verifier'),
-    executorModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'executor'),
-    plannerReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
-      settings,
-      project,
-      issue,
-      'planner',
-    ),
-    reviewerReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
-      settings,
-      project,
-      issue,
-      'reviewer',
-    ),
-    verifierReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
-      settings,
-      project,
-      issue,
-      'verifier',
-    ),
-    executorReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
-      settings,
-      project,
-      issue,
-      'executor',
-    ),
-  };
-}
+export { resolveIssuePhaseModels };
 
 type PhaseModels = ReturnType<typeof resolveProjectPhaseModels>;
 

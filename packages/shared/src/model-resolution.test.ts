@@ -7,6 +7,7 @@ import {
   resolveEffectivePhaseReasoningEffort,
   resolveEffectivePhaseReasoningEffortForIssue,
   resolveExecutorModelForIssue,
+  resolveIssuePhaseModels,
   resolvePhaseModel,
   resolvePhaseModelForIssue,
   resolvePhaseModelId,
@@ -229,6 +230,24 @@ describe('model-resolution', () => {
     const project = makeProject({ executorModelOverride: 'codex' });
 
     expect(resolvePhaseModelForIssue(settings, project, makeIssue(), 'executor')).toBe('codex');
+  });
+
+  it('resolves the complete issue phase-model launch contract once', () => {
+    const project = makeProject({ reviewerModelOverride: 'claude' });
+    const issue = makeIssue({
+      executorModelOverride: 'codex',
+      executorModelIdOverride: 'gpt-5.6-sol',
+      executorReasoningEffortOverride: 'xhigh',
+    });
+
+    expect(resolveIssuePhaseModels(settings, project, issue)).toMatchObject({
+      plannerModel: 'claude',
+      reviewerModel: 'claude',
+      verifierModel: 'openrouter',
+      executorModel: 'codex',
+      executorModelId: 'gpt-5.6-sol',
+      executorReasoningEffort: 'xhigh',
+    });
   });
 
   it('lets issue model IDs shadow project and provider defaults', () => {
