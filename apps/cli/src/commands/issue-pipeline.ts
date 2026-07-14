@@ -1,9 +1,6 @@
 import { routeFromLabels } from '@shipcode/agents';
 import { createPipeline, launchIssuePipeline } from '@shipcode/pipeline';
-import {
-  resolveIssuePhaseModels,
-  resolveProviderReasoningEffort,
-} from '@shipcode/shared';
+import { resolveIssuePhaseModels, resolveProviderReasoningEffort } from '@shipcode/shared';
 import type { CliContext } from '../context';
 import { createCliContext } from '../context';
 import { parseIssueNumber } from './issue-helpers';

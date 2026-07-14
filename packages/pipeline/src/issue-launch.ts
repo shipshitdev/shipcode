@@ -53,8 +53,7 @@ export async function launchIssuePipeline(
   await hooks.onIssueStarted?.();
 
   const thread =
-    reusableThread ??
-    deps.threads.create(issue.projectId, issue.body ?? issue.title, issue.title);
+    reusableThread ?? deps.threads.create(issue.projectId, issue.body ?? issue.title, issue.title);
 
   if (reusableThread) {
     deps.threads.updateIssueContent(thread.id, issue.body ?? issue.title, issue.title);

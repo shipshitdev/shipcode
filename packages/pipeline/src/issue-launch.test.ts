@@ -70,6 +70,7 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     priorityRank: 'p2',
     priorityRaw: 'P2',
     priorityFetchedAt: '2026-07-14T00:00:00.000Z',
+    isQuickMode: false,
     ...overrides,
   };
 }
