@@ -1026,6 +1026,9 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             if (context.nodeVerificationRetries >= MAX_NODE_VERIFICATION_RETRIES) {
               const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
               void postTaskGraphComment(context, failedGraph);
+              // Refresh the canonical Workpad so a failed run reflects the failure
+              // state, not the last successful snapshot (#394).
+              void postWorkpadComment(context, plan, failedGraph);
               emitPhase(
                 threadId,
                 'failed',
@@ -1054,6 +1057,8 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           // nodeOutcome === 'failed' — max retries exhausted
           const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
           void postTaskGraphComment(context, failedGraph);
+          // Reflect the failure in the canonical Workpad (#394).
+          void postWorkpadComment(context, plan, failedGraph);
           emitPhase(
             threadId,
             'failed',
@@ -1102,9 +1107,13 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       if (activeTaskNode && deps.taskGraphs) {
         const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
         void postTaskGraphComment(context, failedGraph);
+        // Reflect the node failure in the canonical Workpad (#394).
+        void postWorkpadComment(context, plan, failedGraph);
       } else if (taskGraph?.mode === 'direct' && deps.taskGraphs && taskGraph.status !== 'failed') {
         try {
-          deps.taskGraphs.updateGraphStatus(taskGraph.id, 'failed');
+          const failedGraph = deps.taskGraphs.updateGraphStatus(taskGraph.id, 'failed');
+          // Mirror the direct-mode success path: keep the Workpad current on failure.
+          void postWorkpadComment(context, plan, failedGraph);
         } catch (error) {
           console.error(`[pipeline] direct task graph failure failed for ${threadId}:`, error);
         }

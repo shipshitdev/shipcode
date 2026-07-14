@@ -134,6 +134,27 @@ const EXTERNAL_SIDE_EFFECT_CRITERION_PATTERNS: RegExp[] = [
 ];
 
 /**
+ * A criterion naming a concrete workspace artifact — a backticked identifier, a
+ * source-file path, or a well-known root file. In a repo that itself builds GitHub
+ * tooling, such criteria ("the `gh issue view` wrapper returns typed data", "the
+ * README links to github.com/org/repo") are diff-verifiable even though they mention
+ * gh/github/comment, so they must not be treated as external side effects.
+ */
+const CODE_ARTIFACT_SIGNAL =
+  /`[^`]+`|\b[\w./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|md|mdx|json|ya?ml|toml|css|scss|html|sh)\b|\b(?:README|CHANGELOG|LICENSE|Dockerfile|Makefile|tsconfig)\b/;
+
+/**
+ * Verbs denoting an actual GitHub write / network / command-execution action. When
+ * present, the criterion really does require performing an external side effect
+ * (e.g. "Run `gh issue view 42`"), so the code-artifact exemption above does not
+ * apply. Kept deliberately broad: extra matches only *disable* the exemption, and a
+ * criterion is still classified external only if it also matches a pattern below —
+ * so this can never cause a false negative, only forgo a rescue.
+ */
+const EXTERNAL_ACTION_VERB =
+  /\b(?:post|push|publish|open|creat|clos|merg|reopen|label|assign|upload|run|execute|invoke|call|fetch|send|sync)\w*/i;
+
+/**
  * True when an acceptance criterion depends on an external side effect the
  * sandboxed executor cannot perform or the diff-only verifier cannot observe
  * (GitHub writes, network calls, issue/PR comment updates). Such criteria are
@@ -141,6 +162,12 @@ const EXTERNAL_SIDE_EFFECT_CRITERION_PATTERNS: RegExp[] = [
  * verification.
  */
 export function isExternalSideEffectCriterion(criterion: string): boolean {
+  // Keep criteria that describe a concrete workspace artifact and don't call for a
+  // GitHub write — they're verifiable from the diff even when they mention GitHub.
+  // This narrows false positives without loosening detection of true external writes.
+  if (CODE_ARTIFACT_SIGNAL.test(criterion) && !EXTERNAL_ACTION_VERB.test(criterion)) {
+    return false;
+  }
   return EXTERNAL_SIDE_EFFECT_CRITERION_PATTERNS.some((pattern) => pattern.test(criterion));
 }
 

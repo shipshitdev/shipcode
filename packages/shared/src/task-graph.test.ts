@@ -490,6 +490,31 @@ describe('isExternalSideEffectCriterion', () => {
       expect(isExternalSideEffectCriterion(criterion)).toBe(false);
     }
   });
+
+  it('keeps code-describing criteria that merely mention GitHub concepts (#397)', () => {
+    // These name a concrete workspace artifact and describe code — verifiable from
+    // the diff — even though they mention gh / github.com / comment. They must NOT be
+    // stripped just for the keyword, especially in a repo that builds GitHub tooling.
+    for (const criterion of [
+      'The new `gh issue view` wrapper returns typed data',
+      '`formatWorkpadComment` embeds the issue marker in the comment body',
+      'The generated README links to github.com/org/repo',
+      '`parseGithubUrl` handles github.com and api.github.com inputs',
+    ]) {
+      expect(isExternalSideEffectCriterion(criterion)).toBe(false);
+    }
+  });
+
+  it('still flags a code artifact paired with a real external action verb (#397)', () => {
+    // A backtick alone must not rescue a criterion that actually performs a write.
+    for (const criterion of [
+      'Run `gh issue view 42` and confirm the body',
+      'Post the rendered body from `formatComment` as an issue comment',
+      'Push `release.tar.gz` to the GitHub release via git push',
+    ]) {
+      expect(isExternalSideEffectCriterion(criterion)).toBe(true);
+    }
+  });
 });
 
 describe('workspaceVerifiableCriteria', () => {
