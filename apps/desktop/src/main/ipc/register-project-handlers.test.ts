@@ -278,6 +278,7 @@ describe('registerProjectHandlers', () => {
     getRepoMetadataMock.mockResolvedValue({
       githubRepoId: 'R_repo',
       githubRepoFullName: 'shipshitdev/shipcode',
+      githubProjectUrl: null,
     });
     ensureLabelsMock.mockResolvedValue({ created: [], alreadyPresent: [], failed: [] });
     configureMainTelemetryMock.mockResolvedValue(undefined);
@@ -1458,6 +1459,101 @@ describe('registerProjectHandlers', () => {
       projectId: 'project-1',
       issues,
     });
+  });
+
+  it('auto-configures the repository-associated GitHub Project when adding a folder', async () => {
+    let project: Project = {
+      ...baseProject,
+      githubProjectUrl: null,
+      githubStatusMapping: null,
+    };
+    const mapping = {
+      todo: { name: 'Backlog', color: 'GRAY' },
+      inProgress: { name: 'In Progress', color: 'YELLOW' },
+      humanReview: { name: 'Human Review', color: 'BLUE' },
+      deferred: { name: 'Deferred', color: 'GRAY' },
+      done: { name: 'Done', color: 'PURPLE' },
+    };
+    getRepoMetadataMock.mockResolvedValueOnce({
+      githubRepoId: 'R_repo',
+      githubRepoFullName: 'shipshitdev/shipcode',
+      githubProjectUrl: 'https://github.com/orgs/shipshitdev/projects/1',
+    });
+    validateProjectStatusFieldMock.mockResolvedValueOnce({ ok: true, mapping });
+
+    const queries = {
+      projects: {
+        add: vi.fn((projectPath: string) => {
+          project = { ...project, path: projectPath };
+          return project;
+        }),
+        getById: vi.fn(() => project),
+        updateGitInfo: vi.fn((_id: string, gitRemote: string | null, defaultBranch: string) => {
+          project = { ...project, gitRemote, defaultBranch };
+        }),
+        updateGithubRepoIdentity: vi.fn(
+          (
+            _id: string,
+            identity: { githubRepoId: string | null; githubRepoFullName: string | null },
+          ) => {
+            project = { ...project, ...identity };
+          },
+        ),
+        updateGithubProjectUrl: vi.fn((_id: string, githubProjectUrl: string | null) => {
+          project = { ...project, githubProjectUrl };
+        }),
+        setGithubStatusMapping: vi.fn((_id: string, githubStatusMapping: unknown) => {
+          project = { ...project, githubStatusMapping: githubStatusMapping as never };
+        }),
+        clearGithubStatusMapping: vi.fn(),
+        getByGithubRepoIdentity: vi.fn(() => null),
+        markStarterIssueSeeded: vi.fn(),
+      },
+      githubIssues: {
+        upsert: vi.fn(),
+        list: vi.fn(() => []),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor' })),
+      },
+      threads: {
+        listByProject: vi.fn(() => []),
+      },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const addProject = handlers.get('project:add');
+    if (!addProject) throw new Error('project:add handler not registered');
+
+    await expect(
+      addProject(undefined, { path: '/tmp/shipcode', repo: null }),
+    ).resolves.toMatchObject({
+      githubRepoFullName: 'shipshitdev/shipcode',
+      githubProjectUrl: 'https://github.com/orgs/shipshitdev/projects/1',
+      githubStatusMapping: mapping,
+    });
+    expect(queries.projects.updateGithubProjectUrl).toHaveBeenCalledWith(
+      project.id,
+      'https://github.com/orgs/shipshitdev/projects/1',
+    );
+    expect(validateProjectStatusFieldMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: '/tmp/shipcode',
+        projectUrl: 'https://github.com/orgs/shipshitdev/projects/1',
+      }),
+    );
+    expect(queries.projects.setGithubStatusMapping).toHaveBeenCalledWith(project.id, mapping);
+    await flushBackgroundTasks();
   });
 
   it('reuses an existing seeded starter issue for the same GitHub repo identity', async () => {

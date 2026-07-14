@@ -112,6 +112,12 @@ export interface IssueLabelActionResult {
   skipped: string[];
 }
 
+export interface GithubRepoMetadata {
+  githubRepoId: string;
+  githubRepoFullName: string;
+  githubProjectUrl: string | null;
+}
+
 interface ProjectMetadataQueryResponse {
   data?: {
     repository?: {
@@ -153,18 +159,54 @@ export class GhCli {
     this.env = shellExecEnv();
   }
 
-  async getRepoMetadata(): Promise<{ githubRepoId: string; githubRepoFullName: string }> {
-    const { stdout } = await execFileAsync('gh', ['repo', 'view', '--json', 'id,nameWithOwner'], {
-      cwd: this.cwd,
-      env: this.env,
-    });
-    const parsed = JSON.parse(stdout) as { id?: string; nameWithOwner?: string };
+  async getRepoMetadata(): Promise<GithubRepoMetadata> {
+    let stdout: string;
+    try {
+      const result = await execFileAsync(
+        'gh',
+        ['repo', 'view', '--json', 'id,nameWithOwner,projectsV2'],
+        {
+          cwd: this.cwd,
+          env: this.env,
+        },
+      );
+      stdout = result.stdout;
+    } catch {
+      const result = await execFileAsync('gh', ['repo', 'view', '--json', 'id,nameWithOwner'], {
+        cwd: this.cwd,
+        env: this.env,
+      });
+      stdout = result.stdout;
+    }
+    const parsed = JSON.parse(stdout) as {
+      id?: string;
+      nameWithOwner?: string;
+      projectsV2?: {
+        Nodes?: Array<{ title?: string; url?: string; closed?: boolean }>;
+        nodes?: Array<{ title?: string; url?: string; closed?: boolean }>;
+      } | null;
+    };
     const githubRepoId = parsed.id?.trim();
     const githubRepoFullName = parsed.nameWithOwner?.trim();
     if (!githubRepoId || !githubRepoFullName) {
       throw new Error('Failed to resolve repository id/name via gh repo view');
     }
-    return { githubRepoId, githubRepoFullName };
+
+    const projects = (parsed.projectsV2?.Nodes ?? parsed.projectsV2?.nodes ?? []).filter(
+      (project) => !project.closed && project.url?.trim(),
+    );
+    const repoName = githubRepoFullName.split('/').at(-1)?.toLowerCase() ?? '';
+    const exactMatches = projects.filter(
+      (project) => project.title?.trim().toLowerCase() === repoName,
+    );
+    const selectedProject =
+      projects.length === 1 ? projects[0] : exactMatches.length === 1 ? exactMatches[0] : null;
+
+    return {
+      githubRepoId,
+      githubRepoFullName,
+      githubProjectUrl: selectedProject?.url?.trim() ?? null,
+    };
   }
 
   private async getRepoCoordinates(): Promise<{ owner: string; repo: string }> {

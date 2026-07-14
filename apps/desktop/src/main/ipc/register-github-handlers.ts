@@ -39,6 +39,7 @@ import { PipelineScheduler } from '../pipeline-scheduler';
 import {
   assertPrdRewriteModelSupported,
   attachIssueToConfiguredProjectBoard,
+  persistGithubProjectConfiguration,
   sendGithubIssuesUpdated,
   syncLinkedPullRequestFeedback,
 } from './helpers';
@@ -249,7 +250,7 @@ export function registerGitHubHandlers({
 
       const refreshPromise = (async () => {
         const startedAt = Date.now();
-        const project = queries.projects.getById(projectId);
+        let project = queries.projects.getById(projectId);
         if (!project) throw new Error(`Project ${projectId} not found`);
         if (!fs.existsSync(project.path)) {
           throw new Error(
@@ -263,13 +264,28 @@ export function registerGitHubHandlers({
         let githubRepoFullName =
           project.githubRepoFullName ??
           (githubRemoteRef ? `${githubRemoteRef.owner}/${githubRemoteRef.repo}` : null);
-        if (!project.githubRepoFullName) {
+        if (!project.githubRepoFullName || !project.githubProjectUrl) {
           try {
             const metadata = await ghCli.getRepoMetadata();
             githubRepoFullName = metadata.githubRepoFullName;
-            queries.projects.updateGithubRepoIdentity(project.id, metadata);
+            if (!project.githubRepoFullName) {
+              queries.projects.updateGithubRepoIdentity(project.id, {
+                githubRepoId: metadata.githubRepoId,
+                githubRepoFullName: metadata.githubRepoFullName,
+              });
+            }
+            if (!project.githubProjectUrl && metadata.githubProjectUrl) {
+              await persistGithubProjectConfiguration({
+                queries,
+                projectId: project.id,
+                projectPath: project.path,
+                projectUrl: metadata.githubProjectUrl,
+                source: 'github:refresh-issues',
+              });
+              project = queries.projects.getById(projectId) ?? project;
+            }
           } catch (err) {
-            log.warn('[github:refresh-issues] repo identity backfill failed', err);
+            log.warn('[github:refresh-issues] repo integration backfill failed', err);
           }
         }
         const issues = await ghCli.listAllIssues();

@@ -85,17 +85,90 @@ describe('GhCli', () => {
   });
 
   describe('repo metadata and labels', () => {
-    it('resolves repository metadata and validates required fields', async () => {
-      success(JSON.stringify({ id: ' R_123 ', nameWithOwner: ' shipshitdev/shipcode ' }));
+    it('resolves repository metadata, its associated project, and validates required fields', async () => {
+      success(
+        JSON.stringify({
+          id: ' R_123 ',
+          nameWithOwner: ' shipshitdev/shipcode ',
+          projectsV2: {
+            Nodes: [
+              {
+                title: 'shipcode',
+                url: ' https://github.com/orgs/shipshitdev/projects/1 ',
+                closed: false,
+              },
+            ],
+          },
+        }),
+      );
 
       await expect(gh.getRepoMetadata()).resolves.toEqual({
         githubRepoId: 'R_123',
         githubRepoFullName: 'shipshitdev/shipcode',
+        githubProjectUrl: 'https://github.com/orgs/shipshitdev/projects/1',
       });
+      expect(mockExecFileAsync).toHaveBeenCalledWith(
+        'gh',
+        ['repo', 'view', '--json', 'id,nameWithOwner,projectsV2'],
+        ghExecOptions,
+      );
 
       success(JSON.stringify({ id: '', nameWithOwner: 'shipshitdev/shipcode' }));
       await expect(gh.getRepoMetadata()).rejects.toThrow(
         'Failed to resolve repository id/name via gh repo view',
+      );
+    });
+
+    it('prefers the unique open project named after the repository', async () => {
+      success(
+        JSON.stringify({
+          id: 'R_123',
+          nameWithOwner: 'acme/widget',
+          projectsV2: {
+            Nodes: [
+              { title: 'Legacy', url: 'https://github.com/orgs/acme/projects/1', closed: true },
+              { title: 'Roadmap', url: 'https://github.com/orgs/acme/projects/2', closed: false },
+              { title: 'widget', url: 'https://github.com/orgs/acme/projects/3', closed: false },
+            ],
+          },
+        }),
+      );
+
+      await expect(gh.getRepoMetadata()).resolves.toMatchObject({
+        githubProjectUrl: 'https://github.com/orgs/acme/projects/3',
+      });
+    });
+
+    it('does not guess when multiple open associated projects are ambiguous', async () => {
+      success(
+        JSON.stringify({
+          id: 'R_123',
+          nameWithOwner: 'acme/widget',
+          projectsV2: {
+            nodes: [
+              { title: 'Roadmap', url: 'https://github.com/orgs/acme/projects/2' },
+              { title: 'Launch', url: 'https://github.com/orgs/acme/projects/3' },
+            ],
+          },
+        }),
+      );
+
+      await expect(gh.getRepoMetadata()).resolves.toMatchObject({ githubProjectUrl: null });
+    });
+
+    it('keeps repository identity resolution working without Projects scope', async () => {
+      failure('missing read:project scope');
+      success(JSON.stringify({ id: 'R_123', nameWithOwner: 'acme/widget' }));
+
+      await expect(gh.getRepoMetadata()).resolves.toEqual({
+        githubRepoId: 'R_123',
+        githubRepoFullName: 'acme/widget',
+        githubProjectUrl: null,
+      });
+      expect(mockExecFileAsync).toHaveBeenLastCalledWith(
+        'gh',
+        ['repo', 'view', '--json', 'id,nameWithOwner'],
+        ghExecOptions,
       );
     });
 

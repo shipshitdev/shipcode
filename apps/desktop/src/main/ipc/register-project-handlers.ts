@@ -14,7 +14,6 @@ import {
   GhCli,
   inspectProjectSetup,
   validateOpenRouterModel,
-  validateProjectStatusField,
   writeProjectSetup,
 } from '@shipcode/agents';
 import {
@@ -47,7 +46,6 @@ import {
   parseGithubRemote,
   parseUnifiedDiff,
   SHIPCODE_DEFAULT_LABELS,
-  SHIPCODE_PIPELINE_LABELS,
   TRIAGE_RULE_LIMIT,
   validateGithubProjectUrl,
 } from '@shipcode/shared';
@@ -58,7 +56,12 @@ import log from '../logger.service';
 import { isSafeExternalUrl } from '../security';
 import { configureMainTelemetry, getTelemetryStatus } from '../telemetry';
 import { isWorktreeLocked, withWorktreeLock } from '../worktree-locks';
-import { enrichProjectPath, enrichProjectPaths, sendGithubIssuesUpdated } from './helpers';
+import {
+  enrichProjectPath,
+  enrichProjectPaths,
+  persistGithubProjectConfiguration,
+  sendGithubIssuesUpdated,
+} from './helpers';
 import { registerProjectCodeBrowserHandlers } from './register-project-code-browser-handlers';
 import type { IpcHandlerDeps } from './types';
 
@@ -307,17 +310,29 @@ async function resolveGithubRepoIdentity(
   projectPath: string,
   gitRemote: string | null,
   repoArg?: Pick<OnboardingRepo, 'id' | 'name'> | null,
-): Promise<{ githubRepoId: string; githubRepoFullName: string } | null> {
-  if (repoArg?.id && repoArg?.name) {
-    return { githubRepoId: repoArg.id, githubRepoFullName: repoArg.name };
-  }
-  if (!parseGithubRemote(gitRemote)) return null;
+): Promise<{
+  githubRepoId: string;
+  githubRepoFullName: string;
+  githubProjectUrl: string | null;
+} | null> {
+  if (!repoArg && !parseGithubRemote(gitRemote)) return null;
   try {
     const ghCli = new GhCli(projectPath);
-    return await ghCli.getRepoMetadata();
+    const metadata = await ghCli.getRepoMetadata();
+    return {
+      githubRepoId: repoArg?.id ?? metadata.githubRepoId,
+      githubRepoFullName: repoArg?.name ?? metadata.githubRepoFullName,
+      githubProjectUrl: metadata.githubProjectUrl,
+    };
   } catch (error) {
     log.warn('[project:add] failed to resolve GitHub repo metadata:', error);
-    return null;
+    return repoArg?.id && repoArg.name
+      ? {
+          githubRepoId: repoArg.id,
+          githubRepoFullName: repoArg.name,
+          githubProjectUrl: null,
+        }
+      : null;
   }
 }
 
@@ -427,42 +442,32 @@ async function resolveProjectGithubIdentityAndOnboard({
   projectId,
   projectPath,
   remote,
+  repo,
 }: {
   mainWindow: import('electron').BrowserWindow;
   queries: IpcHandlerDeps['queries'];
   projectId: string;
   projectPath: string;
   remote: string | null;
+  repo?: Pick<OnboardingRepo, 'id' | 'name'> | null;
 }): Promise<void> {
-  const repoIdentity = await resolveGithubRepoIdentity(projectPath, remote, null);
+  const repoIdentity = await resolveGithubRepoIdentity(projectPath, remote, repo);
   if (!repoIdentity) return;
 
-  queries.projects.updateGithubRepoIdentity(projectId, repoIdentity);
-  await runProjectGithubOnboarding({ mainWindow, queries, projectId, projectPath });
-}
-
-function enqueueProjectGithubIdentityAndOnboarding({
-  mainWindow,
-  queries,
-  projectId,
-  projectPath,
-  remote,
-}: {
-  mainWindow: import('electron').BrowserWindow;
-  queries: IpcHandlerDeps['queries'];
-  projectId: string;
-  projectPath: string;
-  remote: string | null;
-}): void {
-  void resolveProjectGithubIdentityAndOnboard({
-    mainWindow,
-    queries,
-    projectId,
-    projectPath,
-    remote,
-  }).catch((error) => {
-    log.warn('[project:add] failed to resolve GitHub identity:', error);
+  queries.projects.updateGithubRepoIdentity(projectId, {
+    githubRepoId: repoIdentity.githubRepoId,
+    githubRepoFullName: repoIdentity.githubRepoFullName,
   });
+  if (repoIdentity.githubProjectUrl) {
+    await persistGithubProjectConfiguration({
+      queries,
+      projectId,
+      projectPath,
+      projectUrl: repoIdentity.githubProjectUrl,
+      source: 'project:add',
+    });
+  }
+  enqueueProjectGithubOnboarding({ mainWindow, queries, projectId, projectPath });
 }
 
 function resolveProjectOpenTarget(
@@ -613,22 +618,14 @@ export function registerProjectHandlers({
         const branch = await git.getDefaultBranch();
         queries.projects.updateGitInfo(project.id, remote, branch);
 
-        if (repo?.id && repo.name) {
-          const repoIdentity = { githubRepoId: repo.id, githubRepoFullName: repo.name };
-          queries.projects.updateGithubRepoIdentity(project.id, repoIdentity);
-          enqueueProjectGithubOnboarding({
-            mainWindow,
-            queries,
-            projectId: project.id,
-            projectPath,
-          });
-        } else if (parseGithubRemote(remote)) {
-          enqueueProjectGithubIdentityAndOnboarding({
+        if ((repo?.id && repo.name) || parseGithubRemote(remote)) {
+          await resolveProjectGithubIdentityAndOnboard({
             mainWindow,
             queries,
             projectId: project.id,
             projectPath,
             remote,
+            repo,
           });
         }
 
@@ -1469,45 +1466,13 @@ export function registerProjectHandlers({
         throw new Error(clampError(result.reason));
       }
 
-      queries.projects.updateGithubProjectUrl(projectId, result.value);
-
-      // Auto-detect GH Projects v2 Status field mapping when URL is set
-      if (result.value && project.path) {
-        try {
-          const validation = await validateProjectStatusField({
-            cwd: project.path,
-            projectUrl: result.value,
-            onWarn: (msg: string, err?: unknown) =>
-              log.warn('[project:set-github-project-url] status validation:', msg, err),
-          });
-          if (validation.ok && validation.mapping) {
-            queries.projects.setGithubStatusMapping(projectId, validation.mapping);
-            // Ensure pipeline labels exist in the repo
-            const ghCli = new GhCli(project.path);
-            await ghCli.ensureLabels([...SHIPCODE_PIPELINE_LABELS]);
-            log.info('[project:set-github-project-url] status mapping auto-detected', {
-              mapping: validation.mapping,
-            });
-          } else {
-            log.info('[project:set-github-project-url] status auto-detection partial/failed', {
-              ok: validation.ok,
-              reason: validation.reason,
-              available: validation.availableOptions,
-            });
-            // Store partial mapping if available — still useful for partial sync
-            if (validation.mapping) {
-              queries.projects.setGithubStatusMapping(projectId, validation.mapping);
-            } else {
-              queries.projects.clearGithubStatusMapping(projectId);
-            }
-          }
-        } catch (err) {
-          log.warn('[project:set-github-project-url] status field validation error:', err);
-          // Don't block saving the URL — status sync is best-effort
-        }
-      } else if (!result.value) {
-        queries.projects.clearGithubStatusMapping(projectId);
-      }
+      await persistGithubProjectConfiguration({
+        queries,
+        projectId,
+        projectPath: project.path,
+        projectUrl: result.value,
+        source: 'project:set-github-project-url',
+      });
 
       const updated = enrichProjectPath(queries.projects.getById(projectId));
       if (!updated) throw new Error(`Project ${projectId} not found after GitHub URL update`);
