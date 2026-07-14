@@ -144,11 +144,7 @@ export class WorktreeManager {
    * Create a worktree for a non-issue thread. Pass a title for slug-based names.
    */
   async create(threadId: string, baseBranch?: string): Promise<WorktreeCreateResult>;
-  async create(
-    threadId: string,
-    title: string,
-    baseBranch?: string,
-  ): Promise<WorktreeCreateResult>;
+  async create(threadId: string, title: string, baseBranch?: string): Promise<WorktreeCreateResult>;
   async create(
     idOrNumber: string | number,
     ...rest: [titleOrBase?: string, baseBranch?: string]
