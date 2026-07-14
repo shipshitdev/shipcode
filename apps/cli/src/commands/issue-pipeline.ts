@@ -44,13 +44,18 @@ export async function startIssuePipeline(
   });
 
   const settings = ctx.settings.get();
+  // Resolve the base phase models first so the executor effort override honors any
+  // project-/issue-level executorReasoningEffort normalization, matching the other
+  // phases. Feeding raw settings.executorReasoningEffort here would silently drop
+  // those overrides for CLI-launched issues.
+  const basePhaseModels = resolveIssuePhaseModels(settings, ctx.project, cachedIssue);
   const phaseModels = {
-    ...resolveIssuePhaseModels(settings, ctx.project, cachedIssue),
+    ...basePhaseModels,
     executorModel: route.executorModel,
     executorModelId: route.executorModelOverride,
     executorReasoningEffort: resolveProviderReasoningEffort(
       route.executorModel,
-      settings.executorReasoningEffort,
+      basePhaseModels.executorReasoningEffort,
       route.executorModelOverride,
     ).effective,
   };

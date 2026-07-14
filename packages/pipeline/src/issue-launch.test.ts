@@ -231,4 +231,32 @@ describe('launchIssuePipeline', () => {
 
     expect(onLaunchError).toHaveBeenCalledWith(error, newThread);
   });
+
+  it('routes a validatePhaseModels rejection through onLaunchError instead of stranding the thread', async () => {
+    const error = new Error('unsupported model / missing API key');
+    const validatePhaseModels = vi.fn(async () => {
+      throw error;
+    });
+    const onLaunchError = vi.fn();
+
+    await expect(
+      launchIssuePipeline(
+        {
+          threads: threads as never,
+          githubIssues: githubIssues as never,
+          plans: plans as never,
+          pipeline,
+        },
+        { project, issue: makeIssue(), phaseModels },
+        { validatePhaseModels, onLaunchError },
+      ),
+    ).rejects.toBe(error);
+
+    // Validation runs inside the try, so the failure is reported and the thread is
+    // never persisted/launched (avoiding a thread stuck forever in `planning`).
+    expect(onLaunchError).toHaveBeenCalledWith(error, newThread);
+    expect(threads.setPhaseModels).not.toHaveBeenCalled();
+    expect(plans.supersedeAll).not.toHaveBeenCalled();
+    expect(pipeline.startFromGitHubIssue).not.toHaveBeenCalled();
+  });
 });

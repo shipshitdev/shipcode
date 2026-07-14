@@ -62,14 +62,18 @@ export async function launchIssuePipeline(
   deps.threads.setGithubIssue(thread.id, issue.issueNumber, project.gitRemote);
   deps.githubIssues.linkThread(issue.id, thread.id);
   await hooks.onIssueLinked?.(thread);
-  await hooks.validatePhaseModels?.(phaseModels);
-
-  deps.threads.setPhaseModels(thread.id, phaseModels);
-  deps.threads.resetFailureTracking(thread.id);
-  deps.plans.supersedeAll(thread.id);
-  deps.plans.supersedeAllForIssue(issue.projectId, issue.issueNumber, thread.id);
 
   try {
+    // validatePhaseModels can reject (unsupported model / missing API key). Keep it —
+    // and the phase-model persistence below — inside the try so onLaunchError fires
+    // and the thread transitions out of `planning` instead of being stranded there.
+    await hooks.validatePhaseModels?.(phaseModels);
+
+    deps.threads.setPhaseModels(thread.id, phaseModels);
+    deps.threads.resetFailureTracking(thread.id);
+    deps.plans.supersedeAll(thread.id);
+    deps.plans.supersedeAllForIssue(issue.projectId, issue.issueNumber, thread.id);
+
     await deps.pipeline.startFromGitHubIssue(
       thread.id,
       project.path,
