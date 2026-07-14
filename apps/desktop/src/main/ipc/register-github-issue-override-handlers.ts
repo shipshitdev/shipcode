@@ -12,11 +12,11 @@ export function registerGitHubIssueOverrideHandlers({
 }: Pick<IpcHandlerDeps, 'ipcMain' | 'mainWindow' | 'queries'>): void {
   const handleIssueOverride = <TArgs extends unknown[], TResult>(
     channel: string,
-    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => TResult | Promise<TResult>,
+    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => TResult,
   ) => {
-    ipcMain.handle(channel, async (event, ...args) => {
+    ipcMain.handle(channel, (event, ...args) => {
       try {
-        return await handler(event, ...(args as TArgs));
+        return handler(event, ...(args as TArgs));
       } catch (error) {
         log.error(`[${channel}]`, error);
         throw new Error(clampError(error));

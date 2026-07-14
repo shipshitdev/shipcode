@@ -41,7 +41,7 @@ describe('registerGitHubIssueOverrideHandlers', () => {
     });
   });
 
-  it('logs full override errors and exposes only the clamped first line', async () => {
+  it('logs full override errors and exposes only the clamped first line', () => {
     const fullError = new Error(`${'x'.repeat(400)}\nstack trace`);
     githubIssues.getByNumber.mockImplementationOnce(() => {
       throw fullError;
@@ -49,9 +49,9 @@ describe('registerGitHubIssueOverrideHandlers', () => {
     const handler = handlers.get('github:clear-phase-model-override');
     if (!handler) throw new Error('override handler not registered');
 
-    await expect(
+    expect(() =>
       handler(undefined, { projectId: 'project-1', issueNumber: 318, phase: 'executor' }),
-    ).rejects.toThrow(`${'x'.repeat(279)}…`);
+    ).toThrow(`${'x'.repeat(279)}…`);
     expect(logError).toHaveBeenCalledWith('[github:clear-phase-model-override]', fullError);
   });
 });
