@@ -1187,10 +1187,11 @@ describe('execution phase handlers', () => {
     ).toHaveBeenCalledWith('node-1');
     // The canonical Workpad must be refreshed on the failure path too, so a failed
     // run reflects the failure state rather than the last successful snapshot (#397).
-    expect(
-      (harness.deps as never as { postWorkpadComment: ReturnType<typeof vi.fn> })
-        .postWorkpadComment,
-    ).toHaveBeenCalledWith(expect.anything(), expect.anything(), graph);
+    expect(harness.runtime.postWorkpadComment).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      graph,
+    );
   });
 
   it('retries scoped node verification when the verifier throws', async () => {
