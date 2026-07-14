@@ -7,11 +7,13 @@ import {
   formatTaskGraphExecutionContract,
   formatTaskNodeIssueBody,
   inferTaskSurfaces,
+  isExternalSideEffectCriterion,
   pickTaskAgentRole,
   suggestedReasoningForTask,
   TASK_GRAPH_COMMENT_MARKER,
   type TaskGraphMode,
   type TaskGraphWithNodes,
+  workspaceVerifiableCriteria,
 } from './task-graph';
 import type { ShipCodePlan } from './types';
 
@@ -429,6 +431,106 @@ describe('buildTaskGraphDraftFromPlan', () => {
       'packages/shared/src/types.test.ts',
       'packages/shared/src/types.ts',
     ]);
+  });
+
+  it('excludes external-side-effect criteria (Workpad / GitHub writes) from node criteria (#394)', () => {
+    const draft = buildTaskGraphDraftFromPlan(
+      plan({
+        objective: 'Add the exporter',
+        files: [],
+        steps: [],
+        acceptanceCriteria: [
+          'src/index.ts exports the new function',
+          'Update the single GitHub issue #42 ShipCode Workpad comment in place',
+        ],
+      }),
+    );
+
+    expect(draft.assessment.mode).toBe('direct');
+    expect(draft.nodes[0].acceptanceCriteria).toEqual(['src/index.ts exports the new function']);
+  });
+
+  it('falls back to the objective when every plan criterion is an external side effect', () => {
+    const draft = buildTaskGraphDraftFromPlan(
+      plan({
+        objective: 'Add the exporter',
+        files: [],
+        steps: [],
+        acceptanceCriteria: ['Post a comment on the GitHub issue confirming completion'],
+      }),
+    );
+
+    expect(draft.nodes[0].acceptanceCriteria).toEqual([
+      'Plan objective is satisfied: Add the exporter',
+    ]);
+  });
+});
+
+describe('isExternalSideEffectCriterion', () => {
+  it('flags GitHub / network / Workpad criteria', () => {
+    for (const criterion of [
+      'Update the single GitHub issue #42 ShipCode Workpad comment in place',
+      'Post a comment on the pull request',
+      'Run `gh issue view 42` and confirm the body',
+      'Push the branch to origin via git push',
+      'Close the GitHub issue when done',
+      'Fetch the release from api.github.com',
+    ]) {
+      expect(isExternalSideEffectCriterion(criterion)).toBe(true);
+    }
+  });
+
+  it('leaves workspace-verifiable criteria untouched', () => {
+    for (const criterion of [
+      'src/index.ts exports parseConfig',
+      'Tests in foo.test.ts exercise the empty-input path',
+      'The build produces no type errors',
+      'A new migration file is added under packages/db/migrations',
+    ]) {
+      expect(isExternalSideEffectCriterion(criterion)).toBe(false);
+    }
+  });
+
+  it('keeps code-describing criteria that merely mention GitHub concepts (#397)', () => {
+    // These name a concrete workspace artifact and describe code — verifiable from
+    // the diff — even though they mention gh / github.com / comment. They must NOT be
+    // stripped just for the keyword, especially in a repo that builds GitHub tooling.
+    for (const criterion of [
+      'The new `gh issue view` wrapper returns typed data',
+      '`formatWorkpadComment` embeds the issue marker in the comment body',
+      'The generated README links to github.com/org/repo',
+      '`parseGithubUrl` handles github.com and api.github.com inputs',
+    ]) {
+      expect(isExternalSideEffectCriterion(criterion)).toBe(false);
+    }
+  });
+
+  it('still flags a code artifact paired with a real external action verb (#397)', () => {
+    // A backtick alone must not rescue a criterion that actually performs a write.
+    for (const criterion of [
+      'Run `gh issue view 42` and confirm the body',
+      'Post the rendered body from `formatComment` as an issue comment',
+      'Push `release.tar.gz` to the GitHub release via git push',
+    ]) {
+      expect(isExternalSideEffectCriterion(criterion)).toBe(true);
+    }
+  });
+});
+
+describe('workspaceVerifiableCriteria', () => {
+  it('drops external criteria and keeps workspace ones', () => {
+    expect(
+      workspaceVerifiableCriteria(
+        ['src/a.ts compiles', 'Update the issue Workpad comment'],
+        'Node title',
+      ),
+    ).toEqual(['src/a.ts compiles']);
+  });
+
+  it('returns a generic fallback when everything was external', () => {
+    expect(
+      workspaceVerifiableCriteria(['Post an issue comment'], 'Implement the exporter'),
+    ).toEqual(["The diff implements the node's described change: Implement the exporter"]);
   });
 });
 

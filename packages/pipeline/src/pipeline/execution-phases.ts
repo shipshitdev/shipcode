@@ -32,6 +32,7 @@ import {
   type ShipCodePlan,
   type TaskNodeRecord,
   VERIFICATION_FENCE_TAG,
+  workspaceVerifiableCriteria,
 } from '@shipcode/shared';
 import { computeRetryDelayMs } from '../retry-scheduler';
 import type { ExecutePhaseCarry, PipelineContext, VerifyPhaseCarry } from '../types';
@@ -93,6 +94,7 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
     getVerifyCommands,
     prepareWorktree,
     postTaskGraphComment,
+    postWorkpadComment,
     resolveAgentForPhase,
     runProviderPhase,
     runShellCommand,
@@ -529,7 +531,13 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
     threadId: string,
     planId: string,
   ): string {
-    const criteria = node.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n');
+    // Defense in depth: never let an external-side-effect criterion (GitHub
+    // write, Workpad, network) reach the diff-only verifier — the executor runs
+    // in a network-disabled sandbox and cannot satisfy it, and the pipeline owns
+    // those writes (#394). Node construction already filters these; this is the
+    // second gate in case a node was built elsewhere.
+    const verifiableCriteria = workspaceVerifiableCriteria(node.acceptanceCriteria, node.title);
+    const criteria = verifiableCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n');
 
     return `You are a code verifier evaluating a single task node from a larger implementation plan.
 
@@ -581,7 +589,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       `Node "${node.stableKey}: ${node.title}" failed verification on attempt ${retryAttempt}.`,
       'Re-examine your implementation against these acceptance criteria before finishing:',
       '',
-      ...node.acceptanceCriteria.map((c) => `- ${c}`),
+      ...workspaceVerifiableCriteria(node.acceptanceCriteria, node.title).map((c) => `- ${c}`),
       '',
       'Do NOT expand scope beyond this node. Fix only what is wrong here.',
       '</node_verification_failure>',
@@ -1034,6 +1042,9 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             context.nodeAnchorSha = null;
             const updatedGraph = deps.taskGraphs.markNodeCompletedAndPromote(activeTaskNode.id);
             void postTaskGraphComment(context, updatedGraph);
+            // Pipeline owns the Workpad write — refresh it from the main process
+            // after the node advances, never from the sandboxed executor (#394).
+            void postWorkpadComment(context, plan, updatedGraph);
             resetPhaseState(context);
             return { next: 'execute', plan };
           }
@@ -1044,6 +1055,9 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             if (context.nodeVerificationRetries >= MAX_NODE_VERIFICATION_RETRIES) {
               const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
               void postTaskGraphComment(context, failedGraph);
+              // Refresh the canonical Workpad so a failed run reflects the failure
+              // state, not the last successful snapshot (#394).
+              void postWorkpadComment(context, plan, failedGraph);
               emitPhase(
                 threadId,
                 'failed',
@@ -1072,6 +1086,8 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           // nodeOutcome === 'failed' — max retries exhausted
           const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
           void postTaskGraphComment(context, failedGraph);
+          // Reflect the failure in the canonical Workpad (#394).
+          void postWorkpadComment(context, plan, failedGraph);
           emitPhase(
             threadId,
             'failed',
@@ -1084,7 +1100,10 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
         if (taskGraph?.mode === 'direct' && deps.taskGraphs && taskGraph.status !== 'completed') {
           try {
-            deps.taskGraphs.updateGraphStatus(taskGraph.id, 'completed');
+            const completedGraph = deps.taskGraphs.updateGraphStatus(taskGraph.id, 'completed');
+            // Main-process Workpad refresh for the single-node (direct) path,
+            // mirroring the decomposed path above (#394).
+            void postWorkpadComment(context, plan, completedGraph);
           } catch (error) {
             console.error(`[pipeline] direct task graph completion failed for ${threadId}:`, error);
           }
@@ -1117,9 +1136,13 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       if (activeTaskNode && deps.taskGraphs) {
         const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
         void postTaskGraphComment(context, failedGraph);
+        // Reflect the node failure in the canonical Workpad (#394).
+        void postWorkpadComment(context, plan, failedGraph);
       } else if (taskGraph?.mode === 'direct' && deps.taskGraphs && taskGraph.status !== 'failed') {
         try {
-          deps.taskGraphs.updateGraphStatus(taskGraph.id, 'failed');
+          const failedGraph = deps.taskGraphs.updateGraphStatus(taskGraph.id, 'failed');
+          // Mirror the direct-mode success path: keep the Workpad current on failure.
+          void postWorkpadComment(context, plan, failedGraph);
         } catch (error) {
           console.error(`[pipeline] direct task graph failure failed for ${threadId}:`, error);
         }

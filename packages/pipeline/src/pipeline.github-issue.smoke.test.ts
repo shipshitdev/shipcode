@@ -364,7 +364,11 @@ describe('startFromGitHubIssue — smoke', () => {
     );
   });
 
-  it('seeds the planner prompt with the workpad protocol marker', async () => {
+  it('never instructs the sandboxed executor to write the Workpad over the network', async () => {
+    // The executor runs without network access, so the planner/executor prompt
+    // must NOT carry the old gh-driven workpad protocol — the pipeline owns that
+    // write from the main process (#394). It should instead state there is no
+    // network access.
     const pipeline = createPipeline(smoke.deps);
     const issue = { number: 42, title: 'Fix the bug', body: 'It crashes', labels: [] };
 
@@ -378,9 +382,10 @@ describe('startFromGitHubIssue — smoke', () => {
       .flatMap((call) => (Array.isArray(call[2]) ? (call[2] as unknown[]) : []))
       .filter((a): a is string => typeof a === 'string');
     const combined = allArgs.join('\n');
-    expect(combined).toContain('## ShipCode Workpad');
-    expect(combined).toContain('workpad_protocol');
-    expect(combined).toContain('issue #42');
+    expect(combined).not.toContain('workpad_protocol');
+    expect(combined).not.toContain('## ShipCode Workpad');
+    expect(combined).toContain('NO network access');
+    expect(combined).toContain('#42');
   });
 
   it('sets autonomous=true and seeds context fields from the issue', async () => {

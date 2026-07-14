@@ -101,6 +101,7 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
     getVerifyCommands,
     postPlanComment,
     postTaskGraphComment,
+    postWorkpadComment,
     resolveAgentForPhase,
     runProviderPhase,
   } = runtime;
@@ -240,6 +241,10 @@ export function createPlanningPhaseHandlers({ deps, contextHelpers, runtime }: P
     if (taskGraph && taskGraph.mode !== 'direct') {
       await postTaskGraphComment(context, taskGraph);
     }
+    // Seed / refresh the canonical Workpad comment from the main process as soon
+    // as the plan is structured. The executor never writes it — it has no
+    // network in its sandbox (#394).
+    void postWorkpadComment(context, structuredPlan, taskGraph);
 
     const revisionCount = getRevisionCountForContext(context);
     deps.emitter.emit({ type: 'plan:parsed', threadId, plan: structuredPlan });

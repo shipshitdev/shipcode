@@ -106,6 +106,83 @@ export interface TaskGraphWithNodes extends TaskGraphRecord {
 
 export const TASK_GRAPH_COMMENT_MARKER = '## ShipCode Task Graph';
 
+/**
+ * Patterns that mark an acceptance criterion as requiring an *external side
+ * effect* — a GitHub write, a network call, a comment/PR post — rather than a
+ * workspace-verifiable artifact (code, tests, files, build output).
+ *
+ * Executors run in a network-disabled sandbox and cannot reach GitHub or any
+ * remote, so these criteria are structurally unsatisfiable from the workspace.
+ * The pipeline main process owns all such writes (see the Workpad updater), so
+ * they must never gate node execution or node verification. See #394.
+ */
+const EXTERNAL_SIDE_EFFECT_CRITERION_PATTERNS: RegExp[] = [
+  // The pipeline's own canonical state-of-work comment.
+  /workpad/i,
+  // `gh` CLI reads/writes and network git.
+  /\bgh\s+(?:issue|pr|api|repo|release|comment|auth|search)\b/i,
+  /\bgit\s+(?:push|fetch|pull)\b/i,
+  /api\.github\.com/i,
+  /github\.com/i,
+  // Issue / PR comment writes. Qualified with an issue/PR/GitHub token so this
+  // never trips on a *code* comment ("update the code comment in src/a.ts").
+  /\b(?:issue|pull request|\bpr\b|github)\b[^.\n]*\bcomment\b/i,
+  /\bcomment\b[^.\n]*\bon\s+(?:the\s+|a\s+|an\s+)?(?:issue|pull request|\bpr\b|github)\b/i,
+  // Issue / PR lifecycle writes that only make sense against GitHub.
+  /\b(?:close|reopen|merge|label|assign)\b[^.\n]*\b(?:issue|pull request|\bpr\b)\b/i,
+  /\b(?:open|create)\b[^.\n]*\bgithub\s+(?:issue|pull request|\bpr\b)\b/i,
+];
+
+/**
+ * A criterion naming a concrete workspace artifact — a backticked identifier, a
+ * source-file path, or a well-known root file. In a repo that itself builds GitHub
+ * tooling, such criteria ("the `gh issue view` wrapper returns typed data", "the
+ * README links to github.com/org/repo") are diff-verifiable even though they mention
+ * gh/github/comment, so they must not be treated as external side effects.
+ */
+const CODE_ARTIFACT_SIGNAL =
+  /`[^`]+`|\b[\w./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|md|mdx|json|ya?ml|toml|css|scss|html|sh)\b|\b(?:README|CHANGELOG|LICENSE|Dockerfile|Makefile|tsconfig)\b/;
+
+/**
+ * Verbs denoting an actual GitHub write / network / command-execution action. When
+ * present, the criterion really does require performing an external side effect
+ * (e.g. "Run `gh issue view 42`"), so the code-artifact exemption above does not
+ * apply. Kept deliberately broad: extra matches only *disable* the exemption, and a
+ * criterion is still classified external only if it also matches a pattern below —
+ * so this can never cause a false negative, only forgo a rescue.
+ */
+const EXTERNAL_ACTION_VERB =
+  /\b(?:post|push|publish|open|creat|clos|merg|reopen|label|assign|upload|run|execute|invoke|call|fetch|send|sync)\w*/i;
+
+/**
+ * True when an acceptance criterion depends on an external side effect the
+ * sandboxed executor cannot perform or the diff-only verifier cannot observe
+ * (GitHub writes, network calls, issue/PR comment updates). Such criteria are
+ * owned by the pipeline, not the executor, and must be excluded from node
+ * verification.
+ */
+export function isExternalSideEffectCriterion(criterion: string): boolean {
+  // Keep criteria that describe a concrete workspace artifact and don't call for a
+  // GitHub write — they're verifiable from the diff even when they mention GitHub.
+  // This narrows false positives without loosening detection of true external writes.
+  if (CODE_ARTIFACT_SIGNAL.test(criterion) && !EXTERNAL_ACTION_VERB.test(criterion)) {
+    return false;
+  }
+  return EXTERNAL_SIDE_EFFECT_CRITERION_PATTERNS.some((pattern) => pattern.test(criterion));
+}
+
+/**
+ * Keep only workspace-verifiable acceptance criteria — the ones a verifier can
+ * confirm from the diff alone. Returns the filtered list, or, when every
+ * criterion was an external side effect, a single generic fallback so node
+ * verification still has something meaningful to check.
+ */
+export function workspaceVerifiableCriteria(criteria: string[], nodeTitle: string): string[] {
+  const kept = criteria.filter((criterion) => !isExternalSideEffectCriterion(criterion));
+  if (kept.length > 0) return kept;
+  return [`The diff implements the node's described change: ${nodeTitle}`];
+}
+
 export interface TaskGraphExecutionContractOptions {
   activeNode?: TaskNodeRecord | null;
 }
@@ -317,8 +394,15 @@ export function buildTaskGraphDraftFromPlan(
 ): TaskGraphDraft {
   const assessment = assessPlanScope(plan, options);
   const planFiles = uniqueSorted(plan.files.map((file) => file.path));
-  const allCriteria = plan.acceptanceCriteria.length
-    ? plan.acceptanceCriteria
+  // Drop external-side-effect criteria (GitHub writes, Workpad, network) before
+  // they can be baked into a node — the sandboxed executor can never satisfy
+  // them and the diff-only verifier can never observe them (#394). The pipeline
+  // owns those writes.
+  const workspaceCriteria = plan.acceptanceCriteria.filter(
+    (criterion) => !isExternalSideEffectCriterion(criterion),
+  );
+  const allCriteria = workspaceCriteria.length
+    ? workspaceCriteria
     : [`Plan objective is satisfied: ${plan.objective}`];
 
   const nodes: TaskNodeDraft[] =

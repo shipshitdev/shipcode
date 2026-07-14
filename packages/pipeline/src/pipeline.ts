@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { buildIssueRunPrompt, buildWorkpadProtocol } from '@shipcode/agents';
+import { buildIssueRunPrompt } from '@shipcode/agents';
 import {
   type PipelinePhase,
   resolvePipelineSpeedProfile,
@@ -336,18 +336,22 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     // Strip any legacy YAML frontmatter from the body so the planner sees the
     // clean PRD prose, not duplicated metadata that now lives in native
     // labels / project fields (#45).
-    const prompt =
-      buildIssueRunPrompt({
-        issueNumber: issue.number,
-        issueTitle: issue.title,
-        issueBody: stripPrdFrontmatter(issue.body ?? ''),
-        projectPath,
-        worktreePath: options?.worktreePath ?? null,
-        baseBranch,
-        currentBranch: options?.worktreePath
-          ? resolveCurrentBranch(projectPath, options.worktreePath)
-          : null,
-      }) + buildWorkpadProtocol({ issueNumber: issue.number });
+    // NOTE: the ShipCode Workpad comment is maintained by the pipeline main
+    // process (see postWorkpadComment) — it is NOT part of the executor prompt.
+    // The executor runs in a network-disabled sandbox and cannot reach GitHub,
+    // so instructing it to update the Workpad produced impossible acceptance
+    // criteria that failed every attempt (#394).
+    const prompt = buildIssueRunPrompt({
+      issueNumber: issue.number,
+      issueTitle: issue.title,
+      issueBody: stripPrdFrontmatter(issue.body ?? ''),
+      projectPath,
+      worktreePath: options?.worktreePath ?? null,
+      baseBranch,
+      currentBranch: options?.worktreePath
+        ? resolveCurrentBranch(projectPath, options.worktreePath)
+        : null,
+    });
     launch(threadId, () =>
       planning.startPlanGeneration(threadId, prompt, projectPath, options?.worktreePath ?? null),
     );

@@ -6,6 +6,7 @@ import {
   GhCli,
   PIPELINE_TIMELINE_COMMENT_MARKER,
   PLAN_COMMENT_MARKER,
+  WORKPAD_MARKER,
 } from '@shipcode/agents';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -2176,6 +2177,78 @@ describe('createPipelineRuntime', () => {
     expect(mockGhCli.closeIssue).toHaveBeenCalledWith(101);
     expect(mockGhCli.reopenIssue).toHaveBeenCalledWith(102);
     expect(mockGhCli.upsertIssueCommentByMarker).toHaveBeenCalled();
+  });
+
+  it('upserts the canonical Workpad comment from the main process (#394)', async () => {
+    mockGhCli.upsertIssueCommentByMarker.mockResolvedValue(undefined);
+    const { deps } = makeDeps();
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext({ githubIssueNumber: 42 });
+
+    await runtime.postWorkpadComment(context, {
+      id: 'plan-1',
+      threadId: 'thread-1',
+      version: 1,
+      objective: 'Ship the exporter',
+      files: [],
+      steps: [],
+      acceptanceCriteria: ['src/index.ts exports parseConfig'],
+      outOfScope: [],
+      estimatedComplexity: 'low',
+      dependencies: [],
+    });
+
+    expect(mockGhCli.upsertIssueCommentByMarker).toHaveBeenCalledWith(
+      42,
+      WORKPAD_MARKER,
+      expect.stringContaining('## ShipCode Workpad'),
+    );
+    expect(mockGhCli.upsertIssueCommentByMarker).toHaveBeenCalledWith(
+      42,
+      WORKPAD_MARKER,
+      expect.stringContaining('Ship the exporter'),
+    );
+  });
+
+  it('skips the Workpad write for quick-task (non-real) issue numbers', async () => {
+    const { deps } = makeDeps();
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    await runtime.postWorkpadComment(makeContext({ githubIssueNumber: -1 }), {
+      id: 'plan-1',
+      threadId: 'thread-1',
+      version: 1,
+      objective: 'Ship it',
+      files: [],
+      steps: [],
+      acceptanceCriteria: ['works'],
+      outOfScope: [],
+      estimatedComplexity: 'low',
+      dependencies: [],
+    });
+
+    expect(mockGhCli.upsertIssueCommentByMarker).not.toHaveBeenCalled();
+  });
+
+  it('swallows Workpad comment posting failures', async () => {
+    mockGhCli.upsertIssueCommentByMarker.mockRejectedValue(new Error('offline'));
+    const { deps } = makeDeps();
+    const runtime = createPipelineRuntime(deps, {} as never);
+
+    await expect(
+      runtime.postWorkpadComment(makeContext({ githubIssueNumber: 42 }), {
+        id: 'plan-1',
+        threadId: 'thread-1',
+        version: 1,
+        objective: 'Ship it',
+        files: [],
+        steps: [],
+        acceptanceCriteria: ['works'],
+        outOfScope: [],
+        estimatedComplexity: 'low',
+        dependencies: [],
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it('swallows task subissue open-state sync failures', async () => {

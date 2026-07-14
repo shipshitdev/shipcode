@@ -203,9 +203,9 @@ export type {
   VerificationPromptOptions,
 } from './prompts/verification-prompt';
 export { buildVerificationPrompt } from './prompts/verification-prompt';
-export type { WorkpadProtocolContext } from './prompts/workpad-protocol';
+export type { WorkpadCommentContext } from './prompts/workpad-protocol';
 export {
-  buildWorkpadProtocol,
+  formatWorkpadComment,
   WORKPAD_MARKER,
   WORKPAD_SECTIONS,
 } from './prompts/workpad-protocol';

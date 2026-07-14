@@ -33,6 +33,7 @@ export function buildShipCodeRunContract({
 ## Rules
 
 - Do all work in the provided worktree.
+- This environment has NO network access. Do not call \`gh\`, \`curl\`, or any tool that reaches GitHub or the internet — such calls fail with connection errors. ShipCode performs all GitHub writes (issue/Workpad comments, PRs) from its main process; you never need to.
 - Do not rename the current branch.
 - Diff against ${effectiveBaseBranch}.
 - Treat the GitHub issue/PRD below as the source of truth.
