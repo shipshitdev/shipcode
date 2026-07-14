@@ -429,11 +429,13 @@ function enqueueProjectGithubOnboarding({
   projectId: string;
   projectPath: string;
 }): void {
-  void runProjectGithubOnboarding({ mainWindow, queries, projectId, projectPath }).catch(
-    (error) => {
-      log.warn('[project:add] failed to complete GitHub onboarding:', error);
-    },
-  );
+  setTimeout(() => {
+    void runProjectGithubOnboarding({ mainWindow, queries, projectId, projectPath }).catch(
+      (error) => {
+        log.warn('[project:add] failed to complete GitHub onboarding:', error);
+      },
+    );
+  }, 0);
 }
 
 async function resolveProjectGithubIdentityAndOnboard({
