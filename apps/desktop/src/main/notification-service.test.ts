@@ -285,7 +285,12 @@ describe('NotificationService', () => {
   });
 
   it('suppresses a generic failure immediately after verification exhausted', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-08T10:00:00Z'));
     const thread = makeThread({ status: 'failed' });
+    (notificationQueries.create as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeNotificationRecord({ kind: 'failed' }),
+    );
     const service = new NotificationService(
       mainWindow,
       notificationQueries,
@@ -298,6 +303,10 @@ describe('NotificationService', () => {
 
     expect(notificationQueries.create).not.toHaveBeenCalled();
     expect(webContentsSendMock).not.toHaveBeenCalledWith('notification:fire', expect.anything());
+
+    vi.setSystemTime(new Date('2026-05-08T10:00:03Z'));
+    service.fire('failed', thread);
+    expect(notificationQueries.create).toHaveBeenCalledTimes(1);
   });
 
   it('dedupes identical thread notifications inside the dedupe window', () => {

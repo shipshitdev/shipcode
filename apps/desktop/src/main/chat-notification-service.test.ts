@@ -3,6 +3,7 @@ import type { PipelinePhase, Project, Thread } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatNotificationService } from './chat-notification-service';
+import log from './logger.service';
 
 vi.mock('./logger.service', () => ({
   default: {
@@ -193,6 +194,27 @@ describe('ChatNotificationService', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('logs background delivery persistence failures instead of rejecting unobserved', async () => {
+    getSettingsMock.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      discordEnabled: true,
+      discordWebhookUrl: 'https://discord.com/api/webhooks/123/abc',
+      telegramEnabled: false,
+    });
+    setSettingsMock.mockImplementationOnce(() => {
+      throw new Error('settings write failed');
+    });
+    const service = makeService();
+
+    service.fire('failed', makeThread({ status: 'failed' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(log.error).toHaveBeenCalledWith(
+      '[chat-notifications] discord delivery failed',
+      expect.objectContaining({ message: 'settings write failed' }),
+    );
   });
 
   it('skips delivery when the project no longer exists', async () => {

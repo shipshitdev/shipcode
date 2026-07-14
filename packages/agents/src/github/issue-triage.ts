@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
@@ -44,7 +44,6 @@ interface TriageEnvelope {
 }
 
 export async function triageGitHubIssues(opts: {
-  cwd: string;
   issues: GitHubIssueCacheRecord[];
   settings: Pick<
     AppSettings,
@@ -100,7 +99,6 @@ export async function triageGitHubIssues(opts: {
   const text = await runCliTriage({
     provider,
     prompt,
-    cwd: opts.cwd,
     modelId,
     reasoningEffort: opts.settings.triageReasoningEffort,
   });
@@ -148,26 +146,30 @@ Output exactly one fenced block:
 `;
 }
 
-function runCliTriage(opts: {
+async function runCliTriage(opts: {
   provider: Extract<ExecutorModel, 'claude' | 'codex'>;
   prompt: string;
-  cwd: string;
   modelId: string | null;
   reasoningEffort: ReasoningEffort;
 }): Promise<string> {
   if (opts.provider === 'codex') {
-    return Promise.reject(
-      new Error('Codex issue triage is disabled because it cannot run in no-tools mode'),
-    );
+    throw new Error('Codex issue triage is disabled because it cannot run in no-tools mode');
   }
-  return runNoToolsTextGeneration({
-    prompt: opts.prompt,
-    cwd: mkdtempSync(join(tmpdir(), 'shipcode-triage-')),
-    timeoutMs: TRIAGE_TIMEOUT_MS,
-    maxTurns: 1,
-    modelId: opts.modelId,
-    reasoningEffort: opts.reasoningEffort,
-  }).then((stdout) => unwrapCliResultEnvelope(stdout));
+
+  const triageDir = mkdtempSync(join(tmpdir(), 'shipcode-triage-'));
+  try {
+    const stdout = await runNoToolsTextGeneration({
+      prompt: opts.prompt,
+      cwd: triageDir,
+      timeoutMs: TRIAGE_TIMEOUT_MS,
+      maxTurns: 1,
+      modelId: opts.modelId,
+      reasoningEffort: opts.reasoningEffort,
+    });
+    return unwrapCliResultEnvelope(stdout);
+  } finally {
+    rmSync(triageDir, { recursive: true, force: true });
+  }
 }
 
 export function extractTriageRecommendations(text: string): IssueTriageRecommendation[] {

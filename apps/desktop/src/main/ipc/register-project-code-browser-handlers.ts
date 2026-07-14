@@ -125,6 +125,7 @@ export function registerProjectCodeBrowserHandlers({
           modifiedSet = new Set();
         }
       }
+      const modifiedPaths = [...modifiedSet];
 
       const entries = await fsp.readdir(dirPath, { withFileTypes: true });
       const result = await Promise.all(
@@ -150,7 +151,7 @@ export function registerProjectCodeBrowserHandlers({
                 sizeBytes,
                 isModified: isFile
                   ? modifiedSet.has(entryRelative)
-                  : isDirty && [...modifiedSet].some((p) => p.startsWith(`${entryRelative}/`)),
+                  : isDirty && modifiedPaths.some((p) => p.startsWith(`${entryRelative}/`)),
               };
             })(),
           ];

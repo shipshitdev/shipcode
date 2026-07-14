@@ -73,6 +73,7 @@ describe('UpdateService.checkNow', () => {
     });
 
     svc.start();
+    svc.start();
     await vi.advanceTimersByTimeAsync(5_000);
     expect(fetch).toHaveBeenCalledTimes(1);
 
@@ -83,6 +84,18 @@ describe('UpdateService.checkNow', () => {
     svc.stop();
     await vi.advanceTimersByTimeAsync(30 * 60_000);
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancels the delayed initial check when stopped before startup polling begins', async () => {
+    vi.useFakeTimers();
+    global.fetch = vi.fn(async () => new Response(null, { status: 404 })) as typeof fetch;
+
+    const svc = new UpdateService(makeWindow());
+    svc.start();
+    svc.stop();
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('treats GitHub 404 (no published releases) as up-to-date, not error', async () => {

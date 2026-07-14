@@ -136,9 +136,12 @@ export function stagePrdAttachments(sessionId: string, filePaths: string[]): Sta
     let header: Buffer;
     try {
       const fd = fs.openSync(filePath, 'r');
-      header = Buffer.alloc(HEADER_BYTES);
-      fs.readSync(fd, header, 0, HEADER_BYTES, 0);
-      fs.closeSync(fd);
+      try {
+        header = Buffer.alloc(HEADER_BYTES);
+        fs.readSync(fd, header, 0, HEADER_BYTES, 0);
+      } finally {
+        fs.closeSync(fd);
+      }
     } catch {
       errors.push(`${path.basename(filePath)}: cannot read file`);
       continue;
