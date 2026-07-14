@@ -1,6 +1,7 @@
 import type { AgentType } from '@shipcode/shared';
 import type { ProcessManager } from '../process-manager';
 import { measurePromptPayload } from '../prompt-scope';
+import { awaitManagedProcess } from './managed-process';
 import { firstString } from './output-summary';
 import type { ProviderRequest, ProviderResponse } from './types';
 
@@ -133,52 +134,12 @@ export async function runStdinCli(
   }
 
   req.onTerminalEvent?.({ kind: 'lifecycle', message: config.lifecycleMessage });
-
-  return new Promise<StdinCliRunResult>((resolve) => {
-    let rawOutput = '';
-    let settled = false;
-
-    const cleanup = () => {
-      processManager.removeListener('output', outputHandler);
-      processManager.removeListener('exit', exitHandler);
-      req.signal.removeEventListener('abort', abortHandler);
-    };
-
-    const settle = (result: StdinCliRunResult) => {
-      /* v8 ignore next -- listeners are removed during cleanup; guard is for event races */
-      if (settled) return;
-      settled = true;
-      cleanup();
-      resolve(result);
-    };
-
-    const outputHandler = (processId: string, data: string) => {
-      if (processId !== process.id) return;
-      rawOutput += data;
-      req.onTerminalEvent?.({ kind: 'raw', content: data });
-    };
-
-    const exitHandler = (processId: string, exitCode: number) => {
-      if (processId !== process.id) return;
-      req.onTerminalEvent?.({ kind: 'done' });
-      settle({ rawOutput, exitCode });
-    };
-
-    const abortHandler = () => {
-      try {
-        processManager.kill(process.id);
-      } catch {
-        // Exit handler owns settlement when the process is already gone.
-      }
-      setTimeout(() => {
-        if (!settled) settle({ rawOutput, exitCode: 130 });
-      }, 2000);
-    };
-
-    processManager.on('output', outputHandler);
-    processManager.on('exit', exitHandler);
-    req.signal.addEventListener('abort', abortHandler, { once: true });
-    if (req.signal.aborted) abortHandler();
+  return awaitManagedProcess({
+    processManager,
+    process,
+    signal: req.signal,
+    onOutput: (data) => req.onTerminalEvent?.({ kind: 'raw', content: data }),
+    onExit: () => req.onTerminalEvent?.({ kind: 'done' }),
   });
 }
 

@@ -60,7 +60,7 @@ vi.mock('../logger.service', () => ({
   logProcessOutput: vi.fn(),
 }));
 
-import { parseOnboardingRepoList, registerSupportHandlers } from './register-support-handlers';
+import { registerSupportHandlers } from './register-support-handlers';
 
 // ---------------------------------------------------------------------------
 // Minimal test doubles
@@ -201,24 +201,6 @@ describe('support IPC utilities', () => {
     });
   });
 
-  it('parses onboarding repository output with sorting, de-dupe, and validation', () => {
-    expect(
-      parseOnboardingRepoList(
-        [
-          JSON.stringify({ id: 'repo-z', name: 'shipshitdev/zeta', private: true }),
-          JSON.stringify({ id: 'repo-a', name: ' shipshitdev/alpha ', private: false }),
-          JSON.stringify({ id: 'repo-dupe', name: 'shipshitdev/alpha', private: true }),
-          JSON.stringify({ id: '', name: 'shipshitdev/missing-id', private: false }),
-          JSON.stringify({ id: 'repo-missing-name', name: '   ', private: false }),
-        ].join('\n'),
-      ),
-    ).toEqual([
-      { id: 'repo-a', name: 'shipshitdev/alpha', private: false },
-      { id: 'repo-z', name: 'shipshitdev/zeta', private: true },
-    ]);
-    expect(parseOnboardingRepoList('\n')).toEqual([]);
-  });
-
   it('lists onboarding repos through gh and clamps lookup failures', async () => {
     mockExec.mockImplementationOnce(
       (
@@ -231,7 +213,10 @@ describe('support IPC utilities', () => {
         callback(null, {
           stdout: [
             JSON.stringify({ id: 'repo-b', name: 'shipshitdev/beta', private: true }),
-            JSON.stringify({ id: 'repo-a', name: 'shipshitdev/alpha', private: false }),
+            JSON.stringify({ id: 'repo-a', name: ' shipshitdev/alpha ', private: false }),
+            JSON.stringify({ id: 'repo-dupe', name: 'shipshitdev/alpha', private: true }),
+            JSON.stringify({ id: '', name: 'shipshitdev/missing-id', private: false }),
+            JSON.stringify({ id: 'repo-missing-name', name: '   ', private: false }),
           ].join('\n'),
           stderr: '',
         });

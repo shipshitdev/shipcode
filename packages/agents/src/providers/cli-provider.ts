@@ -19,6 +19,7 @@ import type { ProcessManager } from '../process-manager';
 import { measurePromptPayload } from '../prompt-scope';
 import { buildSandboxedClaudeExecuteCommand, resolveSrt } from '../sandbox/srt';
 import { StreamParser } from '../stream-parser';
+import { awaitManagedProcess, type ManagedProcessResult } from './managed-process';
 import { stripAnsi } from './output-summary';
 import { mapReasoningEffortToClaudeThinkingTokens, mapReasoningEffortToCodex } from './reasoning';
 import {
@@ -29,10 +30,7 @@ import {
   type ProviderResponse,
 } from './types';
 
-interface CliRunResult {
-  rawOutput: string;
-  exitCode: number;
-}
+type CliRunResult = ManagedProcessResult;
 
 interface CliCommand {
   args: string[];
@@ -129,51 +127,7 @@ async function runCli(
     };
   }
   onProcessStart?.(process.id);
-
-  return new Promise<CliRunResult>((resolve) => {
-    let rawOutput = '';
-    let settled = false;
-
-    const cleanup = () => {
-      processManager.removeListener('output', outputHandler);
-      processManager.removeListener('exit', exitHandler);
-      signal.removeEventListener('abort', abortHandler);
-    };
-
-    const settle = (result: CliRunResult) => {
-      /* v8 ignore next -- listeners are removed during cleanup; guard handles event races */
-      if (settled) return;
-      settled = true;
-      cleanup();
-      resolve(result);
-    };
-
-    const outputHandler = (processId: string, data: string) => {
-      if (processId === process.id) rawOutput += data;
-    };
-
-    const exitHandler = (processId: string, exitCode: number) => {
-      if (processId !== process.id) return;
-      settle({ rawOutput, exitCode });
-    };
-
-    const abortHandler = () => {
-      try {
-        processManager.kill(process.id);
-      } catch {
-        // kill may fail if process already exited; exit handler will settle.
-      }
-      // Don't settle here — let the subsequent exit event carry the exitCode.
-      // If no exit fires within a short grace window, force-settle with 130.
-      setTimeout(() => {
-        if (!settled) settle({ rawOutput, exitCode: 130 });
-      }, 2000);
-    };
-
-    processManager.on('output', outputHandler);
-    processManager.on('exit', exitHandler);
-    signal.addEventListener('abort', abortHandler, { once: true });
-  });
+  return awaitManagedProcess({ processManager, process, signal });
 }
 
 /**

@@ -9,7 +9,6 @@ import {
   enrichProjectPath,
   enrichProjectPaths,
   resolveIssuePhaseModels,
-  resolveLinkedPullRequestPipelineStatus,
   resolveProjectPhaseModels,
   sendGithubIssuesUpdated,
   syncLinkedPullRequestFeedback,
@@ -751,50 +750,27 @@ describe('syncLinkedPullRequestFeedback', () => {
       }),
     );
   });
-});
 
-describe('resolveLinkedPullRequestPipelineStatus', () => {
-  it('maps pull request review states to ShipCode issue statuses', () => {
-    expect(
-      resolveLinkedPullRequestPipelineStatus({
-        state: 'OPEN',
-        isDraft: true,
-        reviewDecision: null,
-        reviewRequestCount: 0,
-      }),
-    ).toBe('executing');
-    expect(
-      resolveLinkedPullRequestPipelineStatus({
-        state: 'OPEN',
-        isDraft: false,
-        reviewDecision: 'REVIEW_REQUIRED',
-        reviewRequestCount: 0,
-      }),
-    ).toBe('needs_review');
-    expect(
-      resolveLinkedPullRequestPipelineStatus({
-        state: 'OPEN',
-        isDraft: false,
-        reviewDecision: 'APPROVED',
-        reviewRequestCount: 0,
-      }),
-    ).toBe('ready_to_merge');
-    expect(
-      resolveLinkedPullRequestPipelineStatus({
-        state: 'MERGED',
-        isDraft: false,
-        reviewDecision: 'APPROVED',
-        reviewRequestCount: 0,
-      }),
-    ).toBe('completed');
-    expect(
-      resolveLinkedPullRequestPipelineStatus({
-        state: 'CLOSED',
-        isDraft: false,
-        reviewDecision: null,
-        reviewRequestCount: 0,
-      }),
-    ).toBe('executing');
+  it.each([
+    ['draft', { isDraft: true }, 'executing'],
+    ['merged', { state: 'MERGED', reviewDecision: 'APPROVED' }, 'completed'],
+    ['closed', { state: 'CLOSED' }, 'executing'],
+  ])('maps a %s linked PR through the public sync flow', async (_label, feedback, status) => {
+    const queries = makeFeedbackQueries({
+      id: 'thread-1',
+      githubPrNumber: 17,
+    });
+    ghCliGetPullRequestFeedbackMock.mockResolvedValueOnce(makeFeedback(feedback));
+
+    await syncLinkedPullRequestFeedback(
+      makeProject() as never,
+      makeIssue({ pipelineStatus: 'needs_review' }) as never,
+      queries,
+      notificationService as never,
+      chatNotificationService as never,
+    );
+
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', status);
   });
 });
 

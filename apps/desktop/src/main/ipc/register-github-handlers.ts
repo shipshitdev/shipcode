@@ -16,6 +16,7 @@ import type {
   GitHubIssueCacheRecord,
   GitHubIssueComment,
   IssuePipelineStatus,
+  PrdMetadataFields,
 } from '@shipcode/shared';
 import {
   agentLabelForExecutor,
@@ -1007,10 +1008,7 @@ export function registerGitHubHandlers({
         title: string;
         body: string;
         labels?: string[];
-        prdMetadata?: {
-          estimatedComplexity: import('@shipcode/shared').PrdEstimatedComplexity;
-          blastRadius: import('@shipcode/shared').PrdBlastRadius;
-        };
+        prdMetadata?: PrdMetadataFields;
       },
     ) => {
       const project = queries.projects.getById(projectId);
@@ -1121,10 +1119,7 @@ export function registerGitHubHandlers({
         title: string;
         body: string;
         labels?: string[];
-        prdMetadata?: {
-          estimatedComplexity: import('@shipcode/shared').PrdEstimatedComplexity;
-          blastRadius: import('@shipcode/shared').PrdBlastRadius;
-        };
+        prdMetadata?: PrdMetadataFields;
       },
     ) => {
       const project = queries.projects.getById(projectId);

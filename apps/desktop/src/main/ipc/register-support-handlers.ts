@@ -41,9 +41,7 @@ function supportHandlerError(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export function parseOnboardingRepoList(
-  stdout: string,
-): { id: string; name: string; private: boolean }[] {
+function parseOnboardingRepoList(stdout: string): { id: string; name: string; private: boolean }[] {
   const seen = new Set<string>();
   const repos: { id: string; name: string; private: boolean }[] = [];
   for (const line of stdout.trim().split('\n').filter(Boolean)) {

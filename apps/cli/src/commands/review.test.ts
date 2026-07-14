@@ -5,7 +5,8 @@ const {
   requireOnboardingMock,
   routeFromLabelsMock,
   createPipelineMock,
-  startFromGitHubIssueMock,
+  launchIssuePipelineMock,
+  upsertIssueMock,
   ghGetIssueMock,
   getThreadByIssueMock,
   getLatestPlanMock,
@@ -15,7 +16,8 @@ const {
   requireOnboardingMock: vi.fn(),
   routeFromLabelsMock: vi.fn(),
   createPipelineMock: vi.fn(),
-  startFromGitHubIssueMock: vi.fn(),
+  launchIssuePipelineMock: vi.fn(),
+  upsertIssueMock: vi.fn(),
   ghGetIssueMock: vi.fn(),
   getThreadByIssueMock: vi.fn(),
   getLatestPlanMock: vi.fn(),
@@ -36,7 +38,30 @@ vi.mock('@shipcode/agents', () => ({
 
 vi.mock('@shipcode/pipeline', () => ({
   createPipeline: createPipelineMock,
+  launchIssuePipeline: launchIssuePipelineMock,
 }));
+
+vi.mock('@shipcode/shared', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/shared')>();
+  return {
+    ...actual,
+    resolveIssuePhaseModels: vi.fn(() => ({
+      plannerModel: 'codex',
+      reviewerModel: 'codex',
+      verifierModel: 'codex',
+      executorModel: 'codex',
+      plannerModelId: null,
+      reviewerModelId: null,
+      verifierModelId: null,
+      executorModelId: null,
+      plannerReasoningEffort: 'high',
+      reviewerReasoningEffort: 'high',
+      verifierReasoningEffort: 'high',
+      executorReasoningEffort: 'high',
+    })),
+    resolveProviderReasoningEffort: vi.fn(() => ({ effective: 'high' })),
+  };
+});
 
 import { reviewCommand } from './review';
 
@@ -54,9 +79,9 @@ describe('reviewCommand', () => {
       executorModel: 'codex',
       modelOverride: 'gpt-5.4',
     });
-    createPipelineMock.mockReturnValue({
-      startFromGitHubIssue: startFromGitHubIssueMock,
-    });
+    createPipelineMock.mockReturnValue({});
+    launchIssuePipelineMock.mockResolvedValue({ id: 'thread-1' });
+    upsertIssueMock.mockReturnValue({ id: 'issue-cache-7', issueNumber: 7 });
     createCliContextMock.mockReturnValue({
       project: {
         id: 'project-1',
@@ -69,6 +94,12 @@ describe('reviewCommand', () => {
       },
       threads: {
         getByProjectAndGithubIssue: getThreadByIssueMock,
+      },
+      githubIssues: {
+        upsert: upsertIssueMock,
+      },
+      settings: {
+        get: vi.fn(() => ({ executorReasoningEffort: 'high' })),
       },
       plans: {
         getLatest: getLatestPlanMock,
@@ -95,24 +126,22 @@ describe('reviewCommand', () => {
       id: 'review-1',
       decision: 'approve',
     });
-    startFromGitHubIssueMock.mockResolvedValue(undefined);
   });
 
   it('fetches the issue, routes labels, starts the pipeline, and prints the generated review', async () => {
     await reviewCommand('7');
 
     expect(ghGetIssueMock).toHaveBeenCalledWith(7);
-    expect(startFromGitHubIssueMock).toHaveBeenCalledWith(
-      'project-1',
-      '/repo',
-      {
-        number: 7,
-        title: 'Review branch',
-        body: 'Check plan',
-        labels: ['shipcode:agent:codex/gpt-5.4'],
-      },
-      'codex',
-      { baseBranch: 'develop', executorModelOverride: 'gpt-5.4' },
+    expect(launchIssuePipelineMock).toHaveBeenCalledWith(
+      expect.objectContaining({ pipeline: expect.any(Object) }),
+      expect.objectContaining({
+        issue: { id: 'issue-cache-7', issueNumber: 7 },
+        phaseModels: expect.objectContaining({
+          executorModel: 'codex',
+          executorModelId: 'gpt-5.4',
+        }),
+        executorModelOverride: 'gpt-5.4',
+      }),
     );
     expect(getReviewByPlanIdMock).toHaveBeenCalledWith('plan-1');
     expect(logSpy).toHaveBeenCalledWith('\n--- Review Output ---');
@@ -135,12 +164,12 @@ describe('reviewCommand', () => {
 
     await reviewCommand('7');
 
-    expect(startFromGitHubIssueMock).toHaveBeenCalledWith(
-      'project-1',
-      '/repo',
+    expect(launchIssuePipelineMock).toHaveBeenCalledWith(
       expect.any(Object),
-      'codex',
-      { baseBranch: 'develop', executorModelOverride: null },
+      expect.objectContaining({
+        phaseModels: expect.objectContaining({ executorModel: 'codex' }),
+        executorModelOverride: null,
+      }),
     );
   });
 
@@ -149,12 +178,12 @@ describe('reviewCommand', () => {
 
     await reviewCommand('7');
 
-    expect(startFromGitHubIssueMock).toHaveBeenCalledWith(
-      'project-1',
-      '/repo',
+    expect(launchIssuePipelineMock).toHaveBeenCalledWith(
       expect.any(Object),
-      'codex',
-      { baseBranch: 'develop', executorModelOverride: null },
+      expect.objectContaining({
+        phaseModels: expect.objectContaining({ executorModel: 'codex' }),
+        executorModelOverride: null,
+      }),
     );
   });
 

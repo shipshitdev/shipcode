@@ -1368,7 +1368,7 @@ describe('registerPipelineHandlers', () => {
       expect(execFileMock).toHaveBeenCalledWith(
         'git',
         ['diff', '--name-only', 'abc123def456', '--'],
-        expect.objectContaining({ cwd: '/tmp/worktree' }),
+        expect.objectContaining({ cwd: '/tmp/worktree', timeout: 15_000 }),
         expect.any(Function),
       );
       expect(lastExecutionResumeContext()).toContain(

@@ -7,5 +7,6 @@ export default {
   models: 'Models',
   cli: 'CLI',
   configuration: 'Configuration',
+  workflow: 'WORKFLOW.md',
   openrouter: 'OpenRouter',
 };

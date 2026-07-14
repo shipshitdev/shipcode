@@ -116,11 +116,11 @@ const MAX_THREAD_BREADCRUMBS = 25;
 /**
  * Map a pipeline event to a Sentry breadcrumb for the lifecycle trail, or null
  * for events that are too noisy/low-signal to record (per-turn, per-token,
- * raw output). Pure — exported for focused tests. The trail attached to a
- * captured failure reads e.g. `run started → phase planning → approval-gate →
+ * raw output). The trail attached to a captured failure reads e.g.
+ * `run started → phase planning → approval-gate →
  * phase executing → verification exhausted → phase failed`.
  */
-export function breadcrumbForEvent(event: PipelineEvent): TelemetryBreadcrumb | null {
+function breadcrumbForEvent(event: PipelineEvent): TelemetryBreadcrumb | null {
   switch (event.type) {
     case 'pipeline:start-context':
       return {

@@ -5,7 +5,7 @@ import { DEFAULT_MAX_RETRY_BACKOFF_MS } from './retry-scheduler';
 
 export const DEFAULT_MAX_CONCURRENT_AGENTS = 10;
 export const DEFAULT_MAX_TURNS = 20;
-export const DEFAULT_FAN_OUT_WORKER_COUNT = 3;
+const DEFAULT_FAN_OUT_WORKER_COUNT = 3;
 export const MAX_FAN_OUT_WORKER_COUNT = 8;
 
 export type ExecuteOrchestration = 'single' | 'fan-out';

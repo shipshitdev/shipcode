@@ -1,11 +1,10 @@
 import fs from 'node:fs';
 import type { GhSyncDeps } from '@shipcode/pipeline';
-import { loadWorkflowPolicy } from '@shipcode/pipeline';
+import { launchIssuePipeline, loadWorkflowPolicy } from '@shipcode/pipeline';
 import type {
   ExecutorModel,
   GitHubIssueCacheRecord,
   IssuePipelineStatus,
-  PipelinePhase,
   Project,
 } from '@shipcode/shared';
 import {
@@ -13,14 +12,12 @@ import {
   EXECUTION_PHASES,
   ISSUE_PIPELINE_STATUS,
   PIPELINE_PHASE,
-  resolveEffectivePhaseReasoningEffortForIssue,
   resolveExecutorModelForIssue,
-  resolvePhaseModelForIssue,
-  resolvePhaseModelIdForIssue,
 } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
 import {
   assertCliPhaseModelsSupported,
+  resolveIssuePhaseModels,
   resolveProjectPhaseModels,
   transitionThreadPhase,
 } from './ipc/helpers';
@@ -44,12 +41,6 @@ const RUNNING_PIPELINE_PHASES = [
   PIPELINE_PHASE.verifying,
   PIPELINE_PHASE.shipping,
 ] as const;
-
-const REUSABLE_THREAD_STATUSES = new Set<PipelinePhase>([
-  PIPELINE_PHASE.failed,
-  PIPELINE_PHASE.completed,
-  PIPELINE_PHASE.idle,
-]);
 
 /**
  * PipelineScheduler manages a global cap on concurrently-running pipelines.
@@ -353,47 +344,6 @@ export class PipelineScheduler {
     }
   }
 
-  private _resolvePhaseModels(
-    settings: ReturnType<PipelineSchedulerDeps['queries']['settings']['get']>,
-    project: NonNullable<ReturnType<PipelineSchedulerDeps['queries']['projects']['getById']>>,
-    issue: GitHubIssueCacheRecord,
-  ) {
-    return {
-      plannerModel: resolvePhaseModelForIssue(settings, project, issue, 'planner'),
-      reviewerModel: resolvePhaseModelForIssue(settings, project, issue, 'reviewer'),
-      verifierModel: resolvePhaseModelForIssue(settings, project, issue, 'verifier'),
-      executorModel: resolvePhaseModelForIssue(settings, project, issue, 'executor'),
-      plannerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'planner'),
-      reviewerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer'),
-      verifierModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'verifier'),
-      executorModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'executor'),
-      plannerReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
-        settings,
-        project,
-        issue,
-        'planner',
-      ),
-      reviewerReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
-        settings,
-        project,
-        issue,
-        'reviewer',
-      ),
-      verifierReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
-        settings,
-        project,
-        issue,
-        'verifier',
-      ),
-      executorReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
-        settings,
-        project,
-        issue,
-        'executor',
-      ),
-    };
-  }
-
   private async _launch(
     issue: GitHubIssueCacheRecord,
     project: NonNullable<ReturnType<PipelineSchedulerDeps['queries']['projects']['getById']>>,
@@ -401,76 +351,36 @@ export class PipelineScheduler {
     const { queries, pipeline, emitter, getMainWindow } = this.deps;
     const settings = queries.settings.get();
 
-    const reusableThread = issue.threadId ? queries.threads.getById(issue.threadId) : null;
+    const phaseModels = resolveIssuePhaseModels(settings, project, issue);
 
-    if (reusableThread && !REUSABLE_THREAD_STATUSES.has(reusableThread.status)) {
-      throw new Error(`Issue #${issue.issueNumber} already has active thread`);
-    }
-
-    queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.planning);
-    this._syncPipelineLabel(project, issue.issueNumber, ISSUE_PIPELINE_STATUS.planning);
-    const thread =
-      reusableThread && REUSABLE_THREAD_STATUSES.has(reusableThread.status)
-        ? reusableThread
-        : queries.threads.create(issue.projectId, issue.body ?? issue.title, issue.title);
-
-    if (reusableThread && thread.id === reusableThread.id) {
-      queries.threads.updateIssueContent(thread.id, issue.body ?? issue.title, issue.title);
-    }
-
-    queries.threads.setGithubIssue(thread.id, issue.issueNumber, project.gitRemote);
-    queries.githubIssues.linkThread(issue.id, thread.id);
-    this._sendIssuesUpdated(issue.projectId);
-
-    const phaseModels = this._resolvePhaseModels(settings, project, issue);
-    await assertCliPhaseModelsSupported(phaseModels);
-
-    const effectiveExecutorModel = resolveExecutorModelForIssue(settings, project, issue);
-    queries.threads.setPhaseModels(thread.id, {
-      ...phaseModels,
-      executorModel: effectiveExecutorModel,
-    });
-    queries.threads.resetFailureTracking(thread.id);
-    queries.plans.supersedeAll(thread.id);
-    queries.plans.supersedeAllForIssue(issue.projectId, issue.issueNumber, thread.id);
-
-    try {
-      await pipeline.startFromGitHubIssue(
-        thread.id,
-        project.path,
-        { number: issue.issueNumber, title: issue.title, body: issue.body, labels: issue.labels },
-        effectiveExecutorModel,
-        {
-          worktreePath: thread.worktreePath,
-          baseBranch: project.defaultBranch,
-          plannerModel: phaseModels.plannerModel,
-          reviewerModel: phaseModels.reviewerModel,
-          verifierModel: phaseModels.verifierModel,
-          plannerModelIdOverride: phaseModels.plannerModelId,
-          reviewerModelIdOverride: phaseModels.reviewerModelId,
-          executorModelIdOverride: phaseModels.executorModelId,
-          verifierModelIdOverride: phaseModels.verifierModelId,
-          plannerReasoningEffort: phaseModels.plannerReasoningEffort,
-          reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
-          executorReasoningEffort: phaseModels.executorReasoningEffort,
-          verifierReasoningEffort: phaseModels.verifierReasoningEffort,
+    await launchIssuePipeline(
+      {
+        threads: queries.threads,
+        githubIssues: queries.githubIssues,
+        plans: queries.plans,
+        pipeline,
+      },
+      { project, issue, phaseModels },
+      {
+        validatePhaseModels: assertCliPhaseModelsSupported,
+        onIssueStarted: () =>
+          this._syncPipelineLabel(project, issue.issueNumber, ISSUE_PIPELINE_STATUS.planning),
+        onIssueLinked: () => this._sendIssuesUpdated(issue.projectId),
+        onLaunchError: (err, thread) => {
+          transitionThreadPhase(
+            getMainWindow(),
+            queries,
+            emitter,
+            {
+              threadId: thread.id,
+              phase: PIPELINE_PHASE.failed,
+              errorMessage: clampError(err),
+            },
+            this.deps.ghSync,
+          );
         },
-      );
-    } catch (err) {
-      const win = getMainWindow();
-      transitionThreadPhase(
-        win,
-        queries,
-        emitter,
-        {
-          threadId: thread.id,
-          phase: PIPELINE_PHASE.failed,
-          errorMessage: clampError(err),
-        },
-        this.deps.ghSync,
-      );
-      throw err;
-    }
+      },
+    );
   }
 
   private async _launchQuickTask(
@@ -492,7 +402,7 @@ export class PipelineScheduler {
     this._syncPipelineLabel(project, issue.issueNumber, ISSUE_PIPELINE_STATUS.planning);
     this._sendIssuesUpdated(issue.projectId);
 
-    const phaseModels = this._resolvePhaseModels(settings, project, issue);
+    const phaseModels = resolveIssuePhaseModels(settings, project, issue);
     await assertCliPhaseModelsSupported(phaseModels);
 
     const effectiveExecutorModel = resolveExecutorModelForIssue(settings, project, issue);

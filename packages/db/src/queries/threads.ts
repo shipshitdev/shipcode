@@ -254,6 +254,18 @@ export class ThreadQueries {
       .run(branch, worktreePath, id);
   }
 
+  /**
+   * Persist the fork point after the worktree is created. The worktree forks
+   * from `origin/<base>` (freshly fetched), which can differ from the local
+   * base recorded at pipeline start, so the durable `fork_point_sha` is updated
+   * to match the real fork ref and keep diff bases correct across restarts.
+   */
+  setForkPointSha(id: string, forkPointSha: string): void {
+    this.db
+      .prepare(`UPDATE threads SET fork_point_sha = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
+      .run(forkPointSha, id);
+  }
+
   clearWorktree(id: string): void {
     this.db
       .prepare(

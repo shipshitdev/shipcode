@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const gitMock = {
   raw: vi.fn(),
+  fetch: vi.fn(),
   deleteLocalBranch: vi.fn(),
   checkout: vi.fn(),
   merge: vi.fn(),
@@ -113,9 +114,45 @@ branch refs/heads/feature/not-ours
     await expect(manager.create(42, 'Fix OpenRouter Tier 1!', 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
       branch: 'ship/42-fix-openrouter-tier-1',
+      baseRef: 'origin/main',
+      baseStale: false,
     });
 
+    // Freshens the base from origin before forking.
+    expect(gitMock.fetch).toHaveBeenCalledWith('origin', 'main');
     expect(gitMock.raw).toHaveBeenNthCalledWith(1, ['worktree', 'prune']);
+    expect(gitMock.raw).toHaveBeenNthCalledWith(3, [
+      '-c',
+      'branch.autoSetupMerge=false',
+      '-c',
+      'push.autoSetupRemote=false',
+      'worktree',
+      'add',
+      '-b',
+      'ship/42-fix-openrouter-tier-1',
+      '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
+      'origin/main',
+    ]);
+  });
+
+  it('falls back to the local ref and flags the base stale when the fetch fails', async () => {
+    gitMock.fetch.mockRejectedValueOnce(new Error('could not read from remote'));
+    gitMock.raw
+      .mockResolvedValueOnce('')
+      .mockRejectedValueOnce(new Error('branch not found'))
+      .mockResolvedValueOnce('');
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/tmp/shipcode-worktrees',
+    });
+
+    await expect(manager.create(42, 'Fix OpenRouter Tier 1!', 'main')).resolves.toEqual({
+      worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
+      branch: 'ship/42-fix-openrouter-tier-1',
+      baseRef: 'main',
+      baseStale: true,
+    });
+
+    // Forks from the local ref, not origin/*, when the remote is unreachable.
     expect(gitMock.raw).toHaveBeenNthCalledWith(3, [
       '-c',
       'branch.autoSetupMerge=false',
@@ -130,6 +167,37 @@ branch refs/heads/feature/not-ours
     ]);
   });
 
+  it('forks from an already-remote base ref without double-prefixing or refetching', async () => {
+    gitMock.raw
+      .mockResolvedValueOnce('')
+      .mockRejectedValueOnce(new Error('branch not found'))
+      .mockResolvedValueOnce('');
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/tmp/shipcode-worktrees',
+    });
+
+    await expect(manager.create(42, 'Fix OpenRouter Tier 1!', 'origin/main')).resolves.toEqual({
+      worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
+      branch: 'ship/42-fix-openrouter-tier-1',
+      baseRef: 'origin/main',
+      baseStale: false,
+    });
+
+    expect(gitMock.fetch).not.toHaveBeenCalled();
+    expect(gitMock.raw).toHaveBeenNthCalledWith(3, [
+      '-c',
+      'branch.autoSetupMerge=false',
+      '-c',
+      'push.autoSetupRemote=false',
+      'worktree',
+      'add',
+      '-b',
+      'ship/42-fix-openrouter-tier-1',
+      '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
+      'origin/main',
+    ]);
+  });
+
   it('creates untitled issue worktrees under the default worktree root', async () => {
     gitMock.raw
       .mockResolvedValueOnce('')
@@ -140,6 +208,8 @@ branch refs/heads/feature/not-ours
     await expect(manager.create(42, undefined as never, 'main')).resolves.toEqual({
       worktreePath: defaultUntitledIssueWorktreePath,
       branch: 'ship/42',
+      baseRef: 'origin/main',
+      baseStale: false,
     });
   });
 
@@ -156,7 +226,10 @@ branch refs/heads/feature/not-ours
     await expect(manager.create(42, 'Fix OpenRouter')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter',
       branch: 'ship/42-fix-openrouter',
+      baseRef: 'origin/main',
+      baseStale: false,
     });
+    expect(gitMock.fetch).toHaveBeenCalledWith('origin', 'main');
   });
 
   it('creates manual worktrees from the resolved default branch', async () => {
@@ -171,8 +244,11 @@ branch refs/heads/feature/not-ours
     await expect(manager.create('thread-1')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/thread-1',
       branch: 'shipcode/thread-1',
+      baseRef: 'origin/develop',
+      baseStale: false,
     });
 
+    expect(gitMock.fetch).toHaveBeenCalledWith('origin', 'develop');
     expect(gitMock.raw).toHaveBeenLastCalledWith([
       '-c',
       'branch.autoSetupMerge=false',
@@ -183,7 +259,7 @@ branch refs/heads/feature/not-ours
       '-b',
       'shipcode/thread-1',
       '/tmp/shipcode-worktrees/project-9a1fd1/thread-1',
-      'develop',
+      'origin/develop',
     ]);
   });
 
@@ -198,6 +274,8 @@ branch refs/heads/feature/not-ours
     ).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/tighten-quick-flow',
       branch: 'shipcode/tighten-quick-flow',
+      baseRef: 'origin/main',
+      baseStale: false,
     });
 
     expect(gitMock.raw).toHaveBeenLastCalledWith([
@@ -210,7 +288,7 @@ branch refs/heads/feature/not-ours
       '-b',
       'shipcode/tighten-quick-flow',
       '/tmp/shipcode-worktrees/project-9a1fd1/tighten-quick-flow',
-      'main',
+      'origin/main',
     ]);
   });
 
@@ -228,6 +306,8 @@ branch refs/heads/feature/not-ours
     ).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/auto-clean',
       branch: 'shipcode/auto-clean',
+      baseRef: 'origin/main',
+      baseStale: false,
     });
 
     expect(gitMock.raw).toHaveBeenLastCalledWith([
@@ -240,7 +320,7 @@ branch refs/heads/feature/not-ours
       '-b',
       'shipcode/auto-clean',
       '/tmp/shipcode-worktrees/project-9a1fd1/auto-clean',
-      'main',
+      'origin/main',
     ]);
   });
 
@@ -257,6 +337,8 @@ branch refs/heads/feature/not-ours
     await expect(manager.create(42, 'Fix OpenRouter', 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-2',
       branch: 'ship/42-fix-openrouter-2',
+      baseRef: 'origin/main',
+      baseStale: false,
     });
   });
 
@@ -274,6 +356,8 @@ branch refs/heads/feature/not-ours
     await expect(manager.create(42, 'Fix OpenRouter', 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-3',
       branch: 'ship/42-fix-openrouter-3',
+      baseRef: 'origin/main',
+      baseStale: false,
     });
   });
 
@@ -291,6 +375,8 @@ branch refs/heads/feature/not-ours
     await expect(manager.create(42, 'Fix OpenRouter', 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-3',
       branch: 'ship/42-fix-openrouter-3',
+      baseRef: 'origin/main',
+      baseStale: false,
     });
 
     gitMock.raw
@@ -314,6 +400,8 @@ branch refs/heads/feature/not-ours
     await expect(manager.create(42, 'Fix OpenRouter', 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-2',
       branch: 'ship/42-fix-openrouter-2',
+      baseRef: 'origin/main',
+      baseStale: false,
     });
   });
 
@@ -330,6 +418,8 @@ branch refs/heads/feature/not-ours
     await expect(manager.create(42, undefined as never, 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-2',
       branch: 'ship/42-2',
+      baseRef: 'origin/main',
+      baseStale: false,
     });
   });
 
@@ -346,6 +436,8 @@ branch refs/heads/feature/not-ours
     await expect(manager.create('thread-1', '!!!', 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/thread-1-3',
       branch: 'shipcode/thread-1-3',
+      baseRef: 'origin/main',
+      baseStale: false,
     });
   });
 
@@ -361,6 +453,8 @@ branch refs/heads/feature/not-ours
     await expect(manager.create('thread-2', '', 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/thread-2-3',
       branch: 'shipcode/thread-2-3',
+      baseRef: 'origin/main',
+      baseStale: false,
     });
   });
 

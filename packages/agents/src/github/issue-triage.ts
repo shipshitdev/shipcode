@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,29 +8,13 @@ import type {
   ReasoningEffort,
 } from '@shipcode/shared';
 import { SHIPCODE_AGENT_LABELS, SHIPCODE_CLASSIFICATION_LABELS } from '@shipcode/shared';
-import { classifyPoolExhaustion, markPoolExhausted } from '../agent-sdk-pool-state';
-import { extractCliFailureMessage, formatCliSpawnFailure } from '../cli-error';
 import { unwrapCliResultEnvelope } from '../cli-result';
+import { runNoToolsTextGeneration } from '../no-tools-text-generation';
 import { OpenRouterClient, OpenRouterError } from '../providers/openrouter-http';
-import {
-  mapReasoningEffortToClaudeThinkingTokens,
-  normalizeOpenRouterReasoningEffort,
-} from '../providers/reasoning';
+import { normalizeOpenRouterReasoningEffort } from '../providers/reasoning';
 
 const TRIAGE_FENCE_TAG = 'shipcode-issue-triage';
 const TRIAGE_TIMEOUT_MS = 120_000;
-const SAFE_TRIAGE_ENV_KEYS = new Set([
-  'PATH',
-  'HOME',
-  'USER',
-  'SHELL',
-  'TERM',
-  'LANG',
-  'LC_ALL',
-  'LC_CTYPE',
-  'TMPDIR',
-  'ANTHROPIC_API_KEY',
-]);
 const TRIAGE_LABELS = [
   ...SHIPCODE_AGENT_LABELS.map((label) => label.name),
   ...SHIPCODE_CLASSIFICATION_LABELS.filter((label) => label.name.endsWith(':deferred')).map(
@@ -58,14 +41,6 @@ export interface IssueTriageRunResult {
 
 interface TriageEnvelope {
   issues?: unknown;
-}
-
-function filteredTriageEnv(): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && SAFE_TRIAGE_ENV_KEYS.has(key)) env[key] = value;
-  }
-  return env;
 }
 
 export async function triageGitHubIssues(opts: {
@@ -185,66 +160,14 @@ function runCliTriage(opts: {
       new Error('Codex issue triage is disabled because it cannot run in no-tools mode'),
     );
   }
-  return new Promise((resolve, reject) => {
-    const label = opts.provider === 'claude' ? 'Claude CLI' : 'Codex CLI';
-    const args = [
-      '-p',
-      ...(opts.modelId ? ['--model', opts.modelId] : []),
-      '--output-format',
-      'json',
-      '--max-turns',
-      '1',
-      ...(() => {
-        const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(
-          opts.reasoningEffort,
-          opts.modelId,
-        );
-        return thinkingTokens === null
-          ? []
-          : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
-      })(),
-      '--allowedTools',
-      '',
-    ];
-
-    const proc = spawn(opts.provider, args, {
-      cwd: mkdtempSync(join(tmpdir(), 'shipcode-triage-')),
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: filteredTriageEnv(),
-    });
-    let stdout = '';
-    let stderr = '';
-    const timer = setTimeout(() => {
-      proc.kill('SIGTERM');
-      reject(new Error(`${label} timed out after ${TRIAGE_TIMEOUT_MS}ms`));
-    }, TRIAGE_TIMEOUT_MS);
-
-    proc.stdout.on('data', (chunk) => {
-      stdout += chunk;
-    });
-    proc.stderr.on('data', (chunk) => {
-      stderr += chunk;
-    });
-    proc.on('error', (err) => {
-      clearTimeout(timer);
-      reject(new Error(formatCliSpawnFailure(label, err.message)));
-    });
-    proc.on('close', (code) => {
-      clearTimeout(timer);
-      if (code !== 0) {
-        // Triage runs `claude -p`, drawing from the rationed Agent-SDK pool.
-        // Flag exhaustion so the UI alerts; triage itself still fails this run.
-        if (classifyPoolExhaustion(stdout, stderr, code ?? 1)) {
-          markPoolExhausted('Claude Agent-SDK credit pool exhausted');
-        }
-        reject(new Error(`${label} exited ${code}: ${extractCliFailureMessage(stdout, stderr)}`));
-        return;
-      }
-      resolve(unwrapCliResultEnvelope(stdout));
-    });
-    proc.stdin.write(opts.prompt);
-    proc.stdin.end();
-  });
+  return runNoToolsTextGeneration({
+    prompt: opts.prompt,
+    cwd: mkdtempSync(join(tmpdir(), 'shipcode-triage-')),
+    timeoutMs: TRIAGE_TIMEOUT_MS,
+    maxTurns: 1,
+    modelId: opts.modelId,
+    reasoningEffort: opts.reasoningEffort,
+  }).then((stdout) => unwrapCliResultEnvelope(stdout));
 }
 
 export function extractTriageRecommendations(text: string): IssueTriageRecommendation[] {

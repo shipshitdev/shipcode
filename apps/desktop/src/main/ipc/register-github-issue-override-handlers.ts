@@ -1,5 +1,7 @@
-import type { ExecutorModel, ReasoningEffort } from '@shipcode/shared';
+import { clampError, type ExecutorModel, type ReasoningEffort } from '@shipcode/shared';
+import type { IpcMainInvokeEvent } from 'electron';
 
+import log from '../logger.service';
 import { sendGithubIssuesUpdated } from './helpers';
 import type { IpcHandlerDeps } from './types';
 
@@ -8,6 +10,20 @@ export function registerGitHubIssueOverrideHandlers({
   mainWindow,
   queries,
 }: Pick<IpcHandlerDeps, 'ipcMain' | 'mainWindow' | 'queries'>): void {
+  const handleIssueOverride = <TArgs extends unknown[], TResult>(
+    channel: string,
+    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => TResult,
+  ) => {
+    ipcMain.handle(channel, (event, ...args) => {
+      try {
+        return handler(event, ...(args as TArgs));
+      } catch (error) {
+        log.error(`[${channel}]`, error);
+        throw new Error(clampError(error));
+      }
+    });
+  };
+
   const VALID_PHASE_ROLES = new Set(['planner', 'reviewer', 'executor', 'verifier'] as const);
   type PhaseRole = 'planner' | 'reviewer' | 'executor' | 'verifier';
   function assertPhaseRole(phase: string): asserts phase is PhaseRole {
@@ -16,7 +32,7 @@ export function registerGitHubIssueOverrideHandlers({
     }
   }
 
-  ipcMain.handle(
+  handleIssueOverride(
     'github:set-phase-model-override',
     (
       _event,
@@ -45,7 +61,7 @@ export function registerGitHubIssueOverrideHandlers({
     },
   );
 
-  ipcMain.handle(
+  handleIssueOverride(
     'github:clear-phase-model-override',
     (
       _event,
@@ -69,7 +85,7 @@ export function registerGitHubIssueOverrideHandlers({
     },
   );
 
-  ipcMain.handle(
+  handleIssueOverride(
     'github:set-phase-model-id-override',
     (
       _event,
@@ -98,7 +114,7 @@ export function registerGitHubIssueOverrideHandlers({
     },
   );
 
-  ipcMain.handle(
+  handleIssueOverride(
     'github:clear-phase-model-id-override',
     (
       _event,
@@ -121,7 +137,7 @@ export function registerGitHubIssueOverrideHandlers({
     },
   );
 
-  ipcMain.handle(
+  handleIssueOverride(
     'github:clear-all-phase-overrides-for-project',
     (_event, { projectId }: { projectId: string }) => {
       const project = queries.projects.getById(projectId);
@@ -133,7 +149,7 @@ export function registerGitHubIssueOverrideHandlers({
     },
   );
 
-  ipcMain.handle(
+  handleIssueOverride(
     'github:set-revision-count-override',
     (
       _event,
@@ -166,7 +182,7 @@ export function registerGitHubIssueOverrideHandlers({
     },
   );
 
-  ipcMain.handle(
+  handleIssueOverride(
     'github:set-require-approval-override',
     (
       _event,
@@ -191,7 +207,7 @@ export function registerGitHubIssueOverrideHandlers({
     },
   );
 
-  ipcMain.handle(
+  handleIssueOverride(
     'github:set-phase-reasoning-effort-override',
     (
       _event,
@@ -227,7 +243,7 @@ export function registerGitHubIssueOverrideHandlers({
     },
   );
 
-  ipcMain.handle(
+  handleIssueOverride(
     'github:clear-phase-reasoning-effort-override',
     (
       _event,

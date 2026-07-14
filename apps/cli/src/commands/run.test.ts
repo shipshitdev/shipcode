@@ -9,7 +9,8 @@ const {
   getIssueMock,
   routeFromLabelsMock,
   createCliEmitterMock,
-  startFromGitHubIssueMock,
+  launchIssuePipelineMock,
+  upsertIssueMock,
   settingsGetMock,
   EmptyQuery,
 } = vi.hoisted(() => ({
@@ -21,7 +22,8 @@ const {
   getIssueMock: vi.fn(),
   routeFromLabelsMock: vi.fn(),
   createCliEmitterMock: vi.fn(),
-  startFromGitHubIssueMock: vi.fn(),
+  launchIssuePipelineMock: vi.fn(),
+  upsertIssueMock: vi.fn(),
   settingsGetMock: vi.fn(),
   EmptyQuery: class {},
 }));
@@ -44,6 +46,9 @@ vi.mock('@shipcode/db', async (importOriginal) => {
     SettingsQueries: class {
       get = settingsGetMock;
     },
+    GitHubIssueQueries: class {
+      upsert = upsertIssueMock;
+    },
     TaskGraphQueries: EmptyQuery,
   };
 });
@@ -62,10 +67,31 @@ vi.mock('@shipcode/agents', () => ({
 }));
 
 vi.mock('@shipcode/pipeline', () => ({
-  createPipeline: vi.fn(() => ({
-    startFromGitHubIssue: startFromGitHubIssueMock,
-  })),
+  createPipeline: vi.fn(() => ({})),
+  launchIssuePipeline: launchIssuePipelineMock,
 }));
+
+vi.mock('@shipcode/shared', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/shared')>();
+  return {
+    ...actual,
+    resolveIssuePhaseModels: vi.fn(() => ({
+      plannerModel: 'codex',
+      reviewerModel: 'codex',
+      verifierModel: 'codex',
+      executorModel: 'codex',
+      plannerModelId: null,
+      reviewerModelId: null,
+      verifierModelId: null,
+      executorModelId: null,
+      plannerReasoningEffort: 'high',
+      reviewerReasoningEffort: 'high',
+      verifierReasoningEffort: 'high',
+      executorReasoningEffort: 'high',
+    })),
+    resolveProviderReasoningEffort: vi.fn(() => ({ effective: 'high' })),
+  };
+});
 
 vi.mock('../adapters/cli-emitter', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../adapters/cli-emitter')>();
@@ -96,6 +122,7 @@ describe('runCommand', () => {
       {
         id: 'project-1',
         path: process.cwd(),
+        gitRemote: 'https://github.com/acme/repo.git',
         defaultBranch: 'develop',
       },
     ]);
@@ -110,14 +137,15 @@ describe('runCommand', () => {
       modelOverride: 'openrouter/auto',
     });
     createCliEmitterMock.mockReturnValue({});
-    settingsGetMock.mockReturnValue({});
-    startFromGitHubIssueMock.mockResolvedValue(undefined);
+    settingsGetMock.mockReturnValue({ executorReasoningEffort: 'high' });
+    upsertIssueMock.mockReturnValue({ id: 'issue-cache-42', issueNumber: 42 });
+    launchIssuePipelineMock.mockResolvedValue({ id: 'thread-1' });
   });
 
   it('exits on invalid issue numbers before starting the pipeline', async () => {
     await expect(runCommand('not-a-number')).rejects.toThrow('process.exit:1');
     expect(errorSpy).toHaveBeenCalledWith('Invalid issue number:', 'not-a-number');
-    expect(startFromGitHubIssueMock).not.toHaveBeenCalled();
+    expect(launchIssuePipelineMock).not.toHaveBeenCalled();
   });
 
   it('returns before parsing when onboarding is incomplete', async () => {
@@ -126,26 +154,22 @@ describe('runCommand', () => {
     await runCommand('not-a-number');
 
     expect(getIssueMock).not.toHaveBeenCalled();
-    expect(startFromGitHubIssueMock).not.toHaveBeenCalled();
+    expect(launchIssuePipelineMock).not.toHaveBeenCalled();
   });
 
-  it('routes executor model and override from labels into startFromGitHubIssue', async () => {
+  it('routes executor model and override from labels into the shared issue launcher', async () => {
     await runCommand('42');
 
-    expect(startFromGitHubIssueMock).toHaveBeenCalledWith(
-      'project-1',
-      process.cwd(),
-      {
-        number: 42,
-        title: 'Add OpenRouter issue routing',
-        body: 'Implement it',
-        labels: ['shipcode:agent:openrouter/auto'],
-      },
-      'openrouter',
-      {
-        baseBranch: 'develop',
+    expect(launchIssuePipelineMock).toHaveBeenCalledWith(
+      expect.objectContaining({ pipeline: expect.any(Object) }),
+      expect.objectContaining({
+        issue: { id: 'issue-cache-42', issueNumber: 42 },
+        phaseModels: expect.objectContaining({
+          executorModel: 'openrouter',
+          executorModelId: 'openrouter/auto',
+        }),
         executorModelOverride: 'openrouter/auto',
-      },
+      }),
     );
     expect(logSpy).toHaveBeenCalledWith('Model: openrouter (openrouter/auto)');
   });
@@ -168,15 +192,12 @@ describe('runCommand', () => {
 
     await runCommand('42');
 
-    expect(startFromGitHubIssueMock).toHaveBeenCalledWith(
-      'project-1',
-      process.cwd(),
+    expect(launchIssuePipelineMock).toHaveBeenCalledWith(
       expect.any(Object),
-      'codex',
-      {
-        baseBranch: 'develop',
+      expect.objectContaining({
+        phaseModels: expect.objectContaining({ executorModel: 'codex' }),
         executorModelOverride: null,
-      },
+      }),
     );
     expect(logSpy).toHaveBeenCalledWith('Model: codex');
   });
@@ -188,15 +209,12 @@ describe('runCommand', () => {
 
     await runCommand('42');
 
-    expect(startFromGitHubIssueMock).toHaveBeenCalledWith(
-      'project-1',
-      process.cwd(),
+    expect(launchIssuePipelineMock).toHaveBeenCalledWith(
       expect.any(Object),
-      'codex',
-      {
-        baseBranch: 'develop',
+      expect.objectContaining({
+        phaseModels: expect.objectContaining({ executorModel: 'codex' }),
         executorModelOverride: null,
-      },
+      }),
     );
     expect(logSpy).toHaveBeenCalledWith('Model: codex');
   });

@@ -6,7 +6,7 @@ const {
   getThreadForIssueOrExitMock,
   routeFromLabelsMock,
   createPipelineMock,
-  startFromGitHubIssueMock,
+  launchIssuePipelineMock,
   rehydrateContextMock,
   startExecutionMock,
   startVerificationMock,
@@ -25,7 +25,7 @@ const {
   getThreadForIssueOrExitMock: vi.fn(),
   routeFromLabelsMock: vi.fn(),
   createPipelineMock: vi.fn(),
-  startFromGitHubIssueMock: vi.fn(),
+  launchIssuePipelineMock: vi.fn(),
   rehydrateContextMock: vi.fn(),
   startExecutionMock: vi.fn(),
   startVerificationMock: vi.fn(),
@@ -59,6 +59,7 @@ vi.mock('@shipcode/agents', () => ({
 
 vi.mock('@shipcode/pipeline', () => ({
   createPipeline: createPipelineMock,
+  launchIssuePipeline: launchIssuePipelineMock,
 }));
 
 import { approveCommand } from './approve';
@@ -86,17 +87,18 @@ describe('pipeline CLI commands', () => {
       modelOverride: 'openrouter/auto',
     });
     createPipelineMock.mockReturnValue({
-      startFromGitHubIssue: startFromGitHubIssueMock,
       rehydrateContext: rehydrateContextMock,
       startExecution: startExecutionMock,
       startVerification: startVerificationMock,
       startShipping: startShippingMock,
       startPlanGeneration: startPlanGenerationMock,
     });
+    launchIssuePipelineMock.mockResolvedValue({ id: 'thread-1' });
     createCliContextMock.mockReturnValue({
       project: {
         id: 'project-1',
         path: '/repo',
+        gitRemote: 'https://github.com/acme/repo.git',
         defaultBranch: 'main',
       },
       pipelineDeps: { deps: true },
@@ -105,6 +107,66 @@ describe('pipeline CLI commands', () => {
       },
       threads: {
         getByProjectAndGithubIssue: getThreadByIssueMock,
+      },
+      githubIssues: {
+        upsert: vi.fn(() => ({
+          id: 'issue-cache-42',
+          projectId: 'project-1',
+          issueNumber: 42,
+          title: 'Ship coverage',
+          body: 'Add tests',
+          labels: ['shipcode:agent:openrouter/auto'],
+          assignee: null,
+          state: 'open',
+          pipelineStatus: 'todo',
+          threadId: null,
+          claimedAt: null,
+          claimedBy: null,
+          lastPhaseUpdate: null,
+          lastStatusLabel: null,
+          plannerModelOverride: null,
+          reviewerModelOverride: null,
+          executorModelOverride: null,
+          verifierModelOverride: null,
+          plannerModelIdOverride: null,
+          reviewerModelIdOverride: null,
+          executorModelIdOverride: null,
+          verifierModelIdOverride: null,
+          plannerReasoningEffortOverride: null,
+          reviewerReasoningEffortOverride: null,
+          executorReasoningEffortOverride: null,
+          verifierReasoningEffortOverride: null,
+          revisionCountOverride: null,
+          linkedPrNumber: null,
+          linkedPrUrl: null,
+          linkedPrIsDraft: false,
+          ciBlocked: false,
+          failingChecks: [],
+          unresolvedReviewComments: [],
+          unresolvedReviewCommentCount: 0,
+          prLastSyncAt: null,
+          fetchedAt: '2026-07-14T00:00:00.000Z',
+          priorityRank: null,
+          priorityRaw: null,
+          priorityFetchedAt: null,
+        })),
+        updatePipelineStatus: vi.fn(),
+      },
+      settings: {
+        get: vi.fn(() => ({
+          plannerModel: 'codex',
+          reviewerModel: 'codex',
+          executorModel: 'codex',
+          verifierModel: 'codex',
+          openrouterPlannerModel: null,
+          openrouterReviewerModel: null,
+          openrouterExecutorModel: null,
+          openrouterVerifierModel: null,
+          plannerReasoningEffort: 'high',
+          reviewerReasoningEffort: 'high',
+          executorReasoningEffort: 'high',
+          verifierReasoningEffort: 'high',
+        })),
       },
       plans: {
         getLatest: getLatestPlanMock,
@@ -197,17 +259,22 @@ describe('pipeline CLI commands', () => {
   it('runs plan generation and prints a structured plan when one is saved', async () => {
     await planCommand('42');
 
-    expect(startFromGitHubIssueMock).toHaveBeenCalledWith(
-      'project-1',
-      '/repo',
-      {
-        number: 42,
-        title: 'Ship coverage',
-        body: 'Add tests',
-        labels: ['shipcode:agent:openrouter/auto'],
-      },
-      'openrouter',
-      { baseBranch: 'main', executorModelOverride: 'openrouter/auto' },
+    expect(launchIssuePipelineMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threads: expect.any(Object),
+        githubIssues: expect.any(Object),
+        plans: expect.any(Object),
+        pipeline: expect.any(Object),
+      }),
+      expect.objectContaining({
+        project: expect.objectContaining({ id: 'project-1' }),
+        issue: expect.objectContaining({ id: 'issue-cache-42', issueNumber: 42 }),
+        phaseModels: expect.objectContaining({
+          executorModel: 'openrouter',
+          executorModelId: 'openrouter/auto',
+        }),
+        executorModelOverride: 'openrouter/auto',
+      }),
     );
     expect(logSpy).toHaveBeenCalledWith('\n--- Plan Output ---');
     expect(logSpy).toHaveBeenCalledWith(JSON.stringify(structuredPlan, null, 2));
@@ -220,12 +287,12 @@ describe('pipeline CLI commands', () => {
 
     await expect(planCommand('42')).rejects.toThrow('process.exit:1');
 
-    expect(startFromGitHubIssueMock).toHaveBeenCalledWith(
-      'project-1',
-      '/repo',
+    expect(launchIssuePipelineMock).toHaveBeenCalledWith(
       expect.any(Object),
-      'codex',
-      { baseBranch: 'main', executorModelOverride: null },
+      expect.objectContaining({
+        phaseModels: expect.objectContaining({ executorModel: 'codex' }),
+        executorModelOverride: null,
+      }),
     );
     expect(errorSpy).toHaveBeenCalledWith('Thread not found after pipeline run.');
   });
