@@ -10,6 +10,8 @@ import type {
   GitVisualizerData,
   Project,
 } from '@shipcode/shared';
+import { clampError } from '@shipcode/shared';
+import type { IpcMainInvokeEvent } from 'electron';
 
 import log from '../logger.service';
 import { enrichProjectPath } from './helpers';
@@ -33,6 +35,20 @@ export function registerProjectCodeBrowserHandlers({
   buildGitVisualizerData,
   parseDiffRecords,
 }: RegisterProjectCodeBrowserHandlersOptions): void {
+  const handleCodeBrowser = <TArgs extends unknown[], TResult>(
+    channel: string,
+    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => TResult | Promise<TResult>,
+  ) => {
+    ipcMain.handle(channel, async (event, ...args) => {
+      try {
+        return await handler(event, ...(args as TArgs));
+      } catch (error) {
+        log.error(`[${channel}]`, error);
+        throw new Error(clampError(error));
+      }
+    });
+  };
+
   const CODE_TREE_IGNORE = new Set([
     '.git',
     'node_modules',
@@ -71,7 +87,7 @@ export function registerProjectCodeBrowserHandlers({
     }
   }
 
-  ipcMain.handle(
+  handleCodeBrowser(
     'code:list-tree',
     async (
       _event,
@@ -148,7 +164,7 @@ export function registerProjectCodeBrowserHandlers({
     },
   );
 
-  ipcMain.handle(
+  handleCodeBrowser(
     'code:read-file',
     async (
       _event,
@@ -189,7 +205,7 @@ export function registerProjectCodeBrowserHandlers({
     },
   );
 
-  ipcMain.handle(
+  handleCodeBrowser(
     'code:file-diff',
     async (
       _event,
