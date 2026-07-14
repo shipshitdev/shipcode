@@ -6,7 +6,6 @@ import { isIssueChatSessionLive, sendIssueChatTurn } from './issue-chat-session'
 import log from './logger.service';
 
 interface IssueChatCommentSyncState {
-  threadId: string;
   lastSeenCommentId: number | null;
   timer: ReturnType<typeof setInterval> | null;
   isPolling: boolean;
@@ -97,7 +96,6 @@ async function syncIssueChatCommentsOnce({
   const state =
     syncStates.get(threadId) ??
     ({
-      threadId,
       lastSeenCommentId: null,
       timer: null,
       isPolling: false,
@@ -175,7 +173,6 @@ export function startIssueChatCommentSync(deps: IssueChatCommentSyncDeps): void 
       ? settings.githubPollingIntervalMs
       : GITHUB_POLL_INTERVAL_MS;
   const state: IssueChatCommentSyncState = {
-    threadId: deps.threadId,
     lastSeenCommentId: existing?.lastSeenCommentId ?? null,
     timer: null,
     isPolling: false,
