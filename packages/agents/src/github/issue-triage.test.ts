@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { existsSync } from 'node:fs';
 import type { AppSettings } from '@shipcode/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -201,7 +202,6 @@ describe('issue triage', () => {
     const chatSpy = client.chat as unknown as ReturnType<typeof vi.fn>;
 
     await triageGitHubIssues({
-      cwd: '/tmp/repo',
       issues: [baseIssue],
       apiKey: 'k',
       settings: triageSettings({
@@ -233,7 +233,6 @@ describe('issue triage', () => {
     } as unknown as OpenRouterClientType;
 
     const result = await triageGitHubIssues({
-      cwd: '/tmp/repo',
       issues: [baseIssue],
       apiKey: 'k',
       settings: triageSettings({
@@ -256,7 +255,6 @@ describe('issue triage', () => {
     });
 
     const result = await triageGitHubIssues({
-      cwd: '/tmp/repo',
       issues: [baseIssue],
       apiKey: 'k',
       settings: triageSettings({ triageModelId: 'default/client-request' }),
@@ -284,7 +282,6 @@ describe('issue triage', () => {
 
     await expect(
       triageGitHubIssues({
-        cwd: '/tmp/repo',
         issues: [baseIssue],
         apiKey: 'k',
         settings: triageSettings({
@@ -314,7 +311,6 @@ describe('issue triage', () => {
 
     await expect(
       triageGitHubIssues({
-        cwd: '/tmp/repo',
         issues: [baseIssue],
         apiKey: 'k',
         settings: triageSettings(),
@@ -326,7 +322,6 @@ describe('issue triage', () => {
   it('rejects OpenRouter triage when the API key is missing', async () => {
     await expect(
       triageGitHubIssues({
-        cwd: '/tmp/repo',
         issues: [baseIssue],
         settings: triageSettings(),
       }),
@@ -338,7 +333,6 @@ describe('issue triage', () => {
     spawnMock.mockReturnValueOnce(fake.proc);
 
     const promise = triageGitHubIssues({
-      cwd: '/tmp/repo',
       issues: [baseIssue],
       settings: triageSettings({
         triageModel: 'claude',
@@ -370,6 +364,8 @@ describe('issue triage', () => {
         env: expect.objectContaining({ PATH: expect.any(String) }),
       }),
     );
+    const triageCwd = (spawnMock.mock.calls[0][2] as { cwd: string }).cwd;
+    expect(existsSync(triageCwd)).toBe(true);
     const prompt = fake.proc.stdin.write.mock.calls[0][0] as string;
     expect(prompt).toContain('Review these GitHub issues');
     expect(spawnMock.mock.calls[0][1]).not.toContain(prompt);
@@ -399,6 +395,7 @@ describe('issue triage', () => {
         },
       ],
     });
+    expect(existsSync(triageCwd)).toBe(false);
   });
 
   it('omits Claude thinking-token flags when reasoning maps to none', async () => {
@@ -406,7 +403,6 @@ describe('issue triage', () => {
     spawnMock.mockReturnValueOnce(fake.proc);
 
     const promise = triageGitHubIssues({
-      cwd: '/tmp/repo',
       issues: [baseIssue],
       settings: triageSettings({
         triageModel: 'claude',
@@ -430,7 +426,6 @@ describe('issue triage', () => {
   it('rejects Codex triage because it cannot run in no-tools mode', async () => {
     await expect(
       triageGitHubIssues({
-        cwd: '/tmp/repo',
         issues: [baseIssue],
         settings: triageSettings({
           triageModel: 'codex',
@@ -445,7 +440,6 @@ describe('issue triage', () => {
   it('rejects explicit Codex triage models before spawning the CLI', async () => {
     await expect(
       triageGitHubIssues({
-        cwd: '/tmp/repo',
         issues: [baseIssue],
         settings: triageSettings({
           triageModel: 'codex',
@@ -460,7 +454,6 @@ describe('issue triage', () => {
     const spawnFailure = createFakeProc();
     spawnMock.mockReturnValueOnce(spawnFailure.proc);
     const spawnPromise = triageGitHubIssues({
-      cwd: '/tmp/repo',
       issues: [baseIssue],
       settings: triageSettings({ triageModel: 'claude' }),
     });
@@ -472,7 +465,6 @@ describe('issue triage', () => {
     const exitFailure = createFakeProc();
     spawnMock.mockReturnValueOnce(exitFailure.proc);
     const exitPromise = triageGitHubIssues({
-      cwd: '/tmp/repo',
       issues: [baseIssue],
       settings: triageSettings({ triageModel: 'claude' }),
     });
@@ -488,7 +480,6 @@ describe('issue triage', () => {
     spawnMock.mockReturnValueOnce(fake.proc);
 
     const promise = triageGitHubIssues({
-      cwd: '/tmp/repo',
       issues: [baseIssue],
       settings: triageSettings({ triageModel: 'claude' }),
     });

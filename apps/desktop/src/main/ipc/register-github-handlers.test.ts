@@ -4849,7 +4849,6 @@ describe('registerGitHubHandlers', () => {
     expect(ensureLabelsMock).toHaveBeenCalled();
     expect(triageGitHubIssuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        cwd: '/tmp',
         issues: [eligibleIssue],
       }),
     );

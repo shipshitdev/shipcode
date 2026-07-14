@@ -603,7 +603,6 @@ export function registerGitHubHandlers({
 
     await ghCli.ensureLabels(SHIPCODE_DEFAULT_LABELS);
     const result = await triageGitHubIssues({
-      cwd: project.path,
       issues: candidates,
       settings,
       apiKey: process.env.OPENROUTER_API_KEY,
