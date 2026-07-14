@@ -280,5 +280,9 @@ function runMemoryCliWithStdin(
     cwd,
     timeoutMs,
     maxTurns: 1,
+    // Memory generation historically ran without `--max-thinking-tokens`. The shared
+    // helper defaults an absent effort to 'high' (32000 tokens), so pin 'none' to
+    // preserve the prior no-thinking-budget behavior and avoid a silent latency/cost bump.
+    reasoningEffort: 'none',
   });
 }

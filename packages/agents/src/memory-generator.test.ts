@@ -49,6 +49,12 @@ describe('generateMemoryFiles', () => {
       written: ['goal.md', 'architecture.md', 'constraints.md', 'do-dont.md'],
     });
 
+    // Regression guard: memory generation historically ran without a thinking-token
+    // budget. The shared no-tools helper defaults an absent effort to 'high' (32000
+    // tokens), so runMemoryCliWithStdin must pin 'none' and emit no --max-thinking-tokens.
+    const claudeArgs = mockSpawn.mock.calls[0]?.[1] as string[];
+    expect(claudeArgs).not.toContain('--max-thinking-tokens');
+
     expect(readFileSync(join(projectPath, '.agents/memory/goal.md'), 'utf8')).toContain(
       'Goal body',
     );

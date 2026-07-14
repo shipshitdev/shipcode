@@ -63,15 +63,20 @@ describe('awaitManagedProcess', () => {
       throw new Error('already gone');
     });
     const controller = new AbortController();
+    const onExit = vi.fn();
     const promise = awaitManagedProcess({
       processManager: processManager as ProcessManager,
       process: { id: 'proc-1' },
       signal: controller.signal,
+      onExit,
     });
 
     controller.abort();
     await vi.advanceTimersByTimeAsync(2000);
 
     await expect(promise).resolves.toEqual({ rawOutput: '', exitCode: 130 });
+    // The abort-fallback path must notify onExit just like the exit handler does,
+    // so consumers of the shared helper observe the terminal exit in every case.
+    expect(onExit).toHaveBeenCalledWith(130);
   });
 });

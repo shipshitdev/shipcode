@@ -61,6 +61,9 @@ export function awaitManagedProcess(
       }
       if (settled) return;
       abortTimer = setTimeout(() => {
+        // Mirror exitHandler: notify onExit before settling so consumers of the
+        // shared helper observe the terminal exit even on the abort-fallback path.
+        options.onExit?.(130);
         settle({ rawOutput, exitCode: 130 });
       }, 2000);
     };
