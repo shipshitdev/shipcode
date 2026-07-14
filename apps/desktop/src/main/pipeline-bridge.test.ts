@@ -17,7 +17,7 @@ vi.mock('./telemetry', () => ({
 }));
 
 import { logEvent } from './logger.service';
-import { breadcrumbForEvent, createElectronEmitter } from './pipeline-bridge';
+import { createElectronEmitter } from './pipeline-bridge';
 import { capturePipelineFailure } from './telemetry';
 
 function makeMainWindow() {
@@ -179,95 +179,6 @@ describe('createElectronEmitter onPipelineTerminal (slot-freed) callback', () =>
   });
 });
 
-describe('breadcrumbForEvent', () => {
-  it('maps a phase transition to an info breadcrumb', () => {
-    const crumb = breadcrumbForEvent({
-      type: 'pipeline:phase',
-      threadId: 'thread-1',
-      phase: 'executing',
-      runId: 'run-9',
-    } as PipelineEvent);
-    expect(crumb).toEqual({
-      category: 'pipeline.phase',
-      level: 'info',
-      message: 'phase: executing',
-      data: { threadId: 'thread-1', phase: 'executing', runId: 'run-9' },
-    });
-  });
-
-  it('marks the failed phase as an error-level breadcrumb', () => {
-    const crumb = breadcrumbForEvent({
-      type: 'pipeline:phase',
-      threadId: 'thread-1',
-      phase: 'failed',
-    } as PipelineEvent);
-    expect(crumb?.level).toBe('error');
-    expect(crumb?.data).toMatchObject({ phase: 'failed', runId: null });
-  });
-
-  it('records run start, approval-gate, and verification-exhausted lifecycle steps', () => {
-    expect(
-      breadcrumbForEvent({
-        type: 'pipeline:start-context',
-        threadId: 't',
-        source: 'github:start-issue',
-        projectPath: '/p',
-        githubIssueNumber: 42,
-        autonomous: true,
-        requireApproval: false,
-        reviewRound: 0,
-      } as PipelineEvent),
-    ).toMatchObject({
-      category: 'pipeline.lifecycle',
-      message: 'run started via github:start-issue',
-    });
-
-    expect(
-      breadcrumbForEvent({
-        type: 'pipeline:approval-gate',
-        threadId: 't',
-        outcome: 'auto_execute',
-        reviewDecision: 'approve',
-        planVersion: 1,
-        requireApproval: false,
-        autonomous: true,
-        reviewRound: 1,
-        revisionCount: 0,
-        hasCriticalOrMajor: false,
-        reasons: ['reviewApproved'],
-      } as PipelineEvent),
-    ).toMatchObject({
-      category: 'pipeline.approval',
-      message: 'approval-gate: auto_execute (review: approve)',
-    });
-
-    expect(
-      breadcrumbForEvent({
-        type: 'pipeline:verification-exhausted',
-        threadId: 't',
-        retries: 3,
-      } as PipelineEvent),
-    ).toMatchObject({
-      category: 'pipeline.verification',
-      level: 'warning',
-      message: 'verification exhausted after 3 retries',
-    });
-  });
-
-  it('returns null for noisy / low-signal events', () => {
-    expect(
-      breadcrumbForEvent({ type: 'pipeline:output', threadId: 't', chunk: 'x' } as PipelineEvent),
-    ).toBeNull();
-    expect(
-      breadcrumbForEvent({
-        type: 'pipeline:turn-started',
-        threadId: 't',
-        turnNumber: 1,
-      } as PipelineEvent),
-    ).toBeNull();
-  });
-});
-
 describe('createElectronEmitter thread-scoped breadcrumb trail', () => {
   let mainWindow: ReturnType<typeof makeMainWindow>;
   let deps: ReturnType<typeof makeDeps>;
@@ -305,6 +216,24 @@ describe('createElectronEmitter thread-scoped breadcrumb trail', () => {
       phase: 'executing',
     } as PipelineEvent);
     emitter.emit({
+      type: 'pipeline:approval-gate',
+      threadId: 'thread-1',
+      outcome: 'auto_execute',
+      reviewDecision: 'approve',
+      planVersion: 1,
+      requireApproval: false,
+      autonomous: true,
+      reviewRound: 1,
+      revisionCount: 0,
+      hasCriticalOrMajor: false,
+      reasons: ['reviewApproved'],
+    } as never);
+    emitter.emit({
+      type: 'pipeline:verification-exhausted',
+      threadId: 'thread-1',
+      retries: 3,
+    } as PipelineEvent);
+    emitter.emit({
       type: 'pipeline:phase',
       threadId: 'thread-1',
       phase: 'failed',
@@ -319,7 +248,17 @@ describe('createElectronEmitter thread-scoped breadcrumb trail', () => {
             data: expect.objectContaining({ threadId: 'thread-1' }),
           }),
           expect.objectContaining({
+            category: 'pipeline.approval',
+            message: 'approval-gate: auto_execute (review: approve)',
+          }),
+          expect.objectContaining({
+            category: 'pipeline.verification',
+            level: 'warning',
+            message: 'verification exhausted after 3 retries',
+          }),
+          expect.objectContaining({
             category: 'pipeline.phase',
+            level: 'error',
             data: expect.objectContaining({ threadId: 'thread-1', phase: 'failed' }),
           }),
         ],

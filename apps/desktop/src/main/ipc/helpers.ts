@@ -252,7 +252,7 @@ const PR_REVIEW_PIPELINE_STATUSES = new Set<import('@shipcode/shared').IssuePipe
   ISSUE_PIPELINE_STATUS.readyToMerge,
 ]);
 
-export function resolveLinkedPullRequestPipelineStatus(
+function resolveLinkedPullRequestPipelineStatus(
   feedback: Pick<
     LinkedPullRequestFeedback,
     'isDraft' | 'state' | 'reviewDecision' | 'reviewRequestCount'

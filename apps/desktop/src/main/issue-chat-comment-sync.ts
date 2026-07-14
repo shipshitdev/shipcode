@@ -56,7 +56,7 @@ function stripMarker(body: string): string | null {
   return null;
 }
 
-export function buildGithubIssueChatTurn(comment: GitHubIssueComment): GithubCommentTurn | null {
+function buildGithubIssueChatTurn(comment: GitHubIssueComment): GithubCommentTurn | null {
   if (!TRUSTED_AUTHOR_ASSOCIATIONS.has(comment.authorAssociation ?? '')) return null;
   const body = stripMarker(comment.body);
   if (!body) return null;
@@ -82,7 +82,7 @@ async function listCommentsForThread(
   return gh.listIssueComments(thread.githubIssueNumber);
 }
 
-export async function syncIssueChatCommentsOnce({
+async function syncIssueChatCommentsOnce({
   threadId,
   queries,
   processManager,
