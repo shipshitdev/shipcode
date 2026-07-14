@@ -1,0 +1,66 @@
+name: Deploy Web
+
+# Auto-deploy apps/web to Vercel production on merge to master — but ONLY when
+# web-affecting files change. Vercel's own Git integration is deliberately off
+# (apps/web/vercel.json → git.deploymentEnabled: false) so unrelated monorepo
+# pushes (desktop, CLI, memory docs) don't trigger whole-repo Vercel builds;
+# this path-filtered job restores auto-deploy for the web surface without that
+# noise. Releases still deploy web via publish.yml's deploy-web job.
+#
+# Paths: the web app, the docs it bundles (sync-docs-to-web.sh copies
+# apps/docs/out into apps/web/public/docs), and the workspace packages web
+# imports (@shipcode/ui, @shipcode/shared).
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'apps/web/**'
+      - 'apps/docs/**'
+      - 'packages/ui/**'
+      - 'packages/shared/**'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+# Master is already green (required checks gate the merge), so this job just
+# builds + deploys. A newer push supersedes an in-flight deploy.
+concurrency:
+  group: deploy-web-production
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  BUN_VERSION: "1.3.14"
+  NODE_VERSION: "22"
+
+jobs:
+  deploy-web:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: "prj_em8zYt0Lxin5PqxObNI47qBl2fOa"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install Vercel CLI
+        run: npm install --global vercel@50.7.1
+      - name: Install dependencies
+        run: bun install
+      # No explicit sync:docs here: `vercel build` runs vercel.json's
+      # buildCommand (`… && bun run sync:docs && … build`), so docs are synced
+      # as part of the build. Running it here too would double-build docs
+      # (the sync uses turbo --force).
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=production --token "${{ secrets.VERCEL_TOKEN }}"
+      - name: Build Vercel artifact
+        run: vercel build --prod --token "${{ secrets.VERCEL_TOKEN }}"
+      - name: Deploy web to Vercel production
+        run: vercel deploy --prebuilt --prod --token "${{ secrets.VERCEL_TOKEN }}"
