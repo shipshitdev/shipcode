@@ -25,7 +25,6 @@
     "clawpatch:review:quick": "clawpatch review --limit 3 --jobs 3",
     "clawpatch:status": "clawpatch status",
     "coverage": "turbo run build --filter='./packages/*' && bun run coverage:sharded && bun run coverage:summary",
-    "coverage:legacy": "turbo run coverage && node scripts/coverage-summary.mjs",
     "coverage:sharded": "node scripts/run-coverage-shards.mjs",
     "coverage:summary": "node scripts/coverage-summary.mjs",
     "deploy:web": "bun run sync:docs && vercel deploy --prod --yes",

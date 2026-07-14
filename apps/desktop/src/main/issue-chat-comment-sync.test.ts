@@ -26,11 +26,7 @@ vi.mock('./logger.service', () => ({
   },
 }));
 
-import {
-  buildGithubIssueChatTurn,
-  stopIssueChatCommentSync,
-  syncIssueChatCommentsOnce,
-} from './issue-chat-comment-sync';
+import { startIssueChatCommentSync, stopIssueChatCommentSync } from './issue-chat-comment-sync';
 
 function makeComment(overrides: Record<string, unknown> = {}) {
   return {
@@ -61,6 +57,9 @@ function makeHarness() {
           path: '/tmp/shipcode',
         })),
       },
+      settings: {
+        get: vi.fn(() => ({ githubPollingIntervalMs: 5_000 })),
+      },
     },
     processManager: {},
     mainWindow: {},
@@ -69,7 +68,10 @@ function makeHarness() {
 
 describe('issue chat comment sync', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
+    mocks.listIssueComments.mockReset();
+    mocks.sendIssueChatTurn.mockReset();
     mocks.isIssueChatSessionLive.mockReturnValue(true);
     mocks.sendIssueChatTurn.mockResolvedValue({
       threadId: 'thread-1',
@@ -84,23 +86,10 @@ describe('issue chat comment sync', () => {
 
   afterEach(() => {
     stopIssueChatCommentSync('thread-1');
+    vi.useRealTimers();
   });
 
-  it('extracts opt-in GitHub comment markers into untrusted chat turns', () => {
-    expect(buildGithubIssueChatTurn(makeComment({ body: 'plain comment' }))).toBeNull();
-    expect(buildGithubIssueChatTurn(makeComment({ body: '/ask' }))).toBeNull();
-    expect(
-      buildGithubIssueChatTurn(
-        makeComment({ body: '/ask spend tokens', authorAssociation: 'CONTRIBUTOR' }),
-      ),
-    ).toBeNull();
-    expect(buildGithubIssueChatTurn(makeComment({ body: '@shipcode draft a plan' }))).toEqual({
-      speaker: 'github:octocat',
-      text: 'GitHub issue comment from @octocat (untrusted user input):\n\ndraft a plan',
-    });
-  });
-
-  it('baselines existing comments and dispatches only new marker comments once', async () => {
+  it('baselines existing comments and dispatches only new trusted marker comments once', async () => {
     const h = makeHarness();
     mocks.listIssueComments
       .mockResolvedValueOnce([
@@ -111,25 +100,28 @@ describe('issue chat comment sync', () => {
         makeComment({ id: 1, body: '/ask old prompt', createdAt: '2026-06-01T00:00:00.000Z' }),
         makeComment({ id: 2, body: 'plain old', createdAt: '2026-06-01T00:01:00.000Z' }),
         makeComment({ id: 3, body: 'plain new', createdAt: '2026-06-01T00:02:00.000Z' }),
-        makeComment({ id: 4, body: '/ask new prompt', createdAt: '2026-06-01T00:03:00.000Z' }),
+        makeComment({
+          id: 4,
+          body: '/ask untrusted prompt',
+          authorAssociation: 'CONTRIBUTOR',
+          createdAt: '2026-06-01T00:03:00.000Z',
+        }),
+        makeComment({ id: 5, body: '/ask', createdAt: '2026-06-01T00:04:00.000Z' }),
+        makeComment({
+          id: 6,
+          body: '@shipcode new prompt',
+          createdAt: '2026-06-01T00:05:00.000Z',
+        }),
       ]);
 
-    await expect(syncIssueChatCommentsOnce({ ...h, baselineOnly: true } as never)).resolves.toEqual(
-      {
-        checked: 2,
-        dispatched: 0,
-        ignored: 2,
-        lastSeenCommentId: 2,
-      },
-    );
+    startIssueChatCommentSync(h as never);
+    await Promise.resolve();
+    await Promise.resolve();
     expect(mocks.sendIssueChatTurn).not.toHaveBeenCalled();
 
-    await expect(syncIssueChatCommentsOnce(h as never)).resolves.toEqual({
-      checked: 4,
-      dispatched: 1,
-      ignored: 1,
-      lastSeenCommentId: 4,
-    });
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(mocks.listIssueComments).toHaveBeenCalledTimes(2);
     expect(mocks.sendIssueChatTurn).toHaveBeenCalledWith({
       args: {
         threadId: 'thread-1',
@@ -142,7 +134,7 @@ describe('issue chat comment sync', () => {
     });
   });
 
-  it('does not advance the marker cursor when dispatch fails', async () => {
+  it('retries a marker comment when dispatch fails without advancing the cursor', async () => {
     const h = makeHarness();
     mocks.sendIssueChatTurn.mockRejectedValueOnce(new Error('turn already running'));
     mocks.listIssueComments
@@ -152,27 +144,36 @@ describe('issue chat comment sync', () => {
       .mockResolvedValueOnce([
         makeComment({ id: 1, body: 'old', createdAt: '2026-06-01T00:00:00.000Z' }),
         makeComment({ id: 2, body: '/ask retry me', createdAt: '2026-06-01T00:01:00.000Z' }),
+      ])
+      .mockResolvedValue([
+        makeComment({ id: 1, body: 'old', createdAt: '2026-06-01T00:00:00.000Z' }),
+        makeComment({ id: 2, body: '/ask retry me', createdAt: '2026-06-01T00:01:00.000Z' }),
       ]);
 
-    await syncIssueChatCommentsOnce({ ...h, baselineOnly: true } as never);
-    await expect(syncIssueChatCommentsOnce(h as never)).resolves.toMatchObject({
-      dispatched: 0,
-      lastSeenCommentId: 1,
-    });
+    startIssueChatCommentSync(h as never);
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(5_000);
     expect(mocks.logError).toHaveBeenCalledWith(
       expect.stringContaining('failed to dispatch comment 2'),
     );
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(mocks.sendIssueChatTurn).toHaveBeenCalledTimes(2);
   });
 
-  it('stops without polling when the chat session is no longer live', async () => {
-    mocks.isIssueChatSessionLive.mockReturnValue(false);
+  it('stops the polling timer', async () => {
+    const h = makeHarness();
+    mocks.listIssueComments.mockResolvedValue([
+      makeComment({ id: 1, body: 'old', createdAt: '2026-06-01T00:00:00.000Z' }),
+    ]);
 
-    await expect(syncIssueChatCommentsOnce(makeHarness() as never)).resolves.toEqual({
-      checked: 0,
-      dispatched: 0,
-      ignored: 0,
-      lastSeenCommentId: null,
-    });
-    expect(mocks.listIssueComments).not.toHaveBeenCalled();
+    startIssueChatCommentSync(h as never);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(stopIssueChatCommentSync('thread-1')).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(mocks.listIssueComments).toHaveBeenCalledTimes(1);
   });
 });

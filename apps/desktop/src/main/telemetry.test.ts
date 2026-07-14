@@ -8,7 +8,6 @@ import {
   getTelemetryStatus,
   isTelemetryDisabledByEnv,
   MainTelemetryController,
-  recordBreadcrumb,
   resolveTelemetryStatus,
   type SentryMainAdapter,
 } from './telemetry';
@@ -244,8 +243,6 @@ describe('telemetry', () => {
       verificationRetries: 1,
       message: 'failed',
     });
-    recordBreadcrumb({ category: 'pipeline.phase', message: 'phase: planning' });
-
     expect(sentryMainAdapter.captureException).not.toHaveBeenCalled();
     expect(sentryMainAdapter.captureMessage).not.toHaveBeenCalled();
     expect(sentryMainAdapter.addBreadcrumb).not.toHaveBeenCalled();
@@ -280,31 +277,11 @@ describe('telemetry', () => {
       message: 'failed',
     });
 
-    recordBreadcrumb({
-      category: 'pipeline.phase',
-      message: 'phase: failed',
-      level: 'error',
-      data: { threadId: 'thread-1', phase: 'failed', secretToken: 'nope' },
-    });
-
     expect(sentryMainAdapter.captureException).toHaveBeenCalledTimes(2);
     expect(sentryMainAdapter.captureMessage).toHaveBeenCalledWith(
       'Pipeline failed in failed',
       expect.objectContaining({ tags: expect.objectContaining({ surface: 'pipeline' }) }),
     );
-    expect(sentryMainAdapter.addBreadcrumb).toHaveBeenCalledWith(
-      expect.objectContaining({
-        category: 'pipeline.phase',
-        level: 'error',
-        message: 'phase: failed',
-        data: expect.objectContaining({
-          threadId: 'thread-1',
-          phase: 'failed',
-          secretToken: '[redacted]',
-        }),
-      }),
-    );
-
     delete process.env.SHIPCODE_SENTRY_DSN;
     delete process.env.SHIPCODE_ENVIRONMENT;
     await configureMainTelemetry({ telemetryEnabled: false });

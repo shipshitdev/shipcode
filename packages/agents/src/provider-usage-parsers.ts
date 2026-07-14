@@ -11,7 +11,7 @@ interface ClaudeAuthDetails {
   loginMethod: string | null;
 }
 
-export function cleanTerminalText(text: string): string {
+function cleanTerminalText(text: string): string {
   return stripAnsi(text).replace(/\r/g, '');
 }
 
