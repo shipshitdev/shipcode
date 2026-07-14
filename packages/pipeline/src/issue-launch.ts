@@ -25,7 +25,7 @@ export interface IssuePipelineLaunchDeps {
 
 export interface IssuePipelineLaunchHooks {
   validatePhaseModels?: (phaseModels: ResolvedIssuePhaseModels) => Promise<void>;
-  onIssueStarted?: () => void | Promise<void>;
+  onIssueStarted?: () => void;
   onIssueLinked?: (thread: Thread) => void | Promise<void>;
   onLaunchError?: (error: unknown, thread: Thread) => void | Promise<void>;
 }
@@ -50,7 +50,7 @@ export async function launchIssuePipeline(
   }
 
   deps.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.planning);
-  await hooks.onIssueStarted?.();
+  hooks.onIssueStarted?.();
 
   const thread =
     reusableThread ?? deps.threads.create(issue.projectId, issue.body ?? issue.title, issue.title);
