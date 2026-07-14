@@ -1855,6 +1855,7 @@ describe('registerGitHubHandlers – branch coverage supplement', () => {
 
     it('evicts expired comment entries while populating another cache key', async () => {
       vi.useFakeTimers();
+      const mapDeleteSpy = vi.spyOn(Map.prototype, 'delete');
       try {
         vi.setSystemTime(new Date('2026-07-14T10:00:00Z'));
         listIssueCommentsMock.mockResolvedValue([]);
@@ -1869,11 +1870,19 @@ describe('registerGitHubHandlers – branch coverage supplement', () => {
         if (!handler) throw new Error('handler not registered');
 
         await handler(undefined, { projectId: 'cache-a', issueNumber: 42, force: true });
+        // Ignore the in-flight-map deletion from the first fetch; only assert the
+        // TTL eviction triggered by the second fetch below.
+        mapDeleteSpy.mockClear();
+
         await vi.advanceTimersByTimeAsync(30_000);
         await handler(undefined, { projectId: 'cache-b', issueNumber: 43, force: true });
 
         expect(listIssueCommentsMock).toHaveBeenCalledTimes(2);
+        // The expired 'cache-a:42' entry must be evicted from the cache Map, not just
+        // left to grow — this is the actual leak fix under test.
+        expect(mapDeleteSpy).toHaveBeenCalledWith('cache-a:42');
       } finally {
+        mapDeleteSpy.mockRestore();
         vi.useRealTimers();
       }
     });
