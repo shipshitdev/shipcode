@@ -6,6 +6,7 @@ import {
   GhCli,
   inspectProjectSetup,
   StreamParser,
+  validateProjectStatusField,
 } from '@shipcode/agents';
 import {
   buildPullRequestFeedbackFindingInputs,
@@ -35,6 +36,7 @@ import {
   resolvePhaseModel,
   resolvePhaseModelId,
   SHIPCODE_CI_BLOCKED_LABEL,
+  SHIPCODE_PIPELINE_LABELS,
   type SystemHealth,
 } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
@@ -66,6 +68,75 @@ export function enrichProjectPaths(projects: import('@shipcode/shared').Project[
       setupError: setup.error,
     };
   });
+}
+
+/**
+ * Projects whose GitHub Projects-v2 board has already been probed this session.
+ * A repo with no associated board legitimately resolves to `githubProjectUrl: null`,
+ * so without this guard every `github:refresh-issues` (fired on nearly every UI
+ * action) would re-run `gh repo view … projectsV2` forever for board-less repos.
+ * Session-scoped: a probe runs at most once per project per app launch, and a manual
+ * URL clear re-arms detection so the documented "clearing resumes auto-detect" holds.
+ */
+const githubProjectBoardChecked = new Set<string>();
+
+export function hasCheckedGithubProjectBoard(projectId: string): boolean {
+  return githubProjectBoardChecked.has(projectId);
+}
+
+export function markGithubProjectBoardChecked(projectId: string): void {
+  githubProjectBoardChecked.add(projectId);
+}
+
+export async function persistGithubProjectConfiguration({
+  queries,
+  projectId,
+  projectPath,
+  projectUrl,
+  source,
+}: {
+  queries: Queries;
+  projectId: string;
+  projectPath: string;
+  projectUrl: string | null;
+  source: string;
+}): Promise<void> {
+  queries.projects.updateGithubProjectUrl(projectId, projectUrl);
+  if (!projectUrl) {
+    queries.projects.clearGithubStatusMapping(projectId);
+    // A manual clear should let auto-detection run again on the next refresh.
+    githubProjectBoardChecked.delete(projectId);
+    return;
+  }
+
+  try {
+    const validation = await validateProjectStatusField({
+      cwd: projectPath,
+      projectUrl,
+      onWarn: (message: string, err?: unknown) =>
+        log.warn(`[${source}] status validation:`, message, err),
+    });
+    if (validation.mapping) {
+      queries.projects.setGithubStatusMapping(projectId, validation.mapping);
+    } else {
+      queries.projects.clearGithubStatusMapping(projectId);
+    }
+
+    if (validation.ok && validation.mapping) {
+      const ghCli = new GhCli(projectPath);
+      await ghCli.ensureLabels([...SHIPCODE_PIPELINE_LABELS]);
+      log.info(`[${source}] status mapping auto-detected`, { mapping: validation.mapping });
+      return;
+    }
+
+    log.info(`[${source}] status auto-detection partial/failed`, {
+      ok: validation.ok,
+      reason: validation.reason,
+      available: validation.availableOptions,
+    });
+  } catch (err) {
+    log.warn(`[${source}] status field validation error:`, err);
+  }
 }
 
 export function resolveProjectPhaseModels(

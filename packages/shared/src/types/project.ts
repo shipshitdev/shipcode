@@ -18,9 +18,9 @@ export interface Project {
   starterIssueNumber: number | null;
   starterIssueCreatedAt: string | null;
   /**
-   * Optional override for the Kanban `board` quick-link. GitHub Projects v2
-   * live under a user/org (`/users/<name>/projects/<n>` or `/orgs/<name>/projects/<n>`)
-   * and can span multiple repos, so we can't derive this from `gitRemote` alone.
+   * GitHub Projects v2 board used for the Kanban `board` quick-link and status
+   * sync. Auto-detected from the repository's associated `projectsV2` when a
+   * folder is added or refreshed; users can override or clear it in settings.
    * When null, the Kanban header hides the `board` quick-link.
    */
   githubProjectUrl: string | null;

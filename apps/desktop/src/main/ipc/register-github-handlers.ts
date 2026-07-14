@@ -40,6 +40,9 @@ import { PipelineScheduler } from '../pipeline-scheduler';
 import {
   assertPrdRewriteModelSupported,
   attachIssueToConfiguredProjectBoard,
+  hasCheckedGithubProjectBoard,
+  markGithubProjectBoardChecked,
+  persistGithubProjectConfiguration,
   sendGithubIssuesUpdated,
   syncLinkedPullRequestFeedback,
 } from './helpers';
@@ -250,7 +253,7 @@ export function registerGitHubHandlers({
 
       const refreshPromise = (async () => {
         const startedAt = Date.now();
-        const project = queries.projects.getById(projectId);
+        let project = queries.projects.getById(projectId);
         if (!project) throw new Error(`Project ${projectId} not found`);
         if (!fs.existsSync(project.path)) {
           throw new Error(
@@ -264,13 +267,38 @@ export function registerGitHubHandlers({
         let githubRepoFullName =
           project.githubRepoFullName ??
           (githubRemoteRef ? `${githubRemoteRef.owner}/${githubRemoteRef.repo}` : null);
-        if (!project.githubRepoFullName) {
+        // Fetch repo metadata only when identity is still unknown, or when the board
+        // hasn't yet been probed this session. A board-less repo resolves to a null
+        // project URL forever, so gating solely on `!githubProjectUrl` would re-run
+        // `gh repo view … projectsV2` on every refresh (nearly every UI action).
+        const needsRepoIdentity = !project.githubRepoFullName;
+        const needsBoardDetection =
+          !project.githubProjectUrl && !hasCheckedGithubProjectBoard(projectId);
+        if (needsRepoIdentity || needsBoardDetection) {
           try {
             const metadata = await ghCli.getRepoMetadata();
             githubRepoFullName = metadata.githubRepoFullName;
-            queries.projects.updateGithubRepoIdentity(project.id, metadata);
+            // The board was probed (found or not) — don't re-probe until the URL is
+            // manually cleared or the app restarts.
+            markGithubProjectBoardChecked(projectId);
+            if (!project.githubRepoFullName) {
+              queries.projects.updateGithubRepoIdentity(project.id, {
+                githubRepoId: metadata.githubRepoId,
+                githubRepoFullName: metadata.githubRepoFullName,
+              });
+            }
+            if (!project.githubProjectUrl && metadata.githubProjectUrl) {
+              await persistGithubProjectConfiguration({
+                queries,
+                projectId: project.id,
+                projectPath: project.path,
+                projectUrl: metadata.githubProjectUrl,
+                source: 'github:refresh-issues',
+              });
+              project = queries.projects.getById(projectId) ?? project;
+            }
           } catch (err) {
-            log.warn('[github:refresh-issues] repo identity backfill failed', err);
+            log.warn('[github:refresh-issues] repo integration backfill failed', err);
           }
         }
         const issues = await ghCli.listAllIssues();

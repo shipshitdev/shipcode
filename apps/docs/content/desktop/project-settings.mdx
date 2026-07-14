@@ -11,7 +11,7 @@ The modal lives at [`apps/desktop/src/renderer/components/ProjectSettingsModal.t
 | Field | DB column | Purpose |
 |-------|-----------|---------|
 | Project name | `projects.name` | Seeded from the directory basename when the repo is first added, then editable as a local display name |
-| GitHub Projects v2 URL | `projects.github_project_url` | Enables readiness checks, board sync, Status mapping, and the Kanban `board` quick-link |
+| GitHub Projects v2 URL | `projects.github_project_url` | Auto-detected from the repository's associated Projects; enables readiness checks, board sync, Status mapping, and the Kanban `board` quick-link |
 | Human approval override | `projects.require_approval_override` | Optional project-local approval gate. `null` inherits the app default; issue-level overrides can still change a specific issue |
 | Revision override | `projects.revision_count_override` | Optional project-local revision count. `null` inherits the app default; issue-level overrides can still change a specific issue |
 | Speed profile override | `projects.pipeline_speed_profile_override` | Optional project-local scheduling/execution speed profile |
@@ -100,9 +100,9 @@ Issue Detail can still override human approval, revisions, and phase models for 
 
 ## Why the GitHub Projects v2 URL exists
 
-GitHub Projects v2 boards live under a **user or org**, not under a repo. A board can span multiple repos, so ShipCode can't derive the real board URL from the project's git remote alone.
+GitHub Projects v2 boards live under a **user or org**, but GitHub exposes the boards associated with each repository. When you add a folder or refresh its board, ShipCode reads that association and stores the only open board automatically. If several open boards are associated, ShipCode selects the unique board whose title matches the repository name.
 
-Paste your real board URL into this field and ShipCode can sync cached issues to the board, detect the `Status` field, map columns, run readiness checks, and show the Kanban `board` button. Leave it blank and board sync stays disabled.
+If no board is associated or several candidates remain ambiguous, paste the intended board URL into this field. A configured URL lets ShipCode sync cached issues to the board, detect the `Status` field, map columns, run readiness checks, and show the Kanban `board` button. A manual URL remains authoritative until you clear it; clearing allows auto-detection to run again on the next refresh.
 
 ## Accepted URL formats
 

@@ -29,6 +29,7 @@ const {
   listAllIssuesMock,
   fetchProjectPrioritiesMock,
   fetchProjectStatusesMock,
+  validateProjectStatusFieldMock,
   checkProjectReadinessMock,
   triageGitHubIssuesMock,
   enhancePrdDraftMock,
@@ -59,6 +60,7 @@ const {
   listAllIssuesMock: vi.fn(async () => [] as Array<unknown>),
   fetchProjectPrioritiesMock: vi.fn(),
   fetchProjectStatusesMock: vi.fn(),
+  validateProjectStatusFieldMock: vi.fn(),
   checkProjectReadinessMock: vi.fn(),
   triageGitHubIssuesMock: vi.fn(),
   enhancePrdDraftMock: vi.fn(),
@@ -110,6 +112,7 @@ vi.mock('@shipcode/agents', async () => {
     GhCli: MockGhCli,
     fetchProjectPriorities: fetchProjectPrioritiesMock,
     fetchProjectStatuses: fetchProjectStatusesMock,
+    validateProjectStatusField: validateProjectStatusFieldMock,
     checkProjectReadiness: checkProjectReadinessMock,
     triageGitHubIssues: triageGitHubIssuesMock,
     enhancePrdDraft: enhancePrdDraftMock,
@@ -257,6 +260,7 @@ describe('registerGitHubHandlers', () => {
     getRepoMetadataMock.mockResolvedValue({
       githubRepoId: 'repo-1',
       githubRepoFullName: 'acme/repo',
+      githubProjectUrl: null,
     });
     reopenIssueMock.mockReset();
     listAllIssuesMock.mockReset();
@@ -269,6 +273,13 @@ describe('registerGitHubHandlers', () => {
     });
     fetchProjectStatusesMock.mockReset();
     fetchProjectStatusesMock.mockResolvedValue(new Map());
+    validateProjectStatusFieldMock.mockReset();
+    validateProjectStatusFieldMock.mockResolvedValue({
+      ok: false,
+      reason: 'No project configured',
+      availableOptions: [],
+      mapping: null,
+    });
     triageGitHubIssuesMock.mockReset();
     triageGitHubIssuesMock.mockResolvedValue({
       provider: 'openrouter',
@@ -660,6 +671,64 @@ describe('registerGitHubHandlers', () => {
       projectId: 'project-1',
       issues: cachedAfterSync,
     });
+  });
+
+  it('probes repo metadata at most once per session for a board-less repo', async () => {
+    // Identity already resolved, but no associated Projects-v2 board (URL stays null).
+    const noBoardProject = {
+      ...baseProject,
+      id: 'project-noboard',
+      path: '/tmp',
+      githubRepoFullName: 'acme/repo',
+      githubProjectUrl: null,
+    };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => noBoardProject),
+        updateGithubRepoIdentity: vi.fn(),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          list: vi.fn(() => []),
+          getByNumber: vi.fn(() => null),
+          upsert: vi.fn(),
+          markClosedOnClose: vi.fn(),
+          updateState: vi.fn(),
+          clearArchivedAt: vi.fn(),
+          setPriority: vi.fn(),
+          setIssueType: vi.fn(),
+          archiveIssues: vi.fn(),
+          resetStaleApproval: vi.fn(() => 0),
+        },
+        [],
+      ),
+      issueEdges: { replaceBodyEdges: vi.fn() },
+      threads: {
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const refresh = handlers.get('github:refresh-issues');
+    if (!refresh) throw new Error('github:refresh-issues handler not registered');
+
+    await refresh(undefined, { projectId: 'project-noboard', force: true });
+    await refresh(undefined, { projectId: 'project-noboard', force: true });
+
+    // Metadata is probed once; the session negative-cache suppresses the second (and
+    // every subsequent) probe so board-less repos don't re-run `gh repo view` forever.
+    expect(getRepoMetadataMock).toHaveBeenCalledTimes(1);
   });
 
   it('refresh keeps terminal local thread state ahead of stale active pipeline labels', async () => {
@@ -5233,11 +5302,24 @@ describe('registerGitHubHandlers', () => {
     };
 
     function buildQueries(project: typeof projectWithBoard | typeof projectWithoutBoard) {
+      let currentProject = { ...project };
       const cachedAfterUpsert = [{ ...baseIssue, fetchedAt: new Date().toISOString() }];
       return {
         projects: {
-          getById: vi.fn(() => project),
+          getById: vi.fn(() => currentProject),
           updateGithubRepoIdentity: vi.fn(),
+          updateGithubProjectUrl: vi.fn((_projectId: string, githubProjectUrl: string | null) => {
+            currentProject = { ...currentProject, githubProjectUrl } as typeof currentProject;
+          }),
+          setGithubStatusMapping: vi.fn((_projectId: string, githubStatusMapping: unknown) => {
+            currentProject = {
+              ...currentProject,
+              githubStatusMapping: githubStatusMapping as never,
+            };
+          }),
+          clearGithubStatusMapping: vi.fn(() => {
+            currentProject = { ...currentProject, githubStatusMapping: null };
+          }),
         },
         githubIssues: buildGithubIssuesQueries({
           list: vi
@@ -5323,6 +5405,55 @@ describe('registerGitHubHandlers', () => {
 
       expect(fetchProjectPrioritiesMock).not.toHaveBeenCalled();
       expect(queries.githubIssues.setPriority).not.toHaveBeenCalled();
+    });
+
+    it('backfills the repository-associated GitHub Project before refreshing', async () => {
+      const queries = buildQueries(projectWithoutBoard);
+      const projectUrl = 'https://github.com/orgs/acme/projects/1';
+      const mapping = {
+        todo: { name: 'Backlog', color: 'GRAY' },
+        inProgress: { name: 'In Progress', color: 'YELLOW' },
+        humanReview: { name: 'Human Review', color: 'BLUE' },
+        deferred: { name: 'Deferred', color: 'GRAY' },
+        done: { name: 'Done', color: 'PURPLE' },
+      };
+      getRepoMetadataMock.mockResolvedValueOnce({
+        githubRepoId: 'repo-1',
+        githubRepoFullName: 'acme/repo',
+        githubProjectUrl: projectUrl,
+      });
+      validateProjectStatusFieldMock.mockResolvedValueOnce({ ok: true, mapping });
+      listAllIssuesMock.mockResolvedValue([]);
+
+      registerGitHubHandlers({
+        ipcMain,
+        mainWindow: mainWindow as never,
+        queries: queries as never,
+        pipeline: {} as never,
+        emitter: { emit: vi.fn() } as never,
+        notificationService: {} as never,
+        chatNotificationService: {} as never,
+        processManager: {} as never,
+      });
+
+      const refresh = handlers.get('github:refresh-issues');
+      if (!refresh) throw new Error('github:refresh-issues handler not registered');
+      await refresh(undefined, { projectId: 'project-1', force: true });
+
+      expect(queries.projects.updateGithubProjectUrl).toHaveBeenCalledWith(
+        projectWithoutBoard.id,
+        projectUrl,
+      );
+      expect(queries.projects.setGithubStatusMapping).toHaveBeenCalledWith(
+        projectWithoutBoard.id,
+        mapping,
+      );
+      expect(fetchProjectPrioritiesMock).toHaveBeenCalledWith(
+        expect.objectContaining({ projectUrl }),
+      );
+      expect(fetchProjectStatusesMock).toHaveBeenCalledWith(
+        expect.objectContaining({ projectUrl }),
+      );
     });
 
     it('swallows fetchProjectPriorities errors so refresh still completes', async () => {

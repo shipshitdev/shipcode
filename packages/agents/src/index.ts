@@ -32,7 +32,7 @@ export {
   readContextFile,
 } from './context-generator';
 export { loadRepoContext, loadStructuredRepoContext } from './context-loader';
-export type { PrReviewEvent, SubmitPrReviewResult } from './github/gh-cli';
+export type { GithubRepoMetadata, PrReviewEvent, SubmitPrReviewResult } from './github/gh-cli';
 export { GhCli } from './github/gh-cli';
 export type {
   ApplyTriageRulesOnceOptions,
