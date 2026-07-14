@@ -281,6 +281,7 @@ function makeExecutionHarness(context = makeContext()) {
     runShellCommand: vi.fn(),
     runProviderPhase: vi.fn(async () => ({ rawOutput: 'done', exitCode: 0 })),
     postTaskGraphComment: vi.fn(),
+    postWorkpadComment: vi.fn(),
   } as unknown as PipelineRuntime;
   const handlers = createExecutionPhaseHandlers({
     deps: deps as never,
@@ -1386,6 +1387,93 @@ describe('execution phase handlers', () => {
       ).taskGraphs.markNodeCompletedAndPromote,
     ).toHaveBeenCalledWith('node-1');
     expect(harness.runtime.runProviderPhase).toHaveBeenCalledTimes(2);
+  });
+
+  it('verifies a node on workspace criteria only and lets the pipeline own the Workpad write (#394)', async () => {
+    // Regression: a node carrying a GitHub-write acceptance criterion (the old
+    // Workpad requirement) must NOT be handed to the diff-only verifier — the
+    // sandboxed executor can never satisfy it. The node passes on its
+    // workspace-verifiable criterion, and the pipeline (main process) performs
+    // the Workpad update.
+    const context = makeContext({ worktreePath: process.cwd() });
+    const harness = makeExecutionHarness(context);
+    const node = {
+      id: 'node-1',
+      stableKey: 'step-1',
+      title: 'Implement the exporter',
+      description: 'Do node',
+      status: 'ready',
+      githubIssueNumber: null,
+      order: 1,
+      files: ['src/a.ts'],
+      acceptanceCriteria: [
+        'src/a.ts exports the new function',
+        'Update the single GitHub issue #42 ShipCode Workpad comment in place',
+      ],
+      surfaces: [],
+      agentRole: 'backend',
+      suggestedReasoningEffort: 'medium',
+    };
+    const completedGraph = {
+      id: 'graph-1',
+      mode: 'github-subissues',
+      status: 'active',
+      nodes: [{ ...node, status: 'completed' }],
+      edges: [],
+    };
+    (harness.deps as never as { taskGraphs: unknown }).taskGraphs = {
+      getByPlanId: vi.fn(() => ({
+        id: 'graph-1',
+        mode: 'github-subissues',
+        status: 'active',
+        nodes: [node],
+        edges: [],
+      })),
+      getNextReadyNode: vi.fn(() => node),
+      updateNodeStatus: vi.fn(),
+      markNodeCompletedAndPromote: vi.fn(() => completedGraph),
+      markNodeFailed: vi.fn(() => completedGraph),
+    } as never;
+    vi.mocked(harness.runtime.runProviderPhase)
+      .mockResolvedValueOnce({ rawOutput: 'done', exitCode: 0 })
+      .mockResolvedValueOnce({ rawOutput: verificationPassed, exitCode: 0 });
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
+      if (args[0] === 'rev-parse') return 'anchor-sha\n';
+      if (args[0] === 'status') return '';
+      if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
+      return '';
+    });
+
+    await harness.handlers.startExecution('thread-1', plan as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // The verifier prompt (2nd runProviderPhase call) must exclude the Workpad
+    // criterion and keep the workspace one.
+    const verifyCall = vi
+      .mocked(harness.runtime.runProviderPhase)
+      .mock.calls.find((call) => (call[1] as { phase?: string })?.phase === 'verify');
+    expect(verifyCall).toBeDefined();
+    const verifyPrompt = verifyCall?.[2] as string;
+    expect(verifyPrompt).toContain('src/a.ts exports the new function');
+    expect(verifyPrompt).not.toContain('Workpad');
+
+    // Node passed on the workspace criterion — thread advances, not fails.
+    expect(
+      (
+        harness.deps as never as {
+          taskGraphs: { markNodeCompletedAndPromote: ReturnType<typeof vi.fn> };
+        }
+      ).taskGraphs.markNodeCompletedAndPromote,
+    ).toHaveBeenCalledWith('node-1');
+
+    // The pipeline — not the executor — performs the Workpad update.
+    expect(harness.runtime.postWorkpadComment).toHaveBeenCalledWith(
+      context,
+      plan,
+      expect.objectContaining({ id: 'graph-1' }),
+    );
   });
 
   it('completes a task graph node from cumulative diff when a retry finds it already committed', async () => {

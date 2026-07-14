@@ -112,6 +112,11 @@ export interface PipelineRuntime {
   ) => void;
   postPlanComment: (context: PipelineContext, plan: ShipCodePlan) => Promise<void>;
   postTaskGraphComment: (context: PipelineContext, graph: TaskGraphWithNodes) => Promise<void>;
+  postWorkpadComment: (
+    context: PipelineContext,
+    plan: ShipCodePlan,
+    graph?: TaskGraphWithNodes | null,
+  ) => Promise<void>;
 }
 
 /**

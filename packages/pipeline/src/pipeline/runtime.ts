@@ -1,8 +1,10 @@
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { hostname } from 'node:os';
 import { promisify } from 'node:util';
 import {
   formatPipelineTimelineComment,
   formatPlanComment,
+  formatWorkpadComment,
   GhCli,
   isPoolExhausted,
   measurePhasePromptTelemetry,
@@ -12,6 +14,7 @@ import {
   type ProviderPhase,
   type ProviderRequest,
   toPersistedPromptTelemetryMaterials,
+  WORKPAD_MARKER,
 } from '@shipcode/agents';
 import {
   type AppSettings,
@@ -19,6 +22,7 @@ import {
   formatTaskNodeIssueBody,
   isRealGithubIssueNumber,
   type ProviderRunMode,
+  type ShipCodePlan,
   TASK_GRAPH_COMMENT_MARKER,
   type TaskGraphWithNodes,
 } from '@shipcode/shared';
@@ -891,6 +895,52 @@ export function createPipelineRuntime(
     }
   }
 
+  /**
+   * `<host>:<abs-cwd>@<short-sha>` stamp for the Workpad. Best-effort: a git
+   * failure (detached worktree, no commits yet) degrades the sha to `unknown`
+   * rather than throwing.
+   */
+  function buildWorkpadEnvStamp(context: PipelineContext): string {
+    const cwd = context.worktreePath ?? context.projectPath;
+    let shortSha = 'unknown';
+    try {
+      shortSha = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+        cwd,
+        encoding: 'utf-8',
+      }).trim();
+    } catch {
+      // no HEAD yet / not a repo — keep 'unknown'
+    }
+    return `${hostname()}:${cwd}@${shortSha}`;
+  }
+
+  /**
+   * Upsert the single canonical ShipCode Workpad comment on the issue. This is
+   * the pipeline's replacement for the old executor-driven workpad protocol:
+   * the executor runs in a network-disabled sandbox and cannot reach GitHub, so
+   * the main process (which has network + `gh` auth) owns this write (#394).
+   */
+  async function postWorkpadComment(
+    context: PipelineContext,
+    plan: ShipCodePlan,
+    graph?: TaskGraphWithNodes | null,
+  ): Promise<void> {
+    if (!isRealGithubIssueNumber(context.githubIssueNumber)) return;
+    try {
+      const body = formatWorkpadComment({
+        issueNumber: context.githubIssueNumber,
+        plan,
+        graph: graph ?? null,
+        envStamp: buildWorkpadEnvStamp(context),
+      });
+      if (!body) return;
+      const ghCli = new GhCli(context.projectPath);
+      await ghCli.upsertIssueCommentByMarker(context.githubIssueNumber, WORKPAD_MARKER, body);
+    } catch (error) {
+      console.error('[pipeline] Failed to post workpad comment:', error);
+    }
+  }
+
   async function ensureTaskNodeIssues(
     context: PipelineContext,
     ghCli: GhCli,
@@ -962,5 +1012,6 @@ export function createPipelineRuntime(
     emitPhase,
     postPlanComment,
     postTaskGraphComment,
+    postWorkpadComment,
   };
 }

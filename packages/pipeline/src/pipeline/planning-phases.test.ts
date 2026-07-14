@@ -209,6 +209,7 @@ function makePlanningHarness(context = makePlanningContext()) {
     getVerifyCommands: vi.fn(() => []),
     postPlanComment: vi.fn(),
     postTaskGraphComment: vi.fn(),
+    postWorkpadComment: vi.fn(),
     resolveAgentForPhase: vi.fn(() => context.plannerModel),
     runProviderPhase: vi.fn(async () => ({ rawOutput: planBlock, exitCode: 0 })),
   } as unknown as PipelineRuntime;
