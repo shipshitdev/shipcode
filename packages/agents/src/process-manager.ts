@@ -305,6 +305,39 @@ function collectDescendantPids(rootPid: number, rows: PsRow[]): Set<number> {
   return descendants;
 }
 
+interface PreparedProcessSpawn {
+  id: string;
+  outputMode: ManagedProcessOutputMode;
+  resolvedCommand: string;
+  env: Record<string, string>;
+  startedAt: number;
+}
+
+function prepareSpawn(
+  command: string,
+  cwd: string,
+  options: ManagedProcessSpawnOptions,
+): PreparedProcessSpawn {
+  assertWorkspacePolicy(cwd, options);
+
+  if (!cachedEnv || Date.now() - cachedEnvTimestamp > CACHED_ENV_TTL_MS) {
+    cachedEnv = getShellEnv();
+    cachedEnvTimestamp = Date.now();
+  }
+
+  return {
+    id: nanoid(),
+    outputMode: options.outputMode ?? 'normalized',
+    resolvedCommand: resolveCommand(command),
+    env: mergeSafeEnv(
+      cachedEnv,
+      options.extraEnv,
+      options.envKeyAllowlist ? new Set(options.envKeyAllowlist) : undefined,
+    ),
+    startedAt: Date.now(),
+  };
+}
+
 export class ProcessManager extends EventEmitter {
   private processes: Map<string, ManagedProcess> = new Map();
 
@@ -316,21 +349,11 @@ export class ProcessManager extends EventEmitter {
     threadId?: string,
     options: ManagedProcessSpawnOptions = {},
   ): ManagedProcess {
-    const id = nanoid();
-    const outputMode = options.outputMode ?? 'normalized';
-
     // Defense in depth: when the caller declares a workspaceRoot policy,
     // assert the cwd before spawning. A mismatch here means the pipeline
     // is about to run an agent in the wrong directory — fail loud, never
     // continue.
-    assertWorkspacePolicy(cwd, options);
-
-    if (!cachedEnv || Date.now() - cachedEnvTimestamp > CACHED_ENV_TTL_MS) {
-      cachedEnv = getShellEnv();
-      cachedEnvTimestamp = Date.now();
-    }
-
-    const resolvedCommand = resolveCommand(command);
+    const { id, outputMode, resolvedCommand, env, startedAt } = prepareSpawn(command, cwd, options);
 
     let ptyProcess: pty.IPty;
     try {
@@ -339,11 +362,7 @@ export class ProcessManager extends EventEmitter {
         cols: 120,
         rows: 30,
         cwd,
-        env: mergeSafeEnv(
-          cachedEnv,
-          options.extraEnv,
-          options.envKeyAllowlist ? new Set(options.envKeyAllowlist) : undefined,
-        ),
+        env,
       });
     } catch (err) {
       // Spawn failed (e.g. binary not found, alias instead of real path).
@@ -361,8 +380,8 @@ export class ProcessManager extends EventEmitter {
         threadId,
         outputMode,
         stdinMode: 'tty',
-        lastEventAt: Date.now(),
-        startedAt: Date.now(),
+        lastEventAt: startedAt,
+        startedAt,
       };
       this.processes.set(id, managed);
 
@@ -389,8 +408,8 @@ export class ProcessManager extends EventEmitter {
       exitCode: null,
       outputMode,
       stdinMode: 'tty',
-      lastEventAt: Date.now(),
-      startedAt: Date.now(),
+      lastEventAt: startedAt,
+      startedAt,
     };
 
     this.processes.set(id, managed);
@@ -434,25 +453,10 @@ export class ProcessManager extends EventEmitter {
     threadId?: string,
     options: ManagedProcessSpawnOptions = {},
   ): ManagedProcess {
-    const id = nanoid();
-    const outputMode = options.outputMode ?? 'normalized';
-
-    assertWorkspacePolicy(cwd, options);
-
-    if (!cachedEnv || Date.now() - cachedEnvTimestamp > CACHED_ENV_TTL_MS) {
-      cachedEnv = getShellEnv();
-      cachedEnvTimestamp = Date.now();
-    }
-
-    const resolvedCommand = resolveCommand(command);
+    const { id, outputMode, resolvedCommand, env, startedAt } = prepareSpawn(command, cwd, options);
     let child: ChildProcessWithoutNullStreams;
 
     const detached = options.detached ?? false;
-    const env = mergeSafeEnv(
-      cachedEnv,
-      options.extraEnv,
-      options.envKeyAllowlist ? new Set(options.envKeyAllowlist) : undefined,
-    );
 
     try {
       child = spawnChild(resolvedCommand, args, {
@@ -476,8 +480,8 @@ export class ProcessManager extends EventEmitter {
         threadId,
         outputMode,
         stdinMode: 'pipe',
-        lastEventAt: Date.now(),
-        startedAt: Date.now(),
+        lastEventAt: startedAt,
+        startedAt,
       };
       this.processes.set(id, managed);
 
@@ -504,8 +508,8 @@ export class ProcessManager extends EventEmitter {
       outputMode,
       stdinMode: 'pipe',
       detached,
-      lastEventAt: Date.now(),
-      startedAt: Date.now(),
+      lastEventAt: startedAt,
+      startedAt,
     };
 
     this.processes.set(id, managed);

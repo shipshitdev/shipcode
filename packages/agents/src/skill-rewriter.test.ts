@@ -244,6 +244,23 @@ describe('rewriteSkillDraft', () => {
     ).rejects.toThrow('Codex skill rewriting is disabled because it cannot run in no-tools mode');
     expect(mockSpawn).not.toHaveBeenCalled();
   });
+
+  it('rejects model IDs that could inject Claude CLI arguments', async () => {
+    await expect(
+      rewriteSkillDraft({
+        phase: 'plan-generation',
+        currentContent: VALID_PLAN_SKILL,
+        bundledContent: VALID_PLAN_SKILL,
+        requiredSlots: ['USER_PROMPT', 'THREAD_ID', 'OUTPUT_SCHEMA'],
+        userInstruction: 'keep the contract',
+        projectContext: '',
+        cwd: '/repo',
+        cli: 'claude',
+        modelId: '--allowedTools=Bash',
+      }),
+    ).rejects.toThrow('Invalid model ID: --allowedTools=Bash');
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
 });
 
 describe('extractRewrittenSkill', () => {
