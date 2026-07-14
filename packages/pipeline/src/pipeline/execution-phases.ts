@@ -763,6 +763,35 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             );
         context.worktreePath = worktree.worktreePath;
         deps.threads.setWorktree(threadId, worktree.branch, worktree.worktreePath);
+
+        if (worktree.baseStale) {
+          // Offline / no remote / unknown branch: we forked from the local ref,
+          // which may be behind origin (#395). Surface it so a failed run is
+          // attributable to a stale base rather than a mystery.
+          emitTerminalLifecycle(
+            threadId,
+            `[worktree] Warning: could not fetch origin/${context.baseBranch || 'default branch'} — base may be stale (forked from local ref)\r\n`,
+          );
+        }
+
+        // The worktree forked from `origin/<base>` (freshly fetched), which can
+        // be ahead of the local base whose SHA was recorded at pipeline start.
+        // Re-record the fork point from the real fork ref so diff bases (see
+        // resolveWorktreeDiffBase) don't span hundreds of upstream commits.
+        if (worktree.baseRef) {
+          try {
+            const forkSha = execFileSync('git', ['rev-parse', worktree.baseRef], {
+              cwd: context.projectPath,
+              encoding: 'utf-8',
+            }).trim();
+            if (forkSha && forkSha !== context.forkPointSha) {
+              context.forkPointSha = forkSha;
+              deps.threads.setForkPointSha(threadId, forkSha);
+            }
+          } catch {
+            // Keep the start-time fork point if the fork ref can't be resolved.
+          }
+        }
       } catch (error) {
         console.error(`[pipeline] worktree creation failed for thread ${threadId}:`, error);
         emitPhase(threadId, 'failed', `Worktree creation failed: ${String(error)}`);

@@ -290,6 +290,27 @@ describe('ThreadQueries', () => {
     expect(updated.forkPointSha).toBe('abc123');
   });
 
+  it('setForkPointSha() re-records the fork point without touching other fields', () => {
+    const t = threads.create(projectId, 'a', 'A');
+    threads.updateAutonomousFields(t.id, {
+      autonomous: true,
+      reviewRound: 3,
+      executorModel: 'claude',
+      baseBranch: 'main',
+      forkPointSha: 'stale-local-sha',
+    });
+
+    threads.setForkPointSha(t.id, 'fresh-origin-sha');
+
+    const updated = threads.getById(t.id);
+    expect(updated?.forkPointSha).toBe('fresh-origin-sha');
+    // Only the fork point changes; the other autonomous fields are untouched.
+    expect(updated?.autonomous).toBe(true);
+    expect(updated?.reviewRound).toBe(3);
+    expect(updated?.executorModel).toBe('claude');
+    expect(updated?.baseBranch).toBe('main');
+  });
+
   it('updateAutonomousFields() persists false autonomous flag', () => {
     const t = threads.create(projectId, 'a', 'A');
     threads.updateAutonomousFields(t.id, {

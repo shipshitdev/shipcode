@@ -10,6 +10,22 @@ import {
   type WorktreeArtifactCleanupResult,
 } from './worktree-artifacts';
 
+export interface WorktreeCreateResult {
+  worktreePath: string;
+  branch: string;
+  /**
+   * The ref the worktree was actually forked from. Normally `origin/<base>`
+   * (after a fresh fetch); falls back to the local `<base>` when the fetch
+   * failed.
+   */
+  baseRef: string;
+  /**
+   * True when the origin fetch failed and we forked from a possibly-stale local
+   * ref. Callers should surface a "base may be stale" warning to the user.
+   */
+  baseStale: boolean;
+}
+
 export interface WorktreeManagerOptions {
   /**
    * User-configured worktree root.
@@ -123,23 +139,20 @@ export class WorktreeManager {
     issueNumber: number,
     title: string,
     baseBranch?: string,
-  ): Promise<{ worktreePath: string; branch: string }>;
+  ): Promise<WorktreeCreateResult>;
   /**
    * Create a worktree for a non-issue thread. Pass a title for slug-based names.
    */
-  async create(
-    threadId: string,
-    baseBranch?: string,
-  ): Promise<{ worktreePath: string; branch: string }>;
+  async create(threadId: string, baseBranch?: string): Promise<WorktreeCreateResult>;
   async create(
     threadId: string,
     title: string,
     baseBranch?: string,
-  ): Promise<{ worktreePath: string; branch: string }>;
+  ): Promise<WorktreeCreateResult>;
   async create(
     idOrNumber: string | number,
     ...rest: [titleOrBase?: string, baseBranch?: string]
-  ): Promise<{ worktreePath: string; branch: string }> {
+  ): Promise<WorktreeCreateResult> {
     const [titleOrBase, baseBranch] = rest;
     const parent = resolveWorktreeParent(this.projectPath, this.options.worktreeRoot ?? null);
     const hasExplicitThreadTitle = typeof idOrNumber === 'string' && rest.length >= 2;
@@ -169,6 +182,11 @@ export class WorktreeManager {
       dirName = threadTitle ? slugify(threadTitle) || idOrNumber : idOrNumber;
     }
 
+    // Fork from the freshest remote tip, not a possibly-stale local ref.
+    // Resolve once, before the retry loop, so a concurrent-collision retry
+    // never re-fetches.
+    const { ref: forkRef, stale: baseStale } = await this.resolveForkBase(base);
+
     // Retry loop: if a concurrent start grabs the branch between our check
     // and the actual `worktree add`, bump the suffix and try again.
     const MAX_RETRIES = 3;
@@ -182,9 +200,9 @@ export class WorktreeManager {
           '-b',
           branch,
           worktreePath,
-          base,
+          forkRef,
         ]);
-        return { worktreePath, branch };
+        return { worktreePath, branch, baseRef: forkRef, baseStale };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const isCollision = /already exists|is already checked out/i.test(msg);
@@ -325,5 +343,29 @@ export class WorktreeManager {
 
   private async getDefaultBranch(): Promise<string> {
     return resolveDefaultBranch(this.git);
+  }
+
+  /**
+   * Fetch the base branch from origin so a new worktree forks from the freshest
+   * remote tip rather than a possibly-stale local ref.
+   *
+   * The #395 incident: local `master` was 669 commits behind origin, so
+   * `git worktree add -b <branch> <path> master` forked from six-week-old code.
+   * Plans referenced code that did not exist on the base and every run failed
+   * verification.
+   *
+   * On any fetch failure — offline, no `origin` remote, or a base branch that
+   * does not exist on the remote — fall back to the local ref and flag it stale
+   * so callers can warn the user instead of silently forking from old code.
+   */
+  private async resolveForkBase(base: string): Promise<{ ref: string; stale: boolean }> {
+    // Already a remote-tracking ref: nothing to freshen locally, use as-is.
+    if (base.startsWith('origin/')) return { ref: base, stale: false };
+    try {
+      await this.git.fetch('origin', base);
+      return { ref: `origin/${base}`, stale: false };
+    } catch {
+      return { ref: base, stale: true };
+    }
   }
 }
