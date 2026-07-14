@@ -15,6 +15,7 @@ const execFileAsync = promisify(execFile);
 const AUTO_FIX_FAILURE_OUTPUT_MAX = 8_000;
 const EXECUTION_RESUME_PROMPT_MAX = 24_000;
 const EXECUTION_RESUME_GIT_OUTPUT_MAX = 12_000;
+const EXECUTION_RESUME_GIT_TIMEOUT_MS = 15_000;
 const EXECUTION_RESUME_TERMINAL_LIMIT = 120;
 export const RUN_TIMELINE_TERMINAL_LIMIT = 40;
 export const STEERING_INSTRUCTION_MAX = 4_000;
@@ -111,6 +112,7 @@ async function readGitResumeOutput(cwd: string, args: string[], label: string): 
       cwd,
       encoding: 'utf8',
       maxBuffer: EXECUTION_RESUME_GIT_OUTPUT_MAX * 4,
+      timeout: EXECUTION_RESUME_GIT_TIMEOUT_MS,
     });
     return clampResumeText(String(stdout), EXECUTION_RESUME_GIT_OUTPUT_MAX, label);
   } catch (error) {
