@@ -235,6 +235,19 @@ describe('prd-attachments', () => {
       expect(readResult.errors[0]).toMatch(/cannot read file/i);
       openSpy.mockRestore();
 
+      const partialRead = tmpFile('.png', PNG_MAGIC);
+      const readSpy = vi.spyOn(fs, 'readSync').mockImplementationOnce(() => {
+        throw new Error('read failed');
+      });
+      const closeSpy = vi.spyOn(fs, 'closeSync');
+
+      const partialReadResult = stagePrdAttachments(id, [partialRead]);
+      expect(partialReadResult.staged).toHaveLength(0);
+      expect(partialReadResult.errors[0]).toMatch(/cannot read file/i);
+      expect(closeSpy).toHaveBeenCalledTimes(1);
+      readSpy.mockRestore();
+      closeSpy.mockRestore();
+
       const copyFail = tmpFile('.png', PNG_MAGIC);
       const copySpy = vi.spyOn(fs, 'copyFileSync').mockImplementationOnce(() => {
         throw new Error('copy failed');

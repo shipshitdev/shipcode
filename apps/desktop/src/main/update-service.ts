@@ -41,6 +41,7 @@ interface GithubReleaseResponse {
 export class UpdateService {
   private mainWindow: BrowserWindow;
   private status: UpdateStatus;
+  private initialTimer: NodeJS.Timeout | null = null;
   private timer: NodeJS.Timeout | null = null;
   private inFlight: Promise<UpdateStatus> | null = null;
 
@@ -60,7 +61,9 @@ export class UpdateService {
   }
 
   start(): void {
-    setTimeout(() => {
+    if (this.initialTimer || this.timer) return;
+    this.initialTimer = setTimeout(() => {
+      this.initialTimer = null;
       void this.checkNow();
     }, INITIAL_CHECK_DELAY_MS);
     this.timer = setInterval(() => {
@@ -69,6 +72,10 @@ export class UpdateService {
   }
 
   stop(): void {
+    if (this.initialTimer) {
+      clearTimeout(this.initialTimer);
+      this.initialTimer = null;
+    }
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
