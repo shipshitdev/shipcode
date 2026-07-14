@@ -667,6 +667,64 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
+  it('probes repo metadata at most once per session for a board-less repo', async () => {
+    // Identity already resolved, but no associated Projects-v2 board (URL stays null).
+    const noBoardProject = {
+      ...baseProject,
+      id: 'project-noboard',
+      path: '/tmp',
+      githubRepoFullName: 'acme/repo',
+      githubProjectUrl: null,
+    };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => noBoardProject),
+        updateGithubRepoIdentity: vi.fn(),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          list: vi.fn(() => []),
+          getByNumber: vi.fn(() => null),
+          upsert: vi.fn(),
+          markClosedOnClose: vi.fn(),
+          updateState: vi.fn(),
+          clearArchivedAt: vi.fn(),
+          setPriority: vi.fn(),
+          setIssueType: vi.fn(),
+          archiveIssues: vi.fn(),
+          resetStaleApproval: vi.fn(() => 0),
+        },
+        [],
+      ),
+      issueEdges: { replaceBodyEdges: vi.fn() },
+      threads: {
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const refresh = handlers.get('github:refresh-issues');
+    if (!refresh) throw new Error('github:refresh-issues handler not registered');
+
+    await refresh(undefined, { projectId: 'project-noboard', force: true });
+    await refresh(undefined, { projectId: 'project-noboard', force: true });
+
+    // Metadata is probed once; the session negative-cache suppresses the second (and
+    // every subsequent) probe so board-less repos don't re-run `gh repo view` forever.
+    expect(getRepoMetadataMock).toHaveBeenCalledTimes(1);
+  });
+
   it('refresh keeps terminal local thread state ahead of stale active pipeline labels', async () => {
     const failedThreadIssue = {
       ...baseIssue,

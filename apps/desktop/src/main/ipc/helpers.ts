@@ -72,6 +72,24 @@ export function enrichProjectPaths(projects: import('@shipcode/shared').Project[
   });
 }
 
+/**
+ * Projects whose GitHub Projects-v2 board has already been probed this session.
+ * A repo with no associated board legitimately resolves to `githubProjectUrl: null`,
+ * so without this guard every `github:refresh-issues` (fired on nearly every UI
+ * action) would re-run `gh repo view … projectsV2` forever for board-less repos.
+ * Session-scoped: a probe runs at most once per project per app launch, and a manual
+ * URL clear re-arms detection so the documented "clearing resumes auto-detect" holds.
+ */
+const githubProjectBoardChecked = new Set<string>();
+
+export function hasCheckedGithubProjectBoard(projectId: string): boolean {
+  return githubProjectBoardChecked.has(projectId);
+}
+
+export function markGithubProjectBoardChecked(projectId: string): void {
+  githubProjectBoardChecked.add(projectId);
+}
+
 export async function persistGithubProjectConfiguration({
   queries,
   projectId,
@@ -88,6 +106,8 @@ export async function persistGithubProjectConfiguration({
   queries.projects.updateGithubProjectUrl(projectId, projectUrl);
   if (!projectUrl) {
     queries.projects.clearGithubStatusMapping(projectId);
+    // A manual clear should let auto-detection run again on the next refresh.
+    githubProjectBoardChecked.delete(projectId);
     return;
   }
 

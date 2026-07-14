@@ -39,6 +39,8 @@ import { PipelineScheduler } from '../pipeline-scheduler';
 import {
   assertPrdRewriteModelSupported,
   attachIssueToConfiguredProjectBoard,
+  hasCheckedGithubProjectBoard,
+  markGithubProjectBoardChecked,
   persistGithubProjectConfiguration,
   sendGithubIssuesUpdated,
   syncLinkedPullRequestFeedback,
@@ -264,10 +266,20 @@ export function registerGitHubHandlers({
         let githubRepoFullName =
           project.githubRepoFullName ??
           (githubRemoteRef ? `${githubRemoteRef.owner}/${githubRemoteRef.repo}` : null);
-        if (!project.githubRepoFullName || !project.githubProjectUrl) {
+        // Fetch repo metadata only when identity is still unknown, or when the board
+        // hasn't yet been probed this session. A board-less repo resolves to a null
+        // project URL forever, so gating solely on `!githubProjectUrl` would re-run
+        // `gh repo view … projectsV2` on every refresh (nearly every UI action).
+        const needsRepoIdentity = !project.githubRepoFullName;
+        const needsBoardDetection =
+          !project.githubProjectUrl && !hasCheckedGithubProjectBoard(projectId);
+        if (needsRepoIdentity || needsBoardDetection) {
           try {
             const metadata = await ghCli.getRepoMetadata();
             githubRepoFullName = metadata.githubRepoFullName;
+            // The board was probed (found or not) — don't re-probe until the URL is
+            // manually cleared or the app restarts.
+            markGithubProjectBoardChecked(projectId);
             if (!project.githubRepoFullName) {
               queries.projects.updateGithubRepoIdentity(project.id, {
                 githubRepoId: metadata.githubRepoId,
