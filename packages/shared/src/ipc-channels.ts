@@ -94,6 +94,11 @@ export interface StagedPrdAttachment {
   sizeBytes: number;
 }
 
+export interface PrdMetadataFields {
+  estimatedComplexity: PrdEstimatedComplexity;
+  blastRadius: PrdBlastRadius;
+}
+
 // === Request-Response Channels (invoke/handle) ===
 
 export interface IpcInvokeChannels {
@@ -357,10 +362,7 @@ export interface IpcInvokeChannels {
       title: string;
       body: string;
       labels?: string[];
-      prdMetadata?: {
-        estimatedComplexity: PrdEstimatedComplexity;
-        blastRadius: PrdBlastRadius;
-      };
+      prdMetadata?: PrdMetadataFields;
     };
     result: { issue: GitHubIssueCacheRecord; projectAttachWarning: string | null };
   };
@@ -371,10 +373,7 @@ export interface IpcInvokeChannels {
       title: string;
       body: string;
       labels?: string[];
-      prdMetadata?: {
-        estimatedComplexity: PrdEstimatedComplexity;
-        blastRadius: PrdBlastRadius;
-      };
+      prdMetadata?: PrdMetadataFields;
     };
     result: GitHubIssueCacheRecord | null;
   };
