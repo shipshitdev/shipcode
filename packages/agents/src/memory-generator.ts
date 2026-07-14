@@ -3,25 +3,12 @@ import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { GeneratorCli, MemoryFileInfo, RepoMemoryStatus } from '@shipcode/shared';
 import { unwrapCliResultEnvelope } from './cli-result';
-import { runCliWithStdin } from './cli-stdin-runner';
 import { extractFencedJson } from './fenced-json';
+import { runNoToolsTextGeneration } from './no-tools-text-generation';
 
 const MEMORY_DIR = '.agents/memory';
 const OBSOLETE_CONTEXT_DIR = '.agents/context';
 const MEMORY_FENCE_TAG = 'shipcode-memory';
-const CLAUDE_TEXT_ENV_KEYS = [
-  'PATH',
-  'HOME',
-  'USER',
-  'SHELL',
-  'TERM',
-  'LANG',
-  'LC_ALL',
-  'LC_CTYPE',
-  'TMPDIR',
-  'ANTHROPIC_API_KEY',
-] as const;
-
 const GENERATED_MEMORY_FILES = [
   {
     key: 'goal',
@@ -288,14 +275,10 @@ function runMemoryCliWithStdin(
   if (cli === 'codex') {
     throw new Error('Codex memory generation is disabled because it cannot run in no-tools mode');
   }
-  const args = ['-p', '--output-format', 'json', '--max-turns', '1', '--allowedTools', ''];
-
-  return runCliWithStdin({
-    cli,
-    args,
-    input: prompt,
+  return runNoToolsTextGeneration({
+    prompt,
     cwd,
     timeoutMs,
-    envKeyAllowlist: CLAUDE_TEXT_ENV_KEYS,
+    maxTurns: 1,
   });
 }
