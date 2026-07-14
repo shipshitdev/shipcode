@@ -1,4 +1,5 @@
 import { createGhSyncService } from '@shipcode/pipeline';
+import type { PrdMetadataFields } from '@shipcode/shared';
 import type { IpcMain } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerGitHubHandlers } from './register-github-handlers';
@@ -11,6 +12,11 @@ vi.mock('../logger.service', () => ({
   },
   logEvent: vi.fn(),
 }));
+
+const PRD_METADATA_FIXTURE = {
+  estimatedComplexity: 'medium',
+  blastRadius: 'contained',
+} satisfies PrdMetadataFields;
 
 const {
   closeIssueMock,
@@ -3003,10 +3009,7 @@ describe('registerGitHubHandlers', () => {
         title: 'New issue',
         body: 'Body',
         labels: ['enhancement'],
-        prdMetadata: {
-          estimatedComplexity: 'medium',
-          blastRadius: 'contained',
-        },
+        prdMetadata: PRD_METADATA_FIXTURE,
       }),
     ).rejects.toThrow('Failed to create PRD metadata labels: blast:contained: missing permission');
 
