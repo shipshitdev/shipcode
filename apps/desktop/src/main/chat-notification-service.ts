@@ -82,7 +82,9 @@ export class ChatNotificationService {
   ) {}
 
   fire(kind: NotificationKind, thread: Thread, testSummary?: string) {
-    void this.deliver(kind, thread, testSummary);
+    void this.deliver(kind, thread, testSummary).catch((error) => {
+      log.error('[chat-notifications] delivery setup failed', error);
+    });
   }
 
   async sendTest(provider: 'discord' | 'telegram', projectId: string | null = null) {
@@ -129,23 +131,32 @@ export class ChatNotificationService {
 
     const discordRoute = this.resolveDiscordRoute(settings, project);
     if (discordRoute && this.shouldSend(`discord:${dedupeBase}`)) {
-      void this.sendDiscord(discordRoute, message);
+      this.deliverSafely('discord', this.sendDiscord(discordRoute, message));
     }
 
     const telegramRoute = this.resolveTelegramRoute(settings, project);
     if (telegramRoute && this.shouldSend(`telegram:${dedupeBase}`)) {
-      void this.sendTelegram(telegramRoute, message);
+      this.deliverSafely('telegram', this.sendTelegram(telegramRoute, message));
     }
   }
 
   private shouldSend(key: string): boolean {
     const now = Date.now();
+    for (const [cachedKey, sentAt] of this.lastSentAt) {
+      if (now - sentAt >= DEDUPE_WINDOW_MS) this.lastSentAt.delete(cachedKey);
+    }
     const last = this.lastSentAt.get(key);
     if (last && now - last < DEDUPE_WINDOW_MS) {
       return false;
     }
     this.lastSentAt.set(key, now);
     return true;
+  }
+
+  private deliverSafely(provider: 'discord' | 'telegram', delivery: Promise<unknown>): void {
+    void delivery.catch((error) => {
+      log.error(`[chat-notifications] ${provider} delivery failed`, error);
+    });
   }
 
   private resolveDiscordRoute(

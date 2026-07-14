@@ -1852,6 +1852,31 @@ describe('registerGitHubHandlers – branch coverage supplement', () => {
       // Still only called once
       expect(listIssueCommentsMock).toHaveBeenCalledTimes(1);
     });
+
+    it('evicts expired comment entries while populating another cache key', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-07-14T10:00:00Z'));
+        listIssueCommentsMock.mockResolvedValue([]);
+
+        const queries = {
+          projects: { getById: vi.fn(() => baseProject) },
+          githubIssues: buildGithubIssuesQueries({ getByNumber: vi.fn(() => baseIssue) }),
+        };
+        registerHandlers(queries);
+
+        const handler = handlers.get('github:list-comments');
+        if (!handler) throw new Error('handler not registered');
+
+        await handler(undefined, { projectId: 'cache-a', issueNumber: 42, force: true });
+        await vi.advanceTimersByTimeAsync(30_000);
+        await handler(undefined, { projectId: 'cache-b', issueNumber: 43, force: true });
+
+        expect(listIssueCommentsMock).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   // ---------------------------------------------------------------------------

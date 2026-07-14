@@ -65,6 +65,14 @@ const STALE_LINK_THREAD_STATUSES = new Set<string>([
   PIPELINE_PHASE.idle,
 ]);
 
+function evictExpiredIssueCommentsCacheEntries(now: number): void {
+  for (const [cacheKey, entry] of issueCommentsCache) {
+    if (now - entry.cachedAtMs >= ISSUE_COMMENT_TTL_MS) {
+      issueCommentsCache.delete(cacheKey);
+    }
+  }
+}
+
 function assertRealGithubIssue(issue: GitHubIssueCacheRecord, action: string): void {
   if (issue.isQuickMode || !isRealGithubIssueNumber(issue.issueNumber)) {
     throw new Error(`Quick tasks have no GitHub issue: cannot ${action}`);
@@ -1499,8 +1507,10 @@ export function registerGitHubHandlers({
       }: { projectId: string; issueNumber: number; force?: boolean },
     ) => {
       const cacheKey = `${projectId}:${issueNumber}`;
+      const now = Date.now();
+      evictExpiredIssueCommentsCacheEntries(now);
       const cached = issueCommentsCache.get(cacheKey);
-      if (!force && cached && Date.now() - cached.cachedAtMs < ISSUE_COMMENT_TTL_MS) {
+      if (!force && cached && now - cached.cachedAtMs < ISSUE_COMMENT_TTL_MS) {
         return cached.comments;
       }
 

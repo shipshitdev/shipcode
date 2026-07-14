@@ -63,10 +63,14 @@ export class NotificationService {
   ) {}
 
   markVerificationExhausted(threadId: string) {
-    this.verificationExhaustedAt.set(threadId, Date.now());
+    const now = Date.now();
+    this.pruneDedupeState(now);
+    this.verificationExhaustedAt.set(threadId, now);
   }
 
   fire(kind: NotificationKind, thread: Thread, testSummary?: string) {
+    const now = Date.now();
+    this.pruneDedupeState(now);
     const settings = this.settings.get();
     if (!settings.notificationsEnabled) return;
 
@@ -76,17 +80,17 @@ export class NotificationService {
     // Suppress 'failed' if verification-exhausted just fired for this thread.
     if (kind === 'failed') {
       const exhaustedAt = this.verificationExhaustedAt.get(thread.id);
-      if (exhaustedAt && Date.now() - exhaustedAt < DEDUPE_WINDOW_MS) {
+      if (exhaustedAt && now - exhaustedAt < DEDUPE_WINDOW_MS) {
         return;
       }
     }
 
     // Dedupe identical (threadId, kind) within the window.
     const last = this.lastFiredByThread.get(thread.id);
-    if (last && last.kind === kind && Date.now() - last.t < DEDUPE_WINDOW_MS) {
+    if (last && last.kind === kind && now - last.t < DEDUPE_WINDOW_MS) {
       return;
     }
-    this.lastFiredByThread.set(thread.id, { kind, t: Date.now() });
+    this.lastFiredByThread.set(thread.id, { kind, t: now });
 
     // Clear prior notifications (failed, verification_exhausted, etc.) before
     // creating the completed notification so stale failures don't linger in the inbox.
@@ -138,6 +142,17 @@ export class NotificationService {
     }
 
     if (settings.notificationBadgeEnabled) this.refreshBadge();
+  }
+
+  private pruneDedupeState(now: number): void {
+    for (const [threadId, last] of this.lastFiredByThread) {
+      if (now - last.t >= DEDUPE_WINDOW_MS) this.lastFiredByThread.delete(threadId);
+    }
+    for (const [threadId, exhaustedAt] of this.verificationExhaustedAt) {
+      if (now - exhaustedAt >= DEDUPE_WINDOW_MS) {
+        this.verificationExhaustedAt.delete(threadId);
+      }
+    }
   }
 
   refreshBadge() {
