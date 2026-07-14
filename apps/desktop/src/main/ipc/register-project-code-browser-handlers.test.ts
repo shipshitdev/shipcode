@@ -31,24 +31,25 @@ describe('registerProjectCodeBrowserHandlers', () => {
     });
   });
 
-  it.each(['code:list-tree', 'code:read-file', 'code:file-diff'])(
-    'logs full %s errors and exposes only the clamped first line',
-    async (channel) => {
-      const fullError = new Error(`${'x'.repeat(400)}\nstack trace`);
-      projects.getById.mockImplementationOnce(() => {
-        throw fullError;
-      });
-      const handler = handlers.get(channel);
-      if (!handler) throw new Error(`${channel} handler not registered`);
+  it.each([
+    'code:list-tree',
+    'code:read-file',
+    'code:file-diff',
+  ])('logs full %s errors and exposes only the clamped first line', async (channel) => {
+    const fullError = new Error(`${'x'.repeat(400)}\nstack trace`);
+    projects.getById.mockImplementationOnce(() => {
+      throw fullError;
+    });
+    const handler = handlers.get(channel);
+    if (!handler) throw new Error(`${channel} handler not registered`);
 
-      await expect(
-        handler(undefined, {
-          projectId: 'project-1',
-          worktreePath: '/tmp/worktree',
-          relativePath: 'src/index.ts',
-        }),
-      ).rejects.toThrow(`${'x'.repeat(279)}…`);
-      expect(logError).toHaveBeenCalledWith(`[${channel}]`, fullError);
-    },
-  );
+    await expect(
+      handler(undefined, {
+        projectId: 'project-1',
+        worktreePath: '/tmp/worktree',
+        relativePath: 'src/index.ts',
+      }),
+    ).rejects.toThrow(`${'x'.repeat(279)}…`);
+    expect(logError).toHaveBeenCalledWith(`[${channel}]`, fullError);
+  });
 });
