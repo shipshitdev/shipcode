@@ -104,7 +104,9 @@ describe('web component coverage', () => {
       button.click();
     });
 
-    expect(writeText).toHaveBeenCalledWith('brew install --cask shipshitdev/tap/shipcode');
+    expect(writeText).toHaveBeenCalledWith(
+      'brew tap shipshitdev/tap && brew install --cask shipshitdev/tap/shipcode',
+    );
     expect(button.textContent).toBe('Copied!');
 
     act(() => {

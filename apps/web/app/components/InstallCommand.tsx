@@ -1,9 +1,10 @@
 'use client';
 
+import { HOMEBREW_INSTALL_COMMAND } from '@shipcode/shared';
 import { useState } from 'react';
 
 const COMMANDS = {
-  desktop: 'brew install --cask shipshitdev/tap/shipcode',
+  desktop: HOMEBREW_INSTALL_COMMAND,
   cli: 'npx @shipshitdev/shipcode run 42',
 } as const;
 
