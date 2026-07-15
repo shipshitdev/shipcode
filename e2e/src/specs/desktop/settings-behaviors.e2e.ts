@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { PINNED_MODEL_DEFAULTS } from '@shipcode/shared';
 import { expect, type Harness, test } from '../../fixtures/electron-app';
 
 type SettingsSnapshot = {
@@ -210,7 +211,7 @@ test.describe('settings behavior contracts', () => {
         },
         { timeout: 15_000 },
       )
-      .toEqual({ provider: 'codex', model: 'gpt-5.5' });
+      .toEqual({ provider: 'codex', model: PINNED_MODEL_DEFAULTS.codex.phase });
 
     await page.locator('#auto-commit-mode').click();
     await page.getByRole('option', { name: 'Single commit', exact: true }).click();

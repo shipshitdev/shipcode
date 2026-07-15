@@ -1,4 +1,9 @@
-import type { AppSettings, ExecutorModel, IntegrationStatus } from '@shipcode/shared';
+import {
+  type AppSettings,
+  type ExecutorModel,
+  type IntegrationStatus,
+  PINNED_MODEL_DEFAULTS,
+} from '@shipcode/shared';
 import { SettingsSection } from '@shipcode/ui';
 import {
   Input,
@@ -12,14 +17,28 @@ import {
 } from '@shipshitdev/ui';
 import { getModelOptions, PROVIDER_DISPLAY } from '../model-provider-options-data';
 
-const AUTO_COMMIT_PROVIDERS: ExecutorModel[] = ['claude', 'codex', 'openrouter'];
+const AUTO_COMMIT_PROVIDERS = [
+  'claude',
+  'codex',
+  'openrouter',
+] as const satisfies readonly ExecutorModel[];
+type AutoCommitProvider = (typeof AUTO_COMMIT_PROVIDERS)[number];
+
+const AUTO_COMMIT_DEFAULT_MODELS = {
+  claude: PINNED_MODEL_DEFAULTS.claude.phase,
+  codex: PINNED_MODEL_DEFAULTS.codex.phase,
+  openrouter: PINNED_MODEL_DEFAULTS.openrouter.paid,
+} as const satisfies Record<AutoCommitProvider, string>;
 
 function defaultModelForProvider(
-  provider: ExecutorModel,
+  provider: AutoCommitProvider,
   integrationStatus: IntegrationStatus | undefined,
 ): string {
-  if (provider === 'openrouter') return 'openrouter/auto';
-  return getModelOptions(provider, integrationStatus)[0]?.value ?? provider;
+  const options = getModelOptions(provider, integrationStatus);
+  const pinnedDefault = AUTO_COMMIT_DEFAULT_MODELS[provider];
+  return options.some((option) => option.value === pinnedDefault)
+    ? pinnedDefault
+    : (options[0]?.value ?? provider);
 }
 
 export function AutoCommitSettingsSection({
@@ -38,7 +57,7 @@ export function AutoCommitSettingsSection({
   const modelSelection = usesProviderDefault ? '__default__' : settings.autoCommitModel;
 
   const updateProvider = (value: string) => {
-    const nextProvider = value as ExecutorModel;
+    const nextProvider = value as AutoCommitProvider;
     onUpdate({
       autoCommitProvider: nextProvider,
       autoCommitModel: defaultModelForProvider(nextProvider, integrationStatus),

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { DEFAULT_SETTINGS } from '@shipcode/shared';
+import { DEFAULT_SETTINGS, PINNED_MODEL_DEFAULTS } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -105,6 +105,7 @@ describe('settings leaf section callback coverage', () => {
     );
 
     fireEvent.click(screen.getAllByTestId('select-codex-claude')[0]);
+    fireEvent.click(screen.getAllByTestId('select-codex-codex')[0]);
     fireEvent.click(screen.getAllByTestId('select-codex-openrouter')[0]);
     fireEvent.click(screen.getAllByTestId('select-custom-model-__default__')[0]);
     fireEvent.blur(screen.getByLabelText('Custom model'), { target: { value: '   ' } });
@@ -118,11 +119,15 @@ describe('settings leaf section callback coverage', () => {
 
     expect(onUpdate).toHaveBeenCalledWith({
       autoCommitProvider: 'claude',
-      autoCommitModel: expect.any(String),
+      autoCommitModel: PINNED_MODEL_DEFAULTS.claude.phase,
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      autoCommitProvider: 'codex',
+      autoCommitModel: PINNED_MODEL_DEFAULTS.codex.phase,
     });
     expect(onUpdate).toHaveBeenCalledWith({
       autoCommitProvider: 'openrouter',
-      autoCommitModel: 'openrouter/auto',
+      autoCommitModel: PINNED_MODEL_DEFAULTS.openrouter.paid,
     });
     expect(onUpdate).toHaveBeenCalledWith({ autoCommitModel: 'codex' });
     expect(onUpdate).toHaveBeenCalledWith({ autoCommitMode: 'single' });

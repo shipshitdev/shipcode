@@ -334,6 +334,13 @@
       "spec": "src/specs/web/docs-route-coverage.e2e.ts"
     },
     {
+      "id": "web-download-content",
+      "surfaceId": "web-download",
+      "title": "Download route serves its redirect handoff content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
       "id": "docs-index-content",
       "surfaceId": "docs-index",
       "title": "Docs index route serves route-specific content",
@@ -362,6 +369,13 @@
       "spec": "src/specs/web/docs-route-coverage.e2e.ts"
     },
     {
+      "id": "docs-models-content",
+      "surfaceId": "docs-models",
+      "title": "Models docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
       "id": "docs-openrouter-content",
       "surfaceId": "docs-openrouter",
       "title": "OpenRouter docs route serves route-specific content",
@@ -379,6 +393,13 @@
       "id": "docs-pipeline-overview-content",
       "surfaceId": "docs-pipeline-overview",
       "title": "Pipeline overview docs route serves route-specific content",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-workflow-content",
+      "surfaceId": "docs-workflow",
+      "title": "WORKFLOW.md docs route serves route-specific content",
       "covered": true,
       "spec": "src/specs/web/docs-route-coverage.e2e.ts"
     },
