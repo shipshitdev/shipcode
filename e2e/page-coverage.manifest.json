@@ -276,6 +276,14 @@
       "spec": "src/specs/web/docs-route-coverage.e2e.ts"
     },
     {
+      "id": "docs-models",
+      "kind": "docs-route",
+      "title": "Models",
+      "path": "/models",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
       "id": "docs-openrouter",
       "kind": "docs-route",
       "title": "OpenRouter",
@@ -296,6 +304,14 @@
       "kind": "docs-route",
       "title": "Pipeline overview",
       "path": "/pipeline/overview",
+      "covered": true,
+      "spec": "src/specs/web/docs-route-coverage.e2e.ts"
+    },
+    {
+      "id": "docs-workflow",
+      "kind": "docs-route",
+      "title": "WORKFLOW.md",
+      "path": "/workflow",
       "covered": true,
       "spec": "src/specs/web/docs-route-coverage.e2e.ts"
     },

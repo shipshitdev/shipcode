@@ -103,6 +103,7 @@ function pageSurfaceExpected() {
     ...settingsSections.map((section) => ({ id: `settings-${section}`, kind: 'settings-section' })),
     ...issueTabs.map((tab) => ({ id: `issue-tab-${tab}`, kind: 'issue-tab' })),
     { id: 'web-home', kind: 'web-route', path: '/' },
+    { id: 'web-download', kind: 'web-route', path: '/download' },
     ...docsFiles.map((relativeFile) => ({
       id: docsIdFromRelative(relativeFile),
       kind: 'docs-route',
