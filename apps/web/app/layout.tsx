@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://shipcode.shipshit.dev'),
   openGraph: {
     title: 'ShipCode — Autonomous AI Coding Pipeline',
-    description: 'From issue queue to reviewed PR. Install with brew install --cask shipcode.',
+    description: 'From issue queue to reviewed PR. Install from the ShipCode Homebrew tap.',
     siteName: 'ShipCode',
     type: 'website',
     images: [
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'ShipCode — Autonomous AI Coding Pipeline',
-    description: 'From issue queue to reviewed PR. Install with brew install --cask shipcode.',
+    description: 'From issue queue to reviewed PR. Install from the ShipCode Homebrew tap.',
     images: ['/og.png'],
   },
 };

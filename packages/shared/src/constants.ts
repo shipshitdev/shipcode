@@ -1,6 +1,11 @@
 import { PINNED_MODEL_DEFAULTS } from './model-catalog';
 import { type AppSettings, type ExecutorModel, PIPELINE_PHASE, type PipelinePhase } from './types';
 
+export const HOMEBREW_INSTALL_COMMAND =
+  'brew tap shipshitdev/tap && brew install --cask shipshitdev/tap/shipcode';
+export const HOMEBREW_UPDATE_COMMAND =
+  'brew tap shipshitdev/tap && brew install --cask --force shipshitdev/tap/shipcode';
+
 export const DEFAULT_NOTIFICATION_EVENTS = {
   approval: true,
   failed: true,

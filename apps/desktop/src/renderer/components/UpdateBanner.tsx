@@ -1,10 +1,8 @@
-import type { UpdateStatus } from '@shipcode/shared';
+import { HOMEBREW_UPDATE_COMMAND, type UpdateStatus } from '@shipcode/shared';
 import { Alert, AlertDescription, Button } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
-
-const BREW_UPGRADE_COMMAND = 'brew upgrade --cask shipcode';
 
 export function UpdateBanner() {
   const queryClient = useQueryClient();
@@ -25,7 +23,7 @@ export function UpdateBanner() {
   }, [queryClient]);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(BREW_UPGRADE_COMMAND);
+    await navigator.clipboard.writeText(HOMEBREW_UPDATE_COMMAND);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -47,7 +45,7 @@ export function UpdateBanner() {
       <AlertDescription className="text-xs text-accent">
         ShipCode v{status.latest} is available. You're on v{status.current}. Upgrade with{' '}
         <code className="rounded bg-accent/15 px-1 py-0.5 font-mono text-[11px]">
-          {BREW_UPGRADE_COMMAND}
+          {HOMEBREW_UPDATE_COMMAND}
         </code>
       </AlertDescription>
       <div className="ml-auto flex items-center gap-1.5">

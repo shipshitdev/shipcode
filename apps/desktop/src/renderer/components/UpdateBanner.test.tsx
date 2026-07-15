@@ -77,7 +77,9 @@ describe('UpdateBanner', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
 
     await waitFor(() => {
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('brew upgrade --cask shipcode');
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        'brew tap shipshitdev/tap && brew install --cask --force shipshitdev/tap/shipcode',
+      );
     });
     expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
     await waitFor(

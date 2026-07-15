@@ -472,7 +472,7 @@ function createWindow() {
   log.transports.file.level = queries.settings.get().devLogLevel;
 
   // Update service: poll GitHub releases for newer ShipCode builds.
-  // Notify-only — install via `brew upgrade --cask shipcode`.
+  // Notify-only — bootstrap or upgrade through the ShipCode Homebrew tap.
   updateService = new UpdateService(mainWindow);
   if (!E2E_MODE) updateService.start();
 
