@@ -2,7 +2,7 @@
 
 Headless CLI for ShipCode — an autonomous AI coding pipeline that takes GitHub issues in and ships pull requests out.
 
-This package is the **terminal / CI / server** entry point. If you want the desktop GUI instead, install [the ShipCode desktop app](https://shipcode.shipshit.dev/docs/getting-started) via `brew tap shipshitdev/tap && brew install --cask shipcode` — the two share the same pipeline engine but are otherwise separate products. You don't need both.
+This package is the **terminal / CI / server** entry point. If you want the desktop GUI instead, install [the ShipCode desktop app](https://shipcode.shipshit.dev/docs/getting-started) via `brew tap shipshitdev/tap && brew install --cask shipshitdev/tap/shipcode` — the two share the same pipeline engine but are otherwise separate products. You don't need both.
 
 ## Install
 
@@ -98,7 +98,7 @@ See the [architecture docs](https://shipcode.shipshit.dev/docs/architecture) for
 
 | If you want... | Use |
 |---|---|
-| A GUI to watch pipelines, triage issues, edit settings, view costs | Desktop app (`brew tap shipshitdev/tap && brew install --cask shipcode`) |
+| A GUI to watch pipelines, triage issues, edit settings, view costs | Desktop app (`brew tap shipshitdev/tap && brew install --cask shipshitdev/tap/shipcode`) |
 | To run the pipeline from a terminal, script, cron job, or CI job | This CLI (`npm i -g @shipshitdev/shipcode`) |
 | Both | Install both — they share the same SQLite DB and worktree layout |
 

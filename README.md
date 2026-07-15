@@ -16,7 +16,7 @@ Label a GitHub issue with `shipcode:agent:claude`, `shipcode:agent:codex`, `ship
 ## Install
 
 ```bash
-brew tap shipshitdev/tap && brew install --cask shipcode   # macOS desktop app
+brew tap shipshitdev/tap && brew install --cask shipshitdev/tap/shipcode   # macOS desktop app
 npx @shipshitdev/shipcode                      # CLI
 ```
 
