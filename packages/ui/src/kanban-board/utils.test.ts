@@ -12,7 +12,6 @@ import { describe, expect, it } from 'vitest';
 import {
   compareIssues,
   customCollisionDetection,
-  dragOverlayBorderClass,
   formatDate,
   isApprovedAwaitingExecutionIssue,
   issueMatchesColumn,
@@ -24,7 +23,6 @@ import {
   resolveIssueRevisionBadge,
   rowToneFor,
   sectionToneFor,
-  statusDotColorClass,
 } from './utils';
 
 function makeIssue(
@@ -750,15 +748,7 @@ describe('resolveColumnDotColor', () => {
 });
 
 describe('status and tone helpers', () => {
-  it('maps issue statuses to dot and row tones', () => {
-    expect(statusDotColorClass('approval', true)).toBe('bg-agent');
-    expect(statusDotColorClass('failed')).toBe('bg-danger');
-    expect(statusDotColorClass('clarifying')).toBe('bg-warning');
-    expect(statusDotColorClass('completed')).toBe('bg-success');
-    expect(statusDotColorClass('closed')).toBe('bg-done');
-    expect(statusDotColorClass('executing')).toBe('bg-agent');
-    expect(statusDotColorClass('todo')).toBe('bg-muted-foreground/40');
-
+  it('maps issue statuses to row tones', () => {
     expect(rowToneFor('todo', true)).toBe('agent');
     expect(rowToneFor('failed')).toBe('danger');
     expect(rowToneFor('approval')).toBe('warning');
@@ -774,7 +764,6 @@ describe('status and tone helpers', () => {
     expect(sectionToneFor('agent', 'planning')).toBe('agent');
     expect(sectionToneFor('done', 'completed')).toBe('done');
     expect(sectionToneFor('todo', 'backlog')).toBe('default');
-    expect(dragOverlayBorderClass('failed')).toBe('');
     expect(resolveColumnDotColor('todo', null)).toBeNull();
     expect(formatDate('2026-04-13T12:00:00.000Z')).toBe('Apr 13, 2026');
   });
