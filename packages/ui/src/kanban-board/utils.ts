@@ -81,24 +81,6 @@ export function issueMatchesSection(
   return section.statuses.includes(issue.pipelineStatus);
 }
 
-export function statusDotColorClass(
-  status: IssuePipelineStatus,
-  approvedAwaitingExecution = false,
-): string {
-  if (approvedAwaitingExecution) return 'bg-agent';
-  if (status === ISSUE_PIPELINE_STATUS.failed) return 'bg-danger';
-  if (
-    status === ISSUE_PIPELINE_STATUS.approval ||
-    status === ISSUE_PIPELINE_STATUS.clarifying ||
-    status === ISSUE_PIPELINE_STATUS.paused
-  )
-    return 'bg-warning';
-  if (status === ISSUE_PIPELINE_STATUS.completed) return 'bg-success';
-  if (status === ISSUE_PIPELINE_STATUS.closed) return 'bg-done';
-  if (ACTIVE_STATUSES.includes(status)) return 'bg-agent';
-  return 'bg-muted-foreground/40';
-}
-
 export function statusDotTextColorClass(
   status: IssuePipelineStatus,
   approvedAwaitingExecution = false,
@@ -142,13 +124,6 @@ export function statusDotFill(
   if (status === ISSUE_PIPELINE_STATUS.planning || status === ISSUE_PIPELINE_STATUS.clarifying)
     return 0.25;
   return 0;
-}
-
-export function dragOverlayBorderClass(
-  _status: IssuePipelineStatus,
-  _approvedAwaitingExecution = false,
-): string {
-  return '';
 }
 
 export function resolveIssuePhaseChip(
