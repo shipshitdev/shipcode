@@ -1232,6 +1232,63 @@ describe('createPipelineRuntime', () => {
     });
   });
 
+  it('forces configured programmatic Claude pipeline phases through the interactive CLI', async () => {
+    const provider: AgentProvider = {
+      id: 'claude-cli',
+      supports: new Set(['plan', 'execute']),
+      generate: vi.fn(async (request) => ({
+        rawOutput: 'done',
+        exitCode: 0,
+        resolvedModel: request.modelHint ?? 'claude',
+      })),
+      healthCheck: vi.fn(async () => ({ ok: true })),
+    };
+    const { deps } = makeDeps(provider);
+    deps.settings.get = vi.fn(() => ({
+      ...DEFAULT_SETTINGS,
+      forceInteractiveClaude: true,
+      agentRunModes: {
+        ...DEFAULT_SETTINGS.agentRunModes,
+        claude: {
+          ...DEFAULT_SETTINGS.agentRunModes.claude,
+          plan: 'programmatic',
+          execute: 'programmatic',
+        },
+      },
+    })) as never;
+    const runtime = createPipelineRuntime(deps, {} as never);
+    const context = makeContext();
+
+    await runtime.runProviderPhase(context, buildPhasePayload(context, 'plan'), 'prompt', [], {});
+    await runtime.runProviderPhase(
+      context,
+      buildPhasePayload(context, 'execute'),
+      'prompt',
+      [],
+      {},
+    );
+
+    expect(provider.generate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        phase: 'plan',
+        phaseHints: expect.objectContaining({ runMode: 'interactive' }),
+      }),
+    );
+    expect(provider.generate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        phase: 'execute',
+        phaseHints: expect.objectContaining({ runMode: 'interactive' }),
+      }),
+    );
+    expect(provider.generate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        phaseHints: expect.objectContaining({ osSandbox: expect.anything() }),
+      }),
+    );
+  });
+
   it('keeps provider success nonfatal when step completion logging fails', async () => {
     const provider: AgentProvider = {
       id: 'claude-cli',

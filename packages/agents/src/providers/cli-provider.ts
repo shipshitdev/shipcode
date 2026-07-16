@@ -375,6 +375,13 @@ function phaseOutputArtifactPath(req: ProviderRequest): string {
   return path.join(req.cwd, '.shipcode', 'runs', req.threadId, `${req.phase}-output.md`);
 }
 
+async function preparePhaseOutputArtifact(req: ProviderRequest): Promise<string> {
+  const outputPath = phaseOutputArtifactPath(req);
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+  await fs.rm(outputPath, { force: true });
+  return outputPath;
+}
+
 /** The fenced tag a given structured phase is expected to emit. */
 const PHASE_FENCE_TAG: Partial<Record<ProviderPhase, string>> = {
   plan: PLAN_FENCE_TAG,
@@ -415,8 +422,7 @@ function buildStructuredInstruction(
 
 async function buildClaudeInteractiveStructuredCommand(req: ProviderRequest): Promise<CliCommand> {
   const promptArtifactPath = await writeExecutePromptArtifact(req);
-  const outputPath = phaseOutputArtifactPath(req);
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+  const outputPath = await preparePhaseOutputArtifact(req);
   const modelArgs = req.modelHint ? ['--model', req.modelHint] : [];
   const fenceTag = PHASE_FENCE_TAG[req.phase] ?? PLAN_FENCE_TAG;
   // plan/revision may inspect the repo to ground their output; review/verify
@@ -440,8 +446,7 @@ async function buildClaudeInteractiveStructuredCommand(req: ProviderRequest): Pr
 
 async function buildCodexInteractiveStructuredCommand(req: ProviderRequest): Promise<CliCommand> {
   const promptArtifactPath = await writeExecutePromptArtifact(req);
-  const outputPath = phaseOutputArtifactPath(req);
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+  const outputPath = await preparePhaseOutputArtifact(req);
   const fenceTag = PHASE_FENCE_TAG[req.phase] ?? PLAN_FENCE_TAG;
   // workspace-write is required so the agent can write the output artifact —
   // read-only would block the write. Mirrors the interactive execute posture.

@@ -1159,6 +1159,25 @@ describe('interactive structured bridge', () => {
     expect(last).toContain(path.join(cwd, '.shipcode', 'runs', 'tid', 'plan-output.md'));
   });
 
+  it.each([
+    ['claude', buildClaudeInteractiveStructuredCommand],
+    ['codex', buildCodexInteractiveStructuredCommand],
+  ] as const)('%s structured command removes stale phase output before retry', async (_, build) => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-struct-stale-'));
+    try {
+      const request = req({ phase: 'plan', cwd, threadId: 'tid' });
+      const outputPath = phaseOutputArtifactPath(request);
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, 'stale output');
+
+      await build(request);
+
+      expect(fs.existsSync(outputPath)).toBe(false);
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it('readPhaseOutputArtifact returns file content when present', async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-struct-'));
     const dir = path.join(cwd, '.shipcode', 'runs', 'tid');
