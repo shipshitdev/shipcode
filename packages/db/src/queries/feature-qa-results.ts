@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { FeatureQaFlowResult } from '@shipcode/shared';
-import { toIsoUtc } from '@shipcode/shared';
+import { ISO_NOW_SQL, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows } from '../utils';
 
@@ -47,7 +47,7 @@ export class FeatureQaResultQueries {
       .prepare(
         `INSERT INTO feature_qa_results
           (id, thread_id, feature_id, status, flow_results, summary, evidence_paths, run_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, ${ISO_NOW_SQL}))`,
       )
       .run(
         id,
