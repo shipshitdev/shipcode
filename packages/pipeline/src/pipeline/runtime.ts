@@ -348,12 +348,14 @@ export function createPipelineRuntime(
       agent === 'claude' || agent === 'codex'
         ? getAgentPhaseRunMode(settingsSnapshot, agent, phase)
         : undefined;
-    // Auto-fallback: when the rationed `claude -p` Agent-SDK credit pool is
-    // exhausted, route programmatic claude phases through the interactive CLI
-    // (which is unaffected by the pool) instead of failing. Codex has no such
-    // pool, so it is never rerouted here.
+    // Auto-fallback: route programmatic claude phases through the interactive
+    // CLI when the user forces it globally or the rationed `claude -p`
+    // Agent-SDK credit pool is exhausted. Codex has no such override or pool,
+    // so it is never rerouted here.
     const effectiveRunMode: ProviderRunMode | undefined =
-      agent === 'claude' && configuredRunMode === 'programmatic' && isPoolExhausted()
+      agent === 'claude' &&
+      configuredRunMode === 'programmatic' &&
+      (settingsSnapshot.forceInteractiveClaude || isPoolExhausted())
         ? 'interactive'
         : configuredRunMode;
     // Programmatic claude EXECUTE must run inside the `srt` OS sandbox (host
