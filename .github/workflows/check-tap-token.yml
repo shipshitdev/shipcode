@@ -12,22 +12,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Report tap write permission
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::TAP_GITHUB_TOKEN is empty/unset"; exit 1
+            echo "::error::TAP_GITHUB_TOKEN is empty/unset"
+            exit 1
           fi
           echo "Token identity:"
           gh api user --jq '"  login: \(.login), type: \(.type)"' || echo "  (gh api user failed — token may be fine-grained; that's fine)"
           echo "Permissions on shipshitdev/homebrew-tap:"
           # Single request; parse .push from the response so set -e can't abort
           # before the diagnostic and we don't hit the API twice.
-          PERMS=$(gh api repos/shipshitdev/homebrew-tap --jq '.permissions' 2>&1) || {
-            echo "::error::cannot read repo with this token: $PERMS"; exit 1;
-          }
+          if ! PERMS=$(gh api repos/shipshitdev/homebrew-tap --jq '.permissions' 2>&1); then
+            echo "::error::cannot read repo with this token: $PERMS"
+            exit 1
+          fi
           echo "  $PERMS"
-          PUSH=$(printf '%s' "$PERMS" | jq -r '.push // false')
+          if ! PUSH=$(printf '%s' "$PERMS" | jq -r '
+            if type == "object" and ((.push | type) == "boolean") then
+              .push
+            else
+              error("missing boolean .push permission")
+            end
+          ' 2>&1); then
+            echo "::error::cannot parse repo permissions: $PUSH"
+            exit 1
+          fi
           echo "push=$PUSH"
           if [ "$PUSH" = "true" ]; then
             echo "::notice::TAP_GITHUB_TOKEN CAN write to the tap — publish cask job will succeed."
