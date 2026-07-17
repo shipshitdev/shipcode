@@ -54,6 +54,13 @@ export function isAutomationIssue(issue: GitHubIssueCacheRecord): boolean {
   return !issue.isQuickMode && issue.issueNumber <= AUTOMATION_ISSUE_NUMBER_BASE;
 }
 
+export function issueReferenceLabel(issue: GitHubIssueCacheRecord, isCreating: boolean): string {
+  if (isCreating) return 'Creating';
+  if (issue.isQuickMode) return 'Quick';
+  if (isAutomationIssue(issue)) return 'Auto';
+  return `#${issue.issueNumber}`;
+}
+
 export function issueMatchesColumn(
   issue: GitHubIssueCacheRecord,
   column: Pick<BoardColumn, 'key' | 'statuses'>,

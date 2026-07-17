@@ -44,19 +44,13 @@ import type {
 import {
   isAutomationIssue,
   isIssueCreating,
+  issueReferenceLabel,
   statusDotFill,
   statusDotTextColorClass,
 } from './utils';
 
 const ISSUE_CARD_BASE_CLASS =
   'group relative flex shrink-0 flex-col overflow-hidden rounded-md border border-white/[0.04] bg-tertiary p-3 text-left transition-colors outline-none';
-
-function issueReferenceLabel(issue: GitHubIssueCacheRecord, isCreating: boolean): string {
-  if (isCreating) return 'Creating';
-  if (issue.isQuickMode) return 'Quick';
-  if (isAutomationIssue(issue)) return 'Auto';
-  return `#${issue.issueNumber}`;
-}
 
 function labelDotClass(label: string): string {
   const l = label.toLowerCase();
