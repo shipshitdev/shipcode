@@ -8,6 +8,13 @@ import {
 } from '../providers/openrouter-http';
 
 const spawnMock = vi.hoisted(() => vi.fn());
+const rmSyncMock = vi.hoisted(() => vi.fn());
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  rmSyncMock.mockImplementation(actual.rmSync);
+  return { ...actual, rmSync: rmSyncMock };
+});
 
 vi.mock('node:child_process', () => ({
   spawn: spawnMock,
@@ -459,8 +466,10 @@ describe('issue triage', () => {
     });
 
     await Promise.resolve();
+    const spawnFailureCwd = (spawnMock.mock.calls[0][2] as { cwd: string }).cwd;
     spawnFailure.failToSpawn('ENOENT');
     await expect(spawnPromise).rejects.toThrow('Claude CLI');
+    expect(existsSync(spawnFailureCwd)).toBe(false);
 
     const exitFailure = createFakeProc();
     spawnMock.mockReturnValueOnce(exitFailure.proc);
@@ -470,8 +479,33 @@ describe('issue triage', () => {
     });
 
     await Promise.resolve();
+    const exitFailureCwd = (spawnMock.mock.calls[1][2] as { cwd: string }).cwd;
     exitFailure.close(2, { stderr: 'permission denied\nfull trace' });
     await expect(exitPromise).rejects.toThrow('Claude CLI exited 2: permission denied');
+    expect(existsSync(exitFailureCwd)).toBe(false);
+  });
+
+  it('does not mask a CLI generation error when temporary directory cleanup fails', async () => {
+    const fake = createFakeProc();
+    spawnMock.mockReturnValueOnce(fake.proc);
+    const promise = triageGitHubIssues({
+      issues: [baseIssue],
+      settings: triageSettings({ triageModel: 'claude' }),
+    });
+
+    await Promise.resolve();
+    const triageCwd = (spawnMock.mock.calls[0][2] as { cwd: string }).cwd;
+    rmSyncMock.mockImplementationOnce(() => {
+      throw new Error('cleanup failed');
+    });
+    fake.close(2, { stderr: 'permission denied\nfull trace' });
+
+    try {
+      await expect(promise).rejects.toThrow('Claude CLI exited 2: permission denied');
+      expect(existsSync(triageCwd)).toBe(true);
+    } finally {
+      rmSyncMock(triageCwd, { recursive: true, force: true });
+    }
   });
 
   it('times out stalled CLI triage processes', async () => {
