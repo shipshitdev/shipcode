@@ -43,6 +43,7 @@ import {
   hasCheckedGithubProjectBoard,
   markGithubProjectBoardChecked,
   persistGithubProjectConfiguration,
+  resolvePrdRewriteContext,
   sendGithubIssuesUpdated,
   syncLinkedPullRequestFeedback,
 } from './helpers';
@@ -1554,14 +1555,11 @@ export function registerGitHubHandlers({
       const issue = await ghCli.getIssue(issueNumber);
 
       const settings = queries.settings.get();
-      const modelId =
-        settings.prdRewriteCli === 'claude'
-          ? settings.prdRewriteClaudeModel
-          : settings.prdRewriteCodexModel;
+      const rewriteContext = resolvePrdRewriteContext(settings);
       await assertPrdRewriteModelSupported(
-        settings.prdRewriteCli,
-        modelId,
-        settings.prdRewriteReasoningEffort,
+        rewriteContext.cli,
+        rewriteContext.modelId,
+        rewriteContext.reasoningEffort,
       );
       const skillPath = path.join(project.path, 'skills', 'writing-prds', 'SKILL.md');
       let skillContent: string;
@@ -1580,9 +1578,7 @@ export function registerGitHubHandlers({
         draftBody: issue.body ?? '',
         skillContent,
         cwd: project.path,
-        cli: settings.prdRewriteCli,
-        modelId,
-        reasoningEffort: settings.prdRewriteReasoningEffort,
+        ...rewriteContext,
       });
 
       await ghCli.editIssue({

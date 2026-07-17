@@ -19,7 +19,11 @@ import {
 } from '@shipcode/shared';
 import { shell } from 'electron';
 import log from '../logger.service';
-import { assertPrdRewriteModelSupported, buildSkillRow } from './helpers';
+import {
+  assertPrdRewriteModelSupported,
+  buildSkillRow,
+  resolvePrdRewriteContext,
+} from './helpers';
 import type { IpcHandlerDeps } from './types';
 
 function getWritingPrdsPaths(projectPath: string) {
@@ -188,16 +192,12 @@ export function registerSkillsHandlers({ ipcMain, queries }: IpcHandlerDeps): vo
         throw new Error(`Project ${effectiveContextProjectId} not found`);
       }
 
-      const settings = queries.settings.get();
-      const modelId =
-        settings.prdRewriteCli === 'claude'
-          ? settings.prdRewriteClaudeModel
-          : settings.prdRewriteCodexModel;
+      const rewriteContext = resolvePrdRewriteContext(queries.settings.get());
 
       await assertPrdRewriteModelSupported(
-        settings.prdRewriteCli,
-        modelId,
-        settings.prdRewriteReasoningEffort,
+        rewriteContext.cli,
+        rewriteContext.modelId,
+        rewriteContext.reasoningEffort,
       );
 
       try {
@@ -209,9 +209,7 @@ export function registerSkillsHandlers({ ipcMain, queries }: IpcHandlerDeps): vo
           userInstruction: trimmedInstruction,
           projectContext: buildSkillRewriteProjectContext(contextProject),
           cwd: contextProject?.path ?? process.cwd(),
-          cli: settings.prdRewriteCli,
-          modelId,
-          reasoningEffort: settings.prdRewriteReasoningEffort,
+          ...rewriteContext,
         });
       } catch (err) {
         log.error('[skills:rewrite]', err);

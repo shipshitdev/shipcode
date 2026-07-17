@@ -25,7 +25,7 @@ import {
   type ReasoningEffort,
 } from '@shipcode/shared';
 import log, { logProcessOutput } from '../logger.service';
-import { assertPrdRewriteModelSupported } from './helpers';
+import { assertPrdRewriteModelSupported, resolvePrdRewriteContext } from './helpers';
 import {
   clearPrdAttachmentSession,
   createPrdAttachmentSession,
@@ -112,14 +112,11 @@ export function registerSupportHandlers({
       }
 
       const settings = queries.settings.get();
-      const modelId =
-        settings.prdRewriteCli === 'claude'
-          ? settings.prdRewriteClaudeModel
-          : settings.prdRewriteCodexModel;
+      const rewriteContext = resolvePrdRewriteContext(settings);
       await assertPrdRewriteModelSupported(
-        settings.prdRewriteCli,
-        modelId,
-        settings.prdRewriteReasoningEffort,
+        rewriteContext.cli,
+        rewriteContext.modelId,
+        rewriteContext.reasoningEffort,
       );
 
       const skillPath = path.join(project.path, 'skills', 'writing-prds', 'SKILL.md');
@@ -140,9 +137,7 @@ export function registerSupportHandlers({
           draftBody: draftBody ?? '',
           skillContent,
           cwd: project.path,
-          cli: settings.prdRewriteCli,
-          modelId,
-          reasoningEffort: settings.prdRewriteReasoningEffort,
+          ...rewriteContext,
         });
       } catch (err) {
         log.error('[ai:enhance-prd]', err);

@@ -9,6 +9,7 @@ import {
   enrichProjectPath,
   enrichProjectPaths,
   resolveIssuePhaseModels,
+  resolvePrdRewriteContext,
   resolveProjectPhaseModels,
   sendGithubIssuesUpdated,
   syncLinkedPullRequestFeedback,
@@ -172,6 +173,10 @@ function makeSettings(overrides: Record<string, unknown> = {}) {
     openrouterReviewerModel: 'openai/gpt-5.2',
     openrouterExecutorModel: 'anthropic/claude-opus-4.5',
     openrouterVerifierModel: 'openai/gpt-5.2-mini',
+    prdRewriteCli: 'claude',
+    prdRewriteClaudeModel: 'claude-sonnet-4-5',
+    prdRewriteCodexModel: 'gpt-5.2',
+    prdRewriteReasoningEffort: 'medium',
     ...overrides,
   };
 }
@@ -381,6 +386,28 @@ describe('phase model helpers', () => {
     await expect(assertPrdRewriteModelSupported('codex', 'gpt-5.2', 'minimal')).rejects.toThrow(
       'Codex CLI does not report minimal effort',
     );
+  });
+
+  it('resolves the configured PRD rewrite model for each CLI provider', () => {
+    const settings = makeSettings();
+
+    expect(resolvePrdRewriteContext(settings as never)).toEqual({
+      cli: 'claude',
+      modelId: 'claude-sonnet-4-5',
+      reasoningEffort: 'medium',
+    });
+    expect(
+      resolvePrdRewriteContext(
+        makeSettings({
+          prdRewriteCli: 'codex',
+          prdRewriteReasoningEffort: 'high',
+        }) as never,
+      ),
+    ).toEqual({
+      cli: 'codex',
+      modelId: 'gpt-5.2',
+      reasoningEffort: 'high',
+    });
   });
 });
 
