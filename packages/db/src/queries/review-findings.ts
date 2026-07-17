@@ -5,7 +5,7 @@ import type {
   ReviewFindingSource,
   ReviewFindingStatus,
 } from '@shipcode/shared';
-import { toIsoUtc } from '@shipcode/shared';
+import { ISO_NOW_SQL, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows } from '../utils';
 
@@ -169,7 +169,7 @@ export class ReviewFindingQueries {
                   worktree_path = ?,
                   branch = ?,
                   metadata_json = ?,
-                  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                  updated_at = ${ISO_NOW_SQL}
             WHERE id = ?`,
         )
         .run(
@@ -256,8 +256,8 @@ export class ReviewFindingQueries {
       .prepare(
         `UPDATE review_findings
             SET status = ?,
-                resolved_at = CASE WHEN ? IN ('fixed', 'ignored', 'closed') THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now') ELSE resolved_at END,
-                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                resolved_at = CASE WHEN ? IN ('fixed', 'ignored', 'closed') THEN ${ISO_NOW_SQL} ELSE resolved_at END,
+                updated_at = ${ISO_NOW_SQL}
           WHERE id = ?`,
       )
       .run(status, status, id);
@@ -276,8 +276,8 @@ export class ReviewFindingQueries {
             SET status = 'fixed',
                 resolved_by_run_id = ?,
                 commit_sha = COALESCE(?, commit_sha),
-                resolved_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                resolved_at = ${ISO_NOW_SQL},
+                updated_at = ${ISO_NOW_SQL}
           WHERE thread_id = ?
             AND status = 'open'
             AND (? IS NULL OR plan_id = ?)`,
@@ -303,8 +303,8 @@ export class ReviewFindingQueries {
         `UPDATE review_findings
             SET status = 'superseded',
                 resolved_by_run_id = ?,
-                resolved_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                resolved_at = ${ISO_NOW_SQL},
+                updated_at = ${ISO_NOW_SQL}
           WHERE thread_id = ?
             AND status = 'open'
             AND (? IS NULL OR source = ?)

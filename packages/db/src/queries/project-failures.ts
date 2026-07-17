@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { type ProjectFailureRecord, toIsoUtc } from '@shipcode/shared';
+import { ISO_NOW_SQL, type ProjectFailureRecord, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows } from '../utils';
 
@@ -53,7 +53,7 @@ export class ProjectFailureQueries {
                     WHEN status = 'in_progress' AND owner_thread_id IS NULL THEN ?
                     ELSE owner_thread_id
                   END,
-                  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                  updated_at = ${ISO_NOW_SQL}
             WHERE id = ?`,
         )
         .run(
@@ -145,8 +145,8 @@ export class ProjectFailureQueries {
             SET status = 'resolved',
                 resolved_by_thread_id = ?,
                 resolved_commit_sha = ?,
-                resolved_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                resolved_at = ${ISO_NOW_SQL},
+                updated_at = ${ISO_NOW_SQL}
           WHERE owner_thread_id = ?
             AND status = 'in_progress'`,
       )

@@ -1,10 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type {
-  PipelineStepCompletionUpdate,
-  PipelineStepInsert,
-  PipelineStepPhase,
-  PipelineStepRecord,
-  PipelineStepStatus,
+import {
+  ISO_NOW_SQL,
+  type PipelineStepCompletionUpdate,
+  type PipelineStepInsert,
+  type PipelineStepPhase,
+  type PipelineStepRecord,
+  type PipelineStepStatus,
 } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows } from '../utils';
@@ -74,7 +75,7 @@ export class PipelineStepQueries {
                 prompt_tokens = COALESCE(?, prompt_tokens),
                 completion_tokens = COALESCE(?, completion_tokens),
                 cost_usd = COALESCE(?, cost_usd),
-                completed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                completed_at = ${ISO_NOW_SQL},
                 duration_ms = ?,
                 conversation_id = COALESCE(?, conversation_id)
           WHERE id = ?`,

@@ -5,6 +5,7 @@ import type {
   IssueGraphNodeRecord,
   ProjectIssueGraph,
 } from '@shipcode/shared';
+import { ISO_NOW_SQL } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows, transaction } from '../utils';
 
@@ -17,8 +18,8 @@ const ISSUE_EDGES_SCHEMA_SQL = `
     edge_type TEXT NOT NULL CHECK (edge_type IN ('blocks', 'depends_on', 'reference')),
     origin TEXT NOT NULL CHECK (origin IN ('body', 'manual')),
     source_body_issue_id TEXT REFERENCES github_issue_cache(id) ON DELETE CASCADE,
-    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    created_at TEXT NOT NULL DEFAULT (${ISO_NOW_SQL}),
+    updated_at TEXT NOT NULL DEFAULT (${ISO_NOW_SQL}),
     CHECK (source_issue_id <> target_issue_id)
   );
 

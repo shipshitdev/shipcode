@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import {
   buildTaskGraphDraftFromPlan,
+  ISO_NOW_SQL,
   type ShipCodePlan,
   type TaskEdgeRecord,
   type TaskGraphAssessment,
@@ -74,7 +75,7 @@ export class TaskGraphQueries {
         .prepare(
           `UPDATE task_graphs
               SET status = 'superseded',
-                  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                  updated_at = ${ISO_NOW_SQL}
             WHERE thread_id = ?
               AND status = 'active'`,
         )
@@ -208,14 +209,14 @@ export class TaskGraphQueries {
           ? 'completed_at'
           : null;
     const timestampAssignment = timestampColumn
-      ? `, ${timestampColumn} = COALESCE(${timestampColumn}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`
+      ? `, ${timestampColumn} = COALESCE(${timestampColumn}, ${ISO_NOW_SQL})`
       : '';
 
     this.db
       .prepare(
         `UPDATE task_nodes
             SET status = ?,
-                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                updated_at = ${ISO_NOW_SQL}
                 ${timestampAssignment}
           WHERE id = ?`,
       )
@@ -275,7 +276,7 @@ export class TaskGraphQueries {
             .prepare(
               `UPDATE task_nodes
                   SET status = 'ready',
-                      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                      updated_at = ${ISO_NOW_SQL}
                 WHERE id = ?
                   AND status IN ('pending', 'blocked')`,
             )
@@ -325,7 +326,7 @@ export class TaskGraphQueries {
                   END,
                   started_at = NULL,
                   completed_at = NULL,
-                  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                  updated_at = ${ISO_NOW_SQL}
             WHERE graph_id = ?`,
         )
         .run(graphId, graphId);
@@ -339,7 +340,7 @@ export class TaskGraphQueries {
       .prepare(
         `UPDATE task_graphs
             SET status = ?,
-                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                updated_at = ${ISO_NOW_SQL}
           WHERE id = ?`,
       )
       .run(status, graphId);
@@ -355,7 +356,7 @@ export class TaskGraphQueries {
       .prepare(
         `UPDATE task_nodes
             SET github_issue_number = ?,
-                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                updated_at = ${ISO_NOW_SQL}
           WHERE id = ?`,
       )
       .run(issueNumber, nodeId);

@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { toIsoUtc } from '@shipcode/shared';
+import { ISO_NOW_SQL, toIsoUtc } from '@shipcode/shared';
 import { asRow } from '../utils';
 
 export type IssueChatSessionProvider = 'claude' | 'codex';
@@ -57,7 +57,7 @@ export class IssueChatSessionQueries {
           cwd = excluded.cwd,
           model = excluded.model,
           reasoning_effort = excluded.reasoning_effort,
-          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
+          updated_at = ${ISO_NOW_SQL}`,
       )
       .run(
         input.threadId,
@@ -79,7 +79,7 @@ export class IssueChatSessionQueries {
       .prepare(
         `UPDATE issue_chat_sessions
             SET session_id = ?,
-                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                updated_at = ${ISO_NOW_SQL}
           WHERE thread_id = ?`,
       )
       .run(sessionId, threadId);
