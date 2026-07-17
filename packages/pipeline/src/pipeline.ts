@@ -5,11 +5,10 @@ import {
   resolvePipelineSpeedProfile,
   resolveRequireApproval,
   resolveRequireApprovalForIssue,
-  type ShipCodePlan,
   stripPrdFrontmatter,
 } from '@shipcode/shared';
-import { nanoid } from 'nanoid';
 import { createPipelineContextHelpers } from './pipeline/context';
+import { synthesizeDirectExecutionPlan } from './pipeline/direct-execution-plan';
 import { createExecutionPhaseHandlers } from './pipeline/execution-phases';
 import { createPlanningPhaseHandlers } from './pipeline/planning-phases';
 import { createPipelineRuntime } from './pipeline/runtime';
@@ -484,32 +483,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       reviewRound: 0,
     });
 
-    const prompt = `Quick task: ${task.title}\n\n${task.text}`;
-
-    const synthesizedPlan: ShipCodePlan = {
-      id: nanoid(),
+    const synthesizedPlan = synthesizeDirectExecutionPlan({
+      source: 'quick-task',
       threadId,
-      version: 1,
-      objective: `Quick: ${task.title}`,
-      files: [],
-      steps: [
-        {
-          order: 1,
-          description: prompt,
-          files: [],
-          rationale: 'Quick task — executed directly without plan/review.',
-        },
-      ],
-      acceptanceCriteria: [
-        `Implements: ${task.title}`,
-        ...(task.text.trim().length > 20
-          ? [`Satisfies instructions: ${task.text.trim().slice(0, 200)}`]
-          : []),
-      ],
-      outOfScope: [],
-      estimatedComplexity: 'low',
-      dependencies: [],
-    };
+      title: task.title,
+      text: task.text,
+    });
 
     const planRecord = deps.plans.create(threadId, '<quick-task-synthesized>', synthesizedPlan, 1);
     deps.plans.updateStatus(planRecord.id, 'approved');
@@ -555,28 +534,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     // requires `structured !== null` and `status !== rejected/superseded`)
     // passes without running planner/reviewer phases. Trivial-but-valid
     // values are required for every ShipCodePlan field.
-    const synthesizedPlan: ShipCodePlan = {
-      id: nanoid(),
+    const synthesizedPlan = synthesizeDirectExecutionPlan({
+      source: 'automation',
       threadId,
-      version: 1,
-      objective: `Automation: ${automationName}`,
-      files: [],
-      steps: [
-        {
-          order: 1,
-          description: prompt,
-          files: [],
-          rationale: 'Automation prompt — executed directly without plan/review.',
-        },
-      ],
-      acceptanceCriteria: [
-        `Implements automation: ${automationName}`,
-        ...(prompt.trim().length > 20 ? [`Satisfies prompt: ${prompt.trim().slice(0, 200)}`] : []),
-      ],
-      outOfScope: [],
-      estimatedComplexity: 'medium',
-      dependencies: [],
-    };
+      name: automationName,
+      prompt,
+    });
 
     const planRecord = deps.plans.create(threadId, '<automation-synthesized>', synthesizedPlan, 1);
     deps.plans.updateStatus(planRecord.id, 'approved');
