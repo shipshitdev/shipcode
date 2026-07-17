@@ -36,14 +36,12 @@ import {
   isIssueCreating,
   issueMatchesColumn,
   issueMatchesSection,
+  issueReferenceLabel,
   rowToneFor,
   sectionToneFor,
   statusDotFill,
 } from './utils';
 
-const EMPTY_REVISION_BADGE_MAP = new Map<string, IssueRevisionBadge | null>();
-const EMPTY_APPROVAL_BADGE_MAP = new Map<string, IssueApprovalBadge | null>();
-const EMPTY_PRIORITY_BADGE_MAP = new Map<string, IssuePriorityBadge | null>();
 const EMPTY_STALENESS_MAP = new Map<string, IssueStalenessResult | null>();
 const EMPTY_APPROVED_AWAITING_EXECUTION = new Set<string>();
 
@@ -80,13 +78,7 @@ function DraggableListRow({
   const isClosed = presentationStatus === ISSUE_PIPELINE_STATUS.closed;
   const isCreating = isIssueCreating(issue);
   const isAutomation = isAutomationIssue(issue);
-  const referenceLabel = isCreating
-    ? 'Creating'
-    : issue.isQuickMode
-      ? 'Quick'
-      : isAutomation
-        ? 'Auto'
-        : `#${issue.issueNumber}`;
+  const referenceLabel = issueReferenceLabel(issue, isCreating);
   const isDraggable =
     !isCreating &&
     DRAGGABLE_STATUSES.includes(presentationStatus) &&
@@ -314,22 +306,47 @@ interface ListSectionBlockProps {
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
 }
 
-function ListSectionBlock({
-  columnKey,
-  section,
-  issues,
-  issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
-  issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
-  issuePriorityBadgeById = EMPTY_PRIORITY_BADGE_MAP,
-  issueStalenessById = EMPTY_STALENESS_MAP,
-  repoUrl,
-  selectedIssueNumber,
-  activeId,
-  onIssueClick,
-  onOpenPullRequest,
-  onArchiveIssue,
-  approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
-}: ListSectionBlockProps) {
+type ListRowContext = Pick<
+  ListSectionBlockProps,
+  | 'issueRevisionBadgeById'
+  | 'issueApprovalBadgeById'
+  | 'issuePriorityBadgeById'
+  | 'issueStalenessById'
+  | 'repoUrl'
+  | 'selectedIssueNumber'
+  | 'activeId'
+  | 'onIssueClick'
+  | 'onOpenPullRequest'
+  | 'onArchiveIssue'
+  | 'approvedAwaitingExecutionIssueIds'
+>;
+
+function getListRowProps(
+  issue: GitHubIssueCacheRecord,
+  columnKey: ColumnKey,
+  context: ListRowContext,
+): DraggableListRowProps {
+  return {
+    issue,
+    revisionBadge: context.issueRevisionBadgeById.get(issue.id) ?? null,
+    approvalBadge: context.issueApprovalBadgeById.get(issue.id) ?? null,
+    priorityBadge: context.issuePriorityBadgeById.get(issue.id) ?? null,
+    staleness: context.issueStalenessById?.get(issue.id) ?? null,
+    repoUrl: context.repoUrl,
+    selectedIssueNumber: context.selectedIssueNumber,
+    activeId: context.activeId,
+    onIssueClick: context.onIssueClick,
+    onOpenPullRequest: context.onOpenPullRequest,
+    onArchiveIssue: columnKey === 'done' ? context.onArchiveIssue : undefined,
+    approvedAwaitingExecution: isApprovedAwaitingExecutionIssue(
+      issue,
+      context.approvedAwaitingExecutionIssueIds,
+    ),
+  };
+}
+
+function ListSectionBlock(props: ListSectionBlockProps) {
+  const { columnKey, section, issues } = props;
   const count = issues.length;
   const empty = count === 0;
   const tone = sectionToneFor(columnKey, section.key);
@@ -363,24 +380,7 @@ function ListSectionBlock({
       {!empty && (
         <div className="flex flex-col gap-0.5">
           {issues.map((issue) => (
-            <DraggableListRow
-              key={issue.id}
-              issue={issue}
-              revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
-              approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
-              priorityBadge={issuePriorityBadgeById.get(issue.id) ?? null}
-              staleness={issueStalenessById.get(issue.id) ?? null}
-              repoUrl={repoUrl}
-              approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
-                issue,
-                approvedAwaitingExecutionIssueIds,
-              )}
-              selectedIssueNumber={selectedIssueNumber}
-              activeId={activeId}
-              onIssueClick={onIssueClick}
-              onOpenPullRequest={onOpenPullRequest}
-              onArchiveIssue={columnKey === 'done' ? onArchiveIssue : undefined}
-            />
+            <DraggableListRow key={issue.id} {...getListRowProps(issue, columnKey, props)} />
           ))}
         </div>
       )}
@@ -425,21 +425,22 @@ interface IssueListViewProps {
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
 }
 
-export function IssueListView({
-  issues,
-  columnDotColors,
-  issueRevisionBadgeById,
-  issueApprovalBadgeById,
-  issuePriorityBadgeById,
-  issueStalenessById = EMPTY_STALENESS_MAP,
-  repoUrl,
-  selectedIssueNumber,
-  activeId,
-  onIssueClick,
-  onOpenPullRequest,
-  onArchiveIssue,
-  approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
-}: IssueListViewProps) {
+export function IssueListView(props: IssueListViewProps) {
+  const {
+    issues,
+    columnDotColors,
+    issueRevisionBadgeById,
+    issueApprovalBadgeById,
+    issuePriorityBadgeById,
+    issueStalenessById = EMPTY_STALENESS_MAP,
+    repoUrl,
+    selectedIssueNumber,
+    activeId,
+    onIssueClick,
+    onOpenPullRequest,
+    onArchiveIssue,
+    approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
+  } = props;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const toggle = (key: string) => {
@@ -510,20 +511,7 @@ export function IssueListView({
                     {columnIssues.map((issue) => (
                       <DraggableListRow
                         key={issue.id}
-                        issue={issue}
-                        revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
-                        approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
-                        priorityBadge={issuePriorityBadgeById.get(issue.id) ?? null}
-                        staleness={issueStalenessById.get(issue.id) ?? null}
-                        repoUrl={repoUrl}
-                        approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
-                          issue,
-                          approvedAwaitingExecutionIssueIds,
-                        )}
-                        selectedIssueNumber={selectedIssueNumber}
-                        activeId={activeId}
-                        onIssueClick={onIssueClick}
-                        onOpenPullRequest={onOpenPullRequest}
+                        {...getListRowProps(issue, column.key, props)}
                       />
                     ))}
                     {columnIssues.length === 0 && (

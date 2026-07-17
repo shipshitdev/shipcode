@@ -16,6 +16,7 @@ import {
   isApprovedAwaitingExecutionIssue,
   issueMatchesColumn,
   issueMatchesSection,
+  issueReferenceLabel,
   resolveColumnDotColor,
   resolveIssueApprovalBadge,
   resolveIssuePhaseChip,
@@ -174,6 +175,17 @@ const SETTINGS: AppSettings = {
   executorReasoningEffort: 'high',
   verifierReasoningEffort: 'medium',
 };
+
+describe('issueReferenceLabel', () => {
+  it('labels creating, quick, automation, and GitHub issues consistently', () => {
+    expect(issueReferenceLabel(makeIssue(1, 'Creating'), true)).toBe('Creating');
+    expect(issueReferenceLabel({ ...makeIssue(2, 'Quick'), isQuickMode: true }, false)).toBe(
+      'Quick',
+    );
+    expect(issueReferenceLabel(makeIssue(-1_000_001, 'Automation'), false)).toBe('Auto');
+    expect(issueReferenceLabel(makeIssue(283, 'GitHub issue'), false)).toBe('#283');
+  });
+});
 
 describe('compareIssues', () => {
   it('keeps creating issues first and sorts creating ties by newest fetch time', () => {
