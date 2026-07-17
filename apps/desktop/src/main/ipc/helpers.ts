@@ -271,10 +271,7 @@ export async function assertPrdRewriteModelSupported(
 export function resolvePrdRewriteContext(
   settings: Pick<
     ReturnType<Queries['settings']['get']>,
-    | 'prdRewriteCli'
-    | 'prdRewriteClaudeModel'
-    | 'prdRewriteCodexModel'
-    | 'prdRewriteReasoningEffort'
+    'prdRewriteCli' | 'prdRewriteClaudeModel' | 'prdRewriteCodexModel' | 'prdRewriteReasoningEffort'
   >,
 ) {
   return {

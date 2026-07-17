@@ -19,11 +19,7 @@ import {
 } from '@shipcode/shared';
 import { shell } from 'electron';
 import log from '../logger.service';
-import {
-  assertPrdRewriteModelSupported,
-  buildSkillRow,
-  resolvePrdRewriteContext,
-} from './helpers';
+import { assertPrdRewriteModelSupported, buildSkillRow, resolvePrdRewriteContext } from './helpers';
 import type { IpcHandlerDeps } from './types';
 
 function getWritingPrdsPaths(projectPath: string) {
