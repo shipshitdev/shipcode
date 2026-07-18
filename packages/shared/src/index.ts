@@ -5,6 +5,7 @@ export * from './cli-model-capabilities';
 export * from './constants';
 export * from './errors';
 export * from './feature-qa-state';
+export * from './fetch-with-timeout';
 export * from './format-bytes';
 export * from './format-clock-time';
 export * from './format-cost';
