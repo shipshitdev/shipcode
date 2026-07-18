@@ -260,7 +260,7 @@ describe('registerAutomationHandlers', () => {
       executorModelId: 'sol',
     });
 
-    expect(projects.getById).toHaveBeenCalledTimes(2);
+    expect(projects.getById).toHaveBeenCalledTimes(4);
     expect(assertCliPhaseModelsSupportedMock).toHaveBeenCalledTimes(2);
     expect(assertCliPhaseModelsSupportedMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ executorModel: 'codex', executorModelId: 'gpt-5.6-sol' }),

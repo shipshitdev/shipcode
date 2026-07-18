@@ -116,12 +116,12 @@ export function registerGitHubIssueOverrideHandlers({
       assertPhaseRole(phase);
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
       const trimmed = modelId.trim();
       if (trimmed && !/^[a-zA-Z0-9._:/@-]+$/.test(trimmed)) {
         throw new Error(`Invalid model ID: ${trimmed}`);
       }
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
       const provider = resolvePhaseModelForIssue(queries.settings.get(), project, issue, phase);
       queries.githubIssues.updatePhaseModelIdOverride(
         issue.id,
