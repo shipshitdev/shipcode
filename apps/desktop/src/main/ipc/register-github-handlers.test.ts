@@ -4056,6 +4056,8 @@ describe('registerGitHubHandlers', () => {
         getByNumber: vi.fn(() => refreshedIssue),
         updatePhaseModelIdOverride: vi.fn(),
       }),
+      projects: { getById: vi.fn(() => baseProject) },
+      settings: { get: vi.fn(() => ({ executorModel: 'claude' })) },
     };
 
     registerGitHubHandlers({
@@ -4157,6 +4159,8 @@ describe('registerGitHubHandlers', () => {
         updateRevisionCountOverride: vi.fn(),
         updatePhaseReasoningEffortOverride: vi.fn(),
       }),
+      projects: { getById: vi.fn(() => baseProject) },
+      settings: { get: vi.fn(() => ({ plannerModel: 'claude' })) },
     };
 
     registerGitHubHandlers({
@@ -4197,6 +4201,19 @@ describe('registerGitHubHandlers', () => {
       baseIssue.id,
       'planner',
       'claude-opus-4-1',
+    );
+    expect(
+      setModelId(undefined, {
+        projectId: 'project-1',
+        issueNumber: 42,
+        phase: 'planner',
+        modelId: '  OPUS  ',
+      }),
+    ).toEqual(baseIssue);
+    expect(queries.githubIssues.updatePhaseModelIdOverride).toHaveBeenLastCalledWith(
+      baseIssue.id,
+      'planner',
+      'opus',
     );
 
     expect(

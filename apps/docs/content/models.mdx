@@ -8,7 +8,7 @@ The source of truth is [`model-catalog.ts`](https://github.com/shipshitdev/shipc
 
 | Provider | Curated models | Plan | Review | Execute | Verify |
 |----------|----------------|:----:|:------:|:-------:|:------:|
-| Claude CLI | `claude-fable-5`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001` | ✓ | ✓ | ✓ | ✓ |
+| Claude CLI | `opus`, `sonnet`, `haiku`, `fable`, `claude-fable-5`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001` | ✓ | ✓ | ✓ | ✓ |
 | Codex CLI | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini` | ✓ | ✓ | ✓ | ✓ |
 | Gemini CLI | `gemini-2.5-pro`, `gemini-2.5-flash` | ✓ | ✓ | ✓ | ✓ |
 | Cursor CLI | `auto` | — | — | ✓ | — |
@@ -42,16 +42,20 @@ The phase provider itself comes from app settings, then project overrides, then 
 
 ## Slug aliases
 
-Model fields accept canonical IDs or these case-insensitive shorthands:
+Model fields accept canonical IDs or these case-insensitive shorthands. Bare Claude family aliases are rolling Claude CLI selections: the installed Claude CLI chooses the latest generation in that family. Versioned shorthands resolve to concrete IDs and remain pinned.
 
 | Family | Aliases | Resolves to |
 |--------|---------|-------------|
-| Opus | `opus`, `opus-4.8`, `opus4.8` | `claude-opus-4-8` |
+| Opus (latest) | `opus` | Rolling `opus` alias |
+| Opus 4.8 | `opus-4.8`, `opus4.8` | `claude-opus-4-8` |
 | Opus 4.7 | `opus-4.7` | `claude-opus-4-7` |
 | Opus 4.6 | `opus-4.6` | `claude-opus-4-6` |
-| Sonnet | `sonnet`, `sonnet-4.6` | `claude-sonnet-4-6` |
-| Fable | `fable`, `fable-5`, `fable5` | `claude-fable-5` |
-| Haiku | `haiku`, `haiku-4.5` | `claude-haiku-4-5-20251001` |
+| Sonnet (latest) | `sonnet` | Rolling `sonnet` alias |
+| Sonnet 4.6 | `sonnet-4.6` | `claude-sonnet-4-6` |
+| Fable (latest) | `fable` | Rolling `fable` alias |
+| Fable 5 | `fable-5`, `fable5` | `claude-fable-5` |
+| Haiku (latest) | `haiku` | Rolling `haiku` alias |
+| Haiku 4.5 | `haiku-4.5` | `claude-haiku-4-5-20251001` |
 | Grok | `grok`, `grok-4.5`, `grok4.5` | `grok-4.5` |
 | GPT-5.6 Sol | `5.6`, `gpt-5.6`, `5.6-sol`, `sol` | `gpt-5.6-sol` |
 | GPT-5.6 Terra | `5.6-terra`, `terra` | `gpt-5.6-terra` |
@@ -61,6 +65,12 @@ Model fields accept canonical IDs or these case-insensitive shorthands:
 | GPT-5.4 Mini | `5.4-mini`, `mini` | `gpt-5.4-mini` |
 
 Unknown values are preserved as typed, which allows provider-native model IDs that are not in the curated fallback catalog.
+
+Rolling Claude aliases are valid only when the selected provider is Claude CLI. OpenRouter requires a concrete OpenRouter model ID such as `anthropic/claude-opus-4.8`; ShipCode rejects bare Claude aliases before an OpenRouter request can be sent.
+
+ShipCode records the concrete model reported by successful Claude stream-JSON runs. Interactive Claude sessions do not always expose that metadata. When they do not, the resolved-model field remains unavailable rather than recording the requested alias as if it were concrete evidence.
+
+Existing saved concrete Claude IDs are not migrated to rolling aliases. A saved `claude-opus-4-8` selection stays pinned until it is explicitly changed.
 
 ## Presets
 

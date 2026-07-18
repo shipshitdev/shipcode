@@ -1,6 +1,8 @@
 import {
   CLI_PROVIDER_FALLBACK_OPTIONS,
   CLI_PROVIDER_LABELS,
+  CLAUDE_ROLLING_MODEL_OPTIONS,
+  isClaudeRollingModelAlias,
   type KnownModelOption,
 } from './model-catalog';
 import { getSupportedReasoningEfforts } from './reasoning-effort';
@@ -74,7 +76,15 @@ export function getCapabilityModelOptions(
   provider: ExecutorModel,
 ): ReadonlyArray<CliModelCapabilityOption> {
   if (provider === 'openrouter') return [];
-  return getProviderModelCapabilities(integrationStatus, provider).models;
+  const models = getProviderModelCapabilities(integrationStatus, provider).models;
+  if (provider !== 'claude') return models;
+  const reportedValues = new Set(models.map((model) => model.value));
+  return [
+    ...CLAUDE_ROLLING_MODEL_OPTIONS.filter((option) => !reportedValues.has(option.value)).map(
+      (option) => optionToCapability('claude', option),
+    ),
+    ...models,
+  ];
 }
 
 export function getCapabilitySupportedReasoningEfforts(
@@ -109,6 +119,9 @@ export function assessCliModelAvailabilityFromCapabilities(
   modelId: string | null | undefined,
 ): ModelAvailabilityAssessment {
   if (!modelId) return { available: true, message: null };
+  if (provider === 'claude' && isClaudeRollingModelAlias(modelId)) {
+    return { available: true, message: null };
+  }
   const capabilities = getProviderModelCapabilitiesFromMap(modelCapabilities, provider);
   if (capabilities.models.some((option) => option.value === modelId)) {
     return { available: true, message: null };

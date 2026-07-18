@@ -284,6 +284,35 @@ describe('registerAutomationHandlers', () => {
     expect(automations.update).toHaveBeenCalled();
   });
 
+  it('preserves Claude rolling aliases and rejects them for OpenRouter automations', async () => {
+    automations.create.mockReturnValue(
+      makeAutomation({ executorProvider: 'claude', executorModelId: 'opus' }),
+    );
+
+    await getHandler('automations:create')(null, {
+      projectId: 'project-1',
+      name: 'Latest Opus',
+      prompt: 'Run it',
+      cronExpr: '0 0 * * *',
+      executorProvider: 'claude',
+      executorModelId: '  OPUS  ',
+    });
+
+    expect(automations.create).toHaveBeenCalledWith(
+      expect.objectContaining({ executorProvider: 'claude', executorModelId: 'opus' }),
+    );
+    await expect(
+      getHandler('automations:create')(null, {
+        projectId: 'project-1',
+        name: 'Invalid OpenRouter alias',
+        prompt: 'Run it',
+        cronExpr: '0 0 * * *',
+        executorProvider: 'openrouter',
+        executorModelId: 'opus',
+      }),
+    ).rejects.toThrow('opus is a rolling Claude CLI alias');
+  });
+
   it('does not persist an automation when model preflight fails', async () => {
     assertCliPhaseModelsSupportedMock.mockRejectedValueOnce(
       new Error('Executor: Codex CLI 1.0.3 cannot serve gpt-5.6-sol'),

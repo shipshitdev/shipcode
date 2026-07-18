@@ -1717,6 +1717,8 @@ describe('registerGitHubHandlers – branch coverage supplement', () => {
   it('accepts model IDs with all valid characters', () => {
     const queries = {
       githubIssues: buildGithubIssuesQueries({ updatePhaseModelIdOverride: vi.fn() }),
+      projects: { getById: vi.fn(() => baseProject) },
+      settings: { get: vi.fn(() => ({ plannerModel: 'openrouter' })) },
     };
     registerHandlers(queries);
 
@@ -1738,6 +1740,14 @@ describe('registerGitHubHandlers – branch coverage supplement', () => {
       'planner',
       'openrouter/anthropic/claude-opus-4.5:thinking',
     );
+    expect(() =>
+      handler(undefined, {
+        projectId: 'project-1',
+        issueNumber: 42,
+        phase: 'planner',
+        modelId: 'opus',
+      }),
+    ).toThrow('opus is a rolling Claude CLI alias');
   });
 
   // ---------------------------------------------------------------------------

@@ -27,6 +27,28 @@ type AutomationModelSelection = {
   executorReasoningEffort: Automation['executorReasoningEffort'];
 };
 
+function normalizeAutomationExecutorModelId(
+  selection: Pick<AutomationModelSelection, 'targets' | 'executorProvider' | 'executorModelId'>,
+  queries: IpcHandlerDeps['queries'],
+): string | null {
+  const modelId = selection.executorModelId;
+  if (modelId == null) return null;
+  const settings = queries.settings.get();
+  const normalizedValues = new Set(
+    selection.targets.map((projectId) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Automation target project ${projectId} not found`);
+      const fallback = resolveProjectPhaseModels(settings, project).executorModel;
+      const provider = resolveAutomationExecutorProvider(selection.executorProvider, fallback);
+      return resolveModelAlias(provider, modelId);
+    }),
+  );
+  if (normalizedValues.size !== 1) {
+    throw new Error('Automation model ID resolves differently across its target providers');
+  }
+  return [...normalizedValues][0] ?? null;
+}
+
 function resolveAutomationExecutorProvider(
   provider: AgentType | null,
   fallback: ExecutorModel,
@@ -102,15 +124,21 @@ export function registerAutomationHandlers(
 
   handleAutomation('automations:create', async (_e, input: CreateAutomationInput) => {
     validateCron(input.cronExpr);
-    // Canonicalize friendly model shorthands (e.g. "opus", "5.5") on save so
-    // every downstream consumer sees a concrete model id.
-    const normalized: CreateAutomationInput =
-      input.executorModelId == null
-        ? input
-        : { ...input, executorModelId: resolveModelAlias(input.executorModelId) };
+    const targets = input.targets ?? [input.projectId];
+    const normalized: CreateAutomationInput = {
+      ...input,
+      executorModelId: normalizeAutomationExecutorModelId(
+        {
+          targets,
+          executorProvider: input.executorProvider ?? null,
+          executorModelId: input.executorModelId ?? null,
+        },
+        queries,
+      ),
+    };
     await assertAutomationModelsSupported(
       {
-        targets: normalized.targets ?? [normalized.projectId],
+        targets,
         executorProvider: normalized.executorProvider ?? null,
         executorModelId: normalized.executorModelId ?? null,
         executorReasoningEffort: normalized.executorReasoningEffort ?? null,
@@ -127,19 +155,32 @@ export function registerAutomationHandlers(
     async (_e, payload: { id: string } & UpdateAutomationInput) => {
       const { id, ...patch } = payload;
       if (patch.cronExpr !== undefined) validateCron(patch.cronExpr);
-      const normalized: UpdateAutomationInput =
-        patch.executorModelId == null
-          ? patch
-          : { ...patch, executorModelId: resolveModelAlias(patch.executorModelId) };
       const existing = queries.automations.getById(id);
       if (!existing) throw new Error(`Automation ${id} not found`);
+      const targets = patch.targets ?? existing.targets;
+      const executorProvider =
+        patch.executorProvider === undefined ? existing.executorProvider : patch.executorProvider;
+      const executorModelId =
+        patch.executorModelId === undefined ? existing.executorModelId : patch.executorModelId;
+      const normalized: UpdateAutomationInput = {
+        ...patch,
+        ...(patch.executorModelId !== undefined || patch.executorProvider !== undefined
+          ? {
+              executorModelId: normalizeAutomationExecutorModelId(
+                {
+                  targets,
+                  executorProvider,
+                  executorModelId,
+                },
+                queries,
+              ),
+            }
+          : {}),
+      };
       await assertAutomationModelsSupported(
         {
-          targets: normalized.targets ?? existing.targets,
-          executorProvider:
-            normalized.executorProvider === undefined
-              ? existing.executorProvider
-              : normalized.executorProvider,
+          targets,
+          executorProvider,
           executorModelId:
             normalized.executorModelId === undefined
               ? existing.executorModelId

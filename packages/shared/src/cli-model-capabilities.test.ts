@@ -3,6 +3,7 @@ import {
   assessCliModelAvailabilityFromCapabilities,
   assessCliReasoningEffortAvailabilityFromCapabilities,
   fallbackCliModelCapabilities,
+  getCapabilityModelOptions,
 } from './cli-model-capabilities';
 import {
   CLAUDE_MODEL_OPTIONS,
@@ -13,7 +14,7 @@ import {
   GEMINI_FALLBACK_MODEL_OPTIONS,
   GROK_FALLBACK_MODEL_OPTIONS,
 } from './model-catalog';
-import type { PhaseCliProvider, ReasoningEffort } from './types';
+import type { CliModelCapabilities, PhaseCliProvider, ReasoningEffort } from './types';
 
 const PROVIDERS = [
   'claude',
@@ -76,6 +77,34 @@ describe('assessCliModelAvailabilityFromCapabilities', () => {
       expect(assessment.available).toBe(false);
       expect(assessment.message).toContain(CLI_PROVIDER_LABELS[provider]);
     }
+  });
+
+  it('accepts rolling Claude aliases even when the installed catalog only reports concrete IDs', () => {
+    const capabilities: Partial<Record<PhaseCliProvider, CliModelCapabilities>> = {
+      claude: {
+        provider: 'claude',
+        source: 'catalog',
+        models: [
+          {
+            value: 'claude-opus-4-8',
+            label: 'Opus 4.8',
+            description: null,
+            defaultReasoningEffort: 'high',
+            supportedReasoningEfforts: ['none', 'medium', 'high'],
+          },
+        ],
+        error: null,
+        checkedAt: new Date(0).toISOString(),
+      },
+    };
+
+    expect(assessCliModelAvailabilityFromCapabilities(capabilities, 'claude', 'opus')).toEqual({
+      available: true,
+      message: null,
+    });
+    expect(
+      getCapabilityModelOptions({ modelCapabilities: capabilities } as never, 'claude'),
+    ).toContainEqual(expect.objectContaining({ value: 'opus', label: 'Opus (latest)' }));
   });
 });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CLAUDE_MODEL_OPTIONS,
+  CLAUDE_ROLLING_MODEL_ALIASES,
   CODEX_FALLBACK_MODEL_OPTIONS,
   GEMINI_FALLBACK_MODEL_OPTIONS,
   getKnownModelLabel,
@@ -76,7 +77,9 @@ describe('model-catalog', () => {
     expect(getKnownModelLabel('provider/not-curated')).toBeNull();
   });
 
-  it('exposes Opus 4.8 as a selectable Claude and OpenRouter option', () => {
+  it('exposes rolling Claude aliases alongside pinned Claude and OpenRouter options', () => {
+    expect(CLAUDE_MODEL_OPTIONS).toContainEqual({ value: 'opus', label: 'Opus (latest)' });
+    expect(getKnownModelLabel('opus')).toBe('Opus (latest)');
     expect(CLAUDE_MODEL_OPTIONS.map((option) => option.value)).toContain('claude-opus-4-8');
     expect(OPENROUTER_MODEL_OPTIONS.map((option) => option.value)).toContain(
       'anthropic/claude-opus-4.8',
@@ -103,49 +106,59 @@ describe('model-catalog', () => {
   });
 
   describe('resolveModelAlias', () => {
-    it('resolves bare family shorthands to the pinned generation', () => {
-      expect(resolveModelAlias('opus')).toBe('claude-opus-4-8');
-      expect(resolveModelAlias('sonnet')).toBe('claude-sonnet-4-6');
-      expect(resolveModelAlias('haiku')).toBe('claude-haiku-4-5-20251001');
-      expect(resolveModelAlias('5.5')).toBe('gpt-5.5');
-      expect(resolveModelAlias('5.4-mini')).toBe('gpt-5.4-mini');
+    it('preserves normalized rolling family aliases only for Claude CLI', () => {
+      for (const alias of Object.values(CLAUDE_ROLLING_MODEL_ALIASES)) {
+        expect(resolveModelAlias('claude', `  ${alias.toUpperCase()}  `)).toBe(alias);
+      }
     });
 
-    it('resolves Fable 5 and GPT-5.6 family shorthands', () => {
-      expect(resolveModelAlias('fable')).toBe('claude-fable-5');
-      expect(resolveModelAlias('fable-5')).toBe('claude-fable-5');
-      expect(resolveModelAlias('fable5')).toBe('claude-fable-5');
+    it('resolves versioned Claude shorthands to concrete model IDs', () => {
+      expect(resolveModelAlias('claude', 'opus-4.8')).toBe('claude-opus-4-8');
+      expect(resolveModelAlias('claude', 'sonnet-4.6')).toBe('claude-sonnet-4-6');
+      expect(resolveModelAlias('claude', 'haiku-4.5')).toBe('claude-haiku-4-5-20251001');
+      expect(resolveModelAlias('claude', 'fable-5')).toBe('claude-fable-5');
+      expect(resolveModelAlias('claude', 'fable5')).toBe('claude-fable-5');
+    });
+
+    it('keeps Codex family shorthand canonicalization unchanged', () => {
+      expect(resolveModelAlias('codex', '5.5')).toBe('gpt-5.5');
+      expect(resolveModelAlias('codex', '5.4-mini')).toBe('gpt-5.4-mini');
       // Bare 5.6 routes to Sol, the flagship tier, matching upstream behavior.
-      expect(resolveModelAlias('5.6')).toBe('gpt-5.6-sol');
-      expect(resolveModelAlias('gpt-5.6')).toBe('gpt-5.6-sol');
-      expect(resolveModelAlias('sol')).toBe('gpt-5.6-sol');
-      expect(resolveModelAlias('5.6-sol')).toBe('gpt-5.6-sol');
-      expect(resolveModelAlias('terra')).toBe('gpt-5.6-terra');
-      expect(resolveModelAlias('5.6-terra')).toBe('gpt-5.6-terra');
-      expect(resolveModelAlias('luna')).toBe('gpt-5.6-luna');
-      expect(resolveModelAlias('5.6-luna')).toBe('gpt-5.6-luna');
+      expect(resolveModelAlias('codex', '5.6')).toBe('gpt-5.6-sol');
+      expect(resolveModelAlias('codex', 'gpt-5.6')).toBe('gpt-5.6-sol');
+      expect(resolveModelAlias('codex', 'sol')).toBe('gpt-5.6-sol');
+      expect(resolveModelAlias('codex', '5.6-sol')).toBe('gpt-5.6-sol');
+      expect(resolveModelAlias('codex', 'terra')).toBe('gpt-5.6-terra');
+      expect(resolveModelAlias('codex', '5.6-terra')).toBe('gpt-5.6-terra');
+      expect(resolveModelAlias('codex', 'luna')).toBe('gpt-5.6-luna');
+      expect(resolveModelAlias('codex', '5.6-luna')).toBe('gpt-5.6-luna');
     });
 
     it('resolves Grok shorthands', () => {
-      expect(resolveModelAlias('grok')).toBe('grok-4.5');
-      expect(resolveModelAlias('grok-4.5')).toBe('grok-4.5');
-      expect(resolveModelAlias('grok4.5')).toBe('grok-4.5');
-      expect(resolveModelAlias('GROK')).toBe('grok-4.5');
+      expect(resolveModelAlias('grok', 'grok')).toBe('grok-4.5');
+      expect(resolveModelAlias('grok', 'grok-4.5')).toBe('grok-4.5');
+      expect(resolveModelAlias('grok', 'grok4.5')).toBe('grok-4.5');
+      expect(resolveModelAlias('grok', 'GROK')).toBe('grok-4.5');
     });
 
-    it('is case-insensitive and trims whitespace', () => {
-      expect(resolveModelAlias('  OPUS  ')).toBe('claude-opus-4-8');
+    it('rejects rolling Claude aliases for OpenRouter and other providers', () => {
+      expect(() => resolveModelAlias('openrouter', 'opus')).toThrow(
+        'opus is a rolling Claude CLI alias',
+      );
+      expect(() => resolveModelAlias('codex', 'sonnet')).toThrow(
+        'sonnet is a rolling Claude CLI alias',
+      );
     });
 
     it('passes already-canonical ids through unchanged', () => {
-      expect(resolveModelAlias('claude-opus-4-8')).toBe('claude-opus-4-8');
-      expect(resolveModelAlias('openrouter/auto')).toBe('openrouter/auto');
+      expect(resolveModelAlias('claude', 'claude-opus-4-8')).toBe('claude-opus-4-8');
+      expect(resolveModelAlias('openrouter', 'openrouter/auto')).toBe('openrouter/auto');
     });
 
     it('returns null for nullish or blank input', () => {
-      expect(resolveModelAlias(null)).toBeNull();
-      expect(resolveModelAlias(undefined)).toBeNull();
-      expect(resolveModelAlias('   ')).toBeNull();
+      expect(resolveModelAlias('claude', null)).toBeNull();
+      expect(resolveModelAlias('claude', undefined)).toBeNull();
+      expect(resolveModelAlias('claude', '   ')).toBeNull();
     });
   });
 });

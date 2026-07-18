@@ -56,7 +56,7 @@ export function executorReasoningOptions(
   const efforts =
     provider === 'inherit' || provider === 'gh' || provider === 'shell'
       ? ALL_AUTOMATION_REASONING_EFFORTS
-      : getSupportedReasoningEfforts(provider, resolveModelAlias(modelId));
+      : getSupportedReasoningEfforts(provider, resolveModelAlias(provider, modelId));
 
   return [
     { value: 'inherit', label: 'Inherit' },
@@ -72,7 +72,7 @@ export function executorModelPlaceholder(provider: 'inherit' | AgentType): strin
     case 'codex':
       return 'e.g. gpt-5.6-sol';
     case 'claude':
-      return 'e.g. claude-opus-4-8';
+      return 'e.g. opus or claude-opus-4-8';
     default:
       return 'Inherit from project default';
   }

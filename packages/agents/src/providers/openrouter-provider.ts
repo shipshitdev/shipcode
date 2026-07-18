@@ -18,7 +18,7 @@
  *   3. Tier default (openrouterDefaultPaidModel = 'openrouter/auto')
  */
 
-import { type AppSettings, normalizeReasoningModelId } from '@shipcode/shared';
+import { type AppSettings, normalizeReasoningModelId, resolveModelAlias } from '@shipcode/shared';
 import { measurePromptPayload } from '../prompt-scope';
 import { StreamParser } from '../stream-parser';
 import { executeViaOpenRouter } from './openrouter-execute';
@@ -189,7 +189,10 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
  * Precedence: explicit modelHint > per-phase setting override > tier default.
  */
 function resolveModel(req: ProviderRequest, settings: AppSettings): string {
-  if (req.modelHint) return normalizeReasoningModelId('openrouter', req.modelHint) ?? req.modelHint;
+  if (req.modelHint) {
+    const normalized = resolveModelAlias('openrouter', req.modelHint);
+    return normalizeReasoningModelId('openrouter', normalized) ?? normalized ?? req.modelHint;
+  }
 
   const perPhase = (() => {
     switch (req.phase) {
@@ -205,9 +208,14 @@ function resolveModel(req: ProviderRequest, settings: AppSettings): string {
     }
   })();
 
-  if (perPhase) return normalizeReasoningModelId('openrouter', perPhase) ?? perPhase;
+  if (perPhase) {
+    const normalized = resolveModelAlias('openrouter', perPhase);
+    return normalizeReasoningModelId('openrouter', normalized) ?? normalized ?? perPhase;
+  }
+  const normalizedDefault = resolveModelAlias('openrouter', settings.openrouterDefaultPaidModel);
   return (
-    normalizeReasoningModelId('openrouter', settings.openrouterDefaultPaidModel) ??
+    normalizeReasoningModelId('openrouter', normalizedDefault) ??
+    normalizedDefault ??
     settings.openrouterDefaultPaidModel
   );
 }

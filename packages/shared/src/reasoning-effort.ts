@@ -1,4 +1,8 @@
-import { CLAUDE_MODEL_IDS, OPENROUTER_MODEL_IDS } from './model-catalog';
+import {
+  CLAUDE_MODEL_IDS,
+  CLAUDE_ROLLING_MODEL_ALIASES,
+  OPENROUTER_MODEL_IDS,
+} from './model-catalog';
 import type { ExecutorModel, ReasoningEffort } from './types';
 
 const ALL_REASONING_EFFORTS = [
@@ -42,7 +46,10 @@ const CLAUDE_ALWAYS_THINKING_EFFORTS = [
   'medium',
   'high',
 ] as const satisfies readonly ReasoningEffort[];
-const CLAUDE_ALWAYS_THINKING_MODELS = new Set<string>([CLAUDE_MODEL_IDS.fable5]);
+const CLAUDE_ALWAYS_THINKING_MODELS = new Set<string>([
+  CLAUDE_MODEL_IDS.fable5,
+  CLAUDE_ROLLING_MODEL_ALIASES.fable,
+]);
 const OPENROUTER_ADAPTIVE_CLAUDE_EFFORTS = [
   'none',
   'high',

@@ -7,7 +7,11 @@ import type {
   GitHubIssueCacheRecord,
   ReasoningEffort,
 } from '@shipcode/shared';
-import { SHIPCODE_AGENT_LABELS, SHIPCODE_CLASSIFICATION_LABELS } from '@shipcode/shared';
+import {
+  resolveModelAlias,
+  SHIPCODE_AGENT_LABELS,
+  SHIPCODE_CLASSIFICATION_LABELS,
+} from '@shipcode/shared';
 import { unwrapCliResultEnvelope } from '../cli-result';
 import { runNoToolsTextGeneration } from '../no-tools-text-generation';
 import { OpenRouterClient, OpenRouterError } from '../providers/openrouter-http';
@@ -60,7 +64,8 @@ export async function triageGitHubIssues(opts: {
     const apiKey = opts.apiKey;
     if (!apiKey) throw new Error('OPENROUTER_API_KEY is not set');
     const client = opts.createOpenRouterClient?.(apiKey) ?? new OpenRouterClient({ apiKey });
-    const model = modelId || opts.settings.openrouterDefaultPaidModel;
+    const configuredModel = modelId || opts.settings.openrouterDefaultPaidModel;
+    const model = resolveModelAlias('openrouter', configuredModel) ?? configuredModel;
     const controller = new AbortController();
     try {
       const reasoningEffort = normalizeOpenRouterReasoningEffort(
