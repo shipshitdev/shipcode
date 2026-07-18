@@ -151,14 +151,14 @@ const CURATED_MODEL_LABELS = Object.fromEntries(
 
 export const PINNED_MODEL_DEFAULTS = {
   claude: {
-    phase: CLAUDE_MODEL_IDS.sonnet46,
+    phase: CLAUDE_MODEL_IDS.fable5,
     prdRewrite: CLAUDE_MODEL_IDS.sonnet46,
     triage: CLAUDE_MODEL_IDS.haiku45,
   },
   codex: {
-    phase: CODEX_FALLBACK_MODEL_IDS.gpt55,
-    prdRewrite: CODEX_FALLBACK_MODEL_IDS.gpt54Mini,
-    triage: CODEX_FALLBACK_MODEL_IDS.gpt54Mini,
+    phase: CODEX_FALLBACK_MODEL_IDS.gpt56Sol,
+    prdRewrite: CODEX_FALLBACK_MODEL_IDS.gpt56Luna,
+    triage: CODEX_FALLBACK_MODEL_IDS.gpt56Luna,
   },
   gemini: {
     phase: GEMINI_FALLBACK_MODEL_IDS.pro,

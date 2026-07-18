@@ -26,7 +26,7 @@ describe('model config presets', () => {
       verifierReasoningEffort: 'high',
       prdRewriteCli: 'claude',
       prdRewriteClaudeModel: 'claude-sonnet-4-6',
-      prdRewriteCodexModel: 'gpt-5.4-mini',
+      prdRewriteCodexModel: 'gpt-5.6-luna',
       prdRewriteReasoningEffort: 'none',
     });
   });
@@ -39,10 +39,10 @@ describe('model config presets', () => {
       reviewerModelOverride: 'codex',
       executorModelOverride: 'codex',
       verifierModelOverride: 'codex',
-      plannerModelIdOverride: 'gpt-5.5',
-      reviewerModelIdOverride: 'gpt-5.5',
-      executorModelIdOverride: 'gpt-5.5',
-      verifierModelIdOverride: 'gpt-5.5',
+      plannerModelIdOverride: 'gpt-5.6-sol',
+      reviewerModelIdOverride: 'gpt-5.6-sol',
+      executorModelIdOverride: 'gpt-5.6-sol',
+      verifierModelIdOverride: 'gpt-5.6-sol',
       plannerReasoningEffortOverride: 'xhigh',
       reviewerReasoningEffortOverride: 'high',
       executorReasoningEffortOverride: 'medium',
@@ -50,7 +50,18 @@ describe('model config presets', () => {
     });
   });
 
-  it('builds opus-combo overrides: Opus 4.8 plans, GPT-5.5 codes, GPT-5.4 Mini verifies', () => {
+  it('builds claude project overrides with the pinned Fable model for every phase', () => {
+    const overrides = buildProjectModelPresetOverrides('claude');
+
+    expect(overrides).toMatchObject({
+      plannerModelIdOverride: 'claude-fable-5',
+      reviewerModelIdOverride: 'claude-fable-5',
+      executorModelIdOverride: 'claude-fable-5',
+      verifierModelIdOverride: 'claude-fable-5',
+    });
+  });
+
+  it('builds opus-combo overrides: Opus 4.8 plans, GPT-5.6 Sol codes, GPT-5.4 Mini verifies', () => {
     const preset = getModelConfigPreset('opus-combo');
     expect(preset.label).toBe('Opus combo');
     expect(preset.appliesTo).toBe('project');
@@ -61,8 +72,8 @@ describe('model config presets', () => {
       executorModelOverride: 'codex',
       verifierModelOverride: 'codex',
       plannerModelIdOverride: 'claude-opus-4-8',
-      reviewerModelIdOverride: 'gpt-5.5',
-      executorModelIdOverride: 'gpt-5.5',
+      reviewerModelIdOverride: 'gpt-5.6-sol',
+      executorModelIdOverride: 'gpt-5.6-sol',
       verifierModelIdOverride: 'gpt-5.4-mini',
       // claude clamps xhigh -> high (CLI has no xhigh); codex keeps its tiers.
       plannerReasoningEffortOverride: 'high',

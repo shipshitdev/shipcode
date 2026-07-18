@@ -25,12 +25,12 @@ Pinned defaults are used when a CLI-backed phase or auxiliary task has no explic
 
 | Lane | Provider | Pinned model |
 |------|----------|--------------|
-| Pipeline phases | Claude | `claude-sonnet-4-6` |
+| Pipeline phases | Claude | `claude-fable-5` |
 | PRD rewrite | Claude | `claude-sonnet-4-6` |
 | Issue triage | Claude | `claude-haiku-4-5-20251001` |
-| Pipeline phases | Codex | `gpt-5.5` |
-| PRD rewrite | Codex | `gpt-5.4-mini` |
-| Issue triage | Codex | `gpt-5.4-mini` |
+| Pipeline phases | Codex | `gpt-5.6-sol` |
+| PRD rewrite | Codex | `gpt-5.6-luna` |
+| Issue triage | Codex | `gpt-5.6-luna` |
 | Pipeline phases | Gemini | `gemini-2.5-pro` |
 | Execution | Cursor | `auto` |
 | Execution | Grok | `grok-4.5` |
@@ -66,10 +66,10 @@ Unknown values are preserved as typed, which allows provider-native model IDs th
 
 | Preset | Scope | Plan | Review | Execute | Verify |
 |--------|-------|------|--------|---------|--------|
-| `claude` | App or project | Sonnet 4.6 | Sonnet 4.6 | Sonnet 4.6 | Sonnet 4.6 |
-| `codex` | App or project | GPT-5.5 | GPT-5.5 | GPT-5.5 | GPT-5.5 |
-| `hybrid` | App or project | Sonnet 4.6 | GPT-5.5 | GPT-5.5 | GPT-5.5 |
-| `opus-combo` | Project only | Opus 4.8 | GPT-5.5 | GPT-5.5 | GPT-5.4 Mini |
+| `claude` | App or project | Fable 5 | Fable 5 | Fable 5 | Fable 5 |
+| `codex` | App or project | GPT-5.6 Sol | GPT-5.6 Sol | GPT-5.6 Sol | GPT-5.6 Sol |
+| `hybrid` | App or project | Fable 5 | GPT-5.6 Sol | GPT-5.6 Sol | GPT-5.6 Sol |
+| `opus-combo` | Project only | Opus 4.8 | GPT-5.6 Sol | GPT-5.6 Sol | GPT-5.4 Mini |
 | `fable-combo` | Project only | Fable 5 | GPT-5.6 Sol | GPT-5.6 Terra | GPT-5.6 Luna |
 
 `opus-combo` and `fable-combo` are project-only because their concrete per-phase model IDs require project overrides; the app-wide preset path selects providers while keeping the pinned provider models. The Fable combo intentionally maps the deepest planning work to Fable, flagship review to Sol, sustained implementation to Terra, and fast verification to Luna.
