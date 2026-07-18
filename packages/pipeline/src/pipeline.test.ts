@@ -5973,6 +5973,8 @@ Custom prompt`,
 
       pipeline.cancel('t1');
 
+      expect(context.cancelled).toBe(true);
+      expect(context.retryTimer).toBeNull();
       expect(abortSpy).toHaveBeenCalled();
       expect(mock.deps.processManager.kill).toHaveBeenCalledWith('proc-1');
       expect(cleanup).toHaveBeenCalled();
@@ -6010,6 +6012,8 @@ Custom prompt`,
 
       pipeline.pause('t1');
 
+      expect(context.cancelled).toBe(true);
+      expect(context.retryTimer).toBeNull();
       expect(abortSpy).toHaveBeenCalled();
       expect(mock.deps.processManager.kill).toHaveBeenCalledWith('proc-1');
       expect(cleanup).toHaveBeenCalled();
