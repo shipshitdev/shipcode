@@ -3644,20 +3644,20 @@ describe('registerProjectHandlers', () => {
       }),
     ).rejects.toThrow(`Project ${baseProject.id} not found after notification routing update`);
 
-    await expect(
+    expect(() =>
       handlers.get('project:set-require-approval')?.(undefined, {
         projectId: baseProject.id,
         requireApproval: 'yes',
       }),
-    ).rejects.toThrow('Invalid requireApproval value: yes');
+    ).toThrow('Invalid requireApproval value: yes');
 
     queries.projects.getById.mockReturnValueOnce(baseProject).mockReturnValueOnce(null as never);
-    await expect(
+    expect(() =>
       handlers.get('project:set-require-approval')?.(undefined, {
         projectId: baseProject.id,
         requireApproval: true,
       }),
-    ).rejects.toThrow(`Project ${baseProject.id} not found after approval update`);
+    ).toThrow(`Project ${baseProject.id} not found after approval update`);
 
     queries.projects.getById.mockReturnValueOnce(baseProject).mockReturnValueOnce(null as never);
     await expect(
@@ -3778,12 +3778,12 @@ describe('registerProjectHandlers', () => {
         },
       }),
     ).rejects.toThrow(`Project ${baseProject.id} not found`);
-    await expect(
+    expect(() =>
       handlers.get('project:set-require-approval')?.(undefined, {
         projectId: baseProject.id,
         requireApproval: true,
       }),
-    ).rejects.toThrow(`Project ${baseProject.id} not found`);
+    ).toThrow(`Project ${baseProject.id} not found`);
     await expect(
       handlers.get('project:set-model-overrides')?.(undefined, {
         projectId: baseProject.id,
@@ -4093,12 +4093,12 @@ describe('registerProjectHandlers', () => {
     ).resolves.toMatchObject(routing);
     expect(queries.projects.updateNotificationRouting).toHaveBeenCalledWith(project.id, routing);
 
-    await expect(
+    expect(
       handlers.get('project:set-require-approval')?.(undefined, {
         projectId: project.id,
         requireApproval: true,
       }),
-    ).resolves.toMatchObject({ requireApprovalOverride: true });
+    ).toMatchObject({ requireApprovalOverride: true });
     expect(queries.projects.updateRequireApprovalOverride).toHaveBeenCalledWith(project.id, true);
 
     await expect(
