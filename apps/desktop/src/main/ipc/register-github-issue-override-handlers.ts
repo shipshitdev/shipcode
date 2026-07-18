@@ -1,6 +1,7 @@
 import {
   clampError,
   type ExecutorModel,
+  getPhaseDescriptor,
   type ReasoningEffort,
   resolveModelAlias,
   resolvePhaseModelForIssue,
@@ -59,6 +60,11 @@ export function registerGitHubIssueOverrideHandlers({
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
       if (model !== 'claude' && model !== 'codex' && model !== 'openrouter') {
         throw new Error(`Invalid ${phase} model: ${model}`);
+      }
+      const descriptor = getPhaseDescriptor(phase);
+      const existingModelId = issue[descriptor.issueModelIdOverrideKey];
+      if (existingModelId) {
+        resolveModelAlias(model, existingModelId);
       }
 
       queries.githubIssues.updatePhaseModelOverride(issue.id, phase, model);

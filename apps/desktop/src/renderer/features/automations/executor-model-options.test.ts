@@ -65,6 +65,18 @@ describe('executorReasoningOptions', () => {
     expect(values('openrouter', 'qwen/qwen3-coder:free')).toEqual(['inherit', 'none']);
     expect(values('openrouter', 'anthropic/claude-opus-4.8')).toEqual(['inherit', 'none', 'high']);
   });
+
+  it('keeps the form renderable for an incompatible free-form model id', () => {
+    expect(values('openrouter', 'opus')).toEqual([
+      'inherit',
+      'none',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
+  });
 });
 
 describe('executorModelPlaceholder', () => {

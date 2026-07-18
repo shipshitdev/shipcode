@@ -53,10 +53,14 @@ export function executorReasoningOptions(
   provider: 'inherit' | AgentType,
   modelId: string,
 ): ReadonlyArray<{ value: 'inherit' | ReasoningEffort; label: string }> {
-  const efforts =
-    provider === 'inherit' || provider === 'gh' || provider === 'shell'
-      ? ALL_AUTOMATION_REASONING_EFFORTS
-      : getSupportedReasoningEfforts(provider, resolveModelAlias(provider, modelId));
+  let efforts: readonly ReasoningEffort[] = ALL_AUTOMATION_REASONING_EFFORTS;
+  if (provider !== 'inherit' && provider !== 'gh' && provider !== 'shell') {
+    try {
+      efforts = getSupportedReasoningEfforts(provider, resolveModelAlias(provider, modelId));
+    } catch {
+      // Keep the form renderable while save-boundary validation reports the invalid pair.
+    }
+  }
 
   return [
     { value: 'inherit', label: 'Inherit' },

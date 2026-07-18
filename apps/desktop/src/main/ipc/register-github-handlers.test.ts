@@ -4152,6 +4152,46 @@ describe('registerGitHubHandlers', () => {
     );
   });
 
+  it('rejects a provider switch that conflicts with the existing issue model id', () => {
+    const issueWithClaudeAlias = {
+      ...baseIssue,
+      plannerModelOverride: 'claude',
+      plannerModelIdOverride: 'opus',
+    };
+    const queries = {
+      githubIssues: buildGithubIssuesQueries({
+        getByNumber: vi.fn(() => issueWithClaudeAlias),
+        updatePhaseModelOverride: vi.fn(),
+      }),
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const setOverride = handlers.get('github:set-phase-model-override');
+    if (!setOverride) throw new Error('model override handler not registered');
+
+    expect(() =>
+      setOverride(undefined, {
+        projectId: 'project-1',
+        issueNumber: 42,
+        phase: 'planner',
+        model: 'openrouter',
+      }),
+    ).toThrow(
+      'opus is a rolling Claude CLI alias and cannot be used with openrouter. Choose a concrete openrouter model ID.',
+    );
+    expect(queries.githubIssues.updatePhaseModelOverride).not.toHaveBeenCalled();
+  });
+
   it('updates and clears model id, revision, and reasoning override values', () => {
     const queries = {
       githubIssues: buildGithubIssuesQueries({
