@@ -9,8 +9,8 @@ import {
 
 describe('modelDisplay', () => {
   it('returns friendly labels for known model keys', () => {
-    expect(modelDisplay('claude')).toBe('Sonnet 4.6');
-    expect(modelDisplay('codex')).toBe('GPT-5.5');
+    expect(modelDisplay('claude')).toBe('Fable 5');
+    expect(modelDisplay('codex')).toBe('GPT-5.6 Sol');
     expect(modelDisplay('claude-opus-4-6')).toBe('Opus 4.6');
     expect(modelDisplay('claude-fable-5')).toBe('Fable 5');
     expect(modelDisplay('gpt-5.6-sol')).toBe('GPT-5.6 Sol');
@@ -51,7 +51,7 @@ describe('formatProviderModelDisplay', () => {
   });
 
   it('includes both provider and model when useful', () => {
-    expect(formatProviderModelDisplay('claude', 'claude')).toBe('Claude / Sonnet 4.6');
+    expect(formatProviderModelDisplay('claude', 'claude')).toBe('Claude / Fable 5');
     expect(formatProviderModelDisplay('codex', 'gpt-5.4')).toBe('Codex / GPT-5.4');
     expect(formatProviderModelDisplay('openrouter', null)).toBe('OpenRouter');
     expect(formatProviderModelDisplay('gemini', 'gemini-2.5-pro')).toBe('Gemini 2.5 Pro');
@@ -71,11 +71,11 @@ describe('formatResolvedModelDisplay', () => {
   });
 
   it('falls back to the resolved provider alias default when no specific model matches the provider', () => {
-    expect(formatResolvedModelDisplay('custom/requested', 'codex')).toBe('Codex / GPT-5.5');
+    expect(formatResolvedModelDisplay('custom/requested', 'codex')).toBe('Codex / GPT-5.6 Sol');
   });
 
   it('uses the requested provider alias when the resolved value is absent', () => {
-    expect(formatResolvedModelDisplay('codex', null)).toBe('Codex / GPT-5.5');
+    expect(formatResolvedModelDisplay('codex', null)).toBe('Codex / GPT-5.6 Sol');
   });
 
   it('prefers the resolved upstream model for openrouter', () => {

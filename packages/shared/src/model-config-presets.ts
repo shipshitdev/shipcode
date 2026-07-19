@@ -83,10 +83,10 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
     description: 'Anthropic across planning, review, execution, and verification.',
     appliesTo: 'all',
     phases: {
-      planner: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'planner'),
-      reviewer: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'reviewer'),
-      executor: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'executor'),
-      verifier: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'verifier'),
+      planner: makePhasePreset('claude', SHARED_PHASE_MODELS.claude, 'planner'),
+      reviewer: makePhasePreset('claude', SHARED_PHASE_MODELS.claude, 'reviewer'),
+      executor: makePhasePreset('claude', SHARED_PHASE_MODELS.claude, 'executor'),
+      verifier: makePhasePreset('claude', SHARED_PHASE_MODELS.claude, 'verifier'),
     },
     prdRewrite: {
       cli: 'claude',
@@ -130,13 +130,13 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
   },
   {
     // Budget combo: Opus 4.8 plans on the Claude subscription (the one step
-    // that benefits from deep reasoning), then GPT-5.5 reviews + executes and
+    // that benefits from deep reasoning), then GPT-5.6 Sol reviews + executes and
     // GPT-5.4 Mini verifies — keeping the token-heavy lanes off the Claude
     // weekly quota. Project-scoped because the Opus/Mini model ids are only
     // honored through per-project overrides (the global path pins the model).
     key: 'opus-combo',
     label: 'Opus combo',
-    description: 'Opus 4.8 plans, GPT-5.5 reviews and executes, GPT-5.4 Mini verifies.',
+    description: 'Opus 4.8 plans, GPT-5.6 Sol reviews and executes, GPT-5.4 Mini verifies.',
     appliesTo: 'project',
     phases: {
       planner: makePhasePreset('claude', CLAUDE_MODEL_IDS.opus48, 'planner'),

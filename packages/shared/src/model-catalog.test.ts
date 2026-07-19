@@ -16,14 +16,14 @@ describe('model-catalog', () => {
   it('keeps pinned defaults explicit and stable', () => {
     expect(PINNED_MODEL_DEFAULTS).toEqual({
       claude: {
-        phase: 'claude-sonnet-4-6',
+        phase: 'claude-fable-5',
         prdRewrite: 'claude-sonnet-4-6',
         triage: 'claude-haiku-4-5-20251001',
       },
       codex: {
-        phase: 'gpt-5.5',
-        prdRewrite: 'gpt-5.4-mini',
-        triage: 'gpt-5.4-mini',
+        phase: 'gpt-5.6-sol',
+        prdRewrite: 'gpt-5.6-luna',
+        triage: 'gpt-5.6-luna',
       },
       gemini: {
         phase: 'gemini-2.5-pro',
@@ -64,8 +64,8 @@ describe('model-catalog', () => {
   });
 
   it('normalizes friendly labels for provider aliases and upstream slugs', () => {
-    expect(getKnownModelLabel('claude')).toBe('Sonnet 4.6');
-    expect(getKnownModelLabel('codex')).toBe('GPT-5.5');
+    expect(getKnownModelLabel('claude')).toBe('Fable 5');
+    expect(getKnownModelLabel('codex')).toBe('GPT-5.6 Sol');
     expect(getKnownModelLabel(OPENROUTER_MODEL_IDS.autoPaid)).toBe('Auto (paid)');
     expect(getKnownModelLabel('anthropic/claude-opus-4-6')).toBe('Claude Opus 4.6');
   });
