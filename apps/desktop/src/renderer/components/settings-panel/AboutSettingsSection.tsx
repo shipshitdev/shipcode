@@ -11,7 +11,7 @@ import {
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
-import { useEffect } from 'react';
+import { useUpdateStatus } from '../../hooks/useUpdateStatus';
 
 const UPDATE_TRACK_OPTIONS: Array<{
   value: AppSettings['updateTrack'];
@@ -55,19 +55,7 @@ export function AboutSettingsSection({
     staleTime: Number.POSITIVE_INFINITY,
   });
 
-  const { data: updateStatus } = useQuery<UpdateStatus>({
-    queryKey: ['update-status'],
-    queryFn: () => window.shipcode.invoke('update:get-status'),
-    staleTime: 30_000,
-  });
-
-  useEffect(() => {
-    if (!window.shipcode?.on) return;
-    const unsub = window.shipcode.on('update:status-changed', (next: UpdateStatus) => {
-      queryClient.setQueryData(['update-status'], next);
-    });
-    return unsub;
-  }, [queryClient]);
+  const updateStatus = useUpdateStatus();
 
   const checkForUpdates = useMutation({
     mutationFn: () => window.shipcode.invoke('update:check-now'),

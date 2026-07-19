@@ -1,26 +1,14 @@
 import { HOMEBREW_UPDATE_COMMAND, type UpdateStatus } from '@shipcode/shared';
 import { Alert, AlertDescription, Button } from '@shipshitdev/ui';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, ExternalLink } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useUpdateStatus } from '../hooks/useUpdateStatus';
 
 export function UpdateBanner() {
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
-
-  const { data: status } = useQuery<UpdateStatus>({
-    queryKey: ['update-status'],
-    queryFn: () => window.shipcode.invoke('update:get-status'),
-    staleTime: 30_000,
-  });
-
-  useEffect(() => {
-    if (!window.shipcode?.on) return;
-    const unsub = window.shipcode.on('update:status-changed', (next: UpdateStatus) => {
-      queryClient.setQueryData(['update-status'], next);
-    });
-    return unsub;
-  }, [queryClient]);
+  const status = useUpdateStatus();
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(HOMEBREW_UPDATE_COMMAND);
