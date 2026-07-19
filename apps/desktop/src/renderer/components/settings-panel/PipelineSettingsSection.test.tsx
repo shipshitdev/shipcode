@@ -332,7 +332,7 @@ describe('PipelineSettingsSection', () => {
         executorReasoningEffort: 'medium',
         verifierReasoningEffort: 'high',
         prdRewriteCli: 'codex',
-        prdRewriteCodexModel: 'gpt-5.4-mini',
+        prdRewriteCodexModel: 'gpt-5.6-luna',
       }),
     );
   }, 15_000);
