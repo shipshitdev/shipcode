@@ -168,7 +168,11 @@ async function runCliTriage(opts: {
     });
     return unwrapCliResultEnvelope(stdout);
   } finally {
-    rmSync(triageDir, { recursive: true, force: true });
+    try {
+      rmSync(triageDir, { recursive: true, force: true });
+    } catch {
+      // Best-effort cleanup must not replace the triage result or generation error.
+    }
   }
 }
 
