@@ -118,7 +118,11 @@ describe('programmatic claude execute — sandbox gating', () => {
       expect(call.args).toContain('-p');
       expect(call.args).toContain('--dangerously-skip-permissions');
       // Prompt is piped via stdin, never argv.
-      expect(call.stdin).toBe('IMPLEMENT THE THING');
+      expect(call.stdin).toMatch(/^\/goal /);
+      expect(call.stdin).toContain(`${wt}/.shipcode/runs/t1/execute-prompt.md`);
+      expect(fs.readFileSync(path.join(wt, '.shipcode/runs/t1/execute-prompt.md'), 'utf8')).toBe(
+        'IMPLEMENT THE THING',
+      );
 
       await trigger('exit', 'proc-1', 0);
       await promise;

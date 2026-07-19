@@ -118,7 +118,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   postPipelineTimelineEnabled: true,
   plannerReasoningEffort: 'low',
   reviewerReasoningEffort: 'high',
-  executorReasoningEffort: 'medium',
+  executorReasoningEffort: 'high',
   verifierReasoningEffort: 'high',
   notificationsEnabled: true,
   notificationOsEnabled: true,
