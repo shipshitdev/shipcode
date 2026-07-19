@@ -18,6 +18,11 @@ import {
   SHIPCODE_AGENT_LABELS,
 } from '@shipcode/shared';
 import { shellExecEnv } from '../health-check';
+import {
+  buildCheckSummaries,
+  buildUnresolvedReviewComments,
+  type PullRequestReviewData,
+} from './pr-parsers';
 
 const execFileAsync = promisify(execFile);
 
@@ -1154,58 +1159,16 @@ export class GhCli {
     const parsed = JSON.parse(stdout) as {
       data?: {
         repository?: {
-          pullRequest?: {
-            number: number;
-            url: string;
-            isDraft: boolean;
-            state: string;
-            reviewDecision: string | null;
-            reviewRequests?: { totalCount?: number | null } | null;
-            commits?: {
-              nodes?: Array<{
-                commit?: {
-                  statusCheckRollup?: {
-                    contexts?: {
-                      nodes?: Array<
-                        | {
-                            __typename: 'CheckRun';
-                            name?: string;
-                            conclusion?: string | null;
-                            status?: string | null;
-                            detailsUrl?: string | null;
-                            checkSuite?: {
-                              workflowRun?: { workflow?: { name?: string | null } | null } | null;
-                            } | null;
-                          }
-                        | {
-                            __typename: 'StatusContext';
-                            context?: string;
-                            state?: string | null;
-                            targetUrl?: string | null;
-                          }
-                      >;
-                    } | null;
-                  } | null;
-                } | null;
-              }>;
-            } | null;
-            reviewThreads?: {
-              nodes?: Array<{
-                isResolved?: boolean;
-                isOutdated?: boolean;
-                comments?: {
-                  nodes?: Array<{
-                    body?: string;
-                    url?: string;
-                    createdAt?: string;
-                    path?: string | null;
-                    line?: number | null;
-                    author?: { login?: string | null } | null;
-                  }>;
-                } | null;
-              }>;
-            } | null;
-          } | null;
+          pullRequest?:
+            | ({
+                number: number;
+                url: string;
+                isDraft: boolean;
+                state: string;
+                reviewDecision: string | null;
+                reviewRequests?: { totalCount?: number | null } | null;
+              } & PullRequestReviewData)
+            | null;
         } | null;
       };
     };
@@ -1215,59 +1178,9 @@ export class GhCli {
       throw new Error(`Pull request #${prNumber} not found`);
     }
 
-    const failingChecks: GitHubPrCheckSummary[] = [];
-    const contexts = pr.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
-
-    for (const node of contexts) {
-      if (!node) continue;
-      if (node.__typename === 'CheckRun') {
-        const status = (node.status ?? '').toUpperCase();
-        const conclusion = (node.conclusion ?? '').toUpperCase();
-        const summary: GitHubPrCheckSummary = {
-          name: node.name ?? 'check',
-          status:
-            status !== 'COMPLETED'
-              ? 'pending'
-              : conclusion === 'SUCCESS' || conclusion === 'NEUTRAL' || conclusion === 'SKIPPED'
-                ? 'success'
-                : 'failed',
-          conclusion: node.conclusion?.toLowerCase() ?? null,
-          detailsUrl: node.detailsUrl ?? null,
-          workflowName: node.checkSuite?.workflowRun?.workflow?.name ?? null,
-        };
-        if (summary.status === 'failed') failingChecks.push(summary);
-        continue;
-      }
-
-      const state = (node.state ?? '').toUpperCase();
-      const summary: GitHubPrCheckSummary = {
-        name: node.context ?? 'status',
-        status: state === 'SUCCESS' ? 'success' : state === 'PENDING' ? 'pending' : 'failed',
-        conclusion: node.state?.toLowerCase() ?? null,
-        detailsUrl: node.targetUrl ?? null,
-        workflowName: null,
-      };
-      if (summary.status === 'failed') failingChecks.push(summary);
-    }
-
-    const unresolvedThreads = (pr.reviewThreads?.nodes ?? []).filter(
-      (thread) => !!thread && !thread.isResolved && !thread.isOutdated,
-    );
-    const unresolvedReviewComments: GitHubPrReviewCommentSummary[] = unresolvedThreads
-      .map((thread) => {
-        const comments = thread.comments?.nodes ?? [];
-        const comment = comments[comments.length - 1];
-        if (!comment?.url || !comment.body || !comment.createdAt) return null;
-        return {
-          author: comment.author?.login ?? null,
-          body: comment.body,
-          url: comment.url,
-          createdAt: comment.createdAt,
-          path: comment.path ?? null,
-          line: comment.line ?? null,
-        } satisfies GitHubPrReviewCommentSummary;
-      })
-      .filter((comment): comment is GitHubPrReviewCommentSummary => !!comment);
+    const failingChecks = buildCheckSummaries(pr.commits);
+    const { comments: unresolvedReviewComments, count: unresolvedReviewCommentCount } =
+      buildUnresolvedReviewComments(pr.reviewThreads);
 
     return {
       number: pr.number,
@@ -1279,7 +1192,7 @@ export class GhCli {
       ciBlocked: failingChecks.length > 0,
       failingChecks,
       unresolvedReviewComments,
-      unresolvedReviewCommentCount: unresolvedThreads.length,
+      unresolvedReviewCommentCount,
     };
   }
 
@@ -1378,67 +1291,25 @@ export class GhCli {
     const parsed = JSON.parse(stdout) as {
       data?: {
         repository?: {
-          pullRequest?: {
-            number: number;
-            url: string;
-            title: string;
-            body: string | null;
-            author: { login: string } | null;
-            headRefName: string;
-            baseRefName: string;
-            isDraft: boolean;
-            state: string;
-            reviewDecision: string | null;
-            additions: number;
-            deletions: number;
-            changedFiles: number;
-            labels?: { nodes?: Array<{ name?: string }> } | null;
-            closingIssuesReferences?: { nodes?: Array<{ number?: number }> } | null;
-            commits?: {
-              nodes?: Array<{
-                commit?: {
-                  statusCheckRollup?: {
-                    contexts?: {
-                      nodes?: Array<
-                        | {
-                            __typename: 'CheckRun';
-                            name?: string;
-                            conclusion?: string | null;
-                            status?: string | null;
-                            detailsUrl?: string | null;
-                            checkSuite?: {
-                              workflowRun?: { workflow?: { name?: string | null } | null } | null;
-                            } | null;
-                          }
-                        | {
-                            __typename: 'StatusContext';
-                            context?: string;
-                            state?: string | null;
-                            targetUrl?: string | null;
-                          }
-                      >;
-                    } | null;
-                  } | null;
-                } | null;
-              }>;
-            } | null;
-            reviewThreads?: {
-              nodes?: Array<{
-                isResolved?: boolean;
-                isOutdated?: boolean;
-                comments?: {
-                  nodes?: Array<{
-                    body?: string;
-                    url?: string;
-                    createdAt?: string;
-                    path?: string | null;
-                    line?: number | null;
-                    author?: { login?: string | null } | null;
-                  }>;
-                } | null;
-              }>;
-            } | null;
-          } | null;
+          pullRequest?:
+            | ({
+                number: number;
+                url: string;
+                title: string;
+                body: string | null;
+                author: { login: string } | null;
+                headRefName: string;
+                baseRefName: string;
+                isDraft: boolean;
+                state: string;
+                reviewDecision: string | null;
+                additions: number;
+                deletions: number;
+                changedFiles: number;
+                labels?: { nodes?: Array<{ name?: string }> } | null;
+                closingIssuesReferences?: { nodes?: Array<{ number?: number }> } | null;
+              } & PullRequestReviewData)
+            | null;
         } | null;
       };
     };
@@ -1448,59 +1319,9 @@ export class GhCli {
       throw new Error(`Pull request #${prNumber} not found`);
     }
 
-    const failingChecks: GitHubPrCheckSummary[] = [];
-    const contexts = pr.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
-
-    for (const node of contexts) {
-      if (!node) continue;
-      if (node.__typename === 'CheckRun') {
-        const status = (node.status ?? '').toUpperCase();
-        const conclusion = (node.conclusion ?? '').toUpperCase();
-        const summary: GitHubPrCheckSummary = {
-          name: node.name ?? 'check',
-          status:
-            status !== 'COMPLETED'
-              ? 'pending'
-              : conclusion === 'SUCCESS' || conclusion === 'NEUTRAL' || conclusion === 'SKIPPED'
-                ? 'success'
-                : 'failed',
-          conclusion: node.conclusion?.toLowerCase() ?? null,
-          detailsUrl: node.detailsUrl ?? null,
-          workflowName: node.checkSuite?.workflowRun?.workflow?.name ?? null,
-        };
-        if (summary.status === 'failed') failingChecks.push(summary);
-        continue;
-      }
-
-      const state = (node.state ?? '').toUpperCase();
-      const summary: GitHubPrCheckSummary = {
-        name: node.context ?? 'status',
-        status: state === 'SUCCESS' ? 'success' : state === 'PENDING' ? 'pending' : 'failed',
-        conclusion: node.state?.toLowerCase() ?? null,
-        detailsUrl: node.targetUrl ?? null,
-        workflowName: null,
-      };
-      if (summary.status === 'failed') failingChecks.push(summary);
-    }
-
-    const unresolvedThreads = (pr.reviewThreads?.nodes ?? []).filter(
-      (thread) => !!thread && !thread.isResolved && !thread.isOutdated,
-    );
-    const unresolvedReviewComments: GitHubPrReviewCommentSummary[] = unresolvedThreads
-      .map((thread) => {
-        const comments = thread.comments?.nodes ?? [];
-        const comment = comments[comments.length - 1];
-        if (!comment?.url || !comment.body || !comment.createdAt) return null;
-        return {
-          author: comment.author?.login ?? null,
-          body: comment.body,
-          url: comment.url,
-          createdAt: comment.createdAt,
-          path: comment.path ?? null,
-          line: comment.line ?? null,
-        } satisfies GitHubPrReviewCommentSummary;
-      })
-      .filter((comment): comment is GitHubPrReviewCommentSummary => !!comment);
+    const failingChecks = buildCheckSummaries(pr.commits);
+    const { comments: unresolvedReviewComments, count: unresolvedReviewCommentCount } =
+      buildUnresolvedReviewComments(pr.reviewThreads);
 
     return {
       number: pr.number,
@@ -1523,7 +1344,7 @@ export class GhCli {
       ciBlocked: failingChecks.length > 0,
       failingChecks,
       unresolvedReviewComments,
-      unresolvedReviewCommentCount: unresolvedThreads.length,
+      unresolvedReviewCommentCount,
     };
   }
 
