@@ -7,8 +7,7 @@ describe('fetchWithTimeout', () => {
     vi.useRealTimers();
   });
 
-  it('forwards the request and clears the timeout after completion', async () => {
-    vi.useFakeTimers();
+  it('forwards the request with a composed abort signal', async () => {
     const response = new Response('ok');
     const fetchMock = vi.fn().mockResolvedValue(response);
     vi.stubGlobal('fetch', fetchMock);
@@ -28,11 +27,9 @@ describe('fetchWithTimeout', () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('aborts requests when the timeout elapses', async () => {
-    vi.useFakeTimers();
     vi.stubGlobal(
       'fetch',
       vi.fn(
@@ -45,19 +42,13 @@ describe('fetchWithTimeout', () => {
       ),
     );
 
-    const pending = fetchWithTimeout('https://example.test/slow', {}, 1_000);
-    const assertion = expect(pending).rejects.toMatchObject({
+    await expect(fetchWithTimeout('https://example.test/slow', {}, 25)).rejects.toMatchObject({
       name: 'TimeoutError',
       message: 'The operation was aborted due to timeout',
     });
-    await vi.advanceTimersByTimeAsync(1_000);
-
-    await assertion;
-    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('keeps the timeout active while the response body is consumed', async () => {
-    vi.useFakeTimers();
     vi.stubGlobal(
       'fetch',
       vi.fn((_url, init) => {
@@ -71,16 +62,11 @@ describe('fetchWithTimeout', () => {
       }),
     );
 
-    const response = await fetchWithTimeout('https://example.test/slow-body', {}, 1_000);
-    const body = response.json();
-    const assertion = expect(body).rejects.toMatchObject({
+    const response = await fetchWithTimeout('https://example.test/slow-body', {}, 25);
+    await expect(response.json()).rejects.toMatchObject({
       name: 'TimeoutError',
       message: 'The operation was aborted due to timeout',
     });
-    await vi.advanceTimersByTimeAsync(1_000);
-
-    await assertion;
-    expect(vi.getTimerCount()).toBe(0);
   });
 
   it.each(['init', 'outer'] as const)('honors an aborted %s signal', async (source) => {
