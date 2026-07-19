@@ -168,13 +168,23 @@ describe('pipeline prompt telemetry', () => {
       expect.objectContaining({
         threadId: 't1',
         phase: 'plan',
+        provider: 'claude-cli',
+        model: 'claude',
+        promptCharacters: expect.any(Number),
+        promptBytes: expect.any(Number),
+        promptLines: expect.any(Number),
         promptTokens: 11,
         completionTokens: 7,
         costUsd: 0.02,
         selectedMaterials: expect.objectContaining({
           count: expect.any(Number),
           labels: expect.any(Array),
-          kinds: expect.any(Array),
+          kinds: expect.arrayContaining(['issue_prompt']),
+          selectedScope: expect.objectContaining({
+            allowedContextSlices: expect.any(Array),
+            allowedMaterialKinds: expect.any(Array),
+          }),
+          sections: expect.any(Array),
         }),
       }),
     );
