@@ -190,6 +190,28 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     }
   }
 
+  function haltActivePipeline(threadId: string): void {
+    const context = activePipelines.get(threadId);
+    if (!context) return;
+
+    context.cancelled = true;
+    if (context.retryTimer) {
+      clearTimeout(context.retryTimer);
+      context.retryTimer = null;
+    }
+    try {
+      context.abort.abort();
+    } catch {
+      // best effort
+    }
+    if (context.activeProcessId) {
+      deps.processManager.kill(context.activeProcessId);
+    }
+    if (context.runtimeQaCleanup) {
+      void context.runtimeQaCleanup();
+    }
+  }
+
   function resolveCurrentBranch(projectPath: string, worktreePath: string | null | undefined) {
     try {
       return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
@@ -553,25 +575,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   }
 
   function cancel(threadId: string) {
-    const context = activePipelines.get(threadId);
-    if (context) {
-      context.cancelled = true;
-      if (context.retryTimer) {
-        clearTimeout(context.retryTimer);
-        context.retryTimer = null;
-      }
-      try {
-        context.abort.abort();
-      } catch {
-        // best effort
-      }
-      if (context.activeProcessId) {
-        deps.processManager.kill(context.activeProcessId);
-      }
-      if (context.runtimeQaCleanup) {
-        void context.runtimeQaCleanup();
-      }
-    }
+    haltActivePipeline(threadId);
 
     finishCurrentRun(threadId, 'cancelled', 'Pipeline cancelled by user.');
     activePipelines.delete(threadId);
@@ -579,25 +583,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   }
 
   function pause(threadId: string) {
-    const context = activePipelines.get(threadId);
-    if (context) {
-      context.cancelled = true;
-      if (context.retryTimer) {
-        clearTimeout(context.retryTimer);
-        context.retryTimer = null;
-      }
-      try {
-        context.abort.abort();
-      } catch {
-        // best effort
-      }
-      if (context.activeProcessId) {
-        deps.processManager.kill(context.activeProcessId);
-      }
-      if (context.runtimeQaCleanup) {
-        void context.runtimeQaCleanup();
-      }
-    }
+    haltActivePipeline(threadId);
 
     runtime.emitPhase(threadId, 'paused');
     activePipelines.delete(threadId);
