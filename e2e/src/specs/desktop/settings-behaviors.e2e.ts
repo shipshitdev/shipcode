@@ -1,4 +1,3 @@
-import type { Page } from '@playwright/test';
 import { PINNED_MODEL_DEFAULTS } from '@shipcode/shared';
 import { expect, type Harness, test } from '../../fixtures/electron-app';
 
@@ -60,20 +59,8 @@ test.use({
   },
 });
 
-async function invokeInRenderer<T>(page: Page, channel: string, args?: unknown): Promise<T> {
-  return page.evaluate(
-    ({ channel, args }) =>
-      (
-        window as unknown as {
-          shipcode: { invoke(channel: string, args?: unknown): Promise<unknown> };
-        }
-      ).shipcode.invoke(channel, args),
-    { channel, args },
-  ) as Promise<T>;
-}
-
-async function settings(page: Page): Promise<SettingsSnapshot> {
-  return invokeInRenderer<SettingsSnapshot>(page, 'settings:get');
+async function settings(harness: Harness): Promise<SettingsSnapshot> {
+  return harness.invoke<SettingsSnapshot>('settings:get');
 }
 
 async function openSettingsSection(
@@ -102,15 +89,15 @@ test.describe('settings behavior contracts', () => {
 
     await openSettingsSection(harness, 'github', /^GitHub$/);
 
-    const before = await settings(page);
+    const before = await settings(harness);
     await page.locator('#polling-enabled').click();
     await expect
-      .poll(async () => (await settings(page)).githubPollingEnabled, { timeout: 15_000 })
+      .poll(async () => (await settings(harness)).githubPollingEnabled, { timeout: 15_000 })
       .toBe(!before.githubPollingEnabled);
 
     await page.locator('#poll-interval').fill('45000');
     await expect
-      .poll(async () => (await settings(page)).githubPollingIntervalMs, { timeout: 15_000 })
+      .poll(async () => (await settings(harness)).githubPollingIntervalMs, { timeout: 15_000 })
       .toBe(45_000);
 
     await page.locator('#auto-run-max').fill('3');
@@ -118,7 +105,7 @@ test.describe('settings behavior contracts', () => {
 
     await expect
       .poll(async () => {
-        const next = await settings(page);
+        const next = await settings(harness);
         return {
           max: next.autoRunMaxTasks,
           priorities: next.autoRunPriorities,
@@ -135,7 +122,7 @@ test.describe('settings behavior contracts', () => {
 
     await page.locator('#notifications-enabled').click();
     await expect
-      .poll(async () => (await settings(page)).notificationsEnabled, { timeout: 15_000 })
+      .poll(async () => (await settings(harness)).notificationsEnabled, { timeout: 15_000 })
       .toBe(false);
 
     await expect(page.locator('#notification-os')).toBeDisabled();
@@ -144,7 +131,7 @@ test.describe('settings behavior contracts', () => {
 
     await page.locator('#chat-failed').click();
     await expect
-      .poll(async () => (await settings(page)).chatNotificationEvents.failed, {
+      .poll(async () => (await settings(harness)).chatNotificationEvents.failed, {
         timeout: 15_000,
       })
       .toBe(false);
@@ -168,7 +155,7 @@ test.describe('settings behavior contracts', () => {
     await expect
       .poll(
         async () => {
-          const next = await settings(page);
+          const next = await settings(harness);
           return {
             discordEnabled: next.discordEnabled,
             discordWebhookUrl: next.discordWebhookUrl,
@@ -195,7 +182,7 @@ test.describe('settings behavior contracts', () => {
 
     await page.locator('#auto-commit-enabled').click();
     await expect
-      .poll(async () => (await settings(page)).autoCommitEnabled, { timeout: 15_000 })
+      .poll(async () => (await settings(harness)).autoCommitEnabled, { timeout: 15_000 })
       .toBe(false);
 
     await page.locator('#auto-commit-provider').click();
@@ -203,7 +190,7 @@ test.describe('settings behavior contracts', () => {
     await expect
       .poll(
         async () => {
-          const next = await settings(page);
+          const next = await settings(harness);
           return {
             provider: next.autoCommitProvider,
             model: next.autoCommitModel,
@@ -220,7 +207,7 @@ test.describe('settings behavior contracts', () => {
     await expect
       .poll(
         async () => {
-          const next = await settings(page);
+          const next = await settings(harness);
           return {
             mode: next.autoCommitMode,
             noPr: next.cleanupCriteria.worktreeNoPrCleanTree,
@@ -277,7 +264,7 @@ test.describe('settings behavior contracts', () => {
     await page.getByRole('option', { name: 'Warn', exact: true }).click();
 
     await expect
-      .poll(async () => (await settings(page)).devLogLevel, { timeout: 15_000 })
+      .poll(async () => (await settings(harness)).devLogLevel, { timeout: 15_000 })
       .toBe('warn');
   });
 
@@ -299,6 +286,6 @@ test.describe('settings behavior contracts', () => {
       page.getByRole('option', { name: 'Nightly (reserved)', exact: true }),
     ).toHaveAttribute('aria-disabled', 'true');
 
-    expect((await settings(page)).updateTrack).toBe('master');
+    expect((await settings(harness)).updateTrack).toBe('master');
   });
 });

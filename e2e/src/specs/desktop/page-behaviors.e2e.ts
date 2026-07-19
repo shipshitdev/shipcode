@@ -1,4 +1,5 @@
-import { expect, type Harness, test } from '../../fixtures/electron-app';
+import { expect, test } from '../../fixtures/electron-app';
+import { selectSeedProject } from '../../fixtures/flows';
 
 const BEHAVIOR_ISSUE = {
   issueNumber: 701,
@@ -15,11 +16,6 @@ test.use({
     issues: [BEHAVIOR_ISSUE],
   },
 });
-
-async function selectSeedProject(harness: Harness): Promise<void> {
-  await harness.callStore('selectProject', harness.seed.projectId);
-  await expect(harness.page.locator('#root')).toBeVisible();
-}
 
 test.describe('page behavior contracts', () => {
   test('overview stat cards navigate to inbox and activity', async ({ harness }) => {

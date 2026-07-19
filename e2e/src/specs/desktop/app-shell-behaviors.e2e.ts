@@ -1,5 +1,5 @@
-import type { Page } from '@playwright/test';
 import { expect, type Harness, test } from '../../fixtures/electron-app';
+import { selectSeedProject } from '../../fixtures/flows';
 
 type SettingsSnapshot = {
   theme: string;
@@ -24,23 +24,6 @@ test.use({
     issues: [SHELL_ISSUE],
   },
 });
-
-async function invokeInRenderer<T>(page: Page, channel: string, args?: unknown): Promise<T> {
-  return page.evaluate(
-    ({ channel, args }) =>
-      (
-        window as unknown as {
-          shipcode: { invoke(channel: string, args?: unknown): Promise<unknown> };
-        }
-      ).shipcode.invoke(channel, args),
-    { channel, args },
-  ) as Promise<T>;
-}
-
-async function selectSeedProject(harness: Harness): Promise<void> {
-  await harness.callStore('selectProject', harness.seed.projectId);
-  await expect(harness.page.locator('#root')).toBeVisible();
-}
 
 async function openSettingsSection(
   harness: Harness,
@@ -75,7 +58,7 @@ test.describe('app shell behavior contracts', () => {
       })
       .toBe('14');
 
-    const settings = await invokeInRenderer<SettingsSnapshot>(page, 'settings:get');
+    const settings = await harness.invoke<SettingsSnapshot>('settings:get');
     expect(settings.theme).toBe('dark');
     expect(settings.fontSize).toBe(14);
   });
@@ -95,7 +78,7 @@ test.describe('app shell behavior contracts', () => {
       timeout: 15_000,
     });
 
-    const settings = await invokeInRenderer<SettingsSnapshot>(page, 'settings:get');
+    const settings = await harness.invoke<SettingsSnapshot>('settings:get');
     expect(settings.worktreeRoot).toBeNull();
   });
 
@@ -107,24 +90,19 @@ test.describe('app shell behavior contracts', () => {
       timeout: 15_000,
     });
 
-    const before = await invokeInRenderer<SettingsSnapshot>(page, 'settings:get');
+    const before = await harness.invoke<SettingsSnapshot>('settings:get');
     await page.locator('#require-approval').click();
 
     await expect
-      .poll(
-        async () =>
-          (await invokeInRenderer<SettingsSnapshot>(page, 'settings:get')).requireApproval,
-        {
-          timeout: 15_000,
-        },
-      )
+      .poll(async () => (await harness.invoke<SettingsSnapshot>('settings:get')).requireApproval, {
+        timeout: 15_000,
+      })
       .toBe(!before.requireApproval);
 
     await page.locator('#max-concurrent-pipelines').fill('4');
     await expect
       .poll(
-        async () =>
-          (await invokeInRenderer<SettingsSnapshot>(page, 'settings:get')).maxConcurrentPipelines,
+        async () => (await harness.invoke<SettingsSnapshot>('settings:get')).maxConcurrentPipelines,
         { timeout: 15_000 },
       )
       .toBe(4);

@@ -27,6 +27,8 @@ export interface Harness {
   app: ElectronApplication;
   page: Page;
   seed: SeedResult;
+  /** Invoke a renderer-to-main IPC channel through the preload bridge. */
+  invoke<T>(channel: string, args?: unknown): Promise<T>;
   /** Push a main→renderer IPC event (e.g. pipeline:phase, terminal:event). */
   fire(channel: string, ...args: unknown[]): Promise<void>;
   /** Read the renderer Zustand store snapshot (exposed in E2E mode). */
@@ -88,6 +90,17 @@ export async function launchApp(seedOptions: SeedOptions = {}): Promise<Harness>
     undefined,
     { timeout: 30_000 },
   );
+
+  const invoke = <T>(channel: string, args?: unknown): Promise<T> =>
+    page.evaluate(
+      ({ channel, args }) =>
+        (
+          window as unknown as {
+            shipcode: { invoke(channel: string, args?: unknown): Promise<unknown> };
+          }
+        ).shipcode.invoke(channel, args),
+      { channel, args },
+    ) as Promise<T>;
 
   const fire: Harness['fire'] = async (channel, ...args) => {
     await app.evaluate(
@@ -156,7 +169,7 @@ export async function launchApp(seedOptions: SeedOptions = {}): Promise<Harness>
     }
   };
 
-  return { app, page, seed, fire, getState, setState, callStore, cleanup };
+  return { app, page, seed, invoke, fire, getState, setState, callStore, cleanup };
 }
 
 interface HarnessFixtures {
