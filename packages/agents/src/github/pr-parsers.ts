@@ -98,7 +98,8 @@ export function buildUnresolvedReviewComments(
   reviewThreads: PullRequestReviewData['reviewThreads'],
 ): UnresolvedReviewComments {
   const unresolvedThreads = (reviewThreads?.nodes ?? []).filter(
-    (thread) => !!thread && !thread.isResolved && !thread.isOutdated,
+    (thread): thread is NonNullable<typeof thread> =>
+      !!thread && !thread.isResolved && !thread.isOutdated,
   );
   const comments = unresolvedThreads
     .map((thread) => {
