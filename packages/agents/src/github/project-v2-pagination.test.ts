@@ -117,8 +117,6 @@ describe('paginateProjectV2Items', () => {
     });
 
     expect(items.map((item) => item.content?.number)).toEqual([1]);
-    expect(onWarn).toHaveBeenCalledWith(
-      '[project-test] hit page cap of 1; truncating test sync',
-    );
+    expect(onWarn).toHaveBeenCalledWith('[project-test] hit page cap of 1; truncating test sync');
   });
 });
