@@ -33,7 +33,8 @@ vi.mock('@shipcode/agents', () => ({
   validateSkill: mockValidateSkill,
 }));
 
-vi.mock('./helpers', () => ({
+vi.mock('./helpers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./helpers')>()),
   assertPrdRewriteModelSupported: mockAssertPrdRewriteModelSupported,
   buildSkillRow: mockBuildSkillRow,
 }));

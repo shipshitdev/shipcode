@@ -268,6 +268,22 @@ export async function assertPrdRewriteModelSupported(
   );
 }
 
+export function resolvePrdRewriteContext(
+  settings: Pick<
+    ReturnType<Queries['settings']['get']>,
+    'prdRewriteCli' | 'prdRewriteClaudeModel' | 'prdRewriteCodexModel' | 'prdRewriteReasoningEffort'
+  >,
+) {
+  return {
+    cli: settings.prdRewriteCli,
+    modelId:
+      settings.prdRewriteCli === 'claude'
+        ? settings.prdRewriteClaudeModel
+        : settings.prdRewriteCodexModel,
+    reasoningEffort: settings.prdRewriteReasoningEffort,
+  };
+}
+
 export function tryParsePlan(rawOutput: string): ShipCodePlan | null {
   if (!rawOutput) return null;
   const parser = new StreamParser();
