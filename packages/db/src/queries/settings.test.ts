@@ -43,7 +43,7 @@ describe('SettingsQueries', () => {
     expect(s.verifierModel).toBe('codex');
     expect(s.prdRewriteCli).toBe('claude');
     expect(s.prdRewriteClaudeModel).toBe('claude-sonnet-4-6');
-    expect(s.prdRewriteCodexModel).toBe('gpt-5.4-mini');
+    expect(s.prdRewriteCodexModel).toBe('gpt-5.6-luna');
     expect(s.prdRewriteReasoningEffort).toBe(DEFAULT_SETTINGS.prdRewriteReasoningEffort);
     expect(s.githubPollingEnabled).toBe(false);
     expect(s.githubPollingIntervalMs).toBe(30000);
