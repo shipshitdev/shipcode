@@ -46,12 +46,40 @@ describe('fetchWithTimeout', () => {
     );
 
     const pending = fetchWithTimeout('https://example.test/slow', {}, 1_000);
-    await vi.advanceTimersByTimeAsync(1_000);
-
-    await expect(pending).rejects.toMatchObject({
+    const assertion = expect(pending).rejects.toMatchObject({
       name: 'TimeoutError',
       message: 'The operation was aborted due to timeout',
     });
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    await assertion;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps the timeout active while the response body is consumed', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url, init) => {
+        const signal = init?.signal;
+        return Promise.resolve({
+          json: () =>
+            new Promise((_resolve, reject) => {
+              signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+            }),
+        } as Response);
+      }),
+    );
+
+    const response = await fetchWithTimeout('https://example.test/slow-body', {}, 1_000);
+    const body = response.json();
+    const assertion = expect(body).rejects.toMatchObject({
+      name: 'TimeoutError',
+      message: 'The operation was aborted due to timeout',
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    await assertion;
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -100,12 +128,14 @@ describe('fetchWithTimeout', () => {
     await expect(pending).rejects.toBe(reason);
   });
 
-  it.each([-1, 1.5, Number.POSITIVE_INFINITY, 2 ** 31])(
-    'rejects invalid timeout %s',
-    async (timeoutMs) => {
-      await expect(fetchWithTimeout('https://example.test', {}, timeoutMs)).rejects.toThrow(
-        RangeError,
-      );
-    },
-  );
+  it.each([
+    -1,
+    1.5,
+    Number.POSITIVE_INFINITY,
+    2 ** 31,
+  ])('rejects invalid timeout %s', async (timeoutMs) => {
+    await expect(fetchWithTimeout('https://example.test', {}, timeoutMs)).rejects.toThrow(
+      RangeError,
+    );
+  });
 });
