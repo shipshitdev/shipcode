@@ -6,6 +6,7 @@ import {
   type GhStatusOption,
   parseGithubProjectUrl,
 } from '@shipcode/shared';
+import { paginateProjectV2Items } from './project-v2-pagination';
 
 const execFileAsync = promisify(execFile);
 
@@ -71,114 +72,6 @@ export function normalizeStatusOption(
   }
   return { macroColumn: null, raw: trimmed };
 }
-
-// ---------------------------------------------------------------------------
-// GraphQL queries — identical structure to project-priority.ts
-// ---------------------------------------------------------------------------
-
-interface SingleSelectFieldRef {
-  name?: string;
-}
-
-interface FieldValueNode {
-  __typename?: string;
-  name?: string;
-  field?: SingleSelectFieldRef;
-}
-
-interface ProjectItemNode {
-  isArchived?: boolean;
-  content?: {
-    __typename?: string;
-    number?: number;
-    repository?: { nameWithOwner?: string };
-  };
-  fieldValues?: { nodes?: FieldValueNode[] };
-}
-
-interface ProjectV2Response {
-  data?: {
-    organization?: {
-      projectV2?: {
-        items?: {
-          pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
-          nodes?: ProjectItemNode[];
-        };
-      } | null;
-    } | null;
-    user?: {
-      projectV2?: {
-        items?: {
-          pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
-          nodes?: ProjectItemNode[];
-        };
-      } | null;
-    } | null;
-  };
-  errors?: Array<{ message?: string }>;
-}
-
-const ITEMS_ORG_QUERY = `
-  query($login: String!, $number: Int!, $cursor: String) {
-    organization(login: $login) {
-      projectV2(number: $number) {
-        items(first: 100, after: $cursor) {
-          pageInfo { hasNextPage endCursor }
-          nodes {
-            isArchived
-            content {
-              __typename
-              ... on Issue {
-                number
-                repository { nameWithOwner }
-              }
-            }
-            fieldValues(first: 50) {
-              nodes {
-                __typename
-                ... on ProjectV2ItemFieldSingleSelectValue {
-                  name
-                  field { ... on ProjectV2SingleSelectField { name } }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-`;
-
-const ITEMS_USER_QUERY = `
-  query($login: String!, $number: Int!, $cursor: String) {
-    user(login: $login) {
-      projectV2(number: $number) {
-        items(first: 100, after: $cursor) {
-          pageInfo { hasNextPage endCursor }
-          nodes {
-            isArchived
-            content {
-              __typename
-              ... on Issue {
-                number
-                repository { nameWithOwner }
-              }
-            }
-            fieldValues(first: 50) {
-              nodes {
-                __typename
-                ... on ProjectV2ItemFieldSingleSelectValue {
-                  name
-                  field { ... on ProjectV2SingleSelectField { name } }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-`;
 
 // ---------------------------------------------------------------------------
 // Validation queries — fetch project Status field options (single call)
@@ -259,10 +152,6 @@ const HUMAN_REVIEW_PATTERN =
 const DEFERRED_PATTERN = /^(deferred|postponed|later|someday)$/i;
 const DONE_PATTERN = /^(done|closed|completed|shipped|resolved|merged)$/i;
 
-function isMissingScopeError(message: string): boolean {
-  return /insufficient_scopes|read:project|missing.*scope|requires.*scope/i.test(message);
-}
-
 // ---------------------------------------------------------------------------
 // fetchProjectStatuses — paginated read of Status field values
 // ---------------------------------------------------------------------------
@@ -275,108 +164,42 @@ export async function fetchProjectStatuses(
   opts: FetchProjectStatusesOptions,
 ): Promise<Map<number, IssueGhStatus>> {
   const result = new Map<number, IssueGhStatus>();
-  const parsed = parseGithubProjectUrl(opts.projectUrl);
-  if (!parsed) {
-    opts.onWarn?.(`[project-status] unparseable project URL: ${opts.projectUrl}`);
-    return result;
-  }
-  const { ownerType, owner, number } = parsed;
-  const isOrg = ownerType === 'orgs';
-  const query = isOrg ? ITEMS_ORG_QUERY : ITEMS_USER_QUERY;
-  const maxPages = opts.maxPages ?? 50;
   const repoFilter = opts.repoFullName?.toLowerCase() ?? null;
+  const items = await paginateProjectV2Items({
+    cwd: opts.cwd,
+    projectUrl: opts.projectUrl,
+    warningPrefix: 'project-status',
+    syncName: 'status',
+    maxPages: opts.maxPages,
+    onWarn: opts.onWarn,
+  });
 
-  let cursor: string | null = null;
-  for (let page = 0; page < maxPages; page++) {
-    const args = [
-      'api',
-      'graphql',
-      '-f',
-      `query=${query}`,
-      '-F',
-      `login=${owner}`,
-      '-F',
-      `number=${number}`,
-    ];
-    args.push('-F', cursor ? `cursor=${cursor}` : 'cursor=');
+  for (const item of items) {
+    if (item.isArchived) continue;
+    if (item.content?.__typename !== 'Issue') continue;
+    const issueNumber = item.content.number;
+    if (typeof issueNumber !== 'number') continue;
 
-    let stdout: string;
-    try {
-      const exec = await execFileAsync('gh', args, { cwd: opts.cwd });
-      stdout = exec.stdout;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      const stderr =
-        err && typeof err === 'object' && 'stderr' in err
-          ? String((err as { stderr?: unknown }).stderr ?? '')
-          : '';
-      const blob = `${message}\n${stderr}`;
-      if (isMissingScopeError(blob)) {
-        opts.onWarn?.(
-          '[project-status] missing read:project scope — run `gh auth refresh -s read:project` to enable status sync',
-          err,
-        );
-      } else {
-        opts.onWarn?.('[project-status] gh api graphql failed', err);
-      }
-      return result;
+    // Filter by repository when repoFullName is provided — prevents
+    // cross-repo issue number collisions on multi-repo project boards.
+    if (repoFilter) {
+      const itemRepo = item.content.repository?.nameWithOwner?.toLowerCase();
+      if (itemRepo && itemRepo !== repoFilter) continue;
     }
 
-    let parsedJson: ProjectV2Response;
-    try {
-      parsedJson = JSON.parse(stdout) as ProjectV2Response;
-    } catch (err) {
-      opts.onWarn?.('[project-status] failed to parse GraphQL response', err);
-      return result;
+    let statusName: string | null = null;
+    for (const value of item.fieldValues?.nodes ?? []) {
+      if (value.__typename !== 'ProjectV2ItemFieldSingleSelectValue') continue;
+      if (!/^status$/i.test(value.field?.name ?? '')) continue;
+      statusName = value.name ?? null;
+      break;
     }
 
-    if (parsedJson.errors && parsedJson.errors.length > 0) {
-      const messages = parsedJson.errors.map((e) => e.message ?? '<unknown>').join('; ');
-      opts.onWarn?.(`[project-status] GraphQL errors: ${messages}`);
-      return result;
+    if (statusName !== null) {
+      result.set(issueNumber, { raw: statusName });
     }
-
-    const project = isOrg
-      ? parsedJson.data?.organization?.projectV2
-      : parsedJson.data?.user?.projectV2;
-    if (!project) return result;
-
-    const items = project.items?.nodes ?? [];
-    for (const item of items) {
-      if (item.isArchived) continue;
-      if (item.content?.__typename !== 'Issue') continue;
-      const issueNumber = item.content?.number;
-      if (typeof issueNumber !== 'number') continue;
-
-      // Filter by repository when repoFullName is provided — prevents
-      // cross-repo issue number collisions on multi-repo project boards.
-      if (repoFilter) {
-        const itemRepo = item.content?.repository?.nameWithOwner?.toLowerCase();
-        if (itemRepo && itemRepo !== repoFilter) continue;
-      }
-
-      let statusName: string | null = null;
-      const values = item.fieldValues?.nodes ?? [];
-      for (const v of values) {
-        if (v.__typename !== 'ProjectV2ItemFieldSingleSelectValue') continue;
-        const fieldName = v.field?.name ?? '';
-        if (!/^status$/i.test(fieldName)) continue;
-        statusName = v.name ?? null;
-        break;
-      }
-
-      if (statusName !== null) {
-        result.set(issueNumber, { raw: statusName });
-      }
-    }
-
-    const pageInfo = project.items?.pageInfo;
-    if (!pageInfo?.hasNextPage) return result;
-    cursor = pageInfo.endCursor ?? null;
-    if (!cursor) return result;
   }
 
-  opts.onWarn?.(`[project-status] hit page cap of ${maxPages}; truncating status sync`);
   return result;
 }
 
