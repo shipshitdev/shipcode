@@ -1,4 +1,4 @@
-import type { PhaseCliProvider } from './types/agents';
+import type { ExecutorModel, PhaseCliProvider } from './types/agents';
 
 export interface KnownModelOption<T extends string = string> {
   value: T;
@@ -15,6 +15,24 @@ export const CLAUDE_MODEL_IDS = {
 } as const;
 
 export type ClaudeModelId = (typeof CLAUDE_MODEL_IDS)[keyof typeof CLAUDE_MODEL_IDS];
+
+export const CLAUDE_ROLLING_MODEL_ALIASES = {
+  opus: 'opus',
+  sonnet: 'sonnet',
+  haiku: 'haiku',
+  fable: 'fable',
+} as const;
+
+export type ClaudeRollingModelAlias =
+  (typeof CLAUDE_ROLLING_MODEL_ALIASES)[keyof typeof CLAUDE_ROLLING_MODEL_ALIASES];
+export type ClaudeModelSelection = ClaudeModelId | ClaudeRollingModelAlias;
+
+export const CLAUDE_ROLLING_MODEL_OPTIONS = [
+  { value: CLAUDE_ROLLING_MODEL_ALIASES.opus, label: 'Opus (latest)' },
+  { value: CLAUDE_ROLLING_MODEL_ALIASES.sonnet, label: 'Sonnet (latest)' },
+  { value: CLAUDE_ROLLING_MODEL_ALIASES.haiku, label: 'Haiku (latest)' },
+  { value: CLAUDE_ROLLING_MODEL_ALIASES.fable, label: 'Fable (latest)' },
+] as const satisfies readonly KnownModelOption<ClaudeRollingModelAlias>[];
 
 export const CODEX_FALLBACK_MODEL_IDS = {
   gpt56Sol: 'gpt-5.6-sol',
@@ -67,13 +85,14 @@ export const OPENROUTER_MODEL_IDS = {
 export type OpenRouterModelId = (typeof OPENROUTER_MODEL_IDS)[keyof typeof OPENROUTER_MODEL_IDS];
 
 export const CLAUDE_MODEL_OPTIONS = [
+  ...CLAUDE_ROLLING_MODEL_OPTIONS,
   { value: CLAUDE_MODEL_IDS.sonnet46, label: 'Sonnet 4.6' },
   { value: CLAUDE_MODEL_IDS.opus46, label: 'Opus 4.6' },
   { value: CLAUDE_MODEL_IDS.opus47, label: 'Opus 4.7' },
   { value: CLAUDE_MODEL_IDS.opus48, label: 'Opus 4.8' },
   { value: CLAUDE_MODEL_IDS.fable5, label: 'Fable 5' },
   { value: CLAUDE_MODEL_IDS.haiku45, label: 'Haiku 4.5' },
-] as const satisfies readonly KnownModelOption<ClaudeModelId>[];
+] as const satisfies readonly KnownModelOption<ClaudeModelSelection>[];
 
 // Codex publishes the real model catalog via `codex debug models`. These are
 // conservative fallbacks only, used when an old CLI cannot report capabilities.
@@ -197,21 +216,16 @@ export function getKnownModelLabel(modelId: string | null | undefined): string |
 }
 
 // Human-friendly shorthands a user can type in a model field instead of an
-// exact id. Normalized at the input boundary so everything downstream sees a
-// canonical id. Keys are matched case-insensitively. Bare family names
-// (`opus`/`sonnet`/`haiku`) resolve to the current pinned generation.
+// exact id. Keys are matched case-insensitively. Bare Claude family names are
+// handled separately because they are rolling aliases only for Claude CLI.
 export const MODEL_SLUG_ALIASES: Record<string, string> = {
-  opus: CLAUDE_MODEL_IDS.opus48,
   'opus-4.8': CLAUDE_MODEL_IDS.opus48,
   'opus4.8': CLAUDE_MODEL_IDS.opus48,
   'opus-4.7': CLAUDE_MODEL_IDS.opus47,
   'opus-4.6': CLAUDE_MODEL_IDS.opus46,
-  sonnet: CLAUDE_MODEL_IDS.sonnet46,
   'sonnet-4.6': CLAUDE_MODEL_IDS.sonnet46,
-  fable: CLAUDE_MODEL_IDS.fable5,
   'fable-5': CLAUDE_MODEL_IDS.fable5,
   fable5: CLAUDE_MODEL_IDS.fable5,
-  haiku: CLAUDE_MODEL_IDS.haiku45,
   'haiku-4.5': CLAUDE_MODEL_IDS.haiku45,
   grok: GROK_FALLBACK_MODEL_IDS.grok45,
   'grok-4.5': GROK_FALLBACK_MODEL_IDS.grok45,
@@ -231,14 +245,32 @@ export const MODEL_SLUG_ALIASES: Record<string, string> = {
   mini: CODEX_FALLBACK_MODEL_IDS.gpt54Mini,
 };
 
+const CLAUDE_ROLLING_ALIAS_SET = new Set<string>(Object.values(CLAUDE_ROLLING_MODEL_ALIASES));
+
+export function isClaudeRollingModelAlias(value: string | null | undefined): boolean {
+  return value != null && CLAUDE_ROLLING_ALIAS_SET.has(value.trim().toLowerCase());
+}
+
 /**
- * Resolve a user-typed model shorthand to its canonical id. Unknown values
- * (including already-canonical ids) are trimmed and returned unchanged.
- * Returns null only for nullish/blank input.
+ * Normalize a user-typed model value for its provider.
+ *
+ * Bare Claude family aliases remain rolling only for Claude CLI. Other
+ * shorthands resolve to concrete IDs. A rolling Claude alias is rejected for
+ * every other provider so it can never leak into an OpenRouter request.
  */
-export function resolveModelAlias(value: string | null | undefined): string | null {
+export function resolveModelAlias(
+  provider: ExecutorModel,
+  value: string | null | undefined,
+): string | null {
   if (value == null) return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
-  return MODEL_SLUG_ALIASES[trimmed.toLowerCase()] ?? trimmed;
+  const normalized = trimmed.toLowerCase();
+  if (CLAUDE_ROLLING_ALIAS_SET.has(normalized)) {
+    if (provider === 'claude') return normalized;
+    throw new Error(
+      `${normalized} is a rolling Claude CLI alias and cannot be used with ${provider}. Choose a concrete ${provider} model ID.`,
+    );
+  }
+  return MODEL_SLUG_ALIASES[normalized] ?? trimmed;
 }

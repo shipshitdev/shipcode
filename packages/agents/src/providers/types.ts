@@ -241,7 +241,11 @@ export interface ProviderResponse {
   exitCode: number;
   /** Structured error diagnostics when `exitCode !== 0`. */
   providerError?: ProviderError;
-  /** What model actually served the request (e.g. openrouter/auto resolution). */
+  /**
+   * Concrete model reported by the provider. Omitted when an interactive CLI
+   * does not expose concrete model evidence; requested aliases are never
+   * mislabeled as resolved models.
+   */
   resolvedModel?: string;
   tokensUsed?: { prompt: number; completion: number };
   costUsd?: number;

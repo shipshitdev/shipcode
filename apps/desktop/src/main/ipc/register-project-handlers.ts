@@ -45,6 +45,8 @@ import {
   PIPELINE_PHASE,
   parseGithubRemote,
   parseUnifiedDiff,
+  resolveModelAlias,
+  resolvePhaseModel,
   SHIPCODE_DEFAULT_LABELS,
   TRIAGE_RULE_LIMIT,
   validateGithubProjectUrl,
@@ -87,6 +89,76 @@ const PROJECT_OPEN_APP_NAMES: Record<ProjectOpenTarget, string> = {
 };
 
 const STARTER_ISSUE_TITLE = 'Ship your first change with ShipCode';
+
+function normalizeSettingsModelPatch(
+  settings: AppSettings,
+  patch: Partial<AppSettings>,
+): Partial<AppSettings> {
+  const triageProvider = patch.triageModel ?? settings.triageModel;
+  const autoCommitProvider = patch.autoCommitProvider ?? settings.autoCommitProvider;
+
+  return {
+    ...patch,
+    ...(patch.triageModelId !== undefined
+      ? { triageModelId: resolveModelAlias(triageProvider, patch.triageModelId) }
+      : {}),
+    ...(patch.prdRewriteClaudeModel !== undefined
+      ? {
+          prdRewriteClaudeModel: resolveModelAlias('claude', patch.prdRewriteClaudeModel),
+        }
+      : {}),
+    ...(patch.prdRewriteCodexModel !== undefined
+      ? { prdRewriteCodexModel: resolveModelAlias('codex', patch.prdRewriteCodexModel) }
+      : {}),
+    ...(patch.openrouterPlannerModel !== undefined
+      ? {
+          openrouterPlannerModel: resolveModelAlias('openrouter', patch.openrouterPlannerModel),
+        }
+      : {}),
+    ...(patch.openrouterReviewerModel !== undefined
+      ? {
+          openrouterReviewerModel: resolveModelAlias('openrouter', patch.openrouterReviewerModel),
+        }
+      : {}),
+    ...(patch.openrouterExecutorModel !== undefined
+      ? {
+          openrouterExecutorModel: resolveModelAlias('openrouter', patch.openrouterExecutorModel),
+        }
+      : {}),
+    ...(patch.openrouterVerifierModel !== undefined
+      ? {
+          openrouterVerifierModel: resolveModelAlias('openrouter', patch.openrouterVerifierModel),
+        }
+      : {}),
+    ...(patch.openrouterDefaultPaidModel !== undefined
+      ? {
+          openrouterDefaultPaidModel:
+            resolveModelAlias('openrouter', patch.openrouterDefaultPaidModel) ??
+            patch.openrouterDefaultPaidModel,
+        }
+      : {}),
+    ...(patch.openrouterDefaultFreeModel !== undefined
+      ? {
+          openrouterDefaultFreeModel:
+            resolveModelAlias('openrouter', patch.openrouterDefaultFreeModel) ??
+            patch.openrouterDefaultFreeModel,
+        }
+      : {}),
+    ...(patch.openrouterExplicitFallback !== undefined
+      ? {
+          openrouterExplicitFallback:
+            resolveModelAlias('openrouter', patch.openrouterExplicitFallback) ??
+            patch.openrouterExplicitFallback,
+        }
+      : {}),
+    ...(patch.autoCommitModel !== undefined
+      ? {
+          autoCommitModel:
+            resolveModelAlias(autoCommitProvider, patch.autoCommitModel) ?? patch.autoCommitModel,
+        }
+      : {}),
+  };
+}
 
 function buildStarterIssueBody(repoFullName: string): string {
   return [
@@ -1093,7 +1165,7 @@ export function registerProjectHandlers({
   });
 
   ipcMain.handle('settings:set', (_event, patch: Partial<AppSettings>) => {
-    queries.settings.set(patch);
+    queries.settings.set(normalizeSettingsModelPatch(queries.settings.get(), patch));
     void configureMainTelemetry(queries.settings.get()).catch((err) => {
       log.warn('[telemetry] reconfigure failed:', err);
     });
@@ -1315,7 +1387,9 @@ export function registerProjectHandlers({
             worktreePath,
             apiKey,
             provider: settings.autoCommitProvider,
-            model: settings.autoCommitModel,
+            model:
+              resolveModelAlias(settings.autoCommitProvider, settings.autoCommitModel) ??
+              settings.autoCommitModel,
             mode: settings.autoCommitMode,
             signal: controller.signal,
           }),
@@ -1543,7 +1617,28 @@ export function registerProjectHandlers({
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
 
-      queries.projects.updateModelOverrides(projectId, overrides);
+      const settings = queries.settings.get();
+      const candidateProject = { ...project, ...overrides };
+      const normalizedOverrides = {
+        ...overrides,
+        plannerModelIdOverride: resolveModelAlias(
+          resolvePhaseModel(settings, candidateProject, 'planner'),
+          overrides.plannerModelIdOverride,
+        ),
+        reviewerModelIdOverride: resolveModelAlias(
+          resolvePhaseModel(settings, candidateProject, 'reviewer'),
+          overrides.reviewerModelIdOverride,
+        ),
+        executorModelIdOverride: resolveModelAlias(
+          resolvePhaseModel(settings, candidateProject, 'executor'),
+          overrides.executorModelIdOverride,
+        ),
+        verifierModelIdOverride: resolveModelAlias(
+          resolvePhaseModel(settings, candidateProject, 'verifier'),
+          overrides.verifierModelIdOverride,
+        ),
+      };
+      queries.projects.updateModelOverrides(projectId, normalizedOverrides);
       const updated = enrichProjectPath(queries.projects.getById(projectId));
       if (!updated) throw new Error(`Project ${projectId} not found after model override update`);
       return updated;

@@ -591,10 +591,13 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
         const structuredParser = new StreamParser();
         structuredParser.feed(raw);
         const structuredClarification = structuredParser.extractClarificationRequest();
+        const transcriptParser = new StreamParser();
+        transcriptParser.feed(structuredResult.rawOutput);
+        const resolvedModel = transcriptParser.extractModel() ?? structuredParser.extractModel();
         return {
           rawOutput: raw,
           exitCode: structuredResult.exitCode,
-          resolvedModel: structuredParser.extractModel() ?? req.modelHint ?? 'claude',
+          ...(resolvedModel ? { resolvedModel } : {}),
           promptTelemetry,
           ...(structuredClarification.success && structuredClarification.data
             ? { clarificationRequest: structuredClarification.data }
@@ -638,7 +641,6 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
             rawOutput:
               'Programmatic Claude execute requires the OS sandbox (srt), which is disabled. Enable claudeExecuteSandboxEnabled, switch this phase to interactive, or use codex (sandboxed via codex exec).',
             exitCode: 1,
-            resolvedModel: req.modelHint ?? 'claude',
             promptTelemetry,
             providerError: {
               kind: 'unexpected_stop',
@@ -658,7 +660,6 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
           return {
             rawOutput: `${resolveSrt().reason}. Install @anthropic-ai/sandbox-runtime or disable sandboxed Claude execute.`,
             exitCode: 127,
-            resolvedModel: req.modelHint ?? 'claude',
             promptTelemetry,
             providerError: {
               kind: 'binary_missing',
@@ -702,6 +703,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
       parser.feed(result.rawOutput);
       const usage = parser.extractUsage();
       const clarification = parser.extractClarificationRequest();
+      const resolvedModel = parser.extractModel();
       // Detect Agent-SDK credit-pool exhaustion on the programmatic (`-p`)
       // path. There is no balance API, so we infer it from the failure and
       // flag it process-wide; the pipeline then falls back to interactive.
@@ -729,7 +731,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
       return {
         rawOutput: StreamParser.stripSystemEvents(result.rawOutput),
         exitCode: result.exitCode,
-        resolvedModel: parser.extractModel() ?? 'claude',
+        ...(resolvedModel ? { resolvedModel } : {}),
         promptTelemetry,
         /* v8 ignore start -- stream parser extraction is covered directly; provider only forwards parsed metadata */
         ...(usage

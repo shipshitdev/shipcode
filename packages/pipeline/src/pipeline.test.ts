@@ -6393,9 +6393,6 @@ Custom prompt`,
     });
 
     it('does NOT emit model-resolved when the provider omits resolvedModel', async () => {
-      // Baseline claude-cli provider returns `resolvedModel: 'claude'`
-      // so we get an event — verify the opposite by stubbing a
-      // provider that returns no resolvedModel at all.
       const silentProvider: AgentProvider = {
         id: 'openrouter',
         supports: new Set(['plan', 'review', 'revision', 'verify', 'execute']),
@@ -6427,9 +6424,7 @@ Custom prompt`,
       expect(mock.deps.threads.addTokenUsage).not.toHaveBeenCalled();
     });
 
-    it('emits model-resolved for claude-cli too (resolvedModel defaults to "claude")', async () => {
-      // The CLI provider sets resolvedModel: 'claude' unconditionally,
-      // so plan phase under the default settings should emit the event.
+    it('does not fabricate model-resolved for claude-cli without concrete evidence', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
 
@@ -6441,13 +6436,8 @@ Custom prompt`,
         (event): event is Extract<PipelineEvent, { type: 'pipeline:model-resolved' }> =>
           event.type === 'pipeline:model-resolved',
       );
-      expect(resolvedEvents.length).toBeGreaterThan(0);
-      expect(resolvedEvents[0]).toMatchObject({
-        phase: 'plan',
-        resolvedModel: 'claude',
-      });
-      // No tokensUsed/costUsd because the CLI provider doesn't report them
-      expect(resolvedEvents[0].tokensUsed).toBeUndefined();
+      expect(resolvedEvents).toHaveLength(0);
+      expect(mock.deps.threads.setResolvedModel).not.toHaveBeenCalled();
     });
 
     it('skips addTokenUsage when provider reports resolvedModel but no tokensUsed', async () => {

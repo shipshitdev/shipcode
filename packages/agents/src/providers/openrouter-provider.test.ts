@@ -204,6 +204,21 @@ describe('createOpenRouterProvider', () => {
     expect(chatSpy.mock.calls[0][0]).toEqual(expect.objectContaining({ model: 'openrouter/auto' }));
   });
 
+  it('rejects rolling Claude CLI aliases before an OpenRouter request is sent', async () => {
+    const stub = makeStubClient();
+    const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
+    const provider = createOpenRouterProvider({
+      getApiKey: () => 'k',
+      getSettings: () => settings(),
+      createClient: () => stub,
+    });
+
+    await expect(provider.generate(req({ phase: 'plan', modelHint: 'opus' }))).rejects.toThrow(
+      'opus is a rolling Claude CLI alias',
+    );
+    expect(chatSpy).not.toHaveBeenCalled();
+  });
+
   it('normalizes legacy OpenRouter Claude 4.6 aliases before sending', async () => {
     const stub = makeStubClient();
     const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;

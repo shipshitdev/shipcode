@@ -56,6 +56,7 @@ describe('reasoning-effort', () => {
   it('never offers none for Fable 5, whose thinking cannot be disabled', () => {
     expect(getSupportedReasoningEfforts('claude', 'claude-fable-5')).toEqual(['medium', 'high']);
     expect(getSupportedReasoningEfforts('claude', ' claude-fable-5 ')).toEqual(['medium', 'high']);
+    expect(getSupportedReasoningEfforts('claude', 'fable')).toEqual(['medium', 'high']);
   });
 
   it('maps unsupported Fable 5 efforts to the nearest thinking budget', () => {
@@ -86,6 +87,10 @@ describe('reasoning-effort', () => {
       effective: 'high',
       exact: true,
       message: null,
+    });
+    expect(resolveProviderReasoningEffort('claude', 'none', 'fable')).toMatchObject({
+      effective: 'medium',
+      exact: false,
     });
     // Other Claude models keep the legacy none/medium/high behavior.
     expect(resolveProviderReasoningEffort('claude', 'none', 'claude-opus-4-8')).toEqual({

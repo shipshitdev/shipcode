@@ -250,6 +250,15 @@ describe('buildClaudeArgs', () => {
       'Read,Grep',
     ]);
   });
+
+  it('passes rolling and pinned Claude model values through unchanged', () => {
+    expect(buildClaudeArgs(req({ phase: 'plan', modelHint: 'opus' }))).toEqual(
+      expect.arrayContaining(['--model', 'opus']),
+    );
+    expect(buildClaudeArgs(req({ phase: 'plan', modelHint: 'claude-opus-4-8' }))).toEqual(
+      expect.arrayContaining(['--model', 'claude-opus-4-8']),
+    );
+  });
 });
 
 describe('buildCodexArgs', () => {
@@ -602,7 +611,26 @@ describe('createClaudeCliProvider', () => {
     const result = await promise;
     expect(result.exitCode).toBe(0);
     expect(result.rawOutput).toBe('partial output');
-    expect(result.resolvedModel).toBe('claude');
+    expect(result.resolvedModel).toBeUndefined();
+  });
+
+  it('records the concrete Claude model reported by stream JSON', async () => {
+    const { pm, trigger } = createMockProcessManager();
+    const provider = createClaudeCliProvider(pm);
+
+    const promise = provider.generate(req({ phase: 'plan', modelHint: 'opus' }));
+    await new Promise((r) => setImmediate(r));
+    await trigger(
+      'output',
+      'proc-1',
+      `${JSON.stringify({
+        type: 'assistant',
+        message: { model: 'claude-opus-4-9', content: [{ type: 'text', text: 'done' }] },
+      })}\n`,
+    );
+    await trigger('exit', 'proc-1', 0);
+
+    await expect(promise).resolves.toMatchObject({ resolvedModel: 'claude-opus-4-9' });
   });
 
   it('notifies callers when the managed Claude process starts', async () => {
@@ -721,7 +749,12 @@ describe('createClaudeCliProvider', () => {
       const provider = createClaudeCliProvider(pm);
 
       const promise = provider.generate(
-        req({ phase: 'execute', cwd, phaseHints: { runMode: 'interactive' } }),
+        req({
+          phase: 'execute',
+          cwd,
+          modelHint: 'opus',
+          phaseHints: { runMode: 'interactive' },
+        }),
       );
       await waitForSpawn(spawnCalls);
 
@@ -730,6 +763,7 @@ describe('createClaudeCliProvider', () => {
       expect(spawnCalls[0].args).toEqual(
         expect.arrayContaining(['--permission-mode', 'acceptEdits', '--name', 'shipcode-t1']),
       );
+      expect(spawnCalls[0].args).toEqual(expect.arrayContaining(['--model', 'opus']));
       expect(spawnCalls[0].args).not.toContain('-p');
       expect(spawnCalls[0].args.at(-1)).toContain(`${cwd}/.shipcode/runs/t1/execute-prompt.md`);
       expect(spawnCalls[0].options).toEqual(expect.objectContaining({ outputMode: 'raw' }));
@@ -738,7 +772,8 @@ describe('createClaudeCliProvider', () => {
       );
 
       await trigger('exit', 'proc-1', 0);
-      await promise;
+      const result = await promise;
+      expect(result.resolvedModel).toBeUndefined();
     } finally {
       fs.rmSync(cwd, { recursive: true, force: true });
     }
@@ -1201,7 +1236,13 @@ describe('interactive structured bridge', () => {
     const provider = createClaudeCliProvider(pm);
 
     const promise = provider.generate(
-      req({ phase: 'plan', cwd, threadId: 'tid', phaseHints: { runMode: 'interactive' } }),
+      req({
+        phase: 'plan',
+        cwd,
+        threadId: 'tid',
+        modelHint: 'opus',
+        phaseHints: { runMode: 'interactive' },
+      }),
     );
     // Spawn happens only after the builder's prompt/output dirs are created.
     await waitForSpawn(spawnCalls);
@@ -1247,5 +1288,40 @@ describe('interactive structured bridge', () => {
     expect(result.rawOutput).toContain('shipcode-clarification');
     expect(result.clarificationRequest?.summary).toBe('Need input');
     expect(result.exitCode).toBe(0);
+    expect(result.resolvedModel).toBeUndefined();
+  });
+
+  it('records concrete model evidence when an interactive Claude transcript exposes it', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-struct-model-'));
+    try {
+      const { pm, trigger, spawnCalls } = createMockProcessManager();
+      const provider = createClaudeCliProvider(pm);
+      const promise = provider.generate(
+        req({
+          phase: 'plan',
+          cwd,
+          threadId: 'tid',
+          modelHint: 'opus',
+          phaseHints: { runMode: 'interactive' },
+        }),
+      );
+      await waitForSpawn(spawnCalls);
+      const outPath = path.join(cwd, '.shipcode', 'runs', 'tid', 'plan-output.md');
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
+      fs.writeFileSync(outPath, 'done');
+      await trigger(
+        'output',
+        'proc-1',
+        `${JSON.stringify({
+          type: 'assistant',
+          message: { model: 'claude-opus-4-9', content: [] },
+        })}\n`,
+      );
+      await trigger('exit', 'proc-1', 0);
+
+      await expect(promise).resolves.toMatchObject({ resolvedModel: 'claude-opus-4-9' });
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
   });
 });

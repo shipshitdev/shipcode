@@ -1,4 +1,11 @@
-import { clampError, type ExecutorModel, type ReasoningEffort } from '@shipcode/shared';
+import {
+  clampError,
+  type ExecutorModel,
+  getPhaseDescriptor,
+  type ReasoningEffort,
+  resolveModelAlias,
+  resolvePhaseModelForIssue,
+} from '@shipcode/shared';
 import type { IpcMainInvokeEvent } from 'electron';
 
 import log from '../logger.service';
@@ -54,6 +61,11 @@ export function registerGitHubIssueOverrideHandlers({
       if (model !== 'claude' && model !== 'codex' && model !== 'openrouter') {
         throw new Error(`Invalid ${phase} model: ${model}`);
       }
+      const descriptor = getPhaseDescriptor(phase);
+      const existingModelId = issue[descriptor.issueModelIdOverrideKey];
+      if (existingModelId) {
+        resolveModelAlias(model, existingModelId);
+      }
 
       queries.githubIssues.updatePhaseModelOverride(issue.id, phase, model);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
@@ -108,7 +120,14 @@ export function registerGitHubIssueOverrideHandlers({
       if (trimmed && !/^[a-zA-Z0-9._:/@-]+$/.test(trimmed)) {
         throw new Error(`Invalid model ID: ${trimmed}`);
       }
-      queries.githubIssues.updatePhaseModelIdOverride(issue.id, phase, trimmed || null);
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      const provider = resolvePhaseModelForIssue(queries.settings.get(), project, issue, phase);
+      queries.githubIssues.updatePhaseModelIdOverride(
+        issue.id,
+        phase,
+        resolveModelAlias(provider, trimmed),
+      );
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
       return queries.githubIssues.getByNumber(projectId, issueNumber);
     },

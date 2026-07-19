@@ -227,6 +227,21 @@ describe('issue triage', () => {
     );
   });
 
+  it('rejects rolling Claude CLI aliases before OpenRouter triage requests', async () => {
+    const client = makeStubClient();
+    const chatSpy = client.chat as unknown as ReturnType<typeof vi.fn>;
+
+    await expect(
+      triageGitHubIssues({
+        issues: [baseIssue],
+        apiKey: 'k',
+        settings: triageSettings({ triageModelId: 'opus' }),
+        createOpenRouterClient: () => client,
+      }),
+    ).rejects.toThrow('opus is a rolling Claude CLI alias');
+    expect(chatSpy).not.toHaveBeenCalled();
+  });
+
   it('falls back to the requested OpenRouter triage model when response model is null', async () => {
     const client = {
       chat: vi.fn(async () => ({

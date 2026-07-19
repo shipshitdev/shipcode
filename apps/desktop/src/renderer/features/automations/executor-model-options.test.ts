@@ -13,9 +13,11 @@ describe('executorModelSuggestions', () => {
   });
 
   it('returns Claude model ids for claude', () => {
-    const values = executorModelSuggestions('claude').map((o) => o.value);
+    const suggestions = executorModelSuggestions('claude');
+    const values = suggestions.map((o) => o.value);
     expect(values.length).toBeGreaterThan(0);
     expect(values.every((v) => typeof v === 'string' && v.length > 0)).toBe(true);
+    expect(suggestions).toContainEqual({ value: 'opus', label: 'Opus (latest)' });
   });
 
   it('returns codex fallback ids for codex', () => {
@@ -62,6 +64,18 @@ describe('executorReasoningOptions', () => {
   it('respects OpenRouter per-model reasoning support', () => {
     expect(values('openrouter', 'qwen/qwen3-coder:free')).toEqual(['inherit', 'none']);
     expect(values('openrouter', 'anthropic/claude-opus-4.8')).toEqual(['inherit', 'none', 'high']);
+  });
+
+  it('keeps the form renderable for an incompatible free-form model id', () => {
+    expect(values('openrouter', 'opus')).toEqual([
+      'inherit',
+      'none',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
   });
 });
 

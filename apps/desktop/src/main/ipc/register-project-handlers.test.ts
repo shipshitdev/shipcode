@@ -4074,6 +4074,30 @@ describe('registerProjectHandlers', () => {
       }),
     ).resolves.toMatchObject(modelOverrides);
     expect(queries.projects.updateModelOverrides).toHaveBeenCalledWith(project.id, modelOverrides);
+    const rollingOverrides = {
+      ...modelOverrides,
+      plannerModelIdOverride: '  OPUS  ',
+    };
+    await expect(
+      handlers.get('project:set-model-overrides')?.(undefined, {
+        projectId: project.id,
+        overrides: rollingOverrides,
+      }),
+    ).resolves.toMatchObject({ plannerModelIdOverride: 'opus' });
+    expect(queries.projects.updateModelOverrides).toHaveBeenLastCalledWith(
+      project.id,
+      expect.objectContaining({ plannerModelIdOverride: 'opus' }),
+    );
+    await expect(
+      handlers.get('project:set-model-overrides')?.(undefined, {
+        projectId: project.id,
+        overrides: {
+          ...modelOverrides,
+          plannerModelOverride: 'openrouter',
+          plannerModelIdOverride: 'opus',
+        },
+      }),
+    ).rejects.toThrow('opus is a rolling Claude CLI alias');
 
     expect(
       handlers.get('project:set-notify-github-user')?.(undefined, {
@@ -4379,6 +4403,21 @@ describe('registerProjectHandlers', () => {
     handlers.get('settings:set')?.(undefined, { telemetryEnabled: true });
     await Promise.resolve();
     expect(queries.settings.set).toHaveBeenCalledWith({ telemetryEnabled: true });
+    handlers.get('settings:set')?.(undefined, {
+      triageModel: 'claude',
+      triageModelId: '  OPUS  ',
+      prdRewriteCodexModel: 'sol',
+    });
+    expect(queries.settings.set).toHaveBeenLastCalledWith({
+      triageModel: 'claude',
+      triageModelId: 'opus',
+      prdRewriteCodexModel: 'gpt-5.6-sol',
+    });
+    expect(() =>
+      handlers.get('settings:set')?.(undefined, {
+        openrouterPlannerModel: 'opus',
+      }),
+    ).toThrow('opus is a rolling Claude CLI alias');
     expect(handlers.get('telemetry:get-status')?.()).toEqual(expect.any(Object));
 
     await expect(handlers.get('health:check')?.(undefined, { force: true })).resolves.toEqual({

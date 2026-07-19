@@ -36,9 +36,12 @@ describe('model-provider-options', () => {
       gemini: 'Google',
       openrouter: 'OpenRouter',
     });
-    expect(getModelOptions('claude', integrationStatus as never)).toEqual([
-      expect.objectContaining({ value: 'claude-custom', label: 'Claude Custom' }),
-    ]);
+    expect(getModelOptions('claude', integrationStatus as never)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: 'claude-custom', label: 'Claude Custom' }),
+        expect.objectContaining({ value: 'opus', label: 'Opus (latest)' }),
+      ]),
+    );
     expect(getModelOptions('openrouter')).toEqual(
       expect.arrayContaining([expect.objectContaining({ value: expect.any(String) })]),
     );
