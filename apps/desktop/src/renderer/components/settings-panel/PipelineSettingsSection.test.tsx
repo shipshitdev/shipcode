@@ -329,7 +329,7 @@ describe('PipelineSettingsSection', () => {
         verifierModel: 'codex',
         plannerReasoningEffort: 'xhigh',
         reviewerReasoningEffort: 'high',
-        executorReasoningEffort: 'medium',
+        executorReasoningEffort: 'high',
         verifierReasoningEffort: 'high',
         prdRewriteCli: 'codex',
         prdRewriteCodexModel: 'gpt-5.6-luna',
