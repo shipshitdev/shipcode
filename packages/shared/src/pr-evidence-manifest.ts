@@ -254,14 +254,8 @@ export function redactEvidenceText(value: string): string {
       /\b(?:github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]+|sk-[A-Za-z0-9_-]{12,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]+)\b/g,
       '[REDACTED]',
     )
-    .replace(
-      /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
-      '[REDACTED JWT]',
-    )
-    .replace(
-      /([?&](?:api[_-]?key|token|secret|password)=)[^&#\s]+/gi,
-      '$1[REDACTED]',
-    )
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[REDACTED JWT]')
+    .replace(/([?&](?:api[_-]?key|token|secret|password)=)[^&#\s]+/gi, '$1[REDACTED]')
     .replace(
       /(["']?(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret|password)["']?\s*[:=]\s*["']?)[^"'\s,;}]+/gi,
       '$1[REDACTED]',
