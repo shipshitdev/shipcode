@@ -24,6 +24,7 @@ export * from './model-identifiers';
 export * from './model-resolution';
 export * from './notifications';
 export * from './pipeline-utils';
+export * from './pr-evidence-manifest';
 export * from './prd-issue-metadata';
 export * from './prd-template';
 export * from './provider-usage';
