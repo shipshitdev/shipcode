@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   deserializePrEvidenceManifest,
+  type PrEvidenceManifest,
   prEvidenceManifestSchema,
   serializePrEvidenceManifest,
-  type PrEvidenceManifest,
 } from './pr-evidence-manifest';
 
 function manifest(overrides: Partial<PrEvidenceManifest> = {}): PrEvidenceManifest {
