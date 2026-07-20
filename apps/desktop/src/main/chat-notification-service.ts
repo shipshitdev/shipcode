@@ -5,7 +5,7 @@ import type {
   Project,
   Thread,
 } from '@shipcode/shared';
-import { clampError, notificationEventFlagForKind } from '@shipcode/shared';
+import { clampError, fetchWithTimeout, notificationEventFlagForKind } from '@shipcode/shared';
 import log from './logger.service';
 
 const DEDUPE_WINDOW_MS = 2_000;
@@ -248,7 +248,7 @@ export class ChatNotificationService {
       }
       if (retryDelay > 0) await delay(retryDelay);
       try {
-        const response = await fetch(url, { ...init, signal: AbortSignal.timeout(10_000) });
+        const response = await fetchWithTimeout(url, init, 10_000);
         if (response.ok) {
           status.lastSuccessAt = new Date().toISOString();
           status.lastError = null;

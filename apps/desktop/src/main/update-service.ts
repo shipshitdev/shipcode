@@ -1,4 +1,4 @@
-import type { UpdateStatus } from '@shipcode/shared';
+import { fetchWithTimeout, type UpdateStatus } from '@shipcode/shared';
 import { app, type BrowserWindow } from 'electron';
 import log from './logger.service';
 
@@ -98,16 +98,16 @@ export class UpdateService {
     this.update({ state: 'checking', error: null });
 
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10_000);
-
-      const response = await fetch(RELEASES_API_URL, {
-        signal: controller.signal,
-        headers: {
-          Accept: 'application/vnd.github+json',
-          'User-Agent': 'shipcode-desktop',
+      const response = await fetchWithTimeout(
+        RELEASES_API_URL,
+        {
+          headers: {
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'shipcode-desktop',
+          },
         },
-      }).finally(() => clearTimeout(timeout));
+        10_000,
+      );
 
       if (response.status === 404) {
         // Repo has no published stable release yet (pre-release state).

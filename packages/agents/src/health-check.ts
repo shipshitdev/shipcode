@@ -23,6 +23,7 @@ import type {
 } from '@shipcode/shared';
 import {
   fallbackCliModelCapabilities,
+  fetchWithTimeout,
   getKnownModelLabel,
   getSupportedReasoningEfforts,
   normalizeReasoningModelId,
@@ -731,11 +732,14 @@ export async function checkOpenRouterAuth(
   // reachable at `/key` — we hit the documented one.
   let keyResponse: Response;
   try {
-    keyResponse = await fetch(`${OPENROUTER_API_BASE}/auth/key`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(10_000),
-    });
+    keyResponse = await fetchWithTimeout(
+      `${OPENROUTER_API_BASE}/auth/key`,
+      {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${apiKey}` },
+      },
+      10_000,
+    );
   } catch (err) {
     return {
       ok: false,
@@ -774,11 +778,14 @@ export async function checkOpenRouterAuth(
     try {
       // /models returns the whole catalog; scanning it is cheaper than
       // assuming a /models/{id} endpoint exists (it doesn't reliably).
-      const modelsRes = await fetch(`${OPENROUTER_API_BASE}/models`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${apiKey}` },
-        signal: AbortSignal.timeout(10_000),
-      });
+      const modelsRes = await fetchWithTimeout(
+        `${OPENROUTER_API_BASE}/models`,
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${apiKey}` },
+        },
+        10_000,
+      );
       /* v8 ignore next -- non-OK catalog validation is non-fatal by design */
       if (modelsRes.ok) {
         const body = (await modelsRes.json()) as { data?: Array<{ id: string }> };
@@ -820,11 +827,14 @@ function openRouterAuthStatusFromFailure(
 
 async function fetchOpenRouterCatalog(apiKey: string): Promise<Set<string> | null> {
   try {
-    const modelsRes = await fetch(`${OPENROUTER_API_BASE}/models`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(10_000),
-    });
+    const modelsRes = await fetchWithTimeout(
+      `${OPENROUTER_API_BASE}/models`,
+      {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${apiKey}` },
+      },
+      10_000,
+    );
     if (!modelsRes.ok) return null;
     const body = (await modelsRes.json()) as { data?: Array<{ id: string }> };
     return new Set((body.data as Array<{ id: string }>).map((model) => model.id));

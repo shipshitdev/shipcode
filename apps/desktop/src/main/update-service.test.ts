@@ -327,25 +327,31 @@ describe('UpdateService.checkNow', () => {
   });
 
   it('aborts slow update checks after the timeout', async () => {
-    vi.useFakeTimers();
+    const timeout = new AbortController();
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeout.signal);
     global.fetch = vi.fn(
       (_url, init) =>
         new Promise<Response>((_resolve, reject) => {
           const signal = init?.signal;
           if (signal instanceof AbortSignal) {
-            signal.addEventListener('abort', () => reject(new Error('aborted by timeout')));
+            signal.addEventListener('abort', () => reject(new Error('aborted by timeout')), {
+              once: true,
+            });
           }
         }),
     ) as typeof fetch;
 
     const svc = new UpdateService(makeWindow());
     const pending = svc.checkNow();
-
-    await vi.advanceTimersByTimeAsync(10_000);
-    await expect(pending).resolves.toMatchObject({
+    const expected = expect(pending).resolves.toMatchObject({
       state: 'error',
       error: 'aborted by timeout',
     });
+
+    timeout.abort();
+
+    await expected;
+    expect(timeoutSpy).toHaveBeenCalledWith(10_000);
   });
 
   it('skips renderer sends when the window or webContents is destroyed', async () => {
