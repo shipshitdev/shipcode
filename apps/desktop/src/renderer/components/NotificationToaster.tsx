@@ -1,8 +1,7 @@
-import type { AppSettings, NotificationKind, NotificationRecord } from '@shipcode/shared';
-import { useQuery } from '@tanstack/react-query';
+import type { NotificationKind, NotificationRecord } from '@shipcode/shared';
 import { useEffect, useRef } from 'react';
 import notifySoundUrl from '../assets/notify.wav?url';
-import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
+import { useAppSettings } from '../hooks/useAppSettings';
 import { useAppStore } from '../stores/app-store';
 import { InAppNotification, useToastExit } from './InAppNotification';
 
@@ -56,12 +55,7 @@ export function NotificationToaster() {
   const selectThread = useAppStore((s) => s.selectThread);
   const setViewMode = useAppStore((s) => s.setViewMode);
 
-  const { data: settings } = useQuery<AppSettings>({
-    queryKey: ['settings'],
-    queryFn: () => window.shipcode.invoke<AppSettings>('settings:get'),
-    enabled: notifications.length > 0,
-    staleTime: STABLE_APP_STATE_STALE_TIME,
-  });
+  const { data: settings } = useAppSettings({ enabled: notifications.length > 0 });
 
   const lastSeenIdsRef = useRef<Set<string> | null>(null);
   if (lastSeenIdsRef.current === null) {

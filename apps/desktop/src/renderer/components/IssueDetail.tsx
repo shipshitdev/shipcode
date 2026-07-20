@@ -1,6 +1,5 @@
 import type {
   ActivityEntry,
-  AppSettings,
   ClarificationAnswer,
   DiffRecord,
   ExecutorModel,
@@ -67,6 +66,7 @@ import {
   Square,
 } from 'lucide-react';
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useAppSettings } from '../hooks/useAppSettings';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { toast } from '../stores/toast-store';
@@ -315,11 +315,7 @@ function useIssueDetailView() {
   const normalizedReviewsByPlanId =
     reviewsByPlanId && typeof reviewsByPlanId === 'object' ? reviewsByPlanId : {};
 
-  const { data: settings } = useQuery<AppSettings | null>({
-    queryKey: ['settings'],
-    queryFn: () => window.shipcode.invoke('settings:get'),
-    staleTime: STABLE_APP_STATE_STALE_TIME,
-  });
+  const { data: settings } = useAppSettings();
 
   const { data: integrationStatus } = useQuery<IntegrationStatus>({
     queryKey: ['integrations'],

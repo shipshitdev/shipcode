@@ -1,5 +1,4 @@
 import type {
-  AppSettings,
   CliProviderUsageMap,
   CliProviderUsageStatus,
   CliProviderUsageWindow,
@@ -22,6 +21,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
+import { useAppSettings } from '../hooks/useAppSettings';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
@@ -496,11 +496,7 @@ export function Titlebar() {
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
-  const { data: settings } = useQuery<AppSettings>({
-    queryKey: ['settings'],
-    queryFn: () => window.shipcode.invoke<AppSettings>('settings:get'),
-    staleTime: STABLE_APP_STATE_STALE_TIME,
-  });
+  const { data: settings } = useAppSettings();
 
   // Polling owned by HealthBanner (health) and ProjectSidebar (provider-usage).
   // Titlebar piggybacks via shared query keys — no duplicate refetchInterval.

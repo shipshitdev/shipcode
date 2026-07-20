@@ -1,16 +1,11 @@
-import type {
-  AppSettings,
-  AutoCommitResult,
-  DiffRecord,
-  GitVisualizerData,
-} from '@shipcode/shared';
+import type { AutoCommitResult, DiffRecord, GitVisualizerData } from '@shipcode/shared';
 import { GitVisualizer } from '@shipcode/ui';
 import { Alert, AlertDescription, Button } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { CleanupModal } from '../../components/CleanupModal';
-import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';
+import { useAppSettings } from '../../hooks/useAppSettings';
 import { useAppStore } from '../../stores/app-store';
 
 export function ProjectGitVisualizer() {
@@ -25,11 +20,7 @@ export function ProjectGitVisualizer() {
   } | null>(null);
   const [cleanupOpen, setCleanupOpen] = useState(false);
 
-  const { data: settings } = useQuery<AppSettings>({
-    queryKey: ['settings'],
-    queryFn: () => window.shipcode.invoke('settings:get'),
-    staleTime: STABLE_APP_STATE_STALE_TIME,
-  });
+  const { data: settings } = useAppSettings();
 
   const {
     data,

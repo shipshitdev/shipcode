@@ -1,5 +1,4 @@
 import {
-  type AppSettings,
   buildProjectModelPresetOverrides,
   clampError,
   type IntegrationStatus,
@@ -26,6 +25,7 @@ import {
   useReducer,
   useRef,
 } from 'react';
+import { useAppSettings } from '../hooks/useAppSettings';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ProjectSettingsContextTab } from './project-settings-modal/ProjectSettingsContextTab';
@@ -229,12 +229,7 @@ function useProjectSettingsModalView() {
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
-  const { data: settings } = useQuery<AppSettings>({
-    queryKey: ['settings'],
-    queryFn: () => window.shipcode.invoke('settings:get'),
-    enabled: projectSettingsModalOpen,
-    staleTime: STABLE_APP_STATE_STALE_TIME,
-  });
+  const { data: settings } = useAppSettings({ enabled: projectSettingsModalOpen });
 
   const { data: integrationStatus } = useQuery<IntegrationStatus>({
     queryKey: ['integrations'],
