@@ -54,7 +54,13 @@ describe('registerGitHubIssueOverrideHandlers', () => {
 
     registerGitHubIssueOverrideHandlers({
       ipcMain,
-      mainWindow: { webContents: { send } } as never,
+      mainWindow: {
+        isDestroyed: vi.fn(() => false),
+        webContents: {
+          isDestroyed: vi.fn(() => false),
+          send,
+        },
+      } as never,
       queries: {
         githubIssues: {
           getByNumber,
