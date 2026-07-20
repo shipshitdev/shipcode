@@ -185,10 +185,7 @@ function syncOpenIssueState(
   const localPipelineStatus = resolveOpenIssuePipelineStatus(issue, thread);
 
   if (githubAuthoritative && project?.githubStatusMapping && githubStatus?.raw) {
-    const { macroColumn } = normalizeStatusOption(
-      githubStatus.raw,
-      project.githubStatusMapping,
-    );
+    const { macroColumn } = normalizeStatusOption(githubStatus.raw, project.githubStatusMapping);
     const projectPipelineStatus = pipelineStatusForProjectMacroColumn(macroColumn);
 
     // Unknown project options are intentionally non-destructive. A project can
@@ -451,18 +448,10 @@ export function registerGitHubHandlers({
         // being overwritten by labels or macro lanes cached before refresh.
         for (const cachedIssue of queries.githubIssues.list(projectId)) {
           if (cachedIssue.state !== 'open' || cachedIssue.isQuickMode) continue;
-          syncOpenIssueState(
-            queries,
-            cachedIssue,
-            ghSync,
-            project,
-            {
-              githubStatus: projectStatuses.get(cachedIssue.issueNumber),
-              githubAuthoritative: Boolean(
-                project.githubProjectUrl && project.githubStatusMapping,
-              ),
-            },
-          );
+          syncOpenIssueState(queries, cachedIssue, ghSync, project, {
+            githubStatus: projectStatuses.get(cachedIssue.issueNumber),
+            githubAuthoritative: Boolean(project.githubProjectUrl && project.githubStatusMapping),
+          });
         }
 
         await Promise.all(
