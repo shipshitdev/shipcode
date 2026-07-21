@@ -10,7 +10,9 @@ import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { AppPickerSection } from '@/AppPickerSection';
 import { ShipCodeLogoMark } from '@/brand/ShipCodeLogoMark';
+import { LabeledModelSelect } from '@/LabeledModelSelect';
 import { PipelineStatus } from '@/PipelineStatus';
 import { PlanViewer } from '@/PlanViewer';
 import { ReviewViewer } from '@/ReviewViewer';
@@ -281,6 +283,59 @@ describe('root UI components', () => {
     act(() => clearButton?.click());
     expect(onClear).toHaveBeenCalledTimes(1);
     view.cleanup();
+  });
+
+  it('connects labeled model selectors to their visible labels', () => {
+    const labeledSelect = renderIntoDom(
+      <LabeledModelSelect
+        id="default-model"
+        label="Default model"
+        value="model-a"
+        options={[{ value: 'model-a', label: 'Model A' }]}
+        onValueChange={vi.fn()}
+      />,
+    );
+    expect(labeledSelect.container.querySelector('label')?.htmlFor).toBe('default-model');
+    expect(
+      labeledSelect.container.querySelector('[data-slot="labeled-model-select"]'),
+    ).not.toBeNull();
+    labeledSelect.cleanup();
+  });
+
+  it('renders app availability, paths, and errors in app picker sections', () => {
+    const appPicker = renderIntoDom(
+      <AppPickerSection
+        title="Project opener"
+        description="Choose an app."
+        label="Default app"
+        selectId="default-app"
+        value="finder"
+        options={[
+          {
+            value: 'finder',
+            label: 'Finder',
+            available: true,
+            path: '/Applications/Finder.app',
+            error: null,
+          },
+          {
+            value: 'editor',
+            label: 'Editor',
+            available: false,
+            path: null,
+            error: 'Editor is not installed',
+          },
+        ]}
+        onValueChange={vi.fn()}
+      />,
+    );
+    expect(appPicker.container.querySelector('label')?.htmlFor).toBe('default-app');
+    expect(appPicker.container.textContent).toContain('Available');
+    expect(appPicker.container.textContent).toContain('Unavailable');
+    expect(appPicker.container.textContent).toContain('/Applications/Finder.app');
+    expect(appPicker.container.textContent).toContain('Editor is not installed');
+    expect(appPicker.container.querySelectorAll('[data-slot="app-picker-option"]')).toHaveLength(2);
+    appPicker.cleanup();
   });
 
   it('renders active and completed phases and only emits clicks for enabled phases', () => {

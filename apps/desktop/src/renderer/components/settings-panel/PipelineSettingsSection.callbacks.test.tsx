@@ -8,6 +8,35 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PipelineSettingsSection } from './PipelineSettingsSection';
 
+vi.mock('@shipcode/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/ui')>();
+  return {
+    ...actual,
+    LabeledModelSelect: ({
+      value,
+      options,
+      onValueChange,
+    }: {
+      value: string;
+      options: readonly { value: string; label: string }[];
+      onValueChange: (value: string) => void;
+    }) => (
+      <div data-select-value={value}>
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            data-testid={`select-${value}-${option.value}`}
+            onClick={() => onValueChange(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    ),
+  };
+});
+
 vi.mock('@shipshitdev/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shipshitdev/ui')>();
   const selectValues = [

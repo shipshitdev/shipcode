@@ -7,6 +7,38 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IntegrationsSettingsSection } from './IntegrationsSettingsSection';
 
+vi.mock('@shipcode/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/ui')>();
+  return {
+    ...actual,
+    AppPickerSection: ({
+      value,
+      options,
+      onValueChange,
+    }: {
+      value: string;
+      options: readonly { value: string; label: string; error: string | null }[];
+      onValueChange: (value: string) => void;
+    }) => (
+      <section>
+        {options.map((option) => (
+          <div key={option.value}>
+            <span>{option.label}</span>
+            {option.error ? <span>{option.error}</span> : null}
+            <button
+              type="button"
+              data-testid={`select-${value}-${option.value}`}
+              onClick={() => onValueChange(option.value)}
+            >
+              select {option.value}
+            </button>
+          </div>
+        ))}
+      </section>
+    ),
+  };
+});
+
 vi.mock('@shipshitdev/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shipshitdev/ui')>();
   const selectValues = ['terminal', 'ghostty', 'cursor', 'finder', 'vscode', 't3code'];
