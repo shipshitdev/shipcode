@@ -3,12 +3,14 @@ import type {
   PipelineCheckpoint,
   PipelinePhase,
   PlanRecord,
+  RetryAction,
   ReviewRecord,
   ShipCodePlan,
   Thread,
   VerificationRecord,
 } from '@shipcode/shared';
 import {
+  getRetryAction,
   PIPELINE_EXECUTOR_PROVIDERS,
   PIPELINE_PHASE,
   shipCodePlanSchema,
@@ -258,8 +260,6 @@ export function resolveFailingPhaseOutput({
   }
 }
 
-export type IssueRetryAction = 'review' | 'execute' | 'verify' | 'commit_and_push' | 'plan';
-
 export function resolveIssueRetryPresentation({
   thread,
   latestPlan,
@@ -269,7 +269,7 @@ export function resolveIssueRetryPresentation({
   latestPlan: PlanRecord | null | undefined;
   latestVerification: VerificationRecord | null | undefined;
 }): {
-  retryAction: IssueRetryAction | null;
+  retryAction: RetryAction | null;
   retryButtonLabel: string;
   retrySummary: string | null;
 } {
@@ -278,21 +278,9 @@ export function resolveIssueRetryPresentation({
     latestVerification?.result === 'failed' &&
     !!latestVerification?.structured;
 
-  const retryAction = (() => {
-    if (!thread) return null;
-    if (/no code changes/i.test(thread.lastError ?? '')) return 'plan' as const;
-    const structuredPlan = latestPlan?.structured ?? null;
-    if (!structuredPlan) return 'plan' as const;
-    if (!thread.worktreePath) return 'review' as const;
-    if (latestVerification && latestVerification.planId === latestPlan?.id) {
-      if (latestVerification.result === 'failed' && latestVerification.structured) {
-        return 'execute' as const;
-      }
-      if (latestVerification.result === 'failed') return 'verify' as const;
-      if (latestVerification.result === 'passed') return 'commit_and_push' as const;
-    }
-    return 'execute' as const;
-  })();
+  const retryAction = thread
+    ? getRetryAction(thread, latestPlan ?? null, latestVerification ?? null)
+    : null;
 
   const retryButtonLabel =
     retryAction === 'review'

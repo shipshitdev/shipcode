@@ -8,6 +8,7 @@ import type {
 import {
   clampError,
   clarificationAnswerSchema,
+  getRetryAction,
   PIPELINE_PHASE,
   resolveExecutorModelForIssue,
   resolveRequireApproval,
@@ -33,7 +34,6 @@ import {
   RUN_TIMELINE_TERMINAL_LIMIT,
   STEERING_INSTRUCTION_MAX,
 } from './register-pipeline-handlers.utils';
-import { getRetryAction } from './retry-phase';
 import type { IpcHandlerDeps } from './types';
 
 const execFileAsync = promisify(execFile);

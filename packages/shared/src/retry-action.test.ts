@@ -1,6 +1,6 @@
-import type { PlanRecord, Thread, VerificationRecord } from '@shipcode/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { getRetryAction } from './retry-phase';
+import type { PlanRecord, Thread, VerificationRecord } from './types';
+import { getRetryAction } from './retry-action';
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
   return {
@@ -9,7 +9,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     title: 'Test thread',
     prompt: 'Prompt',
     status: 'failed',
-    kind: 'pipeline' as const,
+    kind: 'pipeline',
     worktreeBranch: null,
     worktreePath: null,
     plannerModel: 'claude',
@@ -100,6 +100,16 @@ describe('getRetryAction', () => {
     expect(getRetryAction(thread, makePlan({ structured: null }), null)).toBe('plan');
   });
 
+  it('restarts planning when execution produced no code changes', () => {
+    thread = makeThread({
+      lastError: 'Executor exited successfully but produced no code changes',
+      worktreePath: '/tmp/project',
+      worktreeBranch: 'ship/1-test',
+    });
+
+    expect(getRetryAction(thread, makePlan(), null)).toBe('plan');
+  });
+
   it('restarts review when there is a plan but no worktree yet', () => {
     expect(getRetryAction(thread, makePlan(), null)).toBe('review');
   });
@@ -116,7 +126,7 @@ describe('getRetryAction', () => {
     ).toBe('execute');
   });
 
-  it('restarts execution when the latest verification failed with structured findings for the current plan', () => {
+  it('restarts execution when the latest verification failed with structured findings', () => {
     thread = makeThread({ worktreePath: '/tmp/project', worktreeBranch: 'ship/1-test' });
     expect(
       getRetryAction(
@@ -137,14 +147,14 @@ describe('getRetryAction', () => {
     ).toBe('execute');
   });
 
-  it('restarts verification when the latest verification failed without structured findings for the current plan', () => {
+  it('restarts verification when the latest verification failed without structured findings', () => {
     thread = makeThread({ worktreePath: '/tmp/project', worktreeBranch: 'ship/1-test' });
     expect(getRetryAction(thread, makePlan(), makeVerification({ result: 'failed' }))).toBe(
       'verify',
     );
   });
 
-  it('restarts commit and push when the latest verification passed for the current plan', () => {
+  it('restarts commit and push when the latest verification passed', () => {
     thread = makeThread({ worktreePath: '/tmp/project', worktreeBranch: 'ship/1-test' });
     expect(getRetryAction(thread, makePlan(), makeVerification({ result: 'passed' }))).toBe(
       'commit_and_push',
