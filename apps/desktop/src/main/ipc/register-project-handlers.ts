@@ -52,8 +52,9 @@ import {
   validateGithubProjectUrl,
 } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
-import { dialog, shell } from 'electron';
+import { app, dialog, shell } from 'electron';
 import { runAutoCommitWorkflow, runCleanupAnalyze, runCleanupApply } from '../git-workflows';
+import { applyLaunchAtLoginSetting } from '../launch-at-login';
 import log from '../logger.service';
 import { NotificationCredentialStore } from '../notification-credential-store';
 import { isSafeExternalUrl } from '../security';
@@ -1169,12 +1170,21 @@ export function registerProjectHandlers({
   });
 
   ipcMain.handle('settings:set', (_event, patch: Partial<AppSettings>) => {
-    const normalizedPatch = normalizeSettingsModelPatch(queries.settings.get(), patch);
+    const previousSettings = queries.settings.get();
+    const normalizedPatch = normalizeSettingsModelPatch(previousSettings, patch);
     try {
       credentialStore.set(normalizedPatch);
     } catch (error) {
       log.warn('[settings:set] secure credential update failed:', error);
       throw new Error(clampError(error));
+    }
+    if (normalizedPatch.launchAtLogin !== undefined) {
+      try {
+        applyLaunchAtLoginSetting(app, normalizedPatch.launchAtLogin);
+      } catch (error) {
+        credentialStore.set({ launchAtLogin: previousSettings.launchAtLogin });
+        throw error;
+      }
     }
     void configureMainTelemetry(queries.settings.get()).catch((err) => {
       log.warn('[telemetry] reconfigure failed:', err);

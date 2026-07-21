@@ -44,10 +44,12 @@ afterEach(() => {
 function renderGeneral({
   telemetryStatus,
   settings = DEFAULT_SETTINGS,
+  launchAtLoginSupported = false,
   worktreeRootError = null,
 }: {
   telemetryStatus?: TelemetryStatus;
   settings?: typeof DEFAULT_SETTINGS;
+  launchAtLoginSupported?: boolean;
   worktreeRootError?: string | null;
 } = {}) {
   const onUpdate = vi.fn();
@@ -57,6 +59,7 @@ function renderGeneral({
     <GeneralSettingsSection
       settings={settings}
       telemetryStatus={telemetryStatus}
+      launchAtLoginSupported={launchAtLoginSupported}
       worktreeRootError={worktreeRootError}
       onUpdate={onUpdate}
       onUpdateWorktreeRoot={onUpdateWorktreeRoot}
@@ -79,6 +82,18 @@ function makeTelemetryStatus(overrides: Partial<TelemetryStatus> = {}): Telemetr
 }
 
 describe('GeneralSettingsSection', () => {
+  it('updates launch at login only on supported platforms', () => {
+    const { onUpdate } = renderGeneral({ launchAtLoginSupported: true });
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Launch ShipCode at login' }));
+    expect(onUpdate).toHaveBeenCalledWith({ launchAtLogin: true });
+
+    cleanup();
+    renderGeneral({ launchAtLoginSupported: false });
+    expect(screen.queryByRole('switch', { name: 'Launch ShipCode at login' })).toBeNull();
+    expect(screen.getByText(/available in packaged macOS builds only/i)).toBeInTheDocument();
+  });
+
   it('updates appearance controls through settings patches', () => {
     const { onUpdate } = renderGeneral();
 

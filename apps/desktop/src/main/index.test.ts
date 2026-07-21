@@ -83,6 +83,7 @@ const telemetryMock = {
   captureMainException: vi.fn(),
   configureMainTelemetry: vi.fn(async () => undefined),
 };
+const applyLaunchAtLoginSettingMock = vi.fn();
 
 const processManagerMock = {
   killStalled: vi.fn(() => [] as string[]),
@@ -148,6 +149,7 @@ let throwOnGetStuck = false;
 
 const settingsRecord = {
   devLogLevel: 'info',
+  launchAtLogin: true,
   maxConcurrentPipelines: 2,
 };
 
@@ -190,6 +192,9 @@ function installMocks() {
     fixMainProcessPath: vi.fn(() => ({ applied: false, reason: 'not_packaged' })),
   }));
   vi.doMock('./telemetry', () => telemetryMock);
+  vi.doMock('./launch-at-login', () => ({
+    applyLaunchAtLoginSetting: applyLaunchAtLoginSettingMock,
+  }));
   vi.doMock('./splash-screen', () => ({
     SplashScreen: construct(splashScreenMock),
   }));
@@ -329,6 +334,7 @@ describe('main index bootstrap', () => {
     expect(menuMock.setApplicationMenu).toHaveBeenCalledWith({ id: 'menu' });
     expect(windows).toHaveLength(1);
     expect(splashScreenMock.create).toHaveBeenCalled();
+    expect(applyLaunchAtLoginSettingMock).toHaveBeenCalledWith(appMock, true);
     expect(telemetryMock.configureMainTelemetry).toHaveBeenCalledWith(settingsRecord);
     expect(automationSchedulerMock.start).toHaveBeenCalled();
     expect(reconciliationLoopMock.start).toHaveBeenCalled();

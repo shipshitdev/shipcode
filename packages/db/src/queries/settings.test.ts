@@ -23,6 +23,7 @@ describe('SettingsQueries', () => {
     expect(s.fontStyle).toBe('dm-sans');
     expect(s.fontSize).toBe(13);
     expect(s.telemetryEnabled).toBeNull();
+    expect(s.launchAtLogin).toBe(false);
     expect(s.defaultWorktreeEnabled).toBe(true);
     expect(s.terminalScrollback).toBe(10000);
     // Structured phases default to programmatic for both providers.
@@ -65,6 +66,15 @@ describe('SettingsQueries', () => {
     settings.set({ postFormalPrReviewEnabled: false });
 
     expect(settings.get().postFormalPrReviewEnabled).toBe(false);
+  });
+
+  it('round-trips and validates the launch-at-login preference', () => {
+    settings.set({ launchAtLogin: true });
+    expect(settings.get().launchAtLogin).toBe(true);
+
+    expect(() => settings.set({ launchAtLogin: 'true' as never })).toThrow(
+      'launchAtLogin must be boolean',
+    );
   });
 
   it('round-trips the pipeline timeline comment setting', () => {

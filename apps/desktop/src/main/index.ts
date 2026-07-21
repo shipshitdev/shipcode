@@ -127,6 +127,7 @@ import {
 import { registerIpcHandlers } from './ipc';
 import { transitionThreadPhase } from './ipc/helpers';
 import { notifyIssueGraphPipelinePhaseChange } from './ipc/register-issue-graph-handlers';
+import { applyLaunchAtLoginSetting } from './launch-at-login';
 import { NotificationService } from './notification-service';
 import { NotificationCredentialStore } from './notification-credential-store';
 import { createElectronEmitter } from './pipeline-bridge';
@@ -266,6 +267,12 @@ function createWindow() {
       '[notification-credentials] migration deferred:',
       error instanceof Error ? error.message : 'Unknown secure storage error',
     );
+  }
+
+  try {
+    applyLaunchAtLoginSetting(app, queries.settings.get().launchAtLogin);
+  } catch (error) {
+    log.warn('[startup] launch-at-login reconciliation failed:', error);
   }
 
   if (!E2E_MODE) {

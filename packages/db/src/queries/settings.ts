@@ -227,6 +227,7 @@ export class SettingsQueries {
         ? (parsedFontSize as AppSettings['fontSize'])
         : DEFAULT_SETTINGS.fontSize,
       telemetryEnabled: parseNullableBool(stored.telemetryEnabled),
+      launchAtLogin: parseBool(stored.launchAtLogin, DEFAULT_SETTINGS.launchAtLogin),
       defaultWorktreeEnabled: parseBool(
         stored.defaultWorktreeEnabled,
         DEFAULT_SETTINGS.defaultWorktreeEnabled,
@@ -513,6 +514,9 @@ export class SettingsQueries {
       if (typeof patch.telemetryEnabled !== 'boolean') {
         throw new Error('telemetryEnabled must be boolean|null');
       }
+    }
+    if ('launchAtLogin' in patch && typeof patch.launchAtLogin !== 'boolean') {
+      throw new Error('launchAtLogin must be boolean');
     }
     if ('prdRewriteCli' in patch && patch.prdRewriteCli != null) {
       if (!isGeneratorCli(patch.prdRewriteCli)) {

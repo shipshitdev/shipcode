@@ -15,12 +15,14 @@ import {
 export function GeneralSettingsSection({
   settings,
   telemetryStatus,
+  launchAtLoginSupported = false,
   worktreeRootError,
   onUpdate,
   onUpdateWorktreeRoot,
 }: {
   settings: AppSettings;
   telemetryStatus?: TelemetryStatus;
+  launchAtLoginSupported?: boolean;
   worktreeRootError: string | null;
   onUpdate: (patch: Partial<AppSettings>) => void;
   onUpdateWorktreeRoot: (value: string | null) => void;
@@ -93,6 +95,26 @@ export function GeneralSettingsSection({
             </SelectContent>
           </Select>
         </SettingsRow>
+      </SettingsSection>
+
+      <SettingsSection title="Startup">
+        {launchAtLoginSupported ? (
+          <SettingsRow
+            label="Launch ShipCode at login"
+            htmlFor="launch-at-login"
+            description="Open the packaged ShipCode app automatically when you log in to macOS."
+          >
+            <Switch
+              id="launch-at-login"
+              checked={settings.launchAtLogin}
+              onCheckedChange={(checked) => onUpdate({ launchAtLogin: checked })}
+            />
+          </SettingsRow>
+        ) : (
+          <p className="text-xs text-secondary">
+            Launch at login is currently available in packaged macOS builds only.
+          </p>
+        )}
       </SettingsSection>
 
       <SettingsSection title="Privacy">
