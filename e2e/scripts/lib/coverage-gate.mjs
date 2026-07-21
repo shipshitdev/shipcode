@@ -64,10 +64,14 @@ export function summarizeCoverage(rows) {
   return {
     total,
     covered,
-    coveredPct: Number(((covered / total) * 100).toFixed(2)),
+    coveredPct: total === 0 ? 0 : Number(((covered / total) * 100).toFixed(2)),
     driftRows: rows.filter((row) => row.claimed && !row.specsExist),
     uncovered: rows.filter((row) => !row.counted),
   };
+}
+
+export function formatCoverageFailures(failureMessages, mark = '✗') {
+  return failureMessages.join(`\n${mark} `);
 }
 
 export function runCoverageGate({
@@ -130,8 +134,9 @@ export function runCoverageGate({
     `\nCovered ${summary.covered}/${summary.total} = ${summary.coveredPct}% (gate ${gateMin}%)`,
   );
 
-  const [failure] = failureMessages;
-  if (failure) failCoverageGate(failure, failureMark);
+  if (failureMessages.length > 0) {
+    failCoverageGate(formatCoverageFailures(failureMessages, failureMark ?? '✗'), failureMark);
+  }
 
   console.log(`\n${formatSuccess(context)}`);
   return { ...context, artifact, passed };

@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { buildCoverageRows, resolveGateMinimum, summarizeCoverage } from './coverage-gate.mjs';
+import {
+  buildCoverageRows,
+  formatCoverageFailures,
+  resolveGateMinimum,
+  summarizeCoverage,
+} from './coverage-gate.mjs';
 
 test('coverage gate precedence prefers environment, then manifest, then fallback', () => {
   assert.equal(
@@ -80,4 +85,19 @@ test('coverage rows require every assigned spec before counting a claim', () => 
     },
     { covered: 1, coveredPct: 33.33, drift: ['drifted'], total: 3 },
   );
+});
+
+test('empty coverage summaries remain finite', () => {
+  assert.deepEqual(summarizeCoverage([]), {
+    covered: 0,
+    coveredPct: 0,
+    driftRows: [],
+    total: 0,
+    uncovered: [],
+  });
+});
+
+test('coverage failures retain every validation message', () => {
+  assert.equal(formatCoverageFailures(['first', 'second']), 'first\n✗ second');
+  assert.equal(formatCoverageFailures(['first', 'second'], 'FAIL'), 'first\nFAIL second');
 });

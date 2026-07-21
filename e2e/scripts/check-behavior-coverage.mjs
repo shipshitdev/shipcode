@@ -46,7 +46,19 @@ for (const surface of surfaces) {
 }
 
 let requiredKindSet;
-let surfaceGaps;
+
+function findSurfaceGaps(rows) {
+  const countedSurfaceIds = new Set(rows.filter((row) => row.counted).map((row) => row.surfaceId));
+  return surfaces
+    .filter((surface) => requiredKindSet.has(surface.kind))
+    .filter((surface) => !countedSurfaceIds.has(surface.id))
+    .map((surface) => ({
+      id: surface.id,
+      kind: surface.kind,
+      title: surface.title,
+      path: surface.path ?? null,
+    }));
+}
 
 runCoverageGate({
   artifactPath: ARTIFACT,
@@ -58,7 +70,7 @@ runCoverageGate({
       acc[row.surfaceKind] = current;
       return acc;
     }, {});
-    return { bySurfaceKind, surfaceGaps };
+    return { bySurfaceKind, surfaceGaps: findSurfaceGaps(rows) };
   },
   defaultGateMin: 100,
   emptyMessage: 'manifest contains no behaviors',
@@ -72,18 +84,7 @@ runCoverageGate({
   formatSuccess: ({ coveredPct, gateMin }) =>
     `OK E2E behavior coverage gate passed (${coveredPct}% >= ${gateMin}%).`,
   getFailureMessages: ({ coveredPct, driftRows, gateMin, rows }) => {
-    const countedSurfaceIds = new Set(
-      rows.filter((row) => row.counted).map((row) => row.surfaceId),
-    );
-    surfaceGaps = surfaces
-      .filter((surface) => requiredKindSet.has(surface.kind))
-      .filter((surface) => !countedSurfaceIds.has(surface.id))
-      .map((surface) => ({
-        id: surface.id,
-        kind: surface.kind,
-        title: surface.title,
-        path: surface.path ?? null,
-      }));
+    const surfaceGaps = findSurfaceGaps(rows);
     return [
       driftRows.length > 0
         ? `manifest drift - covered behaviors missing their spec file: ${driftRows.map((row) => row.id).join(', ')}`
