@@ -1,4 +1,4 @@
-import { Button, Modal, ModalFooter } from '@shipshitdev/ui';
+import { ConfirmDialog } from '@shipcode/ui';
 
 interface ThreadPanelBoardReviewDialogProps {
   count: number;
@@ -14,45 +14,30 @@ export function ThreadPanelBoardReviewDialog({
   onConfirm,
 }: ThreadPanelBoardReviewDialogProps) {
   const noun = count === 1 ? 'issue' : 'issues';
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.metaKey && event.key === 'Enter' && count > 0) {
-      event.preventDefault();
-      onConfirm();
-    }
-  };
 
   return (
-    <Modal
+    <ConfirmDialog
       open={open}
       onClose={onClose}
+      onConfirm={onConfirm}
       title={`Review and align ${count} ${noun}?`}
       className="max-w-md"
-      onKeyDown={handleKeyDown}
-    >
-      <div className="space-y-3">
-        <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+      warningText={
+        <>
           Warning: ShipCode will ask the triage model to review {count} unclaimed Backlog {noun} and
           may update GitHub labels for each one that meets the auto-apply confidence threshold.
-        </div>
-        <p className="text-sm text-secondary">
-          Active, running, completed, archived, quick-task, and already-linked issues are skipped.
-          The board will refresh after the batch finishes.
-        </p>
-      </div>
-      <ModalFooter>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="border-warning/35 bg-warning/10 text-warning hover:bg-warning/15 hover:text-warning"
-          onClick={onConfirm}
-          disabled={count === 0}
-        >
-          Review board
-        </Button>
-      </ModalFooter>
-    </Modal>
+        </>
+      }
+      warningVariant="warning"
+      confirmLabel="Review board"
+      confirmVariant="outline"
+      confirmClassName="border-warning/35 bg-warning/10 text-warning hover:bg-warning/15 hover:text-warning"
+      disabled={count === 0}
+    >
+      <p className="text-sm text-secondary">
+        Active, running, completed, archived, quick-task, and already-linked issues are skipped. The
+        board will refresh after the batch finishes.
+      </p>
+    </ConfirmDialog>
   );
 }

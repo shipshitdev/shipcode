@@ -1,5 +1,5 @@
 import type { PlanRecord, ReviewRecord } from '@shipcode/shared';
-import { PlanViewer, ReviewViewer } from '@shipcode/ui';
+import { ConfirmDialog, PlanViewer, ReviewViewer } from '@shipcode/ui';
 import { Button, Modal, ModalFooter } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { X } from 'lucide-react';
@@ -66,19 +66,6 @@ export function buildIssueDetailDialogs({
       handleApproveAndClose();
     }
   };
-  const handleArchiveKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.metaKey && e.key === 'Enter') {
-      e.preventDefault();
-      onArchiveConfirmed();
-    }
-  };
-  const handleMarkAsDoneKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.metaKey && e.key === 'Enter' && !isSubmitting) {
-      e.preventDefault();
-      onMarkAsDoneConfirmed();
-    }
-  };
-
   return (
     <>
       <Modal
@@ -122,52 +109,32 @@ export function buildIssueDetailDialogs({
         )}
       </Modal>
 
-      <Modal
+      <ConfirmDialog
         open={showArchiveConfirm}
         onClose={onCloseArchiveConfirm}
+        onConfirm={onArchiveConfirmed}
         title={`Archive issue #${activeIssueNumber}?`}
-        className="max-w-sm"
-        onKeyDown={handleArchiveKeyDown}
-      >
-        <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-          Warning: this closes the GitHub issue and archives its GitHub Project card. Archived items
-          disappear from the Done column.
-        </div>
-        <ModalFooter>
-          <Button variant="ghost" size="sm" onClick={onCloseArchiveConfirm}>
-            Cancel
-          </Button>
-          <Button variant="destructive" size="sm" onClick={onArchiveConfirmed}>
-            Archive
-          </Button>
-        </ModalFooter>
-      </Modal>
+        warningText="Warning: this closes the GitHub issue and archives its GitHub Project card. Archived items disappear from the Done column."
+        confirmLabel="Archive"
+        confirmVariant="destructive"
+      />
 
-      <Modal
+      <ConfirmDialog
         open={showMarkAsDoneConfirm}
         onClose={onCloseMarkAsDoneConfirm}
+        onConfirm={onMarkAsDoneConfirmed}
         title={`Close issue #${activeIssueNumber}?`}
-        className="max-w-sm"
-        onKeyDown={handleMarkAsDoneKeyDown}
+        confirmLabel={
+          <LoadingButtonContent loading={isSubmitting}>Close Issue</LoadingButtonContent>
+        }
+        confirmClassName="bg-purple-600 text-white hover:bg-purple-700"
+        disabled={isSubmitting}
       >
         <p className="text-sm text-secondary">
           This will move the issue to Closed in the Done column. You can still reopen it later from
           GitHub.
         </p>
-        <ModalFooter>
-          <Button variant="ghost" size="sm" onClick={onCloseMarkAsDoneConfirm}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            onClick={onMarkAsDoneConfirmed}
-            disabled={isSubmitting}
-            className="bg-purple-600 text-white hover:bg-purple-700"
-          >
-            <LoadingButtonContent loading={isSubmitting}>Close Issue</LoadingButtonContent>
-          </Button>
-        </ModalFooter>
-      </Modal>
+      </ConfirmDialog>
     </>
   );
 }
