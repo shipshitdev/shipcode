@@ -20,14 +20,15 @@ export function getRetryAction(
     return 'review';
   }
 
-  if (latestVerification?.planId === latestPlan?.id) {
-    if (latestVerification.result === 'failed' && latestVerification.structured) {
+  const verification = latestVerification;
+  if (verification && verification.planId === latestPlan?.id) {
+    if (verification.result === 'failed' && verification.structured) {
       return 'execute';
     }
-    if (latestVerification.result === 'failed') {
+    if (verification.result === 'failed') {
       return 'verify';
     }
-    if (latestVerification.result === 'passed') {
+    if (verification.result === 'passed') {
       return 'commit_and_push';
     }
   }
