@@ -14,13 +14,12 @@ import { Badge } from '@/primitives/badge';
 import { Button } from '@/primitives/button';
 import {
   ACTIVE_STATUSES,
-  COLUMN_FILL,
-  COLUMN_TEXT_CLASS,
   COLUMNS,
   DRAGGABLE_STATUSES,
   LIST_COLUMN_DROP_ID,
   LIST_COLUMN_LABEL,
 } from './constants';
+import { ColumnHeader } from './ColumnHeader';
 import { StatusCircleIcon } from './StatusCircleIcon';
 import type {
   ColumnKey,
@@ -467,17 +466,14 @@ export function IssueListView(props: IssueListViewProps) {
                 className="h-auto flex-1 justify-start gap-2 px-0 text-xs font-semibold uppercase tracking-wider text-secondary hover:bg-transparent hover:text-primary"
                 onClick={() => toggle(column.key)}
               >
-                {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                <StatusCircleIcon
-                  fill={COLUMN_FILL[column.key]}
-                  className={cn(!columnDotColor && COLUMN_TEXT_CLASS[column.key])}
-                  style={columnDotColor ? { color: columnDotColor } : undefined}
-                  size={10}
+                <ColumnHeader
+                  columnKey={column.key}
+                  label={label}
+                  count={columnIssues.length}
+                  countStyle="parenthetical"
+                  columnDotColor={columnDotColor}
+                  leading={isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                 />
-                {label}
-                <span className="ml-0.5 font-normal normal-case tracking-normal text-muted-foreground">
-                  ({columnIssues.length})
-                </span>
               </Button>
             </div>
             {!isCollapsed && (

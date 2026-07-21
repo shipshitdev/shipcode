@@ -98,6 +98,44 @@ describe('BoardColumns drag state coverage', () => {
     view.cleanup();
   });
 
+  it('shares column header content across flat and stacked board layouts', () => {
+    const todoIssue = makeIssue({
+      id: 'todo-column-header',
+      issueNumber: 84,
+      title: 'Todo column header',
+      pipelineStatus: 'todo',
+    });
+    const flat = renderDroppableColumn({
+      issues: [todoIssue],
+      columnDotColor: '#123456',
+      onHideColumn: vi.fn(),
+    });
+    const flatHeader = flat.container.querySelector('[data-slot="kanban-column-header"]');
+    expect(flatHeader?.textContent).toContain('Todo');
+    expect(flatHeader?.textContent).toContain('1');
+    expect(flatHeader?.querySelector('[style*="color: rgb(18, 52, 86)"]')).not.toBeNull();
+    expect(flatHeader?.querySelector('button[aria-label="Hide column"]')).not.toBeNull();
+    flat.cleanup();
+
+    const closedIssue = makeIssue({
+      id: 'done-column-header',
+      issueNumber: 85,
+      title: 'Done column header',
+      state: 'closed',
+      pipelineStatus: 'closed',
+    });
+    const stacked = renderStackedColumn({
+      issues: [closedIssue],
+      readOnly: true,
+      onHideColumn: vi.fn(),
+    });
+    const stackedHeader = stacked.container.querySelector('[data-slot="kanban-column-header"]');
+    expect(stackedHeader?.textContent).toContain('Done');
+    expect(stackedHeader?.textContent).toContain('1');
+    expect(stackedHeader?.querySelector('button[aria-label="Hide column"]')).toBeNull();
+    stacked.cleanup();
+  });
+
   it('highlights droppable section headers, lists, and empty placeholders', () => {
     const completedIssue = makeIssue({
       id: 'completed-drag-target',
