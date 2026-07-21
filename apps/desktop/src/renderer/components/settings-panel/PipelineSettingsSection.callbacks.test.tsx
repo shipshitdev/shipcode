@@ -243,9 +243,9 @@ describe('PipelineSettingsSection callback coverage', () => {
     openModelsTab();
 
     fireEvent.click(screen.getAllByTestId('select-gpt-5.4-mini-__default__')[0]);
-    fireEvent.click(screen.getAllByTestId('select-openrouter/auto-gpt-5.4-mini')[0]);
-    fireEvent.click(screen.getAllByTestId('select-openrouter/auto-gpt-5.4-mini')[1]);
-    fireEvent.click(screen.getAllByTestId('select-openrouter/auto-gpt-5.4-mini')[2]);
+    fireEvent.click(screen.getAllByTestId('select-openrouter/auto-anthropic/claude-sonnet-4.6')[0]);
+    fireEvent.click(screen.getAllByTestId('select-openrouter/auto-anthropic/claude-sonnet-4.6')[1]);
+    fireEvent.click(screen.getAllByTestId('select-openrouter/auto-anthropic/claude-sonnet-4.6')[2]);
 
     const testingTab = screen.getByRole('tab', { name: 'Testing' });
     fireEvent.mouseDown(testingTab, { button: 0 });
@@ -261,9 +261,15 @@ describe('PipelineSettingsSection callback coverage', () => {
     );
 
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ prdRewriteCodexModel: null }));
-    expect(onUpdate).toHaveBeenCalledWith({ openrouterDefaultPaidModel: 'gpt-5.4-mini' });
-    expect(onUpdate).toHaveBeenCalledWith({ openrouterDefaultFreeModel: 'gpt-5.4-mini' });
-    expect(onUpdate).toHaveBeenCalledWith({ openrouterExplicitFallback: 'gpt-5.4-mini' });
+    expect(onUpdate).toHaveBeenCalledWith({
+      openrouterDefaultPaidModel: 'anthropic/claude-sonnet-4.6',
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      openrouterDefaultFreeModel: 'anthropic/claude-sonnet-4.6',
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      openrouterExplicitFallback: 'anthropic/claude-sonnet-4.6',
+    });
     expect(onUpdate).toHaveBeenCalledWith({ testCommand: null });
     expect(onUpdate).toHaveBeenCalledWith({ testingContext: 'keep mocks small' });
   });
