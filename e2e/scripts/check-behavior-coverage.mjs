@@ -10,12 +10,15 @@
  * Gate precedence:
  * E2E_BEHAVIOR_COVERAGE_MIN env > manifest.gateMinPct > 100.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {
+  failCoverageGate,
+  readJson,
+  resolveCoveragePaths,
+  runCoverageGate,
+} from './lib/coverage-gate.mjs';
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const PKG_ROOT = path.resolve(HERE, '..');
+const { packageRoot: PKG_ROOT } = resolveCoveragePaths(import.meta.url);
 const BEHAVIOR_MANIFEST = path.join(PKG_ROOT, 'behavior-coverage.manifest.json');
 const PAGE_MANIFEST = path.join(PKG_ROOT, 'page-coverage.manifest.json');
 const ARTIFACT = path.join(PKG_ROOT, 'e2e-behavior-coverage.json');
@@ -29,116 +32,71 @@ const DEFAULT_REQUIRED_SURFACE_KINDS = [
   'docs-route',
 ];
 
-function fail(message) {
-  console.error(`\nFAIL ${message}`);
-  process.exit(1);
-}
-
-function readJson(file) {
-  if (!existsSync(file)) fail(`manifest not found at ${file}`);
-  return JSON.parse(readFileSync(file, 'utf8'));
-}
-
-const manifest = readJson(BEHAVIOR_MANIFEST);
 const pageManifest = readJson(PAGE_MANIFEST);
-const behaviors = Array.isArray(manifest.behaviors) ? manifest.behaviors : [];
 const surfaces = Array.isArray(pageManifest.surfaces) ? pageManifest.surfaces : [];
 
-if (behaviors.length === 0) fail('manifest contains no behaviors');
-if (surfaces.length === 0) fail('page manifest contains no surfaces');
+if (surfaces.length === 0) failCoverageGate('page manifest contains no surfaces', 'FAIL');
 
-const requiredSurfaceKinds = Array.isArray(manifest.requiredSurfaceKinds)
-  ? manifest.requiredSurfaceKinds
-  : DEFAULT_REQUIRED_SURFACE_KINDS;
-const requiredKindSet = new Set(requiredSurfaceKinds);
 const surfaceById = new Map();
 for (const surface of surfaces) {
-  if (!surface.id || typeof surface.id !== 'string') fail('surface is missing a string id');
+  if (!surface.id || typeof surface.id !== 'string') {
+    failCoverageGate('surface is missing a string id', 'FAIL');
+  }
   surfaceById.set(surface.id, surface);
 }
 
-const ids = new Set();
-for (const behavior of behaviors) {
-  if (!behavior.id || typeof behavior.id !== 'string') fail('behavior is missing a string id');
-  if (ids.has(behavior.id)) fail(`duplicate behavior id: ${behavior.id}`);
-  ids.add(behavior.id);
-  if (!behavior.surfaceId || typeof behavior.surfaceId !== 'string') {
-    fail(`${behavior.id} is missing surfaceId`);
-  }
-  if (!surfaceById.has(behavior.surfaceId)) {
-    fail(`${behavior.id} references unknown surfaceId: ${behavior.surfaceId}`);
-  }
-  if (!behavior.title || typeof behavior.title !== 'string') {
-    fail(`${behavior.id} is missing title`);
-  }
-}
+let requiredKindSet;
+let surfaceGaps;
 
-const envMin = process.env.E2E_BEHAVIOR_COVERAGE_MIN;
-const gateMin =
-  envMin !== undefined && envMin !== ''
-    ? Number(envMin)
-    : typeof manifest.gateMinPct === 'number'
-      ? manifest.gateMinPct
-      : 100;
-
-if (!Number.isFinite(gateMin) || gateMin < 0 || gateMin > 100) {
-  fail(`invalid coverage gate: ${gateMin}`);
-}
-
-const rows = behaviors.map((behavior) => {
-  const claimed = behavior.covered === true;
-  const specRel = behavior.spec ?? '';
-  const specExists = specRel ? existsSync(path.join(PKG_ROOT, specRel)) : false;
-  const counted = claimed && specExists;
-  const surface = surfaceById.get(behavior.surfaceId);
-  return {
-    id: behavior.id,
-    surfaceId: behavior.surfaceId,
-    surfaceKind: surface?.kind ?? 'unknown',
-    title: behavior.title,
-    claimed,
-    spec: specRel,
-    specExists,
-    counted,
-    rationale: behavior.rationale ?? '',
-    followUp: behavior.followUp ?? null,
-  };
-});
-
-const total = rows.length;
-const covered = rows.filter((row) => row.counted).length;
-const coveredPct = Number(((covered / total) * 100).toFixed(2));
-const driftRows = rows.filter((row) => row.claimed && !row.specExists);
-const uncovered = rows.filter((row) => !row.counted);
-
-const countedSurfaceIds = new Set(rows.filter((row) => row.counted).map((row) => row.surfaceId));
-const surfaceGaps = surfaces
-  .filter((surface) => requiredKindSet.has(surface.kind))
-  .filter((surface) => !countedSurfaceIds.has(surface.id))
-  .map((surface) => ({
-    id: surface.id,
-    kind: surface.kind,
-    title: surface.title,
-    path: surface.path ?? null,
-  }));
-
-const bySurfaceKind = rows.reduce((acc, row) => {
-  const current = acc[row.surfaceKind] ?? { total: 0, covered: 0 };
-  current.total += 1;
-  if (row.counted) current.covered += 1;
-  acc[row.surfaceKind] = current;
-  return acc;
-}, {});
-
-const artifact = {
-  total,
-  covered,
-  coveredPct,
-  gateMinPct: gateMin,
-  bySurfaceKind,
-  surfaceGaps,
-  passed: coveredPct >= gateMin && driftRows.length === 0 && surfaceGaps.length === 0,
-  uncovered: uncovered.map((row) => ({
+runCoverageGate({
+  artifactPath: ARTIFACT,
+  artifactBeforePassed: ({ rows }) => {
+    const bySurfaceKind = rows.reduce((acc, row) => {
+      const current = acc[row.surfaceKind] ?? { total: 0, covered: 0 };
+      current.total += 1;
+      if (row.counted) current.covered += 1;
+      acc[row.surfaceKind] = current;
+      return acc;
+    }, {});
+    return { bySurfaceKind, surfaceGaps };
+  },
+  defaultGateMin: 100,
+  emptyMessage: 'manifest contains no behaviors',
+  entriesKey: 'behaviors',
+  envName: 'E2E_BEHAVIOR_COVERAGE_MIN',
+  failureMark: 'FAIL',
+  formatRow: (row) => {
+    const mark = row.counted ? 'OK' : row.claimed && !row.specExists ? 'MISS' : 'TODO';
+    return `  ${mark} ${row.id} -> ${row.surfaceId}`;
+  },
+  formatSuccess: ({ coveredPct, gateMin }) =>
+    `OK E2E behavior coverage gate passed (${coveredPct}% >= ${gateMin}%).`,
+  getFailureMessages: ({ coveredPct, driftRows, gateMin, rows }) => {
+    const countedSurfaceIds = new Set(
+      rows.filter((row) => row.counted).map((row) => row.surfaceId),
+    );
+    surfaceGaps = surfaces
+      .filter((surface) => requiredKindSet.has(surface.kind))
+      .filter((surface) => !countedSurfaceIds.has(surface.id))
+      .map((surface) => ({
+        id: surface.id,
+        kind: surface.kind,
+        title: surface.title,
+        path: surface.path ?? null,
+      }));
+    return [
+      driftRows.length > 0
+        ? `manifest drift - covered behaviors missing their spec file: ${driftRows.map((row) => row.id).join(', ')}`
+        : null,
+      surfaceGaps.length > 0
+        ? `page surfaces missing covered behavior contracts: ${surfaceGaps.map((surface) => surface.id).join(', ')}`
+        : null,
+      coveredPct < gateMin ? `behavior coverage ${coveredPct}% < gate ${gateMin}%` : null,
+    ];
+  },
+  getSpecs: (behavior) => [behavior.spec ?? ''],
+  manifestPath: BEHAVIOR_MANIFEST,
+  mapUncovered: (row) => ({
     id: row.id,
     surfaceId: row.surfaceId,
     surfaceKind: row.surfaceKind,
@@ -146,32 +104,44 @@ const artifact = {
     reason: row.claimed && !row.specExists ? 'spec-missing' : 'not-covered',
     rationale: row.rationale,
     followUp: row.followUp,
-  })),
-};
-writeFileSync(ARTIFACT, `${JSON.stringify(artifact, null, 2)}\n`);
+  }),
+  mapRow: (behavior, { specStatuses }) => ({
+    id: behavior.id,
+    surfaceId: behavior.surfaceId,
+    surfaceKind: surfaceById.get(behavior.surfaceId)?.kind ?? 'unknown',
+    title: behavior.title,
+    spec: specStatuses[0].spec,
+    specExists: specStatuses[0].exists,
+    rationale: behavior.rationale ?? '',
+    followUp: behavior.followUp ?? null,
+  }),
+  packageRoot: PKG_ROOT,
+  title: 'E2E behavior coverage',
+  validateEntries: (behaviors, manifest) => {
+    const requiredSurfaceKinds = Array.isArray(manifest.requiredSurfaceKinds)
+      ? manifest.requiredSurfaceKinds
+      : DEFAULT_REQUIRED_SURFACE_KINDS;
+    requiredKindSet = new Set(requiredSurfaceKinds);
 
-console.log('\nE2E behavior coverage');
-for (const row of rows) {
-  const mark = row.counted ? 'OK' : row.claimed && !row.specExists ? 'MISS' : 'TODO';
-  console.log(`  ${mark} ${row.id} -> ${row.surfaceId}`);
-}
-console.log(`\nCovered ${covered}/${total} = ${coveredPct}% (gate ${gateMin}%)`);
-
-if (driftRows.length > 0) {
-  fail(
-    `manifest drift - covered behaviors missing their spec file: ${driftRows
-      .map((row) => row.id)
-      .join(', ')}`,
-  );
-}
-if (surfaceGaps.length > 0) {
-  fail(
-    `page surfaces missing covered behavior contracts: ${surfaceGaps
-      .map((surface) => surface.id)
-      .join(', ')}`,
-  );
-}
-if (coveredPct < gateMin) {
-  fail(`behavior coverage ${coveredPct}% < gate ${gateMin}%`);
-}
-console.log(`\nOK E2E behavior coverage gate passed (${coveredPct}% >= ${gateMin}%).`);
+    const ids = new Set();
+    for (const behavior of behaviors) {
+      if (!behavior.id || typeof behavior.id !== 'string') {
+        failCoverageGate('behavior is missing a string id', 'FAIL');
+      }
+      if (ids.has(behavior.id)) failCoverageGate(`duplicate behavior id: ${behavior.id}`, 'FAIL');
+      ids.add(behavior.id);
+      if (!behavior.surfaceId || typeof behavior.surfaceId !== 'string') {
+        failCoverageGate(`${behavior.id} is missing surfaceId`, 'FAIL');
+      }
+      if (!surfaceById.has(behavior.surfaceId)) {
+        failCoverageGate(
+          `${behavior.id} references unknown surfaceId: ${behavior.surfaceId}`,
+          'FAIL',
+        );
+      }
+      if (!behavior.title || typeof behavior.title !== 'string') {
+        failCoverageGate(`${behavior.id} is missing title`, 'FAIL');
+      }
+    }
+  },
+});
