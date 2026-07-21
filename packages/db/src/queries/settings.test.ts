@@ -72,6 +72,9 @@ describe('SettingsQueries', () => {
     settings.set({ launchAtLogin: true });
     expect(settings.get().launchAtLogin).toBe(true);
 
+    settings.set({ launchAtLogin: undefined });
+    expect(settings.get().launchAtLogin).toBe(false);
+
     expect(() => settings.set({ launchAtLogin: 'true' as never })).toThrow(
       'launchAtLogin must be boolean',
     );

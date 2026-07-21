@@ -515,7 +515,11 @@ export class SettingsQueries {
         throw new Error('telemetryEnabled must be boolean|null');
       }
     }
-    if ('launchAtLogin' in patch && typeof patch.launchAtLogin !== 'boolean') {
+    if (
+      'launchAtLogin' in patch &&
+      patch.launchAtLogin !== undefined &&
+      typeof patch.launchAtLogin !== 'boolean'
+    ) {
       throw new Error('launchAtLogin must be boolean');
     }
     if ('prdRewriteCli' in patch && patch.prdRewriteCli != null) {

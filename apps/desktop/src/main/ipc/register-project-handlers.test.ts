@@ -4473,10 +4473,10 @@ describe('registerProjectHandlers', () => {
     expect(queries.settings.set).toHaveBeenLastCalledWith({ launchAtLogin: true });
     expect(applyLaunchAtLoginSettingMock).toHaveBeenCalledWith(app, true);
     applyLaunchAtLoginSettingMock.mockImplementationOnce(() => {
-      throw new Error('login item failed');
+      throw new Error('login item failed\nsensitive detail');
     });
     expect(() => handlers.get('settings:set')?.(undefined, { launchAtLogin: true })).toThrow(
-      'login item failed',
+      /^login item failed$/,
     );
     expect(queries.settings.set).toHaveBeenLastCalledWith({ launchAtLogin: false });
     handlers.get('settings:set')?.(undefined, {

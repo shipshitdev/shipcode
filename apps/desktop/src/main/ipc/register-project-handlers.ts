@@ -1183,7 +1183,11 @@ export function registerProjectHandlers({
         applyLaunchAtLoginSetting(app, normalizedPatch.launchAtLogin);
       } catch (error) {
         credentialStore.set({ launchAtLogin: previousSettings.launchAtLogin });
-        throw error;
+        log.warn(
+          '[settings:set] launch at login update failed:',
+          error instanceof Error ? (error.stack ?? error.message) : error,
+        );
+        throw new Error(clampError(error));
       }
     }
     void configureMainTelemetry(queries.settings.get()).catch((err) => {
