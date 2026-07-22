@@ -8,7 +8,9 @@ import { ConfirmDialog } from '@/ConfirmDialog';
 const mountedViews = new Set<{ cleanup: () => void }>();
 
 afterEach(() => {
-  mountedViews.forEach((view) => view.cleanup());
+  mountedViews.forEach((view) => {
+    view.cleanup();
+  });
   mountedViews.clear();
 });
 
