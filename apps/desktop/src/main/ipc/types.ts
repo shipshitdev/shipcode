@@ -37,6 +37,7 @@ import type { GhSyncDeps, Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import type { BrowserWindow, IpcMain } from 'electron';
 import type { AutomationSchedulerLike } from '../automation-scheduler';
 import type { ChatNotificationService } from '../chat-notification-service';
+import type { NotificationCredentialStore } from '../notification-credential-store';
 import type { NotificationService } from '../notification-service';
 import type { ResourceMonitor } from '../resource-monitor';
 
@@ -84,6 +85,7 @@ export interface IpcHandlerDeps {
   emitter: PipelineEmitter;
   notificationService: NotificationService;
   chatNotificationService: ChatNotificationService;
+  notificationCredentials?: NotificationCredentialStore;
   resourceMonitor?: ResourceMonitor;
   /**
    * In-memory cron scheduler for Automations. `project:remove` uses it to cancel

@@ -7,6 +7,7 @@ import type {
 } from '@shipcode/shared';
 import { clampError, fetchWithTimeout, notificationEventFlagForKind } from '@shipcode/shared';
 import log from './logger.service';
+import type { NotificationCredentialSettingsReader } from './notification-credential-store';
 
 const DEDUPE_WINDOW_MS = 2_000;
 const RETRY_DELAYS_MS = [0, 500, 1_500] as const;
@@ -75,11 +76,15 @@ interface TelegramRoute {
 
 export class ChatNotificationService {
   private lastSentAt = new Map<string, number>();
+  private credentialSettings: NotificationCredentialSettingsReader;
 
   constructor(
     private settings: SettingsQueries,
     private projects: ProjectQueries,
-  ) {}
+    credentialSettings?: NotificationCredentialSettingsReader,
+  ) {
+    this.credentialSettings = credentialSettings ?? { getMainSettings: () => this.settings.get() };
+  }
 
   fire(kind: NotificationKind, thread: Thread, testSummary?: string) {
     void this.deliver(kind, thread, testSummary).catch((error) => {
@@ -88,7 +93,7 @@ export class ChatNotificationService {
   }
 
   async sendTest(provider: 'discord' | 'telegram', projectId: string | null = null) {
-    const settings = this.settings.get();
+    const settings = this.credentialSettings.getMainSettings();
     const project = projectId ? this.projects.getById(projectId) : null;
     const message = [
       'ShipCode test alert',
@@ -120,7 +125,7 @@ export class ChatNotificationService {
   }
 
   private async deliver(kind: NotificationKind, thread: Thread, testSummary?: string) {
-    const settings = this.settings.get();
+    const settings = this.credentialSettings.getMainSettings();
     if (!settings.chatNotificationEvents[notificationEventFlagForKind(kind)]) return;
 
     const project = this.projects.getById(thread.projectId);

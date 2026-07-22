@@ -23,6 +23,7 @@ import { registerSupportHandlers } from './ipc/register-support-handlers';
 import type { Queries } from './ipc/types';
 import log, { logEvent } from './logger.service';
 import type { NotificationService } from './notification-service';
+import type { NotificationCredentialStore } from './notification-credential-store';
 import type { ResourceMonitor } from './resource-monitor';
 import { captureIpcFailure } from './telemetry';
 import type { UpdateService } from './update-service';
@@ -36,6 +37,7 @@ export function registerIpcHandlers(
   emitter: PipelineEmitter,
   notificationService: NotificationService,
   chatNotificationService: ChatNotificationService,
+  notificationCredentials: NotificationCredentialStore,
   updateService: UpdateService,
   automationScheduler: AutomationSchedulerLike,
   resourceMonitor: ResourceMonitor,
@@ -97,6 +99,7 @@ export function registerIpcHandlers(
     emitter,
     notificationService,
     chatNotificationService,
+    notificationCredentials,
     resourceMonitor,
     automationScheduler,
     onProjectsChanged,

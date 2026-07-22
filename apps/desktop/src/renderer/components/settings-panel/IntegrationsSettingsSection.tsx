@@ -172,6 +172,8 @@ function useIntegrationsSettingsSectionView({
 }) {
   const [discordTestResult, setDiscordTestResult] = useState<string | null>(null);
   const [telegramTestResult, setTelegramTestResult] = useState<string | null>(null);
+  const [discordWebhookDraft, setDiscordWebhookDraft] = useState('');
+  const [telegramBotTokenDraft, setTelegramBotTokenDraft] = useState('');
   const getOpenRouterModelPresentation = (
     check: NonNullable<IntegrationStatus>['openrouter']['modelChecks'][number],
   ) => {
@@ -457,11 +459,40 @@ function useIntegrationsSettingsSectionView({
                       />
                     </label>
                     <Input
-                      value={settings.discordWebhookUrl ?? ''}
-                      onChange={(e) => onUpdate({ discordWebhookUrl: e.target.value || null })}
-                      placeholder="https://discord.com/api/webhooks/..."
+                      aria-label="Discord webhook URL"
+                      autoComplete="new-password"
+                      type="password"
+                      value={discordWebhookDraft}
+                      onChange={(e) => setDiscordWebhookDraft(e.target.value)}
+                      placeholder={
+                        integrationStatus.discord.configured
+                          ? 'Configured — enter a replacement webhook URL'
+                          : 'https://discord.com/api/webhooks/...'
+                      }
                       spellCheck={false}
                     />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={!discordWebhookDraft.trim()}
+                        onClick={() => {
+                          onUpdate({ discordWebhookUrl: discordWebhookDraft.trim() });
+                          setDiscordWebhookDraft('');
+                        }}
+                      >
+                        Save Discord webhook
+                      </Button>
+                      {integrationStatus.discord.configured ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => onUpdate({ discordWebhookUrl: null })}
+                        >
+                          Clear Discord webhook
+                        </Button>
+                      ) : null}
+                    </div>
                     {integrationStatus.discord.message ? (
                       <div className="text-amber-300">{integrationStatus.discord.message}</div>
                     ) : null}
@@ -518,11 +549,40 @@ function useIntegrationsSettingsSectionView({
                       />
                     </label>
                     <Input
-                      value={settings.telegramBotToken ?? ''}
-                      onChange={(e) => onUpdate({ telegramBotToken: e.target.value || null })}
-                      placeholder="Bot token"
+                      aria-label="Telegram bot token"
+                      autoComplete="new-password"
+                      type="password"
+                      value={telegramBotTokenDraft}
+                      onChange={(e) => setTelegramBotTokenDraft(e.target.value)}
+                      placeholder={
+                        integrationStatus.telegram.configured
+                          ? 'Configured — enter a replacement bot token'
+                          : 'Bot token'
+                      }
                       spellCheck={false}
                     />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={!telegramBotTokenDraft.trim()}
+                        onClick={() => {
+                          onUpdate({ telegramBotToken: telegramBotTokenDraft.trim() });
+                          setTelegramBotTokenDraft('');
+                        }}
+                      >
+                        Save Telegram token
+                      </Button>
+                      {integrationStatus.telegram.configured ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => onUpdate({ telegramBotToken: null })}
+                        >
+                          Clear Telegram token
+                        </Button>
+                      ) : null}
+                    </div>
                     <Input
                       value={settings.telegramDefaultChatId ?? ''}
                       onChange={(e) => onUpdate({ telegramDefaultChatId: e.target.value || null })}

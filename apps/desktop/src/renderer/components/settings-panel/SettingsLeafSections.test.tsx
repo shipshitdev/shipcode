@@ -534,8 +534,6 @@ describe('settings leaf sections', () => {
         integrationsFetching={false}
         settings={{
           ...DEFAULT_SETTINGS,
-          discordWebhookUrl: 'https://discord.test/webhook',
-          telegramBotToken: 'token',
           telegramDefaultChatId: '-100',
         }}
         onUpdate={onUpdate}
@@ -564,9 +562,10 @@ describe('settings leaf sections', () => {
     expect(screen.getByText(/Last delivery succeeded at/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Enable Discord chat alerts'));
-    fireEvent.change(screen.getByPlaceholderText('https://discord.com/api/webhooks/...'), {
-      target: { value: '' },
+    fireEvent.change(screen.getByLabelText('Discord webhook URL'), {
+      target: { value: 'https://discord.test/webhook' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Discord webhook' }));
     fireEvent.click(screen.getAllByRole('button', { name: 'Send test message' })[0]);
 
     await waitFor(() => {
@@ -574,7 +573,8 @@ describe('settings leaf sections', () => {
     });
 
     fireEvent.click(screen.getByText('Enable Telegram chat alerts'));
-    fireEvent.change(screen.getByPlaceholderText('Bot token'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Telegram bot token'), { target: { value: 'token' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Telegram token' }));
     fireEvent.change(screen.getByPlaceholderText('Default chat ID'), {
       target: { value: '-200' },
     });
@@ -585,9 +585,11 @@ describe('settings leaf sections', () => {
     });
 
     expect(onUpdate).toHaveBeenCalledWith({ discordEnabled: true });
-    expect(onUpdate).toHaveBeenCalledWith({ discordWebhookUrl: null });
+    expect(onUpdate).toHaveBeenCalledWith({
+      discordWebhookUrl: 'https://discord.test/webhook',
+    });
     expect(onUpdate).toHaveBeenCalledWith({ telegramEnabled: true });
-    expect(onUpdate).toHaveBeenCalledWith({ telegramBotToken: null });
+    expect(onUpdate).toHaveBeenCalledWith({ telegramBotToken: 'token' });
     expect(onUpdate).toHaveBeenCalledWith({ telegramDefaultChatId: '-200' });
     expect(onTestChat).toHaveBeenCalledWith('discord');
     expect(onTestChat).toHaveBeenCalledWith('telegram');

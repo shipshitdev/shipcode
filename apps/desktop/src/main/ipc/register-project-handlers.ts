@@ -55,6 +55,7 @@ import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
 import { dialog, shell } from 'electron';
 import { runAutoCommitWorkflow, runCleanupAnalyze, runCleanupApply } from '../git-workflows';
 import log from '../logger.service';
+import { NotificationCredentialStore } from '../notification-credential-store';
 import { isSafeExternalUrl } from '../security';
 import { configureMainTelemetry, getTelemetryStatus } from '../telemetry';
 import { isWorktreeLocked, withWorktreeLock } from '../worktree-locks';
@@ -610,9 +611,12 @@ export function registerProjectHandlers({
   queries,
   pipeline,
   chatNotificationService,
+  notificationCredentials,
   automationScheduler,
   onProjectsChanged,
 }: IpcHandlerDeps): void {
+  const credentialStore =
+    notificationCredentials ?? new NotificationCredentialStore(queries.settings);
   registerProjectCodeBrowserHandlers({
     ipcMain,
     queries,
@@ -919,7 +923,7 @@ export function registerProjectHandlers({
 
     return {
       project,
-      settings: queries.settings.get(),
+      settings: credentialStore.getRendererSettings(),
       threads,
       latestPlanStatusByThreadId: (() => {
         const threadIds = threads.map((t) => t.id);
@@ -1161,11 +1165,11 @@ export function registerProjectHandlers({
   });
 
   ipcMain.handle('settings:get', () => {
-    return queries.settings.get();
+    return credentialStore.getRendererSettings();
   });
 
   ipcMain.handle('settings:set', (_event, patch: Partial<AppSettings>) => {
-    queries.settings.set(normalizeSettingsModelPatch(queries.settings.get(), patch));
+    credentialStore.set(normalizeSettingsModelPatch(queries.settings.get(), patch));
     void configureMainTelemetry(queries.settings.get()).catch((err) => {
       log.warn('[telemetry] reconfigure failed:', err);
     });
@@ -1194,7 +1198,7 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'integrations:check',
     async (_event, { force = false }: { force?: boolean } = {}) => {
-      return checkIntegrationStatus(queries.settings.get(), { force });
+      return checkIntegrationStatus(credentialStore.getMainSettings(), { force });
     },
   );
 

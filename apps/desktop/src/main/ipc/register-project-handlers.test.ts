@@ -4398,7 +4398,11 @@ describe('registerProjectHandlers', () => {
       review,
     ]);
     expect(handlers.get('diff:list')?.(undefined, { threadId: 'thread-1' })).toEqual([diff]);
-    expect(handlers.get('settings:get')?.()).toEqual(settings);
+    expect(handlers.get('settings:get')?.()).toEqual({
+      ...settings,
+      discordWebhookUrl: null,
+      telegramBotToken: null,
+    });
     configureMainTelemetryMock.mockRejectedValueOnce(new Error('telemetry failed'));
     handlers.get('settings:set')?.(undefined, { telemetryEnabled: true });
     await Promise.resolve();
