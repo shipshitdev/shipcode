@@ -1,10 +1,11 @@
 import type { ProcessManager } from '@shipcode/agents';
 import type { GhSyncDeps, Pipeline, PipelineEmitter } from '@shipcode/pipeline';
-import { PIPELINE_PHASE } from '@shipcode/shared';
+import { clampError, PIPELINE_PHASE } from '@shipcode/shared';
 import type { BrowserWindow, IpcMain } from 'electron';
 import type { AutomationSchedulerLike } from './automation-scheduler';
 import type { ChatNotificationService } from './chat-notification-service';
 import { transitionThreadPhase } from './ipc/helpers';
+import { validateIpcInvokeArgs } from './ipc/input-validation';
 import { registerAgentConversationHandlers } from './ipc/register-agent-conversation-handlers';
 import { registerAutomationHandlers } from './ipc/register-automation-handlers';
 import { registerDeveloperHandlers } from './ipc/register-developer-handlers';
@@ -64,6 +65,7 @@ export function registerIpcHandlers(
         ipcMain.handle(channel, async (event, ...args) => {
           const startedAt = Date.now();
           try {
+            validateIpcInvokeArgs(String(channel), args);
             const result = await listener(event, ...args);
             const elapsedMs = Date.now() - startedAt;
             logEvent('ipc:handle', {
@@ -77,7 +79,8 @@ export function registerIpcHandlers(
             return result;
           } catch (error) {
             const elapsedMs = Date.now() - startedAt;
-            const message = error instanceof Error ? error.message : String(error);
+            const message = clampError(error) || 'IPC request failed';
+            console.error(`[ipc] ${String(channel)} failed`, error);
             captureIpcFailure(error, { channel: String(channel), elapsedMs });
             logEvent('ipc:handle', {
               channel,
@@ -85,7 +88,7 @@ export function registerIpcHandlers(
               elapsedMs,
               error: message,
             });
-            throw error;
+            throw new Error(message);
           }
         })) as IpcMain['handle'];
       return wrapped;

@@ -26,3 +26,26 @@ packages/
 - **PR is the human gate** — fully autonomous until PR creation
 - **Fork-point SHA for diffs** — stable diffs even when base branch moves
 - **node:sqlite** — built-in Node.js SQLite, no native addon dependencies
+
+## Desktop IPC Trust Boundary
+
+Electron's main process treats the registered channel name and the
+`IpcMainInvokeEvent` as trusted application-owned values. Every argument received from the
+renderer is untrusted, even though the preload bridge and TypeScript channel map constrain normal
+callers.
+
+Before any invoke handler runs, the shared main-process boundary requires either no argument or one
+plain object containing only bounded primitive values, arrays, and plain objects. It rejects
+accessors, symbol properties, circular references, prototype-sensitive keys, non-finite numbers,
+unsupported object prototypes, and payloads outside these limits:
+
+- 1 MiB total input
+- 512 KiB per string
+- 20 nesting levels and 20,000 values
+- 10,000 array items and 1,000 properties per object
+- 256 bytes per property name
+
+Transport validation is the first layer. Each handler still owns domain validation such as enum
+membership, project and thread existence, authorization, URL allowlists, and filesystem path safety.
+Failures are logged in full in the main process, while renderer-visible errors and IPC event metadata
+are reduced to one line and 280 characters.
