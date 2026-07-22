@@ -10,15 +10,9 @@ test.describe('harness smoke', () => {
   test('boots an onboarded workspace with the store exposed', async ({ harness }) => {
     await expect(harness.page.locator('#root')).toBeVisible();
 
-    const securityPreferences = await harness.app.evaluate(({ BrowserWindow }) => {
-      const mainWindow = BrowserWindow.getAllWindows().find((candidate) =>
-        candidate.webContents
-          .getLastWebPreferences()
-          .preload?.replaceAll('\\', '/')
-          .endsWith('/preload/index.js'),
-      );
-      if (!mainWindow) throw new Error('Expected the main BrowserWindow');
-      const preferences = mainWindow.webContents.getLastWebPreferences();
+    const mainWindow = await harness.app.browserWindow(harness.page);
+    const securityPreferences = await mainWindow.evaluate((browserWindow) => {
+      const preferences = browserWindow.webContents.getLastWebPreferences();
       return {
         allowRunningInsecureContent: preferences.allowRunningInsecureContent,
         contextIsolation: preferences.contextIsolation,
