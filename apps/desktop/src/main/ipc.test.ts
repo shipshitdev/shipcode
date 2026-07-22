@@ -283,9 +283,7 @@ describe('registerIpcHandlers', () => {
     });
     register();
 
-    await expect(handled.get('test:private-error')?.({})).rejects.toThrow(
-      `${'x'.repeat(279)}…`,
-    );
+    await expect(handled.get('test:private-error')?.({})).rejects.toThrow(`${'x'.repeat(279)}…`);
     expect(consoleError).toHaveBeenCalledWith('[ipc] test:private-error failed', fullError);
     expect(mocks.logEvent).toHaveBeenCalledWith(
       'ipc:handle',

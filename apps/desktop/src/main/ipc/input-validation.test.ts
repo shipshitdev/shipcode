@@ -57,9 +57,9 @@ describe('validateIpcInvokeArgs', () => {
     const exact = 'x'.repeat(IPC_INPUT_LIMITS.maxStringBytes);
 
     expect(() => validateIpcInvokeArgs('pipeline:reject', [{ feedback: exact }])).not.toThrow();
-    expect(() =>
-      validateIpcInvokeArgs('pipeline:reject', [{ feedback: `${exact}x` }]),
-    ).toThrow(`args.feedback exceeds ${IPC_INPUT_LIMITS.maxStringBytes} bytes`);
+    expect(() => validateIpcInvokeArgs('pipeline:reject', [{ feedback: `${exact}x` }])).toThrow(
+      `args.feedback exceeds ${IPC_INPUT_LIMITS.maxStringBytes} bytes`,
+    );
   });
 
   it('rejects excessive nesting, collection size, and total payload bytes', () => {
