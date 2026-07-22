@@ -5,6 +5,7 @@ import {
   toPipelinePromptScope,
 } from '@shipcode/agents';
 import {
+  type AppSettings,
   type PhaseSkillKey,
   type PromptTelemetryPhase,
   resolvePhaseModelForIssue,
@@ -203,6 +204,117 @@ function emitWorkflowWarning(deps: PipelineDeps, context: PipelineContext): void
   });
 }
 
+type ContextReasoningModels = Pick<
+  PipelineContext,
+  | 'plannerModel'
+  | 'reviewerModel'
+  | 'verifierModel'
+  | 'executorModel'
+  | 'plannerModelIdOverride'
+  | 'reviewerModelIdOverride'
+  | 'executorModelIdOverride'
+  | 'verifierModelIdOverride'
+>;
+
+type ContextReasoningSeed = Pick<
+  Partial<PipelineContext>,
+  | 'phaseReasoningOverrides'
+  | 'plannerReasoningEffort'
+  | 'reviewerReasoningEffort'
+  | 'executorReasoningEffort'
+  | 'verifierReasoningEffort'
+>;
+
+type ContextReasoningSettings = Pick<
+  AppSettings,
+  | 'plannerReasoningEffort'
+  | 'reviewerReasoningEffort'
+  | 'executorReasoningEffort'
+  | 'verifierReasoningEffort'
+>;
+
+type ResolvedContextReasoning = Pick<
+  PipelineContext,
+  | 'phaseReasoningOverrides'
+  | 'phaseReasoningEfforts'
+  | 'plannerReasoningEffort'
+  | 'reviewerReasoningEffort'
+  | 'executorReasoningEffort'
+  | 'verifierReasoningEffort'
+>;
+
+function resolveContextReasoning(
+  models: Readonly<ContextReasoningModels>,
+  seed: Readonly<ContextReasoningSeed>,
+  settings: Readonly<ContextReasoningSettings>,
+  existing?: Readonly<Pick<PipelineContext, 'phaseReasoningOverrides'>>,
+): ResolvedContextReasoning {
+  const phaseReasoningOverrides = {
+    plan:
+      seed.phaseReasoningOverrides?.plan ??
+      existing?.phaseReasoningOverrides.plan ??
+      seed.plannerReasoningEffort ??
+      settings.plannerReasoningEffort,
+    review:
+      seed.phaseReasoningOverrides?.review ??
+      existing?.phaseReasoningOverrides.review ??
+      seed.reviewerReasoningEffort ??
+      settings.reviewerReasoningEffort,
+    revision:
+      seed.phaseReasoningOverrides?.revision ??
+      existing?.phaseReasoningOverrides.revision ??
+      seed.plannerReasoningEffort ??
+      existing?.phaseReasoningOverrides.plan ??
+      settings.plannerReasoningEffort,
+    execute:
+      seed.phaseReasoningOverrides?.execute ??
+      existing?.phaseReasoningOverrides.execute ??
+      seed.executorReasoningEffort ??
+      settings.executorReasoningEffort,
+    verify:
+      seed.phaseReasoningOverrides?.verify ??
+      existing?.phaseReasoningOverrides.verify ??
+      seed.verifierReasoningEffort ??
+      settings.verifierReasoningEffort,
+  } satisfies PipelineContext['phaseReasoningOverrides'];
+  const phaseReasoningEfforts = {
+    plan: resolveProviderReasoningEffort(
+      models.plannerModel,
+      resolvePhaseReasoningEffort('plan', phaseReasoningOverrides.plan),
+      models.plannerModelIdOverride,
+    ).effective,
+    review: resolveProviderReasoningEffort(
+      models.reviewerModel,
+      resolvePhaseReasoningEffort('review', phaseReasoningOverrides.review),
+      models.reviewerModelIdOverride,
+    ).effective,
+    revision: resolveProviderReasoningEffort(
+      models.plannerModel,
+      resolvePhaseReasoningEffort('revision', phaseReasoningOverrides.revision),
+      models.plannerModelIdOverride,
+    ).effective,
+    execute: resolveProviderReasoningEffort(
+      models.executorModel,
+      resolvePhaseReasoningEffort('execute', phaseReasoningOverrides.execute),
+      models.executorModelIdOverride,
+    ).effective,
+    verify: resolveProviderReasoningEffort(
+      models.verifierModel,
+      resolvePhaseReasoningEffort('verify', phaseReasoningOverrides.verify),
+      models.verifierModelIdOverride,
+    ).effective,
+  } satisfies PipelineContext['phaseReasoningEfforts'];
+
+  return {
+    phaseReasoningOverrides,
+    phaseReasoningEfforts,
+    plannerReasoningEffort: phaseReasoningEfforts.plan,
+    reviewerReasoningEffort: phaseReasoningEfforts.review,
+    executorReasoningEffort: phaseReasoningEfforts.execute,
+    verifierReasoningEffort: phaseReasoningEfforts.verify,
+  };
+}
+
 export function createPipelineContextHelpers(
   deps: PipelineDeps,
   activePipelines: Map<string, PipelineContext>,
@@ -238,82 +350,21 @@ export function createPipelineContextHelpers(
         seed.executorModelIdOverride ?? existing.executorModelIdOverride ?? null;
       const verifierModelIdOverride =
         seed.verifierModelIdOverride ?? existing.verifierModelIdOverride ?? null;
-      const phaseReasoningOverrides = {
-        plan:
-          seed.phaseReasoningOverrides?.plan ??
-          existing.phaseReasoningOverrides.plan ??
-          seed.plannerReasoningEffort ??
-          existing.phaseReasoningOverrides.plan ??
-          settings.plannerReasoningEffort,
-        review:
-          seed.phaseReasoningOverrides?.review ??
-          existing.phaseReasoningOverrides.review ??
-          seed.reviewerReasoningEffort ??
-          settings.reviewerReasoningEffort,
-        revision:
-          seed.phaseReasoningOverrides?.revision ??
-          existing.phaseReasoningOverrides.revision ??
-          seed.plannerReasoningEffort ??
-          existing.phaseReasoningOverrides.plan ??
-          settings.plannerReasoningEffort,
-        execute:
-          seed.phaseReasoningOverrides?.execute ??
-          existing.phaseReasoningOverrides.execute ??
-          seed.executorReasoningEffort ??
-          settings.executorReasoningEffort,
-        verify:
-          seed.phaseReasoningOverrides?.verify ??
-          existing.phaseReasoningOverrides.verify ??
-          seed.verifierReasoningEffort ??
-          settings.verifierReasoningEffort,
-      } satisfies PipelineContext['phaseReasoningOverrides'];
-      const phaseReasoningEfforts = {
-        plan: resolveProviderReasoningEffort(
+      const reasoning = resolveContextReasoning(
+        {
           plannerModel,
-          resolvePhaseReasoningEffort('plan', phaseReasoningOverrides.plan),
-          plannerModelIdOverride,
-        ).effective,
-        review: resolveProviderReasoningEffort(
           reviewerModel,
-          resolvePhaseReasoningEffort('review', phaseReasoningOverrides.review),
-          reviewerModelIdOverride,
-        ).effective,
-        revision: resolveProviderReasoningEffort(
-          plannerModel,
-          resolvePhaseReasoningEffort('revision', phaseReasoningOverrides.revision),
-          plannerModelIdOverride,
-        ).effective,
-        execute: resolveProviderReasoningEffort(
-          executorModel,
-          resolvePhaseReasoningEffort('execute', phaseReasoningOverrides.execute),
-          executorModelIdOverride,
-        ).effective,
-        verify: resolveProviderReasoningEffort(
           verifierModel,
-          resolvePhaseReasoningEffort('verify', phaseReasoningOverrides.verify),
+          executorModel,
+          plannerModelIdOverride,
+          reviewerModelIdOverride,
+          executorModelIdOverride,
           verifierModelIdOverride,
-        ).effective,
-      } satisfies PipelineContext['phaseReasoningEfforts'];
-      const plannerReasoningEffort = resolveProviderReasoningEffort(
-        plannerModel,
-        phaseReasoningEfforts.plan,
-        plannerModelIdOverride,
-      ).effective;
-      const reviewerReasoningEffort = resolveProviderReasoningEffort(
-        reviewerModel,
-        phaseReasoningEfforts.review,
-        reviewerModelIdOverride,
-      ).effective;
-      const executorReasoningEffort = resolveProviderReasoningEffort(
-        executorModel,
-        phaseReasoningEfforts.execute,
-        executorModelIdOverride,
-      ).effective;
-      const verifierReasoningEffort = resolveProviderReasoningEffort(
-        verifierModel,
-        phaseReasoningEfforts.verify,
-        verifierModelIdOverride,
-      ).effective;
+        },
+        seed,
+        settings,
+        existing,
+      );
 
       Object.assign(existing, {
         ...seed,
@@ -326,12 +377,7 @@ export function createPipelineContextHelpers(
         executorModelIdOverride,
         verifierModelIdOverride,
         phasePromptScopes: seed.phasePromptScopes ?? existing.phasePromptScopes,
-        phaseReasoningOverrides,
-        phaseReasoningEfforts,
-        plannerReasoningEffort,
-        reviewerReasoningEffort,
-        executorReasoningEffort,
-        verifierReasoningEffort,
+        ...reasoning,
         clarificationHistory: seed.clarificationHistory ?? existing.clarificationHistory ?? [],
         repoPromptMaterials: seed.repoPromptMaterials ?? existing.repoPromptMaterials ?? null,
         workflowPolicy: seed.workflowPolicy ?? existing.workflowPolicy,
@@ -350,59 +396,20 @@ export function createPipelineContextHelpers(
     const reviewerModelIdOverride = seed.reviewerModelIdOverride ?? null;
     const executorModelIdOverride = seed.executorModelIdOverride ?? null;
     const verifierModelIdOverride = seed.verifierModelIdOverride ?? null;
-    const phaseReasoningOverrides = {
-      plan:
-        seed.phaseReasoningOverrides?.plan ??
-        seed.plannerReasoningEffort ??
-        settings.plannerReasoningEffort,
-      review:
-        seed.phaseReasoningOverrides?.review ??
-        seed.reviewerReasoningEffort ??
-        settings.reviewerReasoningEffort,
-      revision:
-        seed.phaseReasoningOverrides?.revision ??
-        seed.plannerReasoningEffort ??
-        settings.plannerReasoningEffort,
-      execute:
-        seed.phaseReasoningOverrides?.execute ??
-        seed.executorReasoningEffort ??
-        settings.executorReasoningEffort,
-      verify:
-        seed.phaseReasoningOverrides?.verify ??
-        seed.verifierReasoningEffort ??
-        settings.verifierReasoningEffort,
-    } satisfies PipelineContext['phaseReasoningOverrides'];
-    const phaseReasoningEfforts = {
-      plan: resolveProviderReasoningEffort(
+    const reasoning = resolveContextReasoning(
+      {
         plannerModel,
-        resolvePhaseReasoningEffort('plan', phaseReasoningOverrides.plan),
-        plannerModelIdOverride,
-      ).effective,
-      review: resolveProviderReasoningEffort(
         reviewerModel,
-        resolvePhaseReasoningEffort('review', phaseReasoningOverrides.review),
-        reviewerModelIdOverride,
-      ).effective,
-      revision: resolveProviderReasoningEffort(
-        plannerModel,
-        resolvePhaseReasoningEffort('revision', phaseReasoningOverrides.revision),
-        plannerModelIdOverride,
-      ).effective,
-      execute: resolveProviderReasoningEffort(
-        executorModel,
-        resolvePhaseReasoningEffort('execute', phaseReasoningOverrides.execute),
-        executorModelIdOverride,
-      ).effective,
-      verify: resolveProviderReasoningEffort(
         verifierModel,
-        resolvePhaseReasoningEffort('verify', phaseReasoningOverrides.verify),
+        executorModel,
+        plannerModelIdOverride,
+        reviewerModelIdOverride,
+        executorModelIdOverride,
         verifierModelIdOverride,
-      ).effective,
-    } satisfies PipelineContext['phaseReasoningEfforts'];
-    const plannerReasoningEffort = phaseReasoningEfforts.plan;
-    const reviewerReasoningEffort = phaseReasoningEfforts.review;
-    const executorReasoningEffort = phaseReasoningEfforts.execute;
-    const verifierReasoningEffort = phaseReasoningEfforts.verify;
+      },
+      seed,
+      settings,
+    );
 
     const persistedThread = deps.threads.getById(threadId);
     const seededProjectId = seed.projectId ?? persistedThread?.projectId ?? null;
@@ -438,10 +445,7 @@ export function createPipelineContextHelpers(
       reviewerModelIdOverride,
       executorModelIdOverride,
       verifierModelIdOverride,
-      plannerReasoningEffort,
-      reviewerReasoningEffort,
-      executorReasoningEffort,
-      verifierReasoningEffort,
+      ...reasoning,
       executorModelOverride: seed.executorModelOverride ?? null,
       baseBranch: seed.baseBranch ?? '',
       forkPointSha: seed.forkPointSha ?? '',
@@ -452,8 +456,6 @@ export function createPipelineContextHelpers(
       repoContext: seed.repoContext ?? null,
       repoPromptMaterials: seed.repoPromptMaterials ?? null,
       phasePromptScopes: seed.phasePromptScopes ?? buildPhasePromptScopes(),
-      phaseReasoningOverrides,
-      phaseReasoningEfforts,
       promptMaterialSummaries: seed.promptMaterialSummaries ?? {},
       promptTelemetry: seed.promptTelemetry ?? [],
       promptTelemetryDiagnostics: seed.promptTelemetryDiagnostics ?? [],
