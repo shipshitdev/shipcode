@@ -5,6 +5,7 @@ const appHandlers = new Map<string, (...args: unknown[]) => unknown>();
 const windows: BrowserWindowMock[] = [];
 
 const appMock = {
+  enableSandbox: vi.fn(),
   setName: vi.fn(),
   getPath: vi.fn(() => '/tmp/shipcode-user-data'),
   getVersion: vi.fn(() => '1.2.3'),
@@ -322,6 +323,7 @@ describe('main index bootstrap', () => {
   it('creates the application window and starts main-process services', async () => {
     await importMain();
 
+    expect(appMock.enableSandbox).toHaveBeenCalledTimes(1);
     expect(appMock.setName).toHaveBeenCalledWith('ShipCode');
     expect(appMock.setAboutPanelOptions).toHaveBeenCalledWith(
       expect.objectContaining({ applicationVersion: '1.2.3' }),

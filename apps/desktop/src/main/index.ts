@@ -45,6 +45,10 @@ process.on('unhandledRejection', (reason) => {
 
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 
+// Enforce Chromium's process sandbox for every renderer, including any window
+// added in the future. The main window also opts in explicitly so its security
+// posture stays visible and independently testable in buildMainWindowOptions.
+app.enableSandbox();
 app.setName('ShipCode');
 
 // E2E mode (SHIPCODE_E2E_MODE=1): the Playwright harness launches the real app
