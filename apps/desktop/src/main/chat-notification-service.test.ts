@@ -111,6 +111,7 @@ describe('ChatNotificationService', () => {
     return new ChatNotificationService(
       { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
       { getById: getProjectMock } as unknown as ProjectQueries,
+      { getMainSettings: getSettingsMock },
     );
   }
 
@@ -192,6 +193,30 @@ describe('ChatNotificationService', () => {
     service.fire('approval', makeThread());
     await new Promise((resolve) => setTimeout(resolve, 0));
 
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not access secure credentials for disabled events', async () => {
+    getSettingsMock.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      chatNotificationEvents: {
+        ...DEFAULT_SETTINGS.chatNotificationEvents,
+        approval: false,
+      },
+    });
+    const getMainSettings = vi.fn(() => {
+      throw new Error('secure storage unavailable');
+    });
+    const service = new ChatNotificationService(
+      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
+      { getById: getProjectMock } as unknown as ProjectQueries,
+      { getMainSettings },
+    );
+
+    service.fire('approval', makeThread());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(getMainSettings).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
 

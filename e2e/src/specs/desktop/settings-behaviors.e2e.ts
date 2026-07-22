@@ -147,9 +147,11 @@ test.describe('settings behavior contracts', () => {
     await page
       .getByPlaceholder('https://discord.com/api/webhooks/...')
       .fill('https://discord.com/api/webhooks/e2e/token');
+    await page.getByRole('button', { name: 'Save Discord webhook' }).click();
 
     await page.locator('#settings-telegram-enabled').click();
     await page.getByPlaceholder('Bot token').fill('123456:e2e-token');
+    await page.getByRole('button', { name: 'Save Telegram token' }).click();
     await page.getByPlaceholder('Default chat ID').fill('-1001234567890');
 
     await expect
@@ -168,11 +170,13 @@ test.describe('settings behavior contracts', () => {
       )
       .toEqual({
         discordEnabled: true,
-        discordWebhookUrl: 'https://discord.com/api/webhooks/e2e/token',
+        discordWebhookUrl: null,
         telegramEnabled: true,
-        telegramBotToken: '123456:e2e-token',
+        telegramBotToken: null,
         telegramDefaultChatId: '-1001234567890',
       });
+    await expect(page.getByRole('button', { name: 'Clear Discord webhook' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Clear Telegram token' })).toBeVisible();
   });
 
   test('auto-commit settings persist provider, mode, and cleanup criteria', async ({ harness }) => {

@@ -1169,7 +1169,13 @@ export function registerProjectHandlers({
   });
 
   ipcMain.handle('settings:set', (_event, patch: Partial<AppSettings>) => {
-    credentialStore.set(normalizeSettingsModelPatch(queries.settings.get(), patch));
+    const normalizedPatch = normalizeSettingsModelPatch(queries.settings.get(), patch);
+    try {
+      credentialStore.set(normalizedPatch);
+    } catch (error) {
+      log.warn('[settings:set] secure credential update failed:', error);
+      throw new Error(clampError(error));
+    }
     void configureMainTelemetry(queries.settings.get()).catch((err) => {
       log.warn('[telemetry] reconfigure failed:', err);
     });
@@ -1198,7 +1204,18 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'integrations:check',
     async (_event, { force = false }: { force?: boolean } = {}) => {
-      return checkIntegrationStatus(credentialStore.getMainSettings(), { force });
+      let mainSettings: AppSettings;
+      try {
+        mainSettings = credentialStore.getMainSettings();
+      } catch (error) {
+        log.warn('[integrations:check] credential decryption unavailable:', error);
+        mainSettings = {
+          ...queries.settings.get(),
+          discordWebhookUrl: null,
+          telegramBotToken: null,
+        };
+      }
+      return checkIntegrationStatus(mainSettings, { force });
     },
   );
 

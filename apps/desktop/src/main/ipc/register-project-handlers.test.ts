@@ -4311,6 +4311,15 @@ describe('registerProjectHandlers', () => {
       canceled: false,
       filePaths: ['/tmp/selected'],
     } as never);
+    const notificationCredentials = {
+      getRendererSettings: vi.fn(() => ({
+        ...settings,
+        discordWebhookUrl: null,
+        telegramBotToken: null,
+      })),
+      getMainSettings: vi.fn(() => settings),
+      set: vi.fn((patch: Partial<AppSettings>) => queries.settings.set(patch)),
+    };
 
     registerProjectHandlers({
       ipcMain,
@@ -4321,6 +4330,7 @@ describe('registerProjectHandlers', () => {
       processManager: {} as never,
       emitter: {} as never,
       notificationService: {} as never,
+      notificationCredentials: notificationCredentials as never,
     });
 
     expect(handlers.get('project:list')?.()).toEqual([
@@ -4427,6 +4437,14 @@ describe('registerProjectHandlers', () => {
         openrouterPlannerModel: 'opus',
       }),
     ).toThrow('opus is a rolling Claude CLI alias');
+    notificationCredentials.set.mockImplementationOnce(() => {
+      throw new Error(`${'x'.repeat(400)}\nstack`);
+    });
+    expect(() =>
+      handlers.get('settings:set')?.(undefined, {
+        discordWebhookUrl: 'https://discord.test/replacement',
+      }),
+    ).toThrow(`${'x'.repeat(279)}…`);
     expect(handlers.get('telemetry:get-status')?.()).toEqual(expect.any(Object));
 
     await expect(handlers.get('health:check')?.(undefined, { force: true })).resolves.toEqual({
@@ -4437,6 +4455,20 @@ describe('registerProjectHandlers', () => {
     ).resolves.toEqual({ providers: [] });
     await expect(handlers.get('integrations:check')?.(undefined, { force: true })).resolves.toEqual(
       { github: { ok: true } },
+    );
+    notificationCredentials.getMainSettings.mockImplementationOnce(() => {
+      throw new Error('secure storage unavailable');
+    });
+    await expect(handlers.get('integrations:check')?.(undefined, { force: true })).resolves.toEqual(
+      { github: { ok: true } },
+    );
+    expect(checkIntegrationStatus).toHaveBeenLastCalledWith(
+      {
+        ...settings,
+        discordWebhookUrl: null,
+        telegramBotToken: null,
+      },
+      { force: true },
     );
     await expect(
       handlers.get('integrations:validate-openrouter-model')?.(undefined, {

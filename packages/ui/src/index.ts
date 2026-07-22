@@ -20,6 +20,11 @@ export { PipelineStatus } from '@/PipelineStatus';
 export { PlanViewer } from '@/PlanViewer';
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/primitives/tooltip';
 export { ReviewViewer } from '@/ReviewViewer';
+export type {
+  SecureCredentialFieldProps,
+  SecureCredentialInputRenderProps,
+} from '@/SecureCredentialField';
+export { SecureCredentialField } from '@/SecureCredentialField';
 export type { SettingsSectionProps } from '@/SettingsSection';
 export { SettingsSection } from '@/SettingsSection';
 export { SideBySideDiffViewer } from '@/SideBySideDiffViewer';

@@ -76,15 +76,12 @@ interface TelegramRoute {
 
 export class ChatNotificationService {
   private lastSentAt = new Map<string, number>();
-  private credentialSettings: NotificationCredentialSettingsReader;
 
   constructor(
     private settings: SettingsQueries,
     private projects: ProjectQueries,
-    credentialSettings?: NotificationCredentialSettingsReader,
-  ) {
-    this.credentialSettings = credentialSettings ?? { getMainSettings: () => this.settings.get() };
-  }
+    private credentialSettings: NotificationCredentialSettingsReader,
+  ) {}
 
   fire(kind: NotificationKind, thread: Thread, testSummary?: string) {
     void this.deliver(kind, thread, testSummary).catch((error) => {
@@ -125,8 +122,8 @@ export class ChatNotificationService {
   }
 
   private async deliver(kind: NotificationKind, thread: Thread, testSummary?: string) {
+    if (!this.settings.get().chatNotificationEvents[notificationEventFlagForKind(kind)]) return;
     const settings = this.credentialSettings.getMainSettings();
-    if (!settings.chatNotificationEvents[notificationEventFlagForKind(kind)]) return;
 
     const project = this.projects.getById(thread.projectId);
     if (!project) return;
