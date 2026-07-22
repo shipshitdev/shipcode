@@ -1032,6 +1032,15 @@ describe('registerGitHubHandlers', () => {
     const deferredIssue = { ...baseIssue, id: 'deferred', issueNumber: 11, pipelineStatus: 'todo' };
     const doneIssue = { ...baseIssue, id: 'done', issueNumber: 12, pipelineStatus: 'todo' };
     const reviewIssue = { ...baseIssue, id: 'review', issueNumber: 13, pipelineStatus: 'todo' };
+    const claimedReviewIssue = {
+      ...baseIssue,
+      id: 'claimed-review',
+      issueNumber: 17,
+      labels: ['shipcode:pipeline:needs_review'],
+      pipelineStatus: 'needs_review',
+      claimedAt: '2026-07-20T08:00:00.000Z',
+      claimedBy: 'scheduler-1',
+    };
     const activeIssue = {
       ...baseIssue,
       id: 'active',
@@ -1066,6 +1075,7 @@ describe('registerGitHubHandlers', () => {
       deferredIssue,
       doneIssue,
       reviewIssue,
+      claimedReviewIssue,
       activeIssue,
       labeledIssue,
       unknownIssue,
@@ -1078,6 +1088,7 @@ describe('registerGitHubHandlers', () => {
         [11, { raw: 'Deferred' }],
         [12, { raw: 'Done' }],
         [13, { raw: 'Human Review' }],
+        [17, { raw: 'Done' }],
         [14, { raw: 'Done' }],
         [15, { raw: 'In Progress' }],
         [16, { raw: 'Icebox' }],
@@ -1141,6 +1152,10 @@ describe('registerGitHubHandlers', () => {
       'review',
       'needs_review',
     );
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      'claimed-review',
+      'needs_review',
+    );
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('active', 'executing');
     expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith('active', 'closed');
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('labeled', 'queued');
@@ -1149,9 +1164,11 @@ describe('registerGitHubHandlers', () => {
       expect.anything(),
     );
     expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith('quick', 'closed');
-    expect(syncToGithub).toHaveBeenCalledTimes(1);
     expect(syncToGithub).toHaveBeenCalledWith(
       expect.objectContaining({ issueNumber: 14, pipelineStatus: 'executing' }),
+    );
+    expect(syncToGithub).toHaveBeenCalledWith(
+      expect.objectContaining({ issueNumber: 17, pipelineStatus: 'needs_review' }),
     );
   });
 

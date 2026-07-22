@@ -73,6 +73,7 @@ const LOCALLY_OWNED_PIPELINE_STATUSES = new Set<IssuePipelineStatus>([
   ISSUE_PIPELINE_STATUS.approval,
   ISSUE_PIPELINE_STATUS.reviewing,
   ISSUE_PIPELINE_STATUS.revising,
+  ISSUE_PIPELINE_STATUS.needsReview,
   ISSUE_PIPELINE_STATUS.executing,
   ISSUE_PIPELINE_STATUS.testing,
   ISSUE_PIPELINE_STATUS.verifying,
@@ -128,6 +129,17 @@ function resolveOpenIssuePipelineStatus(
     : ISSUE_PIPELINE_STATUS.todo;
 }
 
+function hasLocalPipelineOwnership(
+  issue: Pick<GitHubIssueCacheRecord, 'claimedAt' | 'claimedBy'>,
+  localPipelineStatus: IssuePipelineStatus,
+): boolean {
+  return (
+    issue.claimedAt !== null &&
+    issue.claimedBy !== null &&
+    LOCALLY_OWNED_PIPELINE_STATUSES.has(localPipelineStatus)
+  );
+}
+
 function pipelineStatusForProjectMacroColumn(
   macroColumn: ReturnType<typeof normalizeStatusOption>['macroColumn'],
 ): IssuePipelineStatus | null {
@@ -170,9 +182,12 @@ function syncOpenIssueState(
   options: {
     githubStatus?: { raw: string | null };
     githubAuthoritative?: boolean;
+    readBack?: boolean;
   } = {},
 ): GitHubIssueCacheRecord | null {
-  const { githubStatus, githubAuthoritative = false } = options;
+  const { githubStatus, githubAuthoritative = false, readBack = true } = options;
+  const readBackIssue = () =>
+    readBack ? queries.githubIssues.getByNumber(issue.projectId, issue.issueNumber) : null;
   const labelStatus = pipelineStatusFromLabels(issue.labels);
   const thread = resolveCanonicalIssueThread(queries, issue);
   if (thread && issue.threadId !== thread.id) {
@@ -192,24 +207,15 @@ function syncOpenIssueState(
     // add a custom lane without refresh silently translating it to a local lane
     // or overwriting it with stale cached state.
     if (!projectPipelineStatus || !macroColumn) {
-      if (
-        issue.claimedAt &&
-        issue.claimedBy &&
-        LOCALLY_OWNED_PIPELINE_STATUSES.has(localPipelineStatus)
-      ) {
+      if (hasLocalPipelineOwnership(issue, localPipelineStatus)) {
         queries.githubIssues.updatePipelineStatus(issue.id, localPipelineStatus);
       }
-      return queries.githubIssues.getByNumber(issue.projectId, issue.issueNumber);
+      return readBackIssue();
     }
 
-    const hasLocalPipelineOwnership =
-      issue.claimedAt !== null &&
-      issue.claimedBy !== null &&
-      LOCALLY_OWNED_PIPELINE_STATUSES.has(localPipelineStatus);
-
-    if (!hasLocalPipelineOwnership) {
+    if (!hasLocalPipelineOwnership(issue, localPipelineStatus)) {
       queries.githubIssues.updatePipelineStatus(issue.id, projectPipelineStatus);
-      return queries.githubIssues.getByNumber(issue.projectId, issue.issueNumber);
+      return readBackIssue();
     }
 
     // A claimed, active local run owns its macro lane until the claim is
@@ -228,7 +234,7 @@ function syncOpenIssueState(
           log.warn('[github:refresh-issues] active pipeline status sync failed', err);
         });
     }
-    return queries.githubIssues.getByNumber(issue.projectId, issue.issueNumber);
+    return readBackIssue();
   }
 
   queries.githubIssues.updatePipelineStatus(issue.id, localPipelineStatus);
@@ -237,7 +243,7 @@ function syncOpenIssueState(
   // project item has no readable status. Phase transitions remain responsible
   // for outbound synchronization.
   if (githubAuthoritative) {
-    return queries.githubIssues.getByNumber(issue.projectId, issue.issueNumber);
+    return readBackIssue();
   }
 
   if (project && labelStatus !== null && ghSync) {
@@ -254,7 +260,7 @@ function syncOpenIssueState(
       });
   }
 
-  return queries.githubIssues.getByNumber(issue.projectId, issue.issueNumber);
+  return readBackIssue();
 }
 
 function getActiveIssueById(
@@ -448,9 +454,10 @@ export function registerGitHubHandlers({
         // being overwritten by labels or macro lanes cached before refresh.
         for (const cachedIssue of queries.githubIssues.list(projectId)) {
           if (cachedIssue.state !== 'open' || cachedIssue.isQuickMode) continue;
-          syncOpenIssueState(queries, cachedIssue, ghSync, project, {
+          void syncOpenIssueState(queries, cachedIssue, ghSync, project, {
             githubStatus: projectStatuses.get(cachedIssue.issueNumber),
             githubAuthoritative: Boolean(project.githubProjectUrl && project.githubStatusMapping),
+            readBack: false,
           });
         }
 
