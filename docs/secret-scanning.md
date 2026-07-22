@@ -22,10 +22,10 @@ gh workflow run secret-history-scan.yml --repo shipshitdev/shipcode --ref master
 ```
 
 The workflow checks out complete history with credentials disabled, rejects shallow or
-missing-ref checkouts, and runs `gitleaks git --log-opts="--all"`. Its scope is every commit
-reachable from the fetched remote branches and tags. Findings exit non-zero, and gitleaks
-redacts secret values from logs. The workflow does not upload a findings artifact because
-an unredacted artifact could become a second disclosure.
+missing-ref checkouts, and runs `gitleaks git --log-opts="--all -m"`. Its scope is every
+commit reachable from the fetched remote branches and tags, including merge-parent diffs.
+Findings exit non-zero, and gitleaks redacts secret values from logs. The workflow does not
+upload a findings artifact because an unredacted artifact could become a second disclosure.
 
 ## Remediation
 
