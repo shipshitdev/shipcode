@@ -2,8 +2,15 @@
 
 import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmDialog } from '@/ConfirmDialog';
+
+const mountedViews = new Set<{ cleanup: () => void }>();
+
+afterEach(() => {
+  mountedViews.forEach((view) => view.cleanup());
+  mountedViews.clear();
+});
 
 function renderIntoDom(element: ReactElement) {
   const container = document.createElement('div');
@@ -14,7 +21,7 @@ function renderIntoDom(element: ReactElement) {
     root.render(element);
   });
 
-  return {
+  const view = {
     cleanup: () => {
       act(() => {
         root.unmount();
@@ -23,6 +30,9 @@ function renderIntoDom(element: ReactElement) {
       document.body.innerHTML = '';
     },
   };
+
+  mountedViews.add(view);
+  return view;
 }
 
 function buttonNamed(name: string) {
@@ -40,7 +50,7 @@ function buttonNamed(name: string) {
 describe('ConfirmDialog', () => {
   it('confirms with cmd-enter', () => {
     const onConfirm = vi.fn();
-    const view = renderIntoDom(
+    renderIntoDom(
       <ConfirmDialog
         confirmLabel="Archive"
         onClose={vi.fn()}
@@ -60,12 +70,33 @@ describe('ConfirmDialog', () => {
     });
 
     expect(onConfirm).toHaveBeenCalledTimes(1);
-    view.cleanup();
+  });
+
+  it('confirms with ctrl-enter', () => {
+    const onConfirm = vi.fn();
+    renderIntoDom(
+      <ConfirmDialog
+        confirmLabel="Archive"
+        onClose={vi.fn()}
+        onConfirm={onConfirm}
+        open
+        title="Archive issue?"
+      />,
+    );
+
+    const dialog = document.querySelector('[role="dialog"]');
+    act(() => {
+      dialog?.dispatchEvent(
+        new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', ctrlKey: true }),
+      );
+    });
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
   it('blocks the button and shortcut while confirmation is disabled', () => {
     const onConfirm = vi.fn();
-    const view = renderIntoDom(
+    renderIntoDom(
       <ConfirmDialog
         confirmLabel="Review board"
         disabled
@@ -88,12 +119,11 @@ describe('ConfirmDialog', () => {
     });
 
     expect(onConfirm).not.toHaveBeenCalled();
-    view.cleanup();
   });
 
   it('closes from the cancel action', () => {
     const onClose = vi.fn();
-    const view = renderIntoDom(
+    renderIntoDom(
       <ConfirmDialog
         confirmLabel="Continue"
         onClose={onClose}
@@ -110,6 +140,5 @@ describe('ConfirmDialog', () => {
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);
-    view.cleanup();
   });
 });

@@ -38,7 +38,7 @@ export function ConfirmDialog({
   warningVariant = 'danger',
 }: ConfirmDialogProps) {
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.metaKey && event.key === 'Enter' && !disabled) {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !disabled) {
       event.preventDefault();
       onConfirm();
     }
