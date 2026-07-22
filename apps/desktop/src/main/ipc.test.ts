@@ -130,6 +130,7 @@ describe('registerIpcHandlers', () => {
       { id: 4 } as never,
       { id: 5 } as never,
       { id: 6 } as never,
+      { id: 'notification-credentials' } as never,
       { id: 7 } as never,
       { id: 8 } as never,
       { id: 9 } as never,
