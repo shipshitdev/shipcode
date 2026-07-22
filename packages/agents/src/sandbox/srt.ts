@@ -189,6 +189,18 @@ export interface SrtPolicyHandle {
   cleanup: () => Promise<void>;
 }
 
+function assertSrtPolicyInputs(opts: {
+  worktreePath: string;
+  networkPolicy: SandboxNetworkPolicy;
+}): void {
+  if (!path.isAbsolute(opts.worktreePath)) {
+    throw new Error('srt policy requires an absolute worktree path');
+  }
+  if (!Object.hasOwn(NETWORK_PRESETS, opts.networkPolicy)) {
+    throw new Error(`unsupported srt network policy: ${String(opts.networkPolicy)}`);
+  }
+}
+
 /**
  * Write a per-run srt policy to a 0700 temp dir and return its path plus a
  * cleanup. The policy object is built from a FIXED key set — extra write paths
@@ -201,6 +213,10 @@ export async function buildSrtPolicy(opts: {
   networkPolicy: SandboxNetworkPolicy;
   extraWritePaths: string[];
 }): Promise<SrtPolicyHandle> {
+  // Validate before creating any policy artifact. A missing/malformed policy
+  // makes srt fall back to an open default, so invalid inputs must stop the run
+  // before the sandbox process can be spawned.
+  assertSrtPolicyInputs(opts);
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'shipcode-srt-'));
   try {
     await fs.chmod(dir, 0o700);

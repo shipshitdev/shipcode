@@ -17,7 +17,7 @@ import { PLAN_FENCE_TAG, REVIEW_FENCE_TAG, VERIFICATION_FENCE_TAG } from '@shipc
 import { classifyPoolExhaustion, markPoolExhausted } from '../agent-sdk-pool-state';
 import type { ProcessManager } from '../process-manager';
 import { measurePromptPayload } from '../prompt-scope';
-import { buildSandboxedClaudeExecuteCommand, resolveSrt } from '../sandbox/srt';
+import { buildSandboxedClaudeExecuteCommand } from '../sandbox/srt';
 import { StreamParser } from '../stream-parser';
 import { awaitManagedProcess, type ManagedProcessResult } from './managed-process';
 import { stripAnsi } from './output-summary';
@@ -31,6 +31,13 @@ import {
 } from './types';
 
 type CliRunResult = ManagedProcessResult;
+
+const SRT_POLICY_FAILURE =
+  'srt sandbox policy setup failed. Verify sandbox settings, the worktree path, and temporary-directory permissions.';
+const SRT_UNAVAILABLE =
+  'srt sandbox unavailable. Install or reinstall @anthropic-ai/sandbox-runtime, or switch Claude execute to interactive.';
+const SRT_SPAWN_FAILURE =
+  'srt sandbox failed to start. Verify @anthropic-ai/sandbox-runtime and Claude CLI installation permissions.';
 
 interface CliCommand {
   args: string[];
@@ -650,20 +657,37 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
           };
         }
         const inner = buildClaudeCommand(req);
-        const sandboxed = await buildSandboxedClaudeExecuteCommand({
-          worktreePath: req.cwd,
-          innerClaudeArgs: inner.args,
-          networkPolicy: osSandbox.networkPolicy,
-          extraWritePaths: osSandbox.extraWritePaths,
-        });
+        let sandboxed: Awaited<ReturnType<typeof buildSandboxedClaudeExecuteCommand>>;
+        try {
+          sandboxed = await buildSandboxedClaudeExecuteCommand({
+            worktreePath: req.cwd,
+            innerClaudeArgs: inner.args,
+            networkPolicy: osSandbox.networkPolicy,
+            extraWritePaths: osSandbox.extraWritePaths,
+          });
+        } catch {
+          // Policy errors may contain local paths or caller-controlled values.
+          // Return a fixed, bounded diagnostic and never attempt an unsandboxed
+          // fallback or expose the prompt/credentials through rawOutput.
+          return {
+            rawOutput: SRT_POLICY_FAILURE,
+            exitCode: 1,
+            promptTelemetry,
+            providerError: {
+              kind: 'unexpected_stop',
+              message: SRT_POLICY_FAILURE,
+              retryable: false,
+            },
+          };
+        }
         if (!sandboxed) {
           return {
-            rawOutput: `${resolveSrt().reason}. Install @anthropic-ai/sandbox-runtime or disable sandboxed Claude execute.`,
+            rawOutput: SRT_UNAVAILABLE,
             exitCode: 127,
             promptTelemetry,
             providerError: {
               kind: 'binary_missing',
-              message: 'srt sandbox unavailable',
+              message: SRT_UNAVAILABLE,
               retryable: false,
             },
           };
@@ -698,6 +722,21 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
         );
       } finally {
         if (sandboxCleanup) await sandboxCleanup();
+      }
+      if (commandOverride && result.exitCode === 127) {
+        // A synchronous ProcessManager spawn error can carry arbitrary local
+        // exception text. Keep the sandbox launch failure actionable without
+        // forwarding prompt or secret material from that error.
+        return {
+          rawOutput: SRT_SPAWN_FAILURE,
+          exitCode: result.exitCode,
+          promptTelemetry,
+          providerError: {
+            kind: 'binary_missing',
+            message: SRT_SPAWN_FAILURE,
+            retryable: false,
+          },
+        };
       }
       const parser = new StreamParser();
       parser.feed(result.rawOutput);

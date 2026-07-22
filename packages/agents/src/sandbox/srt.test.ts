@@ -80,6 +80,48 @@ describe('buildSrtPolicy', () => {
     await cleanup();
     fs.rmSync(wt, { recursive: true, force: true });
   });
+
+  it('rejects invalid policy inputs before writing an artifact', async () => {
+    await expect(
+      buildSrtPolicy({
+        worktreePath: 'relative/worktree',
+        networkPolicy: 'anthropic-only',
+        extraWritePaths: [],
+      }),
+    ).rejects.toThrow('absolute worktree path');
+
+    await expect(
+      buildSrtPolicy({
+        worktreePath: '/tmp/worktree',
+        networkPolicy: 'allow-all' as never,
+        extraWritePaths: [],
+      }),
+    ).rejects.toThrow('unsupported srt network policy');
+  });
+
+  it('keeps both network presets deny-by-default and exact-host only', async () => {
+    for (const networkPolicy of ['anthropic-only', 'anthropic-github'] as const) {
+      const wt = tmpWorktree();
+      const { policyPath, cleanup } = await buildSrtPolicy({
+        worktreePath: wt,
+        networkPolicy,
+        extraWritePaths: [],
+      });
+      const policy = JSON.parse(fs.readFileSync(policyPath, 'utf8'));
+
+      expect(policy.network.allowedDomains).toEqual(expect.arrayContaining(['api.anthropic.com']));
+      expect(policy.network.allowedDomains).not.toContain('*');
+      expect(policy.network.allowedDomains.every((domain: string) => !domain.includes('*'))).toBe(
+        true,
+      );
+      expect(policy.network.deniedDomains).toEqual([]);
+      expect(policy.network.allowUnixSockets).toEqual([]);
+      expect(policy.network.allowLocalBinding).toBe(false);
+
+      await cleanup();
+      fs.rmSync(wt, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('resolveSrt', () => {

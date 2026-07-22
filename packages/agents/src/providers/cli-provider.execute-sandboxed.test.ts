@@ -44,6 +44,19 @@ function mockPm() {
   return { pm, trigger, spawnCalls };
 }
 
+function mockFailingPm(secret: string) {
+  const pm = {
+    spawn: vi.fn(),
+    spawnWithStdin: vi.fn(() => {
+      throw new Error(`spawn failed: ${secret}\n${'x'.repeat(500)}`);
+    }),
+    kill: vi.fn(),
+    on: vi.fn(),
+    removeListener: vi.fn(),
+  } as unknown as ProcessManager;
+  return pm;
+}
+
 function executeReq(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
   return {
     phase: 'execute',
@@ -134,6 +147,35 @@ describe('programmatic claude execute — sandbox gating', () => {
 
       await trigger('exit', 'proc-1', 0);
       await promise;
+    } finally {
+      fs.rmSync(wt, { recursive: true, force: true });
+    }
+  });
+
+  it('bounds sandbox spawn failures without leaking prompt or secret material', async () => {
+    if (process.platform === 'win32') return; // srt unsupported
+    const wt = fs.mkdtempSync(path.join(os.tmpdir(), 'exec-fail-wt-'));
+    const secret = 'sk-ant-spawn-secret';
+    try {
+      const provider = createClaudeCliProvider(mockFailingPm(secret));
+
+      const result = await provider.generate(
+        executeReq({
+          prompt: `IMPLEMENT WITH ${secret}`,
+          cwd: wt,
+          phaseHints: {
+            runMode: 'programmatic',
+            osSandbox: { backend: 'srt', networkPolicy: 'anthropic-github', extraWritePaths: [] },
+          },
+        }),
+      );
+
+      expect(result.exitCode).toBe(127);
+      expect(result.providerError?.kind).toBe('binary_missing');
+      expect(result.rawOutput).toMatch(/srt sandbox failed to start/i);
+      expect(result.rawOutput.length).toBeLessThanOrEqual(280);
+      expect(result.rawOutput).not.toContain(secret);
+      expect(result.rawOutput).not.toContain('IMPLEMENT WITH');
     } finally {
       fs.rmSync(wt, { recursive: true, force: true });
     }
