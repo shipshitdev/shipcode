@@ -131,6 +131,11 @@ vi.mock('electron', () => ({
   dialog: {
     showOpenDialog: vi.fn(),
   },
+  safeStorage: {
+    isEncryptionAvailable: vi.fn(() => true),
+    encryptString: vi.fn((value: string) => Buffer.from(value, 'utf8')),
+    decryptString: vi.fn((value: Buffer) => value.toString('utf8')),
+  },
   shell: {
     openPath: vi.fn(),
     openExternal: vi.fn(),
