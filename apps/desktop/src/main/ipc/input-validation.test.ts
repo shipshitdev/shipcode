@@ -53,6 +53,29 @@ describe('validateIpcInvokeArgs', () => {
     );
   });
 
+  it('rejects unsafe array properties without invoking accessors', () => {
+    const extraProperty = ['security'] as string[] & { extra?: string };
+    extraProperty.extra = 'do-not-read';
+
+    let accessorInvoked = false;
+    const accessorElement = ['security'];
+    Object.defineProperty(accessorElement, '0', {
+      enumerable: true,
+      get: () => {
+        accessorInvoked = true;
+        return 'do-not-read';
+      },
+    });
+
+    expect(() => validateIpcInvokeArgs('github:create-issue', [{ labels: extraProperty }])).toThrow(
+      'args.labels contains non-index array property extra',
+    );
+    expect(() =>
+      validateIpcInvokeArgs('github:create-issue', [{ labels: accessorElement }]),
+    ).toThrow('args.labels[0] must not use an accessor');
+    expect(accessorInvoked).toBe(false);
+  });
+
   it('accepts the exact string boundary and rejects one byte beyond it', () => {
     const exact = 'x'.repeat(IPC_INPUT_LIMITS.maxStringBytes);
 

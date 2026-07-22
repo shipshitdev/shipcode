@@ -36,6 +36,11 @@ function addNode(channel: string, budget: ValidationBudget): void {
   }
 }
 
+function isCanonicalArrayIndex(key: string, length: number): boolean {
+  const index = Number(key);
+  return Number.isInteger(index) && index >= 0 && index < length && String(index) === key;
+}
+
 function validateStructuredValue(
   channel: string,
   value: unknown,
@@ -88,8 +93,26 @@ function validateStructuredValue(
       invalidInput(channel, `${path} exceeds ${IPC_INPUT_LIMITS.maxArrayItems} array items`);
     }
     addBytes(channel, budget, value.length);
+
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key === 'symbol') {
+        invalidInput(channel, `${path} contains symbol properties`);
+      }
+      if (key === 'length') continue;
+      if (BLOCKED_PROPERTY_NAMES.has(key)) {
+        invalidInput(channel, `${path} contains blocked property ${key}`);
+      }
+      if (!isCanonicalArrayIndex(key, value.length)) {
+        invalidInput(channel, `${path} contains non-index array property ${key}`);
+      }
+    }
+
     for (let index = 0; index < value.length; index += 1) {
-      validateStructuredValue(channel, value[index], `${path}[${index}]`, depth + 1, budget);
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      if (descriptor && !('value' in descriptor)) {
+        invalidInput(channel, `${path}[${index}] must not use an accessor`);
+      }
+      validateStructuredValue(channel, descriptor?.value, `${path}[${index}]`, depth + 1, budget);
     }
     budget.seen.delete(value);
     return;
