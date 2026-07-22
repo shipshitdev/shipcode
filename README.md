@@ -120,6 +120,9 @@ ShipCode uses the `gh` CLI for all GitHub operations. Make sure you're authentic
 gh auth status
 ```
 
+Repository maintainers can use the [secret-scanning runbook](docs/secret-scanning.md) for
+the required pull-request gate, the scheduled full-history audit, and leak remediation.
+
 ### Labels
 
 | Label | Effect |
