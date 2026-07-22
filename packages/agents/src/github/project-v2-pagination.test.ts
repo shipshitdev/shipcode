@@ -137,10 +137,7 @@ describe('paginateProjectV2Items', () => {
     });
 
     expect(items).toEqual([]);
-    expect(onWarn).toHaveBeenCalledWith(
-      '[project-test] gh api graphql failed',
-      expect.any(Error),
-    );
+    expect(onWarn).toHaveBeenCalledWith('[project-test] gh api graphql failed', expect.any(Error));
   });
 
   it('classifies missing project scope failures', async () => {
@@ -216,9 +213,7 @@ describe('paginateProjectV2Items', () => {
     });
 
     expect(items).toEqual([]);
-    expect(onWarn).toHaveBeenCalledWith(
-      `[project-test] project not found: ${PROJECT_URL}`,
-    );
+    expect(onWarn).toHaveBeenCalledWith(`[project-test] project not found: ${PROJECT_URL}`);
   });
 
   it('warns when a page claims another page without a cursor', async () => {

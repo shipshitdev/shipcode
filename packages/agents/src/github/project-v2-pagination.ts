@@ -176,9 +176,7 @@ export async function paginateProjectV2Items(
     const pageInfo = project.items?.pageInfo;
     if (!pageInfo?.hasNextPage) return items;
     if (!pageInfo.endCursor) {
-      opts.onWarn?.(
-        `${prefix} pagination response hasNextPage=true without an endCursor`,
-      );
+      opts.onWarn?.(`${prefix} pagination response hasNextPage=true without an endCursor`);
       return items;
     }
     cursor = pageInfo.endCursor;
