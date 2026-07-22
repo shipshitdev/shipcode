@@ -65,7 +65,11 @@ describe('paginateProjectV2Items', () => {
 
     expect(items.map((item) => item.content?.number)).toEqual([1, 2]);
     expect(mockExecFileAsync).toHaveBeenCalledTimes(2);
+    expect(mockExecFileAsync.mock.calls[0]?.[1]).toContain('cursor=null');
     expect(mockExecFileAsync.mock.calls[1]?.[1]).toContain('cursor=NEXT_PAGE');
+    expect(mockExecFileAsync.mock.calls[0]?.[2]).toEqual(
+      expect.objectContaining({ cwd: '/repo', timeout: 30_000 }),
+    );
   });
 
   it('preserves collected pages when a later response is invalid', async () => {
@@ -118,5 +122,123 @@ describe('paginateProjectV2Items', () => {
 
     expect(items.map((item) => item.content?.number)).toEqual([1]);
     expect(onWarn).toHaveBeenCalledWith('[project-test] hit page cap of 1; truncating test sync');
+  });
+
+  it('warns and preserves collected pages when gh exits with an error', async () => {
+    mockExecFileAsync.mockRejectedValueOnce(new Error('network unavailable'));
+    const onWarn = vi.fn();
+
+    const items = await paginateProjectV2Items({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+      warningPrefix: 'project-test',
+      syncName: 'test',
+      onWarn,
+    });
+
+    expect(items).toEqual([]);
+    expect(onWarn).toHaveBeenCalledWith(
+      '[project-test] gh api graphql failed',
+      expect.any(Error),
+    );
+  });
+
+  it('classifies missing project scope failures', async () => {
+    mockExecFileAsync.mockRejectedValueOnce(
+      Object.assign(new Error('gh failed'), { stderr: 'insufficient_scopes' }),
+    );
+    const onWarn = vi.fn();
+
+    await paginateProjectV2Items({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+      warningPrefix: 'project-test',
+      syncName: 'status',
+      onWarn,
+    });
+
+    expect(onWarn).toHaveBeenCalledWith(
+      '[project-test] missing read:project scope — run `gh auth refresh -s read:project` to enable status sync',
+      expect.any(Error),
+    );
+  });
+
+  it('warns on GraphQL errors and preserves the current items', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({ errors: [{ message: 'permission denied' }] }),
+      stderr: '',
+    });
+    const onWarn = vi.fn();
+
+    const items = await paginateProjectV2Items({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+      warningPrefix: 'project-test',
+      syncName: 'test',
+      onWarn,
+    });
+
+    expect(items).toEqual([]);
+    expect(onWarn).toHaveBeenCalledWith('[project-test] GraphQL errors: permission denied');
+  });
+
+  it('warns for invalid project URLs without invoking gh', async () => {
+    const onWarn = vi.fn();
+
+    const items = await paginateProjectV2Items({
+      cwd: '/repo',
+      projectUrl: 'not-a-project-url',
+      warningPrefix: 'project-test',
+      syncName: 'test',
+      onWarn,
+    });
+
+    expect(items).toEqual([]);
+    expect(mockExecFileAsync).not.toHaveBeenCalled();
+    expect(onWarn).toHaveBeenCalledWith(
+      '[project-test] unparseable project URL: not-a-project-url',
+    );
+  });
+
+  it('warns when the requested project is absent', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({ data: { organization: { projectV2: null } } }),
+      stderr: '',
+    });
+    const onWarn = vi.fn();
+
+    const items = await paginateProjectV2Items({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+      warningPrefix: 'project-test',
+      syncName: 'test',
+      onWarn,
+    });
+
+    expect(items).toEqual([]);
+    expect(onWarn).toHaveBeenCalledWith(
+      `[project-test] project not found: ${PROJECT_URL}`,
+    );
+  });
+
+  it('warns when a page claims another page without a cursor', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: buildPage({ nodes: [{ number: 1 }], hasNextPage: true, endCursor: null }),
+      stderr: '',
+    });
+    const onWarn = vi.fn();
+
+    const items = await paginateProjectV2Items({
+      cwd: '/repo',
+      projectUrl: PROJECT_URL,
+      warningPrefix: 'project-test',
+      syncName: 'test',
+      onWarn,
+    });
+
+    expect(items.map((item) => item.content?.number)).toEqual([1]);
+    expect(onWarn).toHaveBeenCalledWith(
+      '[project-test] pagination response hasNextPage=true without an endCursor',
+    );
   });
 });

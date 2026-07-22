@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { parseGithubProjectUrl } from '@shipcode/shared';
+import { parseGithubProjectUrl, SHELL_EXEC_TIMEOUT_MS } from '@shipcode/shared';
 
 const execFileAsync = promisify(execFile);
 
@@ -121,12 +121,15 @@ export async function paginateProjectV2Items(
       '-F',
       `number=${parsed.number}`,
       '-F',
-      cursor ? `cursor=${cursor}` : 'cursor=',
+      `cursor=${cursor ?? 'null'}`,
     ];
 
     let stdout: string;
     try {
-      const exec = await execFileAsync('gh', args, { cwd: opts.cwd });
+      const exec = await execFileAsync('gh', args, {
+        cwd: opts.cwd,
+        timeout: SHELL_EXEC_TIMEOUT_MS,
+      });
       stdout = exec.stdout;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -163,14 +166,22 @@ export async function paginateProjectV2Items(
     const project = isOrganization
       ? response.data?.organization?.projectV2
       : response.data?.user?.projectV2;
-    if (!project) return items;
+    if (!project) {
+      opts.onWarn?.(`${prefix} project not found: ${opts.projectUrl}`);
+      return items;
+    }
 
     items.push(...(project.items?.nodes ?? []));
 
     const pageInfo = project.items?.pageInfo;
     if (!pageInfo?.hasNextPage) return items;
-    cursor = pageInfo.endCursor ?? null;
-    if (!cursor) return items;
+    if (!pageInfo.endCursor) {
+      opts.onWarn?.(
+        `${prefix} pagination response hasNextPage=true without an endCursor`,
+      );
+      return items;
+    }
+    cursor = pageInfo.endCursor;
   }
 
   opts.onWarn?.(`${prefix} hit page cap of ${maxPages}; truncating ${opts.syncName} sync`);
