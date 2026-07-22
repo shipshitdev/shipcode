@@ -18,7 +18,7 @@ test.describe('harness smoke', () => {
         contextIsolation: preferences.contextIsolation,
         nodeIntegration: preferences.nodeIntegration,
         nodeIntegrationInSubFrames: preferences.nodeIntegrationInSubFrames,
-        nodeIntegrationInWorker: preferences.nodeIntegrationInWorker,
+        nodeIntegrationInWorker: preferences.nodeIntegrationInWorker === true,
         sandbox: preferences.sandbox,
         webSecurity: preferences.webSecurity,
         webviewTag: preferences.webviewTag,
