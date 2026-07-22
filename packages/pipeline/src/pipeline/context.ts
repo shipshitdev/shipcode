@@ -249,12 +249,13 @@ function resolveContextReasoning(
   settings: Readonly<ContextReasoningSettings>,
   existing?: Readonly<Pick<PipelineContext, 'phaseReasoningOverrides'>>,
 ): ResolvedContextReasoning {
+  const plan =
+    seed.phaseReasoningOverrides?.plan ??
+    existing?.phaseReasoningOverrides.plan ??
+    seed.plannerReasoningEffort ??
+    settings.plannerReasoningEffort;
   const phaseReasoningOverrides = {
-    plan:
-      seed.phaseReasoningOverrides?.plan ??
-      existing?.phaseReasoningOverrides.plan ??
-      seed.plannerReasoningEffort ??
-      settings.plannerReasoningEffort,
+    plan,
     review:
       seed.phaseReasoningOverrides?.review ??
       existing?.phaseReasoningOverrides.review ??
@@ -264,8 +265,7 @@ function resolveContextReasoning(
       seed.phaseReasoningOverrides?.revision ??
       existing?.phaseReasoningOverrides.revision ??
       seed.plannerReasoningEffort ??
-      existing?.phaseReasoningOverrides.plan ??
-      settings.plannerReasoningEffort,
+      plan,
     execute:
       seed.phaseReasoningOverrides?.execute ??
       existing?.phaseReasoningOverrides.execute ??

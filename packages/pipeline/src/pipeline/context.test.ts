@@ -376,6 +376,19 @@ describe('createPipelineContextHelpers', () => {
     expect(context.phaseReasoningOverrides.verify).toBe(DEFAULT_SETTINGS.verifierReasoningEffort);
   });
 
+  it('uses the resolved plan override for revision when no revision override is set', () => {
+    const deps = makeDeps();
+    const helpers = createPipelineContextHelpers(deps as never, new Map());
+
+    const context = helpers.ensureContext('thread-1', {
+      projectPath: '/repo',
+      phaseReasoningOverrides: { plan: 'xhigh' },
+    });
+
+    expect(context.phaseReasoningOverrides.plan).toBe('xhigh');
+    expect(context.phaseReasoningOverrides.revision).toBe('xhigh');
+  });
+
   it('keeps reasoning resolution identical when ensureContext reuses seeded context', () => {
     const deps = makeDeps();
     const helpers = createPipelineContextHelpers(deps as never, new Map());
