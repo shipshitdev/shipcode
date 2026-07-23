@@ -64,6 +64,27 @@ describe('shared utility coverage', () => {
           granularity: 'minutes',
         }),
       ).toBe('in 15m');
+      // Default rounding truncates: 90s and 90m stay at the lower whole unit.
+      expect(formatRelativeTime('2026-05-08T11:58:30.000Z')).toBe('1m ago');
+      expect(
+        formatRelativeTime('2026-05-08T10:30:00.000Z', { mode: 'past', granularity: 'minutes' }),
+      ).toBe('1h ago');
+      // rounding: 'round' snaps to the nearest unit at every level (the legacy
+      // provider "checked N ago" indicator: 90s → 2m, 90m → 2h).
+      expect(
+        formatRelativeTime('2026-05-08T11:58:30.000Z', {
+          mode: 'past',
+          granularity: 'minutes',
+          rounding: 'round',
+        }),
+      ).toBe('2m ago');
+      expect(
+        formatRelativeTime('2026-05-08T10:30:00.000Z', {
+          mode: 'past',
+          granularity: 'minutes',
+          rounding: 'round',
+        }),
+      ).toBe('2h ago');
       expect(formatClockTime('2026-05-08T07:08:09.000Z')).toMatch(/^\d{2}:\d{2}:\d{2}$/);
       expect(formatClockTime(new Date('2026-05-08T07:08:09.000Z'))).toMatch(/^\d{2}:\d{2}:\d{2}$/);
       expect(formatClockTime(new Date('2026-05-08T07:08:09.000Z').getTime())).toMatch(

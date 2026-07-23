@@ -32,6 +32,8 @@ const CHECKED_AT_RELATIVE_TIME_OPTIONS = {
   mode: 'past',
   granularity: 'minutes',
   justNowThresholdSec: 45,
+  // Preserve the legacy indicator's nearest-unit rounding (90s → "2m ago").
+  rounding: 'round',
 } as const;
 
 function dotClass(_tone: ProviderTone, state: CliProviderUsageStatus['state']): string {
