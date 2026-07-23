@@ -30,3 +30,5 @@ packages/*/.vitest-reports/
 .clawpatch/
 # Added by code-review-graph
 .code-review-graph/
+# Local MCP configuration; keep repository source configuration portable.
+.codex/config.toml
