@@ -12,6 +12,8 @@ const {
   buildCodexArgs,
   buildCodexStdin,
   buildCodexPrompt,
+  buildNativeExecutionGoal,
+  withExecutionGoalContract,
   buildClaudeInteractiveStructuredCommand,
   buildCodexInteractiveStructuredCommand,
   buildStructuredInstruction,
@@ -410,6 +412,27 @@ describe('buildCodexArgs', () => {
   });
 });
 
+describe('execution goal contracts', () => {
+  it('builds a bounded native goal that points at the full prompt artifact', () => {
+    const goal = buildNativeExecutionGoal('/tmp/wt/.shipcode/runs/t1/execute-prompt.md');
+
+    expect(goal).toMatch(/^\/goal /);
+    expect(goal).toContain('/tmp/wt/.shipcode/runs/t1/execute-prompt.md');
+    expect(goal).toContain('every in-scope plan step and acceptance criterion');
+    expect(goal).toContain('real blocker outside your authority');
+    expect(goal.length).toBeLessThan(4_000);
+  });
+
+  it('adds an idempotent provider-neutral completion contract', () => {
+    const wrapped = withExecutionGoalContract('PROMPT');
+
+    expect(wrapped).toContain('<execution_goal>');
+    expect(wrapped).toContain('Treat completion as a verifiable condition');
+    expect(wrapped).toContain('PROMPT');
+    expect(withExecutionGoalContract(wrapped)).toBe(wrapped);
+  });
+});
+
 describe('buildCodexPrompt', () => {
   it('lets plan phase ground output in repo (read-only inspection allowed)', () => {
     const prompt = buildCodexPrompt(req({ phase: 'plan' }));
@@ -441,8 +464,12 @@ describe('buildCodexPrompt', () => {
     expect(prompt).toContain('Do not run shell commands, inspect files, or use tools');
   });
 
-  it('leaves execute prompts unchanged', () => {
-    expect(buildCodexPrompt(req({ phase: 'execute' }))).toBe('PROMPT');
+  it('adds the completion contract without sending unsupported native goal syntax', () => {
+    const prompt = buildCodexPrompt(req({ phase: 'execute' }));
+
+    expect(prompt).toContain('<execution_goal>');
+    expect(prompt).toContain('PROMPT');
+    expect(prompt).not.toContain('/goal');
   });
 });
 
@@ -765,6 +792,7 @@ describe('createClaudeCliProvider', () => {
       );
       expect(spawnCalls[0].args).toEqual(expect.arrayContaining(['--model', 'opus']));
       expect(spawnCalls[0].args).not.toContain('-p');
+      expect(spawnCalls[0].args.at(-1)).toMatch(/^\/goal /);
       expect(spawnCalls[0].args.at(-1)).toContain(`${cwd}/.shipcode/runs/t1/execute-prompt.md`);
       expect(spawnCalls[0].options).toEqual(expect.objectContaining({ outputMode: 'raw' }));
       expect(fs.readFileSync(path.join(cwd, '.shipcode/runs/t1/execute-prompt.md'), 'utf8')).toBe(
@@ -951,6 +979,7 @@ describe('createCodexCliProvider', () => {
         ]),
       );
       expect(spawnCalls[0].args).not.toContain('exec');
+      expect(spawnCalls[0].args.at(-1)).toMatch(/^\/goal /);
       expect(spawnCalls[0].options).toEqual(expect.objectContaining({ outputMode: 'raw' }));
       expect(fs.readFileSync(path.join(cwd, '.shipcode/runs/t1/execute-prompt.md'), 'utf8')).toBe(
         'PROMPT',

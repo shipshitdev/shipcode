@@ -334,10 +334,15 @@ function materializeMockStdinArgs(args: string[], stdin: string): string[] {
 
 function materializeMockArtifactArgs(args: string[]): string[] {
   const artifactArgIndex = args.findIndex(
-    (arg) => arg.startsWith('Read ') && arg.includes('/.shipcode/runs/'),
+    (arg) =>
+      (arg.startsWith('Read ') || arg.startsWith('/goal Read ')) &&
+      arg.includes('/.shipcode/runs/'),
   );
   if (artifactArgIndex === -1) return args;
-  const match = /^Read (.+) and execute the ShipCode task\.$/.exec(args[artifactArgIndex]);
+  const match =
+    /^(?:\/goal )?Read (.+?) and (?:execute the ShipCode task\.|complete the ShipCode execution task it defines\.)/.exec(
+      args[artifactArgIndex],
+    );
   if (!match) return args;
   const prompt = mockPromptArtifacts.get(match[1]);
   if (!prompt) return args;

@@ -279,6 +279,33 @@ async function writeExecutePromptArtifact(req: ProviderRequest): Promise<string>
   return promptPath;
 }
 
+function buildNativeExecutionGoal(promptArtifactPath: string): string {
+  return [
+    `/goal Read ${promptArtifactPath} and complete the ShipCode execution task it defines.`,
+    'The goal is achieved only when every in-scope plan step and acceptance criterion is implemented,',
+    'the verification permitted by the task and repository instructions has been run,',
+    'and implementation-notes.md contains the reviewer-facing evidence.',
+    'If a real blocker outside your authority prevents completion, document it in implementation-notes.md',
+    'and report the blocker with concrete evidence instead of looping.',
+  ].join(' ');
+}
+
+function withExecutionGoalContract(prompt: string): string {
+  if (prompt.includes('<execution_goal>')) return prompt;
+  return [
+    '<execution_goal>',
+    'Treat completion as a verifiable condition, not merely the end of one response.',
+    'Do not finish until every in-scope plan step and acceptance criterion is implemented,',
+    'the verification permitted by the task and repository instructions has been run,',
+    'and implementation-notes.md contains the reviewer-facing evidence.',
+    'If a real blocker outside your authority prevents completion, document it in implementation-notes.md',
+    'and report the blocker with concrete evidence.',
+    '</execution_goal>',
+    '',
+    prompt,
+  ].join('\n');
+}
+
 async function buildClaudeInteractiveExecuteCommand(req: ProviderRequest): Promise<CliCommand> {
   const promptArtifactPath = await writeExecutePromptArtifact(req);
   const modelArgs = req.modelHint ? ['--model', req.modelHint] : [];
@@ -292,7 +319,7 @@ async function buildClaudeInteractiveExecuteCommand(req: ProviderRequest): Promi
       '--name',
       sanitizeProcessName(`shipcode-${req.threadId}`),
       ...modelArgs,
-      `Read ${promptArtifactPath} and execute the ShipCode task.`,
+      buildNativeExecutionGoal(promptArtifactPath),
     ],
     options: { outputMode: 'raw' },
   };
@@ -342,12 +369,15 @@ async function buildCodexInteractiveExecuteCommand(req: ProviderRequest): Promis
   if (req.modelHint) args.push('-m', req.modelHint);
   const effort = mapReasoningEffortToCodex(req.phaseHints?.reasoningEffort, req.modelHint);
   args.push('-c', `model_reasoning_effort=${effort}`);
-  args.push(`Read ${promptArtifactPath} and execute the ShipCode task.`);
+  args.push(buildNativeExecutionGoal(promptArtifactPath));
   return { args, options: { outputMode: 'raw' } };
 }
 
 function buildCodexPrompt(req: ProviderRequest): string {
-  if (req.phase === 'execute') return req.prompt;
+  // `codex exec` does not activate native `/goal` handling. Keep the
+  // completion condition explicit in the prompt and let ShipCode's
+  // verification/retry state machine provide cross-turn continuation.
+  if (req.phase === 'execute') return withExecutionGoalContract(req.prompt);
 
   // Plan and revision phases need to ground their output in the real repo
   // (per plan-generation skill: walk codebase, cite real file paths, reuse
@@ -656,7 +686,11 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
             },
           };
         }
-        const inner = buildClaudeCommand(req);
+        const promptArtifactPath = await writeExecutePromptArtifact(req);
+        const inner = buildClaudeCommand({
+          ...req,
+          prompt: buildNativeExecutionGoal(promptArtifactPath),
+        });
         let sandboxed: Awaited<ReturnType<typeof buildSandboxedClaudeExecuteCommand>>;
         try {
           sandboxed = await buildSandboxedClaudeExecuteCommand({
@@ -973,6 +1007,8 @@ export const _internals = {
   buildCodexArgs,
   buildCodexStdin,
   buildCodexPrompt,
+  buildNativeExecutionGoal,
+  withExecutionGoalContract,
   buildClaudeInteractiveStructuredCommand,
   buildCodexInteractiveStructuredCommand,
   buildStructuredInstruction,

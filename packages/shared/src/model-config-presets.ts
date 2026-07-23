@@ -50,7 +50,7 @@ export type ProjectModelPresetOverrides = Pick<
 const DEFAULT_PHASE_EFFORTS: Record<ResolvedPhaseModel, ReasoningEffort> = {
   planner: 'xhigh',
   reviewer: 'high',
-  executor: 'medium',
+  executor: 'high',
   verifier: 'high',
 };
 

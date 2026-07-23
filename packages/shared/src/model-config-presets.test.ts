@@ -10,6 +10,10 @@ import {
 import { resolvePhaseModel, resolvePhaseModelId } from './model-resolution';
 
 describe('model config presets', () => {
+  it('defaults execution reasoning to high', () => {
+    expect(DEFAULT_SETTINGS.executorReasoningEffort).toBe('high');
+  });
+
   it('builds the hybrid app settings patch from the shared preset definition', () => {
     const preset = getModelConfigPreset('hybrid');
     const patch = buildAppSettingsModelPresetPatch('hybrid');
@@ -22,7 +26,7 @@ describe('model config presets', () => {
       verifierModel: 'codex',
       plannerReasoningEffort: 'high',
       reviewerReasoningEffort: 'high',
-      executorReasoningEffort: 'medium',
+      executorReasoningEffort: 'high',
       verifierReasoningEffort: 'high',
       prdRewriteCli: 'claude',
       prdRewriteClaudeModel: 'claude-sonnet-4-6',
@@ -45,7 +49,7 @@ describe('model config presets', () => {
       verifierModelIdOverride: 'gpt-5.6-sol',
       plannerReasoningEffortOverride: 'xhigh',
       reviewerReasoningEffortOverride: 'high',
-      executorReasoningEffortOverride: 'medium',
+      executorReasoningEffortOverride: 'high',
       verifierReasoningEffortOverride: 'high',
     });
   });
@@ -78,7 +82,7 @@ describe('model config presets', () => {
       // claude clamps xhigh -> high (CLI has no xhigh); codex keeps its tiers.
       plannerReasoningEffortOverride: 'high',
       reviewerReasoningEffortOverride: 'high',
-      executorReasoningEffortOverride: 'medium',
+      executorReasoningEffortOverride: 'high',
       verifierReasoningEffortOverride: 'high',
     });
   });
@@ -101,7 +105,7 @@ describe('model config presets', () => {
       // GPT-5.6 tiers keep the codex effort ladder.
       plannerReasoningEffortOverride: 'high',
       reviewerReasoningEffortOverride: 'high',
-      executorReasoningEffortOverride: 'medium',
+      executorReasoningEffortOverride: 'high',
       verifierReasoningEffortOverride: 'high',
     });
   });
