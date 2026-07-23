@@ -8,21 +8,20 @@ const {
   mockExecFileAsync,
   mockExecFileSync,
   mockAssertWorkspaceSafe,
-} =
-  vi.hoisted(() => {
-    const mockExecFileAsync = vi.fn();
-    const mockExecFile = Object.assign(vi.fn(), {
-      [Symbol.for('nodejs.util.promisify.custom')]: mockExecFileAsync,
-    });
-    return {
-      mockPtySpawn: vi.fn(),
-      mockChildSpawn: vi.fn(),
-      mockExecFile,
-      mockExecFileAsync,
-      mockExecFileSync: vi.fn(() => ''),
-      mockAssertWorkspaceSafe: vi.fn(),
-    };
+} = vi.hoisted(() => {
+  const mockExecFileAsync = vi.fn();
+  const mockExecFile = Object.assign(vi.fn(), {
+    [Symbol.for('nodejs.util.promisify.custom')]: mockExecFileAsync,
   });
+  return {
+    mockPtySpawn: vi.fn(),
+    mockChildSpawn: vi.fn(),
+    mockExecFile,
+    mockExecFileAsync,
+    mockExecFileSync: vi.fn(() => ''),
+    mockAssertWorkspaceSafe: vi.fn(),
+  };
+});
 
 vi.mock('node-pty', () => ({ spawn: mockPtySpawn }));
 vi.mock('node:child_process', () => ({

@@ -358,6 +358,7 @@ describe('registerFeatureQaHandlers', () => {
     vi.mocked(deps.queries.threads.getById).mockReturnValueOnce({
       id: 'thread-1',
       projectId: 'other-project',
+      worktreeBranch: 'shipcode/thread-1',
       worktreePath: '/tmp/worktree',
     });
     await expect(
@@ -367,6 +368,7 @@ describe('registerFeatureQaHandlers', () => {
     vi.mocked(deps.queries.threads.getById).mockReturnValueOnce({
       id: 'thread-1',
       projectId: 'project-1',
+      worktreeBranch: 'shipcode/thread-1',
       worktreePath: null as never,
     });
     await expect(

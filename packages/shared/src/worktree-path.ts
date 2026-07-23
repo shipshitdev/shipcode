@@ -139,7 +139,9 @@ export function assertGitWorkspaceIdentity(projectPath: string, workspacePath: s
   }
 
   if (workspaceLayout.gitDir === workspaceLayout.commonDir) {
-    throw new Error(`workspacePath is the main repository, not a linked worktree: ${workspacePath}`);
+    throw new Error(
+      `workspacePath is the main repository, not a linked worktree: ${workspacePath}`,
+    );
   }
 
   const expectedAdminParent = path.join(projectLayout.commonDir, 'worktrees');

@@ -481,10 +481,7 @@ branch refs/heads/feature/not-ours
   it('treats already-removed worktrees and branches as successful cleanup', async () => {
     gitMock.raw
       .mockResolvedValueOnce(
-        registeredWorktree(
-          '/tmp/shipcode-worktrees/42-fix-openrouter',
-          'ship/42-fix-openrouter',
-        ),
+        registeredWorktree('/tmp/shipcode-worktrees/42-fix-openrouter', 'ship/42-fix-openrouter'),
       )
       .mockRejectedValueOnce(new Error('path is not a working tree'));
     gitMock.deleteLocalBranch.mockRejectedValueOnce(new Error('branch not found'));
@@ -551,9 +548,7 @@ branch refs/heads/feature/not-ours
   });
 
   it('rejects a persisted branch/path mismatch before removal or branch deletion', async () => {
-    gitMock.raw.mockResolvedValueOnce(
-      registeredWorktree('/tmp/registered-worktree', 'ship/42'),
-    );
+    gitMock.raw.mockResolvedValueOnce(registeredWorktree('/tmp/registered-worktree', 'ship/42'));
     const manager = new WorktreeManager('/repo/project');
 
     await expect(manager.remove('/tmp/other-worktree', 'ship/42')).rejects.toThrow(
@@ -625,12 +620,7 @@ branch refs/heads/feature/not-ours
 
     await manager.move('/tmp/old-worktree', toPath, 'ship/42');
 
-    expect(gitMock.raw).toHaveBeenCalledWith([
-      'worktree',
-      'move',
-      '/tmp/old-worktree',
-      toPath,
-    ]);
+    expect(gitMock.raw).toHaveBeenCalledWith(['worktree', 'move', '/tmp/old-worktree', toPath]);
   });
 
   it('uses squash merge flow when requested', async () => {

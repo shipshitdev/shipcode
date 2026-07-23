@@ -134,7 +134,10 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
     const judgeModelId = agentPolicy.fanOutJudgeModel;
     const created: Array<{ label: string; worktreePath: string; branch: string }> = [];
 
-    const captureDiff = async (worktree: { worktreePath: string; branch: string }): Promise<string> => {
+    const captureDiff = async (worktree: {
+      worktreePath: string;
+      branch: string;
+    }): Promise<string> => {
       const options = { transientWorktree: worktree };
       await runShellCommand(
         context.threadId,

@@ -117,7 +117,9 @@ export class WorktreeManager {
     const worktreePath = path.join(parent, slug || idOrNumber);
     assertCanonicalWorktreePath(worktreePath, 'worktree path');
     if (path.dirname(worktreePath) !== path.resolve(parent)) {
-      throw new Error(`worktree path must be a direct child of its configured parent: ${worktreePath}`);
+      throw new Error(
+        `worktree path must be a direct child of its configured parent: ${worktreePath}`,
+      );
     }
     return worktreePath;
   }

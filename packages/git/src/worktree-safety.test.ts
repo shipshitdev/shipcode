@@ -46,7 +46,10 @@ branch refs/heads/ship/42
     symlinkSync(outside, configured, 'dir');
 
     expect(() =>
-      assertWorktreeCreateTarget(path.join(configured, 'project'), path.join(configured, 'project', '42')),
+      assertWorktreeCreateTarget(
+        path.join(configured, 'project'),
+        path.join(configured, 'project', '42'),
+      ),
     ).toThrow(/symlink/i);
     expect(() => assertWorktreeCreateTarget(outside, path.join(outside, '42'))).not.toThrow();
   });

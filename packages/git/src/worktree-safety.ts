@@ -123,7 +123,8 @@ export async function assertRegisteredWorktree(input: {
   }
 
   if (!existsSync(concretePath)) {
-    if (input.requireExisting) throw new Error(`registered worktree path does not exist: ${concretePath}`);
+    if (input.requireExisting)
+      throw new Error(`registered worktree path does not exist: ${concretePath}`);
     return pathEntry;
   }
 

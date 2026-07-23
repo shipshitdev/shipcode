@@ -132,7 +132,8 @@ export function createRuntimeSetupHandlers({
     const thread = deps.threads.getById(threadId);
     if (!thread) throw new Error(`Thread ${threadId} not found for runtime shell command`);
     const project = deps.projects.getById(thread.projectId);
-    if (!project) throw new Error(`Project ${thread.projectId} not found for runtime shell command`);
+    if (!project)
+      throw new Error(`Project ${thread.projectId} not found for runtime shell command`);
     const isProjectRoot = resolve(cwd) === resolve(project.path);
     if (!isProjectRoot) {
       if (options?.transientWorktree) {
