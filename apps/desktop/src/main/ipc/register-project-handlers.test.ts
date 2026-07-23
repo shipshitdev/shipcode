@@ -3575,6 +3575,7 @@ describe('registerProjectHandlers', () => {
         updateGithubProjectUrl: vi.fn(),
         clearGithubStatusMapping: vi.fn(),
         updateNotificationRouting: vi.fn(),
+        updateRequireApprovalOverride: vi.fn(),
         updateModelOverrides: vi.fn(),
         updateNotifyGithubUser: vi.fn(),
       },
@@ -3648,6 +3649,21 @@ describe('registerProjectHandlers', () => {
       }),
     ).rejects.toThrow(`Project ${baseProject.id} not found after notification routing update`);
 
+    expect(() =>
+      handlers.get('project:set-require-approval')?.(undefined, {
+        projectId: baseProject.id,
+        requireApproval: 'yes',
+      }),
+    ).toThrow('Invalid requireApproval value: yes');
+
+    queries.projects.getById.mockReturnValueOnce(baseProject).mockReturnValueOnce(null as never);
+    expect(() =>
+      handlers.get('project:set-require-approval')?.(undefined, {
+        projectId: baseProject.id,
+        requireApproval: true,
+      }),
+    ).toThrow(`Project ${baseProject.id} not found after approval update`);
+
     queries.projects.getById.mockReturnValueOnce(baseProject).mockReturnValueOnce(null as never);
     await expect(
       handlers.get('project:set-model-overrides')?.(undefined, {
@@ -3673,6 +3689,7 @@ describe('registerProjectHandlers', () => {
         updateGitRemote: vi.fn(),
         updateGithubProjectUrl: vi.fn(),
         updateNotificationRouting: vi.fn(),
+        updateRequireApprovalOverride: vi.fn(),
         updateModelOverrides: vi.fn(),
         updateNotifyGithubUser: vi.fn(),
       },
@@ -3766,6 +3783,12 @@ describe('registerProjectHandlers', () => {
         },
       }),
     ).rejects.toThrow(`Project ${baseProject.id} not found`);
+    expect(() =>
+      handlers.get('project:set-require-approval')?.(undefined, {
+        projectId: baseProject.id,
+        requireApproval: true,
+      }),
+    ).toThrow(`Project ${baseProject.id} not found`);
     await expect(
       handlers.get('project:set-model-overrides')?.(undefined, {
         projectId: baseProject.id,
@@ -3987,6 +4010,9 @@ describe('registerProjectHandlers', () => {
         updateNotificationRouting: vi.fn((_projectId: string, nextRouting: typeof routing) => {
           project = { ...project, ...nextRouting } as Project;
         }),
+        updateRequireApprovalOverride: vi.fn((_projectId: string, requireApproval: boolean) => {
+          project = { ...project, requireApprovalOverride: requireApproval };
+        }),
         updateModelOverrides: vi.fn((_projectId: string, nextOverrides: typeof modelOverrides) => {
           project = { ...project, ...nextOverrides } as unknown as Project;
         }),
@@ -4071,6 +4097,14 @@ describe('registerProjectHandlers', () => {
       }),
     ).resolves.toMatchObject(routing);
     expect(queries.projects.updateNotificationRouting).toHaveBeenCalledWith(project.id, routing);
+
+    expect(
+      handlers.get('project:set-require-approval')?.(undefined, {
+        projectId: project.id,
+        requireApproval: true,
+      }),
+    ).toMatchObject({ requireApprovalOverride: true });
+    expect(queries.projects.updateRequireApprovalOverride).toHaveBeenCalledWith(project.id, true);
 
     await expect(
       handlers.get('project:set-model-overrides')?.(undefined, {

@@ -463,6 +463,74 @@ describe('IssuesPanel', () => {
     });
   });
 
+  it('toggles the project plan approval override from the board toolbar', async () => {
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread-panel:get-data') return panelData;
+      if (channel === 'github:list-issues') return [makeIssue()];
+      if (channel === 'project:set-require-approval') {
+        return {
+          ...project,
+          requireApprovalOverride: (args as { requireApproval: boolean }).requireApproval,
+        };
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    const approvalSwitch = await screen.findByRole('switch', {
+      name: 'Require plan approval for ShipCode',
+    });
+    expect(approvalSwitch).not.toBeChecked();
+
+    fireEvent.click(approvalSwitch);
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('project:set-require-approval', {
+        projectId: project.id,
+        requireApproval: true,
+      });
+      expect(approvalSwitch).toBeChecked();
+    });
+  });
+
+  it('renders an inherited app approval default and can override it off', async () => {
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread-panel:get-data') {
+        return {
+          ...panelData,
+          settings: { ...DEFAULT_SETTINGS, requireApproval: true },
+        } satisfies ThreadPanelData;
+      }
+      if (channel === 'github:list-issues') return [makeIssue()];
+      if (channel === 'project:set-require-approval') {
+        return {
+          ...project,
+          requireApprovalOverride: (args as { requireApproval: boolean }).requireApproval,
+        };
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    const approvalSwitch = await screen.findByRole('switch', {
+      name: 'Require plan approval for ShipCode',
+    });
+    expect(approvalSwitch).toBeChecked();
+    expect(screen.getByText('app')).toBeInTheDocument();
+
+    fireEvent.click(approvalSwitch);
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('project:set-require-approval', {
+        projectId: project.id,
+        requireApproval: false,
+      });
+      expect(approvalSwitch).not.toBeChecked();
+    });
+  });
+
   it('shows the board quick-link when a GitHub Projects URL is configured', async () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'thread-panel:get-data') {

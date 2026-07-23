@@ -523,6 +523,14 @@ export class ProjectQueries {
       .run(handle || null, id);
   }
 
+  updateRequireApprovalOverride(id: string, requireApproval: boolean): void {
+    this.db
+      .prepare(
+        `UPDATE projects SET require_approval_override = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+      )
+      .run(Number(requireApproval), id);
+  }
+
   updateModelOverrides(
     id: string,
     overrides: {

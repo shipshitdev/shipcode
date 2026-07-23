@@ -229,6 +229,40 @@ describe('ProjectQueries', () => {
     expect(updated.prdQualityGate).toBeNull();
   });
 
+  it('updates only the project approval override from the quick toggle', () => {
+    const p = projects.add('/tmp/project-approval-toggle');
+    projects.updateModelOverrides(p.id, {
+      plannerModelOverride: 'claude',
+      reviewerModelOverride: null,
+      executorModelOverride: null,
+      verifierModelOverride: null,
+      plannerModelIdOverride: null,
+      reviewerModelIdOverride: null,
+      executorModelIdOverride: null,
+      verifierModelIdOverride: null,
+      plannerReasoningEffortOverride: null,
+      reviewerReasoningEffortOverride: null,
+      executorReasoningEffortOverride: null,
+      verifierReasoningEffortOverride: null,
+      revisionCountOverride: null,
+      requireApprovalOverride: null,
+      pipelineSpeedProfileOverride: null,
+      prdQualityGate: null,
+    });
+
+    projects.updateRequireApprovalOverride(p.id, true);
+    expect(projects.getById(p.id)).toMatchObject({
+      plannerModelOverride: 'claude',
+      requireApprovalOverride: true,
+    });
+
+    projects.updateRequireApprovalOverride(p.id, false);
+    expect(projects.getById(p.id)).toMatchObject({
+      plannerModelOverride: 'claude',
+      requireApprovalOverride: false,
+    });
+  });
+
   it('rejects invalid project pipeline speed override', () => {
     const p = projects.add('/tmp/project-overrides-invalid');
 

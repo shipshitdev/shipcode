@@ -129,6 +129,10 @@ export interface IpcInvokeChannels {
   'project:set-name': { args: { projectId: string; name: string }; result: Project };
   'project:relink-path': { args: { projectId: string; path: string }; result: Project };
   'project:set-default-branch': { args: { projectId: string; branch: string }; result: Project };
+  'project:set-require-approval': {
+    args: { projectId: string; requireApproval: boolean };
+    result: Project;
+  };
   'project:refresh-git-remote': {
     args: { projectId: string };
     result: { project: Project; remote: string | null; changed: boolean };

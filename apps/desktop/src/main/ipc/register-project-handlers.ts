@@ -1607,6 +1607,33 @@ export function registerProjectHandlers({
   );
 
   ipcMain.handle(
+    'project:set-require-approval',
+    (
+      _event,
+      {
+        projectId,
+        requireApproval,
+      }: {
+        projectId: string;
+        requireApproval: boolean;
+      },
+    ) => {
+      if (typeof requireApproval !== 'boolean') {
+        throw new Error(`Invalid requireApproval value: ${String(requireApproval)}`);
+      }
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      queries.projects.updateRequireApprovalOverride(projectId, requireApproval);
+      const updated = enrichProjectPath(queries.projects.getById(projectId));
+      if (!updated) {
+        throw new Error(`Project ${projectId} not found after approval update`);
+      }
+      return updated;
+    },
+  );
+
+  ipcMain.handle(
     'project:set-model-overrides',
     async (
       _event,

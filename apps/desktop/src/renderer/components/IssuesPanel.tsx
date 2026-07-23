@@ -11,6 +11,7 @@ import {
   PIPELINE_PHASE,
   type Project,
   type ProjectOpenTarget,
+  resolveRequireApproval,
   type TaskGraphWithNodes,
   THREAD_KIND,
   type Thread,
@@ -22,6 +23,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Switch,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
@@ -220,6 +222,59 @@ function ProjectOpenControl({
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+  );
+}
+
+function ProjectApprovalControl({
+  project,
+  settings,
+}: {
+  project: Project;
+  settings: AppSettings;
+}) {
+  const queryClient = useQueryClient();
+  const effectiveRequireApproval = resolveRequireApproval(settings, project);
+  const updateApproval = useMutation({
+    mutationFn: (requireApproval: boolean) =>
+      window.shipcode.invoke<Project>('project:set-require-approval', {
+        projectId: project.id,
+        requireApproval,
+      }),
+    onSuccess: (updatedProject) => {
+      queryClient.setQueryData<Project | null>(['project', project.id], updatedProject);
+      queryClient.setQueryData<IssuesPanelData | undefined>(
+        ['thread-panel-data', project.id],
+        (current) => (current ? { ...current, project: updatedProject } : current),
+      );
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to update plan approval', error.message);
+    },
+  });
+  const checked = updateApproval.isPending
+    ? (updateApproval.variables ?? effectiveRequireApproval)
+    : effectiveRequireApproval;
+
+  return (
+    <label
+      className="flex h-8 shrink-0 cursor-pointer items-center gap-2 rounded-md border border-border bg-primary px-2.5 text-xs font-medium text-secondary"
+      title="Pause after planning for human approval before execution"
+    >
+      <span>plan approval</span>
+      {project.requireApprovalOverride == null ? (
+        <span className="rounded bg-secondary px-1 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+          app
+        </span>
+      ) : null}
+      <Switch
+        checked={checked}
+        disabled={updateApproval.isPending}
+        onCheckedChange={(next) => updateApproval.mutate(next)}
+        aria-label={`Require plan approval for ${project.name}`}
+      />
+    </label>
   );
 }
 
@@ -711,11 +766,14 @@ function useIssuesPanelView() {
         projectName={project?.name}
         projectActions={
           project ? (
-            <ProjectOpenControl
-              project={project}
-              settings={settings}
-              integrationStatus={integrationStatus}
-            />
+            <>
+              {settings ? <ProjectApprovalControl project={project} settings={settings} /> : null}
+              <ProjectOpenControl
+                project={project}
+                settings={settings}
+                integrationStatus={integrationStatus}
+              />
+            </>
           ) : null
         }
         project={project}
