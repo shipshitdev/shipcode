@@ -1,4 +1,5 @@
 import {
+  clampError,
   type GitHubIssueCacheRecord,
   ISSUE_PIPELINE_STATUS,
   type IssuePipelineStatus,
@@ -68,7 +69,7 @@ export function useIssuesPanelActions({
             issueNumber: issue.issueNumber,
             err,
           });
-          toast.error(`Failed to start issue #${issue.issueNumber}`, err?.message ?? String(err));
+          toast.error(`Failed to start issue #${issue.issueNumber}`, clampError(err));
         });
     },
     [activeProjectId, patchIssueOptimistic, refreshIssueState],
@@ -96,7 +97,7 @@ export function useIssuesPanelActions({
             issueNumber: issue.issueNumber,
             err,
           });
-          toast.error('Failed to pause task', err?.message ?? String(err));
+          toast.error('Failed to pause task', clampError(err));
         });
     },
     [patchIssueOptimistic, patchThreadOptimistic, refreshIssueAndThreadState],
@@ -124,7 +125,7 @@ export function useIssuesPanelActions({
             issueNumber: issue.issueNumber,
             err,
           });
-          toast.error('Failed to resume task', err?.message ?? String(err));
+          toast.error('Failed to resume task', clampError(err));
         });
     },
     [patchIssueOptimistic, patchThreadOptimistic, refreshIssueAndThreadState, threadById],
