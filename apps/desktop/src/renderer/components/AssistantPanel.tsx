@@ -1,4 +1,4 @@
-import type { AppSettings, Project, ProjectSetupDraft } from '@shipcode/shared';
+import type { Project, ProjectSetupDraft } from '@shipcode/shared';
 import {
   Badge,
   Button,
@@ -13,6 +13,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bot, Plus, Send, Square, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAppSettings } from '../hooks/useAppSettings';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { type AssistantCli, useAppStore } from '../stores/app-store';
 import { toast } from '../stores/toast-store';
@@ -127,11 +128,7 @@ export function AssistantPanel() {
   const transcript = useAssistantTranscript(assistantThreadId);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: settings } = useQuery<AppSettings>({
-    queryKey: ['settings'],
-    queryFn: () => window.shipcode.invoke<AppSettings>('settings:get'),
-    staleTime: STABLE_APP_STATE_STALE_TIME,
-  });
+  const { data: settings } = useAppSettings();
 
   const { data: activeProject = null } = useQuery<Project | null>({
     queryKey: ['project', activeProjectId],

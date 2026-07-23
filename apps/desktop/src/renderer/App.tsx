@@ -1,4 +1,4 @@
-import type { AppSettings, Project, TelemetryStatus } from '@shipcode/shared';
+import type { Project } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
 import { StartupProgress, type StartupProgressStep, TooltipProvider } from '@shipcode/ui';
 import { Button, Skeleton } from '@shipshitdev/ui';
@@ -22,8 +22,10 @@ import { TerminalDrawer } from './components/TerminalDrawer';
 import { Titlebar } from './components/Titlebar';
 import { UpdateBanner } from './components/UpdateBanner';
 import { ProjectView } from './features/project/project-view';
+import { useAppSettings } from './hooks/useAppSettings';
 import { useGlobalKeyboard } from './hooks/useGlobalKeyboard';
 import { useIpc } from './hooks/useIpc';
+import { useTelemetryStatus } from './hooks/useTelemetryStatus';
 import { STABLE_APP_STATE_STALE_TIME } from './query-stale-times';
 import { useAppStore } from './stores/app-store';
 import { syncRendererTelemetry } from './telemetry';
@@ -158,19 +160,10 @@ export function App() {
   const hasActiveAutomationThread = useAppStore((state) => state.activeAutomationThreadId !== null);
   const hasActiveAutomationDetail = useAppStore((state) => state.activeAutomationDetailId !== null);
 
-  const { data: settings } = useQuery<AppSettings>({
-    queryKey: ['settings'],
-    queryFn: () => window.shipcode.invoke('settings:get'),
-    staleTime: STABLE_APP_STATE_STALE_TIME,
-  });
-
-  const { data: telemetryStatus } = useQuery<TelemetryStatus>({
-    queryKey: ['telemetry-status'],
-    queryFn: () => window.shipcode.invoke('telemetry:get-status'),
-    staleTime: STABLE_APP_STATE_STALE_TIME,
-    // No enabled guard — fire in parallel with settings:get.
-    // Consumers (syncRendererTelemetry, TelemetryConsentDialog) already guard on deps being present.
-  });
+  const { data: settings } = useAppSettings();
+  // No enabled guard — fire in parallel with settings:get.
+  // Consumers (syncRendererTelemetry, TelemetryConsentDialog) already guard on deps being present.
+  const { data: telemetryStatus } = useTelemetryStatus();
 
   const { data: activeProject } = useQuery<Project | null>({
     queryKey: ['project', activeProjectId],

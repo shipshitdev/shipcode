@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAppSettings } from '../hooks/useAppSettings';
 import { NOTIFICATIONS_STALE_TIME, STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { type ProjectTab, useAppStore } from '../stores/app-store';
 import { toast } from '../stores/toast-store';
@@ -108,11 +109,7 @@ function useProjectSidebarView() {
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
-  const { data: settings } = useQuery<AppSettings>({
-    queryKey: ['settings'],
-    queryFn: () => window.shipcode.invoke<AppSettings>('settings:get'),
-    staleTime: STABLE_APP_STATE_STALE_TIME,
-  });
+  const { data: settings } = useAppSettings();
   const sortOrder: SortOrder = settings?.projectSortOrder ?? 'recent';
 
   const { data: integrations } = useQuery<IntegrationStatus>({

@@ -3,11 +3,11 @@ import type {
   GitHubIssueCacheRecord,
   IntegrationStatus,
   Project,
-  TelemetryStatus,
 } from '@shipcode/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
+import { useAppSettings } from '../hooks/useAppSettings';
+import { useTelemetryStatus } from '../hooks/useTelemetryStatus';
 import { useAppStore } from '../stores/app-store';
 import { AboutSettingsSection } from './settings-panel/AboutSettingsSection';
 import { ArchivedSettingsSection } from './settings-panel/ArchivedSettingsSection';
@@ -25,17 +25,8 @@ export function SettingsPanel() {
   const settingsSection = useAppStore((state) => state.settingsSection);
   const [worktreeRootError, setWorktreeRootError] = useState<string | null>(null);
 
-  const { data: settings } = useQuery<AppSettings>({
-    queryKey: ['settings'],
-    queryFn: () => window.shipcode.invoke('settings:get'),
-    staleTime: STABLE_APP_STATE_STALE_TIME,
-  });
-
-  const { data: telemetryStatus } = useQuery<TelemetryStatus>({
-    queryKey: ['telemetry-status'],
-    queryFn: () => window.shipcode.invoke('telemetry:get-status'),
-    staleTime: STABLE_APP_STATE_STALE_TIME,
-  });
+  const { data: settings } = useAppSettings();
+  const { data: telemetryStatus } = useTelemetryStatus();
 
   const updateSettings = useMutation({
     mutationFn: (patch: Partial<AppSettings>) => window.shipcode.invoke('settings:set', patch),
