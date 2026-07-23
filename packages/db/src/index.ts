@@ -53,6 +53,11 @@ export { PipelineRunQueries } from './queries/pipeline-runs';
 export { PipelineStepQueries } from './queries/pipeline-steps';
 export { PipelineWakeRequestQueries } from './queries/pipeline-wake-requests';
 export { PlanQueries } from './queries/plans';
+export type {
+  PrEvidenceManifestRecord,
+  SavePrEvidenceManifestInput,
+} from './queries/pr-evidence-manifests';
+export { PrEvidenceManifestQueries } from './queries/pr-evidence-manifests';
 export { ProjectFailureQueries } from './queries/project-failures';
 export { ProjectQueries } from './queries/projects';
 export { PromptTelemetryQueries } from './queries/prompt-telemetry';

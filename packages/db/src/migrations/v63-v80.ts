@@ -113,3 +113,34 @@ export function migrateV65(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (65)`);
   });
 }
+
+export function migrateV66(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 66) return;
+
+  transaction(db, () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS pr_evidence_manifests (
+        id              TEXT PRIMARY KEY,
+        thread_id       TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        plan_id         TEXT NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        schema_version  INTEGER NOT NULL CHECK(schema_version = 1),
+        revision        INTEGER NOT NULL CHECK(revision > 0),
+        idempotency_key TEXT NOT NULL UNIQUE,
+        manifest_json   TEXT NOT NULL,
+        created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        UNIQUE (plan_id, revision)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pr_evidence_manifests_thread_updated
+        ON pr_evidence_manifests(thread_id, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_pr_evidence_manifests_plan_revision
+        ON pr_evidence_manifests(plan_id, revision DESC);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (66)`);
+  });
+}

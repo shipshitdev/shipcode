@@ -41,6 +41,8 @@ import {
   migrateV60,
   migrateV61,
   migrateV62,
+  migrateV65,
+  migrateV66,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -1532,5 +1534,42 @@ describe('migrateV62', () => {
   it('is idempotent', () => {
     migrateThrough(db, migrateV62);
     expect(() => migrateV62(db)).not.toThrow();
+  });
+});
+
+describe('migrateV66', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('creates the versioned PR evidence manifest ledger', () => {
+    migrateThrough(db, migrateV65);
+    expect(tableExists(db, 'pr_evidence_manifests')).toBe(false);
+
+    migrateV66(db);
+
+    expect(tableExists(db, 'pr_evidence_manifests')).toBe(true);
+    expect(indexExists(db, 'idx_pr_evidence_manifests_thread_updated')).toBe(true);
+    expect(indexExists(db, 'idx_pr_evidence_manifests_plan_revision')).toBe(true);
+    expect(columnExists(db, 'pr_evidence_manifests', 'schema_version')).toBe(true);
+    expect(columnExists(db, 'pr_evidence_manifests', 'idempotency_key')).toBe(true);
+    expect(
+      (
+        db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as {
+          version: number;
+        }
+      ).version,
+    ).toBe(66);
+  });
+
+  it('is idempotent', () => {
+    migrateThrough(db, migrateV66);
+    expect(() => migrateV66(db)).not.toThrow();
   });
 });
