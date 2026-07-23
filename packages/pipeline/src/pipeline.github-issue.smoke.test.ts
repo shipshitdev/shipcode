@@ -20,10 +20,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPipeline } from './pipeline';
 import type { PipelineDeps, PipelineEvent } from './types';
 
+vi.mock('./pipeline/worktree-target-guard', () => ({
+  assertPersistedWorktreeTarget: vi.fn(async () => undefined),
+}));
+
 vi.mock('@shipcode/git', () => {
   class WorktreeManager {
     create = vi.fn().mockResolvedValue({ worktreePath: '/fake/worktree', branch: 'feat/42-smoke' });
     remove = vi.fn().mockResolvedValue({ success: true });
+    assertRegistered = vi.fn().mockResolvedValue(undefined);
   }
   class GitService {
     listBranches = vi.fn().mockResolvedValue([]);
@@ -185,6 +190,8 @@ function createSmokeDeps() {
         id: 't-smoke',
         projectId: 'project-1',
         githubIssueNumber: 42,
+        worktreeBranch: 'feat/42-smoke',
+        worktreePath: null,
       })),
       incrementReviewRound: vi.fn(),
       clearClarification: vi.fn(),

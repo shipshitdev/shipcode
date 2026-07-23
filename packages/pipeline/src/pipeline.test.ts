@@ -40,6 +40,7 @@ vi.mock('@shipcode/git', () => {
   class WorktreeManager {
     create = mockWorktreeCreate;
     remove = vi.fn().mockResolvedValue({ success: true });
+    assertRegistered = vi.fn().mockResolvedValue(undefined);
   }
   class GitService {
     listBranches = vi.fn().mockResolvedValue([]);
@@ -59,6 +60,10 @@ vi.mock('@shipcode/git', () => {
     resolveCurrentBranch: vi.fn().mockResolvedValue('main'),
   };
 });
+
+vi.mock('./pipeline/worktree-target-guard', () => ({
+  assertPersistedWorktreeTarget: vi.fn(async () => undefined),
+}));
 
 const { mockExecSync } = vi.hoisted(() => ({ mockExecSync: vi.fn() }));
 vi.mock('node:child_process', async (importOriginal) => {
@@ -834,6 +839,8 @@ function createMockDeps() {
           projectId: 'project-1',
           githubIssueNumber: 42,
           status: 'planning',
+          worktreeBranch: 'ship/42',
+          worktreePath: null,
         })),
         incrementReviewRound: vi.fn(),
         clearClarification: vi.fn(),
@@ -3197,6 +3204,7 @@ Custom prompt`,
 
       await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
       await flush();
+      await flush();
 
       expect(readFileSync(path.join(worktreeDir, '.env.local'), 'utf-8')).toBe('TOKEN=abc\n');
       expect(readFileSync(path.join(worktreeDir, '.setup-ran'), 'utf-8')).toBe('setup');
@@ -3242,6 +3250,7 @@ Custom prompt`,
         });
 
         await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+        await flush();
         await flush();
       } finally {
         process.env.PATH = previousPath;
@@ -4149,6 +4158,7 @@ Custom prompt`,
       seedVerifyCommandContext(pipeline, 'node -e "process.exit(0)"');
 
       await pipeline.startTesting('t1');
+      await flush();
 
       const context = requireContext(pipeline);
       expect(context.cpuQueueStartedAt).not.toBeNull();
@@ -4240,6 +4250,7 @@ Custom prompt`,
       });
 
       await pipeline.startTesting('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -4520,6 +4531,7 @@ Custom prompt`,
       };
 
       await pipeline.startTesting('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -4617,6 +4629,7 @@ Custom prompt`,
       };
 
       await pipeline.startTesting('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -5111,6 +5124,7 @@ Custom prompt`,
       });
 
       await pipeline.startCommitAndPush('t1');
+      await flush();
 
       // startShipping emits 'shipping' then 'completed' (no github issue)
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'shipping');
@@ -5184,6 +5198,7 @@ Custom prompt`,
       });
 
       await pipeline.startCommitAndPush('t1');
+      await flush();
 
       expect(pushAttempts).toBe(2);
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'shipping');
@@ -5231,6 +5246,7 @@ Custom prompt`,
       });
 
       await pipeline.startShipping('t1');
+      await flush();
 
       expect(mock.deps.threads.setGithubPr).toHaveBeenCalledWith('t1', 99);
       expect(mock.deps.githubIssues.updatePullRequestFeedback).toHaveBeenCalledWith('issue-1', {
@@ -5320,6 +5336,7 @@ Custom prompt`,
       });
 
       await pipeline.startShipping('t1');
+      await flush();
 
       expect(mock.deps.threads.setGithubPr).toHaveBeenCalledWith('t1', 88);
       expect(mock.deps.githubIssues.updatePullRequestFeedback).toHaveBeenCalledWith('issue-1', {
@@ -5356,6 +5373,7 @@ Custom prompt`,
       });
 
       await pipeline.startShipping('t1');
+      await flush();
 
       expect(mock.deps.threads.setGithubPr).toHaveBeenCalledWith('t1', 99);
       expect(createArgs.join(' ')).toContain('ShipCode: Issue #42');

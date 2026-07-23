@@ -81,6 +81,7 @@ import {
   toQaStatus,
   writeVisualQaRuntimeTest,
 } from './visual-qa';
+import { assertPersistedWorktreeTarget } from './worktree-target-guard';
 
 export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: PipelineHelperEnv) {
   const { activePipelines, skillCallSite } = contextHelpers;
@@ -133,11 +134,25 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
     const judgeModelId = agentPolicy.fanOutJudgeModel;
     const created: Array<{ label: string; worktreePath: string; branch: string }> = [];
 
-    const captureDiff = async (cwd: string): Promise<string> => {
-      await runShellCommand(context.threadId, cwd, 'git add -A', signal).catch(() => undefined);
-      const r = await runShellCommand(context.threadId, cwd, 'git diff --cached', signal).catch(
-        () => ({ output: '' }),
-      );
+    const captureDiff = async (worktree: {
+      worktreePath: string;
+      branch: string;
+    }): Promise<string> => {
+      const options = { transientWorktree: worktree };
+      await runShellCommand(
+        context.threadId,
+        worktree.worktreePath,
+        'git add -A',
+        signal,
+        options,
+      ).catch(() => undefined);
+      const r = await runShellCommand(
+        context.threadId,
+        worktree.worktreePath,
+        'git diff --cached',
+        signal,
+        options,
+      ).catch(() => ({ output: '' }));
       return r.output ?? '';
     };
 
@@ -157,7 +172,7 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
         );
         created.push({ label, worktreePath: wt.worktreePath, branch: wt.branch });
         const workerCtx: PipelineContext = { ...context, worktreePath: wt.worktreePath };
-        const prep = await prepareWorktree(workerCtx, 'execute');
+        const prep = await prepareWorktree(workerCtx, 'execute', wt);
         if (!prep.ok)
           return { label, rawOutput: `worker setup failed: ${prep.error}`, exitCode: 1 };
         const resp = await runProviderPhase(
@@ -172,7 +187,7 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
           rawOutput: resp.rawOutput,
           exitCode: resp.exitCode,
           resolvedModel: resp.resolvedModel,
-          diff: await captureDiff(wt.worktreePath),
+          diff: await captureDiff(wt),
         };
       },
       runJudge: async (candidates) => {
@@ -808,6 +823,14 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       }
     }
 
+    try {
+      await assertPersistedWorktreeTarget(deps, context);
+    } catch (error) {
+      emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
+    }
+
     const preparation = await prepareWorktree(context, 'execute');
     if (!preparation.ok) {
       emitPhase(threadId, 'failed', `Setup failed: ${preparation.error}`);
@@ -1002,6 +1025,14 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
       if (context.cancelled) return { next: 'paused' };
 
+      try {
+        await assertPersistedWorktreeTarget(deps, context);
+      } catch (error) {
+        emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
+        activePipelines.delete(threadId);
+        return { next: 'failed' };
+      }
+
       // Post-attempt checkpoint ref (#212): snapshot the attempt's worktree
       // state (including uncommitted executor changes) after every execute /
       // task-graph-node attempt. Runs on the per-attempt hot path (× task-graph
@@ -1167,6 +1198,14 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
   async function startTesting(threadId: string): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
     if (!context) return { next: 'paused' };
+
+    try {
+      await assertPersistedWorktreeTarget(deps, context);
+    } catch (error) {
+      emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
+    }
 
     try {
       ensureRepoSetupContract(context);
@@ -1482,6 +1521,14 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
   ): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
     if (!context) return { next: 'paused' };
+
+    try {
+      await assertPersistedWorktreeTarget(deps, context);
+    } catch (error) {
+      emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
+    }
 
     emitPhase(threadId, 'verifying');
 

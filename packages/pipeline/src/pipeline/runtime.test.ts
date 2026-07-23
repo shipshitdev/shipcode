@@ -30,6 +30,10 @@ const { mockExecFile, mockLoadRepoSetupContract, mockGhCli } = vi.hoisted(() => 
   },
 }));
 
+vi.mock('./worktree-target-guard', () => ({
+  assertPersistedWorktreeTarget: vi.fn(async () => undefined),
+}));
+
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   return {
@@ -184,7 +188,7 @@ function makeDeps(provider?: AgentProvider) {
       updatePipelineStatus: vi.fn(),
     },
     projects: {
-      getById: vi.fn(() => null),
+      getById: vi.fn(() => ({ id: 'project-1', path: '/repo' })),
     },
     promptTelemetry: {
       create: vi.fn(),
@@ -492,6 +496,7 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
 
     const promise = runtime.prepareWorktree(makeContext({ projectPath, worktreePath }), 'execute');
+    await Promise.resolve();
     emitProcess('output', 'proc-1', 'setup ok\n');
     emitProcess('exit', 'proc-1', 0);
 
@@ -540,6 +545,7 @@ describe('createPipelineRuntime', () => {
       makeContext({ projectPath, worktreePath }),
       'execute',
     );
+    await Promise.resolve();
     second.emitProcess('output', 'proc-1', 'failure one\nfailure two\nfailure three\n');
     second.emitProcess('exit', 'proc-1', 1);
 
@@ -566,6 +572,7 @@ describe('createPipelineRuntime', () => {
     const { deps, emitProcess } = makeDeps();
     const runtime = createPipelineRuntime(deps, {} as never);
     const promise = runtime.prepareWorktree(makeContext({ projectPath, worktreePath }), 'execute');
+    await Promise.resolve();
     emitProcess('exit', 'proc-1', 2);
 
     await expect(promise).resolves.toEqual({

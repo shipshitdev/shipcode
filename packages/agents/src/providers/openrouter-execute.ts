@@ -32,6 +32,7 @@ import {
   MAX_EXECUTE_TOTAL_TOKENS,
   MAX_TOOL_CALL_ITERATIONS,
 } from '@shipcode/shared';
+import { assertWorkspaceSafe } from '@shipcode/shared/worktree-path';
 import type { TerminalEvent } from '../terminal-events';
 import { executeToolCall, getToolSchemas, toolCallHash } from '../tools/registry';
 import type { ToolContext } from '../tools/types';
@@ -92,6 +93,27 @@ export async function executeViaOpenRouter(
       providerError: {
         kind: 'unexpected_stop',
         message: 'openrouter execute refuses to run without a worktree (cwd === projectPath)',
+        retryable: false,
+      },
+    };
+  }
+
+  try {
+    if (req.workspaceRoot === undefined) {
+      throw new Error('workspaceRoot is required for OpenRouter execution');
+    }
+    assertWorkspaceSafe({
+      workspacePath: req.cwd,
+      workspaceRoot: req.workspaceRoot,
+      projectPath: req.projectPath,
+    });
+  } catch (error) {
+    return {
+      rawOutput: '',
+      exitCode: 1,
+      providerError: {
+        kind: 'unexpected_stop',
+        message: error instanceof Error ? error.message : String(error),
         retryable: false,
       },
     };

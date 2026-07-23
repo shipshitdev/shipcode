@@ -53,6 +53,10 @@ const {
   mockShellExecEnv: vi.fn(),
 }));
 
+vi.mock('./worktree-target-guard', () => ({
+  assertPersistedWorktreeTarget: vi.fn(async () => undefined),
+}));
+
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   return {
@@ -235,7 +239,13 @@ function makeExecutionHarness(context = makeContext()) {
       })),
     },
     threads: {
-      getById: vi.fn(() => ({ id: 'thread-1', prompt: 'Prompt', title: 'Thread title' })),
+      getById: vi.fn(() => ({
+        id: 'thread-1',
+        prompt: 'Prompt',
+        title: 'Thread title',
+        worktreeBranch: 'ship/42',
+        worktreePath: context.worktreePath,
+      })),
     },
     checkpoints: {
       getLatest: vi.fn(() => null),

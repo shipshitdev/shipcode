@@ -113,7 +113,9 @@ export async function runStdinCli(
   let process: ReturnType<ProcessManager['spawn']>;
   try {
     const options = {
-      ...(req.workspaceRoot !== undefined ? { workspaceRoot: req.workspaceRoot } : {}),
+      ...(req.workspaceRoot !== undefined
+        ? { workspaceRoot: req.workspaceRoot, projectPath: req.projectPath }
+        : {}),
       envKeyAllowlist: [...config.envKeys],
     };
     const processManagerWithStdin = processManager as ProcessManagerWithStdin;

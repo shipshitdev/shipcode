@@ -1,9 +1,11 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import { loadRepoSetupContract } from '@shipcode/agents';
+import { WorktreeManager } from '@shipcode/git';
 
 import type { PipelineContext, PipelineDeps } from '../types';
 import type { PipelineRuntime } from './shared';
+import { assertPersistedWorktreeTarget } from './worktree-target-guard';
 
 /**
  * Build a fallback install command when a frozen-lockfile install fails
@@ -120,13 +122,44 @@ export function createRuntimeSetupHandlers({
     cwd: string,
     command: string,
     signal: AbortSignal,
-    options?: { extraEnv?: Record<string, string>; timeoutMs?: number },
+    options?: {
+      extraEnv?: Record<string, string>;
+      timeoutMs?: number;
+      transientWorktree?: { worktreePath: string; branch: string };
+    },
   ): Promise<{ exitCode: number; output: string }> {
     const timeoutMs = options?.timeoutMs ?? resolveShellTimeoutMs();
+    const thread = deps.threads.getById(threadId);
+    if (!thread) throw new Error(`Thread ${threadId} not found for runtime shell command`);
+    const project = deps.projects.getById(thread.projectId);
+    if (!project)
+      throw new Error(`Project ${thread.projectId} not found for runtime shell command`);
+    const isProjectRoot = resolve(cwd) === resolve(project.path);
+    if (!isProjectRoot) {
+      if (options?.transientWorktree) {
+        if (options.transientWorktree.worktreePath !== cwd) {
+          throw new Error(`Runtime shell path does not match its transient worktree target`);
+        }
+        const settings = deps.settings.get();
+        await new WorktreeManager(project.path, {
+          worktreeRoot: settings.worktreeRoot,
+          branchFormat: settings.worktreeBranchFormat,
+        }).assertRegistered(cwd, options.transientWorktree.branch);
+      } else {
+        await assertPersistedWorktreeTarget(deps, {
+          threadId,
+          projectPath: project.path,
+          worktreePath: cwd,
+        });
+      }
+    }
     return await new Promise((resolvePromise, rejectPromise) => {
       let settled = false;
       const chunks: string[] = [];
       const shell = resolveSetupShell();
+      const workspacePolicy = isProjectRoot
+        ? {}
+        : { workspaceRoot: deps.settings.get().worktreeRoot, projectPath: project.path };
       const managed = deps.processManager.spawnWithStdin(
         'shell',
         shell.command,
@@ -137,6 +170,7 @@ export function createRuntimeSetupHandlers({
         {
           detached: true,
           extraEnv: options?.extraEnv,
+          ...workspacePolicy,
         },
       );
 
@@ -202,9 +236,25 @@ export function createRuntimeSetupHandlers({
   async function prepareWorktree(
     context: PipelineContext,
     stage: 'execute' | 'verify',
+    transientWorktree?: { worktreePath: string; branch: string },
   ): Promise<{ ok: true } | { ok: false; error: string }> {
     const loaded = ensureRepoSetupContract(context);
     if (!loaded || !context.worktreePath) return { ok: true };
+
+    if (transientWorktree) {
+      if (transientWorktree.worktreePath !== context.worktreePath) {
+        return { ok: false, error: 'Setup path does not match its transient worktree target' };
+      }
+      try {
+        const settings = deps.settings.get();
+        await new WorktreeManager(context.projectPath, {
+          worktreeRoot: settings.worktreeRoot,
+          branchFormat: settings.worktreeBranchFormat,
+        }).assertRegistered(context.worktreePath, transientWorktree.branch);
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
 
     const { contract, path: contractPath } = loaded;
     const shouldRunSetup =
@@ -263,6 +313,7 @@ export function createRuntimeSetupHandlers({
           context.worktreePath,
           command,
           context.abort.signal,
+          transientWorktree ? { transientWorktree } : undefined,
         );
         if (result.exitCode !== 0) {
           const snippet = result.output.trim().split('\n').slice(-3).join(' ').slice(0, 300);
@@ -283,6 +334,7 @@ export function createRuntimeSetupHandlers({
                 context.worktreePath,
                 fallback,
                 context.abort.signal,
+                transientWorktree ? { transientWorktree } : undefined,
               );
               if (retry.exitCode === 0) continue;
               const retrySnippet = retry.output

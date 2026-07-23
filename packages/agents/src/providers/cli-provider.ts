@@ -86,6 +86,7 @@ async function runCli(
   signal: AbortSignal,
   threadId?: string,
   workspaceRoot?: string | null,
+  projectPath?: string,
   options?: Parameters<ProcessManager['spawn']>[5],
   onProcessStart?: (processId: string) => void,
   // Spawn a different binary than `agentId` while keeping the process TYPE tag
@@ -102,7 +103,7 @@ async function runCli(
   try {
     const spawnOptions = {
       ...(options ?? {}),
-      ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
+      ...(workspaceRoot !== undefined ? { workspaceRoot, projectPath } : {}),
     };
     const processManagerWithStdin = processManager as ProcessManagerWithStdin;
     if (stdin !== undefined && processManagerWithStdin.spawnWithStdin) {
@@ -582,6 +583,7 @@ async function runInteractiveStructured(
       req.signal,
       req.threadId,
       req.workspaceRoot,
+      req.projectPath,
       { ...(command.options ?? {}), envKeyAllowlist: [...envKeys] },
       composedOnStart,
     );
@@ -750,6 +752,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
           req.signal,
           req.threadId,
           req.workspaceRoot,
+          req.projectPath,
           { ...(command.options ?? {}), envKeyAllowlist: [...CLAUDE_ENV_KEYS] },
           req.onProcessStart,
           commandOverride,
@@ -901,6 +904,7 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
         req.signal,
         req.threadId,
         req.workspaceRoot,
+        req.projectPath,
         { ...(command.options ?? {}), envKeyAllowlist: [...CODEX_ENV_KEYS] },
         req.onProcessStart,
       );

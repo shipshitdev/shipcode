@@ -14,6 +14,7 @@ import {
   REVIEW_FINDINGS_PR_COMMENT_MARKER,
 } from './review-findings';
 import type { PhaseOutcome, PipelineHelperEnv } from './shared';
+import { assertPersistedWorktreeTarget } from './worktree-target-guard';
 
 export function resolveFormalPrReviewEvent(
   decision: 'approve' | 'request_changes' | 'reject' | null,
@@ -66,6 +67,14 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
   async function startCommitAndPush(threadId: string): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
     if (!context) return { next: 'paused' };
+
+    try {
+      await assertPersistedWorktreeTarget(deps, context);
+    } catch (error) {
+      emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
+    }
 
     const cwd = context.worktreePath ?? context.projectPath;
 
@@ -138,6 +147,14 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
   async function startShipping(threadId: string): Promise<PhaseOutcome> {
     const context = activePipelines.get(threadId);
     if (!context) return { next: 'paused' };
+
+    try {
+      await assertPersistedWorktreeTarget(deps, context);
+    } catch (error) {
+      emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
+    }
 
     emitPhase(threadId, 'shipping');
 

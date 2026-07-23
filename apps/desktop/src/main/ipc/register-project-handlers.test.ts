@@ -441,8 +441,14 @@ describe('registerProjectHandlers', () => {
 
     await relinkPath(undefined, { projectId: 'project-1', path: nextProjectPath });
 
-    expect(worktreeRepairMock).toHaveBeenCalledWith([oldWorktreePath]);
-    expect(worktreeMoveMock).toHaveBeenCalledWith(oldWorktreePath, nextWorktreePath);
+    expect(worktreeRepairMock).toHaveBeenCalledWith([
+      { path: oldWorktreePath, branch: 'ship/56-chore' },
+    ]);
+    expect(worktreeMoveMock).toHaveBeenCalledWith(
+      oldWorktreePath,
+      nextWorktreePath,
+      'ship/56-chore',
+    );
     expect(queries.threads.setWorktree).toHaveBeenCalledWith(
       'thread-56',
       'ship/56-chore',
@@ -636,7 +642,9 @@ describe('registerProjectHandlers', () => {
 
     await relinkPath(undefined, { projectId: 'project-1', path: nextProjectPath });
 
-    expect(worktreeRepairMock).toHaveBeenCalledWith([nextWorktreePath]);
+    expect(worktreeRepairMock).toHaveBeenCalledWith([
+      { path: nextWorktreePath, branch: 'ship/88-existing' },
+    ]);
     expect(worktreeMoveMock).not.toHaveBeenCalled();
     expect(queries.threads.setWorktree).toHaveBeenCalledWith(
       'thread-88',
@@ -702,7 +710,9 @@ describe('registerProjectHandlers', () => {
 
     await relinkPath(undefined, { projectId: 'project-1', path: nextProjectPath });
 
-    expect(worktreeRepairMock).toHaveBeenCalledWith([nextWorktreePath]);
+    expect(worktreeRepairMock).toHaveBeenCalledWith([
+      { path: nextWorktreePath, branch: 'ship/77-existing' },
+    ]);
     expect(queries.threads.setWorktree).toHaveBeenCalledWith(
       'thread-77',
       'ship/77-existing',
@@ -767,8 +777,14 @@ describe('registerProjectHandlers', () => {
 
     await relinkPath(undefined, { projectId: 'project-1', path: nextProjectPath });
 
-    expect(worktreeRepairMock).toHaveBeenCalledWith([oldWorktreePath]);
-    expect(worktreeMoveMock).toHaveBeenCalledWith(oldWorktreePath, nextWorktreePath);
+    expect(worktreeRepairMock).toHaveBeenCalledWith([
+      { path: oldWorktreePath, branch: 'shipcode/orphaned-worktree' },
+    ]);
+    expect(worktreeMoveMock).toHaveBeenCalledWith(
+      oldWorktreePath,
+      nextWorktreePath,
+      'shipcode/orphaned-worktree',
+    );
     expect(queries.threads.setWorktree).not.toHaveBeenCalled();
     expect(queries.threads.clearWorktree).not.toHaveBeenCalled();
     expect(queries.projects.updatePath).toHaveBeenCalledWith('project-1', nextProjectPath);
@@ -823,7 +839,9 @@ describe('registerProjectHandlers', () => {
 
     await relinkPath(undefined, { projectId: 'project-1', path: nextProjectPath });
 
-    expect(worktreeRepairMock).toHaveBeenCalledWith([outsideWorktreePath]);
+    expect(worktreeRepairMock).toHaveBeenCalledWith([
+      { path: outsideWorktreePath, branch: 'ship/outside' },
+    ]);
     expect(worktreeMoveMock).not.toHaveBeenCalled();
     expect(queries.threads.setWorktree).not.toHaveBeenCalled();
     expect(queries.threads.clearWorktree).not.toHaveBeenCalled();
@@ -885,8 +903,14 @@ describe('registerProjectHandlers', () => {
 
     await relinkPath(undefined, { projectId: 'project-1', path: nextProjectPath });
 
-    expect(worktreeRepairMock).toHaveBeenCalledWith([oldWorktreePath]);
-    expect(worktreeMoveMock).toHaveBeenCalledWith(oldWorktreePath, nextWorktreePath);
+    expect(worktreeRepairMock).toHaveBeenCalledWith([
+      { path: oldWorktreePath, branch: 'ship/99-failing' },
+    ]);
+    expect(worktreeMoveMock).toHaveBeenCalledWith(
+      oldWorktreePath,
+      nextWorktreePath,
+      'ship/99-failing',
+    );
     expect(queries.threads.setWorktree).not.toHaveBeenCalled();
     expect(queries.projects.updatePath).toHaveBeenCalledWith('project-1', nextProjectPath);
   });

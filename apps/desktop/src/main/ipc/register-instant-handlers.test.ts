@@ -12,6 +12,13 @@ import {
 import { registerInstantHandlers } from './register-instant-handlers';
 
 const mockAssertPrdRewriteModelSupported = vi.hoisted(() => vi.fn());
+const mockAssertRegistered = vi.hoisted(() => vi.fn(async () => undefined));
+
+vi.mock('@shipcode/git', () => ({
+  WorktreeManager: class {
+    assertRegistered = mockAssertRegistered;
+  },
+}));
 
 vi.mock('./helpers', () => ({
   assertPrdRewriteModelSupported: mockAssertPrdRewriteModelSupported,
@@ -127,6 +134,8 @@ describe('registerInstantHandlers', () => {
       },
       settings: {
         get: vi.fn(() => ({
+          worktreeRoot: null,
+          worktreeBranchFormat: null,
           agentRunModes: {
             claude: {
               issueTerminal: 'interactive',
@@ -198,7 +207,11 @@ describe('registerInstantHandlers', () => {
       expect.arrayContaining(['-s', 'workspace-write', '-a', 'on-request', '--no-alt-screen']),
       '/tmp/repo/.shipcode/worktrees/thread-1',
       'thread-created-1',
-      { outputMode: 'raw' },
+      {
+        outputMode: 'raw',
+        workspaceRoot: null,
+        projectPath: '/tmp/repo',
+      },
     );
     expect(result).toEqual({ threadId: 'thread-created-1', cli: 'codex', title: 'Fix #42' });
   });

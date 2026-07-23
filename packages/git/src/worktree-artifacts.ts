@@ -46,6 +46,17 @@ function resolveArtifactPath(worktreePath: string, relativePath: string): string
   return target;
 }
 
+async function assertArtifactRealPath(worktreePath: string, absolutePath: string): Promise<void> {
+  const [rootReal, targetReal] = await Promise.all([
+    fs.realpath(path.resolve(worktreePath)),
+    fs.realpath(absolutePath),
+  ]);
+  const relative = path.relative(rootReal, targetReal);
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error(`artifact path escapes worktree through a symlink: ${absolutePath}`);
+  }
+}
+
 export async function listWorktreeArtifacts(
   worktreePath: string,
   artifactPaths: readonly string[] = DEFAULT_WORKTREE_ARTIFACT_PATHS,
@@ -55,6 +66,7 @@ export async function listWorktreeArtifacts(
       const absolutePath = resolveArtifactPath(worktreePath, relativePath);
       try {
         await fs.lstat(absolutePath);
+        await assertArtifactRealPath(worktreePath, absolutePath);
         return { relativePath, absolutePath };
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code;
@@ -79,6 +91,7 @@ export async function pruneWorktreeArtifacts(
     const absolutePath = resolveArtifactPath(worktreePath, relativePath);
     try {
       await fs.lstat(absolutePath);
+      await assertArtifactRealPath(worktreePath, absolutePath);
       await fs.rm(absolutePath, { force: true, recursive: true });
       removed.push(relativePath);
     } catch (error) {

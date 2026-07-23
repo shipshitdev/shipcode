@@ -135,7 +135,14 @@ function mergeSafeEnv(
 
 function assertWorkspacePolicy(cwd: string, options: ManagedProcessSpawnOptions): void {
   if (options.workspaceRoot === undefined) return;
-  assertWorkspaceSafe({ workspacePath: cwd, workspaceRoot: options.workspaceRoot });
+  if (!options.projectPath) {
+    throw new Error('projectPath is required when workspaceRoot enforcement is enabled');
+  }
+  assertWorkspaceSafe({
+    workspacePath: cwd,
+    workspaceRoot: options.workspaceRoot,
+    projectPath: options.projectPath,
+  });
 }
 
 function getShellEnv(): Record<string, string> {
@@ -193,13 +200,14 @@ export interface ManagedProcessSpawnOptions {
    */
   keepStdinOpen?: boolean;
   /**
-   * When provided, the spawn site asserts `cwd` is a safe agent workspace
-   * (absolute, basename matches `[A-Za-z0-9._-]+`, lives under the configured
-   * workspaceRoot). Defense-in-depth — see `assertWorkspaceSafe`. Pipeline
-   * worktree spawns opt in; instant terminals at the project root do not.
+   * When provided, the spawn site asserts `cwd` is a canonical linked worktree
+   * registered to `projectPath`. Defense-in-depth — see `assertWorkspaceSafe`.
+   * Pipeline worktree spawns opt in; instant terminals at the project root do not.
    * `null` matches the AppSettings default; `''` means project-local mode.
    */
   workspaceRoot?: string | null;
+  /** Exact repository root used to reject worktrees from foreign repositories. */
+  projectPath?: string;
   /**
    * Spawn in a new process group so `kill(-pid)` terminates the entire
    * child tree (server + its children). Used by ServerLifecycleManager.
@@ -349,8 +357,8 @@ export class ProcessManager extends EventEmitter {
     threadId?: string,
     options: ManagedProcessSpawnOptions = {},
   ): ManagedProcess {
-    // Defense in depth: when the caller declares a workspaceRoot policy,
-    // assert the cwd before spawning. A mismatch here means the pipeline
+    // Defense in depth: when the caller declares a workspace policy, assert
+    // the cwd and Git worktree identity before spawning. A mismatch means the pipeline
     // is about to run an agent in the wrong directory — fail loud, never
     // continue.
     const { id, outputMode, resolvedCommand, env, startedAt } = prepareSpawn(command, cwd, options);

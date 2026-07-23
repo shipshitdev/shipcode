@@ -251,6 +251,15 @@ export async function startIssueTerminalSession({
   if (!thread.worktreePath) {
     throw new Error(`Thread ${thread.id} has no worktree path after setup`);
   }
+  if (!thread.worktreeBranch) {
+    throw new Error(`Thread ${thread.id} has no worktree branch after setup`);
+  }
+  const settings = queries.settings.get();
+  const worktreeManager = new WorktreeManager(project.path, {
+    worktreeRoot: settings.worktreeRoot,
+    branchFormat: settings.worktreeBranchFormat,
+  });
+  await worktreeManager.assertRegistered(thread.worktreePath, thread.worktreeBranch);
 
   const runDir = path.join(thread.worktreePath, '.shipcode', 'runs', thread.id);
   const promptArtifactPath = path.join(runDir, 'terminal-prompt.md');
@@ -296,7 +305,11 @@ export async function startIssueTerminalSession({
     cliArgs,
     thread.worktreePath,
     thread.id,
-    { outputMode: 'raw' },
+    {
+      outputMode: 'raw',
+      workspaceRoot: settings.worktreeRoot,
+      projectPath: project.path,
+    },
   );
 
   registerInteractiveTerminalSession({

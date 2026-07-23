@@ -165,12 +165,13 @@ export interface ProviderRequest {
   projectPath: string;
   /**
    * The configured workspace root (matches `AppSettings.worktreeRoot`).
-   * When set, the CLI provider asserts the spawn cwd is a safe workspace
-   * before launching the agent (basename + prefix check). Omit to disable
-   * the check (e.g. instant terminals running at the project root).
-   *   - `null`/undefined  → use default ~/.shipcode/worktrees
-   *   - `''`              → project-local mode (skip prefix check)
-   *   - absolute / `~/x`  → custom worktree root
+   * When provided (including `null`), the CLI provider asserts the spawn cwd
+   * is a canonical linked worktree registered to `projectPath`:
+   *   - `null`             → default ~/.shipcode/worktrees root
+   *   - `''`               → project-local (legacy) creation mode
+   *   - absolute / `~/x`   → custom worktree root
+   * Omit the field entirely (`undefined`) to disable the check — e.g. instant
+   * terminals running at the project root.
    */
   workspaceRoot?: string | null;
   /** Explicit model override. Takes precedence over settings defaults. */

@@ -1,6 +1,8 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { DEFAULT_WORKTREE_ROOT, WORKTREE_DIR } from './constants';
 import {
   assertWorkspaceSafe,
@@ -105,6 +107,30 @@ describe('resolveWorktreeParent', () => {
 });
 
 describe('assertWorkspaceSafe', () => {
+  const tempRoots: string[] = [];
+
+  function createRepository(name: string): { projectPath: string; worktreePath: string } {
+    const root = mkdtempSync(path.join(os.tmpdir(), `shipcode-${name}-`));
+    tempRoots.push(root);
+    const projectPath = path.join(root, 'project');
+    const worktreePath = path.join(root, 'worktree');
+    mkdirSync(projectPath);
+    execFileSync('git', ['init', '--initial-branch=main'], { cwd: projectPath });
+    execFileSync('git', ['config', 'user.email', 'shipcode@example.test'], { cwd: projectPath });
+    execFileSync('git', ['config', 'user.name', 'ShipCode Tests'], { cwd: projectPath });
+    writeFileSync(path.join(projectPath, 'README.md'), `${name}\n`);
+    execFileSync('git', ['add', 'README.md'], { cwd: projectPath });
+    execFileSync('git', ['commit', '-m', 'initial'], { cwd: projectPath });
+    execFileSync('git', ['worktree', 'add', '-b', `shipcode/${name}`, worktreePath], {
+      cwd: projectPath,
+    });
+    return { projectPath, worktreePath };
+  }
+
+  afterEach(() => {
+    for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true });
+  });
+
   it('passes for a worktree under the configured root', () => {
     expect(() =>
       assertWorkspaceSafe({
@@ -189,5 +215,65 @@ describe('assertWorkspaceSafe', () => {
         workspaceRoot: null,
       }),
     ).toThrow(/under workspaceRoot/);
+  });
+
+  it('accepts an exact linked-worktree registration after the configured root changes', () => {
+    const { projectPath, worktreePath } = createRepository('valid-worktree');
+
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: worktreePath,
+        workspaceRoot: '/a/different/root',
+        projectPath,
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects a symlink alias that does not match the Git-registered path', () => {
+    const { projectPath, worktreePath } = createRepository('symlink-escape');
+    const aliasPath = path.join(path.dirname(worktreePath), 'worktree-alias');
+    symlinkSync(worktreePath, aliasPath, 'dir');
+
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: aliasPath,
+        workspaceRoot: path.dirname(aliasPath),
+        projectPath,
+      }),
+    ).toThrow(/symlink|registered path/i);
+  });
+
+  it('rejects a linked worktree belonging to a foreign repository', () => {
+    const trusted = createRepository('trusted-repository');
+    const foreign = createRepository('foreign-repository');
+
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: foreign.worktreePath,
+        workspaceRoot: path.dirname(foreign.worktreePath),
+        projectPath: trusted.projectPath,
+      }),
+    ).toThrow(/foreign Git repository/i);
+  });
+
+  it('rejects crafted Git metadata outside the trusted worktree registry', () => {
+    const trusted = createRepository('trusted-registry');
+    const root = path.dirname(trusted.projectPath);
+    const fakeWorkspace = path.join(root, 'fake-workspace');
+    const fakeAdmin = path.join(root, 'fake-admin');
+    mkdirSync(fakeWorkspace);
+    mkdirSync(fakeAdmin);
+    writeFileSync(path.join(fakeWorkspace, '.git'), `gitdir: ${fakeAdmin}\n`);
+    writeFileSync(path.join(fakeAdmin, 'commondir'), `${path.join(trusted.projectPath, '.git')}\n`);
+    writeFileSync(path.join(fakeAdmin, 'gitdir'), `${path.join(fakeWorkspace, '.git')}\n`);
+    writeFileSync(path.join(fakeAdmin, 'HEAD'), 'ref: refs/heads/shipcode/fake\n');
+
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: fakeWorkspace,
+        workspaceRoot: root,
+        projectPath: trusted.projectPath,
+      }),
+    ).toThrow(/admin directory is not registered/i);
   });
 });
