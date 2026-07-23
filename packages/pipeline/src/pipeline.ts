@@ -11,9 +11,16 @@ import { createPipelineContextHelpers } from './pipeline/context';
 import { synthesizeDirectExecutionPlan } from './pipeline/direct-execution-plan';
 import { createExecutionPhaseHandlers } from './pipeline/execution-phases';
 import { createPlanningPhaseHandlers } from './pipeline/planning-phases';
+import { bootstrapPipelineRun } from './pipeline/run-bootstrap';
 import { createPipelineRuntime } from './pipeline/runtime';
 import type { PhaseOutcome } from './pipeline/shared';
-import type { Pipeline, PipelineContext, PipelineDeps, PipelineExecutorModel } from './types';
+import type {
+  Pipeline,
+  PipelineContext,
+  PipelineDeps,
+  PipelineExecutorModel,
+  PipelineStartOptions,
+} from './types';
 
 export function createPipeline(deps: PipelineDeps): Pipeline {
   const activePipelines = new Map<string, PipelineContext>();
@@ -228,106 +235,28 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     projectPath: string,
     issue: { number: number; title: string; body: string | null; labels: string[] },
     executorModel: PipelineExecutorModel,
-    options?: {
-      baseBranch?: string;
-      worktreePath?: string | null;
-      executorModelOverride?: string | null;
-      plannerModel?: PipelineExecutorModel;
-      reviewerModel?: PipelineExecutorModel;
-      verifierModel?: PipelineExecutorModel;
-      plannerModelIdOverride?: string | null;
-      reviewerModelIdOverride?: string | null;
-      executorModelIdOverride?: string | null;
-      verifierModelIdOverride?: string | null;
-      plannerReasoningEffort?: PipelineContext['plannerReasoningEffort'];
-      reviewerReasoningEffort?: PipelineContext['reviewerReasoningEffort'];
-      executorReasoningEffort?: PipelineContext['executorReasoningEffort'];
-      verifierReasoningEffort?: PipelineContext['verifierReasoningEffort'];
-    },
+    options?: PipelineStartOptions,
   ) {
-    const executorModelOverride = options?.executorModelOverride ?? null;
-    const settings = deps.settings.get();
-
-    let baseBranch = options?.baseBranch ?? '';
-    let forkPointSha = '';
-
-    if (!baseBranch) {
-      try {
-        baseBranch = execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short'], {
-          cwd: projectPath,
-          encoding: 'utf-8',
-        })
-          .trim()
-          .replace('origin/', '');
-      } catch {
-        baseBranch = 'main';
-      }
-    }
-
-    try {
-      forkPointSha = execFileSync('git', ['rev-parse', baseBranch], {
-        cwd: projectPath,
-        encoding: 'utf-8',
-      }).trim();
-    } catch {
-      forkPointSha = '';
-    }
-
-    deps.threads.updateAutonomousFields(threadId, {
-      autonomous: true,
-      reviewRound: 0,
-      executorModel,
-      baseBranch,
-      forkPointSha,
-    });
-    deps.threads.clearClarification(threadId);
-
-    const runId = createRun({
+    const { settings, worktreePath, baseBranch } = bootstrapPipelineRun(deps, contextHelpers, {
       threadId,
-      source: 'github:start-issue',
-      triggerDetail: `issue:${issue.number}`,
-      currentPhase: 'planning',
-      context: {
-        githubIssueNumber: issue.number,
-        githubIssueTitle: issue.title,
-        worktreePath: options?.worktreePath ?? null,
-        executorModel,
-      },
-    });
-
-    contextHelpers.ensureContext(threadId, {
       projectPath,
-      runId,
-      worktreePath: options?.worktreePath ?? null,
-      retryCount: 0,
-      autonomous: true,
-      reviewRound: 0,
-      clarificationRound: 0,
-      clarificationRequest: null,
-      clarificationAnswers: [],
-      clarificationHistory: [],
-      verificationRetries: 0,
       githubIssueNumber: issue.number,
       githubIssueTitle: issue.title,
-      githubRepo: null,
-      plannerModel: options?.plannerModel ?? (settings.plannerModel as PipelineExecutorModel),
-      reviewerModel: options?.reviewerModel ?? (settings.reviewerModel as PipelineExecutorModel),
-      verifierModel: options?.verifierModel ?? (settings.verifierModel as PipelineExecutorModel),
       executorModel,
-      plannerModelIdOverride: options?.plannerModelIdOverride ?? null,
-      reviewerModelIdOverride: options?.reviewerModelIdOverride ?? null,
-      executorModelIdOverride: options?.executorModelIdOverride ?? null,
-      verifierModelIdOverride: options?.verifierModelIdOverride ?? null,
-      plannerReasoningEffort: options?.plannerReasoningEffort ?? settings.plannerReasoningEffort,
-      reviewerReasoningEffort: options?.reviewerReasoningEffort ?? settings.reviewerReasoningEffort,
-      executorReasoningEffort: options?.executorReasoningEffort ?? settings.executorReasoningEffort,
-      verifierReasoningEffort: options?.verifierReasoningEffort ?? settings.verifierReasoningEffort,
-      executorModelOverride,
-      baseBranch,
-      forkPointSha,
-      activeProcessId: null,
-      cancelled: false,
-      verifiedSha: null,
+      options,
+      createRun: () =>
+        createRun({
+          threadId,
+          source: 'github:start-issue',
+          triggerDetail: `issue:${issue.number}`,
+          currentPhase: 'planning',
+          context: {
+            githubIssueNumber: issue.number,
+            githubIssueTitle: issue.title,
+            worktreePath: options?.worktreePath ?? null,
+            executorModel,
+          },
+        }),
     });
 
     const thread = deps.threads.getById(threadId);
@@ -367,14 +296,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       issueTitle: issue.title,
       issueBody: stripPrdFrontmatter(issue.body ?? ''),
       projectPath,
-      worktreePath: options?.worktreePath ?? null,
+      worktreePath,
       baseBranch,
-      currentBranch: options?.worktreePath
-        ? resolveCurrentBranch(projectPath, options.worktreePath)
-        : null,
+      currentBranch: worktreePath ? resolveCurrentBranch(projectPath, worktreePath) : null,
     });
     launch(threadId, () =>
-      planning.startPlanGeneration(threadId, prompt, projectPath, options?.worktreePath ?? null),
+      planning.startPlanGeneration(threadId, prompt, projectPath, worktreePath),
     );
   }
 
@@ -383,108 +310,30 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     projectPath: string,
     task: { issueNumber: number; title: string; text: string },
     executorModel: PipelineExecutorModel,
-    options?: {
-      baseBranch?: string;
-      worktreePath?: string | null;
-      executorModelOverride?: string | null;
-      plannerModel?: PipelineExecutorModel;
-      reviewerModel?: PipelineExecutorModel;
-      verifierModel?: PipelineExecutorModel;
-      plannerModelIdOverride?: string | null;
-      reviewerModelIdOverride?: string | null;
-      executorModelIdOverride?: string | null;
-      verifierModelIdOverride?: string | null;
-      plannerReasoningEffort?: PipelineContext['plannerReasoningEffort'];
-      reviewerReasoningEffort?: PipelineContext['reviewerReasoningEffort'];
-      executorReasoningEffort?: PipelineContext['executorReasoningEffort'];
-      verifierReasoningEffort?: PipelineContext['verifierReasoningEffort'];
-    },
+    options?: PipelineStartOptions,
   ) {
-    const executorModelOverride = options?.executorModelOverride ?? null;
-    const settings = deps.settings.get();
-
-    let baseBranch = options?.baseBranch ?? '';
-    let forkPointSha = '';
-
-    if (!baseBranch) {
-      try {
-        baseBranch = execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short'], {
-          cwd: projectPath,
-          encoding: 'utf-8',
-        })
-          .trim()
-          .replace('origin/', '');
-      } catch {
-        baseBranch = 'main';
-      }
-    }
-
-    try {
-      forkPointSha = execFileSync('git', ['rev-parse', baseBranch], {
-        cwd: projectPath,
-        encoding: 'utf-8',
-      }).trim();
-    } catch {
-      forkPointSha = '';
-    }
-
-    deps.threads.updateAutonomousFields(threadId, {
-      autonomous: true,
-      reviewRound: 0,
-      executorModel,
-      baseBranch,
-      forkPointSha,
-    });
-    deps.threads.clearClarification(threadId);
-
-    const runId = createRun({
+    const { settings } = bootstrapPipelineRun(deps, contextHelpers, {
       threadId,
-      source: 'quick-task:start',
-      triggerDetail: `quick:${task.issueNumber}`,
-      currentPhase: 'executing',
-      context: {
-        quickTaskIssueNumber: task.issueNumber,
-        quickTaskTitle: task.title,
-        worktreePath: options?.worktreePath ?? null,
-        executorModel,
-      },
-    });
-
-    contextHelpers.ensureContext(threadId, {
       projectPath,
-      runId,
-      worktreePath: options?.worktreePath ?? null,
-      retryCount: 0,
-      autonomous: true,
-      reviewRound: 0,
-      clarificationRound: 0,
-      clarificationRequest: null,
-      clarificationAnswers: [],
-      clarificationHistory: [],
-      verificationRetries: 0,
       // Quick tasks have no real GH issue. Pipeline guards check this with
-      // isRealGithubIssueNumber, so leaving null skips workpad / PR / comments.
+      // isRealGithubIssueNumber, so null skips workpad / PR / comments.
       githubIssueNumber: null,
       githubIssueTitle: task.title,
-      githubRepo: null,
-      plannerModel: options?.plannerModel ?? (settings.plannerModel as PipelineExecutorModel),
-      reviewerModel: options?.reviewerModel ?? (settings.reviewerModel as PipelineExecutorModel),
-      verifierModel: options?.verifierModel ?? (settings.verifierModel as PipelineExecutorModel),
       executorModel,
-      plannerModelIdOverride: options?.plannerModelIdOverride ?? null,
-      reviewerModelIdOverride: options?.reviewerModelIdOverride ?? null,
-      executorModelIdOverride: options?.executorModelIdOverride ?? null,
-      verifierModelIdOverride: options?.verifierModelIdOverride ?? null,
-      plannerReasoningEffort: options?.plannerReasoningEffort ?? settings.plannerReasoningEffort,
-      reviewerReasoningEffort: options?.reviewerReasoningEffort ?? settings.reviewerReasoningEffort,
-      executorReasoningEffort: options?.executorReasoningEffort ?? settings.executorReasoningEffort,
-      verifierReasoningEffort: options?.verifierReasoningEffort ?? settings.verifierReasoningEffort,
-      executorModelOverride,
-      baseBranch,
-      forkPointSha,
-      activeProcessId: null,
-      cancelled: false,
-      verifiedSha: null,
+      options,
+      createRun: () =>
+        createRun({
+          threadId,
+          source: 'quick-task:start',
+          triggerDetail: `quick:${task.issueNumber}`,
+          currentPhase: 'executing',
+          context: {
+            quickTaskIssueNumber: task.issueNumber,
+            quickTaskTitle: task.title,
+            worktreePath: options?.worktreePath ?? null,
+            executorModel,
+          },
+        }),
     });
 
     const thread = deps.threads.getById(threadId);

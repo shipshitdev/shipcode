@@ -108,6 +108,23 @@ export interface ProjectFailureLedgerQueries {
   resolveOwnedByThread(threadId: string, commitSha: string): number;
 }
 
+export interface PipelineStartOptions {
+  baseBranch?: string;
+  worktreePath?: string | null;
+  executorModelOverride?: string | null;
+  plannerModel?: PipelineExecutorModel;
+  reviewerModel?: PipelineExecutorModel;
+  verifierModel?: PipelineExecutorModel;
+  plannerModelIdOverride?: string | null;
+  reviewerModelIdOverride?: string | null;
+  executorModelIdOverride?: string | null;
+  verifierModelIdOverride?: string | null;
+  plannerReasoningEffort?: ReasoningEffort;
+  reviewerReasoningEffort?: ReasoningEffort;
+  executorReasoningEffort?: ReasoningEffort;
+  verifierReasoningEffort?: ReasoningEffort;
+}
+
 // Typed event contract -- both desktop and CLI adapters must handle these
 export type PipelineEvent =
   | { type: 'pipeline:phase'; threadId: string; phase: PipelinePhase; runId?: string | null }
@@ -584,22 +601,7 @@ export interface Pipeline {
     projectPath: string,
     issue: { number: number; title: string; body: string | null; labels: string[] },
     executorModel: PipelineExecutorModel,
-    options?: {
-      baseBranch?: string;
-      worktreePath?: string | null;
-      executorModelOverride?: string | null;
-      plannerModel?: PipelineExecutorModel;
-      reviewerModel?: PipelineExecutorModel;
-      verifierModel?: PipelineExecutorModel;
-      plannerModelIdOverride?: string | null;
-      reviewerModelIdOverride?: string | null;
-      executorModelIdOverride?: string | null;
-      verifierModelIdOverride?: string | null;
-      plannerReasoningEffort?: ReasoningEffort;
-      reviewerReasoningEffort?: ReasoningEffort;
-      executorReasoningEffort?: ReasoningEffort;
-      verifierReasoningEffort?: ReasoningEffort;
-    },
+    options?: PipelineStartOptions,
   ) => Promise<void>;
   /**
    * Entry path for Quick Mode tasks. Same flow as startFromGitHubIssue but
@@ -611,22 +613,7 @@ export interface Pipeline {
     projectPath: string,
     task: { issueNumber: number; title: string; text: string },
     executorModel: PipelineExecutorModel,
-    options?: {
-      baseBranch?: string;
-      worktreePath?: string | null;
-      executorModelOverride?: string | null;
-      plannerModel?: PipelineExecutorModel;
-      reviewerModel?: PipelineExecutorModel;
-      verifierModel?: PipelineExecutorModel;
-      plannerModelIdOverride?: string | null;
-      reviewerModelIdOverride?: string | null;
-      executorModelIdOverride?: string | null;
-      verifierModelIdOverride?: string | null;
-      plannerReasoningEffort?: ReasoningEffort;
-      reviewerReasoningEffort?: ReasoningEffort;
-      executorReasoningEffort?: ReasoningEffort;
-      verifierReasoningEffort?: ReasoningEffort;
-    },
+    options?: PipelineStartOptions,
   ) => Promise<void>;
   /**
    * Entry path for cron-driven automation runs. Synthesizes an approved
