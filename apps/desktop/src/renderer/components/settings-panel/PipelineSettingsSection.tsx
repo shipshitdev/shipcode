@@ -11,6 +11,7 @@ import {
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
 import {
+  LabeledModelSelect,
   SettingsSection,
   Tooltip,
   TooltipContent,
@@ -630,77 +631,27 @@ function pipelineSettingsSection({
             description="These defaults are used whenever a phase selects OpenRouter without a custom slug."
           >
             <div className="grid gap-3 md:grid-cols-3">
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="openrouter-default-paid-model"
-                  className="text-[11px] text-secondary"
-                >
-                  Paid default
-                </label>
-                <Select
-                  value={settings.openrouterDefaultPaidModel}
-                  onValueChange={(value) => onUpdate({ openrouterDefaultPaidModel: value })}
-                >
-                  <SelectTrigger id="openrouter-default-paid-model">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {openrouterModelOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="openrouter-default-free-model"
-                  className="text-[11px] text-secondary"
-                >
-                  Free default
-                </label>
-                <Select
-                  value={settings.openrouterDefaultFreeModel}
-                  onValueChange={(value) => onUpdate({ openrouterDefaultFreeModel: value })}
-                >
-                  <SelectTrigger id="openrouter-default-free-model">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {openrouterModelOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="openrouter-explicit-fallback"
-                  className="text-[11px] text-secondary"
-                >
-                  Explicit fallback
-                </label>
-                <Select
-                  value={settings.openrouterExplicitFallback}
-                  onValueChange={(value) => onUpdate({ openrouterExplicitFallback: value })}
-                >
-                  <SelectTrigger id="openrouter-explicit-fallback">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {openrouterModelOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <LabeledModelSelect
+                id="openrouter-default-paid-model"
+                label="Paid default"
+                value={settings.openrouterDefaultPaidModel}
+                options={openrouterModelOptions}
+                onValueChange={(value) => onUpdate({ openrouterDefaultPaidModel: value })}
+              />
+              <LabeledModelSelect
+                id="openrouter-default-free-model"
+                label="Free default"
+                value={settings.openrouterDefaultFreeModel}
+                options={openrouterModelOptions}
+                onValueChange={(value) => onUpdate({ openrouterDefaultFreeModel: value })}
+              />
+              <LabeledModelSelect
+                id="openrouter-explicit-fallback"
+                label="Explicit fallback"
+                value={settings.openrouterExplicitFallback}
+                options={openrouterModelOptions}
+                onValueChange={(value) => onUpdate({ openrouterExplicitFallback: value })}
+              />
             </div>
           </SettingsSection>
 

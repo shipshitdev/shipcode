@@ -1,26 +1,12 @@
 import type {
   AppSettings,
-  DesktopAppHealth,
   IntegrationStatus,
   OpenRouterAuthStatus,
   OpenRouterHealth,
   ProjectOpenTarget,
 } from '@shipcode/shared';
-import { SecureCredentialField, SettingsSection } from '@shipcode/ui';
-import {
-  Button,
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Switch,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@shipshitdev/ui';
+import { AppPickerSection, SecureCredentialField, SettingsSection } from '@shipcode/ui';
+import { Button, Input, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { FolderGit, Sparkles, Terminal } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -134,27 +120,6 @@ function OpenRouterAuthHealthCard({ health }: { health: OpenRouterHealth }) {
   );
 }
 
-function DesktopAppHealthCard({ app }: { app: DesktopAppHealth }) {
-  return (
-    <div className="rounded-md border border-border bg-primary/40 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-[140px] text-[13px] font-medium text-primary">{app.label}</div>
-        <StatusPill tone={app.available ? 'success' : 'neutral'}>
-          {app.available ? 'Available' : 'Unavailable'}
-        </StatusPill>
-      </div>
-      <div className="mt-2 space-y-1 text-[12px] text-secondary">
-        {app.path ? (
-          <div>
-            Path: <code>{app.path}</code>
-          </div>
-        ) : null}
-        {app.error ? <div className="text-amber-300">{app.error}</div> : null}
-      </div>
-    </div>
-  );
-}
-
 function useIntegrationsSettingsSectionView({
   integrationStatus,
   integrationsFetching,
@@ -195,95 +160,41 @@ function useIntegrationsSettingsSectionView({
     } as const;
   };
 
-  const getDesktopApp = (target: ProjectOpenTarget): DesktopAppHealth =>
-    integrationStatus?.desktopApps?.[target] ?? {
-      key: target,
-      label: projectOpenTargetLabels[target],
-      available: false,
-      path: null,
-      error: null,
+  const getDesktopApp = <Target extends ProjectOpenTarget>(target: Target) => {
+    const app = integrationStatus?.desktopApps?.[target];
+    return {
+      value: target,
+      label: app?.label ?? projectOpenTargetLabels[target],
+      available: app?.available ?? false,
+      path: app?.path ?? null,
+      error: app?.error ?? null,
     };
+  };
+  const terminalApps = terminalOpenTargets.map(getDesktopApp);
+  const projectApps = projectOpenTargets.map(getDesktopApp);
   const terminalOpenerSection = (
-    <SettingsSection
+    <AppPickerSection
       title="Terminal opener"
       description="Choose the terminal ShipCode opens from Terminal and the console drawer."
+      label="Default terminal"
+      selectId="terminal-open-target"
+      value={settings.terminalOpenTarget}
+      options={terminalApps}
+      onValueChange={(value) => onUpdate({ terminalOpenTarget: value })}
       className="mb-6"
-    >
-      <div className="mb-4 flex max-w-[260px] flex-col gap-1.5">
-        <label htmlFor="terminal-open-target" className="text-[11px] text-secondary">
-          Default terminal
-        </label>
-        <Select
-          value={settings.terminalOpenTarget}
-          onValueChange={(value) =>
-            onUpdate({ terminalOpenTarget: value as AppSettings['terminalOpenTarget'] })
-          }
-        >
-          <SelectTrigger id="terminal-open-target">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {terminalOpenTargets.map((target) => {
-              const app = getDesktopApp(target);
-              return (
-                <SelectItem key={target} value={target} disabled={!app.available}>
-                  {app.label}
-                  {!app.available ? ' (Unavailable)' : ''}
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        {terminalOpenTargets.map((target) => {
-          const app = getDesktopApp(target);
-          return <DesktopAppHealthCard key={target} app={app} />;
-        })}
-      </div>
-    </SettingsSection>
+    />
   );
   const projectOpenerSection = (
-    <SettingsSection
+    <AppPickerSection
       title="Project opener"
       description="Choose the default app ShipCode uses when you open a project folder from the board toolbar."
+      label="Default app"
+      selectId="project-open-target"
+      value={settings.projectOpenTarget}
+      options={projectApps}
+      onValueChange={(value) => onUpdate({ projectOpenTarget: value })}
       className="mb-6"
-    >
-      <div className="mb-4 flex max-w-[260px] flex-col gap-1.5">
-        <label htmlFor="project-open-target" className="text-[11px] text-secondary">
-          Default app
-        </label>
-        <Select
-          value={settings.projectOpenTarget}
-          onValueChange={(value) =>
-            onUpdate({ projectOpenTarget: value as AppSettings['projectOpenTarget'] })
-          }
-        >
-          <SelectTrigger id="project-open-target">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {projectOpenTargets.map((target) => {
-              const app = getDesktopApp(target);
-              return (
-                <SelectItem key={target} value={target} disabled={!app.available}>
-                  {app.label}
-                  {!app.available ? ' (Unavailable)' : ''}
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        {projectOpenTargets.map((target) => {
-          const app = getDesktopApp(target);
-          return <DesktopAppHealthCard key={target} app={app} />;
-        })}
-      </div>
-    </SettingsSection>
+    />
   );
 
   return (

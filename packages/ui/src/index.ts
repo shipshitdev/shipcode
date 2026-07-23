@@ -1,5 +1,7 @@
 export type { ActivePipelineCardProps } from '@/ActivePipelineCard';
 export { ActivePipelineCard } from '@/ActivePipelineCard';
+export type { AppPickerOption, AppPickerSectionProps } from '@/AppPickerSection';
+export { AppPickerSection } from '@/AppPickerSection';
 export type { CollapsibleSectionProps } from '@/CollapsibleSection';
 export { CollapsibleSection } from '@/CollapsibleSection';
 export type { ConfirmDialogProps } from '@/ConfirmDialog';
@@ -7,6 +9,11 @@ export { ConfirmDialog } from '@/ConfirmDialog';
 export { DiffViewer } from '@/DiffViewer';
 export { GitVisualizer } from '@/GitVisualizer';
 export { KanbanBoard } from '@/KanbanBoard';
+export type {
+  LabeledModelSelectOption,
+  LabeledModelSelectProps,
+} from '@/LabeledModelSelect';
+export { LabeledModelSelect } from '@/LabeledModelSelect';
 export type { IssuePriorityBadge, PlanStepSummary } from '@/kanban-board/types';
 export {
   AUTOMATION_ISSUE_NUMBER_BASE,

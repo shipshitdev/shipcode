@@ -8,6 +8,35 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PipelineSettingsSection } from './PipelineSettingsSection';
 
+vi.mock('@shipcode/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/ui')>();
+  return {
+    ...actual,
+    LabeledModelSelect: ({
+      value,
+      options,
+      onValueChange,
+    }: {
+      value: string;
+      options: readonly { value: string; label: string }[];
+      onValueChange: (value: string) => void;
+    }) => (
+      <div data-select-value={value}>
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            data-testid={`select-${value}-${option.value}`}
+            onClick={() => onValueChange(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    ),
+  };
+});
+
 vi.mock('@shipshitdev/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shipshitdev/ui')>();
   const selectValues = [
@@ -214,9 +243,9 @@ describe('PipelineSettingsSection callback coverage', () => {
     openModelsTab();
 
     fireEvent.click(screen.getAllByTestId('select-gpt-5.4-mini-__default__')[0]);
-    fireEvent.click(screen.getAllByTestId('select-openrouter/auto-gpt-5.4-mini')[0]);
-    fireEvent.click(screen.getAllByTestId('select-openrouter/auto-gpt-5.4-mini')[1]);
-    fireEvent.click(screen.getAllByTestId('select-openrouter/auto-gpt-5.4-mini')[2]);
+    fireEvent.click(screen.getAllByTestId('select-openrouter/auto-anthropic/claude-sonnet-4.6')[0]);
+    fireEvent.click(screen.getAllByTestId('select-openrouter/auto-anthropic/claude-sonnet-4.6')[1]);
+    fireEvent.click(screen.getAllByTestId('select-openrouter/auto-anthropic/claude-sonnet-4.6')[2]);
 
     const testingTab = screen.getByRole('tab', { name: 'Testing' });
     fireEvent.mouseDown(testingTab, { button: 0 });
@@ -232,9 +261,15 @@ describe('PipelineSettingsSection callback coverage', () => {
     );
 
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ prdRewriteCodexModel: null }));
-    expect(onUpdate).toHaveBeenCalledWith({ openrouterDefaultPaidModel: 'gpt-5.4-mini' });
-    expect(onUpdate).toHaveBeenCalledWith({ openrouterDefaultFreeModel: 'gpt-5.4-mini' });
-    expect(onUpdate).toHaveBeenCalledWith({ openrouterExplicitFallback: 'gpt-5.4-mini' });
+    expect(onUpdate).toHaveBeenCalledWith({
+      openrouterDefaultPaidModel: 'anthropic/claude-sonnet-4.6',
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      openrouterDefaultFreeModel: 'anthropic/claude-sonnet-4.6',
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      openrouterExplicitFallback: 'anthropic/claude-sonnet-4.6',
+    });
     expect(onUpdate).toHaveBeenCalledWith({ testCommand: null });
     expect(onUpdate).toHaveBeenCalledWith({ testingContext: 'keep mocks small' });
   });
