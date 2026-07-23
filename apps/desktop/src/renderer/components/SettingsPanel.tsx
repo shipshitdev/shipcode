@@ -135,6 +135,7 @@ export function SettingsPanel() {
             integrationsFetching={integrationsFetching || refreshIntegrations.isPending}
             settings={settings}
             onUpdate={update}
+            onSaveCredential={(patch) => updateSettings.mutateAsync(patch)}
             onRefetch={() => {
               refreshIntegrations.mutate();
             }}

@@ -7,6 +7,7 @@ import type {
 } from '@shipcode/shared';
 import { clampError, fetchWithTimeout, notificationEventFlagForKind } from '@shipcode/shared';
 import log from './logger.service';
+import type { NotificationCredentialSettingsReader } from './notification-credential-store';
 
 const DEDUPE_WINDOW_MS = 2_000;
 const RETRY_DELAYS_MS = [0, 500, 1_500] as const;
@@ -79,6 +80,7 @@ export class ChatNotificationService {
   constructor(
     private settings: SettingsQueries,
     private projects: ProjectQueries,
+    private credentialSettings: NotificationCredentialSettingsReader,
   ) {}
 
   fire(kind: NotificationKind, thread: Thread, testSummary?: string) {
@@ -88,7 +90,7 @@ export class ChatNotificationService {
   }
 
   async sendTest(provider: 'discord' | 'telegram', projectId: string | null = null) {
-    const settings = this.settings.get();
+    const settings = this.credentialSettings.getMainSettings();
     const project = projectId ? this.projects.getById(projectId) : null;
     const message = [
       'ShipCode test alert',
@@ -120,8 +122,8 @@ export class ChatNotificationService {
   }
 
   private async deliver(kind: NotificationKind, thread: Thread, testSummary?: string) {
-    const settings = this.settings.get();
-    if (!settings.chatNotificationEvents[notificationEventFlagForKind(kind)]) return;
+    if (!this.settings.get().chatNotificationEvents[notificationEventFlagForKind(kind)]) return;
+    const settings = this.credentialSettings.getMainSettings();
 
     const project = this.projects.getById(thread.projectId);
     if (!project) return;

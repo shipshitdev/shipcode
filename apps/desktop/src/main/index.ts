@@ -128,6 +128,7 @@ import { registerIpcHandlers } from './ipc';
 import { transitionThreadPhase } from './ipc/helpers';
 import { notifyIssueGraphPipelinePhaseChange } from './ipc/register-issue-graph-handlers';
 import { NotificationService } from './notification-service';
+import { NotificationCredentialStore } from './notification-credential-store';
 import { createElectronEmitter } from './pipeline-bridge';
 import { PipelineScheduler } from './pipeline-scheduler';
 import { ResourceMonitor } from './resource-monitor';
@@ -257,6 +258,16 @@ function createWindow() {
   };
   threadQueries = queries.threads;
 
+  const notificationCredentials = new NotificationCredentialStore(queries.settings);
+  try {
+    notificationCredentials.migratePlaintextCredentials();
+  } catch (error) {
+    log.warn(
+      '[notification-credentials] migration deferred:',
+      error instanceof Error ? error.message : 'Unknown secure storage error',
+    );
+  }
+
   if (!E2E_MODE) {
     void configureMainTelemetry(queries.settings.get()).catch((err) => {
       log.warn('[telemetry] init failed:', err);
@@ -272,7 +283,11 @@ function createWindow() {
     queries.settings,
     queries.activity,
   );
-  const chatNotificationService = new ChatNotificationService(queries.settings, queries.projects);
+  const chatNotificationService = new ChatNotificationService(
+    queries.settings,
+    queries.projects,
+    notificationCredentials,
+  );
 
   // Initialize pipeline state machine.
   splashScreen.completeThrough('services');
@@ -488,6 +503,7 @@ function createWindow() {
     emitter,
     notificationService,
     chatNotificationService,
+    notificationCredentials,
     updateService,
     automationScheduler,
     resourceMonitor,

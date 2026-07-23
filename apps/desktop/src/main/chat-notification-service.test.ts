@@ -111,6 +111,7 @@ describe('ChatNotificationService', () => {
     return new ChatNotificationService(
       { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
       { getById: getProjectMock } as unknown as ProjectQueries,
+      { getMainSettings: getSettingsMock },
     );
   }
 
@@ -148,6 +149,34 @@ describe('ChatNotificationService', () => {
     expect(setSettingsMock).toHaveBeenCalledTimes(2);
   });
 
+  it('reads decrypted credentials through the main-process credential boundary', async () => {
+    getSettingsMock.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      discordEnabled: true,
+      discordWebhookUrl: 'safe-storage:v1:ciphertext',
+      telegramEnabled: false,
+    });
+    const getMainSettings = vi.fn(() => ({
+      ...DEFAULT_SETTINGS,
+      discordEnabled: true,
+      discordWebhookUrl: 'https://discord.com/api/webhooks/123/decrypted',
+      telegramEnabled: false,
+    }));
+    const service = new ChatNotificationService(
+      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
+      { getById: getProjectMock } as unknown as ProjectQueries,
+      { getMainSettings },
+    );
+
+    await service.sendTest('discord');
+
+    expect(getMainSettings).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      'https://discord.com/api/webhooks/123/decrypted',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
   it('respects chat notification event toggles', async () => {
     getSettingsMock.mockReturnValue({
       ...DEFAULT_SETTINGS,
@@ -164,6 +193,30 @@ describe('ChatNotificationService', () => {
     service.fire('approval', makeThread());
     await new Promise((resolve) => setTimeout(resolve, 0));
 
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not access secure credentials for disabled events', async () => {
+    getSettingsMock.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      chatNotificationEvents: {
+        ...DEFAULT_SETTINGS.chatNotificationEvents,
+        approval: false,
+      },
+    });
+    const getMainSettings = vi.fn(() => {
+      throw new Error('secure storage unavailable');
+    });
+    const service = new ChatNotificationService(
+      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
+      { getById: getProjectMock } as unknown as ProjectQueries,
+      { getMainSettings },
+    );
+
+    service.fire('approval', makeThread());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(getMainSettings).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
 

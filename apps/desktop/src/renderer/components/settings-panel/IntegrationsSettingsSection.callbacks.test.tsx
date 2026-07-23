@@ -221,6 +221,7 @@ describe('IntegrationsSettingsSection callback coverage', () => {
         integrationsFetching={false}
         settings={DEFAULT_SETTINGS}
         onUpdate={vi.fn()}
+        onSaveCredential={vi.fn(async () => undefined)}
         onRefetch={vi.fn()}
         onTestChat={vi.fn(async (provider: 'discord' | 'telegram') => `${provider} ok`)}
       />,
@@ -245,6 +246,7 @@ describe('IntegrationsSettingsSection callback coverage', () => {
           terminalOpenTarget: 'terminal',
         }}
         onUpdate={onUpdate}
+        onSaveCredential={vi.fn(async () => undefined)}
         onRefetch={vi.fn()}
         onTestChat={vi.fn(async (provider: 'discord' | 'telegram') => `${provider} ok`)}
       />,

@@ -14,6 +14,7 @@ import { ShipCodeLogoMark } from '@/brand/ShipCodeLogoMark';
 import { PipelineStatus } from '@/PipelineStatus';
 import { PlanViewer } from '@/PlanViewer';
 import { ReviewViewer } from '@/ReviewViewer';
+import { SecureCredentialField } from '@/SecureCredentialField';
 import { SettingsSection } from '@/SettingsSection';
 import { StartupProgress } from '@/StartupProgress';
 import { TaskGraphViewer } from '@/TaskGraphViewer';
@@ -242,6 +243,44 @@ describe('root UI components', () => {
     expect(bodyOnlySection?.querySelector('div')).toBeNull();
     expect(bodyOnlySection?.textContent).toBe('Apply');
     bodyOnly.cleanup();
+  });
+
+  it('renders secure credential actions without exposing a persisted value', () => {
+    const onClear = vi.fn();
+    const view = renderIntoDom(
+      <SecureCredentialField
+        ariaLabel="Webhook URL"
+        clearLabel="Clear webhook"
+        configured={true}
+        placeholder="Configured — enter a replacement"
+        renderInput={({ ariaLabel, onChange, placeholder, value }) => (
+          <input
+            aria-label={ariaLabel}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder={placeholder}
+            type="password"
+          />
+        )}
+        saveLabel="Save webhook"
+        onClear={onClear}
+        onSave={vi.fn(async () => undefined)}
+      />,
+    );
+
+    const input = view.container.querySelector('input');
+    const saveButton = Array.from(view.container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Save webhook',
+    );
+    const clearButton = Array.from(view.container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Clear webhook',
+    );
+    expect(input?.value).toBe('');
+    expect(input?.placeholder).toBe('Configured — enter a replacement');
+    expect(saveButton?.disabled).toBe(true);
+    act(() => clearButton?.click());
+    expect(onClear).toHaveBeenCalledTimes(1);
+    view.cleanup();
   });
 
   it('renders active and completed phases and only emits clicks for enabled phases', () => {

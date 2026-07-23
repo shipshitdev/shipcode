@@ -6,7 +6,7 @@ import type {
   OpenRouterHealth,
   ProjectOpenTarget,
 } from '@shipcode/shared';
-import { SettingsSection } from '@shipcode/ui';
+import { SecureCredentialField, SettingsSection } from '@shipcode/ui';
 import {
   Button,
   Input,
@@ -160,6 +160,7 @@ function useIntegrationsSettingsSectionView({
   integrationsFetching,
   settings,
   onUpdate,
+  onSaveCredential,
   onRefetch,
   onTestChat,
 }: {
@@ -167,6 +168,7 @@ function useIntegrationsSettingsSectionView({
   integrationsFetching: boolean;
   settings: AppSettings;
   onUpdate: (patch: Partial<AppSettings>) => void;
+  onSaveCredential: (patch: Partial<AppSettings>) => Promise<void>;
   onRefetch: () => void;
   onTestChat: (provider: 'discord' | 'telegram') => Promise<string>;
 }) {
@@ -456,11 +458,29 @@ function useIntegrationsSettingsSectionView({
                         onCheckedChange={(checked) => onUpdate({ discordEnabled: checked })}
                       />
                     </label>
-                    <Input
-                      value={settings.discordWebhookUrl ?? ''}
-                      onChange={(e) => onUpdate({ discordWebhookUrl: e.target.value || null })}
-                      placeholder="https://discord.com/api/webhooks/..."
-                      spellCheck={false}
+                    <SecureCredentialField
+                      ariaLabel="Discord webhook URL"
+                      clearLabel="Clear Discord webhook"
+                      configured={integrationStatus.discord.configured}
+                      placeholder={
+                        integrationStatus.discord.configured
+                          ? 'Configured — enter a replacement webhook URL'
+                          : 'https://discord.com/api/webhooks/...'
+                      }
+                      renderInput={({ ariaLabel, onChange, placeholder, value }) => (
+                        <Input
+                          aria-label={ariaLabel}
+                          autoComplete="new-password"
+                          type="password"
+                          value={value}
+                          onChange={(event) => onChange(event.target.value)}
+                          placeholder={placeholder}
+                          spellCheck={false}
+                        />
+                      )}
+                      saveLabel="Save Discord webhook"
+                      onClear={() => onUpdate({ discordWebhookUrl: null })}
+                      onSave={(value) => onSaveCredential({ discordWebhookUrl: value })}
                     />
                     {integrationStatus.discord.message ? (
                       <div className="text-amber-300">{integrationStatus.discord.message}</div>
@@ -517,11 +537,29 @@ function useIntegrationsSettingsSectionView({
                         onCheckedChange={(checked) => onUpdate({ telegramEnabled: checked })}
                       />
                     </label>
-                    <Input
-                      value={settings.telegramBotToken ?? ''}
-                      onChange={(e) => onUpdate({ telegramBotToken: e.target.value || null })}
-                      placeholder="Bot token"
-                      spellCheck={false}
+                    <SecureCredentialField
+                      ariaLabel="Telegram bot token"
+                      clearLabel="Clear Telegram token"
+                      configured={integrationStatus.telegram.configured}
+                      placeholder={
+                        integrationStatus.telegram.configured
+                          ? 'Configured — enter a replacement bot token'
+                          : 'Bot token'
+                      }
+                      renderInput={({ ariaLabel, onChange, placeholder, value }) => (
+                        <Input
+                          aria-label={ariaLabel}
+                          autoComplete="new-password"
+                          type="password"
+                          value={value}
+                          onChange={(event) => onChange(event.target.value)}
+                          placeholder={placeholder}
+                          spellCheck={false}
+                        />
+                      )}
+                      saveLabel="Save Telegram token"
+                      onClear={() => onUpdate({ telegramBotToken: null })}
+                      onSave={(value) => onSaveCredential({ telegramBotToken: value })}
                     />
                     <Input
                       value={settings.telegramDefaultChatId ?? ''}

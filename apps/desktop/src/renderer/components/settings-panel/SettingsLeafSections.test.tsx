@@ -509,6 +509,7 @@ describe('settings leaf sections', () => {
 
   it('renders integration status branches and forwards chat setting actions', async () => {
     const onUpdate = vi.fn();
+    const onSaveCredential = vi.fn(async () => undefined);
     const onRefetch = vi.fn();
     const onTestChat = vi.fn(async (provider: 'discord' | 'telegram') => `${provider} ok`);
 
@@ -518,6 +519,7 @@ describe('settings leaf sections', () => {
         integrationsFetching={true}
         settings={DEFAULT_SETTINGS}
         onUpdate={onUpdate}
+        onSaveCredential={onSaveCredential}
         onRefetch={onRefetch}
         onTestChat={onTestChat}
       />,
@@ -534,11 +536,10 @@ describe('settings leaf sections', () => {
         integrationsFetching={false}
         settings={{
           ...DEFAULT_SETTINGS,
-          discordWebhookUrl: 'https://discord.test/webhook',
-          telegramBotToken: 'token',
           telegramDefaultChatId: '-100',
         }}
         onUpdate={onUpdate}
+        onSaveCredential={onSaveCredential}
         onRefetch={onRefetch}
         onTestChat={onTestChat}
       />,
@@ -564,9 +565,10 @@ describe('settings leaf sections', () => {
     expect(screen.getByText(/Last delivery succeeded at/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Enable Discord chat alerts'));
-    fireEvent.change(screen.getByPlaceholderText('https://discord.com/api/webhooks/...'), {
-      target: { value: '' },
+    fireEvent.change(screen.getByLabelText('Discord webhook URL'), {
+      target: { value: 'https://discord.test/webhook' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Discord webhook' }));
     fireEvent.click(screen.getAllByRole('button', { name: 'Send test message' })[0]);
 
     await waitFor(() => {
@@ -574,7 +576,8 @@ describe('settings leaf sections', () => {
     });
 
     fireEvent.click(screen.getByText('Enable Telegram chat alerts'));
-    fireEvent.change(screen.getByPlaceholderText('Bot token'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Telegram bot token'), { target: { value: 'token' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Telegram token' }));
     fireEvent.change(screen.getByPlaceholderText('Default chat ID'), {
       target: { value: '-200' },
     });
@@ -585,11 +588,47 @@ describe('settings leaf sections', () => {
     });
 
     expect(onUpdate).toHaveBeenCalledWith({ discordEnabled: true });
-    expect(onUpdate).toHaveBeenCalledWith({ discordWebhookUrl: null });
+    expect(onSaveCredential).toHaveBeenCalledWith({
+      discordWebhookUrl: 'https://discord.test/webhook',
+    });
     expect(onUpdate).toHaveBeenCalledWith({ telegramEnabled: true });
-    expect(onUpdate).toHaveBeenCalledWith({ telegramBotToken: null });
+    expect(onSaveCredential).toHaveBeenCalledWith({ telegramBotToken: 'token' });
     expect(onUpdate).toHaveBeenCalledWith({ telegramDefaultChatId: '-200' });
     expect(onTestChat).toHaveBeenCalledWith('discord');
     expect(onTestChat).toHaveBeenCalledWith('telegram');
+    await waitFor(() => {
+      expect(screen.getByLabelText('Discord webhook URL')).toHaveValue('');
+      expect(screen.getByLabelText('Telegram bot token')).toHaveValue('');
+    });
+  });
+
+  it('preserves a credential draft when secure storage rejects the save', async () => {
+    const onSaveCredential = vi.fn(async () => {
+      throw new Error('Secure credential storage is unavailable');
+    });
+
+    render(
+      <IntegrationsSettingsSection
+        integrationStatus={integrationStatus}
+        integrationsFetching={false}
+        settings={DEFAULT_SETTINGS}
+        onUpdate={vi.fn()}
+        onSaveCredential={onSaveCredential}
+        onRefetch={vi.fn()}
+        onTestChat={vi.fn(async () => 'ok')}
+      />,
+    );
+
+    const apiKeysTab = screen.getByRole('tab', { name: 'API Keys' });
+    fireEvent.mouseDown(apiKeysTab, { button: 0 });
+    fireEvent.click(apiKeysTab);
+    const webhookInput = screen.getByLabelText('Discord webhook URL');
+    fireEvent.change(webhookInput, { target: { value: 'https://discord.test/webhook' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Discord webhook' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Secure credential storage is unavailable')).toBeInTheDocument();
+    });
+    expect(webhookInput).toHaveValue('https://discord.test/webhook');
   });
 });

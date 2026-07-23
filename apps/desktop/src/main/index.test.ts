@@ -62,6 +62,11 @@ const menuMock = {
 const shellMock = {
   openExternal: vi.fn(),
 };
+const safeStorageMock = {
+  isEncryptionAvailable: vi.fn(() => true),
+  encryptString: vi.fn((value: string) => Buffer.from(value, 'utf8')),
+  decryptString: vi.fn((value: Buffer) => value.toString('utf8')),
+};
 const originalPlatform = process.platform;
 const originalProcessEmit = process.emit;
 const originalUncaughtListeners = process.listeners('uncaughtException');
@@ -176,6 +181,7 @@ function installMocks() {
     dialog: dialogMock,
     ipcMain: {},
     Menu: menuMock,
+    safeStorage: safeStorageMock,
     shell: shellMock,
   }));
 
