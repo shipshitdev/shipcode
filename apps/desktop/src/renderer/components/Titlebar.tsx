@@ -6,7 +6,7 @@ import type {
   SystemHealth,
   SystemResourceSnapshot,
 } from '@shipcode/shared';
-import { formatBytes, getProjectProviderWarnings } from '@shipcode/shared';
+import { formatBytes, formatRelativeTime, getProjectProviderWarnings } from '@shipcode/shared';
 import { ShipCodeLogoMark } from '@shipcode/ui';
 import { Button, cn, Popover, PopoverContent, PopoverTrigger } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -27,6 +27,14 @@ import { useAppStore } from '../stores/app-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
 
 type ProviderTone = 'claude' | 'codex';
+
+const CHECKED_AT_RELATIVE_TIME_OPTIONS = {
+  mode: 'past',
+  granularity: 'minutes',
+  justNowThresholdSec: 45,
+  // Preserve the legacy indicator's nearest-unit rounding (90s → "2m ago").
+  rounding: 'round',
+} as const;
 
 function dotClass(_tone: ProviderTone, state: CliProviderUsageStatus['state']): string {
   if (state === 'blocked') return 'bg-danger';
@@ -60,18 +68,8 @@ function ProviderStatusDot({
 
 function formatCheckedAt(checkedAt: string | null): string | null {
   if (!checkedAt) return null;
-  const checked = new Date(checkedAt).getTime();
-  if (Number.isNaN(checked)) return null;
-  const diffMs = Date.now() - checked;
-  if (diffMs < 0) return 'just now';
-  const diffSec = Math.round(diffMs / 1000);
-  if (diffSec < 45) return 'just now';
-  const diffMin = Math.round(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.round(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.round(diffHr / 24);
-  return `${diffDay}d ago`;
+  const formatted = formatRelativeTime(checkedAt, CHECKED_AT_RELATIVE_TIME_OPTIONS);
+  return formatted === '-' ? null : formatted;
 }
 
 function ProviderWindowBar({

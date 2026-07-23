@@ -1,5 +1,5 @@
 import type { Automation, Project, Thread } from '@shipcode/shared';
-import { formatCost, formatTokenCount } from '@shipcode/shared';
+import { formatCost, formatRelativeTime, formatTokenCount } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
 import { Button, cn } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -8,7 +8,7 @@ import { ArrowLeft, Loader2, Pencil } from 'lucide-react';
 import { formatTimestamp, SHORT_TIMESTAMP_FORMAT } from '../../components/format-timestamp';
 import { useAppStore } from '../../stores/app-store';
 import { AutomationPromptMarkdown } from './automation-prompt-markdown';
-import { formatAutomationRelativeTime } from './automation-time';
+import { AUTOMATION_RELATIVE_TIME_OPTIONS } from './automation-time';
 import { describeAutomationRun, getAutomationRunTotalTokens } from './run-presentation';
 
 function describeCron(expr: string): string {
@@ -16,7 +16,7 @@ function describeCron(expr: string): string {
     const job = new Cron(expr, { paused: true });
     const next = job.nextRun();
     if (!next) return expr;
-    return `Next run ${formatAutomationRelativeTime(next)}`;
+    return `Next run ${formatRelativeTime(next, AUTOMATION_RELATIVE_TIME_OPTIONS)}`;
   } catch {
     return `Invalid: ${expr}`;
   }
@@ -178,7 +178,7 @@ export function AutomationDetail() {
                         </div>
                       </div>
                       <span className="mt-0.5 shrink-0 text-[11px] text-muted-foreground">
-                        {formatAutomationRelativeTime(run.createdAt)}
+                        {formatRelativeTime(run.createdAt, AUTOMATION_RELATIVE_TIME_OPTIONS)}
                       </span>
                     </Button>
                   );
@@ -244,7 +244,7 @@ export function AutomationDetail() {
                   Last Run
                 </span>
                 <p className="mt-0.5 text-sm text-primary">
-                  {formatAutomationRelativeTime(automation.lastStartedAt)}
+                  {formatRelativeTime(automation.lastStartedAt, AUTOMATION_RELATIVE_TIME_OPTIONS)}
                 </p>
               </div>
             )}
