@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, PIPELINE_PHASE } from '@shipcode/shared';
+import { CLAUDE_MODEL_IDS, DEFAULT_SETTINGS, PIPELINE_PHASE } from '@shipcode/shared';
 import { describe, expect, it, vi } from 'vitest';
 import type { OrchestratorState, PipelineContext } from '../types';
 import {
@@ -374,6 +374,74 @@ describe('createPipelineContextHelpers', () => {
 
     expect(context.phaseReasoningOverrides.execute).toBe(DEFAULT_SETTINGS.executorReasoningEffort);
     expect(context.phaseReasoningOverrides.verify).toBe(DEFAULT_SETTINGS.verifierReasoningEffort);
+  });
+
+  it('uses the resolved plan override for revision when no revision override is set', () => {
+    const deps = makeDeps();
+    const helpers = createPipelineContextHelpers(deps as never, new Map());
+
+    const context = helpers.ensureContext('thread-1', {
+      projectPath: '/repo',
+      phaseReasoningOverrides: { plan: 'xhigh' },
+    });
+
+    expect(context.phaseReasoningOverrides.plan).toBe('xhigh');
+    expect(context.phaseReasoningOverrides.revision).toBe('xhigh');
+  });
+
+  it('keeps reasoning resolution identical when ensureContext reuses seeded context', () => {
+    const deps = makeDeps();
+    const helpers = createPipelineContextHelpers(deps as never, new Map());
+    const seed = {
+      projectPath: '/repo',
+      plannerModel: 'codex',
+      reviewerModel: 'claude',
+      reviewerModelIdOverride: CLAUDE_MODEL_IDS.fable5,
+      verifierModel: 'gemini',
+      executorModel: 'cursor',
+      phaseReasoningOverrides: {
+        plan: 'none',
+        review: 'low',
+        revision: 'xhigh',
+        execute: 'high',
+        verify: 'xhigh',
+      },
+    } satisfies Parameters<typeof helpers.ensureContext>[1];
+
+    const fresh = helpers.ensureContext('thread-1', seed);
+    const freshReasoning = {
+      phaseReasoningOverrides: { ...fresh.phaseReasoningOverrides },
+      phaseReasoningEfforts: { ...fresh.phaseReasoningEfforts },
+      plannerReasoningEffort: fresh.plannerReasoningEffort,
+      reviewerReasoningEffort: fresh.reviewerReasoningEffort,
+      executorReasoningEffort: fresh.executorReasoningEffort,
+      verifierReasoningEffort: fresh.verifierReasoningEffort,
+    };
+
+    const reused = helpers.ensureContext('thread-1', { projectPath: '/repo' });
+
+    expect(reused).toBe(fresh);
+    expect({
+      phaseReasoningOverrides: reused.phaseReasoningOverrides,
+      phaseReasoningEfforts: reused.phaseReasoningEfforts,
+      plannerReasoningEffort: reused.plannerReasoningEffort,
+      reviewerReasoningEffort: reused.reviewerReasoningEffort,
+      executorReasoningEffort: reused.executorReasoningEffort,
+      verifierReasoningEffort: reused.verifierReasoningEffort,
+    }).toEqual(freshReasoning);
+    expect(reused.phaseReasoningEfforts).toEqual({
+      plan: 'low',
+      review: 'medium',
+      revision: 'xhigh',
+      execute: 'none',
+      verify: 'high',
+    });
+    expect(reused).toMatchObject({
+      plannerReasoningEffort: 'low',
+      reviewerReasoningEffort: 'medium',
+      executorReasoningEffort: 'none',
+      verifierReasoningEffort: 'high',
+    });
   });
 
   it('rehydrateContext no-ops for active or missing threads', () => {
