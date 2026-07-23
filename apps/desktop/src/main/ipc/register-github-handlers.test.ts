@@ -1014,7 +1014,7 @@ describe('registerGitHubHandlers', () => {
     await expect(result).resolves.toEqual(cachedAfterSync);
   });
 
-  it('refresh adopts GitHub board status unless an active local claim owns the lane', async () => {
+  it('refresh adopts GitHub board status unless an active local pipeline owns the lane', async () => {
     const syncToGithub = vi.fn(async () => undefined);
     const projectWithBoard = {
       ...baseProject,
@@ -1032,14 +1032,15 @@ describe('registerGitHubHandlers', () => {
     const deferredIssue = { ...baseIssue, id: 'deferred', issueNumber: 11, pipelineStatus: 'todo' };
     const doneIssue = { ...baseIssue, id: 'done', issueNumber: 12, pipelineStatus: 'todo' };
     const reviewIssue = { ...baseIssue, id: 'review', issueNumber: 13, pipelineStatus: 'todo' };
+    // Ownership derives from the local pipeline status alone — no claim row is
+    // required. A `needs_review` lane is preserved even though the board moved
+    // this issue to Done.
     const claimedReviewIssue = {
       ...baseIssue,
       id: 'claimed-review',
       issueNumber: 17,
       labels: ['shipcode:pipeline:needs_review'],
       pipelineStatus: 'needs_review',
-      claimedAt: '2026-07-20T08:00:00.000Z',
-      claimedBy: 'scheduler-1',
     };
     const activeIssue = {
       ...baseIssue,
@@ -1047,8 +1048,6 @@ describe('registerGitHubHandlers', () => {
       issueNumber: 14,
       labels: ['shipcode:pipeline:executing'],
       pipelineStatus: 'executing',
-      claimedAt: '2026-07-20T08:00:00.000Z',
-      claimedBy: 'scheduler-1',
     };
     const labeledIssue = {
       ...baseIssue,

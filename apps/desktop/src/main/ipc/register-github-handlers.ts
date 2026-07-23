@@ -129,15 +129,14 @@ function resolveOpenIssuePipelineStatus(
     : ISSUE_PIPELINE_STATUS.todo;
 }
 
-function hasLocalPipelineOwnership(
-  issue: Pick<GitHubIssueCacheRecord, 'claimedAt' | 'claimedBy'>,
-  localPipelineStatus: IssuePipelineStatus,
-): boolean {
-  return (
-    issue.claimedAt !== null &&
-    issue.claimedBy !== null &&
-    LOCALLY_OWNED_PIPELINE_STATUSES.has(localPipelineStatus)
-  );
+function hasLocalPipelineOwnership(localPipelineStatus: IssuePipelineStatus): boolean {
+  // Ownership is derived from the resolved pipeline status alone. The
+  // claimed_at/claimed_by columns exist but no production path writes them yet
+  // (tryClaim/releaseClaim are unused outside tests), so gating on them here
+  // made this guard permanently false — an authoritative refresh would then
+  // overwrite an actively-running issue's status with the Projects macro column
+  // and re-queue it for a duplicate pipeline run.
+  return LOCALLY_OWNED_PIPELINE_STATUSES.has(localPipelineStatus);
 }
 
 function pipelineStatusForProjectMacroColumn(
@@ -207,19 +206,20 @@ function syncOpenIssueState(
     // add a custom lane without refresh silently translating it to a local lane
     // or overwriting it with stale cached state.
     if (!projectPipelineStatus || !macroColumn) {
-      if (hasLocalPipelineOwnership(issue, localPipelineStatus)) {
+      if (hasLocalPipelineOwnership(localPipelineStatus)) {
         queries.githubIssues.updatePipelineStatus(issue.id, localPipelineStatus);
       }
       return readBackIssue();
     }
 
-    if (!hasLocalPipelineOwnership(issue, localPipelineStatus)) {
+    if (!hasLocalPipelineOwnership(localPipelineStatus)) {
       queries.githubIssues.updatePipelineStatus(issue.id, projectPipelineStatus);
       return readBackIssue();
     }
 
-    // A claimed, active local run owns its macro lane until the claim is
-    // released. Only that explicit ownership can win a refresh conflict.
+    // An active local pipeline run owns its macro lane: its status wins the
+    // refresh conflict so an external Projects move can't clobber in-flight
+    // work.
     queries.githubIssues.updatePipelineStatus(issue.id, localPipelineStatus);
     if (ghSync && macroColumnForStatus(localPipelineStatus) !== macroColumn) {
       void ghSync
