@@ -4,6 +4,7 @@ import type {
   AppSettings,
   GhStatusMapping,
   GitHubIssueCacheRecord,
+  IssuePipelineStatus,
   Project,
   Thread,
 } from '@shipcode/shared';
@@ -24,7 +25,10 @@ import {
   resolveIssueRevisionBadge,
   rowToneFor,
   sectionToneFor,
+  statusDotTextColorClass,
+  statusToneFor,
 } from './utils';
+import type { RowTone } from './types';
 
 function makeIssue(
   issueNumber: number,
@@ -760,14 +764,44 @@ describe('resolveColumnDotColor', () => {
 });
 
 describe('status and tone helpers', () => {
-  it('maps issue statuses to row tones', () => {
-    expect(rowToneFor('todo', true)).toBe('agent');
-    expect(rowToneFor('failed')).toBe('danger');
-    expect(rowToneFor('approval')).toBe('warning');
-    expect(rowToneFor('completed')).toBe('success');
-    expect(rowToneFor('closed')).toBe('done');
-    expect(rowToneFor('executing')).toBe('agent');
-    expect(rowToneFor('todo')).toBe('default');
+  it('maps every issue status through the canonical tone contract', () => {
+    const expectedTones = {
+      todo: 'default',
+      queued: 'default',
+      planning: 'agent',
+      clarifying: 'warning',
+      reviewing: 'agent',
+      revising: 'agent',
+      approval: 'warning',
+      executing: 'agent',
+      testing: 'agent',
+      verifying: 'agent',
+      shipping: 'agent',
+      needs_review: 'default',
+      ready_to_merge: 'default',
+      paused: 'warning',
+      completed: 'success',
+      closed: 'done',
+      deferred: 'default',
+      failed: 'danger',
+    } satisfies Record<IssuePipelineStatus, RowTone>;
+
+    for (const status of Object.keys(expectedTones) as IssuePipelineStatus[]) {
+      expect(statusToneFor(status)).toBe(expectedTones[status]);
+      expect(rowToneFor(status)).toBe(expectedTones[status]);
+    }
+  });
+
+  it('adapts canonical tones for status dots and approved execution waiters', () => {
+    expect(statusDotTextColorClass('failed')).toBe('text-danger');
+    expect(statusDotTextColorClass('approval')).toBe('text-warning');
+    expect(statusDotTextColorClass('completed')).toBe('text-success');
+    expect(statusDotTextColorClass('closed')).toBe('text-done');
+    expect(statusDotTextColorClass('executing')).toBe('text-agent');
+    expect(statusDotTextColorClass('todo')).toBe('text-muted-foreground/40');
+
+    expect(rowToneFor('approval', true)).toBe('agent');
+    expect(statusDotTextColorClass('approval', true)).toBe('text-agent');
   });
 
   it('maps section tone and formatting fallbacks', () => {

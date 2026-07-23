@@ -88,22 +88,45 @@ export function issueMatchesSection(
   return section.statuses.includes(issue.pipelineStatus);
 }
 
-export function statusDotTextColorClass(
-  status: IssuePipelineStatus,
-  approvedAwaitingExecution = false,
-): string {
-  if (approvedAwaitingExecution) return 'text-agent';
-  if (status === ISSUE_PIPELINE_STATUS.failed) return 'text-danger';
+const STATUS_TONE_TEXT_CLASS: Record<RowTone, string> = {
+  default: 'text-muted-foreground/40',
+  success: 'text-success',
+  done: 'text-done',
+  agent: 'text-agent',
+  danger: 'text-danger',
+  warning: 'text-warning',
+};
+
+const STATUS_TONE_BADGE_VARIANT: Record<RowTone, IssueRevisionBadge['variant']> = {
+  default: 'default',
+  success: 'success',
+  done: 'done',
+  agent: 'info',
+  danger: 'danger',
+  warning: 'warning',
+};
+
+export function statusToneFor(status: IssuePipelineStatus): RowTone {
+  if (status === ISSUE_PIPELINE_STATUS.failed) return 'danger';
   if (
     status === ISSUE_PIPELINE_STATUS.approval ||
     status === ISSUE_PIPELINE_STATUS.clarifying ||
     status === ISSUE_PIPELINE_STATUS.paused
-  )
-    return 'text-warning';
-  if (status === ISSUE_PIPELINE_STATUS.completed) return 'text-success';
-  if (status === ISSUE_PIPELINE_STATUS.closed) return 'text-done';
-  if (ACTIVE_STATUSES.includes(status)) return 'text-agent';
-  return 'text-muted-foreground/40';
+  ) {
+    return 'warning';
+  }
+  if (status === ISSUE_PIPELINE_STATUS.completed) return 'success';
+  if (status === ISSUE_PIPELINE_STATUS.closed) return 'done';
+  if (ACTIVE_STATUSES.includes(status)) return 'agent';
+  return 'default';
+}
+
+export function statusDotTextColorClass(
+  status: IssuePipelineStatus,
+  approvedAwaitingExecution = false,
+): string {
+  const tone = approvedAwaitingExecution ? 'agent' : statusToneFor(status);
+  return STATUS_TONE_TEXT_CLASS[tone];
 }
 
 export function statusDotFill(
@@ -225,19 +248,7 @@ export function resolveIssueRevisionBadge(
 }
 
 function badgeVariantForIssueStatus(status: IssuePipelineStatus): IssueRevisionBadge['variant'] {
-  if (status === ISSUE_PIPELINE_STATUS.failed) return 'danger';
-  if (
-    status === ISSUE_PIPELINE_STATUS.approval ||
-    status === ISSUE_PIPELINE_STATUS.clarifying ||
-    status === ISSUE_PIPELINE_STATUS.paused
-  ) {
-    return 'warning';
-  }
-  if (status === ISSUE_PIPELINE_STATUS.completed) return 'success';
-  if (status === ISSUE_PIPELINE_STATUS.closed) return 'done';
-  if (status === ISSUE_PIPELINE_STATUS.deferred) return 'default';
-  if (ACTIVE_STATUSES.includes(status)) return 'info';
-  return 'default';
+  return STATUS_TONE_BADGE_VARIANT[statusToneFor(status)];
 }
 
 /**
@@ -421,19 +432,7 @@ export function rowToneFor(
   status: IssuePipelineStatus,
   approvedAwaitingExecution = false,
 ): RowTone {
-  if (approvedAwaitingExecution) return 'agent';
-  if (status === ISSUE_PIPELINE_STATUS.failed) return 'danger';
-  if (
-    status === ISSUE_PIPELINE_STATUS.approval ||
-    status === ISSUE_PIPELINE_STATUS.clarifying ||
-    status === ISSUE_PIPELINE_STATUS.paused
-  ) {
-    return 'warning';
-  }
-  if (status === ISSUE_PIPELINE_STATUS.completed) return 'success';
-  if (status === ISSUE_PIPELINE_STATUS.closed) return 'done';
-  if (ACTIVE_STATUSES.includes(status)) return 'agent';
-  return 'default';
+  return approvedAwaitingExecution ? 'agent' : statusToneFor(status);
 }
 
 export function sectionToneFor(columnKey: ColumnKey, sectionKey: string): RowTone {

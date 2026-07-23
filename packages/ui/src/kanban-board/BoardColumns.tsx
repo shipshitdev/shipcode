@@ -1,19 +1,14 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
-import { Archive, ChevronDown, ChevronRight, Eye, EyeOff, MoreHorizontal } from 'lucide-react';
+import { Archive, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { DraggableCard } from '@/kanban-board/IssueCardParts';
 import type { GitHubIssueCacheRecord, IssueStalenessResult } from '@/lib/shipcode';
 import { cn } from '@/lib/utils';
 import { Button } from '@/primitives/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/primitives/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/primitives/tooltip';
+import { ColumnHeader } from './ColumnHeader';
 import { COLUMN_FILL, COLUMN_SCROLLBAR_COLOR, COLUMN_TEXT_CLASS, COLUMNS } from './constants';
 import { StatusCircleIcon } from './StatusCircleIcon';
 import type {
@@ -146,46 +141,14 @@ export function DroppableColumn({
           COLUMN_TEXT_CLASS[columnKey],
         )}
       >
-        <span className="flex items-center gap-1.5">
-          <StatusCircleIcon
-            fill={COLUMN_FILL[columnKey]}
-            className={cn(!columnDotColor && COLUMN_TEXT_CLASS[columnKey])}
-            style={columnDotColor ? { color: columnDotColor } : undefined}
-            size={10}
-          />
-          {label}
-        </span>
-        <div className="flex items-center gap-1">
-          <span
-            className={cn(
-              'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
-              COLUMN_TEXT_CLASS[columnKey],
-            )}
-          >
-            {issues.length}
-          </span>
-          {!readOnly && onHideColumn && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="h-5 w-5 text-muted-foreground/60 hover:bg-muted/10 hover:text-primary"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal size={12} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={onHideColumn}>
-                  <EyeOff size={14} />
-                  Hide column
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
+        <ColumnHeader
+          columnKey={columnKey}
+          label={label}
+          count={issues.length}
+          countStyle="badge"
+          columnDotColor={columnDotColor}
+          onHideColumn={readOnly ? undefined : onHideColumn}
+        />
       </div>
       <div
         className="kanban-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-1.5 supports-[scrollbar-gutter:stable]:[scrollbar-gutter:stable]"
@@ -554,46 +517,14 @@ export function StackedColumn({
           COLUMN_TEXT_CLASS[column.key],
         )}
       >
-        <span className="flex items-center gap-1.5">
-          <StatusCircleIcon
-            fill={COLUMN_FILL[column.key]}
-            className={cn(!columnDotColor && COLUMN_TEXT_CLASS[column.key])}
-            style={columnDotColor ? { color: columnDotColor } : undefined}
-            size={10}
-          />
-          {column.label}
-        </span>
-        <div className="flex items-center gap-1">
-          <span
-            className={cn(
-              'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
-              COLUMN_TEXT_CLASS[column.key],
-            )}
-          >
-            {columnIssues.length}
-          </span>
-          {!readOnly && onHideColumn && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="h-5 w-5 text-muted-foreground/60 hover:bg-muted/10 hover:text-primary"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal size={12} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={onHideColumn}>
-                  <EyeOff size={14} />
-                  Hide column
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
+        <ColumnHeader
+          columnKey={column.key}
+          label={column.label}
+          count={columnIssues.length}
+          countStyle="badge"
+          columnDotColor={columnDotColor}
+          onHideColumn={readOnly ? undefined : onHideColumn}
+        />
       </div>
       <div
         className="kanban-scroll isolate min-h-0 flex-1 overflow-y-auto supports-[scrollbar-gutter:stable]:[scrollbar-gutter:stable]"

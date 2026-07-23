@@ -398,6 +398,10 @@ describe('IssueListView coverage states', () => {
       button.textContent?.includes('Backlog'),
     );
     if (!(todoToggle instanceof HTMLButtonElement)) throw new Error('Expected Todo toggle');
+    const todoHeader = todoToggle.querySelector('[data-slot="kanban-column-header"]');
+    expect(todoHeader?.textContent).toContain('Backlog');
+    expect(todoHeader?.textContent).toContain('(0)');
+    expect(todoHeader?.querySelector('button')).toBeNull();
     act(() => todoToggle.click());
     const emptyCountAfter = view.container.textContent?.match(/No issues/g)?.length ?? 0;
     expect(emptyCountAfter).toBe(emptyCountBefore - 1);
