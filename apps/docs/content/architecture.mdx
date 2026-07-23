@@ -26,6 +26,7 @@ packages/
 - **PR is the human gate** — fully autonomous until PR creation
 - **Fork-point SHA for diffs** — stable diffs even when base branch moves
 - **node:sqlite** — built-in Node.js SQLite, no native addon dependencies
+- **Sandboxed Electron renderers** — Chromium sandbox + context isolation around a narrow preload bridge
 
 ## Desktop IPC Trust Boundary
 
@@ -49,3 +50,23 @@ Transport validation is the first layer. Each handler still owns domain validati
 membership, project and thread existence, authorization, URL allowlists, and filesystem path safety.
 Failures are logged in full in the main process, while renderer-visible errors and IPC event metadata
 are reduced to one line and 280 characters.
+
+## Electron renderer boundary
+
+ShipCode enables Electron's Chromium sandbox before the app becomes ready and
+also opts the main and splash windows into sandboxing explicitly. The main
+renderer has Node.js integration disabled in the page, workers, and subframes;
+context isolation remains enabled; insecure mixed content and `<webview>` are
+disabled. The bundled preload remains the only renderer bridge and exposes the
+same frozen `{ invoke, on }` API through `contextBridge`.
+
+Defense in depth does not rely on sandboxing alone:
+
+- production uses a `default-src 'none'` Content Security Policy with explicit
+  resource directives; development adds only the Vite server allowances;
+- main-window navigation is restricted to the exact bundled renderer file (or
+  the Vite development origin);
+- renderer-created windows are denied, and HTTP(S) links are handed to the OS
+  browser instead of inheriting ShipCode's preload bridge;
+- focused main-process tests pin the security-sensitive `BrowserWindow`
+  preferences, CSP, navigation rules, and preload bridge behavior.

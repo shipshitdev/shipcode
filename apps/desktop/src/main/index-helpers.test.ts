@@ -160,7 +160,12 @@ describe('main window and renderer bootstrap helpers', () => {
         preload: '/repo/apps/desktop/dist/preload/index.js',
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: false,
+        nodeIntegrationInWorker: false,
+        nodeIntegrationInSubFrames: false,
+        sandbox: true,
+        webSecurity: true,
+        allowRunningInsecureContent: false,
+        webviewTag: false,
       },
     });
   });

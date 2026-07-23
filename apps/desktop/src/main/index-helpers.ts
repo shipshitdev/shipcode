@@ -156,7 +156,12 @@ export function buildMainWindowOptions(dist: string): BrowserWindowConstructorOp
       preload: path.join(dist, 'preload', 'index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      nodeIntegrationInWorker: false,
+      nodeIntegrationInSubFrames: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      webviewTag: false,
     },
   };
 }

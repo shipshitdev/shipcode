@@ -10,6 +10,46 @@ test.describe('harness smoke', () => {
   test('boots an onboarded workspace with the store exposed', async ({ harness }) => {
     await expect(harness.page.locator('#root')).toBeVisible();
 
+    const mainWindow = await harness.app.browserWindow(harness.page);
+    const securityPreferences = await mainWindow.evaluate((browserWindow) => {
+      const preferences = browserWindow.webContents.getLastWebPreferences();
+      return {
+        allowRunningInsecureContent: preferences.allowRunningInsecureContent,
+        contextIsolation: preferences.contextIsolation,
+        nodeIntegration: preferences.nodeIntegration,
+        nodeIntegrationInSubFrames: preferences.nodeIntegrationInSubFrames,
+        nodeIntegrationInWorker: preferences.nodeIntegrationInWorker === true,
+        sandbox: preferences.sandbox,
+        webSecurity: preferences.webSecurity,
+        webviewTag: preferences.webviewTag,
+      };
+    });
+    expect(securityPreferences).toEqual({
+      allowRunningInsecureContent: false,
+      contextIsolation: true,
+      nodeIntegration: false,
+      nodeIntegrationInSubFrames: false,
+      nodeIntegrationInWorker: false,
+      sandbox: true,
+      webSecurity: true,
+      webviewTag: false,
+    });
+
+    const preloadBridge = await harness.page.evaluate(() => {
+      const bridge = (
+        window as unknown as {
+          shipcode?: { invoke?: unknown; on?: unknown };
+        }
+      ).shipcode;
+      return {
+        frozen: bridge ? Object.isFrozen(bridge) : false,
+        hasInvoke: typeof bridge?.invoke === 'function',
+        hasOn: typeof bridge?.on === 'function',
+      };
+    });
+    expect(preloadBridge).toEqual({ frozen: true, hasInvoke: true, hasOn: true });
+    await expect(harness.invoke('settings:get')).resolves.toBeTruthy();
+
     const state = await harness.getState();
     expect(state).toBeTruthy();
     expect(typeof state.viewMode).toBe('string');
