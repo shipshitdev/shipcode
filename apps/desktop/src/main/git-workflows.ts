@@ -187,7 +187,7 @@ export async function runCleanupAnalyze(args: {
     Promise.all(
       worktreeList.map(async (w) => {
         try {
-          const artifacts = await wt.listArtifacts(w.path);
+          const artifacts = await wt.listArtifacts(w.path, w.branch);
           return [w.path, artifacts.map((artifact) => artifact.relativePath)] as const;
         } catch {
           return [w.path, [] as string[]] as const;
@@ -335,7 +335,7 @@ export async function runCleanupApply(args: {
               if (result.error) throw new Error(result.error);
             } else if (item.kind === 'worktree-artifacts') {
               const result = await args.lockFor(item.worktreePath, async () => {
-                return wt.pruneArtifacts(item.worktreePath);
+                return wt.pruneArtifacts(item.worktreePath, item.branch);
               });
               if (result.failed.length > 0) {
                 throw new Error(

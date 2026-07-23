@@ -1,6 +1,14 @@
 import { EventEmitter } from 'node:events';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const mockAssertRegistered = vi.hoisted(() => vi.fn(async () => undefined));
+
+vi.mock('@shipcode/git', () => ({
+  WorktreeManager: class {
+    assertRegistered = mockAssertRegistered;
+  },
+}));
+
 vi.mock('./logger.service', () => ({
   default: {
     error: vi.fn(),
@@ -120,6 +128,7 @@ function makeHarness() {
 
 describe('issue chat session', () => {
   beforeEach(() => {
+    mockAssertRegistered.mockClear();
     stopIssueChatSessionIfLive('thread-1', { kill: vi.fn() } as never);
   });
 
@@ -205,6 +214,7 @@ describe('issue chat session', () => {
       '/tmp/shipcode-worktree',
       'Continue the prior plan',
       'thread-1',
+      { workspaceRoot: null, projectPath: '/tmp/shipcode' },
     );
   });
 

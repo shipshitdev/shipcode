@@ -10,6 +10,13 @@ const handlers = new Map<string, (...args: unknown[]) => unknown>();
 const mockInspectProjectSetup = vi.hoisted(() => vi.fn());
 const mockLifecycleStart = vi.hoisted(() => vi.fn());
 const mockLifecycleStop = vi.hoisted(() => vi.fn());
+const mockAssertRegistered = vi.hoisted(() => vi.fn(async () => undefined));
+
+vi.mock('@shipcode/git', () => ({
+  WorktreeManager: class {
+    assertRegistered = mockAssertRegistered;
+  },
+}));
 
 vi.mock('electron', () => ({
   shell: {
@@ -59,8 +66,12 @@ function makeDeps(results: FeatureQaResult[]) {
         getById: vi.fn(() => ({
           id: 'thread-1',
           projectId: 'project-1',
+          worktreeBranch: 'shipcode/thread-1',
           worktreePath: '/tmp/worktree',
         })),
+      },
+      settings: {
+        get: vi.fn(() => ({ worktreeRoot: null, worktreeBranchFormat: null })),
       },
     },
   };
@@ -78,6 +89,7 @@ describe('registerFeatureQaHandlers', () => {
     mockInspectProjectSetup.mockReset();
     mockLifecycleStart.mockReset();
     mockLifecycleStop.mockReset();
+    mockAssertRegistered.mockClear();
     mockInspectProjectSetup.mockReturnValue({
       contract: {
         runtimeQa: {
@@ -300,6 +312,7 @@ describe('registerFeatureQaHandlers', () => {
       '/tmp/worktree',
       expect.any(AbortSignal),
       'thread-1',
+      { workspaceRoot: null, projectPath: '/tmp/project' },
     );
     expect(console.info).toHaveBeenCalledWith('[manual-qa:thread-1] server ready');
 

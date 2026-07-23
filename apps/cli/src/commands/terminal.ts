@@ -93,7 +93,14 @@ export async function terminalCommand(
   const ctx = createCliContext(process.cwd());
   const thread = await ensureThreadAndWorktree(ctx, issueNumber);
   if (!thread.worktreePath) throw new Error(`Thread ${thread.id} has no worktree path`);
+  if (!thread.worktreeBranch) throw new Error(`Thread ${thread.id} has no worktree branch`);
   const worktreePath = thread.worktreePath;
+  const settings = ctx.settings.get();
+  const worktreeManager = new WorktreeManager(ctx.project.path, {
+    worktreeRoot: settings.worktreeRoot,
+    branchFormat: settings.worktreeBranchFormat,
+  });
+  await worktreeManager.assertRegistered(worktreePath, thread.worktreeBranch);
 
   const issue = ctx.githubIssues.getByNumber(ctx.project.id, issueNumber);
   if (!issue) throw new Error(`Issue #${issueNumber} is not cached`);
@@ -215,7 +222,11 @@ Terminal output is available in the session transcript.`;
         buildArgs(provider, promptArtifactPath, options.model),
         worktreePath,
         thread.id,
-        { outputMode: 'raw' },
+        {
+          outputMode: 'raw',
+          workspaceRoot: settings.worktreeRoot,
+          projectPath: ctx.project.path,
+        },
       );
     } catch (error) {
       cleanup();

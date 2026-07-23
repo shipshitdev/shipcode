@@ -30,6 +30,17 @@ describe('WorktreeManager', () => {
     });
   });
 
+  function registeredWorktree(worktreePath: string, branch: string): string {
+    return `worktree /repo/project
+HEAD abc123
+branch refs/heads/main
+
+worktree ${worktreePath}
+HEAD def456
+branch refs/heads/${branch}
+`;
+  }
+
   it('formats issue-based branch names and worktree paths from the current settings', () => {
     const manager = new WorktreeManager('/repo/project', {
       worktreeRoot: '/tmp/shipcode-worktrees',
@@ -458,8 +469,24 @@ branch refs/heads/feature/not-ours
     });
   });
 
+  it('rejects traversal-shaped thread IDs before pruning or creating a worktree', async () => {
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/tmp/shipcode-worktrees',
+    });
+
+    await expect(manager.create('../escape', 'main')).rejects.toThrow(/safe Git ref|direct child/);
+    expect(gitMock.raw).not.toHaveBeenCalled();
+  });
+
   it('treats already-removed worktrees and branches as successful cleanup', async () => {
-    gitMock.raw.mockRejectedValueOnce(new Error('path is not a working tree'));
+    gitMock.raw
+      .mockResolvedValueOnce(
+        registeredWorktree(
+          '/tmp/shipcode-worktrees/42-fix-openrouter',
+          'ship/42-fix-openrouter',
+        ),
+      )
+      .mockRejectedValueOnce(new Error('path is not a working tree'));
     gitMock.deleteLocalBranch.mockRejectedValueOnce(new Error('branch not found'));
 
     const manager = new WorktreeManager('/repo/project');
@@ -473,7 +500,9 @@ branch refs/heads/feature/not-ours
   });
 
   it('treats string-form already-removed cleanup errors as success', async () => {
-    gitMock.raw.mockRejectedValueOnce('no such file');
+    gitMock.raw
+      .mockResolvedValueOnce(registeredWorktree('/tmp/worktree', 'ship/42'))
+      .mockRejectedValueOnce('no such file');
     gitMock.deleteLocalBranch.mockRejectedValueOnce('does not exist');
 
     const manager = new WorktreeManager('/repo/project');
@@ -485,7 +514,9 @@ branch refs/heads/feature/not-ours
   });
 
   it('removes existing worktrees and branches successfully', async () => {
-    gitMock.raw.mockResolvedValueOnce('');
+    gitMock.raw
+      .mockResolvedValueOnce(registeredWorktree('/tmp/worktree', 'ship/42'))
+      .mockResolvedValueOnce('');
     gitMock.deleteLocalBranch.mockResolvedValueOnce(undefined);
 
     const manager = new WorktreeManager('/repo/project');
@@ -499,14 +530,18 @@ branch refs/heads/feature/not-ours
   it('reports worktree remove and branch delete failures separately', async () => {
     const manager = new WorktreeManager('/repo/project');
 
-    gitMock.raw.mockRejectedValueOnce(new Error('permission denied'));
+    gitMock.raw
+      .mockResolvedValueOnce(registeredWorktree('/tmp/worktree', 'ship/42'))
+      .mockRejectedValueOnce(new Error('permission denied'));
     await expect(manager.remove('/tmp/worktree', 'ship/42')).resolves.toEqual({
       worktreeRemoved: false,
       branchDeleted: false,
       error: 'worktree remove: permission denied',
     });
 
-    gitMock.raw.mockResolvedValueOnce('');
+    gitMock.raw
+      .mockResolvedValueOnce(registeredWorktree('/tmp/worktree', 'ship/42'))
+      .mockResolvedValueOnce('');
     gitMock.deleteLocalBranch.mockRejectedValueOnce(new Error('branch checked out'));
     await expect(manager.remove('/tmp/worktree', 'ship/42')).resolves.toEqual({
       worktreeRemoved: true,
@@ -515,12 +550,47 @@ branch refs/heads/feature/not-ours
     });
   });
 
-  it('repairs concrete worktree paths through git worktree repair', async () => {
+  it('rejects a persisted branch/path mismatch before removal or branch deletion', async () => {
+    gitMock.raw.mockResolvedValueOnce(
+      registeredWorktree('/tmp/registered-worktree', 'ship/42'),
+    );
     const manager = new WorktreeManager('/repo/project');
 
-    await manager.repair(['/tmp/worktree-a', '/tmp/worktree-b']);
+    await expect(manager.remove('/tmp/other-worktree', 'ship/42')).rejects.toThrow(
+      /branch\/path mismatch/,
+    );
+    expect(gitMock.raw).toHaveBeenCalledTimes(1);
+    expect(gitMock.deleteLocalBranch).not.toHaveBeenCalled();
+  });
 
-    expect(gitMock.raw).toHaveBeenCalledWith([
+  it('uses the persisted registered path after the configured root changes', async () => {
+    gitMock.raw
+      .mockResolvedValueOnce(registeredWorktree('/old/root/thread-42', 'ship/42'))
+      .mockResolvedValueOnce('');
+    gitMock.deleteLocalBranch.mockResolvedValueOnce(undefined);
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/new/root',
+    });
+
+    await expect(manager.remove('/old/root/thread-42', 'ship/42')).resolves.toEqual({
+      worktreeRemoved: true,
+      branchDeleted: true,
+    });
+  });
+
+  it('repairs concrete worktree paths through git worktree repair', async () => {
+    const manager = new WorktreeManager('/repo/project');
+    gitMock.raw
+      .mockResolvedValueOnce(registeredWorktree('/tmp/worktree-a', 'ship/41'))
+      .mockResolvedValueOnce(registeredWorktree('/tmp/worktree-b', 'ship/42'))
+      .mockResolvedValueOnce('');
+
+    await manager.repair([
+      { path: '/tmp/worktree-a', branch: 'ship/41' },
+      { path: '/tmp/worktree-b', branch: 'ship/42' },
+    ]);
+
+    expect(gitMock.raw).toHaveBeenLastCalledWith([
       'worktree',
       'repair',
       '/tmp/worktree-a',
@@ -545,15 +615,21 @@ branch refs/heads/feature/not-ours
   });
 
   it('moves concrete worktree paths through git worktree move', async () => {
-    const manager = new WorktreeManager('/repo/project');
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/tmp',
+    });
+    const toPath = manager.getWorktreePath('new-worktree');
+    gitMock.raw
+      .mockResolvedValueOnce(registeredWorktree('/tmp/old-worktree', 'ship/42'))
+      .mockResolvedValueOnce('');
 
-    await manager.move('/tmp/old-worktree', '/tmp/new-worktree');
+    await manager.move('/tmp/old-worktree', toPath, 'ship/42');
 
     expect(gitMock.raw).toHaveBeenCalledWith([
       'worktree',
       'move',
       '/tmp/old-worktree',
-      '/tmp/new-worktree',
+      toPath,
     ]);
   });
 

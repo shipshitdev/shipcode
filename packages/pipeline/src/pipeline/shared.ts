@@ -53,11 +53,16 @@ export interface PipelineRuntime {
     cwd: string,
     command: string,
     signal: AbortSignal,
-    options?: { extraEnv?: Record<string, string>; timeoutMs?: number },
+    options?: {
+      extraEnv?: Record<string, string>;
+      timeoutMs?: number;
+      transientWorktree?: { worktreePath: string; branch: string };
+    },
   ) => Promise<{ exitCode: number; output: string }>;
   prepareWorktree: (
     context: PipelineContext,
     stage: 'execute' | 'verify',
+    transientWorktree?: { worktreePath: string; branch: string },
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
   getTestingContext: (context: PipelineContext) => string | null;
   getVerifyCommands: (context: PipelineContext) => string[];

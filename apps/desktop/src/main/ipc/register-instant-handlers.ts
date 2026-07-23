@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { extractCodexThreadId } from '@shipcode/agents';
+import { WorktreeManager } from '@shipcode/git';
 import {
   type InstantFixScope,
   type ProviderRunMode,
@@ -30,6 +31,8 @@ type RunningInstantSession = {
   cwd?: string;
   isProcessingTurn?: boolean;
   transport?: ProviderRunMode;
+  workspaceRoot?: string | null;
+  projectPath?: string;
 };
 
 /** threadId → process metadata mapping for cancel/input/resize support. */
@@ -132,6 +135,7 @@ async function startInteractiveInstantSession(args: {
   mode: 'run' | 'shell';
   modelId?: string | null;
   reasoningEffort?: ReasoningEffort;
+  workspacePolicy?: { workspaceRoot: string | null; projectPath: string };
 }): Promise<{ processId: string; promptArtifactPath: string }> {
   const promptArtifactPath = await writePromptArtifact({
     cwd: args.cwd,
@@ -149,6 +153,7 @@ async function startInteractiveInstantSession(args: {
   });
   const proc = args.processManager.spawn(args.cli, args.cli, cliArgs, args.cwd, args.threadId, {
     outputMode: 'raw',
+    ...args.workspacePolicy,
   });
   runningInstants.set(args.threadId, {
     processId: proc.id,
@@ -158,6 +163,7 @@ async function startInteractiveInstantSession(args: {
     reasoningEffort: args.reasoningEffort,
     cwd: args.cwd,
     transport: 'interactive',
+    ...args.workspacePolicy,
   });
   registerExitTracking(
     args.processManager,
@@ -715,6 +721,23 @@ export function registerInstantHandlers({
           : null;
       const latestPlan = queries.plans.getLatest(sourceThread.id);
       const cwd = sourceThread.worktreePath || project.path;
+      const settings = queries.settings.get();
+      const workspacePolicy = sourceThread.worktreePath
+        ? { workspaceRoot: settings.worktreeRoot, projectPath: project.path }
+        : undefined;
+      if (sourceThread.worktreePath) {
+        if (!sourceThread.worktreeBranch) {
+          throw new Error(`Source thread ${sourceThread.id} has no persisted worktree branch`);
+        }
+        const worktreeManager = new WorktreeManager(project.path, {
+          worktreeRoot: settings.worktreeRoot,
+          branchFormat: settings.worktreeBranchFormat,
+        });
+        await worktreeManager.assertRegistered(
+          sourceThread.worktreePath,
+          sourceThread.worktreeBranch,
+        );
+      }
       const prompt = buildThreadFailurePrompt({
         project,
         thread: sourceThread,
@@ -742,6 +765,7 @@ export function registerInstantHandlers({
           prompt,
           scope: 'project',
           mode: 'run',
+          workspacePolicy,
         });
         log.info(
           `[instant] started interactive ${cli} terminal fix for source thread ${sourceThread.id} as ${thread.id} (cwd=${cwd})`,
@@ -765,6 +789,7 @@ export function registerInstantHandlers({
               cwd,
               prompt,
               thread.id,
+              workspacePolicy,
             )
           : processManager.spawnWithStdin(
               'codex',
@@ -783,12 +808,15 @@ export function registerInstantHandlers({
               cwd,
               prompt,
               thread.id,
+              workspacePolicy,
             );
 
       runningInstants.set(thread.id, {
         processId: proc.id,
         cli,
         mode: 'run',
+        cwd,
+        ...workspacePolicy,
       });
       registerExitTracking(processManager, queries, thread.id, proc.id, cli, 'run');
       log.info(
@@ -888,6 +916,9 @@ export function registerInstantHandlers({
         session.cwd,
         followupPrompt,
         threadId,
+        session.projectPath
+          ? { workspaceRoot: session.workspaceRoot ?? null, projectPath: session.projectPath }
+          : undefined,
       );
 
       session.processId = proc.id;

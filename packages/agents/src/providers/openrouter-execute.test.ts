@@ -12,6 +12,12 @@ import {
 } from './openrouter-http';
 import type { ProviderRequest } from './types';
 
+const mockAssertWorkspaceSafe = vi.hoisted(() => vi.fn());
+
+vi.mock('@shipcode/shared/worktree-path', () => ({
+  assertWorkspaceSafe: mockAssertWorkspaceSafe,
+}));
+
 /**
  * Build a scripted OpenRouterClient that returns a predetermined
  * sequence of responses across successive .chat() calls. This lets
@@ -48,6 +54,7 @@ function req(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
     prompt: 'do the plan',
     cwd: '/tmp/worktree-placeholder',
     projectPath: '/tmp/project-placeholder',
+    workspaceRoot: null,
     signal: new AbortController().signal,
     threadId: 't1',
     ...overrides,
@@ -57,6 +64,7 @@ function req(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
 let wt: string;
 
 beforeEach(async () => {
+  mockAssertWorkspaceSafe.mockReset();
   wt = await fs.mkdtemp(path.join(os.tmpdir(), 'shipcode-execute-'));
   await fs.writeFile(path.join(wt, 'target.txt'), 'hello world\n', 'utf-8');
 });
@@ -87,6 +95,23 @@ describe('executeViaOpenRouter', () => {
       model: 'openrouter/auto',
     });
     expect(res.exitCode).toBe(1);
+  });
+
+  it('refuses to run when the workspace identity guard fails', async () => {
+    mockAssertWorkspaceSafe.mockImplementationOnce(() => {
+      throw new Error('workspacePath belongs to a foreign Git repository');
+    });
+    const res = await executeViaOpenRouter(req({ cwd: wt }), {
+      client: scriptedClient([]),
+      model: 'openrouter/auto',
+    });
+
+    expect(res.exitCode).toBe(1);
+    expect(res.providerError).toMatchObject({
+      kind: 'unexpected_stop',
+      retryable: false,
+      message: 'workspacePath belongs to a foreign Git repository',
+    });
   });
 
   // ─── Happy path: tool calls + stop ────────────────────────────────

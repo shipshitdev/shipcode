@@ -1,7 +1,14 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockPtySpawn, mockChildSpawn, mockExecFile, mockExecFileAsync, mockExecFileSync } =
+const {
+  mockPtySpawn,
+  mockChildSpawn,
+  mockExecFile,
+  mockExecFileAsync,
+  mockExecFileSync,
+  mockAssertWorkspaceSafe,
+} =
   vi.hoisted(() => {
     const mockExecFileAsync = vi.fn();
     const mockExecFile = Object.assign(vi.fn(), {
@@ -13,6 +20,7 @@ const { mockPtySpawn, mockChildSpawn, mockExecFile, mockExecFileAsync, mockExecF
       mockExecFile,
       mockExecFileAsync,
       mockExecFileSync: vi.fn(() => ''),
+      mockAssertWorkspaceSafe: vi.fn(),
     };
   });
 
@@ -21,6 +29,9 @@ vi.mock('node:child_process', () => ({
   execFile: mockExecFile,
   execFileSync: mockExecFileSync,
   spawn: mockChildSpawn,
+}));
+vi.mock('@shipcode/shared/worktree-path', () => ({
+  assertWorkspaceSafe: mockAssertWorkspaceSafe,
 }));
 
 import { ProcessManager } from './process-manager';
@@ -100,6 +111,7 @@ describe('ProcessManager registry hygiene', () => {
     mockExecFile.mockReset();
     mockExecFileAsync.mockReset();
     mockExecFileSync.mockReset();
+    mockAssertWorkspaceSafe.mockReset();
     mockExecFileSync.mockReturnValue('');
     mockExecFileAsync.mockResolvedValue({ stdout: '', stderr: '' });
     mockExecFile.mockImplementation(
@@ -829,12 +841,16 @@ describe('ProcessManager registry hygiene', () => {
   it('asserts workspaceSafe when workspaceRoot opt is set', () => {
     const pty = createMockPty();
     mockPtySpawn.mockReturnValueOnce(pty);
+    mockAssertWorkspaceSafe.mockImplementationOnce(() => {
+      throw new Error('workspacePath is not registered for this repository');
+    });
 
     expect(() =>
       manager.spawn('claude', 'claude', [], '/etc/passwd', undefined, {
         workspaceRoot: '/tmp/wt',
+        projectPath: '/tmp/project',
       }),
-    ).toThrow(/under workspaceRoot|basename/i);
+    ).toThrow(/not registered/i);
     // pty.spawn must NOT have been invoked when assertion fails.
     expect(mockPtySpawn).not.toHaveBeenCalled();
   });
@@ -855,8 +871,14 @@ describe('ProcessManager registry hygiene', () => {
     expect(() =>
       manager.spawn('claude', 'claude', [], '/tmp/wt/proj/t-01', undefined, {
         workspaceRoot: '/tmp/wt',
+        projectPath: '/tmp/project',
       }),
     ).not.toThrow();
+    expect(mockAssertWorkspaceSafe).toHaveBeenCalledWith({
+      workspacePath: '/tmp/wt/proj/t-01',
+      workspaceRoot: '/tmp/wt',
+      projectPath: '/tmp/project',
+    });
     expect(mockPtySpawn).toHaveBeenCalledTimes(1);
   });
 

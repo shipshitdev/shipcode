@@ -6,12 +6,17 @@ import { type OpenRouterClient, OpenRouterError } from './openrouter-http';
 import { createOpenRouterProvider } from './openrouter-provider';
 import type { ProviderRequest } from './types';
 
+vi.mock('@shipcode/shared/worktree-path', () => ({
+  assertWorkspaceSafe: vi.fn(),
+}));
+
 function req(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
   return {
     phase: 'plan',
     prompt: 'do stuff',
     cwd: '/tmp/wt',
     projectPath: '/tmp/proj',
+    workspaceRoot: null,
     signal: new AbortController().signal,
     threadId: 't1',
     ...overrides,

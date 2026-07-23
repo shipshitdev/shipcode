@@ -5,8 +5,9 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { terminalCommand, terminalCommentCommand, terminalSummaryCommand } from './terminal';
 
-const { createCliContextMock } = vi.hoisted(() => ({
+const { createCliContextMock, mockAssertRegistered } = vi.hoisted(() => ({
   createCliContextMock: vi.fn(),
+  mockAssertRegistered: vi.fn(async () => undefined),
 }));
 
 vi.mock('../context', () => ({
@@ -18,7 +19,9 @@ vi.mock('../adapters/cli-emitter', () => ({
 }));
 
 vi.mock('@shipcode/git', () => ({
-  WorktreeManager: vi.fn(),
+  WorktreeManager: class {
+    assertRegistered = mockAssertRegistered;
+  },
 }));
 
 vi.mock('@shipcode/shared', () => ({
@@ -216,7 +219,11 @@ describe('terminalCommand', () => {
       expect.arrayContaining(['-m', 'gpt-5', '-c', 'model_reasoning_effort=medium']),
       tmpDir,
       'thread-2',
-      { outputMode: 'raw' },
+      {
+        outputMode: 'raw',
+        workspaceRoot: null,
+        projectPath: tmpDir,
+      },
     );
     expect(resume).toHaveBeenCalled();
     expect(processManager.write).toHaveBeenCalledWith('proc-2', 'continue\n');

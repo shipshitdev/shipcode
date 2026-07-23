@@ -70,7 +70,7 @@ export class ServerLifecycleManager {
     cwd: string,
     signal: AbortSignal,
     threadId: string,
-    options: { previewUrl?: string } = {},
+    options: { previewUrl?: string; workspaceRoot?: string | null; projectPath?: string } = {},
   ): Promise<RunningServer> {
     const port = configuredPort(config.readinessUrl);
     if (port === null) {
@@ -91,6 +91,9 @@ export class ServerLifecycleManager {
       {
         detached: true,
         extraEnv: { [config.portEnvVar]: String(port) },
+        ...(options.workspaceRoot !== undefined
+          ? { workspaceRoot: options.workspaceRoot, projectPath: options.projectPath }
+          : {}),
       },
     );
 

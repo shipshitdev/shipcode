@@ -312,9 +312,18 @@ export async function startIssueChatSession({
   const project = queries.projects.getById(thread.projectId);
   if (!project) throw new Error(`Project not found: ${thread.projectId}`);
   const materializedThread = await ensureThreadWorktree({ queries, thread, project });
-  if (!materializedThread.worktreePath) {
-    throw new Error(`Thread ${thread.id} has no worktree path after setup`);
+  if (!materializedThread.worktreePath || !materializedThread.worktreeBranch) {
+    throw new Error(`Thread ${thread.id} has no persisted worktree target after setup`);
   }
+  const settings = queries.settings.get();
+  const worktreeManager = new WorktreeManager(project.path, {
+    worktreeRoot: settings.worktreeRoot,
+    branchFormat: settings.worktreeBranchFormat,
+  });
+  await worktreeManager.assertRegistered(
+    materializedThread.worktreePath,
+    materializedThread.worktreeBranch,
+  );
   const persisted = queries.issueChatSessions.getByThread(args.threadId);
   if (persisted && persisted.provider !== provider) {
     throw new Error(
@@ -412,6 +421,15 @@ export async function sendIssueChatTurn({
   if (!thread) throw new Error(`Thread not found: ${args.threadId}`);
   const project = queries.projects.getById(thread.projectId);
   if (!project) throw new Error(`Project not found: ${thread.projectId}`);
+  if (!thread.worktreePath || !thread.worktreeBranch || session.cwd !== thread.worktreePath) {
+    throw new Error('Issue chat worktree does not match the persisted thread target');
+  }
+  const settings = queries.settings.get();
+  const worktreeManager = new WorktreeManager(project.path, {
+    worktreeRoot: settings.worktreeRoot,
+    branchFormat: settings.worktreeBranchFormat,
+  });
+  await worktreeManager.assertRegistered(thread.worktreePath, thread.worktreeBranch);
   const issue =
     thread.githubIssueNumber != null
       ? queries.githubIssues.getByNumber(project.id, thread.githubIssueNumber)
@@ -463,6 +481,10 @@ export async function sendIssueChatTurn({
       session.cwd,
       fullPrompt,
       args.threadId,
+      {
+        workspaceRoot: settings.worktreeRoot,
+        projectPath: project.path,
+      },
     );
     session.activeProcessId = managed.id;
 

@@ -40,6 +40,7 @@ vi.mock('@shipcode/git', () => {
   class WorktreeManager {
     create = mockWorktreeCreate;
     remove = vi.fn().mockResolvedValue({ success: true });
+    assertRegistered = vi.fn().mockResolvedValue(undefined);
   }
   class GitService {
     listBranches = vi.fn().mockResolvedValue([]);
@@ -59,6 +60,10 @@ vi.mock('@shipcode/git', () => {
     resolveCurrentBranch: vi.fn().mockResolvedValue('main'),
   };
 });
+
+vi.mock('./pipeline/worktree-target-guard', () => ({
+  assertPersistedWorktreeTarget: vi.fn(async () => undefined),
+}));
 
 const { mockExecSync } = vi.hoisted(() => ({ mockExecSync: vi.fn() }));
 vi.mock('node:child_process', async (importOriginal) => {
@@ -829,6 +834,8 @@ function createMockDeps() {
           projectId: 'project-1',
           githubIssueNumber: 42,
           status: 'planning',
+          worktreeBranch: 'ship/42',
+          worktreePath: null,
         })),
         incrementReviewRound: vi.fn(),
         clearClarification: vi.fn(),

@@ -30,6 +30,10 @@ const { mockExecFile, mockLoadRepoSetupContract, mockGhCli } = vi.hoisted(() => 
   },
 }));
 
+vi.mock('./worktree-target-guard', () => ({
+  assertPersistedWorktreeTarget: vi.fn(async () => undefined),
+}));
+
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   return {
@@ -184,7 +188,7 @@ function makeDeps(provider?: AgentProvider) {
       updatePipelineStatus: vi.fn(),
     },
     projects: {
-      getById: vi.fn(() => null),
+      getById: vi.fn(() => ({ id: 'project-1', path: '/repo' })),
     },
     promptTelemetry: {
       create: vi.fn(),

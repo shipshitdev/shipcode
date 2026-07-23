@@ -60,4 +60,25 @@ describe('worktree artifact cleanup', () => {
       'artifact path must be relative',
     );
   });
+
+  it('does not follow an intermediate symlink outside the worktree during cleanup', async () => {
+    const worktreePath = makeWorktree();
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-artifacts-outside-'));
+    const outsideQa = path.join(outside, 'qa');
+    fs.mkdirSync(outsideQa, { recursive: true });
+    fs.writeFileSync(path.join(outsideQa, 'evidence.json'), '{}\n');
+    fs.symlinkSync(outside, path.join(worktreePath, '.shipcode'));
+
+    try {
+      await expect(listWorktreeArtifacts(worktreePath, ['.shipcode/qa'])).rejects.toThrow(
+        /escapes worktree through a symlink/,
+      );
+      const result = await pruneWorktreeArtifacts(worktreePath, ['.shipcode/qa']);
+      expect(result.removed).toEqual([]);
+      expect(result.failed[0]?.error).toMatch(/escapes worktree through a symlink/);
+      expect(fs.existsSync(path.join(outsideQa, 'evidence.json'))).toBe(true);
+    } finally {
+      fs.rmSync(outside, { force: true, recursive: true });
+    }
+  });
 });

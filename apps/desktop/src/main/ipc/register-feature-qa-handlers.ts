@@ -1,6 +1,7 @@
 import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { inspectProjectSetup, type RunningServer, ServerLifecycleManager } from '@shipcode/agents';
+import { WorktreeManager } from '@shipcode/git';
 import { shell } from 'electron';
 import type { IpcHandlerDeps } from './types';
 
@@ -78,6 +79,15 @@ export function registerFeatureQaHandlers({
       if (!thread.worktreePath) {
         throw new Error('Thread has no worktree for manual QA');
       }
+      if (!thread.worktreeBranch) {
+        throw new Error('Thread has no worktree branch for manual QA');
+      }
+      const settings = queries.settings.get();
+      const worktreeManager = new WorktreeManager(project.path, {
+        worktreeRoot: settings.worktreeRoot,
+        branchFormat: settings.worktreeBranchFormat,
+      });
+      await worktreeManager.assertRegistered(thread.worktreePath, thread.worktreeBranch);
 
       const setup = inspectProjectSetup(project.path);
       const serverConfig = setup?.contract?.runtimeQa?.server;
@@ -94,6 +104,7 @@ export function registerFeatureQaHandlers({
         thread.worktreePath,
         abort.signal,
         threadId,
+        { workspaceRoot: settings.worktreeRoot, projectPath: project.path },
       );
       manualQaServers.set(threadId, { lifecycle, server });
       return { baseUrl: server.baseUrl, port: server.port };

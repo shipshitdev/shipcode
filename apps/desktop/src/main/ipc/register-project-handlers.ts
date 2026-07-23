@@ -338,7 +338,7 @@ async function repairProjectWorktreesAfterRelink(
 
       if (currentExists) {
         try {
-          await manager.repair([currentPath]);
+          await manager.repair([{ path: currentPath, branch: entry.branch }]);
         } catch (error) {
           log.warn(`[project:relink-path] worktree repair failed for ${currentPath}:`, error);
         }
@@ -346,7 +346,7 @@ async function repairProjectWorktreesAfterRelink(
         if (relinkedPath && path.resolve(relinkedPath) !== path.resolve(currentPath)) {
           try {
             await fsp.mkdir(path.dirname(relinkedPath), { recursive: true });
-            await manager.move(currentPath, relinkedPath);
+            await manager.move(currentPath, relinkedPath, entry.branch);
             if (entry.threadId) {
               queries.threads.setWorktree(entry.threadId, entry.branch, relinkedPath);
             }
@@ -362,7 +362,7 @@ async function repairProjectWorktreesAfterRelink(
 
       if (relinkedPath && relinkedExists) {
         try {
-          await manager.repair([relinkedPath]);
+          await manager.repair([{ path: relinkedPath, branch: entry.branch }]);
         } catch (error) {
           log.warn(`[project:relink-path] worktree repair failed for ${relinkedPath}:`, error);
         }

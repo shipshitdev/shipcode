@@ -9,6 +9,13 @@ import {
   type WorktreeArtifact,
   type WorktreeArtifactCleanupResult,
 } from './worktree-artifacts';
+import {
+  assertCanonicalWorktreePath,
+  assertRegisteredWorktree,
+  assertSafeWorktreeBranch,
+  assertWorktreeCreateTarget,
+  listRegisteredWorktrees,
+} from './worktree-safety';
 
 export interface WorktreeCreateResult {
   worktreePath: string;
@@ -102,10 +109,17 @@ export class WorktreeManager {
   getWorktreePath(idOrNumber: string | number, title?: string): string {
     const parent = resolveWorktreeParent(this.projectPath, this.options.worktreeRoot ?? null);
     if (typeof idOrNumber === 'number') {
-      return path.join(parent, this.formatIssueDir(idOrNumber, title ?? ''));
+      const worktreePath = path.join(parent, this.formatIssueDir(idOrNumber, title ?? ''));
+      assertCanonicalWorktreePath(worktreePath, 'worktree path');
+      return worktreePath;
     }
     const slug = title ? slugify(title) : '';
-    return path.join(parent, slug || idOrNumber);
+    const worktreePath = path.join(parent, slug || idOrNumber);
+    assertCanonicalWorktreePath(worktreePath, 'worktree path');
+    if (path.dirname(worktreePath) !== path.resolve(parent)) {
+      throw new Error(`worktree path must be a direct child of its configured parent: ${worktreePath}`);
+    }
+    return worktreePath;
   }
 
   /**
@@ -158,24 +172,29 @@ export class WorktreeManager {
         ? (baseBranch ?? (await this.getDefaultBranch()))
         : ((hasExplicitThreadTitle ? baseBranch : titleOrBase) ?? (await this.getDefaultBranch()));
 
-    await this.prune();
-
     let branch: string;
     let dirName: string;
+    let rawIssueBranch: string | null = null;
 
     if (typeof idOrNumber === 'number') {
       const title = titleOrBase ?? '';
-      const rawBranch = this.formatIssueBranch(idOrNumber, title);
-      branch = await this.resolveUniqueBranch(rawBranch);
+      rawIssueBranch = this.formatIssueBranch(idOrNumber, title);
+      branch = rawIssueBranch;
       dirName = this.formatIssueDir(idOrNumber, title);
-      // If branch was suffixed for collision, match the dir name
-      if (branch !== rawBranch) {
-        const suffix = branch.slice(rawBranch.length);
-        dirName = dirName + suffix;
-      }
     } else {
       branch = this.getBranchName(idOrNumber, threadTitle);
       dirName = threadTitle ? slugify(threadTitle) || idOrNumber : idOrNumber;
+    }
+
+    assertSafeWorktreeBranch(branch);
+    assertWorktreeCreateTarget(parent, path.join(parent, dirName));
+    await this.prune();
+
+    if (rawIssueBranch) {
+      branch = await this.resolveUniqueBranch(rawIssueBranch);
+      if (branch !== rawIssueBranch) {
+        dirName += branch.slice(rawIssueBranch.length);
+      }
     }
 
     // Fork from the freshest remote tip, not a possibly-stale local ref.
@@ -188,6 +207,8 @@ export class WorktreeManager {
     const MAX_RETRIES = 3;
     for (let attempt = 0; ; attempt++) {
       const worktreePath = path.join(parent, dirName);
+      assertSafeWorktreeBranch(branch);
+      assertWorktreeCreateTarget(parent, worktreePath);
       try {
         await this.git.raw([
           ...NO_CONFIG_LOCK_FLAGS,
@@ -233,6 +254,13 @@ export class WorktreeManager {
     let worktreeRemoved = false;
     let branchDeleted = false;
 
+    await assertRegisteredWorktree({
+      git: this.git,
+      projectPath: this.projectPath,
+      worktreePath,
+      branch,
+    });
+
     try {
       await this.git.raw(['worktree', 'remove', worktreePath, '--force']);
       worktreeRemoved = true;
@@ -262,24 +290,72 @@ export class WorktreeManager {
     return { worktreeRemoved, branchDeleted };
   }
 
-  async repair(worktreePaths: string[]): Promise<void> {
-    if (worktreePaths.length === 0) return;
-    await this.git.raw(['worktree', 'repair', ...worktreePaths]);
+  async repair(worktrees: Array<{ path: string; branch: string }>): Promise<void> {
+    if (worktrees.length === 0) return;
+    for (const worktree of worktrees) {
+      await assertRegisteredWorktree({
+        git: this.git,
+        projectPath: this.projectPath,
+        worktreePath: worktree.path,
+        branch: worktree.branch,
+        allowBrokenIdentity: true,
+      });
+    }
+    await this.git.raw(['worktree', 'repair', ...worktrees.map((worktree) => worktree.path)]);
   }
 
   async prune(): Promise<void> {
     await this.git.raw(['worktree', 'prune']);
   }
 
-  async listArtifacts(worktreePath: string): Promise<WorktreeArtifact[]> {
+  /** Validate an existing persisted path/branch pair without mutating Git state. */
+  async assertRegistered(worktreePath: string, branch: string): Promise<void> {
+    await assertRegisteredWorktree({
+      git: this.git,
+      projectPath: this.projectPath,
+      worktreePath,
+      branch,
+      requireExisting: true,
+    });
+  }
+
+  async listArtifacts(worktreePath: string, branch: string): Promise<WorktreeArtifact[]> {
+    await assertRegisteredWorktree({
+      git: this.git,
+      projectPath: this.projectPath,
+      worktreePath,
+      branch,
+      requireExisting: true,
+    });
     return listWorktreeArtifacts(worktreePath);
   }
 
-  async pruneArtifacts(worktreePath: string): Promise<WorktreeArtifactCleanupResult> {
+  async pruneArtifacts(
+    worktreePath: string,
+    branch: string,
+  ): Promise<WorktreeArtifactCleanupResult> {
+    await assertRegisteredWorktree({
+      git: this.git,
+      projectPath: this.projectPath,
+      worktreePath,
+      branch,
+      requireExisting: true,
+    });
     return pruneWorktreeArtifacts(worktreePath);
   }
 
-  async move(fromPath: string, toPath: string): Promise<void> {
+  async move(fromPath: string, toPath: string, branch: string): Promise<void> {
+    await assertRegisteredWorktree({
+      git: this.git,
+      projectPath: this.projectPath,
+      worktreePath: fromPath,
+      branch,
+    });
+    const expectedParent = resolveWorktreeParent(
+      this.projectPath,
+      this.options.worktreeRoot ?? null,
+    );
+    assertWorktreeCreateTarget(expectedParent, toPath);
     await this.git.raw(['worktree', 'move', fromPath, toPath]);
   }
 
@@ -289,30 +365,11 @@ export class WorktreeManager {
    * Matches both legacy `shipcode/` and `ship/{N}-` branch patterns.
    */
   async list(): Promise<Array<{ path: string; branch: string }>> {
-    const result = await this.git.raw(['worktree', 'list', '--porcelain']);
-    const worktrees: Array<{ path: string; branch: string }> = [];
-    let current: { path?: string; branch?: string } = {};
-    const push = () => {
-      if (current.path && current.branch && SHIPCODE_BRANCH_RE.test(current.branch)) {
-        worktrees.push({ path: current.path, branch: current.branch });
-      }
-    };
-    for (const line of result.split('\n')) {
-      if (line.startsWith('worktree ')) {
-        push();
-        current = { path: line.slice('worktree '.length).trim() };
-      } else if (line.startsWith('branch ')) {
-        current.branch = line
-          .slice('branch '.length)
-          .trim()
-          .replace(/^refs\/heads\//, '');
-      } else if (line === '') {
-        push();
-        current = {};
-      }
-    }
-    push();
-    return worktrees;
+    return (await listRegisteredWorktrees(this.git)).flatMap((worktree) =>
+      worktree.branch && SHIPCODE_BRANCH_RE.test(worktree.branch)
+        ? [{ path: worktree.path, branch: worktree.branch }]
+        : [],
+    );
   }
 
   /**
