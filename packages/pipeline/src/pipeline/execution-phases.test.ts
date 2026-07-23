@@ -40,7 +40,6 @@ const {
   mockServerLifecycleStart,
   mockServerLifecycleStop,
   mockShellExecEnv,
-  mockWorktreeAssertRegistered,
 } = vi.hoisted(() => ({
   mockExecFileSync: vi.fn(),
   mockGhSubmitPrReview: vi.fn(async () => ({
@@ -52,7 +51,10 @@ const {
   mockServerLifecycleStart: vi.fn(),
   mockServerLifecycleStop: vi.fn(),
   mockShellExecEnv: vi.fn(),
-  mockWorktreeAssertRegistered: vi.fn(async () => undefined),
+}));
+
+vi.mock('./worktree-target-guard', () => ({
+  assertPersistedWorktreeTarget: vi.fn(async () => undefined),
 }));
 
 vi.mock('node:child_process', async (importOriginal) => {
@@ -71,9 +73,6 @@ vi.mock('@shipcode/git', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shipcode/git')>();
   return {
     ...actual,
-    WorktreeManager: class extends actual.WorktreeManager {
-      assertRegistered = mockWorktreeAssertRegistered;
-    },
     captureCheckpoint: vi.fn(async () => ({
       refName: 'refs/shipcode/checkpoints/thread-1/turn/0',
       turn: 0,

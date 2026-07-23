@@ -496,6 +496,7 @@ describe('createPipelineRuntime', () => {
     const runtime = createPipelineRuntime(deps, {} as never);
 
     const promise = runtime.prepareWorktree(makeContext({ projectPath, worktreePath }), 'execute');
+    await Promise.resolve();
     emitProcess('output', 'proc-1', 'setup ok\n');
     emitProcess('exit', 'proc-1', 0);
 
@@ -544,6 +545,7 @@ describe('createPipelineRuntime', () => {
       makeContext({ projectPath, worktreePath }),
       'execute',
     );
+    await Promise.resolve();
     second.emitProcess('output', 'proc-1', 'failure one\nfailure two\nfailure three\n');
     second.emitProcess('exit', 'proc-1', 1);
 
@@ -570,6 +572,7 @@ describe('createPipelineRuntime', () => {
     const { deps, emitProcess } = makeDeps();
     const runtime = createPipelineRuntime(deps, {} as never);
     const promise = runtime.prepareWorktree(makeContext({ projectPath, worktreePath }), 'execute');
+    await Promise.resolve();
     emitProcess('exit', 'proc-1', 2);
 
     await expect(promise).resolves.toEqual({
