@@ -75,6 +75,8 @@ describe('registerDeveloperHandlers', () => {
     };
     registerDeveloperHandlers(makeDeps() as never, updateService as never);
 
+    expect(handlers.get('app:get-platform')?.()).toBe(process.platform);
+
     await expect(handlers.get('developer:get-info')?.()).resolves.toMatchObject({
       appVersion: '0.1.0',
       logDirectoryPath: '/logs',

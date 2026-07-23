@@ -24,6 +24,8 @@ export interface AppSettings {
    * null = undecided; true = allowed; false = declined.
    */
   telemetryEnabled: boolean | null;
+  /** Launch the packaged macOS app when the user logs in. */
+  launchAtLogin: boolean;
   defaultWorktreeEnabled: boolean;
   terminalScrollback: number;
   agentRunModes: AgentRunModeSettings;

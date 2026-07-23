@@ -10,6 +10,8 @@ export function registerDeveloperHandlers(
   { ipcMain, mainWindow, processManager, resourceMonitor }: IpcHandlerDeps,
   updateService: UpdateService,
 ): void {
+  ipcMain.handle('app:get-platform', () => process.platform);
+
   ipcMain.handle('developer:get-info', async (): Promise<DeveloperInfo> => {
     const health = await checkSystemHealthWithAuth();
     return {

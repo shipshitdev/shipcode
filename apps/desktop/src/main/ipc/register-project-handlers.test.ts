@@ -14,7 +14,7 @@ import type { AppSettings, Project, TriageRule, TriageRuleDraft } from '@shipcod
 import { TRIAGE_RULE_LIMIT } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
 import type { IpcMain } from 'electron';
-import { dialog, shell } from 'electron';
+import { app, dialog, shell } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -33,6 +33,7 @@ const {
   gitListBranchesMock,
   gitPushMock,
   configureMainTelemetryMock,
+  applyLaunchAtLoginSettingMock,
   ensureLabelsMock,
   inspectProjectSetupMock,
   isWorktreeLockedMock,
@@ -87,6 +88,7 @@ const {
   gitListBranchesMock: vi.fn(async () => ['main', 'develop']),
   gitPushMock: vi.fn(async () => ({ pushed: true })),
   configureMainTelemetryMock: vi.fn(async () => undefined),
+  applyLaunchAtLoginSettingMock: vi.fn(() => 'applied'),
   ensureLabelsMock: vi.fn(async () => ({ created: [], alreadyPresent: [], failed: [] })),
   inspectProjectSetupMock: vi.fn(() => ({
     status: 'ready',
@@ -127,7 +129,10 @@ vi.mock('../logger.service', () => ({
 }));
 
 vi.mock('electron', () => ({
-  app: undefined,
+  app: {
+    isPackaged: true,
+    setLoginItemSettings: vi.fn(),
+  },
   dialog: {
     showOpenDialog: vi.fn(),
   },
@@ -182,6 +187,10 @@ vi.mock('../worktree-locks', () => ({
 vi.mock('../telemetry', () => ({
   configureMainTelemetry: configureMainTelemetryMock,
   getTelemetryStatus: vi.fn(() => ({ enabled: false })),
+}));
+
+vi.mock('../launch-at-login', () => ({
+  applyLaunchAtLoginSetting: applyLaunchAtLoginSettingMock,
 }));
 
 const { registerProjectHandlers } = await import('./register-project-handlers');
@@ -4288,7 +4297,11 @@ describe('registerProjectHandlers', () => {
     const review = { id: 'review-1', planId: 'plan-1' };
     const diff = { id: 'diff-1', threadId: 'thread-1' };
     const checkpoint = { id: 'checkpoint-1', threadId: 'thread-1' };
-    const settings: Partial<AppSettings> = { projectOpenTarget: 'cursor', telemetryEnabled: false };
+    const settings: Partial<AppSettings> = {
+      projectOpenTarget: 'cursor',
+      telemetryEnabled: false,
+      launchAtLogin: false,
+    };
     const queries = {
       projects: {
         list: vi.fn(() => [baseProject]),
@@ -4456,6 +4469,16 @@ describe('registerProjectHandlers', () => {
     handlers.get('settings:set')?.(undefined, { telemetryEnabled: true });
     await Promise.resolve();
     expect(queries.settings.set).toHaveBeenCalledWith({ telemetryEnabled: true });
+    handlers.get('settings:set')?.(undefined, { launchAtLogin: true });
+    expect(queries.settings.set).toHaveBeenLastCalledWith({ launchAtLogin: true });
+    expect(applyLaunchAtLoginSettingMock).toHaveBeenCalledWith(app, true);
+    applyLaunchAtLoginSettingMock.mockImplementationOnce(() => {
+      throw new Error('login item failed\nsensitive detail');
+    });
+    expect(() => handlers.get('settings:set')?.(undefined, { launchAtLogin: true })).toThrow(
+      /^login item failed$/,
+    );
+    expect(queries.settings.set).toHaveBeenLastCalledWith({ launchAtLogin: false });
     handlers.get('settings:set')?.(undefined, {
       triageModel: 'claude',
       triageModelId: '  OPUS  ',

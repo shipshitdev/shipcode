@@ -28,6 +28,13 @@ export function SettingsPanel() {
   const { data: settings } = useAppSettings();
   const { data: telemetryStatus } = useTelemetryStatus();
 
+  const { data: appPlatform } = useQuery<string>({
+    queryKey: ['app-platform'],
+    queryFn: () => window.shipcode.invoke('app:get-platform'),
+    enabled: settingsSection === 'general',
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
   const updateSettings = useMutation({
     mutationFn: (patch: Partial<AppSettings>) => window.shipcode.invoke('settings:set', patch),
     onSuccess: () => {
@@ -105,6 +112,7 @@ export function SettingsPanel() {
           <GeneralSettingsSection
             settings={settings}
             telemetryStatus={telemetryStatus}
+            launchAtLoginSupported={appPlatform === 'darwin'}
             worktreeRootError={worktreeRootError}
             onUpdate={update}
             onUpdateWorktreeRoot={(value) => {

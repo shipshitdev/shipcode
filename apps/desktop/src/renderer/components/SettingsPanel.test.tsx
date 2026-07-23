@@ -538,6 +538,27 @@ describe('SettingsPanel', () => {
     });
   });
 
+  it('shows the macOS launch-at-login toggle and persists changes', async () => {
+    useAppStore.setState({ settingsSection: 'general' });
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'app:get-platform') return 'darwin';
+      if (channel === 'telemetry:get-status') {
+        return { enabled: true, envDisabled: false, dsnConfigured: true };
+      }
+      if (channel === 'settings:set') return undefined;
+      return [];
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('switch', { name: 'Launch ShipCode at login' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('settings:set', { launchAtLogin: true });
+    });
+  });
+
   it('loads archived projects and issues and wires restore mutations', async () => {
     useAppStore.setState({ settingsSection: 'archived' });
     invokeMock.mockImplementation(async (channel) => {

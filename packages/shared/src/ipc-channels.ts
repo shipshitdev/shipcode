@@ -840,6 +840,7 @@ export interface IpcInvokeChannels {
   };
 
   // Developer diagnostics
+  'app:get-platform': { args: undefined; result: string };
   'developer:get-info': { args: undefined; result: DeveloperInfo };
   'developer:open-devtools': { args: undefined; result: undefined };
   'developer:open-log-directory': { args: undefined; result: undefined };

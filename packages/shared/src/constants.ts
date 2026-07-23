@@ -36,6 +36,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontStyle: 'dm-sans',
   fontSize: 13,
   telemetryEnabled: null,
+  launchAtLogin: false,
   defaultWorktreeEnabled: true,
   terminalScrollback: 10_000,
   // Programmatic (`claude -p` / `codex exec --json`) is the default for the
