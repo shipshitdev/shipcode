@@ -2840,6 +2840,41 @@ describe('registerPipelineHandlers', () => {
         expect.objectContaining({ previousPlanRawOutput: expect.any(String) }),
       );
     });
+
+    it('re-plans instead of executing when the failure was "no code changes" despite a structured plan', async () => {
+      // getRetryAction routes a "no code changes" failure back to planning even
+      // when an approved structured plan is present, so the dispatcher must NOT
+      // fast-path into execution/review off that plan.
+      queries.threads.getById.mockReturnValue(
+        makeThread({ status: 'failed', lastError: 'Execution finished with no code changes.' }),
+      );
+      queries.plans.getLatest.mockReturnValue({
+        id: 'plan-1',
+        threadId: 'thread-1',
+        version: 1,
+        rawOutput: `\`\`\`shipcode-plan\n${PLAN_JSON}\n\`\`\``,
+        structured: JSON.parse(PLAN_JSON),
+        status: 'approved',
+        createdAt: new Date().toISOString(),
+      });
+      queries.verifications.getLatest.mockReturnValue(null);
+
+      const handler = handlers.get('pipeline:retry');
+      if (!handler) throw new Error('pipeline:retry handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(queries.plans.supersedeAll).toHaveBeenCalledWith('thread-1');
+      expect(pipeline.startPlanGeneration).toHaveBeenCalledWith(
+        'thread-1',
+        'Fix it',
+        '/tmp/project',
+        '/tmp/worktree',
+        expect.objectContaining({ previousPlanRawOutput: expect.any(String) }),
+      );
+      expect(pipeline.startExecution).not.toHaveBeenCalled();
+      expect(pipeline.startReview).not.toHaveBeenCalled();
+    });
   });
 
   describe('pipeline:auto-fix', () => {

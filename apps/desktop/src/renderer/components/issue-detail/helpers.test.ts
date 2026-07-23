@@ -1,4 +1,10 @@
-import type { PipelineCheckpoint, PlanRecord, ReviewRecord } from '@shipcode/shared';
+import type {
+  PipelineCheckpoint,
+  PlanRecord,
+  ReviewRecord,
+  Thread,
+  VerificationRecord,
+} from '@shipcode/shared';
 import { clampTextBlock, PIPELINE_EXECUTOR_PROVIDERS } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
 import {
@@ -11,6 +17,7 @@ import {
   getTriageFailurePresentation,
   resolveClientSidePlan,
   resolveFailingPhaseOutput,
+  resolveIssueRetryPresentation,
   safeErrorMessage,
 } from './helpers';
 
@@ -70,6 +77,207 @@ function makeReview(overrides: Partial<ReviewRecord> = {}): ReviewRecord {
     ...overrides,
   };
 }
+
+function makeRetryThread(overrides: Partial<Thread> = {}): Thread {
+  return {
+    id: 'thread-1',
+    projectId: 'project-1',
+    title: 'Test thread',
+    prompt: 'Prompt',
+    status: 'failed',
+    kind: 'pipeline',
+    worktreeBranch: null,
+    worktreePath: null,
+    plannerModel: 'claude',
+    reviewerModel: 'codex',
+    verifierModel: 'claude',
+    executorModel: 'claude',
+    reviewRound: 0,
+    clarificationRound: 0,
+    clarificationRequest: null,
+    clarificationAnswers: [],
+    answeredClarification: null,
+    verificationStatus: null,
+    verificationRetries: 0,
+    autonomous: true,
+    baseBranch: 'main',
+    forkPointSha: 'abc123',
+    githubIssueNumber: 42,
+    githubPrNumber: null,
+    githubRepo: 'shipshitdev/shipcode',
+    automationId: null,
+    lastError: null,
+    failurePhase: null,
+    failureCount: 0,
+    pausedPhase: null,
+    pausedAt: null,
+    createdAt: '2026-04-14T00:00:00.000Z',
+    updatedAt: '2026-04-14T00:00:00.000Z',
+    plannerResolvedModel: null,
+    reviewerResolvedModel: null,
+    revisorResolvedModel: null,
+    executorResolvedModel: null,
+    verifierResolvedModel: null,
+    totalTokensPrompt: 0,
+    totalTokensCompletion: 0,
+    totalCostUsd: 0,
+    doneAt: null,
+    ...overrides,
+  };
+}
+
+function makeRetryPlan(overrides: Partial<PlanRecord> = {}): PlanRecord {
+  return makePlan({
+    status: 'approved',
+    structured: {
+      id: 'plan-1',
+      threadId: 'thread-1',
+      version: 1,
+      objective: 'Do thing',
+      files: [],
+      steps: [],
+      acceptanceCriteria: [],
+      outOfScope: [],
+      estimatedComplexity: 'low',
+      dependencies: [],
+    },
+    ...overrides,
+  });
+}
+
+function makeVerification(overrides: Partial<VerificationRecord> = {}): VerificationRecord {
+  return {
+    id: 'verification-1',
+    threadId: 'thread-1',
+    planId: 'plan-1',
+    rawOutput: 'raw',
+    structured: null,
+    result: 'failed',
+    retryCount: 0,
+    createdAt: '2026-04-14T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('resolveIssueRetryPresentation', () => {
+  it('returns no action when the issue has no thread', () => {
+    expect(
+      resolveIssueRetryPresentation({ thread: null, latestPlan: null, latestVerification: null }),
+    ).toEqual({
+      retryAction: null,
+      retryButtonLabel: 'Re-plan',
+      retrySummary: null,
+    });
+  });
+
+  it.each([
+    {
+      name: 'planning',
+      thread: makeRetryThread(),
+      plan: null,
+      verification: null,
+      retryAction: 'plan',
+      retryButtonLabel: 'Re-plan',
+      retrySummary:
+        'Retry will start a fresh planning pass. This resumes the workflow, not the same live planner session.',
+    },
+    {
+      name: 'review',
+      thread: makeRetryThread(),
+      plan: makeRetryPlan(),
+      verification: null,
+      retryAction: 'review',
+      retryButtonLabel: 'Resume review',
+      retrySummary: 'Retry will resume from review using the latest structured plan.',
+    },
+    {
+      name: 'execution',
+      thread: makeRetryThread({ worktreePath: '/tmp/project' }),
+      plan: makeRetryPlan(),
+      verification: null,
+      retryAction: 'execute',
+      retryButtonLabel: 'Resume execution',
+      retrySummary: 'Retry will resume from execution using the latest structured plan.',
+    },
+    {
+      name: 'verification',
+      thread: makeRetryThread({ worktreePath: '/tmp/project' }),
+      plan: makeRetryPlan(),
+      verification: makeVerification(),
+      retryAction: 'verify',
+      retryButtonLabel: 'Resume verification',
+      retrySummary: 'Retry will resume from verification using the current worktree.',
+    },
+    {
+      name: 'shipping',
+      thread: makeRetryThread({ worktreePath: '/tmp/project' }),
+      plan: makeRetryPlan(),
+      verification: makeVerification({ result: 'passed' }),
+      retryAction: 'commit_and_push',
+      retryButtonLabel: 'Resume shipping',
+      retrySummary: 'Retry will resume from commit and push using the verified worktree.',
+    },
+  ])('maps the shared $name decision to renderer copy', ({
+    thread,
+    plan,
+    verification,
+    retryAction,
+    retryButtonLabel,
+    retrySummary,
+  }) => {
+    expect(
+      resolveIssueRetryPresentation({
+        thread,
+        latestPlan: plan,
+        latestVerification: verification,
+      }),
+    ).toEqual({ retryAction, retryButtonLabel, retrySummary });
+  });
+
+  it('explains that structured verification failures resume from execution with feedback', () => {
+    const latestVerification = makeVerification({
+      structured: {
+        threadId: 'thread-1',
+        planId: 'plan-1',
+        result: 'failed',
+        summary: 'Not OK',
+        criteriaResults: [],
+        issues: [],
+      },
+    });
+
+    expect(
+      resolveIssueRetryPresentation({
+        thread: makeRetryThread({ worktreePath: '/tmp/project' }),
+        latestPlan: makeRetryPlan(),
+        latestVerification,
+      }),
+    ).toEqual({
+      retryAction: 'execute',
+      retryButtonLabel: 'Resume execution',
+      retrySummary:
+        'Retry will resume from execution using the current worktree and latest verification feedback.',
+    });
+  });
+
+  it('preserves the no-code-changes re-plan guidance from the shared decision', () => {
+    expect(
+      resolveIssueRetryPresentation({
+        thread: makeRetryThread({
+          lastError: 'Executor exited successfully but produced no code changes',
+          worktreePath: '/tmp/project',
+        }),
+        latestPlan: makeRetryPlan(),
+        latestVerification: null,
+      }),
+    ).toEqual({
+      retryAction: 'plan',
+      retryButtonLabel: 'Re-plan',
+      retrySummary:
+        'The executor produced no file changes. Update the issue description with more detail before replanning.',
+    });
+  });
+});
 
 describe('getPlanStatusPresentation', () => {
   it('renders superseded plans as muted badges', () => {

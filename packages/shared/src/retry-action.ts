@@ -1,4 +1,4 @@
-import type { PlanRecord, Thread, VerificationRecord } from '@shipcode/shared';
+import type { PlanRecord, Thread, VerificationRecord } from './types';
 
 export type RetryAction = 'plan' | 'review' | 'execute' | 'verify' | 'commit_and_push';
 
@@ -7,6 +7,10 @@ export function getRetryAction(
   latestPlan: PlanRecord | null,
   latestVerification: VerificationRecord | null,
 ): RetryAction {
+  if (/no code changes/i.test(thread.lastError ?? '')) {
+    return 'plan';
+  }
+
   const structuredPlan = latestPlan?.structured ?? null;
   if (!structuredPlan) {
     return 'plan';
