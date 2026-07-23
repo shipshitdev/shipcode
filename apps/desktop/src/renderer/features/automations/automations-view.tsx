@@ -1,4 +1,5 @@
 import type { Automation, Project, Thread } from '@shipcode/shared';
+import { formatRelativeTime } from '@shipcode/shared';
 import { PageHeader, PhaseChip, Tooltip, TooltipContent, TooltipTrigger } from '@shipcode/ui';
 import { Button, Card, CardContent, cn, Switch } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -6,7 +7,7 @@ import { Cron } from 'croner';
 import { ChevronDown, Loader2, Pencil, Play, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
-import { formatAutomationRelativeTime } from './automation-time';
+import { AUTOMATION_RELATIVE_TIME_OPTIONS } from './automation-time';
 import { describeAutomationRun } from './run-presentation';
 
 const RUN_HISTORY_LIMIT = 5;
@@ -16,7 +17,7 @@ function describeCron(expr: string): string {
     const job = new Cron(expr, { paused: true });
     const next = job.nextRun();
     if (!next) return expr;
-    return `${expr} · next ${formatAutomationRelativeTime(next)}`;
+    return `${expr} · next ${formatRelativeTime(next, AUTOMATION_RELATIVE_TIME_OPTIONS)}`;
   } catch {
     return `Invalid: ${expr}`;
   }
@@ -184,10 +185,10 @@ function AutomationCard({
             </div>
             <div className="mt-1 min-w-0 truncate pl-[22px] text-[11px] font-normal text-muted-foreground">
               {automation.lastStartedAt
-                ? `Last run ${formatAutomationRelativeTime(automation.lastStartedAt)} · ${automation.runCount} total`
+                ? `Last run ${formatRelativeTime(automation.lastStartedAt, AUTOMATION_RELATIVE_TIME_OPTIONS)} · ${automation.runCount} total`
                 : 'Never run'}
               {automation.enabled && automation.nextRunAt
-                ? ` · Next ${formatAutomationRelativeTime(automation.nextRunAt)}`
+                ? ` · Next ${formatRelativeTime(automation.nextRunAt, AUTOMATION_RELATIVE_TIME_OPTIONS)}`
                 : ''}
             </div>
           </Button>
@@ -266,7 +267,7 @@ function AutomationCard({
                       {describeAutomationRun(thread)}
                     </span>
                     <span className="text-[11px] text-muted-foreground">
-                      {formatAutomationRelativeTime(thread.createdAt)}
+                      {formatRelativeTime(thread.createdAt, AUTOMATION_RELATIVE_TIME_OPTIONS)}
                     </span>
                   </Button>
                 ))}
