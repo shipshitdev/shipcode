@@ -46,6 +46,7 @@ const ProjectGraphTab = lazy(() =>
 
 import { useAppStore } from '../stores/app-store';
 import { currentIsoTimestamp } from './format-timestamp';
+import { useIssuesPanelActions } from './issues-panel-actions';
 import { ProjectOpenTargetIcon } from './ProjectOpenTargetIcon';
 import { ThreadPanelArchiveDialog } from './ThreadPanelArchiveDialog';
 import { ThreadPanelBoardReviewDialog } from './ThreadPanelBoardReviewDialog';
@@ -624,6 +625,14 @@ function useIssuesPanelView() {
     );
   };
 
+  const { pausePipeline, resumePipeline, startPipeline } = useIssuesPanelActions({
+    activeProjectId,
+    threadById,
+    patchIssueOptimistic,
+    patchThreadOptimistic,
+    refreshIssues: refreshIssues.mutate,
+  });
+
   const repoUrl = githubRepoUrl(project?.gitRemote);
   const projectsUrl = project?.githubProjectUrl?.trim() ? project.githubProjectUrl.trim() : null;
   const handleIssueClick = (issue: GitHubIssueCacheRecord) => {
@@ -760,28 +769,7 @@ function useIssuesPanelView() {
               toast.error('Failed to set base branch', err?.message ?? String(err));
             });
         }}
-        onStartPipeline={(issue) => {
-          patchIssueOptimistic(issue.id, { pipelineStatus: ISSUE_PIPELINE_STATUS.planning });
-          return window.shipcode
-            .invoke('github:start-issue', {
-              projectId: activeProjectId,
-              issueNumber: issue.issueNumber,
-            })
-            .then(() => {
-              if (activeProjectId) refreshIssues.mutate(activeProjectId);
-            })
-            .catch((err) => {
-              if (activeProjectId) refreshIssues.mutate(activeProjectId);
-              log.error('[threadpanel] start-issue failed', {
-                issueNumber: issue.issueNumber,
-                err,
-              });
-              toast.error(
-                `Failed to start issue #${issue.issueNumber}`,
-                err?.message ?? String(err),
-              );
-            });
-        }}
+        onStartPipeline={startPipeline}
         onRetry={(issue) => {
           patchIssueOptimistic(issue.id, {
             pipelineStatus: ISSUE_PIPELINE_STATUS.todo,
@@ -934,71 +922,8 @@ function useIssuesPanelView() {
               );
             });
         }}
-        onPause={(issue) => {
-          if (!issue.threadId) return;
-          const pausedAt = currentIsoTimestamp();
-          patchIssueOptimistic(issue.id, { pipelineStatus: ISSUE_PIPELINE_STATUS.paused });
-          patchThreadOptimistic(issue.threadId, {
-            status: PIPELINE_PHASE.paused,
-            pausedPhase: issue.pipelineStatus as Thread['pausedPhase'],
-            pausedAt,
-            updatedAt: pausedAt,
-          });
-          return window.shipcode
-            .invoke('pipeline:pause', { threadId: issue.threadId })
-            .then(() => {
-              if (activeProjectId) {
-                refreshIssues.mutate(activeProjectId);
-                queryClient.invalidateQueries({
-                  queryKey: ['thread-panel-data', activeProjectId],
-                });
-              }
-            })
-            .catch((err) => {
-              if (activeProjectId) {
-                refreshIssues.mutate(activeProjectId);
-                queryClient.invalidateQueries({
-                  queryKey: ['thread-panel-data', activeProjectId],
-                });
-              }
-              log.error('[threadpanel] pause failed', { issueNumber: issue.issueNumber, err });
-              toast.error('Failed to pause task', err?.message ?? String(err));
-            });
-        }}
-        onResume={(issue) => {
-          if (!issue.threadId) return;
-          const resumedAt = currentIsoTimestamp();
-          const thread = threadById.get(issue.threadId);
-          const nextStatus = (thread?.pausedPhase ??
-            PIPELINE_PHASE.executing) as IssuePipelineStatus;
-          patchIssueOptimistic(issue.id, { pipelineStatus: nextStatus });
-          patchThreadOptimistic(issue.threadId, {
-            status: nextStatus as Thread['status'],
-            pausedPhase: null,
-            pausedAt: null,
-            updatedAt: resumedAt,
-          });
-          return window.shipcode
-            .invoke('pipeline:resume', { threadId: issue.threadId })
-            .then(() => {
-              if (activeProjectId) {
-                refreshIssues.mutate(activeProjectId);
-                queryClient.invalidateQueries({
-                  queryKey: ['thread-panel-data', activeProjectId],
-                });
-              }
-            })
-            .catch((err) => {
-              if (activeProjectId) {
-                refreshIssues.mutate(activeProjectId);
-                queryClient.invalidateQueries({
-                  queryKey: ['thread-panel-data', activeProjectId],
-                });
-              }
-              log.error('[threadpanel] resume failed', { issueNumber: issue.issueNumber, err });
-              toast.error('Failed to resume task', err?.message ?? String(err));
-            });
-        }}
+        onPause={pausePipeline}
+        onResume={resumePipeline}
         onCancel={(issue) => {
           if (!issue.threadId) return;
           patchIssueOptimistic(issue.id, { pipelineStatus: ISSUE_PIPELINE_STATUS.todo });
