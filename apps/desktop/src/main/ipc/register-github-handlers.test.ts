@@ -1014,7 +1014,8 @@ describe('registerGitHubHandlers', () => {
     await expect(result).resolves.toEqual(cachedAfterSync);
   });
 
-  it('refresh maps GitHub board statuses for todo, deferred, done, and ignored columns', async () => {
+  it('refresh adopts GitHub board status unless an active local pipeline owns the lane', async () => {
+    const syncToGithub = vi.fn(async () => undefined);
     const projectWithBoard = {
       ...baseProject,
       path: '/tmp',
@@ -1031,10 +1032,21 @@ describe('registerGitHubHandlers', () => {
     const deferredIssue = { ...baseIssue, id: 'deferred', issueNumber: 11, pipelineStatus: 'todo' };
     const doneIssue = { ...baseIssue, id: 'done', issueNumber: 12, pipelineStatus: 'todo' };
     const reviewIssue = { ...baseIssue, id: 'review', issueNumber: 13, pipelineStatus: 'todo' };
+    // Ownership derives from the local pipeline status alone — no claim row is
+    // required. A `needs_review` lane is preserved even though the board moved
+    // this issue to Done.
+    const claimedReviewIssue = {
+      ...baseIssue,
+      id: 'claimed-review',
+      issueNumber: 17,
+      labels: ['shipcode:pipeline:needs_review'],
+      pipelineStatus: 'needs_review',
+    };
     const activeIssue = {
       ...baseIssue,
       id: 'active',
       issueNumber: 14,
+      labels: ['shipcode:pipeline:executing'],
       pipelineStatus: 'executing',
     };
     const labeledIssue = {
@@ -1043,6 +1055,12 @@ describe('registerGitHubHandlers', () => {
       issueNumber: 15,
       labels: ['shipcode:pipeline:failed'],
       pipelineStatus: 'failed',
+    };
+    const unknownIssue = {
+      ...baseIssue,
+      id: 'unknown',
+      issueNumber: 16,
+      pipelineStatus: 'deferred',
     };
     const quickIssue = {
       ...baseIssue,
@@ -1056,8 +1074,10 @@ describe('registerGitHubHandlers', () => {
       deferredIssue,
       doneIssue,
       reviewIssue,
+      claimedReviewIssue,
       activeIssue,
       labeledIssue,
+      unknownIssue,
       quickIssue,
     ];
     listAllIssuesMock.mockResolvedValue([]);
@@ -1067,8 +1087,10 @@ describe('registerGitHubHandlers', () => {
         [11, { raw: 'Deferred' }],
         [12, { raw: 'Done' }],
         [13, { raw: 'Human Review' }],
+        [17, { raw: 'Done' }],
         [14, { raw: 'Done' }],
         [15, { raw: 'In Progress' }],
+        [16, { raw: 'Icebox' }],
         [-15, { raw: 'Done' }],
       ]),
     );
@@ -1111,6 +1133,7 @@ describe('registerGitHubHandlers', () => {
       notificationService: {} as never,
       chatNotificationService: {} as never,
       processManager: {} as never,
+      ghSync: { syncToGithub } as never,
     });
 
     const refresh = handlers.get('github:refresh-issues');
@@ -1118,13 +1141,34 @@ describe('registerGitHubHandlers', () => {
 
     await refresh(undefined, { projectId: 'project-1', force: true });
 
+    expect(fetchProjectStatusesMock.mock.invocationCallOrder[0] ?? Number.MAX_VALUE).toBeLessThan(
+      queries.githubIssues.updatePipelineStatus.mock.invocationCallOrder[0] ?? Number.MAX_VALUE,
+    );
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('todo', 'todo');
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('deferred', 'deferred');
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('done', 'closed');
-    expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith('review', null);
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      'review',
+      'needs_review',
+    );
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      'claimed-review',
+      'needs_review',
+    );
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('active', 'executing');
     expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith('active', 'closed');
-    expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith('labeled', 'queued');
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('labeled', 'queued');
+    expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith(
+      'unknown',
+      expect.anything(),
+    );
     expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith('quick', 'closed');
+    expect(syncToGithub).toHaveBeenCalledWith(
+      expect.objectContaining({ issueNumber: 14, pipelineStatus: 'executing' }),
+    );
+    expect(syncToGithub).toHaveBeenCalledWith(
+      expect.objectContaining({ issueNumber: 17, pipelineStatus: 'needs_review' }),
+    );
   });
 
   it('rejects refresh when the project is missing or the repo path is gone', async () => {
@@ -1221,9 +1265,22 @@ describe('registerGitHubHandlers', () => {
     const listed = deferred<Array<unknown>>();
     const refreshedIssue = { ...baseIssue, fetchedAt: new Date().toISOString() };
     listAllIssuesMock.mockReturnValue(listed.promise);
+    fetchProjectStatusesMock.mockResolvedValue(new Map());
     const queries = {
       projects: {
-        getById: vi.fn(() => ({ ...baseProject, path: '/tmp', githubRepoFullName: 'acme/repo' })),
+        getById: vi.fn(() => ({
+          ...baseProject,
+          path: '/tmp',
+          githubRepoFullName: 'acme/repo',
+          githubProjectUrl: 'https://github.com/orgs/acme/projects/1',
+          githubStatusMapping: {
+            todo: { name: 'Todo', optionId: 'todo-id' },
+            inProgress: { name: 'In Progress', optionId: 'progress-id' },
+            humanReview: { name: 'Human Review', optionId: 'review-id' },
+            deferred: { name: 'Deferred', optionId: 'deferred-id' },
+            done: { name: 'Done', optionId: 'done-id' },
+          },
+        })),
         updateGithubRepoIdentity: vi.fn(),
       },
       githubIssues: buildGithubIssuesQueries(
@@ -1269,6 +1326,7 @@ describe('registerGitHubHandlers', () => {
       [refreshedIssue],
     ]);
     expect(listAllIssuesMock).toHaveBeenCalledTimes(1);
+    expect(fetchProjectStatusesMock).toHaveBeenCalledTimes(1);
   });
 
   it('continues refresh when repo identity, priority, and status sync helpers warn or fail', async () => {

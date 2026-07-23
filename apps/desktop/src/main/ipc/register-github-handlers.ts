@@ -27,6 +27,7 @@ import {
   ISSUE_PIPELINE_STATUS,
   isAgentRoutingLabel,
   isRealGithubIssueNumber,
+  macroColumnForStatus,
   PIPELINE_PHASE,
   PRD_METADATA_LABELS,
   parseGithubProjectUrl,
@@ -64,6 +65,20 @@ const STALE_LINK_THREAD_STATUSES = new Set<string>([
   PIPELINE_PHASE.failed,
   PIPELINE_PHASE.completed,
   PIPELINE_PHASE.idle,
+]);
+const LOCALLY_OWNED_PIPELINE_STATUSES = new Set<IssuePipelineStatus>([
+  ISSUE_PIPELINE_STATUS.queued,
+  ISSUE_PIPELINE_STATUS.planning,
+  ISSUE_PIPELINE_STATUS.clarifying,
+  ISSUE_PIPELINE_STATUS.approval,
+  ISSUE_PIPELINE_STATUS.reviewing,
+  ISSUE_PIPELINE_STATUS.revising,
+  ISSUE_PIPELINE_STATUS.needsReview,
+  ISSUE_PIPELINE_STATUS.executing,
+  ISSUE_PIPELINE_STATUS.testing,
+  ISSUE_PIPELINE_STATUS.verifying,
+  ISSUE_PIPELINE_STATUS.shipping,
+  ISSUE_PIPELINE_STATUS.paused,
 ]);
 
 function evictExpiredIssueCommentsCacheEntries(now: number): void {
@@ -114,6 +129,27 @@ function resolveOpenIssuePipelineStatus(
     : ISSUE_PIPELINE_STATUS.todo;
 }
 
+function hasLocalPipelineOwnership(localPipelineStatus: IssuePipelineStatus): boolean {
+  // Ownership is derived from the resolved pipeline status alone. The
+  // claimed_at/claimed_by columns exist but no production path writes them yet
+  // (tryClaim/releaseClaim are unused outside tests), so gating on them here
+  // made this guard permanently false — an authoritative refresh would then
+  // overwrite an actively-running issue's status with the Projects macro column
+  // and re-queue it for a duplicate pipeline run.
+  return LOCALLY_OWNED_PIPELINE_STATUSES.has(localPipelineStatus);
+}
+
+function pipelineStatusForProjectMacroColumn(
+  macroColumn: ReturnType<typeof normalizeStatusOption>['macroColumn'],
+): IssuePipelineStatus | null {
+  if (macroColumn === 'todo') return ISSUE_PIPELINE_STATUS.todo;
+  if (macroColumn === 'in_progress') return ISSUE_PIPELINE_STATUS.queued;
+  if (macroColumn === 'human_review') return ISSUE_PIPELINE_STATUS.needsReview;
+  if (macroColumn === 'deferred') return ISSUE_PIPELINE_STATUS.deferred;
+  if (macroColumn === 'done') return ISSUE_PIPELINE_STATUS.closed;
+  return null;
+}
+
 function updateIssuePipelineStatus(
   project: import('@shipcode/shared').Project,
   queries: IpcHandlerDeps['queries'],
@@ -142,18 +178,73 @@ function syncOpenIssueState(
   issue: GitHubIssueCacheRecord,
   ghSync: GhSyncDeps | undefined,
   project?: import('@shipcode/shared').Project,
+  options: {
+    githubStatus?: { raw: string | null };
+    githubAuthoritative?: boolean;
+    readBack?: boolean;
+  } = {},
 ): GitHubIssueCacheRecord | null {
+  const { githubStatus, githubAuthoritative = false, readBack = true } = options;
+  const readBackIssue = () =>
+    readBack ? queries.githubIssues.getByNumber(issue.projectId, issue.issueNumber) : null;
   const labelStatus = pipelineStatusFromLabels(issue.labels);
   const thread = resolveCanonicalIssueThread(queries, issue);
   if (thread && issue.threadId !== thread.id) {
     queries.githubIssues.linkThread(issue.id, thread.id);
   }
 
-  const pipelineStatus = resolveOpenIssuePipelineStatus(issue, thread);
-
   queries.githubIssues.updateState(issue.id, 'open');
-  queries.githubIssues.updatePipelineStatus(issue.id, pipelineStatus);
   queries.githubIssues.clearArchivedAt(issue.id);
+
+  const localPipelineStatus = resolveOpenIssuePipelineStatus(issue, thread);
+
+  if (githubAuthoritative && project?.githubStatusMapping && githubStatus?.raw) {
+    const { macroColumn } = normalizeStatusOption(githubStatus.raw, project.githubStatusMapping);
+    const projectPipelineStatus = pipelineStatusForProjectMacroColumn(macroColumn);
+
+    // Unknown project options are intentionally non-destructive. A project can
+    // add a custom lane without refresh silently translating it to a local lane
+    // or overwriting it with stale cached state.
+    if (!projectPipelineStatus || !macroColumn) {
+      if (hasLocalPipelineOwnership(localPipelineStatus)) {
+        queries.githubIssues.updatePipelineStatus(issue.id, localPipelineStatus);
+      }
+      return readBackIssue();
+    }
+
+    if (!hasLocalPipelineOwnership(localPipelineStatus)) {
+      queries.githubIssues.updatePipelineStatus(issue.id, projectPipelineStatus);
+      return readBackIssue();
+    }
+
+    // An active local pipeline run owns its macro lane: its status wins the
+    // refresh conflict so an external Projects move can't clobber in-flight
+    // work.
+    queries.githubIssues.updatePipelineStatus(issue.id, localPipelineStatus);
+    if (ghSync && macroColumnForStatus(localPipelineStatus) !== macroColumn) {
+      void ghSync
+        .syncToGithub({
+          projectPath: project.path,
+          projectUrl: project.githubProjectUrl,
+          issueNumber: issue.issueNumber,
+          pipelineStatus: localPipelineStatus,
+          statusMapping: project.githubStatusMapping,
+        })
+        .catch((err) => {
+          log.warn('[github:refresh-issues] active pipeline status sync failed', err);
+        });
+    }
+    return readBackIssue();
+  }
+
+  queries.githubIssues.updatePipelineStatus(issue.id, localPipelineStatus);
+
+  // A GitHub-authoritative refresh never writes a cached lane back when the
+  // project item has no readable status. Phase transitions remain responsible
+  // for outbound synchronization.
+  if (githubAuthoritative) {
+    return readBackIssue();
+  }
 
   if (project && labelStatus !== null && ghSync) {
     void ghSync
@@ -161,7 +252,7 @@ function syncOpenIssueState(
         projectPath: project.path,
         projectUrl: project.githubProjectUrl,
         issueNumber: issue.issueNumber,
-        pipelineStatus,
+        pipelineStatus: localPipelineStatus,
         statusMapping: project.githubStatusMapping,
       })
       .catch((err) => {
@@ -169,7 +260,7 @@ function syncOpenIssueState(
       });
   }
 
-  return queries.githubIssues.getByNumber(issue.projectId, issue.issueNumber);
+  return readBackIssue();
 }
 
 function getActiveIssueById(
@@ -317,6 +408,20 @@ export function registerGitHubHandlers({
           elapsedMs: Date.now() - startedAt,
         });
 
+        let projectStatuses = new Map<number, { raw: string | null }>();
+        if (project.githubProjectUrl && project.githubStatusMapping) {
+          try {
+            projectStatuses = await fetchProjectStatuses({
+              cwd: project.path,
+              projectUrl: project.githubProjectUrl,
+              repoFullName: githubRepoFullName ?? undefined,
+              onWarn: (msg, err) => log.warn(msg, err),
+            });
+          } catch (err) {
+            log.warn('[github:refresh-issues] status sync failed', err);
+          }
+        }
+
         // Batch upsert in a single transaction to avoid per-issue WAL overhead.
         const newIssues: Array<{ number: number; url: string; record: GitHubIssueCacheRecord }> =
           [];
@@ -336,8 +441,6 @@ export function registerGitHubHandlers({
             });
             if (record.state === 'closed') {
               queries.githubIssues.markClosedOnClose(record.id);
-            } else if (record.state === 'open') {
-              syncOpenIssueState(queries, record, ghSync, project);
             }
 
             if (!existingIssue && record.state === 'open' && !record.rulesAppliedAt) {
@@ -345,6 +448,19 @@ export function registerGitHubHandlers({
             }
           }
         });
+
+        // Reconcile every cached open issue only after the board snapshot is
+        // available. This ordering prevents fresh GitHub status moves from
+        // being overwritten by labels or macro lanes cached before refresh.
+        for (const cachedIssue of queries.githubIssues.list(projectId)) {
+          if (cachedIssue.state !== 'open' || cachedIssue.isQuickMode) continue;
+          void syncOpenIssueState(queries, cachedIssue, ghSync, project, {
+            githubStatus: projectStatuses.get(cachedIssue.issueNumber),
+            githubAuthoritative: Boolean(project.githubProjectUrl && project.githubStatusMapping),
+            readBack: false,
+          });
+        }
+
         await Promise.all(
           newIssues.map((issue) =>
             attachIssueToConfiguredProjectBoard(
@@ -452,64 +568,6 @@ export function registerGitHubHandlers({
             }
           } catch (err) {
             log.warn('[github:refresh-issues] priority sync failed', err);
-          }
-
-          // GH Projects v2 Status field sync — updates local pipeline_status
-          // for non-agent-loop issues where GH board is source of truth.
-          if (project.githubStatusMapping) {
-            try {
-              const statuses = await fetchProjectStatuses({
-                cwd: project.path,
-                projectUrl: project.githubProjectUrl,
-                repoFullName: githubRepoFullName ?? undefined,
-                onWarn: (msg, err) => log.warn(msg, err),
-              });
-              const ACTIVE_PIPELINE_STATUSES = new Set<IssuePipelineStatus>([
-                ISSUE_PIPELINE_STATUS.queued,
-                ISSUE_PIPELINE_STATUS.planning,
-                ISSUE_PIPELINE_STATUS.clarifying,
-                ISSUE_PIPELINE_STATUS.approval,
-                ISSUE_PIPELINE_STATUS.reviewing,
-                ISSUE_PIPELINE_STATUS.revising,
-                ISSUE_PIPELINE_STATUS.executing,
-                ISSUE_PIPELINE_STATUS.testing,
-                ISSUE_PIPELINE_STATUS.verifying,
-                ISSUE_PIPELINE_STATUS.shipping,
-                ISSUE_PIPELINE_STATUS.paused,
-                ISSUE_PIPELINE_STATUS.failed,
-              ]);
-              for (const cachedIssue of cachedAfterIssueSync) {
-                // Pipeline labels are the exact ShipCode state; board columns are only macro status.
-                if (pipelineStatusFromLabels(cachedIssue.labels)) continue;
-                // Never override an issue actively being worked by the pipeline.
-                if (ACTIVE_PIPELINE_STATUSES.has(cachedIssue.pipelineStatus)) continue;
-                if (cachedIssue.isQuickMode) continue;
-
-                const s = statuses.get(cachedIssue.issueNumber);
-                if (!s?.raw) continue;
-
-                const { macroColumn } = normalizeStatusOption(s.raw, project.githubStatusMapping);
-                let targetStatus: IssuePipelineStatus | null = null;
-                if (macroColumn === 'todo') targetStatus = ISSUE_PIPELINE_STATUS.todo;
-                else if (macroColumn === 'in_progress') targetStatus = ISSUE_PIPELINE_STATUS.queued;
-                else if (macroColumn === 'human_review') targetStatus = null;
-                else if (macroColumn === 'deferred') targetStatus = ISSUE_PIPELINE_STATUS.deferred;
-                else if (macroColumn === 'done') targetStatus = ISSUE_PIPELINE_STATUS.closed;
-
-                if (targetStatus && targetStatus !== cachedIssue.pipelineStatus) {
-                  updateIssuePipelineStatus(
-                    project,
-                    queries,
-                    cachedIssue,
-                    targetStatus,
-                    'github:refresh-issues',
-                    ghSync,
-                  );
-                }
-              }
-            } catch (err) {
-              log.warn('[github:refresh-issues] status sync failed', err);
-            }
           }
 
           // Sync archive state from GitHub Project board
