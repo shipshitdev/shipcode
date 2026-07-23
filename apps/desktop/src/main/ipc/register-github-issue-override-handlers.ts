@@ -1,6 +1,7 @@
 import {
   clampError,
   type ExecutorModel,
+  type GitHubIssueCacheRecord,
   getPhaseDescriptor,
   type ReasoningEffort,
   resolveModelAlias,
@@ -11,6 +12,17 @@ import type { IpcMainInvokeEvent } from 'electron';
 import log from '../logger.service';
 import { sendGithubIssuesUpdated } from './helpers';
 import type { IpcHandlerDeps } from './types';
+
+type IssueOverrideArgs = {
+  projectId: string;
+  issueNumber: number;
+};
+
+type PhaseRole = 'planner' | 'reviewer' | 'executor' | 'verifier';
+
+type PhaseOverrideArgs = IssueOverrideArgs & {
+  phase: PhaseRole;
+};
 
 export function registerGitHubIssueOverrideHandlers({
   ipcMain,
@@ -32,32 +44,35 @@ export function registerGitHubIssueOverrideHandlers({
   };
 
   const VALID_PHASE_ROLES = new Set(['planner', 'reviewer', 'executor', 'verifier'] as const);
-  type PhaseRole = 'planner' | 'reviewer' | 'executor' | 'verifier';
   function assertPhaseRole(phase: string): asserts phase is PhaseRole {
     if (!VALID_PHASE_ROLES.has(phase as PhaseRole)) {
       throw new Error(`Invalid phase role: ${phase}`);
     }
   }
 
-  handleIssueOverride(
+  const defineIssueOverrideHandler = <TArgs extends IssueOverrideArgs>(
+    channel: string,
+    mutate: (issue: GitHubIssueCacheRecord, args: TArgs) => void,
+    validate?: (args: TArgs) => void,
+  ): void => {
+    handleIssueOverride(channel, (_event, args: TArgs) => {
+      validate?.(args);
+      const issue = queries.githubIssues.getByNumber(args.projectId, args.issueNumber);
+      if (!issue) throw new Error(`Issue #${args.issueNumber} not found in cache`);
+
+      mutate(issue, args);
+      sendGithubIssuesUpdated(mainWindow, queries, args.projectId);
+      return queries.githubIssues.getByNumber(args.projectId, args.issueNumber);
+    });
+  };
+
+  defineIssueOverrideHandler<
+    PhaseOverrideArgs & {
+      model: ExecutorModel;
+    }
+  >(
     'github:set-phase-model-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        phase,
-        model,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
-        model: ExecutorModel;
-      },
-    ) => {
-      assertPhaseRole(phase);
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+    (issue, { phase, model }) => {
       if (model !== 'claude' && model !== 'codex' && model !== 'openrouter') {
         throw new Error(`Invalid ${phase} model: ${model}`);
       }
@@ -68,54 +83,25 @@ export function registerGitHubIssueOverrideHandlers({
       }
 
       queries.githubIssues.updatePhaseModelOverride(issue.id, phase, model);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
     },
+    ({ phase }) => assertPhaseRole(phase),
   );
 
-  handleIssueOverride(
+  defineIssueOverrideHandler<PhaseOverrideArgs>(
     'github:clear-phase-model-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        phase,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
-      },
-    ) => {
-      assertPhaseRole(phase);
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-
+    (issue, { phase }) => {
       queries.githubIssues.updatePhaseModelOverride(issue.id, phase, null);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
     },
+    ({ phase }) => assertPhaseRole(phase),
   );
 
-  handleIssueOverride(
+  defineIssueOverrideHandler<
+    PhaseOverrideArgs & {
+      modelId: string;
+    }
+  >(
     'github:set-phase-model-id-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        phase,
-        modelId,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
-        modelId: string;
-      },
-    ) => {
-      assertPhaseRole(phase);
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+    (issue, { projectId, phase, modelId }) => {
       const trimmed = modelId.trim();
       if (trimmed && !/^[a-zA-Z0-9._:/@-]+$/.test(trimmed)) {
         throw new Error(`Invalid model ID: ${trimmed}`);
@@ -128,32 +114,16 @@ export function registerGitHubIssueOverrideHandlers({
         phase,
         resolveModelAlias(provider, trimmed),
       );
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
     },
+    ({ phase }) => assertPhaseRole(phase),
   );
 
-  handleIssueOverride(
+  defineIssueOverrideHandler<PhaseOverrideArgs>(
     'github:clear-phase-model-id-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        phase,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
-      },
-    ) => {
-      assertPhaseRole(phase);
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+    (issue, { phase }) => {
       queries.githubIssues.updatePhaseModelIdOverride(issue.id, phase, null);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
     },
+    ({ phase }) => assertPhaseRole(phase),
   );
 
   handleIssueOverride(
@@ -168,20 +138,16 @@ export function registerGitHubIssueOverrideHandlers({
     },
   );
 
-  handleIssueOverride(
+  defineIssueOverrideHandler<
+    IssueOverrideArgs & {
+      revisionCount: GitHubIssueCacheRecord['revisionCountOverride'];
+    }
+  >(
     'github:set-revision-count-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        revisionCount,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        revisionCount: import('@shipcode/shared').GitHubIssueCacheRecord['revisionCountOverride'];
-      },
-    ) => {
+    (issue, { revisionCount }) => {
+      queries.githubIssues.updateRevisionCountOverride(issue.id, revisionCount);
+    },
+    ({ revisionCount }) => {
       if (
         revisionCount !== null &&
         revisionCount !== 0 &&
@@ -193,55 +159,35 @@ export function registerGitHubIssueOverrideHandlers({
       ) {
         throw new Error(`Invalid revision count override: ${revisionCount}`);
       }
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-      queries.githubIssues.updateRevisionCountOverride(issue.id, revisionCount);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
     },
   );
 
-  handleIssueOverride(
+  defineIssueOverrideHandler<
+    IssueOverrideArgs & {
+      requireApproval: GitHubIssueCacheRecord['requireApprovalOverride'];
+    }
+  >(
     'github:set-require-approval-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        requireApproval,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        requireApproval: import('@shipcode/shared').GitHubIssueCacheRecord['requireApprovalOverride'];
-      },
-    ) => {
+    (issue, { requireApproval }) => {
+      queries.githubIssues.updateRequireApprovalOverride(issue.id, requireApproval);
+    },
+    ({ requireApproval }) => {
       if (requireApproval !== null && typeof requireApproval !== 'boolean') {
         throw new Error(`Invalid requireApproval override: ${String(requireApproval)}`);
       }
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-      queries.githubIssues.updateRequireApprovalOverride(issue.id, requireApproval);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
     },
   );
 
-  handleIssueOverride(
+  defineIssueOverrideHandler<
+    PhaseOverrideArgs & {
+      effort: ReasoningEffort;
+    }
+  >(
     'github:set-phase-reasoning-effort-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        phase,
-        effort,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
-        effort: ReasoningEffort;
-      },
-    ) => {
+    (issue, { phase, effort }) => {
+      queries.githubIssues.updatePhaseReasoningEffortOverride(issue.id, phase, effort);
+    },
+    ({ phase, effort }) => {
       assertPhaseRole(phase);
       const VALID_EFFORTS: readonly string[] = [
         'none',
@@ -254,34 +200,14 @@ export function registerGitHubIssueOverrideHandlers({
       if (!VALID_EFFORTS.includes(effort)) {
         throw new Error(`Invalid ${phase} reasoning effort: ${effort}`);
       }
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-      queries.githubIssues.updatePhaseReasoningEffortOverride(issue.id, phase, effort);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
     },
   );
 
-  handleIssueOverride(
+  defineIssueOverrideHandler<PhaseOverrideArgs>(
     'github:clear-phase-reasoning-effort-override',
-    (
-      _event,
-      {
-        projectId,
-        issueNumber,
-        phase,
-      }: {
-        projectId: string;
-        issueNumber: number;
-        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
-      },
-    ) => {
-      assertPhaseRole(phase);
-      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+    (issue, { phase }) => {
       queries.githubIssues.updatePhaseReasoningEffortOverride(issue.id, phase, null);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return queries.githubIssues.getByNumber(projectId, issueNumber);
     },
+    ({ phase }) => assertPhaseRole(phase),
   );
 }
