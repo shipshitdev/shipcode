@@ -3,11 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerIpcHandlers } from './ipc';
 
 const mocks = vi.hoisted(() => {
+  const projectSideEffect = vi.fn();
+  const pipelineSideEffect = vi.fn();
+  const githubSideEffect = vi.fn();
   const registerProjectHandlers = vi.fn((deps: { ipcMain: IpcMain }) => {
     deps.ipcMain.handle('test:ok', async () => 'ok');
     deps.ipcMain.handle('test:error', async () => {
       throw new Error('boom');
     });
+    deps.ipcMain.handle('project:mutate', (_event, args) => projectSideEffect(args));
   });
 
   return {
@@ -17,10 +21,17 @@ const mocks = vi.hoisted(() => {
       info: vi.fn(),
     },
     transitionThreadPhase: vi.fn(),
+    projectSideEffect,
+    pipelineSideEffect,
+    githubSideEffect,
     registerProjectHandlers,
-    registerGitHubHandlers: vi.fn(),
+    registerGitHubHandlers: vi.fn((deps: { ipcMain: IpcMain }) => {
+      deps.ipcMain.handle('github:mutate', (_event, args) => githubSideEffect(args));
+    }),
     registerIssueGraphHandlers: vi.fn(),
-    registerPipelineHandlers: vi.fn(),
+    registerPipelineHandlers: vi.fn((deps: { ipcMain: IpcMain }) => {
+      deps.ipcMain.handle('pipeline:mutate', (_event, args) => pipelineSideEffect(args));
+    }),
     registerQuickTaskHandlers: vi.fn(),
     registerSkillsHandlers: vi.fn(),
     registerSupportHandlers: vi.fn(),
@@ -221,7 +232,7 @@ describe('registerIpcHandlers', () => {
     expect(mocks.logger.info).not.toHaveBeenCalledWith('[ipc] test:fast completed in 50ms');
 
     dateSpy.mockReturnValueOnce(4_000).mockReturnValueOnce(4_005);
-    await expect(handled.get('test:string-error')?.({})).rejects.toBe('string boom');
+    await expect(handled.get('test:string-error')?.({})).rejects.toThrow('string boom');
     expect(mocks.captureIpcFailure).toHaveBeenCalledWith('string boom', {
       channel: 'test:string-error',
       elapsedMs: 5,
@@ -234,6 +245,52 @@ describe('registerIpcHandlers', () => {
     });
 
     dateSpy.mockRestore();
+  });
+
+  it('validates project, pipeline, and GitHub input before handler side effects', async () => {
+    register();
+
+    await expect(handled.get('project:mutate')?.({}, 'project-1')).rejects.toThrow(
+      'Invalid IPC input for project:mutate: expected a plain argument object',
+    );
+    await expect(handled.get('pipeline:mutate')?.({}, ['thread-1'])).rejects.toThrow(
+      'Invalid IPC input for pipeline:mutate: expected a plain argument object',
+    );
+    await expect(
+      handled.get('github:mutate')?.({}, { body: 'x'.repeat(512 * 1024 + 1) }),
+    ).rejects.toThrow('Invalid IPC input for github:mutate: args.body exceeds 524288 bytes');
+
+    expect(mocks.projectSideEffect).not.toHaveBeenCalled();
+    expect(mocks.pipelineSideEffect).not.toHaveBeenCalled();
+    expect(mocks.githubSideEffect).not.toHaveBeenCalled();
+
+    const valid = { projectId: 'project-1', issueNumber: 478 };
+    await expect(handled.get('project:mutate')?.({}, valid)).resolves.toBeUndefined();
+    await expect(handled.get('pipeline:mutate')?.({}, valid)).resolves.toBeUndefined();
+    await expect(handled.get('github:mutate')?.({}, valid)).resolves.toBeUndefined();
+    expect(mocks.projectSideEffect).toHaveBeenCalledWith(valid);
+    expect(mocks.pipelineSideEffect).toHaveBeenCalledWith(valid);
+    expect(mocks.githubSideEffect).toHaveBeenCalledWith(valid);
+  });
+
+  it('logs full IPC failures but exposes only a clamped first line', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fullError = new Error(`${'x'.repeat(400)}\nprivate stack detail`);
+    mocks.registerProjectHandlers.mockImplementationOnce((deps: { ipcMain: IpcMain }) => {
+      deps.ipcMain.handle('test:private-error', async () => {
+        throw fullError;
+      });
+    });
+    register();
+
+    await expect(handled.get('test:private-error')?.({})).rejects.toThrow(`${'x'.repeat(279)}…`);
+    expect(consoleError).toHaveBeenCalledWith('[ipc] test:private-error failed', fullError);
+    expect(mocks.logEvent).toHaveBeenCalledWith(
+      'ipc:handle',
+      expect.objectContaining({ error: `${'x'.repeat(279)}…` }),
+    );
+    expect(mocks.captureIpcFailure).toHaveBeenCalledWith(fullError, expect.any(Object));
+    consoleError.mockRestore();
   });
 
   it('logs object renderer diagnostics and ignores invalid payloads', () => {
