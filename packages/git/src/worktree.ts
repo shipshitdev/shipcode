@@ -189,7 +189,6 @@ export class WorktreeManager {
     }
 
     assertSafeWorktreeBranch(branch);
-    assertWorktreeCreateTarget(parent, path.join(parent, dirName));
     await this.prune();
 
     if (rawIssueBranch) {
@@ -210,8 +209,13 @@ export class WorktreeManager {
     for (let attempt = 0; ; attempt++) {
       const worktreePath = path.join(parent, dirName);
       assertSafeWorktreeBranch(branch);
-      assertWorktreeCreateTarget(parent, worktreePath);
       try {
+        // Validate the target inside the retry so a pre-existing directory is
+        // treated as a collision (bump suffix + retry) rather than a hard
+        // failure. Security violations (path escape, symlink, traversal) throw
+        // messages that don't match the collision regex below, so they still
+        // fail fast on the first attempt.
+        assertWorktreeCreateTarget(parent, worktreePath);
         await this.git.raw([
           ...NO_CONFIG_LOCK_FLAGS,
           'worktree',

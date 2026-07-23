@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -467,6 +468,30 @@ branch refs/heads/feature/not-ours
       baseRef: 'origin/main',
       baseStale: false,
     });
+  });
+
+  it('treats a pre-existing target directory as a collision and retries with a suffix', async () => {
+    // Regression: the target-path validation must run *inside* the collision
+    // retry, so a directory that already exists on disk bumps the suffix
+    // instead of hard-failing the whole create. Previously the existence check
+    // ran before the try/catch and aborted the retry loop.
+    const root = path.join(os.tmpdir(), `shipcode-wt-collision-${process.pid}`);
+    const occupied = path.join(root, 'project-9a1fd1', 'tighten-quick-flow');
+    fs.mkdirSync(occupied, { recursive: true });
+    gitMock.raw.mockResolvedValue('');
+    gitMock.fetch.mockResolvedValue(undefined);
+    const manager = new WorktreeManager('/repo/project', { worktreeRoot: root });
+
+    try {
+      await expect(manager.create('thread-1', 'Tighten Quick Flow!', 'main')).resolves.toEqual({
+        worktreePath: path.join(root, 'project-9a1fd1', 'tighten-quick-flow-2'),
+        branch: 'shipcode/tighten-quick-flow-2',
+        baseRef: 'origin/main',
+        baseStale: false,
+      });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('rejects traversal-shaped thread IDs before pruning or creating a worktree', async () => {
