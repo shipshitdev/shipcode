@@ -92,7 +92,11 @@ describe('planCommand', () => {
     });
     createPipelineMock.mockReturnValue({});
     launchIssuePipelineMock.mockResolvedValue({ id: 'thread-1' });
-    upsertIssueMock.mockReturnValue({ id: 'issue-cache-42', issueNumber: 42 });
+    upsertIssueMock.mockReturnValue({
+      id: 'issue-cache-42',
+      issueNumber: 42,
+      requireApprovalOverride: null,
+    });
     createCliContextMock.mockReturnValue({
       project: {
         id: 'project-1',
@@ -104,10 +108,12 @@ describe('planCommand', () => {
         getIssue: ghGetIssueMock,
       },
       threads: {
+        getById: vi.fn(() => ({ id: 'thread-1', status: 'approval' })),
         getByProjectAndGithubIssue: getThreadByIssueMock,
       },
       githubIssues: {
         upsert: upsertIssueMock,
+        updateRequireApprovalOverride: vi.fn(),
       },
       settings: {
         get: vi.fn(() => ({ executorReasoningEffort: 'high' })),
@@ -139,7 +145,11 @@ describe('planCommand', () => {
     expect(launchIssuePipelineMock).toHaveBeenCalledWith(
       expect.objectContaining({ pipeline: expect.any(Object) }),
       expect.objectContaining({
-        issue: { id: 'issue-cache-42', issueNumber: 42 },
+        issue: expect.objectContaining({
+          id: 'issue-cache-42',
+          issueNumber: 42,
+          requireApprovalOverride: true,
+        }),
         phaseModels: expect.objectContaining({
           executorModel: 'openrouter',
           executorModelId: 'openrouter/auto',
@@ -189,7 +199,18 @@ describe('planCommand', () => {
   });
 
   it('exits when the pipeline run does not persist a thread', async () => {
-    getThreadByIssueMock.mockReturnValueOnce(null);
+    const base = createCliContextMock();
+    createCliContextMock.mockReturnValueOnce({
+      ...base,
+      threads: {
+        // Wait sees a terminal status once, then both lookups miss so we exit.
+        getById: vi
+          .fn()
+          .mockReturnValueOnce({ id: 'thread-1', status: 'approval' })
+          .mockReturnValue(null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    });
 
     await expect(planCommand('42')).rejects.toThrow('process.exit:1');
 

@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync } from 'node:fs';
 import path from 'node:path';
 import { assertGitWorkspaceIdentity } from '@shipcode/shared/worktree-path';
 import type { SimpleGit } from 'simple-git';
@@ -78,21 +78,34 @@ export function assertWorktreeCreateTarget(expectedParent: string, targetPath: s
     throw new Error(`worktree create path already exists: ${target}`);
   }
 
+  // Walk up until the first existing ancestor. Reject when that ancestor is a
+  // user-controlled symlink (e.g. `configured -> outside`). Allow known OS
+  // alias roots such as macOS `/tmp`→`/private/tmp` and `/var`→`/private/var`
+  // so tmpdir-based parents and default installs keep working.
   let existingAncestor = parent;
   while (!existsSync(existingAncestor)) {
     const next = path.dirname(existingAncestor);
     if (next === existingAncestor) break;
     existingAncestor = next;
   }
-  if (lstatSync(existingAncestor).isSymbolicLink()) {
+  if (
+    existsSync(existingAncestor) &&
+    lstatSync(existingAncestor).isSymbolicLink() &&
+    !isOsPathAliasRoot(existingAncestor)
+  ) {
     throw new Error(`worktree create parent must not be a symlink: ${existingAncestor}`);
   }
-  const ancestorReal = realpathSync.native(existingAncestor);
-  if (ancestorReal !== existingAncestor) {
-    throw new Error(
-      `worktree create parent must not resolve through symlinks (path: ${existingAncestor}, real: ${ancestorReal})`,
-    );
-  }
+}
+
+/** macOS (and some Linux setups) expose lexical roots that are always symlinks. */
+function isOsPathAliasRoot(candidate: string): boolean {
+  const resolved = path.resolve(candidate);
+  return (
+    resolved === '/tmp' ||
+    resolved === '/var' ||
+    resolved === '/private/tmp' ||
+    resolved === '/private/var'
+  );
 }
 
 export async function assertRegisteredWorktree(input: {

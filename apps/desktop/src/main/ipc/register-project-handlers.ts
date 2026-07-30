@@ -1273,11 +1273,35 @@ export function registerProjectHandlers({
 
   ipcMain.handle('fs:list-directories', async (_event, { dirPath }: { dirPath: string }) => {
     try {
-      const entries = await fsp.readdir(dirPath, { withFileTypes: true });
+      // Directory browser is only for Add Project. Bound it to the user's home
+      // (and explicit addProjectStartsIn root when absolute) so a compromised
+      // renderer cannot enumerate arbitrary system paths.
+      if (typeof dirPath !== 'string' || !path.isAbsolute(dirPath)) {
+        return { entries: [], error: 'permission-denied' as const };
+      }
+      const resolved = path.resolve(dirPath);
+      const home = path.resolve(os.homedir());
+      const settings = queries.settings.get();
+      const startRaw = settings.addProjectStartsIn?.trim() || '';
+      let startRoot = home;
+      if (startRaw && startRaw !== '~') {
+        if (startRaw.startsWith('~/')) {
+          startRoot = path.resolve(path.join(home, startRaw.slice(2)));
+        } else if (path.isAbsolute(startRaw)) {
+          startRoot = path.resolve(startRaw);
+        }
+      }
+      const under = (root: string) =>
+        resolved === root || resolved.startsWith(`${root}${path.sep}`);
+      if (!under(home) && !under(startRoot)) {
+        return { entries: [], error: 'permission-denied' as const };
+      }
+
+      const entries = await fsp.readdir(resolved, { withFileTypes: true });
       const dirs = entries
         .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((e) => ({ name: e.name, absolutePath: path.join(dirPath, e.name) }));
+        .map((e) => ({ name: e.name, absolutePath: path.join(resolved, e.name) }));
       return { entries: dirs, error: null };
     } catch (err: unknown) {
       const code = (err as NodeJS.ErrnoException).code;

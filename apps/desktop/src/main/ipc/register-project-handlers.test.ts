@@ -4590,7 +4590,6 @@ describe('registerProjectHandlers', () => {
     existsSpy.mockReturnValueOnce(false);
     settings.addProjectStartsIn = '/missing/path';
     expect(handlers.get('fs:resolve-start-dir')?.()).toEqual({ resolvedPath: '/home/vincent' });
-    homeSpy.mockRestore();
 
     const readdirSpy = vi.spyOn(fsp, 'readdir');
     readdirSpy.mockResolvedValueOnce([
@@ -4600,23 +4599,34 @@ describe('registerProjectHandlers', () => {
       { name: 'alpha', isDirectory: () => true },
     ] as never);
     await expect(
-      handlers.get('fs:list-directories')?.(undefined, { dirPath: '/tmp/root' }),
+      handlers.get('fs:list-directories')?.(undefined, {
+        dirPath: '/home/vincent/projects',
+      }),
     ).resolves.toEqual({
       entries: [
-        { name: 'alpha', absolutePath: path.join('/tmp/root', 'alpha') },
-        { name: 'zeta', absolutePath: path.join('/tmp/root', 'zeta') },
+        { name: 'alpha', absolutePath: path.join('/home/vincent/projects', 'alpha') },
+        { name: 'zeta', absolutePath: path.join('/home/vincent/projects', 'zeta') },
       ],
       error: null,
     });
+    // Outside home + start root is denied.
+    await expect(
+      handlers.get('fs:list-directories')?.(undefined, { dirPath: '/etc' }),
+    ).resolves.toEqual({ entries: [], error: 'permission-denied' });
     readdirSpy.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }));
     await expect(
-      handlers.get('fs:list-directories')?.(undefined, { dirPath: '/tmp/missing' }),
+      handlers.get('fs:list-directories')?.(undefined, {
+        dirPath: '/home/vincent/missing',
+      }),
     ).resolves.toEqual({ entries: [], error: 'not-found' });
     readdirSpy.mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'EACCES' }));
     await expect(
-      handlers.get('fs:list-directories')?.(undefined, { dirPath: '/tmp/denied' }),
+      handlers.get('fs:list-directories')?.(undefined, {
+        dirPath: '/home/vincent/denied',
+      }),
     ).resolves.toEqual({ entries: [], error: 'permission-denied' });
     readdirSpy.mockRestore();
+    homeSpy.mockRestore();
 
     await handlers.get('shell:open-external')?.(undefined, {
       url: 'https://github.com/shipshitdev/shipcode',

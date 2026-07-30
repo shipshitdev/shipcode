@@ -18,6 +18,7 @@ import {
 } from '@shipcode/agents';
 import {
   type AppSettings,
+  clampError,
   formatTaskGraphChecklist,
   formatTaskNodeIssueBody,
   isRealGithubIssueNumber,
@@ -814,13 +815,16 @@ export function createPipelineRuntime(
     phase: Parameters<typeof deps.threads.updateStatus>[1],
     error?: string,
   ) {
-    const runId = syncRunForPhase(threadId, phase, error);
+    // Clamp before persistence/UI so unexpected exception text never fills
+    // threads.last_error or renderer banners with multi-line stacks.
+    const clampedError = error == null || error === '' ? error : clampError(error);
+    const runId = syncRunForPhase(threadId, phase, clampedError);
     let phaseLogged = false;
     try {
       if (runId) {
-        deps.phaseLogs?.transition(threadId, phase, error ?? null, runId);
+        deps.phaseLogs?.transition(threadId, phase, clampedError ?? null, runId);
       } else {
-        deps.phaseLogs?.transition(threadId, phase, error ?? null);
+        deps.phaseLogs?.transition(threadId, phase, clampedError ?? null);
       }
       phaseLogged = Boolean(deps.phaseLogs);
     } catch (logError) {
@@ -828,7 +832,14 @@ export function createPipelineRuntime(
     }
     // Route through the shared service's serializer — collapses rapid phase
     // transitions into the latest desired state per issue.
-    syncThreadAndIssuePhase(deps.threads, deps.githubIssues, threadId, phase, error, ghSync.deps);
+    syncThreadAndIssuePhase(
+      deps.threads,
+      deps.githubIssues,
+      threadId,
+      phase,
+      clampedError,
+      ghSync.deps,
+    );
     if (phaseLogged) void postPipelineTimelineComment(threadId);
     deps.emitter.emit({ type: 'pipeline:phase', threadId, phase, ...(runId ? { runId } : {}) });
   }
