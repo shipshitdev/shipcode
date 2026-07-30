@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { ISO_NOW_SQL, toIsoUtc } from '@shipcode/shared';
 import { asRow } from '../utils';
 
-export type IssueChatSessionProvider = 'claude' | 'codex';
+export type IssueChatSessionProvider = 'claude' | 'codex' | 'grok';
 
 export interface IssueChatSessionRecord {
   threadId: string;

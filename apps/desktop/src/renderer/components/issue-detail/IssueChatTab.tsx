@@ -25,7 +25,7 @@ import {
   useAssistantTranscript,
 } from '../assistant/AssistantTimeline';
 
-type IssueChatProvider = 'claude' | 'codex';
+type IssueChatProvider = 'claude' | 'codex' | 'grok';
 
 interface IssueChatSessionMetadata {
   threadId: string;
@@ -362,6 +362,7 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
               <SelectContent>
                 <SelectItem value="claude">Claude</SelectItem>
                 <SelectItem value="codex">Codex</SelectItem>
+                <SelectItem value="grok">Grok</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex-1" />

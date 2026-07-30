@@ -78,4 +78,20 @@ describe('IssueChatSessionQueries', () => {
 
     expect(sessions.getByThread('t1')).toBeNull();
   });
+
+  it('accepts grok as a chat session provider', () => {
+    const created = sessions.upsert({
+      threadId: 't1',
+      provider: 'grok',
+      sessionId: 'grok-session-1',
+      cwd: '/tmp/worktree',
+      model: 'grok-4.5',
+    });
+
+    expect(created).toMatchObject({
+      provider: 'grok',
+      sessionId: 'grok-session-1',
+      model: 'grok-4.5',
+    });
+  });
 });
