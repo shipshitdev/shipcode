@@ -28,13 +28,23 @@ function defaultStorage(): SafeStorageAdapter {
 }
 
 export class NotificationCredentialStore implements NotificationCredentialSettingsReader {
-  private readonly storage: SafeStorageAdapter;
+  private storage: SafeStorageAdapter | null;
 
   constructor(
     private readonly settings: SettingsQueries,
-    storage: SafeStorageAdapter = defaultStorage(),
+    storage?: SafeStorageAdapter,
   ) {
-    this.storage = storage;
+    // Do not evaluate defaultStorage() as a default parameter — that runs on
+    // every construct path, including tests that never touch credentials, and
+    // forces an Electron binary download on first require.
+    this.storage = storage ?? null;
+  }
+
+  private getStorage(): SafeStorageAdapter {
+    if (!this.storage) {
+      this.storage = defaultStorage();
+    }
+    return this.storage;
   }
 
   migratePlaintextCredentials(): void {
@@ -84,7 +94,7 @@ export class NotificationCredentialStore implements NotificationCredentialSettin
 
   private encrypt(value: string): string {
     try {
-      return encryptSecureSecret(value, this.storage);
+      return encryptSecureSecret(value, this.getStorage());
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes('unavailable')) {
@@ -100,7 +110,7 @@ export class NotificationCredentialStore implements NotificationCredentialSettin
       throw new Error('Notification credential migration did not complete');
     }
     try {
-      return decryptSecureSecret(value, this.storage);
+      return decryptSecureSecret(value, this.getStorage());
     } catch {
       throw new Error('Secure notification credential decryption failed');
     }
