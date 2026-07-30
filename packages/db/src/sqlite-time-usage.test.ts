@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const QUERY_DIRECTORY = new URL('./queries/', import.meta.url);
@@ -9,7 +9,7 @@ const CANONICAL_TIMESTAMP_QUERIES = [
   'issue-chat-sessions.ts',
   'task-graphs.ts',
   'feature-qa-results.ts',
-  'issue-edges.ts',
+  // issue-edges timestamps live on the V67 schema DEFAULT — query module no longer embeds SQL now.
   'pipeline-steps.ts',
   'review-findings.ts',
   'project-failures.ts',
