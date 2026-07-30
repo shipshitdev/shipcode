@@ -78,6 +78,9 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
 
     const cwd = context.worktreePath ?? context.projectPath;
 
+    // Preflight is fail-closed: HEAD/log/branch errors must never fall through
+    // into a push retry (that used to push after a broken preflight).
+    let branch: string;
     try {
       const currentHead = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd,
@@ -110,20 +113,23 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
         return { next: 'failed' };
       }
 
-      const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
         cwd,
         encoding: 'utf-8',
       }).trim();
-      execFileSync('git', ['push', 'origin', branch, '--set-upstream'], { cwd, encoding: 'utf-8' });
+    } catch (preflightErr) {
+      const message = preflightErr instanceof Error ? preflightErr.message : String(preflightErr);
+      emitPhase(threadId, 'failed', `Commit aborted during preflight: ${message.slice(0, 200)}`);
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
+    }
 
+    try {
+      execFileSync('git', ['push', 'origin', branch, '--set-upstream'], { cwd, encoding: 'utf-8' });
       resetPhaseState(context);
       return { next: 'shipping' };
     } catch (firstErr) {
       try {
-        const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-          cwd,
-          encoding: 'utf-8',
-        }).trim();
         execFileSync('git', ['push', 'origin', branch, '--set-upstream'], {
           cwd,
           encoding: 'utf-8',

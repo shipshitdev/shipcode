@@ -45,28 +45,41 @@ import log from '../logger.service';
 import type { NotificationService } from '../notification-service';
 import type { Queries } from './types';
 
+/**
+ * Redact secrets before any Project crosses the IPC boundary to the renderer.
+ * Presence of a custom Discord webhook is encoded as empty-string vs null:
+ * - null → no override configured
+ * - '' → override configured (value stays only in main/SQLite ciphertext)
+ */
+function redactProjectSecrets<T extends import('@shipcode/shared').Project>(project: T): T {
+  return {
+    ...project,
+    discordWebhookUrlOverride: project.discordWebhookUrlOverride ? '' : null,
+  };
+}
+
 export function enrichProjectPath(project: import('@shipcode/shared').Project | null) {
   if (!project) return null;
   const setup = inspectProjectSetup(project.path);
-  return {
+  return redactProjectSecrets({
     ...project,
     pathExists: fs.existsSync(project.path),
     setupStatus: setup.status,
     setupPath: setup.path,
     setupError: setup.error,
-  };
+  });
 }
 
 export function enrichProjectPaths(projects: import('@shipcode/shared').Project[]) {
   return projects.map((project) => {
     const setup = inspectProjectSetup(project.path);
-    return {
+    return redactProjectSecrets({
       ...project,
       pathExists: fs.existsSync(project.path),
       setupStatus: setup.status,
       setupPath: setup.path,
       setupError: setup.error,
-    };
+    });
   });
 }
 

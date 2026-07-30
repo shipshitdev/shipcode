@@ -1,6 +1,7 @@
 import { sanitizeCliText } from '../adapters/cli-emitter';
 import { requireOnboarding } from './guard';
 import { loadIssuePipelineInput, startIssuePipeline } from './issue-pipeline';
+import { waitForThreadTerminal } from './pipeline-wait';
 
 /**
  * `shipcode plan <issue-number>`
@@ -16,10 +17,22 @@ export async function planCommand(issueNumber: string) {
   console.log(`Issue: ${sanitizeCliText(issue.title)}`);
   console.log('Running plan generation...\n');
 
-  await startIssuePipeline(ctx, issue);
+  // Force the approval gate so this command cannot auto-execute, and wait for
+  // the background dispatch loop to reach a terminal status before reading DB.
+  const { thread: started, restoreRequireApproval } = await startIssuePipeline(
+    ctx,
+    issue,
+    undefined,
+    { requireApproval: true },
+  );
+  try {
+    await waitForThreadTerminal(ctx.threads, started.id);
+  } finally {
+    restoreRequireApproval();
+  }
 
-  // Retrieve the generated plan from DB
-  const thread = ctx.threads.getByProjectAndGithubIssue(ctx.project.id, num);
+  const thread =
+    ctx.threads.getById(started.id) ?? ctx.threads.getByProjectAndGithubIssue(ctx.project.id, num);
   if (!thread) {
     console.error('Thread not found after pipeline run.');
     process.exit(1);

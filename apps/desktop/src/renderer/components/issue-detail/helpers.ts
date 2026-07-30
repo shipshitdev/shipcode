@@ -11,6 +11,7 @@ import type {
 } from '@shipcode/shared';
 import {
   getRetryAction,
+  PHASE_DESCRIPTORS,
   PIPELINE_EXECUTOR_PROVIDERS,
   PIPELINE_PHASE,
   shipCodePlanSchema,
@@ -41,15 +42,13 @@ export const PIPELINE_PREVIEW_PHASES = [
   { id: 'ship', label: 'Ship' },
 ] as const;
 
+/** Phase provider menus must match PHASE_DESCRIPTORS (Cursor/Grok execute-only). */
 export const PHASE_PROVIDER_OPTIONS: Record<
   'planner' | 'reviewer' | 'executor' | 'verifier',
   ExecutorModel[]
-> = {
-  planner: [...PIPELINE_EXECUTOR_PROVIDERS],
-  reviewer: [...PIPELINE_EXECUTOR_PROVIDERS],
-  executor: [...PIPELINE_EXECUTOR_PROVIDERS],
-  verifier: [...PIPELINE_EXECUTOR_PROVIDERS],
-};
+> = Object.fromEntries(
+  PHASE_DESCRIPTORS.map((descriptor) => [descriptor.key, [...descriptor.validProviders]]),
+) as Record<'planner' | 'reviewer' | 'executor' | 'verifier', ExecutorModel[]>;
 
 export type PlanStatusBadgeVariant =
   | 'default'

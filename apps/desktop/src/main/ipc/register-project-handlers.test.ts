@@ -147,6 +147,13 @@ vi.mock('electron', () => ({
   },
 }));
 
+vi.mock('../secure-secret', () => ({
+  encryptSecureSecret: (value: string) =>
+    `safe-storage:v1:${Buffer.from(value, 'utf8').toString('base64')}`,
+  isSecureSecretValue: (value: string) => value.startsWith('safe-storage:v1:'),
+  decryptSecureSecret: (value: string | null | undefined) => value ?? null,
+}));
+
 vi.mock('@shipcode/agents', () => ({
   GhCli: class {
     createIssue = createIssueMock;
@@ -4128,8 +4135,18 @@ describe('registerProjectHandlers', () => {
         projectId: project.id,
         routing,
       }),
-    ).resolves.toMatchObject(routing);
-    expect(queries.projects.updateNotificationRouting).toHaveBeenCalledWith(project.id, routing);
+    ).resolves.toMatchObject({
+      ...routing,
+      // Renderer never sees the secret — empty string marks "configured".
+      discordWebhookUrlOverride: '',
+    });
+    expect(queries.projects.updateNotificationRouting).toHaveBeenCalledWith(project.id, {
+      ...routing,
+      discordWebhookUrlOverride: `safe-storage:v1:${Buffer.from(
+        routing.discordWebhookUrlOverride ?? '',
+        'utf8',
+      ).toString('base64')}`,
+    });
 
     expect(
       handlers.get('project:set-require-approval')?.(undefined, {

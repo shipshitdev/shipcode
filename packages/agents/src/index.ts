@@ -104,7 +104,6 @@ export {
   listMemoryFiles,
   readMemoryFile,
 } from './memory-generator';
-export { loadRepoMemory } from './memory-loader';
 export type { EnhancePrdOptions, GeneratedPrd } from './prd-generator';
 export { buildPrdPrompt, enhancePrdDraft, extractPrd } from './prd-generator';
 export type { ManagedProcess, ManagedProcessResourceUsage } from './process-manager';

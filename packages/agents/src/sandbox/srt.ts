@@ -68,6 +68,16 @@ const DEFAULT_DENY_READ = [
   '~/.kube',
   '~/.pypirc',
   '~/.password-store',
+  // ShipCode global state (other projects' worktrees + local SQLite/settings).
+  '~/.shipcode',
+  // Provider secret / session stores outside ~/.config.
+  '~/.codex',
+  '~/.cursor',
+  // Electron app userData defaults (SQLite + encrypted settings live here).
+  '~/Library/Application Support/shipcode',
+  '~/Library/Application Support/ShipCode',
+  '~/.config/shipcode',
+  '~/.local/share/shipcode',
 ] as const;
 
 /**

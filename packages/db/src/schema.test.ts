@@ -43,6 +43,7 @@ import {
   migrateV62,
   migrateV65,
   migrateV66,
+  migrateV67,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -1571,5 +1572,40 @@ describe('migrateV66', () => {
   it('is idempotent', () => {
     migrateThrough(db, migrateV66);
     expect(() => migrateV66(db)).not.toThrow();
+  });
+});
+
+describe('migrateV67', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('creates issue_edges without requiring IssueEdgeQueries construction', () => {
+    migrateThrough(db, migrateV66);
+    expect(tableExists(db, 'issue_edges')).toBe(false);
+
+    migrateV67(db);
+
+    expect(tableExists(db, 'issue_edges')).toBe(true);
+    expect(indexExists(db, 'idx_issue_edges_project')).toBe(true);
+    expect(indexExists(db, 'idx_issue_edges_unique_manual')).toBe(true);
+    expect(
+      (
+        db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as {
+          version: number;
+        }
+      ).version,
+    ).toBe(67);
+  });
+
+  it('is idempotent', () => {
+    migrateThrough(db, migrateV67);
+    expect(() => migrateV67(db)).not.toThrow();
   });
 });

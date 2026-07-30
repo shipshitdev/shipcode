@@ -5203,6 +5203,32 @@ Custom prompt`,
       expect(pushAttempts).toBe(2);
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'shipping');
     });
+
+    it('preflight command exceptions do not attempt a push', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      requireContext(pipeline).forkPointSha = 'abc123';
+      let pushAttempts = 0;
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git rev-parse HEAD')) throw new Error('git catatonic');
+        if (cmd.startsWith('git push')) {
+          pushAttempts++;
+          return '';
+        }
+        return '';
+      });
+
+      await pipeline.startCommitAndPush('t1');
+
+      expect(pushAttempts).toBe(0);
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('preflight'),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
   });
 
   // ─── startShipping ─────────────────────────────────────────────────

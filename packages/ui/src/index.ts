@@ -9,18 +9,17 @@ export { ConfirmDialog } from '@/ConfirmDialog';
 export { DiffViewer } from '@/DiffViewer';
 export { GitVisualizer } from '@/GitVisualizer';
 export { KanbanBoard } from '@/KanbanBoard';
-export type {
-  LabeledModelSelectOption,
-  LabeledModelSelectProps,
-} from '@/LabeledModelSelect';
-export { LabeledModelSelect } from '@/LabeledModelSelect';
 export type { IssuePriorityBadge, PlanStepSummary } from '@/kanban-board/types';
 export {
   AUTOMATION_ISSUE_NUMBER_BASE,
   isAutomationIssue,
   resolveIssuePriorityBadge,
 } from '@/kanban-board/utils';
-export { LoadingButtonContent } from '@/LoadingButtonContent';
+export type {
+  LabeledModelSelectOption,
+  LabeledModelSelectProps,
+} from '@/LabeledModelSelect';
+export { LabeledModelSelect } from '@/LabeledModelSelect';
 export { useSharedSecondNow } from '@/lib/second-ticker';
 export type { PageHeaderProps } from '@/PageHeader';
 export { PageHeader } from '@/PageHeader';

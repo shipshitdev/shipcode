@@ -23,8 +23,8 @@ import { registerSkillsHandlers } from './ipc/register-skills-handlers';
 import { registerSupportHandlers } from './ipc/register-support-handlers';
 import type { Queries } from './ipc/types';
 import log, { logEvent } from './logger.service';
-import type { NotificationService } from './notification-service';
 import type { NotificationCredentialStore } from './notification-credential-store';
+import type { NotificationService } from './notification-service';
 import type { ResourceMonitor } from './resource-monitor';
 import { captureIpcFailure } from './telemetry';
 import type { UpdateService } from './update-service';
@@ -70,12 +70,14 @@ export function registerIpcHandlers(
             validateIpcInvokeArgs(String(channel), args);
             const result = await listener(event, ...args);
             const elapsedMs = Date.now() - startedAt;
-            logEvent('ipc:handle', {
-              channel,
-              ok: true,
-              elapsedMs,
-            });
+            // Only persist slow/failed IPC diagnostics to disk. Successful
+            // sub-150ms calls are the common path and previously flooded events.log.
             if (elapsedMs >= 150) {
+              logEvent('ipc:handle', {
+                channel,
+                ok: true,
+                elapsedMs,
+              });
               log.info(`[ipc] ${channel} completed in ${elapsedMs}ms`);
             }
             return result;

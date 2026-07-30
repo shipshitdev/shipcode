@@ -1,6 +1,7 @@
 import { sanitizeCliText } from '../adapters/cli-emitter';
 import { requireOnboarding } from './guard';
 import { loadIssuePipelineInput, startIssuePipeline } from './issue-pipeline';
+import { waitForThreadTerminal } from './pipeline-wait';
 
 /**
  * `shipcode review <issue-number>`
@@ -15,10 +16,20 @@ export async function reviewCommand(issueNumber: string) {
   console.log(`Issue: ${sanitizeCliText(issue.title)}`);
   console.log('Running plan + review...\n');
 
-  await startIssuePipeline(ctx, issue);
+  const { thread: started, restoreRequireApproval } = await startIssuePipeline(
+    ctx,
+    issue,
+    undefined,
+    { requireApproval: true },
+  );
+  try {
+    await waitForThreadTerminal(ctx.threads, started.id);
+  } finally {
+    restoreRequireApproval();
+  }
 
-  // Retrieve review from DB — reviews are keyed by planId
-  const thread = ctx.threads.getByProjectAndGithubIssue(ctx.project.id, num);
+  const thread =
+    ctx.threads.getById(started.id) ?? ctx.threads.getByProjectAndGithubIssue(ctx.project.id, num);
   if (!thread) {
     console.error('Thread not found after pipeline run.');
     process.exit(1);

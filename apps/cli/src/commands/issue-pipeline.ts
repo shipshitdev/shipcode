@@ -26,11 +26,18 @@ export function resolveIssuePipelineRoute(labels: string[]) {
   };
 }
 
+export interface StartIssuePipelineResult {
+  thread: Awaited<ReturnType<typeof launchIssuePipeline>>;
+  /** Call after the pipeline has finished so temporary approval forcing is undone. */
+  restoreRequireApproval: () => void;
+}
+
 export async function startIssuePipeline(
   ctx: CliContext,
   issue: PipelineIssue,
   route = resolveIssuePipelineRoute(issue.labels),
-) {
+  options: { requireApproval?: boolean } = {},
+): Promise<StartIssuePipelineResult> {
   const cachedIssue = ctx.githubIssues.upsert({
     projectId: ctx.project.id,
     issueNumber: issue.number,
@@ -43,12 +50,25 @@ export async function startIssuePipeline(
     updatedAt: issue.updatedAt ?? null,
   });
 
+  const previousApproval = cachedIssue.requireApprovalOverride ?? null;
+  let approvalForced = false;
+  if (options.requireApproval === true) {
+    // Force the approval gate so CLI plan/review cannot auto-execute. Leave the
+    // override in place until the caller finishes waiting for terminal status.
+    ctx.githubIssues.updateRequireApprovalOverride(cachedIssue.id, true);
+    approvalForced = true;
+  }
+
   const settings = ctx.settings.get();
   // Resolve the base phase models first so the executor effort override honors any
   // project-/issue-level executorReasoningEffort normalization, matching the other
   // phases. Feeding raw settings.executorReasoningEffort here would silently drop
   // those overrides for CLI-launched issues.
-  const basePhaseModels = resolveIssuePhaseModels(settings, ctx.project, cachedIssue);
+  const basePhaseModels = resolveIssuePhaseModels(
+    settings,
+    ctx.project,
+    approvalForced ? { ...cachedIssue, requireApprovalOverride: true } : cachedIssue,
+  );
   const phaseModels = {
     ...basePhaseModels,
     executorModel: route.executorModel,
@@ -60,18 +80,35 @@ export async function startIssuePipeline(
     ).effective,
   };
 
-  return launchIssuePipeline(
-    {
-      threads: ctx.threads,
-      githubIssues: ctx.githubIssues,
-      plans: ctx.plans,
-      pipeline: createPipeline(ctx.pipelineDeps),
-    },
-    {
-      project: ctx.project,
-      issue: cachedIssue,
-      phaseModels,
-      executorModelOverride: route.executorModelOverride,
-    },
-  );
+  try {
+    const thread = await launchIssuePipeline(
+      {
+        threads: ctx.threads,
+        githubIssues: ctx.githubIssues,
+        plans: ctx.plans,
+        pipeline: createPipeline(ctx.pipelineDeps),
+      },
+      {
+        project: ctx.project,
+        issue: approvalForced ? { ...cachedIssue, requireApprovalOverride: true } : cachedIssue,
+        phaseModels,
+        executorModelOverride: route.executorModelOverride,
+      },
+    );
+
+    return {
+      thread,
+      restoreRequireApproval: () => {
+        if (!approvalForced) return;
+        ctx.githubIssues.updateRequireApprovalOverride(cachedIssue.id, previousApproval);
+        approvalForced = false;
+      },
+    };
+  } catch (error) {
+    if (approvalForced) {
+      ctx.githubIssues.updateRequireApprovalOverride(cachedIssue.id, previousApproval);
+      approvalForced = false;
+    }
+    throw error;
+  }
 }

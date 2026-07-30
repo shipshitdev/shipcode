@@ -52,11 +52,12 @@ import {
   validateGithubProjectUrl,
 } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
-import { app, dialog, shell } from 'electron';
+import { app, dialog, safeStorage, shell } from 'electron';
 import { runAutoCommitWorkflow, runCleanupAnalyze, runCleanupApply } from '../git-workflows';
 import { applyLaunchAtLoginSetting } from '../launch-at-login';
 import log from '../logger.service';
 import { NotificationCredentialStore } from '../notification-credential-store';
+import { encryptSecureSecret, isSecureSecretValue } from '../secure-secret';
 import { isSafeExternalUrl } from '../security';
 import { configureMainTelemetry, getTelemetryStatus } from '../telemetry';
 import { isWorktreeLocked, withWorktreeLock } from '../worktree-locks';
@@ -1611,7 +1612,21 @@ export function registerProjectHandlers({
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
 
-      queries.projects.updateNotificationRouting(projectId, routing);
+      const webhookOverride = routing.discordWebhookUrlOverride?.trim() || null;
+      const encryptedRouting = {
+        ...routing,
+        // Encrypt at the IPC boundary so SQLite never stores a cleartext project
+        // Discord webhook. Empty string / null clears the override. Pass the
+        // imported safeStorage so unit tests' electron mock is used (lazy
+        // require() would bypass vitest mocks and hit the real package).
+        discordWebhookUrlOverride: webhookOverride
+          ? isSecureSecretValue(webhookOverride)
+            ? webhookOverride
+            : encryptSecureSecret(webhookOverride, safeStorage)
+          : null,
+      };
+
+      queries.projects.updateNotificationRouting(projectId, encryptedRouting);
       const updated = enrichProjectPath(queries.projects.getById(projectId));
       if (!updated) {
         throw new Error(`Project ${projectId} not found after notification routing update`);
