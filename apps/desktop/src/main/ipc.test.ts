@@ -213,7 +213,7 @@ describe('registerIpcHandlers', () => {
     dateSpy.mockRestore();
   });
 
-  it('does not emit slow IPC logs for fast handlers and captures string failures', async () => {
+  it('does not emit success IPC logs for fast handlers and captures string failures', async () => {
     mocks.registerProjectHandlers.mockImplementationOnce((deps: { ipcMain: IpcMain }) => {
       deps.ipcMain.handle('test:fast', async () => 'fast');
       deps.ipcMain.handle('test:string-error', async () => {
@@ -225,11 +225,11 @@ describe('registerIpcHandlers', () => {
     register();
 
     await expect(handled.get('test:fast')?.({})).resolves.toBe('fast');
-    expect(mocks.logEvent).toHaveBeenCalledWith('ipc:handle', {
-      channel: 'test:fast',
-      ok: true,
-      elapsedMs: 50,
-    });
+    // Fast successes are intentionally not persisted to events.log.
+    expect(mocks.logEvent).not.toHaveBeenCalledWith(
+      'ipc:handle',
+      expect.objectContaining({ channel: 'test:fast', ok: true }),
+    );
     expect(mocks.logger.info).not.toHaveBeenCalledWith('[ipc] test:fast completed in 50ms');
 
     dateSpy.mockReturnValueOnce(4_000).mockReturnValueOnce(4_005);

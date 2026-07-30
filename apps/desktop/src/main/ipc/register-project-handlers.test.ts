@@ -2557,18 +2557,28 @@ describe('registerProjectHandlers', () => {
     expect(resolveStartDir()).toEqual({ resolvedPath: homeDir });
     expect(resolveStartDir()).toEqual({ resolvedPath: homeDir });
 
-    await expect(listDirectories(undefined, { dirPath: '/tmp' })).resolves.toEqual({
+    const listRoot = path.join(homeDir, 'projects');
+    await expect(listDirectories(undefined, { dirPath: listRoot })).resolves.toEqual({
       entries: [
-        { name: 'alpha', absolutePath: '/tmp/alpha' },
-        { name: 'zeta', absolutePath: '/tmp/zeta' },
+        { name: 'alpha', absolutePath: path.join(listRoot, 'alpha') },
+        { name: 'zeta', absolutePath: path.join(listRoot, 'zeta') },
       ],
       error: null,
     });
-    await expect(listDirectories(undefined, { dirPath: '/missing' })).resolves.toEqual({
+    // Outside home / start root is denied without consuming readdir mocks.
+    await expect(listDirectories(undefined, { dirPath: '/etc' })).resolves.toEqual({
+      entries: [],
+      error: 'permission-denied',
+    });
+    await expect(
+      listDirectories(undefined, { dirPath: path.join(homeDir, 'missing') }),
+    ).resolves.toEqual({
       entries: [],
       error: 'not-found',
     });
-    await expect(listDirectories(undefined, { dirPath: '/denied' })).resolves.toEqual({
+    await expect(
+      listDirectories(undefined, { dirPath: path.join(homeDir, 'denied') }),
+    ).resolves.toEqual({
       entries: [],
       error: 'permission-denied',
     });
