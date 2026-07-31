@@ -317,7 +317,12 @@ function resolveResponseContent(rawOutput: string, exitCode: number, provider: I
   }
   if (exitCode === 0) return content || `${provider} completed without text output.`;
 
-  const excerpt = (content || stripAnsi(cleanRaw).trim()).slice(0, 2_000);
+  // A failed turn can fall back to raw CLI output (Grok's JSON parse failure path
+  // returns cleaned stdout/stderr). Keep the full text in the main-process log and
+  // persist/return only a clamped single line.
+  const raw = content || stripAnsi(cleanRaw).trim();
+  log.error(`[issue-chat] ${provider} exited with code ${exitCode}:`, raw);
+  const excerpt = clampError(raw);
   return `[error] ${provider} exited with code ${exitCode}${excerpt ? `\n\n${excerpt}` : ''}`;
 }
 

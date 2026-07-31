@@ -2523,6 +2523,11 @@ describe('registerProjectHandlers', () => {
       .mockReturnValueOnce(true)
       .mockReturnValueOnce(false)
       .mockReturnValue(true);
+    // Paths under the real home need not exist here; canonicalization is
+    // exercised for real in the symlink-containment test below.
+    const realpathSpy = vi
+      .spyOn(fs.promises, 'realpath')
+      .mockImplementation(async (p) => p as unknown as string);
     const readdirSpy = vi
       .spyOn(fs.promises, 'readdir')
       .mockResolvedValueOnce([
@@ -2585,6 +2590,47 @@ describe('registerProjectHandlers', () => {
 
     existsSpy.mockRestore();
     readdirSpy.mockRestore();
+    realpathSpy.mockRestore();
+  });
+
+  it('denies a home-rooted symlink that escapes to an unallowed directory', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-list-escape-'));
+    const home = path.join(root, 'home');
+    const outside = path.join(root, 'outside');
+    fs.mkdirSync(home, { recursive: true });
+    fs.mkdirSync(path.join(outside, 'secrets'), { recursive: true });
+    // Lexically inside $HOME, canonically outside it — readdir() would follow it.
+    fs.symlinkSync(outside, path.join(home, 'escape'), 'dir');
+    fs.mkdirSync(path.join(home, 'real', 'child'), { recursive: true });
+
+    const homeSpy = vi.spyOn(os, 'homedir').mockReturnValue(home);
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: { projects: {}, settings: { get: vi.fn().mockReturnValue({}) } } as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+    const listDirectories = handlers.get('fs:list-directories');
+    if (!listDirectories) throw new Error('fs:list-directories not registered');
+
+    await expect(
+      listDirectories(undefined, { dirPath: path.join(home, 'escape') }),
+    ).resolves.toEqual({ entries: [], error: 'permission-denied' });
+    // A genuine directory under home still lists, addressed by its canonical path.
+    const realHome = await fs.promises.realpath(home);
+    await expect(listDirectories(undefined, { dirPath: path.join(home, 'real') })).resolves.toEqual(
+      {
+        entries: [{ name: 'child', absolutePath: path.join(realHome, 'real', 'child') }],
+        error: null,
+      },
+    );
+
+    homeSpy.mockRestore();
+    fs.rmSync(root, { recursive: true, force: true });
   });
 
   it('lists code tree entries with ignore filtering, sorting, sizes, and dirty markers', async () => {
@@ -4207,6 +4253,56 @@ describe('registerProjectHandlers', () => {
     expect(queries.projects.updateNotifyGithubUser).toHaveBeenCalledWith(project.id, 'vincent');
   });
 
+  it('keeps the stored discord webhook when the renderer echoes the redacted marker', async () => {
+    const stored = 'safe-storage:v1:c3RvcmVk';
+    const project = { ...baseProject, discordWebhookUrlOverride: stored };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => project),
+        updateNotificationRouting: vi.fn(),
+      },
+      settings: { get: vi.fn(() => ({ projectOpenTarget: 'cursor' })) },
+    };
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+    const setRouting = handlers.get('project:set-notification-routing');
+    if (!setRouting) throw new Error('project:set-notification-routing not registered');
+    const base = {
+      discordRouting: 'override' as const,
+      telegramRouting: 'inherit' as const,
+      telegramChatIdOverride: null,
+    };
+
+    // '' is the redacted "configured" marker from the read model — a routing
+    // save that echoes it back must not wipe the ciphertext.
+    await setRouting(undefined, {
+      projectId: project.id,
+      routing: { ...base, discordWebhookUrlOverride: '' },
+    });
+    expect(queries.projects.updateNotificationRouting).toHaveBeenLastCalledWith(project.id, {
+      ...base,
+      discordWebhookUrlOverride: stored,
+    });
+
+    // null is the only explicit clear.
+    await setRouting(undefined, {
+      projectId: project.id,
+      routing: { ...base, discordWebhookUrlOverride: null },
+    });
+    expect(queries.projects.updateNotificationRouting).toHaveBeenLastCalledWith(project.id, {
+      ...base,
+      discordWebhookUrlOverride: null,
+    });
+  });
+
   it('covers project handler fallback branches for setup, dialogs, openers, removal, and worktree diffs', async () => {
     const worktreePath = '/tmp/worktrees/project-1/untracked';
     const branchOnlyThread = {
@@ -4601,6 +4697,11 @@ describe('registerProjectHandlers', () => {
     settings.addProjectStartsIn = '/missing/path';
     expect(handlers.get('fs:resolve-start-dir')?.()).toEqual({ resolvedPath: '/home/vincent' });
 
+    // These paths are synthetic, so canonicalization is identity here; the real
+    // symlink-containment behaviour is covered by its own test below.
+    const realpathSpy = vi
+      .spyOn(fsp, 'realpath')
+      .mockImplementation(async (p) => p as unknown as string);
     const readdirSpy = vi.spyOn(fsp, 'readdir');
     readdirSpy.mockResolvedValueOnce([
       { name: 'zeta', isDirectory: () => true },
@@ -4636,6 +4737,7 @@ describe('registerProjectHandlers', () => {
       }),
     ).resolves.toEqual({ entries: [], error: 'permission-denied' });
     readdirSpy.mockRestore();
+    realpathSpy.mockRestore();
     homeSpy.mockRestore();
 
     await handlers.get('shell:open-external')?.(undefined, {

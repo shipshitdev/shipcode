@@ -65,6 +65,10 @@ describe('buildSrtPolicy', () => {
         '~/.docker',
         '~/.shipcode',
         '~/.codex',
+        '~/.cursor',
+        '~/.config/shipcode',
+        '~/.local/share/shipcode',
+        '~/Library/Application Support/shipcode',
         '~/Library/Application Support/ShipCode',
       ]),
     );

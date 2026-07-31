@@ -1,7 +1,8 @@
-import type {
-  AgentConversationRecord,
-  ReasoningEffort,
-  TerminalEventRecord,
+import {
+  type AgentConversationRecord,
+  clampError,
+  type ReasoningEffort,
+  type TerminalEventRecord,
 } from '@shipcode/shared';
 import {
   Badge,
@@ -223,7 +224,7 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
           }),
         ]);
       } catch (error) {
-        toast.error('Issue chat failed', error instanceof Error ? error.message : undefined);
+        toast.error('Issue chat failed', clampError(error));
       } finally {
         dispatchIssueChat({ type: 'submitting', value: false });
       }
@@ -240,7 +241,7 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
       await window.shipcode.invoke('issue-chat:stop', { threadId });
       dispatchIssueChat({ type: 'session-started', value: false });
     } catch (error) {
-      toast.error('Issue chat stop failed', error instanceof Error ? error.message : undefined);
+      toast.error('Issue chat stop failed', clampError(error));
     }
   }, [threadId]);
 
@@ -248,7 +249,7 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
     try {
       await startOrResumeSession();
     } catch (error) {
-      toast.error('Issue chat resume failed', error instanceof Error ? error.message : undefined);
+      toast.error('Issue chat resume failed', clampError(error));
     }
   }, [startOrResumeSession]);
 

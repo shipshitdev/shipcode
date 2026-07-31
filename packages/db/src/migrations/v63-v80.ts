@@ -168,6 +168,12 @@ export function migrateV67(db: DatabaseSync): void {
         source_body_issue_id TEXT REFERENCES github_issue_cache(id) ON DELETE CASCADE,
         created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
         updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        -- Body-derived edges always carry their source issue; manual edges never do.
+        -- The query layer relies on this to scope cleanup and uniqueness by origin.
+        CHECK (
+          (origin = 'body' AND source_body_issue_id IS NOT NULL)
+          OR (origin = 'manual' AND source_body_issue_id IS NULL)
+        ),
         CHECK (source_issue_id <> target_issue_id)
       );
 
@@ -179,11 +185,11 @@ export function migrateV67(db: DatabaseSync): void {
 
       CREATE UNIQUE INDEX IF NOT EXISTS idx_issue_edges_unique_manual
         ON issue_edges(project_id, source_issue_id, target_issue_id, edge_type, origin)
-        WHERE source_body_issue_id IS NULL;
+        WHERE origin = 'manual';
 
       CREATE UNIQUE INDEX IF NOT EXISTS idx_issue_edges_unique_body
         ON issue_edges(project_id, source_issue_id, target_issue_id, edge_type, origin, source_body_issue_id)
-        WHERE source_body_issue_id IS NOT NULL;
+        WHERE origin = 'body';
     `);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (67)`);

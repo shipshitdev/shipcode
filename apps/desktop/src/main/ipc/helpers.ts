@@ -50,6 +50,10 @@ import type { Queries } from './types';
  * Presence of a custom Discord webhook is encoded as empty-string vs null:
  * - null → no override configured
  * - '' → override configured (value stays only in main/SQLite ciphertext)
+ *
+ * The write side mirrors this: `project:set-notification-routing` treats '' as
+ * "keep the stored value" so a round-trip cannot erase it. Callers must send
+ * null to clear the override.
  */
 function redactProjectSecrets<T extends import('@shipcode/shared').Project>(project: T): T {
   return {

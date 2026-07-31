@@ -118,8 +118,10 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
         encoding: 'utf-8',
       }).trim();
     } catch (preflightErr) {
-      const message = preflightErr instanceof Error ? preflightErr.message : String(preflightErr);
-      emitPhase(threadId, 'failed', `Commit aborted during preflight: ${message.slice(0, 200)}`);
+      // Raw git stderr is multiline; keep the full trace in the main-process log
+      // and hand the renderer a clamped single line.
+      console.error('[pipeline] commit/push preflight failed', preflightErr);
+      emitPhase(threadId, 'failed', `Commit aborted during preflight: ${clampError(preflightErr)}`);
       activePipelines.delete(threadId);
       return { next: 'failed' };
     }
@@ -137,12 +139,11 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
         resetPhaseState(context);
         return { next: 'shipping' };
       } catch (secondErr) {
-        const message = secondErr instanceof Error ? secondErr.message : String(secondErr);
-        const firstMessage = firstErr instanceof Error ? firstErr.message : String(firstErr);
+        console.error('[pipeline] push failed on both attempts', firstErr, secondErr);
         emitPhase(
           threadId,
           'failed',
-          `Commit and push failed (both attempts). first=${firstMessage.slice(0, 120)} retry=${message.slice(0, 120)}`,
+          `Commit and push failed (both attempts). first=${clampError(firstErr, 120)} retry=${clampError(secondErr, 120)}`,
         );
         activePipelines.delete(threadId);
         return { next: 'failed' };
