@@ -147,6 +147,13 @@ vi.mock('electron', () => ({
   },
 }));
 
+vi.mock('../secure-secret', () => ({
+  encryptSecureSecret: (value: string) =>
+    `safe-storage:v1:${Buffer.from(value, 'utf8').toString('base64')}`,
+  isSecureSecretValue: (value: string) => value.startsWith('safe-storage:v1:'),
+  decryptSecureSecret: (value: string | null | undefined) => value ?? null,
+}));
+
 vi.mock('@shipcode/agents', () => ({
   GhCli: class {
     createIssue = createIssueMock;
@@ -2516,6 +2523,11 @@ describe('registerProjectHandlers', () => {
       .mockReturnValueOnce(true)
       .mockReturnValueOnce(false)
       .mockReturnValue(true);
+    // Paths under the real home need not exist here; canonicalization is
+    // exercised for real in the symlink-containment test below.
+    const realpathSpy = vi
+      .spyOn(fs.promises, 'realpath')
+      .mockImplementation(async (p) => p as unknown as string);
     const readdirSpy = vi
       .spyOn(fs.promises, 'readdir')
       .mockResolvedValueOnce([
@@ -2550,24 +2562,75 @@ describe('registerProjectHandlers', () => {
     expect(resolveStartDir()).toEqual({ resolvedPath: homeDir });
     expect(resolveStartDir()).toEqual({ resolvedPath: homeDir });
 
-    await expect(listDirectories(undefined, { dirPath: '/tmp' })).resolves.toEqual({
+    const listRoot = path.join(homeDir, 'projects');
+    await expect(listDirectories(undefined, { dirPath: listRoot })).resolves.toEqual({
       entries: [
-        { name: 'alpha', absolutePath: '/tmp/alpha' },
-        { name: 'zeta', absolutePath: '/tmp/zeta' },
+        { name: 'alpha', absolutePath: path.join(listRoot, 'alpha') },
+        { name: 'zeta', absolutePath: path.join(listRoot, 'zeta') },
       ],
       error: null,
     });
-    await expect(listDirectories(undefined, { dirPath: '/missing' })).resolves.toEqual({
+    // Outside home / start root is denied without consuming readdir mocks.
+    await expect(listDirectories(undefined, { dirPath: '/etc' })).resolves.toEqual({
+      entries: [],
+      error: 'permission-denied',
+    });
+    await expect(
+      listDirectories(undefined, { dirPath: path.join(homeDir, 'missing') }),
+    ).resolves.toEqual({
       entries: [],
       error: 'not-found',
     });
-    await expect(listDirectories(undefined, { dirPath: '/denied' })).resolves.toEqual({
+    await expect(
+      listDirectories(undefined, { dirPath: path.join(homeDir, 'denied') }),
+    ).resolves.toEqual({
       entries: [],
       error: 'permission-denied',
     });
 
     existsSpy.mockRestore();
     readdirSpy.mockRestore();
+    realpathSpy.mockRestore();
+  });
+
+  it('denies a home-rooted symlink that escapes to an unallowed directory', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-list-escape-'));
+    const home = path.join(root, 'home');
+    const outside = path.join(root, 'outside');
+    fs.mkdirSync(home, { recursive: true });
+    fs.mkdirSync(path.join(outside, 'secrets'), { recursive: true });
+    // Lexically inside $HOME, canonically outside it — readdir() would follow it.
+    fs.symlinkSync(outside, path.join(home, 'escape'), 'dir');
+    fs.mkdirSync(path.join(home, 'real', 'child'), { recursive: true });
+
+    const homeSpy = vi.spyOn(os, 'homedir').mockReturnValue(home);
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: { projects: {}, settings: { get: vi.fn().mockReturnValue({}) } } as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+    const listDirectories = handlers.get('fs:list-directories');
+    if (!listDirectories) throw new Error('fs:list-directories not registered');
+
+    await expect(
+      listDirectories(undefined, { dirPath: path.join(home, 'escape') }),
+    ).resolves.toEqual({ entries: [], error: 'permission-denied' });
+    // A genuine directory under home still lists, addressed by its canonical path.
+    const realHome = await fs.promises.realpath(home);
+    await expect(listDirectories(undefined, { dirPath: path.join(home, 'real') })).resolves.toEqual(
+      {
+        entries: [{ name: 'child', absolutePath: path.join(realHome, 'real', 'child') }],
+        error: null,
+      },
+    );
+
+    homeSpy.mockRestore();
+    fs.rmSync(root, { recursive: true, force: true });
   });
 
   it('lists code tree entries with ignore filtering, sorting, sizes, and dirty markers', async () => {
@@ -4128,8 +4191,18 @@ describe('registerProjectHandlers', () => {
         projectId: project.id,
         routing,
       }),
-    ).resolves.toMatchObject(routing);
-    expect(queries.projects.updateNotificationRouting).toHaveBeenCalledWith(project.id, routing);
+    ).resolves.toMatchObject({
+      ...routing,
+      // Renderer never sees the secret — empty string marks "configured".
+      discordWebhookUrlOverride: '',
+    });
+    expect(queries.projects.updateNotificationRouting).toHaveBeenCalledWith(project.id, {
+      ...routing,
+      discordWebhookUrlOverride: `safe-storage:v1:${Buffer.from(
+        routing.discordWebhookUrlOverride ?? '',
+        'utf8',
+      ).toString('base64')}`,
+    });
 
     expect(
       handlers.get('project:set-require-approval')?.(undefined, {
@@ -4178,6 +4251,56 @@ describe('registerProjectHandlers', () => {
       }),
     ).toMatchObject({ notifyGithubUser: 'vincent' });
     expect(queries.projects.updateNotifyGithubUser).toHaveBeenCalledWith(project.id, 'vincent');
+  });
+
+  it('keeps the stored discord webhook when the renderer echoes the redacted marker', async () => {
+    const stored = 'safe-storage:v1:c3RvcmVk';
+    const project = { ...baseProject, discordWebhookUrlOverride: stored };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => project),
+        updateNotificationRouting: vi.fn(),
+      },
+      settings: { get: vi.fn(() => ({ projectOpenTarget: 'cursor' })) },
+    };
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+    const setRouting = handlers.get('project:set-notification-routing');
+    if (!setRouting) throw new Error('project:set-notification-routing not registered');
+    const base = {
+      discordRouting: 'override' as const,
+      telegramRouting: 'inherit' as const,
+      telegramChatIdOverride: null,
+    };
+
+    // '' is the redacted "configured" marker from the read model — a routing
+    // save that echoes it back must not wipe the ciphertext.
+    await setRouting(undefined, {
+      projectId: project.id,
+      routing: { ...base, discordWebhookUrlOverride: '' },
+    });
+    expect(queries.projects.updateNotificationRouting).toHaveBeenLastCalledWith(project.id, {
+      ...base,
+      discordWebhookUrlOverride: stored,
+    });
+
+    // null is the only explicit clear.
+    await setRouting(undefined, {
+      projectId: project.id,
+      routing: { ...base, discordWebhookUrlOverride: null },
+    });
+    expect(queries.projects.updateNotificationRouting).toHaveBeenLastCalledWith(project.id, {
+      ...base,
+      discordWebhookUrlOverride: null,
+    });
   });
 
   it('covers project handler fallback branches for setup, dialogs, openers, removal, and worktree diffs', async () => {
@@ -4573,8 +4696,12 @@ describe('registerProjectHandlers', () => {
     existsSpy.mockReturnValueOnce(false);
     settings.addProjectStartsIn = '/missing/path';
     expect(handlers.get('fs:resolve-start-dir')?.()).toEqual({ resolvedPath: '/home/vincent' });
-    homeSpy.mockRestore();
 
+    // These paths are synthetic, so canonicalization is identity here; the real
+    // symlink-containment behaviour is covered by its own test below.
+    const realpathSpy = vi
+      .spyOn(fsp, 'realpath')
+      .mockImplementation(async (p) => p as unknown as string);
     const readdirSpy = vi.spyOn(fsp, 'readdir');
     readdirSpy.mockResolvedValueOnce([
       { name: 'zeta', isDirectory: () => true },
@@ -4583,23 +4710,35 @@ describe('registerProjectHandlers', () => {
       { name: 'alpha', isDirectory: () => true },
     ] as never);
     await expect(
-      handlers.get('fs:list-directories')?.(undefined, { dirPath: '/tmp/root' }),
+      handlers.get('fs:list-directories')?.(undefined, {
+        dirPath: '/home/vincent/projects',
+      }),
     ).resolves.toEqual({
       entries: [
-        { name: 'alpha', absolutePath: path.join('/tmp/root', 'alpha') },
-        { name: 'zeta', absolutePath: path.join('/tmp/root', 'zeta') },
+        { name: 'alpha', absolutePath: path.join('/home/vincent/projects', 'alpha') },
+        { name: 'zeta', absolutePath: path.join('/home/vincent/projects', 'zeta') },
       ],
       error: null,
     });
+    // Outside home + start root is denied.
+    await expect(
+      handlers.get('fs:list-directories')?.(undefined, { dirPath: '/etc' }),
+    ).resolves.toEqual({ entries: [], error: 'permission-denied' });
     readdirSpy.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }));
     await expect(
-      handlers.get('fs:list-directories')?.(undefined, { dirPath: '/tmp/missing' }),
+      handlers.get('fs:list-directories')?.(undefined, {
+        dirPath: '/home/vincent/missing',
+      }),
     ).resolves.toEqual({ entries: [], error: 'not-found' });
     readdirSpy.mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'EACCES' }));
     await expect(
-      handlers.get('fs:list-directories')?.(undefined, { dirPath: '/tmp/denied' }),
+      handlers.get('fs:list-directories')?.(undefined, {
+        dirPath: '/home/vincent/denied',
+      }),
     ).resolves.toEqual({ entries: [], error: 'permission-denied' });
     readdirSpy.mockRestore();
+    realpathSpy.mockRestore();
+    homeSpy.mockRestore();
 
     await handlers.get('shell:open-external')?.(undefined, {
       url: 'https://github.com/shipshitdev/shipcode',

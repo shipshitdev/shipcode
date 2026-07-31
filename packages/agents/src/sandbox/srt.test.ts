@@ -56,9 +56,21 @@ describe('buildSrtPolicy', () => {
     expect(policy.filesystem.allowWrite).toContain('/data/cache');
     expect(policy.filesystem.allowWrite).toContain('~/scratch');
     expect(policy.filesystem.allowWrite).not.toContain('relative/should-drop');
-    // Secrets are read-denied.
+    // Secrets and ShipCode/app state are read-denied.
     expect(policy.filesystem.denyRead).toEqual(
-      expect.arrayContaining(['~/.ssh', '~/.aws', '~/.gitconfig', '~/.docker']),
+      expect.arrayContaining([
+        '~/.ssh',
+        '~/.aws',
+        '~/.gitconfig',
+        '~/.docker',
+        '~/.shipcode',
+        '~/.codex',
+        '~/.cursor',
+        '~/.config/shipcode',
+        '~/.local/share/shipcode',
+        '~/Library/Application Support/shipcode',
+        '~/Library/Application Support/ShipCode',
+      ]),
     );
 
     await cleanup();

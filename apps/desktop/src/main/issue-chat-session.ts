@@ -1,5 +1,10 @@
 import crypto from 'node:crypto';
-import { extractCodexThreadId, resolveCliText, StreamParser } from '@shipcode/agents';
+import {
+  extractCodexThreadId,
+  parseJsonResultWithNdjsonFallback,
+  resolveCliText,
+  StreamParser,
+} from '@shipcode/agents';
 import { WorktreeManager } from '@shipcode/git';
 import {
   clampError,
@@ -14,7 +19,7 @@ import type { BrowserWindow } from 'electron';
 import type { IpcHandlerDeps, Queries } from './ipc/types';
 import log from './logger.service';
 
-type IssueChatProvider = 'claude' | 'codex';
+export type IssueChatProvider = 'claude' | 'codex' | 'grok';
 
 export interface StartIssueChatArgs {
   threadId: string;
@@ -77,13 +82,15 @@ interface IssueChatSession {
 const ISSUE_CHAT_PHASE = 'issue_chat';
 const sessions = new Map<string, IssueChatSession>();
 
-function providerLabel(provider: IssueChatProvider): 'claude-cli' | 'codex-cli' {
-  return provider === 'claude' ? 'claude-cli' : 'codex-cli';
+function providerLabel(provider: IssueChatProvider): 'claude-cli' | 'codex-cli' | 'grok-cli' {
+  if (provider === 'claude') return 'claude-cli';
+  if (provider === 'codex') return 'codex-cli';
+  return 'grok-cli';
 }
 
 function ensureIssueChatProvider(provider: string): IssueChatProvider {
-  if (provider === 'claude' || provider === 'codex') return provider;
-  throw new Error(`Issue chat provider must be claude or codex, got ${provider}`);
+  if (provider === 'claude' || provider === 'codex' || provider === 'grok') return provider;
+  throw new Error(`Issue chat provider must be claude, codex, or grok, got ${provider}`);
 }
 
 function normalizeSpeaker(input: string | undefined): string {
@@ -149,6 +156,42 @@ function buildCodexArgs(session: IssueChatSession): string[] {
   return session.sessionId
     ? [...prefix, 'resume', session.sessionId, '-', ...suffix]
     : [...prefix, '-', ...suffix];
+}
+
+/**
+ * Grok Build headless chat. Prompt is piped on stdin (same transport as the
+ * pipeline execute provider). Chat always auto-approves tools because the
+ * session is already isolated to the issue worktree.
+ *
+ * Resume uses `--resume <session>` when we have a provider session id; first
+ * turn allocates a UUID via `--session-id` (same pattern as Claude chat).
+ */
+function buildGrokArgs(session: IssueChatSession): {
+  args: string[];
+  pendingSessionId: string | null;
+} {
+  const modelArgs = session.modelId ? ['--model', session.modelId] : [];
+  const common = [...modelArgs, '--output-format', 'json', '--always-approve'];
+  if (session.sessionId) {
+    return {
+      args: ['-p', '--resume', session.sessionId, ...common],
+      pendingSessionId: null,
+    };
+  }
+  const sessionId = crypto.randomUUID();
+  return {
+    args: ['-p', '--session-id', sessionId, ...common],
+    pendingSessionId: sessionId,
+  };
+}
+
+function buildProviderArgs(session: IssueChatSession): {
+  args: string[];
+  pendingSessionId: string | null;
+} {
+  if (session.provider === 'claude') return buildClaudeArgs(session);
+  if (session.provider === 'grok') return buildGrokArgs(session);
+  return { args: buildCodexArgs(session), pendingSessionId: null };
 }
 
 function buildTurnPrompt(input: {
@@ -263,21 +306,54 @@ async function ensureThreadWorktree(input: {
 
 function resolveResponseContent(rawOutput: string, exitCode: number, provider: IssueChatProvider) {
   const cleanRaw = StreamParser.stripSystemEvents(rawOutput);
-  const content = resolveCliText(cleanRaw).trim() || stripAnsi(cleanRaw).trim();
+  let content = resolveCliText(cleanRaw).trim() || stripAnsi(cleanRaw).trim();
+  if (provider === 'grok') {
+    // Prefer the shared Grok/cursor JSON envelope parse so chat matches pipeline execute.
+    const parsed = parseJsonResultWithNdjsonFallback(rawOutput, {
+      resultFieldNames: ['result', 'text', 'response', 'content', 'output'],
+      modelFieldNames: ['model', 'modelId', 'resolvedModel'],
+    });
+    if (parsed.text.trim()) content = parsed.text.trim();
+  }
   if (exitCode === 0) return content || `${provider} completed without text output.`;
 
-  const excerpt = (content || stripAnsi(cleanRaw).trim()).slice(0, 2_000);
+  // A failed turn can fall back to raw CLI output (Grok's JSON parse failure path
+  // returns cleaned stdout/stderr). Keep the full text in the main-process log and
+  // persist/return only a clamped single line.
+  const raw = content || stripAnsi(cleanRaw).trim();
+  log.error(`[issue-chat] ${provider} exited with code ${exitCode}:`, raw);
+  const excerpt = clampError(raw);
   return `[error] ${provider} exited with code ${exitCode}${excerpt ? `\n\n${excerpt}` : ''}`;
 }
 
 function parseModelAndUsage(provider: IssueChatProvider, rawOutput: string) {
   const parser = new StreamParser();
   parser.feed(rawOutput);
+  if (provider === 'codex') {
+    return {
+      model: parser.extractCodexModel() ?? parser.extractModel(),
+      usage: parser.extractUsage(),
+    };
+  }
+  if (provider === 'grok') {
+    // Grok emits a single JSON result envelope (or NDJSON). Prefer an explicit
+    // model field when present; StreamParser still covers NDJSON streams.
+    try {
+      const cleaned = stripAnsi(rawOutput).trim();
+      const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+      const model =
+        typeof parsed.model === 'string'
+          ? parsed.model
+          : typeof parsed.modelId === 'string'
+            ? parsed.modelId
+            : null;
+      if (model) return { model, usage: parser.extractUsage() };
+    } catch {
+      // fall through to stream parser
+    }
+  }
   return {
-    model:
-      provider === 'codex'
-        ? (parser.extractCodexModel() ?? parser.extractModel())
-        : parser.extractModel(),
+    model: parser.extractModel(),
     usage: parser.extractUsage(),
   };
 }
@@ -458,10 +534,7 @@ export async function sendIssueChatTurn({
     includeContext: session.sessionId == null,
     previousTurns,
   });
-  const command =
-    session.provider === 'claude'
-      ? buildClaudeArgs(session)
-      : { args: buildCodexArgs(session), pendingSessionId: null };
+  const command = buildProviderArgs(session);
   session.isProcessingTurn = true;
 
   emitTerminalEvent(mainWindow, queries, args.threadId, {
@@ -513,6 +586,7 @@ export async function sendIssueChatTurn({
   if (session.provider === 'codex') {
     session.sessionId = extractCodexThreadId(rawOutput) ?? session.sessionId;
   } else if (command.pendingSessionId && exitCode === 0) {
+    // Claude and Grok: session UUID is chosen client-side for the first turn.
     session.sessionId = command.pendingSessionId;
   }
   if (session.sessionId) {

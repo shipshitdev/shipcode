@@ -404,4 +404,96 @@ describe('issue chat session', () => {
       },
     ]);
   });
+
+  it('starts a Grok chat session and runs a turn with always-approve headless args', async () => {
+    const h = makeHarness();
+    const started = await startIssueChatSession({
+      args: { threadId: 'thread-1', provider: 'grok', modelId: 'grok-4.5' },
+      queries: h.queries as never,
+    });
+
+    expect(started).toMatchObject({
+      provider: 'grok',
+      modelId: 'grok-4.5',
+      reattached: false,
+    });
+    expect(h.queries.issueChatSessions.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: 'thread-1',
+        provider: 'grok',
+        model: 'grok-4.5',
+      }),
+    );
+
+    const resultPromise = sendIssueChatTurn({
+      args: { threadId: 'thread-1', text: 'Explain the issue' },
+      queries: h.queries as never,
+      processManager: h.processManager as never,
+      mainWindow: h.mainWindow as never,
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(h.processManager.spawnWithStdin).toHaveBeenCalledWith(
+      'grok',
+      'grok',
+      expect.arrayContaining(['-p', '--output-format', 'json', '--always-approve', '--session-id']),
+      '/tmp/shipcode-worktree',
+      expect.stringContaining('Explain the issue'),
+      'thread-1',
+      expect.any(Object),
+    );
+    h.processManager.emit(
+      'output',
+      'proc-1',
+      `${JSON.stringify({ type: 'result', result: 'Grok says hi', model: 'grok-4.5' })}\n`,
+    );
+    h.processManager.emit('exit', 'proc-1', 0);
+
+    await expect(resultPromise).resolves.toMatchObject({ content: 'Grok says hi' });
+    expect(h.conversations.at(-1)).toMatchObject({
+      phase: 'issue_chat',
+      role: 'response',
+      speaker: 'grok',
+      provider: 'grok-cli',
+      model: 'grok-4.5',
+    });
+  });
+
+  it('resumes a persisted Grok session with --resume', async () => {
+    const h = makeHarness();
+    h.queries.issueChatSessions.getByThread.mockReturnValue({
+      threadId: 'thread-1',
+      provider: 'grok',
+      sessionId: 'grok-session-1',
+      cwd: '/tmp/shipcode-worktree',
+      model: 'grok-4.5',
+      reasoningEffort: null,
+    });
+
+    await startIssueChatSession({
+      args: { threadId: 'thread-1', provider: 'grok' },
+      queries: h.queries as never,
+    });
+
+    const resultPromise = sendIssueChatTurn({
+      args: { threadId: 'thread-1', text: 'Continue' },
+      queries: h.queries as never,
+      processManager: h.processManager as never,
+      mainWindow: h.mainWindow as never,
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(h.processManager.spawnWithStdin).toHaveBeenCalledWith(
+      'grok',
+      'grok',
+      expect.arrayContaining(['-p', '--resume', 'grok-session-1', '--always-approve']),
+      '/tmp/shipcode-worktree',
+      'Continue',
+      'thread-1',
+      expect.any(Object),
+    );
+    h.processManager.emit('output', 'proc-1', `${JSON.stringify({ result: 'Continued.' })}\n`);
+    h.processManager.emit('exit', 'proc-1', 0);
+    await expect(resultPromise).resolves.toMatchObject({ content: 'Continued.' });
+  });
 });

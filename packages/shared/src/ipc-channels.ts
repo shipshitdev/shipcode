@@ -755,7 +755,7 @@ export interface IpcInvokeChannels {
     args: { threadId: string };
     result: {
       threadId: string;
-      provider: 'claude' | 'codex';
+      provider: 'claude' | 'codex' | 'grok';
       sessionId: string | null;
       modelId: string | null;
       reasoningEffort: ReasoningEffort | null;
@@ -765,13 +765,13 @@ export interface IpcInvokeChannels {
   'issue-chat:start': {
     args: {
       threadId: string;
-      provider: 'claude' | 'codex';
+      provider: 'claude' | 'codex' | 'grok';
       modelId?: string | null;
       reasoningEffort?: ReasoningEffort;
     };
     result: {
       threadId: string;
-      provider: 'claude' | 'codex';
+      provider: 'claude' | 'codex' | 'grok';
       modelId: string | null;
       sessionId: string | null;
       reasoningEffort: ReasoningEffort | null;

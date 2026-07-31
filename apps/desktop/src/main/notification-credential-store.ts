@@ -1,31 +1,51 @@
 import type { SettingsQueries } from '@shipcode/db';
 import type { AppSettings } from '@shipcode/shared';
-import { safeStorage } from 'electron';
+import {
+  decryptSecureSecret,
+  encryptSecureSecret,
+  isSecureSecretValue,
+  type SafeStorageAdapter,
+} from './secure-secret';
 
-const ENCRYPTED_VALUE_PREFIX = 'safe-storage:v1:';
 const CREDENTIAL_KEYS = ['discordWebhookUrl', 'telegramBotToken'] as const;
 
 type CredentialKey = (typeof CREDENTIAL_KEYS)[number];
 
-export interface SafeStorageAdapter {
-  isEncryptionAvailable(): boolean;
-  encryptString(plainText: string): Buffer;
-  decryptString(encrypted: Buffer): string;
-}
+export type { SafeStorageAdapter } from './secure-secret';
 
 export interface NotificationCredentialSettingsReader {
   getMainSettings(): AppSettings;
 }
 
-function isEncryptedValue(value: string): boolean {
-  return value.startsWith(ENCRYPTED_VALUE_PREFIX);
+function defaultStorage(): SafeStorageAdapter {
+  // Lazy require so unit tests can inject a SafeStorageAdapter without loading
+  // the Electron binary (which may not be downloaded in CI worktrees).
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { safeStorage } = require('electron') as {
+    safeStorage: SafeStorageAdapter;
+  };
+  return safeStorage;
 }
 
 export class NotificationCredentialStore implements NotificationCredentialSettingsReader {
+  private storage: SafeStorageAdapter | null;
+
   constructor(
     private readonly settings: SettingsQueries,
-    private readonly storage: SafeStorageAdapter = safeStorage,
-  ) {}
+    storage?: SafeStorageAdapter,
+  ) {
+    // Do not evaluate defaultStorage() as a default parameter — that runs on
+    // every construct path, including tests that never touch credentials, and
+    // forces an Electron binary download on first require.
+    this.storage = storage ?? null;
+  }
+
+  private getStorage(): SafeStorageAdapter {
+    if (!this.storage) {
+      this.storage = defaultStorage();
+    }
+    return this.storage;
+  }
 
   migratePlaintextCredentials(): void {
     const current = this.settings.get();
@@ -33,7 +53,7 @@ export class NotificationCredentialStore implements NotificationCredentialSettin
 
     for (const key of CREDENTIAL_KEYS) {
       const value = current[key];
-      if (!value || isEncryptedValue(value)) continue;
+      if (!value || isSecureSecretValue(value)) continue;
       encryptedPatch[key] = this.encrypt(value);
     }
 
@@ -47,8 +67,8 @@ export class NotificationCredentialStore implements NotificationCredentialSettin
     const current = this.settings.get();
     return {
       ...current,
-      discordWebhookUrl: this.decrypt(current.discordWebhookUrl),
-      telegramBotToken: this.decrypt(current.telegramBotToken),
+      discordWebhookUrl: this.decryptRequired(current.discordWebhookUrl),
+      telegramBotToken: this.decryptRequired(current.telegramBotToken),
     };
   }
 
@@ -73,33 +93,26 @@ export class NotificationCredentialStore implements NotificationCredentialSettin
   }
 
   private encrypt(value: string): string {
-    this.assertAvailable();
     try {
-      const encrypted = this.storage.encryptString(value);
-      return `${ENCRYPTED_VALUE_PREFIX}${encrypted.toString('base64')}`;
-    } catch {
+      return encryptSecureSecret(value, this.getStorage());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('unavailable')) {
+        throw new Error('Secure notification credential storage is unavailable');
+      }
       throw new Error('Secure notification credential encryption failed');
     }
   }
 
-  private decrypt(value: string | null): string | null {
+  private decryptRequired(value: string | null): string | null {
     if (!value) return null;
-    if (!isEncryptedValue(value)) {
+    if (!isSecureSecretValue(value)) {
       throw new Error('Notification credential migration did not complete');
     }
-
-    this.assertAvailable();
     try {
-      const encoded = value.slice(ENCRYPTED_VALUE_PREFIX.length);
-      return this.storage.decryptString(Buffer.from(encoded, 'base64'));
+      return decryptSecureSecret(value, this.getStorage());
     } catch {
       throw new Error('Secure notification credential decryption failed');
-    }
-  }
-
-  private assertAvailable(): void {
-    if (!this.storage.isEncryptionAvailable()) {
-      throw new Error('Secure notification credential storage is unavailable');
     }
   }
 }

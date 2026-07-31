@@ -64,13 +64,56 @@ export function registerProjectCodeBrowserHandlers({
   ]);
   const CODE_FILE_MAX_BYTES = 512 * 1024;
 
-  function resolveWithinWorktree(worktreePath: string, relativePath: string): string {
+  /**
+   * Resolve a relative path under a worktree and reject symlink escapes.
+   * String prefix checks alone are insufficient: `fs.readFile` follows
+   * symlinks, so a worktree-internal link to `/etc/passwd` would otherwise
+   * be readable via `code:read-file`.
+   */
+  async function resolveWithinWorktree(
+    worktreePath: string,
+    relativePath: string,
+  ): Promise<string> {
     const normalizedWorktree = path.resolve(worktreePath);
-    const target = path.resolve(normalizedWorktree, relativePath);
-    if (target !== normalizedWorktree && !target.startsWith(`${normalizedWorktree}${path.sep}`)) {
+    let worktreeReal: string;
+    try {
+      worktreeReal = await fsp.realpath(normalizedWorktree);
+    } catch {
+      throw new Error('Worktree path does not exist');
+    }
+
+    const candidate = path.resolve(worktreeReal, relativePath ?? '.');
+    // Lexical check first (fast reject for `../` escapes before any I/O).
+    if (candidate !== worktreeReal && !candidate.startsWith(`${worktreeReal}${path.sep}`)) {
       throw new Error('Path escapes worktree');
     }
-    return target;
+
+    try {
+      const realTarget = await fsp.realpath(candidate);
+      if (realTarget !== worktreeReal && !realTarget.startsWith(`${worktreeReal}${path.sep}`)) {
+        throw new Error('Path escapes worktree');
+      }
+      return realTarget;
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Path escapes worktree') throw error;
+      // Target may not exist yet (e.g. listing empty / missing leaf). Validate
+      // the nearest existing ancestor stays inside the worktree.
+      let cursor = path.dirname(candidate);
+      while (cursor.startsWith(worktreeReal)) {
+        try {
+          const realCursor = await fsp.realpath(cursor);
+          if (realCursor !== worktreeReal && !realCursor.startsWith(`${worktreeReal}${path.sep}`)) {
+            throw new Error('Path escapes worktree');
+          }
+          return candidate;
+        } catch (inner) {
+          if (inner instanceof Error && inner.message === 'Path escapes worktree') throw inner;
+          if (cursor === worktreeReal) break;
+          cursor = path.dirname(cursor);
+        }
+      }
+      throw new Error('Path escapes worktree');
+    }
   }
 
   async function assertWorktreeBelongsToProject(
@@ -101,7 +144,7 @@ export function registerProjectCodeBrowserHandlers({
       if (!project) throw new Error(`Project ${projectId} not found`);
       await assertWorktreeBelongsToProject(project, worktreePath);
 
-      const dirPath = resolveWithinWorktree(worktreePath, relativePath ?? '.');
+      const dirPath = await resolveWithinWorktree(worktreePath, relativePath ?? '.');
       const dirStat = await fsp.stat(dirPath).catch(() => null);
       if (!dirStat?.isDirectory()) {
         throw new Error('Not a directory');
@@ -179,7 +222,7 @@ export function registerProjectCodeBrowserHandlers({
       if (!project) throw new Error(`Project ${projectId} not found`);
       await assertWorktreeBelongsToProject(project, worktreePath);
 
-      const filePath = resolveWithinWorktree(worktreePath, relativePath);
+      const filePath = await resolveWithinWorktree(worktreePath, relativePath);
       const stat = await fsp.stat(filePath);
       if (!stat.isFile()) throw new Error('Not a file');
 
@@ -219,7 +262,7 @@ export function registerProjectCodeBrowserHandlers({
       const project = enrichProjectPath(queries.projects.getById(projectId));
       if (!project) throw new Error(`Project ${projectId} not found`);
       await assertWorktreeBelongsToProject(project, worktreePath);
-      resolveWithinWorktree(worktreePath, relativePath);
+      await resolveWithinWorktree(worktreePath, relativePath);
 
       try {
         const { stdout } = await execFileAsync('git', ['diff', 'HEAD', '--', relativePath], {

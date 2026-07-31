@@ -106,6 +106,7 @@ describe('pipeline CLI commands', () => {
         getIssue: ghGetIssueMock,
       },
       threads: {
+        getById: vi.fn(() => ({ id: 'thread-1', status: 'approval' })),
         getByProjectAndGithubIssue: getThreadByIssueMock,
       },
       githubIssues: {
@@ -137,6 +138,7 @@ describe('pipeline CLI commands', () => {
           executorReasoningEffortOverride: null,
           verifierReasoningEffortOverride: null,
           revisionCountOverride: null,
+          requireApprovalOverride: null,
           linkedPrNumber: null,
           linkedPrUrl: null,
           linkedPrIsDraft: false,
@@ -151,6 +153,7 @@ describe('pipeline CLI commands', () => {
           priorityFetchedAt: null,
         })),
         updatePipelineStatus: vi.fn(),
+        updateRequireApprovalOverride: vi.fn(),
       },
       settings: {
         get: vi.fn(() => ({
@@ -283,7 +286,17 @@ describe('pipeline CLI commands', () => {
 
   it('falls back to codex routing and exits if plan command cannot find the thread', async () => {
     routeFromLabelsMock.mockReturnValueOnce({ error: 'bad label' });
-    getThreadByIssueMock.mockReturnValueOnce(null);
+    const base = createCliContextMock();
+    createCliContextMock.mockReturnValueOnce({
+      ...base,
+      threads: {
+        getById: vi
+          .fn()
+          .mockReturnValueOnce({ id: 'thread-1', status: 'approval' })
+          .mockReturnValue(null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    });
 
     await expect(planCommand('42')).rejects.toThrow('process.exit:1');
 

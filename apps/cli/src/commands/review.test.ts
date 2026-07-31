@@ -81,7 +81,11 @@ describe('reviewCommand', () => {
     });
     createPipelineMock.mockReturnValue({});
     launchIssuePipelineMock.mockResolvedValue({ id: 'thread-1' });
-    upsertIssueMock.mockReturnValue({ id: 'issue-cache-7', issueNumber: 7 });
+    upsertIssueMock.mockReturnValue({
+      id: 'issue-cache-7',
+      issueNumber: 7,
+      requireApprovalOverride: null,
+    });
     createCliContextMock.mockReturnValue({
       project: {
         id: 'project-1',
@@ -93,10 +97,12 @@ describe('reviewCommand', () => {
         getIssue: ghGetIssueMock,
       },
       threads: {
+        getById: vi.fn(() => ({ id: 'thread-1', status: 'approval' })),
         getByProjectAndGithubIssue: getThreadByIssueMock,
       },
       githubIssues: {
         upsert: upsertIssueMock,
+        updateRequireApprovalOverride: vi.fn(),
       },
       settings: {
         get: vi.fn(() => ({ executorReasoningEffort: 'high' })),
@@ -135,7 +141,11 @@ describe('reviewCommand', () => {
     expect(launchIssuePipelineMock).toHaveBeenCalledWith(
       expect.objectContaining({ pipeline: expect.any(Object) }),
       expect.objectContaining({
-        issue: { id: 'issue-cache-7', issueNumber: 7 },
+        issue: expect.objectContaining({
+          id: 'issue-cache-7',
+          issueNumber: 7,
+          requireApprovalOverride: true,
+        }),
         phaseModels: expect.objectContaining({
           executorModel: 'codex',
           executorModelId: 'gpt-5.4',
@@ -188,7 +198,17 @@ describe('reviewCommand', () => {
   });
 
   it('exits when the pipeline run does not persist a thread', async () => {
-    getThreadByIssueMock.mockReturnValueOnce(null);
+    const base = createCliContextMock();
+    createCliContextMock.mockReturnValueOnce({
+      ...base,
+      threads: {
+        getById: vi
+          .fn()
+          .mockReturnValueOnce({ id: 'thread-1', status: 'approval' })
+          .mockReturnValue(null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    });
 
     await expect(reviewCommand('7')).rejects.toThrow('process.exit:1');
 

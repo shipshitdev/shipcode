@@ -52,11 +52,12 @@ import {
   validateGithubProjectUrl,
 } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
-import { app, dialog, shell } from 'electron';
+import { app, dialog, safeStorage, shell } from 'electron';
 import { runAutoCommitWorkflow, runCleanupAnalyze, runCleanupApply } from '../git-workflows';
 import { applyLaunchAtLoginSetting } from '../launch-at-login';
 import log from '../logger.service';
 import { NotificationCredentialStore } from '../notification-credential-store';
+import { encryptSecureSecret, isSecureSecretValue } from '../secure-secret';
 import { isSafeExternalUrl } from '../security';
 import { configureMainTelemetry, getTelemetryStatus } from '../telemetry';
 import { isWorktreeLocked, withWorktreeLock } from '../worktree-locks';
@@ -1272,11 +1273,48 @@ export function registerProjectHandlers({
 
   ipcMain.handle('fs:list-directories', async (_event, { dirPath }: { dirPath: string }) => {
     try {
-      const entries = await fsp.readdir(dirPath, { withFileTypes: true });
+      // Directory browser is only for Add Project. Bound it to the user's home
+      // (and explicit addProjectStartsIn root when absolute) so a compromised
+      // renderer cannot enumerate arbitrary system paths.
+      if (typeof dirPath !== 'string' || !path.isAbsolute(dirPath)) {
+        return { entries: [], error: 'permission-denied' as const };
+      }
+      const resolved = path.resolve(dirPath);
+      const home = path.resolve(os.homedir());
+      const settings = queries.settings.get();
+      const startRaw = settings.addProjectStartsIn?.trim() || '';
+      let startRoot = home;
+      if (startRaw && startRaw !== '~') {
+        if (startRaw.startsWith('~/')) {
+          startRoot = path.resolve(path.join(home, startRaw.slice(2)));
+        } else if (path.isAbsolute(startRaw)) {
+          startRoot = path.resolve(startRaw);
+        }
+      }
+      // Containment must hold on the canonical path: a symlink under $HOME can
+      // point at /etc and still pass a lexical prefix check, and readdir()
+      // follows it. Canonicalize both the request and the allowed roots first.
+      const canonical = await fsp.realpath(resolved);
+      const canonicalRoot = async (root: string) => {
+        try {
+          return await fsp.realpath(root);
+        } catch {
+          return root;
+        }
+      };
+      const canonicalHome = await canonicalRoot(home);
+      const canonicalStartRoot = await canonicalRoot(startRoot);
+      const under = (root: string) =>
+        canonical === root || canonical.startsWith(`${root}${path.sep}`);
+      if (!under(canonicalHome) && !under(canonicalStartRoot)) {
+        return { entries: [], error: 'permission-denied' as const };
+      }
+
+      const entries = await fsp.readdir(canonical, { withFileTypes: true });
       const dirs = entries
         .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((e) => ({ name: e.name, absolutePath: path.join(dirPath, e.name) }));
+        .map((e) => ({ name: e.name, absolutePath: path.join(canonical, e.name) }));
       return { entries: dirs, error: null };
     } catch (err: unknown) {
       const code = (err as NodeJS.ErrnoException).code;
@@ -1611,7 +1649,31 @@ export function registerProjectHandlers({
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
 
-      queries.projects.updateNotificationRouting(projectId, routing);
+      // The renderer never sees the stored webhook: redactProjectSecrets encodes
+      // "configured" as '' and "unset" as null. So '' means "keep what is stored"
+      // — treating it as a clear would wipe the secret on any unrelated routing
+      // save. Only an explicit null clears the override.
+      const submitted = routing.discordWebhookUrlOverride;
+      const nextWebhook =
+        submitted == null
+          ? null
+          : submitted.trim() === ''
+            ? (project.discordWebhookUrlOverride ?? null)
+            : submitted.trim();
+      const encryptedRouting = {
+        ...routing,
+        // Encrypt at the IPC boundary so SQLite never stores a cleartext project
+        // Discord webhook. Retained legacy cleartext is upgraded here too. Pass
+        // the imported safeStorage so unit tests' electron mock is used (lazy
+        // require() would bypass vitest mocks and hit the real package).
+        discordWebhookUrlOverride: nextWebhook
+          ? isSecureSecretValue(nextWebhook)
+            ? nextWebhook
+            : encryptSecureSecret(nextWebhook, safeStorage)
+          : null,
+      };
+
+      queries.projects.updateNotificationRouting(projectId, encryptedRouting);
       const updated = enrichProjectPath(queries.projects.getById(projectId));
       if (!updated) {
         throw new Error(`Project ${projectId} not found after notification routing update`);

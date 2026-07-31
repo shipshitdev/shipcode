@@ -5,38 +5,8 @@ import type {
   IssueGraphNodeRecord,
   ProjectIssueGraph,
 } from '@shipcode/shared';
-import { ISO_NOW_SQL } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows, transaction } from '../utils';
-
-const ISSUE_EDGES_SCHEMA_SQL = `
-  CREATE TABLE IF NOT EXISTS issue_edges (
-    id TEXT PRIMARY KEY,
-    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    source_issue_id TEXT NOT NULL REFERENCES github_issue_cache(id) ON DELETE CASCADE,
-    target_issue_id TEXT NOT NULL REFERENCES github_issue_cache(id) ON DELETE CASCADE,
-    edge_type TEXT NOT NULL CHECK (edge_type IN ('blocks', 'depends_on', 'reference')),
-    origin TEXT NOT NULL CHECK (origin IN ('body', 'manual')),
-    source_body_issue_id TEXT REFERENCES github_issue_cache(id) ON DELETE CASCADE,
-    created_at TEXT NOT NULL DEFAULT (${ISO_NOW_SQL}),
-    updated_at TEXT NOT NULL DEFAULT (${ISO_NOW_SQL}),
-    CHECK (source_issue_id <> target_issue_id)
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_issue_edges_project ON issue_edges(project_id);
-  CREATE INDEX IF NOT EXISTS idx_issue_edges_source ON issue_edges(source_issue_id);
-  CREATE INDEX IF NOT EXISTS idx_issue_edges_target ON issue_edges(target_issue_id);
-  CREATE INDEX IF NOT EXISTS idx_issue_edges_type ON issue_edges(edge_type);
-  CREATE INDEX IF NOT EXISTS idx_issue_edges_source_body ON issue_edges(source_body_issue_id);
-
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_issue_edges_unique_manual
-    ON issue_edges(project_id, source_issue_id, target_issue_id, edge_type, origin)
-    WHERE source_body_issue_id IS NULL;
-
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_issue_edges_unique_body
-    ON issue_edges(project_id, source_issue_id, target_issue_id, edge_type, origin, source_body_issue_id)
-    WHERE source_body_issue_id IS NOT NULL;
-`;
 
 interface IssueEdgeRow {
   id: string;
@@ -62,9 +32,7 @@ interface IssueNodeRow {
 }
 
 export class IssueEdgeQueries {
-  constructor(private db: DatabaseSync) {
-    this.db.exec(ISSUE_EDGES_SCHEMA_SQL);
-  }
+  constructor(private db: DatabaseSync) {}
 
   loadProjectGraph(projectId: string): ProjectIssueGraph {
     const nodeRows = this.db

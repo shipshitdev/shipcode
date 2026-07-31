@@ -104,7 +104,6 @@ export {
   listMemoryFiles,
   readMemoryFile,
 } from './memory-generator';
-export { loadRepoMemory } from './memory-loader';
 export type { EnhancePrdOptions, GeneratedPrd } from './prd-generator';
 export { buildPrdPrompt, enhancePrdDraft, extractPrd } from './prd-generator';
 export type { ManagedProcess, ManagedProcessResourceUsage } from './process-manager';
@@ -212,6 +211,10 @@ export {
 export * from './providers';
 export { ClaudeNormalizer } from './providers/normalizers/claude-normalizer';
 export { CodexNormalizer } from './providers/normalizers/codex-normalizer';
+export {
+  type JsonResultEnvelope,
+  parseJsonResultWithNdjsonFallback,
+} from './providers/stdin-cli-runner';
 export type { LoadedRepoSetupContract } from './repo-setup-contract';
 export { loadRepoSetupContract } from './repo-setup-contract';
 export type {

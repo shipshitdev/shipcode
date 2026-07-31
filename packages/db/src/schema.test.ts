@@ -43,6 +43,8 @@ import {
   migrateV62,
   migrateV65,
   migrateV66,
+  migrateV67,
+  migrateV68,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -1571,5 +1573,99 @@ describe('migrateV66', () => {
   it('is idempotent', () => {
     migrateThrough(db, migrateV66);
     expect(() => migrateV66(db)).not.toThrow();
+  });
+});
+
+describe('migrateV67', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('creates issue_edges without requiring IssueEdgeQueries construction', () => {
+    migrateThrough(db, migrateV66);
+    expect(tableExists(db, 'issue_edges')).toBe(false);
+
+    migrateV67(db);
+
+    expect(tableExists(db, 'issue_edges')).toBe(true);
+    expect(indexExists(db, 'idx_issue_edges_project')).toBe(true);
+    expect(indexExists(db, 'idx_issue_edges_unique_manual')).toBe(true);
+    expect(
+      (
+        db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as {
+          version: number;
+        }
+      ).version,
+    ).toBe(67);
+  });
+
+  it('is idempotent', () => {
+    migrateThrough(db, migrateV67);
+    expect(() => migrateV67(db)).not.toThrow();
+  });
+});
+
+describe('migrateV68', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('allows grok as an issue_chat_sessions provider and preserves rows', () => {
+    migrateThrough(db, migrateV67);
+    // Seed a pre-v68 row (claude/codex only) so the rebuild path is exercised.
+    db.exec(`
+      INSERT INTO projects (id, name, path, git_remote, default_branch, created_at, updated_at)
+      VALUES ('p1', 't', '/tmp', 'git@x', 'main', datetime('now'), datetime('now'));
+      INSERT INTO threads (id, project_id, prompt, title, status, created_at, updated_at)
+      VALUES ('t1', 'p1', 'go', 'T', 'idle', datetime('now'), datetime('now'));
+      INSERT INTO issue_chat_sessions (thread_id, provider, session_id, cwd)
+      VALUES ('t1', 'claude', 's1', '/tmp/wt');
+    `);
+
+    migrateV68(db);
+
+    expect(
+      (
+        db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as {
+          version: number;
+        }
+      ).version,
+    ).toBe(68);
+    expect(
+      (
+        db
+          .prepare("SELECT provider, session_id FROM issue_chat_sessions WHERE thread_id = 't1'")
+          .get() as { provider: string; session_id: string }
+      ).session_id,
+    ).toBe('s1');
+
+    db.exec(`
+      INSERT INTO threads (id, project_id, prompt, title, status, created_at, updated_at)
+      VALUES ('t2', 'p1', 'go', 'T2', 'idle', datetime('now'), datetime('now'));
+    `);
+    expect(() =>
+      db
+        .prepare(
+          "INSERT INTO issue_chat_sessions (thread_id, provider, cwd) VALUES ('t2', 'grok', '/tmp/wt')",
+        )
+        .run(),
+    ).not.toThrow();
+  });
+
+  it('is idempotent', () => {
+    migrateThrough(db, migrateV68);
+    expect(() => migrateV68(db)).not.toThrow();
   });
 });

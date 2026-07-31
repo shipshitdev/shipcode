@@ -144,3 +144,93 @@ export function migrateV66(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (66)`);
   });
 }
+
+/**
+ * Promote issue_edges from constructor-side DDL into the numbered migration
+ * chain so every entry point (desktop, CLI, tests) has the same schema after
+ * getDatabase/runMigrations — without requiring IssueEdgeQueries construction.
+ */
+export function migrateV67(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 67) return;
+
+  transaction(db, () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS issue_edges (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        source_issue_id TEXT NOT NULL REFERENCES github_issue_cache(id) ON DELETE CASCADE,
+        target_issue_id TEXT NOT NULL REFERENCES github_issue_cache(id) ON DELETE CASCADE,
+        edge_type TEXT NOT NULL CHECK (edge_type IN ('blocks', 'depends_on', 'reference')),
+        origin TEXT NOT NULL CHECK (origin IN ('body', 'manual')),
+        source_body_issue_id TEXT REFERENCES github_issue_cache(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        -- Body-derived edges always carry their source issue; manual edges never do.
+        -- The query layer relies on this to scope cleanup and uniqueness by origin.
+        CHECK (
+          (origin = 'body' AND source_body_issue_id IS NOT NULL)
+          OR (origin = 'manual' AND source_body_issue_id IS NULL)
+        ),
+        CHECK (source_issue_id <> target_issue_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_issue_edges_project ON issue_edges(project_id);
+      CREATE INDEX IF NOT EXISTS idx_issue_edges_source ON issue_edges(source_issue_id);
+      CREATE INDEX IF NOT EXISTS idx_issue_edges_target ON issue_edges(target_issue_id);
+      CREATE INDEX IF NOT EXISTS idx_issue_edges_type ON issue_edges(edge_type);
+      CREATE INDEX IF NOT EXISTS idx_issue_edges_source_body ON issue_edges(source_body_issue_id);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_issue_edges_unique_manual
+        ON issue_edges(project_id, source_issue_id, target_issue_id, edge_type, origin)
+        WHERE origin = 'manual';
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_issue_edges_unique_body
+        ON issue_edges(project_id, source_issue_id, target_issue_id, edge_type, origin, source_body_issue_id)
+        WHERE origin = 'body';
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (67)`);
+  });
+}
+
+/**
+ * Expand issue_chat_sessions.provider CHECK to include Grok Build (`grok`).
+ * SQLite cannot alter CHECK constraints in place — rebuild the table.
+ */
+export function migrateV68(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 68) return;
+
+  transaction(db, () => {
+    db.exec(`
+      CREATE TABLE issue_chat_sessions_v68 (
+        thread_id        TEXT PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
+        provider         TEXT NOT NULL CHECK(provider IN ('claude', 'codex', 'grok')),
+        session_id       TEXT,
+        cwd              TEXT NOT NULL,
+        model            TEXT,
+        reasoning_effort TEXT,
+        created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      INSERT INTO issue_chat_sessions_v68
+        (thread_id, provider, session_id, cwd, model, reasoning_effort, created_at, updated_at)
+      SELECT thread_id, provider, session_id, cwd, model, reasoning_effort, created_at, updated_at
+        FROM issue_chat_sessions;
+
+      DROP TABLE issue_chat_sessions;
+      ALTER TABLE issue_chat_sessions_v68 RENAME TO issue_chat_sessions;
+
+      CREATE INDEX IF NOT EXISTS idx_issue_chat_sessions_updated
+        ON issue_chat_sessions(updated_at DESC);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (68)`);
+  });
+}

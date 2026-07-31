@@ -375,6 +375,23 @@ describe('phase option helpers', () => {
   });
 });
 
+describe('PHASE_PROVIDER_OPTIONS', () => {
+  it('matches PHASE_DESCRIPTORS validProviders (Cursor/Grok execute-only)', async () => {
+    const { PHASE_DESCRIPTORS } = await import('@shipcode/shared');
+    const { PHASE_PROVIDER_OPTIONS } = await import('./helpers');
+
+    for (const descriptor of PHASE_DESCRIPTORS) {
+      expect(PHASE_PROVIDER_OPTIONS[descriptor.key]).toEqual([...descriptor.validProviders]);
+    }
+    expect(PHASE_PROVIDER_OPTIONS.planner).not.toContain('cursor');
+    expect(PHASE_PROVIDER_OPTIONS.planner).not.toContain('grok');
+    expect(PHASE_PROVIDER_OPTIONS.reviewer).not.toContain('cursor');
+    expect(PHASE_PROVIDER_OPTIONS.verifier).not.toContain('grok');
+    expect(PHASE_PROVIDER_OPTIONS.executor).toContain('cursor');
+    expect(PHASE_PROVIDER_OPTIONS.executor).toContain('grok');
+  });
+});
+
 describe('diagnosePlanParseFailure', () => {
   it('returns no-fence message for empty input', () => {
     expect(diagnosePlanParseFailure('')).toContain('no shipcode-plan fence');

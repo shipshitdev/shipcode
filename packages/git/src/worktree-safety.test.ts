@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -52,5 +52,20 @@ branch refs/heads/ship/42
       ),
     ).toThrow(/symlink/i);
     expect(() => assertWorktreeCreateTarget(outside, path.join(outside, '42'))).not.toThrow();
+  });
+
+  it('rejects an existing symlink ancestor above an existing real parent', () => {
+    // The parent itself exists and lstats as a plain directory (readdir follows
+    // the link), so only a full ancestor walk catches the escape.
+    const root = mkdtempSync(path.join(os.tmpdir(), 'shipcode-create-ancestor-'));
+    tempRoots.push(root);
+    const outside = path.join(root, 'outside');
+    const configured = path.join(root, 'configured');
+    mkdirSync(path.join(outside, 'project'), { recursive: true });
+    symlinkSync(outside, configured, 'dir');
+
+    const parent = path.join(configured, 'project');
+    expect(lstatSync(parent).isSymbolicLink()).toBe(false);
+    expect(() => assertWorktreeCreateTarget(parent, path.join(parent, '42'))).toThrow(/symlink/i);
   });
 });

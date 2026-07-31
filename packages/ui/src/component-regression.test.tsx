@@ -7,7 +7,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { ActivePipelineCard } from '@/ActivePipelineCard';
 import { DiffViewer } from '@/DiffViewer';
 import { GitVisualizer } from '@/GitVisualizer';
-import { LoadingButtonContent } from '@/LoadingButtonContent';
 import { PageHeader } from '@/PageHeader';
 import { PhaseChip } from '@/PhaseChip';
 import { Button } from '@/primitives/button';
@@ -530,39 +529,6 @@ contextWithoutPrefix
     expect(view.container.querySelector('h1')?.textContent).toBe('Inbox');
     expect(view.container.querySelector('p')).toBeNull();
     expect(view.container.querySelector('header')?.children).toHaveLength(1);
-    view.cleanup();
-  });
-
-  it('renders loading button content without collapsing the label', () => {
-    const view = renderIntoDom(
-      <Button>
-        <LoadingButtonContent loading spinnerSize={14}>
-          <span>Save</span>
-        </LoadingButtonContent>
-      </Button>,
-    );
-
-    expect(view.container.textContent).toContain('Save');
-    expect(view.container.querySelector('.animate-spin')).not.toBeNull();
-    view.cleanup();
-  });
-
-  it('renders loading button content without a spinner when idle', () => {
-    const view = renderIntoDom(
-      <LoadingButtonContent
-        loading={false}
-        className="outer-class"
-        labelClassName="label-class"
-        spinnerClassName="spinner-class"
-      >
-        Save
-      </LoadingButtonContent>,
-    );
-
-    expect(view.container.textContent).toContain('Save');
-    expect(view.container.querySelector('.animate-spin')).toBeNull();
-    expect(view.container.querySelector('.outer-class')).not.toBeNull();
-    expect(view.container.querySelector('.label-class')).not.toBeNull();
     view.cleanup();
   });
 

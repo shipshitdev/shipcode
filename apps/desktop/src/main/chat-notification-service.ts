@@ -8,6 +8,7 @@ import type {
 import { clampError, fetchWithTimeout, notificationEventFlagForKind } from '@shipcode/shared';
 import log from './logger.service';
 import type { NotificationCredentialSettingsReader } from './notification-credential-store';
+import { decryptSecureSecret } from './secure-secret';
 
 const DEDUPE_WINDOW_MS = 2_000;
 const RETRY_DELAYS_MS = [0, 500, 1_500] as const;
@@ -168,10 +169,21 @@ export class ChatNotificationService {
     if (!settings.discordEnabled) return null;
     const routing = project?.discordRouting ?? 'inherit';
     if (routing === 'disabled') return null;
-    const webhookUrl =
+    const rawWebhook =
       routing === 'custom'
         ? (project?.discordWebhookUrlOverride?.trim() ?? '')
         : (settings.discordWebhookUrl?.trim() ?? '');
+    // Project overrides may be safeStorage ciphertext; settings path is already
+    // decrypted by NotificationCredentialStore.getMainSettings().
+    let webhookUrl = rawWebhook;
+    if (routing === 'custom' && rawWebhook) {
+      try {
+        webhookUrl = decryptSecureSecret(rawWebhook)?.trim() ?? '';
+      } catch {
+        // Legacy plaintext rows remain valid until rewritten by the settings path.
+        webhookUrl = rawWebhook;
+      }
+    }
     if (!webhookUrl || !DISCORD_WEBHOOK_RE.test(webhookUrl)) return null;
     return { webhookUrl, destination: 'discord-webhook' };
   }

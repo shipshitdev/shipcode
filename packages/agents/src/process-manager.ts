@@ -8,7 +8,7 @@ import { nanoid } from 'nanoid';
 import * as pty from 'node-pty';
 
 export type ProcessManagerAgentCommand =
-  | Extract<AgentType, 'claude' | 'codex' | 'gemini' | 'gh'>
+  | Extract<AgentType, 'claude' | 'codex' | 'gemini' | 'grok' | 'gh'>
   // Cursor's binary is `cursor-agent`, not `cursor`, so the allowlisted command
   // string diverges from its AgentType tag (unlike the other CLIs).
   | 'cursor-agent';
@@ -23,6 +23,7 @@ const ALLOWED_AGENT_COMMANDS = new Set<ProcessManagerAgentCommand>([
   'claude',
   'codex',
   'gemini',
+  'grok',
   'cursor-agent',
   'gh',
 ]);

@@ -78,6 +78,9 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
 
     const cwd = context.worktreePath ?? context.projectPath;
 
+    // Preflight is fail-closed: HEAD/log/branch errors must never fall through
+    // into a push retry (that used to push after a broken preflight).
+    let branch: string;
     try {
       const currentHead = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd,
@@ -110,20 +113,25 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
         return { next: 'failed' };
       }
 
-      const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
         cwd,
         encoding: 'utf-8',
       }).trim();
-      execFileSync('git', ['push', 'origin', branch, '--set-upstream'], { cwd, encoding: 'utf-8' });
+    } catch (preflightErr) {
+      // Raw git stderr is multiline; keep the full trace in the main-process log
+      // and hand the renderer a clamped single line.
+      console.error('[pipeline] commit/push preflight failed', preflightErr);
+      emitPhase(threadId, 'failed', `Commit aborted during preflight: ${clampError(preflightErr)}`);
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
+    }
 
+    try {
+      execFileSync('git', ['push', 'origin', branch, '--set-upstream'], { cwd, encoding: 'utf-8' });
       resetPhaseState(context);
       return { next: 'shipping' };
     } catch (firstErr) {
       try {
-        const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-          cwd,
-          encoding: 'utf-8',
-        }).trim();
         execFileSync('git', ['push', 'origin', branch, '--set-upstream'], {
           cwd,
           encoding: 'utf-8',
@@ -131,12 +139,11 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
         resetPhaseState(context);
         return { next: 'shipping' };
       } catch (secondErr) {
-        const message = secondErr instanceof Error ? secondErr.message : String(secondErr);
-        const firstMessage = firstErr instanceof Error ? firstErr.message : String(firstErr);
+        console.error('[pipeline] push failed on both attempts', firstErr, secondErr);
         emitPhase(
           threadId,
           'failed',
-          `Commit and push failed (both attempts). first=${firstMessage.slice(0, 120)} retry=${message.slice(0, 120)}`,
+          `Commit and push failed (both attempts). first=${clampError(firstErr, 120)} retry=${clampError(secondErr, 120)}`,
         );
         activePipelines.delete(threadId);
         return { next: 'failed' };
