@@ -1189,7 +1189,9 @@ describe('interactive structured bridge', () => {
     const toolsIdx = cmd.args.indexOf('--tools');
     expect(cmd.args[toolsIdx + 1]).toBe('Read,Write,Glob,Grep');
     expect(cmd.options).toEqual({ outputMode: 'raw' });
-    expect(cmd.stdin).toBeUndefined();
+    // Interactive commands carry no stdin at all — the prompt lives in the
+    // artifact the trailing instruction points at, never on the piped path.
+    expect('stdin' in cmd).toBe(false);
     const last = cmd.args[cmd.args.length - 1];
     expect(last).toContain(path.join(cwd, '.shipcode', 'runs', 'tid', 'plan-prompt.md'));
     expect(last).toContain(path.join(cwd, '.shipcode', 'runs', 'tid', 'plan-output.md'));
