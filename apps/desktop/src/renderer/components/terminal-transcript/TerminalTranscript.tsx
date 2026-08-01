@@ -17,6 +17,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import {
   type ConsoleSeverity,
   classifyConsoleLine,
@@ -50,11 +51,6 @@ interface TerminalTranscriptProps {
   onSendToTerminal?: (request: TerminalFailureActionRequest) => void;
   autoFixingEventId?: string | null;
   sendingToTerminalEventId?: string | null;
-}
-
-function clearStoredTimeout(ref: { current: ReturnType<typeof setTimeout> | null }) {
-  const timeout = ref.current;
-  if (timeout) clearTimeout(timeout);
 }
 
 function toolStartIcon(name: string) {
@@ -711,13 +707,12 @@ export function TerminalTranscript({
 }: TerminalTranscriptProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
-  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { copiedKey: copiedEventId, copy: copyFailureOutput } = useCopyFeedback();
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showAllEventsState, setShowAllEventsState] = useState({
     sourceKey: 'empty',
     value: false,
   });
-  const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
   const dedupedEvents = useMemo(() => dedupeTranscriptEvents(events), [events]);
 
   const hasEvents = dedupedEvents.length > 0;
@@ -748,17 +743,10 @@ export function TerminalTranscript({
     : pendingLabel;
 
   const handleCopyFailure = useCallback(
-    async ({ record, output }: TerminalFailureActionRequest) => {
-      if (copyResetRef.current) clearTimeout(copyResetRef.current);
-      try {
-        await navigator.clipboard.writeText(output);
-        setCopiedEventId(record.id);
-        copyResetRef.current = setTimeout(() => setCopiedEventId(null), 1500);
-      } catch {
-        setCopiedEventId(null);
-      }
+    ({ record, output }: TerminalFailureActionRequest) => {
+      void copyFailureOutput(output, record.id);
     },
-    [],
+    [copyFailureOutput],
   );
 
   const groupedSegments = useMemo(() => groupTranscriptEvents(visibleEvents), [visibleEvents]);
@@ -798,12 +786,6 @@ export function TerminalTranscript({
       sendingToTerminalEventId,
     ],
   );
-
-  useEffect(() => {
-    return () => {
-      clearStoredTimeout(copyResetRef);
-    };
-  }, []);
 
   // Stick-to-bottom: scroll to end when new events arrive.
   useEffect(() => {

@@ -35,6 +35,11 @@ export type {
 export { SecureCredentialField } from '@/SecureCredentialField';
 export type { SettingsSectionProps } from '@/SettingsSection';
 export { SettingsSection } from '@/SettingsSection';
+export type {
+  SettingsSelectRowOption,
+  SettingsSelectRowProps,
+} from '@/SettingsSelectRow';
+export { SettingsSelectRow } from '@/SettingsSelectRow';
 export { SideBySideDiffViewer } from '@/SideBySideDiffViewer';
 export type {
   StartupProgressProps,
