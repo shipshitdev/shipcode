@@ -13,6 +13,7 @@ import {
 } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
 import type { IpcHandlerDeps, Queries } from './ipc/types';
+import { safeSend } from './safe-send';
 import {
   completeInteractiveTerminalSession,
   registerInteractiveTerminalSession,
@@ -200,7 +201,7 @@ function emitTerminalEvent(
   event: Parameters<Queries['terminalEvents']['create']>[1],
 ): void {
   const record = queries.terminalEvents.create(threadId, event);
-  mainWindow.webContents.send('terminal:event', record);
+  safeSend(mainWindow, 'terminal:event', record);
 }
 
 async function importSessionSummary(input: {

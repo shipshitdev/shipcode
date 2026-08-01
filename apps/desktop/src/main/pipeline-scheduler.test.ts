@@ -164,7 +164,7 @@ function makeBaseSettings(overrides: Record<string, unknown> = {}) {
 
 const makeMainWindow = () => ({
   isDestroyed: vi.fn(() => false),
-  webContents: { send: vi.fn() },
+  webContents: { isDestroyed: vi.fn(() => false), send: vi.fn() },
 });
 
 describe('PipelineScheduler', () => {

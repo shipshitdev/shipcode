@@ -18,6 +18,7 @@ import {
 import type { BrowserWindow } from 'electron';
 import type { IpcHandlerDeps, Queries } from './ipc/types';
 import log from './logger.service';
+import { safeSend } from './safe-send';
 
 export type IssueChatProvider = 'claude' | 'codex' | 'grok';
 
@@ -257,9 +258,7 @@ function emitTerminalEvent(
   event: Parameters<Queries['terminalEvents']['create']>[1],
 ): void {
   const record = queries.terminalEvents.create(threadId, event);
-  if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('terminal:event', record);
-  }
+  safeSend(mainWindow, 'terminal:event', record);
 }
 
 function nextRound(queries: Queries, threadId: string): number {

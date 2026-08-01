@@ -57,6 +57,7 @@ Where things live:
 - **Pipe `claude -p` prompts via stdin, never argv.** Argparser breaks on `---` YAML. Reuse `runClaudeWithStdin` in `packages/agents/src/prd-generator.ts`. See: `claude-cli.md`.
 - **Do not use `claude -p` for interactive terminal mode.** Interactive mode launches the real terminal CLI, wraps raw output in our own terminal events, and uses process exit as completion. See: `interactive-cli-run-modes.md`.
 - **`WorktreeManager.remove(path, branch)` takes concrete values** — never recompute from `threadId`. See: `worktrees.md`.
+- **Never call `webContents.send` directly in the main process.** Every send goes through `safeSend` in `apps/desktop/src/main/safe-send.ts` — a raw send throws on a destroyed window and that throw escapes the IPC handler, reporting an already-successful write as a failure. See: `ipc-errors.md`.
 - **Clamp IPC errors** to first-line + ~280 chars; log full trace to main-process console only. See: `ipc-errors.md`.
 
 ## References

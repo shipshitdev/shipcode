@@ -25,6 +25,7 @@ import {
   type ReasoningEffort,
 } from '@shipcode/shared';
 import log, { logProcessOutput } from '../logger.service';
+import { safeSend } from '../safe-send';
 import { assertPrdRewriteModelSupported, resolvePrdRewriteContext } from './helpers';
 import {
   clearPrdAttachmentSession,
@@ -269,12 +270,7 @@ export function registerSupportHandlers({
 
   function emitTerminalEvent(threadId: string, event: TerminalEvent) {
     const record = queries.terminalEvents.create(threadId, event);
-    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
-    try {
-      mainWindow.webContents.send('terminal:event', record);
-    } catch {
-      // webContents destroyed between check and send
-    }
+    safeSend(mainWindow, 'terminal:event', record);
   }
 
   function ensureNormalizer(processId: string, type: string, threadId: string) {
@@ -288,6 +284,8 @@ export function registerSupportHandlers({
   }
 
   processManager.on('output', (processId: string, data: string) => {
+    // Broader than a send guard: with no renderer left there is nobody to feed
+    // the normalizers for either, so the whole listener short-circuits.
     if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
     const proc = processManager.get(processId);
 
@@ -308,21 +306,19 @@ export function registerSupportHandlers({
 
     logProcessOutput(proc?.type ?? 'unknown', data);
 
-    try {
-      mainWindow.webContents.send('agent:output', {
-        processId,
-        chunk: data,
-        threadId: proc?.threadId,
-      });
-    } catch {
-      // webContents destroyed between check and send
-    }
+    safeSend(mainWindow, 'agent:output', {
+      processId,
+      chunk: data,
+      threadId: proc?.threadId,
+    });
   });
 
   processManager.on('stateChange', (processId: string, type: string, state: string) => {
     if (state === 'exited') {
       normalizers.delete(processId);
     }
+    // Broader than a send guard: the trailing terminal-event bookkeeping below
+    // only exists to drive the renderer, so the whole listener short-circuits.
     if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
     const proc = processManager.get(processId);
     const exitSuffix =
@@ -330,16 +326,12 @@ export function registerSupportHandlers({
     if (state === 'running' || state === 'exited') {
       log.info(`[process:${type}] ${processId} → ${state}${exitSuffix}`);
     }
-    try {
-      mainWindow.webContents.send('agent:state', {
-        processId,
-        type,
-        state,
-        threadId: proc?.threadId,
-      });
-    } catch {
-      // webContents destroyed between check and send
-    }
+    safeSend(mainWindow, 'agent:state', {
+      processId,
+      type,
+      state,
+      threadId: proc?.threadId,
+    });
 
     if ((state === 'running' || state === 'exited') && proc?.threadId) {
       const ts = formatClockTime(new Date());
