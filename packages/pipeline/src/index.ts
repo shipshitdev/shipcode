@@ -6,6 +6,8 @@ export {
   IssueGroupSchedulerError,
 } from './issue-group-scheduler';
 export {
+  ISSUE_LAUNCH_MODE,
+  type IssueLaunchMode,
   type IssuePipelineLaunchDeps,
   type IssuePipelineLaunchHooks,
   type LaunchIssuePipelineInput,

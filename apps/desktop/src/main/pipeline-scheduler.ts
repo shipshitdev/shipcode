@@ -1,6 +1,6 @@
 import fs from 'node:fs';
-import type { GhSyncDeps } from '@shipcode/pipeline';
-import { launchIssuePipeline, loadWorkflowPolicy } from '@shipcode/pipeline';
+import type { GhSyncDeps, IssueLaunchMode } from '@shipcode/pipeline';
+import { ISSUE_LAUNCH_MODE, launchIssuePipeline, loadWorkflowPolicy } from '@shipcode/pipeline';
 import type {
   ExecutorModel,
   GitHubIssueCacheRecord,
@@ -12,7 +12,6 @@ import {
   EXECUTION_PHASES,
   ISSUE_PIPELINE_STATUS,
   PIPELINE_PHASE,
-  resolveExecutorModelForIssue,
 } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
 import {
@@ -349,6 +348,27 @@ export class PipelineScheduler {
     issue: GitHubIssueCacheRecord,
     project: NonNullable<ReturnType<PipelineSchedulerDeps['queries']['projects']['getById']>>,
   ): Promise<void> {
+    await this._dispatchLaunch(issue, project, ISSUE_LAUNCH_MODE.githubIssue);
+  }
+
+  private async _launchQuickTask(
+    issue: GitHubIssueCacheRecord,
+    project: NonNullable<ReturnType<PipelineSchedulerDeps['queries']['projects']['getById']>>,
+  ): Promise<void> {
+    await this._dispatchLaunch(issue, project, ISSUE_LAUNCH_MODE.quickTask);
+  }
+
+  /**
+   * Single desktop launch path. Quick tasks and GitHub issues differ only in
+   * the launch mode — everything downstream (phase-model resolution, CLI
+   * support validation, label sync, renderer refresh, failure transition)
+   * is shared so model-routing changes cannot land on one path only.
+   */
+  private async _dispatchLaunch(
+    issue: GitHubIssueCacheRecord,
+    project: NonNullable<ReturnType<PipelineSchedulerDeps['queries']['projects']['getById']>>,
+    mode: IssueLaunchMode,
+  ): Promise<void> {
     const { queries, pipeline, emitter, getMainWindow } = this.deps;
     const settings = queries.settings.get();
 
@@ -361,7 +381,7 @@ export class PipelineScheduler {
         plans: queries.plans,
         pipeline,
       },
-      { project, issue, phaseModels },
+      { project, issue, phaseModels, mode },
       {
         validatePhaseModels: assertCliPhaseModelsSupported,
         onIssueStarted: () =>
@@ -382,79 +402,6 @@ export class PipelineScheduler {
         },
       },
     );
-  }
-
-  private async _launchQuickTask(
-    issue: GitHubIssueCacheRecord,
-    project: NonNullable<ReturnType<PipelineSchedulerDeps['queries']['projects']['getById']>>,
-  ): Promise<void> {
-    const { queries, pipeline, emitter, getMainWindow } = this.deps;
-    const settings = queries.settings.get();
-
-    if (!issue.threadId) {
-      throw new Error(`Quick task ${issue.issueNumber} has no linked thread`);
-    }
-    const thread = queries.threads.getById(issue.threadId);
-    if (!thread) {
-      throw new Error(`Quick task ${issue.issueNumber}: thread ${issue.threadId} missing`);
-    }
-
-    queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.planning);
-    this._syncPipelineLabel(project, issue.issueNumber, ISSUE_PIPELINE_STATUS.planning);
-    this._sendIssuesUpdated(issue.projectId);
-
-    const phaseModels = resolveIssuePhaseModels(settings, project, issue);
-    await assertCliPhaseModelsSupported(phaseModels);
-
-    const effectiveExecutorModel = resolveExecutorModelForIssue(settings, project, issue);
-    queries.threads.setPhaseModels(thread.id, {
-      ...phaseModels,
-      executorModel: effectiveExecutorModel,
-    });
-    queries.threads.resetFailureTracking(thread.id);
-    queries.plans.supersedeAll(thread.id);
-
-    try {
-      await pipeline.startFromQuickTask(
-        thread.id,
-        project.path,
-        {
-          issueNumber: issue.issueNumber,
-          title: issue.title,
-          text: issue.body ?? issue.title,
-        },
-        effectiveExecutorModel,
-        {
-          worktreePath: thread.worktreePath,
-          baseBranch: project.defaultBranch,
-          plannerModel: phaseModels.plannerModel,
-          reviewerModel: phaseModels.reviewerModel,
-          verifierModel: phaseModels.verifierModel,
-          plannerModelIdOverride: phaseModels.plannerModelId,
-          reviewerModelIdOverride: phaseModels.reviewerModelId,
-          executorModelIdOverride: phaseModels.executorModelId,
-          verifierModelIdOverride: phaseModels.verifierModelId,
-          plannerReasoningEffort: phaseModels.plannerReasoningEffort,
-          reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
-          executorReasoningEffort: phaseModels.executorReasoningEffort,
-          verifierReasoningEffort: phaseModels.verifierReasoningEffort,
-        },
-      );
-    } catch (err) {
-      const win = getMainWindow();
-      transitionThreadPhase(
-        win,
-        queries,
-        emitter,
-        {
-          threadId: thread.id,
-          phase: PIPELINE_PHASE.failed,
-          errorMessage: clampError(err),
-        },
-        this.deps.ghSync,
-      );
-      throw err;
-    }
   }
 
   private async _launchAutomation(automationId: string, targetProjectId: string): Promise<void> {
