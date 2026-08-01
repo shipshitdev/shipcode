@@ -28,6 +28,7 @@ import { Bell, Bot, Gauge, ListTodo, PackageCheck, Timer } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 import { useAppStore } from '../stores/app-store';
+import { githubIssuesQueryKey } from '../stores/issue-cache-projection';
 
 interface StatCardProps {
   label: string;
@@ -88,11 +89,9 @@ function useOverviewView() {
   const selectProject = useAppStore((s) => s.selectProject);
   const selectThread = useAppStore((s) => s.selectThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
-  const setGithubIssues = useAppStore((s) => s.setGithubIssues);
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const openTerminal = useAppStore((s) => s.openTerminal);
-  const openActivity = useAppStore((s) => s.openActivity);
-  const openInbox = useAppStore((s) => s.openInbox);
+  const openView = useAppStore((s) => s.openView);
 
   const AGENT_CARD_LIMIT = 4;
   const PAGE_SIZE = 5;
@@ -148,7 +147,7 @@ function useOverviewView() {
       const issues = await window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
         projectId,
       });
-      setGithubIssues(issues);
+      queryClient.setQueryData(githubIssuesQueryKey(projectId), issues);
       const match = issues.find((i) => i.threadId === threadId) ?? null;
       if (match) selectIssue(match);
     } catch {
@@ -191,7 +190,7 @@ function useOverviewView() {
                   | 'agent'
                   | 'default',
                 icon: <ListTodo size={18} />,
-                onClick: openInbox,
+                onClick: () => openView('inbox'),
               },
               {
                 label: 'Pending Approvals',
@@ -203,7 +202,7 @@ function useOverviewView() {
                   | 'danger'
                   | 'default',
                 icon: <Bell size={18} />,
-                onClick: openInbox,
+                onClick: () => openView('inbox'),
               },
               {
                 label: 'Shipped (7d)',
@@ -211,7 +210,7 @@ function useOverviewView() {
                 subtitle: stats ? `${stats.failedLast7d} failed` : '—',
                 tone: 'success' as const,
                 icon: <PackageCheck size={18} />,
-                onClick: openActivity,
+                onClick: () => openView('activity'),
               },
             ].map((card) => (
               <div key={card.label} className="flex-1 min-w-0">
@@ -391,7 +390,7 @@ function useOverviewView() {
                 <Button
                   variant="ghost"
                   size="xs"
-                  onClick={openActivity}
+                  onClick={() => openView('activity')}
                   className="h-auto px-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent capitalize"
                 >
                   View all →
@@ -470,7 +469,7 @@ function useOverviewView() {
                 <Button
                   variant="ghost"
                   size="xs"
-                  onClick={openInbox}
+                  onClick={() => openView('inbox')}
                   className="h-auto px-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent capitalize"
                 >
                   View all →

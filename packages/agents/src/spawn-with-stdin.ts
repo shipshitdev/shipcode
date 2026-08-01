@@ -27,6 +27,13 @@ import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
  */
 export const MAX_COLLECTED_OUTPUT_CHARS = 2 * 1024 * 1024;
 
+/**
+ * Grace period between the polite SIGTERM a timeout sends and the SIGKILL that
+ * follows it. A CLI that traps SIGTERM would otherwise survive the timeout and
+ * keep running (and keep burning credits) long after we stopped listening.
+ */
+export const KILL_GRACE_MS = 5_000;
+
 export interface StdinPipeOptions {
   /**
    * Leave stdin writable after the payload drains, for transports that accept
@@ -208,8 +215,14 @@ export function runWithStdin(options: RunWithStdinOptions): Promise<string> {
 
     const stdin = pipeStdin(child.stdin, options.input);
 
+    let killTimer: ReturnType<typeof setTimeout> | null = null;
+
     child.on('error', (err) => settle(options.formatSpawnError(err)));
     child.on('close', (code, signal) => {
+      if (killTimer) {
+        clearTimeout(killTimer);
+        killTimer = null;
+      }
       const failure: StdinRunFailure = {
         command: options.command,
         args: options.args,
@@ -234,6 +247,16 @@ export function runWithStdin(options: RunWithStdinOptions): Promise<string> {
       const timeoutMs = options.timeoutMs;
       timer = setTimeout(() => {
         child.kill('SIGTERM');
+        // Escalate: a child that traps SIGTERM must not outlive the timeout.
+        killTimer = setTimeout(() => {
+          killTimer = null;
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            // Already gone.
+          }
+        }, KILL_GRACE_MS);
+        killTimer.unref?.();
         settle(
           options.formatTimeoutError?.(timeoutMs) ??
             new Error(`${options.command} timed out after ${timeoutMs}ms`),

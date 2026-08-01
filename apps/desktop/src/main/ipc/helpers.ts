@@ -43,6 +43,7 @@ import type { BrowserWindow } from 'electron';
 import type { ChatNotificationService } from '../chat-notification-service';
 import log from '../logger.service';
 import type { NotificationService } from '../notification-service';
+import { canSendToRenderer, safeSend } from '../safe-send';
 import type { Queries } from './types';
 
 /**
@@ -496,15 +497,13 @@ export function sendGithubIssuesUpdated(
   queries: Queries,
   projectId: string,
 ) {
-  if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
-  try {
-    mainWindow.webContents.send('github:issues-updated', {
-      projectId,
-      issues: queries.githubIssues.list(projectId),
-    });
-  } catch {
-    /* render frame disposed during HMR */
-  }
+  // Broader than a send guard: the issue list is a database read that only exists
+  // to build this payload, so skip it entirely when no renderer is left to get it.
+  if (!canSendToRenderer(mainWindow)) return;
+  safeSend(mainWindow, 'github:issues-updated', {
+    projectId,
+    issues: queries.githubIssues.list(projectId),
+  });
 }
 
 type AttentionPhase = Extract<

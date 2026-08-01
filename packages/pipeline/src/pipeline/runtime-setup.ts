@@ -187,19 +187,27 @@ export function createRuntimeSetupHandlers({
         rejectPromise(error);
       };
 
+      /**
+       * SIGTERM the process group and let the ProcessManager follow up with
+       * SIGKILL if the shell ignores it. Escalation lives in the manager
+       * because only the manager sees the real exit event and can cancel the
+       * pending SIGKILL — this promise has already settled by then.
+       */
+      const terminate = () => {
+        try {
+          deps.processManager.kill(managed.id);
+        } catch {
+          // Process may already be gone; nothing left to escalate.
+        }
+      };
+
       const timer = setTimeout(() => {
         if (settled) return;
         emitTerminalRaw(
           threadId,
           `\r\n[shipcode] Command timed out after ${Math.round(timeoutMs / 60_000)}m — killing process.\r\n`,
         );
-        deps.processManager.kill(managed.id);
-        setTimeout(() => {
-          try {
-            const proc = deps.processManager.get(managed.id);
-            if (proc && proc.state !== 'exited') deps.processManager.kill(managed.id, 'SIGKILL');
-          } catch {}
-        }, 5_000);
+        terminate();
         rejectOnce(
           new Error(
             `Command timed out after ${Math.round(timeoutMs / 60_000)} minutes: ${command}`,
@@ -223,7 +231,7 @@ export function createRuntimeSetupHandlers({
 
       const onAbort = () => {
         if (settled) return;
-        deps.processManager.kill(managed.id);
+        terminate();
         rejectOnce(new Error(`Command aborted: ${command}`));
       };
 

@@ -20,7 +20,9 @@ function getLiveManualQaServer(
   if (!session) return null;
 
   const proc = processManager.get(session.server.processId);
-  if (!proc || proc.state === 'exited') {
+  // `terminating` means the server was already signalled — it may still be
+  // holding the port, but it is no longer a server we can hand to the user.
+  if (!proc || proc.state === 'exited' || proc.state === 'terminating') {
     manualQaServers.delete(threadId);
     return null;
   }
@@ -53,10 +55,6 @@ export function registerFeatureQaHandlers({
 }: IpcHandlerDeps): void {
   ipcMain.handle('feature-qa:list-by-thread', (_event, args: { threadId: string }) => {
     return queries.featureQaResults.listByThread(args.threadId);
-  });
-
-  ipcMain.handle('feature-qa:latest-by-feature', (_event, args: { featureId: string }) => {
-    return queries.featureQaResults.latestByFeature(args.featureId);
   });
 
   ipcMain.handle('feature-qa:get-server', (_event, { threadId }: { threadId: string }) => {

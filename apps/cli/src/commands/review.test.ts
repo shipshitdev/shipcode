@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   createCliContextMock,
@@ -74,6 +74,7 @@ describe('reviewCommand', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    process.exitCode = undefined;
     requireOnboardingMock.mockReturnValue(true);
     routeFromLabelsMock.mockReturnValue({
       executorModel: 'codex',
@@ -134,6 +135,12 @@ describe('reviewCommand', () => {
     });
   });
 
+  afterEach(() => {
+    // The failure branches mark the process as failed on purpose; clear it so
+    // the command under test cannot fail the vitest worker.
+    process.exitCode = undefined;
+  });
+
   it('fetches the issue, routes labels, starts the pipeline, and prints the generated review', async () => {
     await reviewCommand('7');
 
@@ -159,6 +166,7 @@ describe('reviewCommand', () => {
       JSON.stringify({ id: 'review-1', decision: 'approve' }, null, 2),
     );
     expect(logSpy).toHaveBeenCalledWith('\nThread status: approval');
+    expect(process.exitCode).toBeUndefined();
   });
 
   it('returns before doing work when onboarding is incomplete', async () => {
@@ -215,7 +223,7 @@ describe('reviewCommand', () => {
     expect(errorSpy).toHaveBeenCalledWith('Thread not found after pipeline run.');
   });
 
-  it('prints no-output branches when the plan or review is missing', async () => {
+  it('prints no-output branches and exits non-zero when the plan or review is missing', async () => {
     getLatestPlanMock.mockReturnValueOnce(null);
 
     await reviewCommand('7');
@@ -223,7 +231,9 @@ describe('reviewCommand', () => {
     expect(logSpy).toHaveBeenCalledWith(
       '\nNo plan generated (pipeline may have failed before plan phase).',
     );
+    expect(process.exitCode).toBe(1);
 
+    process.exitCode = undefined;
     getReviewByPlanIdMock.mockReturnValueOnce(null);
 
     await reviewCommand('7');
@@ -231,5 +241,25 @@ describe('reviewCommand', () => {
     expect(logSpy).toHaveBeenCalledWith(
       '\nNo review generated (pipeline may have stopped before review phase).',
     );
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('exits non-zero when the pipeline ends in a failed state', async () => {
+    const base = createCliContextMock();
+    const failed = { id: 'thread-1', status: 'failed' };
+    createCliContextMock.mockReturnValueOnce({
+      ...base,
+      threads: {
+        getById: vi.fn(() => failed),
+        getByProjectAndGithubIssue: vi.fn(() => failed),
+      },
+    });
+
+    await reviewCommand('7');
+
+    // The review itself printed fine — the failed thread status is what fails.
+    expect(logSpy).toHaveBeenCalledWith('\n--- Review Output ---');
+    expect(logSpy).toHaveBeenCalledWith('\nThread status: failed');
+    expect(process.exitCode).toBe(1);
   });
 });

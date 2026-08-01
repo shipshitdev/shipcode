@@ -1,16 +1,22 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { SHELL_ALLOWLIST } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TerminalEvent } from '../terminal-events';
-import { executeViaOpenRouter } from './openrouter-execute';
+import { getAllToolNames } from '../tools/registry';
+import {
+  EXECUTE_SYSTEM_PROMPT,
+  executeViaOpenRouter,
+  OPENROUTER_EXECUTE_TOOLS,
+} from './openrouter-execute';
 import {
   type OpenRouterChatResult,
   type OpenRouterClient,
   OpenRouterError,
   type OpenRouterToolCall,
 } from './openrouter-http';
-import type { ProviderRequest } from './types';
+import { PHASE_TOOL_POLICIES, type ProviderRequest } from './types';
 
 const mockAssertWorkspaceSafe = vi.hoisted(() => vi.fn());
 
@@ -481,5 +487,105 @@ describe('executeViaOpenRouter', () => {
       message: 'plain boom',
       retryable: false,
     });
+  });
+
+  // ─── shell: read-only inspection is actually reachable ────────────
+
+  it('runs an allowlisted read-only shell command inside the worktree', async () => {
+    const client = scriptedClient([
+      {
+        toolCalls: [toolCall('c1', 'shell', { command: 'ls', args: ['-1'] })],
+        finishReason: 'tool_calls',
+      },
+      { content: 'listed', finishReason: 'stop' },
+    ]);
+    const events: TerminalEvent[] = [];
+
+    const res = await executeViaOpenRouter(req({ cwd: wt }), {
+      client,
+      model: 'openrouter/auto',
+      onTerminalEvent: (event) => events.push(event),
+    });
+
+    expect(res.exitCode).toBe(0);
+    const shellEnd = events.find(
+      (event): event is Extract<TerminalEvent, { kind: 'tool_end' }> =>
+        event.kind === 'tool_end' && event.name === 'shell',
+    );
+    // tool_end carries exitCode/outputSummary only on failure, so their
+    // absence means the command actually ran rather than being rejected as
+    // a tool this phase does not expose.
+    expect(shellEnd).toBeDefined();
+    expect(shellEnd).not.toHaveProperty('exitCode');
+    expect(shellEnd).not.toHaveProperty('outputSummary');
+  });
+
+  it('still rejects mutating git subcommands through the shell tool', async () => {
+    const client = scriptedClient([
+      {
+        toolCalls: [toolCall('c1', 'shell', { command: 'git', args: ['push'] })],
+        finishReason: 'tool_calls',
+      },
+      { content: 'blocked', finishReason: 'stop' },
+    ]);
+    const events: TerminalEvent[] = [];
+
+    const res = await executeViaOpenRouter(req({ cwd: wt }), {
+      client,
+      model: 'openrouter/auto',
+      onTerminalEvent: (event) => events.push(event),
+    });
+
+    expect(res.exitCode).toBe(0);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        kind: 'tool_end',
+        name: 'shell',
+        exitCode: 1,
+        outputSummary: expect.stringContaining('not in the read-only allowlist'),
+      }),
+    );
+  });
+});
+
+// ─── Prompt / allowlist drift guard ─────────────────────────────────
+//
+// The original bug: the system prompt advertised `shell` while the phase
+// allowlist omitted it, so every shell call was rejected — burning loop
+// iterations, or worse, tempting the model to narrate output it never got.
+// The prompt is now derived from OPENROUTER_EXECUTE_TOOLS; these tests fail
+// if anyone reintroduces a hardcoded tool name in the prose.
+
+describe('EXECUTE_SYSTEM_PROMPT', () => {
+  it('names no tool the phase allowlist withholds', () => {
+    const named = getAllToolNames().filter((name) =>
+      new RegExp(`\\b${name}\\b`).test(EXECUTE_SYSTEM_PROMPT),
+    );
+    const withheld = named.filter((name) => !OPENROUTER_EXECUTE_TOOLS.has(name));
+
+    expect(withheld).toEqual([]);
+    // Sanity check that the regex scan actually finds anything at all —
+    // otherwise an empty `withheld` would prove nothing.
+    expect(named.length).toBeGreaterThan(0);
+  });
+
+  it('names every tool the phase allowlist grants', () => {
+    for (const name of OPENROUTER_EXECUTE_TOOLS) {
+      expect(EXECUTE_SYSTEM_PROMPT).toMatch(new RegExp(`\\b${name}\\b`));
+    }
+  });
+
+  it('exposes the same capability surface as the claude/codex execute phase', () => {
+    // PHASE_TOOL_POLICIES.execute grants Bash; `shell` is its read-only
+    // counterpart here. Drops of either side should be deliberate.
+    expect(OPENROUTER_EXECUTE_TOOLS.has('shell')).toBe(true);
+    expect(PHASE_TOOL_POLICIES.execute.allowedTools).toContain('Bash');
+  });
+
+  it('does not claim shell can run tests or typechecks', () => {
+    // SHELL_ALLOWLIST has no interpreters or package managers, so those runs
+    // belong to the VERIFY phase. Promising them here produced fabrications.
+    expect(EXECUTE_SYSTEM_PROMPT).toContain(SHELL_ALLOWLIST.join(', '));
+    expect(EXECUTE_SYSTEM_PROMPT).toMatch(/no way to\s+run test runners/);
   });
 });

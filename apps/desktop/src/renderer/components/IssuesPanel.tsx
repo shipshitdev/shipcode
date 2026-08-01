@@ -293,7 +293,6 @@ function useIssuesPanelView() {
   const setTerminalThread = useAppStore((state) => state.setTerminalThread);
   const openTerminal = useAppStore((state) => state.openTerminal);
   const requestCommentComposer = useAppStore((state) => state.requestCommentComposer);
-  const setGithubIssues = useAppStore((state) => state.setGithubIssues);
   const pendingCreatedIssues = useAppStore((state) => state.pendingCreatedIssues);
   const previousTaskStatusByIdRef = useRef<Map<string, IssuePipelineStatus> | null>(null);
   if (previousTaskStatusByIdRef.current === null) {
@@ -340,11 +339,6 @@ function useIssuesPanelView() {
       ? [...scopedPendingIssues, ...cachedIssues]
       : cachedIssues;
   }, [activeProjectId, issuesData, pendingCreatedIssues]);
-
-  useEffect(() => {
-    if (issuesData === undefined) return;
-    setGithubIssues(issuesData);
-  }, [issuesData, setGithubIssues]);
 
   const refreshIssues = useMutation({
     mutationFn: (projectId: string) =>
@@ -648,16 +642,10 @@ function useIssuesPanelView() {
     id: string,
     patch: Partial<Pick<GitHubIssueCacheRecord, 'pipelineStatus' | 'state'>>,
   ) => {
+    // Query cache only — the app store follows via subscribeIssueCacheProjection.
     queryClient.setQueryData<GitHubIssueCacheRecord[]>(queryKey, (prev) =>
       prev ? prev.map((issue) => (issue.id === id ? { ...issue, ...patch } : issue)) : prev,
     );
-    useAppStore.setState((state) => ({
-      githubIssues: state.githubIssues.map((issue) =>
-        issue.id === id ? { ...issue, ...patch } : issue,
-      ),
-      activeIssue:
-        state.activeIssue?.id === id ? { ...state.activeIssue, ...patch } : state.activeIssue,
-    }));
   };
 
   const patchThreadOptimistic = (
@@ -690,21 +678,37 @@ function useIssuesPanelView() {
 
   const repoUrl = githubRepoUrl(project?.gitRemote);
   const projectsUrl = project?.githubProjectUrl?.trim() ? project.githubProjectUrl.trim() : null;
-  const handleIssueClick = (issue: GitHubIssueCacheRecord) => {
-    if (isAutomationIssue(issue) && issue.threadId) {
-      selectAutomationThread(issue.threadId);
-      setTerminalThread(issue.threadId);
-      openTerminal();
-      return;
-    }
+  // Board rows are memoized leaves; keep every handler that reaches them
+  // referentially stable so a poll that changes nothing re-renders nothing.
+  const handleIssueClick = useCallback(
+    (issue: GitHubIssueCacheRecord) => {
+      if (isAutomationIssue(issue) && issue.threadId) {
+        selectAutomationThread(issue.threadId);
+        setTerminalThread(issue.threadId);
+        openTerminal();
+        return;
+      }
 
-    selectIssue(issue);
-  };
-  const handleIssueComment = (issue: GitHubIssueCacheRecord) => {
-    handleIssueClick(issue);
-    if (isAutomationIssue(issue)) return;
-    requestCommentComposer(issue.id);
-  };
+      selectIssue(issue);
+    },
+    [openTerminal, selectAutomationThread, selectIssue, setTerminalThread],
+  );
+  const handleIssueComment = useCallback(
+    (issue: GitHubIssueCacheRecord) => {
+      handleIssueClick(issue);
+      if (isAutomationIssue(issue)) return;
+      requestCommentComposer(issue.id);
+    },
+    [handleIssueClick, requestCommentComposer],
+  );
+  const handleOpenPullRequest = useCallback((url: string) => {
+    window.shipcode.invoke('shell:open-external', { url }).catch((err) => {
+      log.error('[threadpanel] open-pull-request failed', { url, err });
+    });
+  }, []);
+  const handleArchiveIssue = useCallback((issue: GitHubIssueCacheRecord) => {
+    setArchiveConfirm({ type: 'one', issue });
+  }, []);
 
   const handleFetchPlanSteps = useCallback(
     async (threadId: string) => {
@@ -797,11 +801,7 @@ function useIssuesPanelView() {
             log.error('[threadpanel] open-external failed', { url, err });
           })
         }
-        onOpenPullRequest={(url) =>
-          window.shipcode.invoke('shell:open-external', { url }).catch((err) => {
-            log.error('[threadpanel] open-pull-request failed', { url, err });
-          })
-        }
+        onOpenPullRequest={handleOpenPullRequest}
         onBaseBranchChange={(branch) => {
           // Optimistic cache update so the toolbar reflects the new branch
           // on the same frame as the click, without waiting for IPC.
@@ -855,7 +855,7 @@ function useIssuesPanelView() {
               );
             });
         }}
-        onArchiveIssue={(issue) => setArchiveConfirm({ type: 'one', issue })}
+        onArchiveIssue={handleArchiveIssue}
         onArchiveAllDone={() => {
           const closedCount = boardIssues.filter((i) =>
             ARCHIVABLE_PIPELINE_STATUSES.includes(i.pipelineStatus),

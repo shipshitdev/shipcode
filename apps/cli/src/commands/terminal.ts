@@ -10,6 +10,7 @@ import {
 } from '@shipcode/shared';
 import { sanitizeCliText } from '../adapters/cli-emitter';
 import { createCliContext } from '../context';
+import { markCliFailure } from '../exit-code';
 import { parseIssueNumber } from './issue-helpers';
 
 type Provider = 'claude' | 'codex';
@@ -165,6 +166,9 @@ Before exiting, write files changed, commands run, blockers, and a suggested Git
       if (settled) return;
       settled = true;
       cleanup();
+      // A failed interactive session is recorded in the DB below; also surface it
+      // to the shell so `shipcode terminal 123 && ...` does not chain on failure.
+      if (exitCode !== 0) markCliFailure();
       const fallback = `Interactive ${provider} session exited with code ${exitCode}.
 Prompt artifact: ${promptArtifactPath}
 Worktree: ${worktreePath}

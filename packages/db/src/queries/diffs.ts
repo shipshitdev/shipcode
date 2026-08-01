@@ -19,6 +19,23 @@ export type DiffInsert = Pick<
   'filePath' | 'action' | 'diffContent' | 'beforeHash' | 'afterHash'
 >;
 
+const INSERT_DIFF_SQL = `INSERT INTO diffs (id, thread_id, file_path, action, diff_content, before_hash, after_hash, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+
+/** Bind values for {@link INSERT_DIFF_SQL}, in column order. */
+function diffInsertValues(record: DiffRecord) {
+  return [
+    record.id,
+    record.threadId,
+    record.filePath,
+    record.action,
+    record.diffContent,
+    record.beforeHash,
+    record.afterHash,
+    record.createdAt,
+  ] as const;
+}
+
 export class DiffQueries {
   constructor(private db: DatabaseSync) {}
 
@@ -39,42 +56,43 @@ export class DiffQueries {
       afterHash?: string | null;
     },
   ): DiffRecord {
-    const id = nanoid();
-    const now = new Date().toISOString();
-    const beforeHash = options?.beforeHash ?? null;
-    const afterHash = options?.afterHash ?? null;
-
-    this.db
-      .prepare(
-        `INSERT INTO diffs (id, thread_id, file_path, action, diff_content, before_hash, after_hash, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(id, threadId, filePath, action, diffContent, beforeHash, afterHash, now);
-
-    return {
-      id,
+    const record: DiffRecord = {
+      id: nanoid(),
       threadId,
       filePath,
       action,
       diffContent,
-      beforeHash,
-      afterHash,
-      createdAt: now,
+      beforeHash: options?.beforeHash ?? null,
+      afterHash: options?.afterHash ?? null,
+      createdAt: new Date().toISOString(),
     };
+
+    this.db.prepare(INSERT_DIFF_SQL).run(...diffInsertValues(record));
+
+    return record;
   }
 
   replaceForThread(threadId: string, diffs: DiffInsert[]): DiffRecord[] {
     return transaction(this.db, () => {
       this.db.prepare('DELETE FROM diffs WHERE thread_id = ?').run(threadId);
 
+      // Prepare once and reuse across the batch — `create()` per diff would
+      // re-prepare the same INSERT for every row.
+      const insertDiff = this.db.prepare(INSERT_DIFF_SQL);
       const created: DiffRecord[] = [];
       for (const diff of diffs) {
-        created.push(
-          this.create(threadId, diff.filePath, diff.action, diff.diffContent, {
-            beforeHash: diff.beforeHash,
-            afterHash: diff.afterHash,
-          }),
-        );
+        const record: DiffRecord = {
+          id: nanoid(),
+          threadId,
+          filePath: diff.filePath,
+          action: diff.action,
+          diffContent: diff.diffContent,
+          beforeHash: diff.beforeHash ?? null,
+          afterHash: diff.afterHash ?? null,
+          createdAt: new Date().toISOString(),
+        };
+        insertDiff.run(...diffInsertValues(record));
+        created.push(record);
       }
 
       return created;

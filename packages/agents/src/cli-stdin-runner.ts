@@ -1,7 +1,9 @@
 import type { GeneratorCli } from '@shipcode/shared';
 import { classifyPoolExhaustion, markPoolExhausted } from './agent-sdk-pool-state';
 import { extractCliFailureMessage, formatCliSpawnFailure } from './cli-error';
-import { MAX_COLLECTED_OUTPUT_CHARS, runWithStdin } from './spawn-with-stdin';
+import { KILL_GRACE_MS, MAX_COLLECTED_OUTPUT_CHARS, runWithStdin } from './spawn-with-stdin';
+
+export { KILL_GRACE_MS };
 
 const SAFE_CLI_ENV_KEYS = new Set([
   'PATH',

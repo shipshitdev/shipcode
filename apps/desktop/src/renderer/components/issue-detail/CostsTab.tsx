@@ -2,14 +2,15 @@ import type {
   CostTaskSummary,
   PipelineStepPhase,
   PipelineStepRecord,
-  PipelineStepStatus,
   PipelineThreadAnalytics,
   PromptTelemetryRecord,
   Thread,
 } from '@shipcode/shared';
 import {
+  formatBytes,
   formatCost,
   formatDurationMilliseconds,
+  formatTokenCount,
   isSyntheticResolvedModel,
   MODEL_DISPLAY,
   PIPELINE_PHASE,
@@ -20,15 +21,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { formatTimestamp, SHORT_TIMESTAMP_FORMAT } from '../format-timestamp';
 import { ActivityHeatmap } from '../heatmap/ActivityHeatmap';
-import { timeAgo } from './helpers';
-
-const STEP_STATUS_VARIANT: Record<PipelineStepStatus, 'success' | 'danger' | 'default'> = {
-  started: 'default',
-  completed: 'success',
-  failed: 'danger',
-  aborted: 'danger',
-  clarification_requested: 'default',
-};
+import { STEP_STATUS_VARIANT, timeAgo } from './helpers';
 
 const STEP_PHASE_LABEL: Record<PipelineStepPhase, string> = {
   plan: 'Plan',
@@ -115,18 +108,11 @@ function StepAttempts({ threadId }: { threadId: string }) {
 }
 
 function formatTokens(prompt: number, completion: number): string {
-  const total = prompt + completion;
-  if (total >= 1000) return `${Math.round(total / 1000)}k tokens`;
-  return `${total} tokens`;
+  return formatTokenCount(prompt + completion, { zero: '0 tokens', suffix: ' tokens' });
 }
 
 function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`;
-}
-
-function formatBytes(value: number): string {
-  if (value < 1024) return `${value.toLocaleString()} B`;
-  return `${(value / 1024).toFixed(1)} KB`;
 }
 
 function formatPromptMaterialKind(kind: string): string {

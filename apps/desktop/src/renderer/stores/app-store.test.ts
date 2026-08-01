@@ -46,6 +46,15 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   ...overrides,
 });
 
+const appendEvent = (threadId: string, suffix = 'first') =>
+  useAppStore
+    .getState()
+    .appendCanonicalEvent(
+      threadId,
+      { kind: 'text', content: threadId },
+      { id: `${threadId}:${suffix}`, createdAt: '2026-04-16T00:00:00.000Z' },
+    );
+
 describe('app-store', () => {
   beforeEach(() => {
     // Reset store to a known state before each test.
@@ -58,6 +67,8 @@ describe('app-store', () => {
       currentPlan: null,
       currentReview: null,
       currentVerification: null,
+      terminalPaneThreadIds: [],
+      terminalPaneMetaByThread: {},
     });
   });
 
@@ -327,6 +338,116 @@ describe('app-store', () => {
       useAppStore.getState().appendCanonicalEvents('thread-empty', []);
       expect(useAppStore.getState()).toBe(before);
     });
+
+    it('evicts the least recently written threads past the stream bound', () => {
+      useAppStore.setState({
+        canonicalTerminalStream: {},
+        activeThreadId: null,
+        terminalThreadId: null,
+        assistantThreadId: null,
+        terminalPaneThreadIds: [],
+      });
+
+      // Five past the bound of 20, so the five oldest keys should be gone.
+      for (let i = 0; i < 25; i += 1) {
+        appendEvent(`bounded-${i}`);
+      }
+
+      const keys = Object.keys(useAppStore.getState().canonicalTerminalStream);
+      expect(keys).toHaveLength(20);
+      expect(keys[0]).toBe('bounded-5');
+      expect(keys.at(-1)).toBe('bounded-24');
+    });
+
+    it('re-orders a rewritten thread to the newest slot instead of duplicating it', () => {
+      useAppStore.setState({
+        canonicalTerminalStream: {},
+        activeThreadId: null,
+        terminalThreadId: null,
+        assistantThreadId: null,
+        terminalPaneThreadIds: [],
+      });
+
+      for (let i = 0; i < 20; i += 1) {
+        appendEvent(`recency-${i}`);
+      }
+      // Touching the oldest thread makes it the newest, so the next write over
+      // the bound evicts recency-1 rather than recency-0.
+      appendEvent('recency-0', 'second');
+      appendEvent('recency-20');
+
+      const keys = Object.keys(useAppStore.getState().canonicalTerminalStream);
+      expect(keys).toHaveLength(20);
+      expect(keys).not.toContain('recency-1');
+      expect(keys.at(-2)).toBe('recency-0');
+      expect(keys.at(-1)).toBe('recency-20');
+    });
+
+    it('never evicts threads the UI is currently rendering', () => {
+      useAppStore.setState({
+        canonicalTerminalStream: {},
+        activeThreadId: 'pinned-active',
+        terminalThreadId: 'pinned-terminal',
+        assistantThreadId: 'pinned-assistant',
+        terminalPaneThreadIds: ['pinned-pane'],
+      });
+
+      for (const threadId of [
+        'pinned-active',
+        'pinned-terminal',
+        'pinned-assistant',
+        'pinned-pane',
+      ])
+        appendEvent(threadId);
+      for (let i = 0; i < 30; i += 1) {
+        appendEvent(`churn-${i}`);
+      }
+
+      const stream = useAppStore.getState().canonicalTerminalStream;
+      expect(stream['pinned-active']).toHaveLength(1);
+      expect(stream['pinned-terminal']).toHaveLength(1);
+      expect(stream['pinned-assistant']).toHaveLength(1);
+      expect(stream['pinned-pane']).toHaveLength(1);
+      // Pinning changes which keys are dropped, not how many are kept: the
+      // churn threads absorb the whole eviction quota.
+      expect(Object.keys(stream)).toHaveLength(20);
+      expect(stream['churn-0']).toBeUndefined();
+      expect(stream['churn-29']).toHaveLength(1);
+    });
+  });
+
+  describe('keyed cache bounds', () => {
+    it('bounds per-thread and per-process caches', () => {
+      useAppStore.setState({
+        currentModels: {},
+        lastActivityByThread: {},
+        terminalEventsByThread: {},
+        processToThread: {},
+        agentOutputs: {},
+        activeThreadId: null,
+        terminalThreadId: null,
+        assistantThreadId: null,
+        terminalPaneThreadIds: [],
+      });
+
+      for (let i = 0; i < 130; i += 1) {
+        useAppStore.getState().setCurrentModel(`model-thread-${i}`, 'sonnet');
+        useAppStore.getState().touchLastActivity(`activity-thread-${i}`);
+        useAppStore.getState().logTerminalEventForThread(`log-thread-${i}`, 'line');
+        useAppStore.getState().mapProcessToThread(`process-${i}`, `thread-${i}`);
+        useAppStore.getState().appendAgentOutput(`output-process-${i}`, 'chunk');
+      }
+
+      const state = useAppStore.getState();
+      expect(Object.keys(state.currentModels)).toHaveLength(100);
+      expect(Object.keys(state.lastActivityByThread)).toHaveLength(100);
+      expect(Object.keys(state.terminalEventsByThread)).toHaveLength(100);
+      expect(Object.keys(state.processToThread)).toHaveLength(100);
+      expect(Object.keys(state.agentOutputs)).toHaveLength(100);
+      expect(state.currentModels['model-thread-29']).toBeUndefined();
+      expect(state.currentModels['model-thread-30']).toBe('sonnet');
+      expect(state.processToThread['process-129']).toBe('thread-129');
+    });
   });
 
   describe('terminal pane metadata', () => {
@@ -372,6 +493,21 @@ describe('app-store', () => {
       useAppStore.getState().setTerminalSplitDirection('vertical');
       expect(useAppStore.getState().terminalSplitDirection).toBe('vertical');
     });
+
+    it('writes no metadata for a thread dropped at the pane cap', () => {
+      useAppStore.setState({ terminalPaneThreadIds: [], terminalPaneMetaByThread: {} });
+
+      for (let i = 0; i < 5; i += 1) {
+        useAppStore.getState().addTerminalPane(`pane-${i}`, { mode: 'live', title: `Pane ${i}` });
+      }
+
+      const state = useAppStore.getState();
+      expect(state.terminalPaneThreadIds).toEqual(['pane-0', 'pane-1', 'pane-2', 'pane-3']);
+      // removeTerminalPane only ever runs for open panes, so metadata for the
+      // rejected thread would never be reclaimed.
+      expect(state.terminalPaneMetaByThread['pane-4']).toBeUndefined();
+      expect(Object.keys(state.terminalPaneMetaByThread)).toHaveLength(4);
+    });
   });
 
   describe('view and modal actions', () => {
@@ -386,7 +522,7 @@ describe('app-store', () => {
         currentVerification: { passed: false } as never,
       });
 
-      useAppStore.getState().openOverview();
+      useAppStore.getState().openView('overview');
       expect(useAppStore.getState()).toMatchObject({
         viewMode: 'overview',
         activeIssue: null,
@@ -398,16 +534,10 @@ describe('app-store', () => {
         currentVerification: null,
       });
 
-      useAppStore.getState().openActivity();
-      expect(useAppStore.getState().viewMode).toBe('activity');
-      useAppStore.getState().openInbox();
-      expect(useAppStore.getState().viewMode).toBe('inbox');
-      useAppStore.getState().openCosts();
-      expect(useAppStore.getState().viewMode).toBe('costs');
-      useAppStore.getState().openSkills();
-      expect(useAppStore.getState().viewMode).toBe('skills');
-      useAppStore.getState().openAutomations();
-      expect(useAppStore.getState().viewMode).toBe('automations');
+      for (const mode of ['activity', 'inbox', 'costs', 'skills', 'automations'] as const) {
+        useAppStore.getState().openView(mode);
+        expect(useAppStore.getState().viewMode).toBe(mode);
+      }
     });
 
     it('opens and closes modals through command surfaces', () => {
@@ -525,7 +655,6 @@ describe('app-store', () => {
       useAppStore.getState().setReview({ approved: true } as never);
       useAppStore.getState().setVerification({ passed: true } as never);
       useAppStore.getState().setSystemHealth({ git: { available: true } } as never);
-      useAppStore.getState().setGithubIssues([makeIssue({ id: 'issue-updated' })]);
 
       expect(useAppStore.getState()).toMatchObject({
         currentPlan: { tasks: [] },
@@ -533,7 +662,6 @@ describe('app-store', () => {
         currentVerification: { passed: true },
         systemHealth: { git: { available: true } },
       });
-      expect(useAppStore.getState().githubIssues[0]?.id).toBe('issue-updated');
     });
   });
 

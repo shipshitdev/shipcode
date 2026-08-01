@@ -1,9 +1,7 @@
-import { exec, execFile } from 'node:child_process';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import {
   checkCliProviderUsage,
   checkDesktopApps,
@@ -51,12 +49,14 @@ import {
   TRIAGE_RULE_LIMIT,
   validateGithubProjectUrl,
 } from '@shipcode/shared';
-import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
+import { execAsync, execFileAsync } from '@shipcode/shared/exec-async';
+import { expandTilde, resolveWorktreeParent } from '@shipcode/shared/worktree-path';
 import { app, dialog, safeStorage, shell } from 'electron';
 import { runAutoCommitWorkflow, runCleanupAnalyze, runCleanupApply } from '../git-workflows';
 import { applyLaunchAtLoginSetting } from '../launch-at-login';
 import log from '../logger.service';
 import { NotificationCredentialStore } from '../notification-credential-store';
+import { safeSend } from '../safe-send';
 import { encryptSecureSecret, isSecureSecretValue } from '../secure-secret';
 import { isSafeExternalUrl } from '../security';
 import { configureMainTelemetry, getTelemetryStatus } from '../telemetry';
@@ -70,8 +70,6 @@ import {
 import { registerProjectCodeBrowserHandlers } from './register-project-code-browser-handlers';
 import type { IpcHandlerDeps } from './types';
 
-const execAsync = promisify(exec);
-const execFileAsync = promisify(execFile);
 const PROJECT_OPEN_TARGET_ORDER: ProjectOpenTarget[] = [
   'cursor',
   'finder',
@@ -1093,13 +1091,10 @@ export function registerProjectHandlers({
         if (!queries.githubIssues.resetToTodo(issue.id)) {
           queries.githubIssues.reconcileCompletedFromEvidence(issue.id);
         }
-        mainWindow.webContents.send('github:issues-updated', {
-          projectId: issue.projectId,
-          issues: queries.githubIssues.list(issue.projectId),
-        });
+        sendGithubIssuesUpdated(mainWindow, queries, issue.projectId);
       }
 
-      mainWindow.webContents.send('pipeline:phase', { threadId, phase: PIPELINE_PHASE.idle });
+      safeSend(mainWindow, 'pipeline:phase', { threadId, phase: PIPELINE_PHASE.idle });
       return { restored: true as const, checkpoint };
     },
   );
@@ -1130,23 +1125,12 @@ export function registerProjectHandlers({
     },
   );
 
-  ipcMain.handle('review:get', (_event, { planId }: { planId: string }) => {
-    return queries.reviews.getByPlanId(planId);
-  });
-
   ipcMain.handle('review:list-by-plans', (_event, { planIds }: { planIds: string[] }) => {
     return queries.reviews.listByPlanIds(planIds);
   });
 
   ipcMain.handle('diff:list', (_event, { threadId }: { threadId: string }) => {
     return queries.diffs.list(threadId);
-  });
-
-  ipcMain.handle('git:status', async (_event, { projectId }: { projectId: string }) => {
-    const project = queries.projects.getById(projectId);
-    if (!project) throw new Error(`Project ${projectId} not found`);
-    const git = new GitService(project.path);
-    return git.getStatus();
   });
 
   ipcMain.handle(
@@ -1253,14 +1237,13 @@ export function registerProjectHandlers({
   ipcMain.handle('fs:resolve-start-dir', () => {
     const settings = queries.settings.get();
     const raw = settings.addProjectStartsIn;
+    const expanded = raw ? expandTilde(raw) : null;
+    // Relative and `~user/…` inputs fall back to home rather than throwing —
+    // this is a browser start directory, not a validated setting.
     let resolvedPath: string;
-    if (!raw) {
-      resolvedPath = os.homedir();
-    } else if (raw === '~') {
-      resolvedPath = os.homedir();
-    } else if (raw.startsWith('~/')) {
-      resolvedPath = path.join(os.homedir(), raw.slice(2));
-    } else if (path.isAbsolute(raw)) {
+    if (expanded) {
+      resolvedPath = expanded;
+    } else if (raw && path.isAbsolute(raw)) {
       resolvedPath = raw;
     } else {
       resolvedPath = os.homedir();
@@ -1284,9 +1267,10 @@ export function registerProjectHandlers({
       const settings = queries.settings.get();
       const startRaw = settings.addProjectStartsIn?.trim() || '';
       let startRoot = home;
-      if (startRaw && startRaw !== '~') {
-        if (startRaw.startsWith('~/')) {
-          startRoot = path.resolve(path.join(home, startRaw.slice(2)));
+      if (startRaw) {
+        const expandedStart = expandTilde(startRaw);
+        if (expandedStart) {
+          startRoot = path.resolve(expandedStart);
         } else if (path.isAbsolute(startRaw)) {
           startRoot = path.resolve(startRaw);
         }
@@ -1531,6 +1515,10 @@ export function registerProjectHandlers({
           ),
         );
         if (removedWorktreePaths.size > 0) {
+          // Serial across threads on purpose: each call batches its own refs into
+          // one `update-ref` transaction, and every ref deletion in the repo
+          // contends on the same packed-refs lock. Concurrency here would only
+          // trade the lock's short retry timeout for skipped refs.
           for (const thread of queries.threads.list(project.id)) {
             if (!thread.worktreePath || !removedWorktreePaths.has(thread.worktreePath)) continue;
             try {

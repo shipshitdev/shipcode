@@ -205,7 +205,7 @@ export interface ManagedProcessSpawnOptions {
    * When provided, the spawn site asserts `cwd` is a canonical linked worktree
    * registered to `projectPath`. Defense-in-depth — see `assertWorkspaceSafe`.
    * Pipeline worktree spawns opt in; instant terminals at the project root do not.
-   * `null` matches the AppSettings default; `''` means project-local mode.
+   * `null` matches the AppSettings default (~/.shipcode/worktrees).
    */
   workspaceRoot?: string | null;
   /** Exact repository root used to reject worktrees from foreign repositories. */
@@ -348,8 +348,22 @@ function prepareSpawn(
   };
 }
 
+/**
+ * How long a process gets to honour a polite kill signal before it is SIGKILLed.
+ * Children that install a no-op SIGTERM handler (or wedge in an uninterruptible
+ * syscall) would otherwise outlive the app forever.
+ */
+export const KILL_ESCALATION_GRACE_MS = 5_000;
+
 export class ProcessManager extends EventEmitter {
   private processes: Map<string, ManagedProcess> = new Map();
+
+  /**
+   * processId → pending SIGKILL escalation. Keyed by id but validated against
+   * the exact `ManagedProcess` object when it fires, so a timer can never land
+   * on a different process that happens to reuse the id.
+   */
+  private escalationTimers: Map<string, NodeJS.Timeout> = new Map();
 
   spawn(
     type: AgentType,
@@ -432,6 +446,7 @@ export class ProcessManager extends EventEmitter {
 
     ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
       managed.exitCode = exitCode;
+      this.clearEscalation(id);
       this.updateState(id, 'exited');
       this.emit('exit', id, exitCode);
       // Drop after synchronous listeners observe the terminal state.
@@ -535,6 +550,7 @@ export class ProcessManager extends EventEmitter {
       if (finalized) return;
       finalized = true;
       managed.exitCode = exitCode;
+      this.clearEscalation(id);
       this.updateState(id, 'exited');
       this.emit('exit', id, exitCode);
       queueMicrotask(() => this.processes.delete(id));
@@ -559,18 +575,38 @@ export class ProcessManager extends EventEmitter {
       keepOpen: options.keepStdinOpen === true,
       onError: (err) => {
         emitOutput(`\x1b[31mError writing prompt to ${command}: ${err.message}\x1b[0m\r\n`);
-        this.killManagedProcess(managed);
+        // Route through kill() so the SIGTERM→SIGKILL escalation timer arms —
+        // a child that ignores SIGTERM after a failed prompt write must not
+        // linger (see KILL_ESCALATION_GRACE_MS).
+        this.kill(id);
       },
     });
 
     return managed;
   }
 
-  kill(processId: string, signal?: string): void {
+  /**
+   * Send a kill signal to a managed process.
+   *
+   * The process is marked `terminating`, never `exited` — only the real pty
+   * `exit` / child `close` event may declare a process dead. Marking it exited
+   * here would make every downstream liveness check (escalation timers,
+   * shutdown waits, stall watchdog) a no-op against a process that is still
+   * running because it ignored the signal.
+   *
+   * Escalation to SIGKILL is the default and is owned by the manager: a caller
+   * that asked for a process to die means it, and only the manager knows when
+   * the process actually exits so the timer can be cleared. Pass
+   * `escalateAfterMs: 0` to opt out (callers running their own escalation).
+   */
+  kill(processId: string, signal?: string, options?: { escalateAfterMs?: number }): void {
     const process = this.processes.get(processId);
-    if (process && process.state !== 'exited') {
-      this.killManagedProcess(process, signal);
-      this.updateState(processId, 'exited');
+    if (!process || process.state === 'exited') return;
+    this.killManagedProcess(process, signal);
+    if (process.state !== 'terminating') this.updateState(processId, 'terminating');
+    const escalateAfterMs = options?.escalateAfterMs ?? KILL_ESCALATION_GRACE_MS;
+    if (escalateAfterMs > 0 && signal !== 'SIGKILL') {
+      this.scheduleEscalation(process, escalateAfterMs);
     }
   }
 
@@ -594,7 +630,9 @@ export class ProcessManager extends EventEmitter {
 
   resize(processId: string, cols: number, rows: number): void {
     const process = this.processes.get(processId);
-    if (process?.pty && process.state !== 'exited') {
+    // A terminating pty is on its way out — resizing it is pointless and can
+    // throw once the fd is gone.
+    if (process?.pty && process.state !== 'exited' && process.state !== 'terminating') {
       process.pty.resize(cols, rows);
     }
   }
@@ -715,7 +753,9 @@ export class ProcessManager extends EventEmitter {
 
     for (const proc of pending) {
       try {
-        this.killManagedProcess(proc);
+        // No per-process escalation timer here: the grace race below owns the
+        // SIGKILL follow-up for the whole batch.
+        this.kill(proc.id, undefined, { escalateAfterMs: 0 });
       } catch {
         // ignore — process may already be dead
       }
@@ -753,17 +793,18 @@ export class ProcessManager extends EventEmitter {
    * caller (typically the pipeline watchdog) can transition the matching
    * threads to a failed state with a "stalled" reason.
    *
-   * Pass 0 to disable — a no-op that returns an empty array. SIGHUP first;
-   * `cleanup()` / exit handler will drop the entry from the registry
-   * once the process actually dies. Idempotent: a stalled process whose
-   * process is already exited is skipped.
+   * Pass 0 to disable — a no-op that returns an empty array. SIGHUP first,
+   * escalating to SIGKILL after the grace period; `cleanup()` / exit handler
+   * will drop the entry from the registry once the process actually dies.
+   * Idempotent: a process that is already exited — or already terminating from
+   * an earlier tick, with its escalation armed — is skipped.
    */
   killStalled(stallTimeoutMs: number): string[] {
     if (!Number.isFinite(stallTimeoutMs) || stallTimeoutMs <= 0) return [];
     const now = Date.now();
     const killed: string[] = [];
     for (const proc of this.processes.values()) {
-      if (proc.state === 'exited') continue;
+      if (proc.state === 'exited' || proc.state === 'terminating') continue;
       const idleMs = now - proc.lastEventAt;
       if (idleMs < stallTimeoutMs) continue;
       this.emit(
@@ -772,7 +813,7 @@ export class ProcessManager extends EventEmitter {
         `\r\n[shipcode] No output for ${Math.round(idleMs / 1000)}s; killing stalled ${proc.type} process.\r\n`,
       );
       try {
-        this.killManagedProcess(proc);
+        this.kill(proc.id);
       } catch {
         // process may already be dead — exit handler will fire either way.
       }
@@ -785,6 +826,41 @@ export class ProcessManager extends EventEmitter {
     const process = this.processes.get(processId);
     if (process && process.state === 'exited') {
       this.processes.delete(processId);
+    }
+  }
+
+  /**
+   * Arm a one-shot SIGKILL for a process that was politely signalled. At most
+   * one escalation is pending per process; a second `kill()` with the same
+   * option does not restart the clock.
+   */
+  private scheduleEscalation(proc: ManagedProcess, delayMs: number): void {
+    if (this.escalationTimers.has(proc.id)) return;
+    const timer = setTimeout(() => {
+      this.escalationTimers.delete(proc.id);
+      const current = this.processes.get(proc.id);
+      // Identity check, not just id: guards against a recycled id.
+      if (!current || current !== proc || current.state === 'exited') return;
+      this.emit(
+        'output',
+        proc.id,
+        `\r\n[shipcode] Process ignored the kill signal for ${Math.round(delayMs / 1000)}s; sending SIGKILL.\r\n`,
+      );
+      try {
+        this.killManagedProcess(proc, 'SIGKILL');
+      } catch {
+        // Process may have died in the gap — the exit handler owns the state.
+      }
+    }, delayMs);
+    timer.unref?.();
+    this.escalationTimers.set(proc.id, timer);
+  }
+
+  private clearEscalation(processId: string): void {
+    const timer = this.escalationTimers.get(processId);
+    if (timer) {
+      clearTimeout(timer);
+      this.escalationTimers.delete(processId);
     }
   }
 

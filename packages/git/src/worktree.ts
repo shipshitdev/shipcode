@@ -37,7 +37,6 @@ export interface WorktreeManagerOptions {
   /**
    * User-configured worktree root.
    *   null | undefined → use DEFAULT_WORKTREE_ROOT (~/.shipcode/worktrees)
-   *   ''               → legacy project-local (<project>/.shipcode/worktrees)
    *   absolute or ~/…  → custom location
    */
   worktreeRoot?: string | null;

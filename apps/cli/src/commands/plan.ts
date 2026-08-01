@@ -1,4 +1,6 @@
+import { PIPELINE_PHASE } from '@shipcode/shared';
 import { sanitizeCliText } from '../adapters/cli-emitter';
+import { markCliFailure } from '../exit-code';
 import { requireOnboarding } from './guard';
 import { loadIssuePipelineInput, startIssuePipeline } from './issue-pipeline';
 import { waitForThreadTerminal } from './pipeline-wait';
@@ -44,7 +46,9 @@ export async function planCommand(issueNumber: string) {
     console.log(sanitizeCliText(JSON.stringify(latestPlan.structured, null, 2)));
   } else {
     console.log('\nNo plan generated (pipeline may have failed or entered clarification).');
+    markCliFailure();
   }
 
   console.log(`\nThread status: ${sanitizeCliText(thread.status)}`);
+  if (thread.status === PIPELINE_PHASE.failed) markCliFailure();
 }

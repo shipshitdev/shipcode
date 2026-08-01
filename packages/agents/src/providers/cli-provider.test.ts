@@ -20,9 +20,26 @@ const {
   phaseOutputArtifactPath,
   isInteractiveStructured,
   readPhaseOutputArtifact,
-  materializeStdinArgsForLegacySpawn,
   stripCodexProtocol,
 } = _internals;
+
+/**
+ * Prompt shaped like the real thing that broke the argv path: YAML frontmatter
+ * plus a fenced block containing `--flag` tokens. Any of these reaching argv
+ * makes the Claude argparser reject the run.
+ */
+const YAML_PROMPT = [
+  '---',
+  'name: plan-generation',
+  'description: Plan a change',
+  '---',
+  '',
+  'Run the following:',
+  '',
+  '```bash',
+  'claude -p --dangerously-skip-permissions --output-format json',
+  '```',
+].join('\n');
 
 // Base request helper — only the phase + prompt vary per test.
 function req(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
@@ -174,22 +191,11 @@ describe('buildClaudeArgs', () => {
     expect(buildClaudeStdin(req({ phase: 'plan' }))).toBe('PROMPT');
   });
 
-  it('materializes Claude stdin after -p only for legacy spawn managers', () => {
-    expect(materializeStdinArgsForLegacySpawn(['-p', '--output-format', 'json'], 'PROMPT')).toEqual(
-      ['-p', 'PROMPT', '--output-format', 'json'],
-    );
-  });
-
-  it('materializes placeholder stdin forms and leaves unrelated args alone', () => {
-    expect(materializeStdinArgsForLegacySpawn(['-p', '-'], 'PROMPT')).toEqual(['-p', 'PROMPT']);
-    expect(materializeStdinArgsForLegacySpawn(['exec', '-', '--json'], 'PROMPT')).toEqual([
-      'exec',
-      'PROMPT',
-      '--json',
-    ]);
-    expect(materializeStdinArgsForLegacySpawn(['--version'], 'PROMPT')).toEqual(['--version']);
-    const args = ['-p', 'existing'];
-    expect(materializeStdinArgsForLegacySpawn(args)).toBe(args);
+  it('keeps a YAML-frontmatter prompt out of the Claude arg list', () => {
+    const request = req({ phase: 'plan', prompt: YAML_PROMPT });
+    expect(buildClaudeArgs(request)).not.toContain('---');
+    expect(buildClaudeArgs(request).join(' ')).not.toContain('---');
+    expect(buildClaudeStdin(request)).toBe(YAML_PROMPT);
   });
 
   it('review phase supports model and explicit tool hints', () => {
@@ -711,25 +717,44 @@ describe('createClaudeCliProvider', () => {
     );
   });
 
-  it('falls back to legacy spawn args when spawnWithStdin is unavailable', async () => {
-    const { pm, trigger, spawnCalls } = createMockProcessManager({ withStdin: false });
+  it('fails loudly instead of moving the prompt to argv when spawnWithStdin is unavailable', async () => {
+    const { pm, spawnCalls } = createMockProcessManager({ withStdin: false });
     const provider = createClaudeCliProvider(pm);
 
-    const promise = provider.generate(req({ phase: 'plan', workspaceRoot: '/tmp/proj' }));
+    const result = await provider.generate(
+      req({ phase: 'plan', prompt: YAML_PROMPT, workspaceRoot: '/tmp/proj' }),
+    );
+
+    expect(spawnCalls).toHaveLength(0);
+    expect(pm.spawn).not.toHaveBeenCalled();
+    expect(result.exitCode).toBe(1);
+    expect(result.providerError?.kind).toBe('unexpected_stop');
+    expect(result.providerError?.retryable).toBe(false);
+    expect(result.providerError?.message).toContain('spawnWithStdin');
+    expect(result.rawOutput).not.toContain(YAML_PROMPT);
+  });
+
+  it('pipes a YAML-frontmatter prompt through stdin, never argv', async () => {
+    const { pm, trigger, spawnCalls } = createMockProcessManager();
+    const provider = createClaudeCliProvider(pm);
+
+    const promise = provider.generate(req({ phase: 'plan', prompt: YAML_PROMPT }));
     await new Promise((r) => setImmediate(r));
 
-    expect(spawnCalls[0].args[1]).toBe('PROMPT');
-    expect(spawnCalls[0].stdin).toBeUndefined();
-    expect(spawnCalls[0].threadId).toBe('t1');
-    expect(spawnCalls[0].options).toEqual(expect.objectContaining({ workspaceRoot: '/tmp/proj' }));
+    expect(spawnCalls).toHaveLength(1);
+    expect(spawnCalls[0].stdin).toBe(YAML_PROMPT);
+    expect(spawnCalls[0].args).not.toContain('---');
+    expect(spawnCalls[0].args?.join(' ')).not.toContain('---');
 
     await trigger('exit', 'proc-1', 0);
     await promise;
   });
 
   it('surfaces synchronous spawn failures as binary_missing output', async () => {
-    const { pm } = createMockProcessManager({ withStdin: false });
-    vi.mocked(pm.spawn).mockImplementationOnce(() => {
+    const { pm } = createMockProcessManager();
+    vi.mocked(
+      (pm as unknown as { spawnWithStdin: ReturnType<typeof vi.fn> }).spawnWithStdin,
+    ).mockImplementationOnce(() => {
       throw new Error('spawn ENOENT');
     });
     const provider = createClaudeCliProvider(pm);
@@ -742,8 +767,10 @@ describe('createClaudeCliProvider', () => {
   });
 
   it('surfaces non-Error synchronous spawn failures as binary_missing output', async () => {
-    const { pm } = createMockProcessManager({ withStdin: false });
-    vi.mocked(pm.spawn).mockImplementationOnce(() => {
+    const { pm } = createMockProcessManager();
+    vi.mocked(
+      (pm as unknown as { spawnWithStdin: ReturnType<typeof vi.fn> }).spawnWithStdin,
+    ).mockImplementationOnce(() => {
       throw 'spawn failed';
     });
     const provider = createClaudeCliProvider(pm);
@@ -917,15 +944,30 @@ describe('createCodexCliProvider', () => {
     expect(result.resolvedModel).toBe('codex');
   });
 
-  it('uses legacy spawn materialization for Codex stdin when needed', async () => {
-    const { pm, trigger, spawnCalls } = createMockProcessManager({ withStdin: false });
+  it('fails loudly instead of moving the Codex prompt to argv when spawnWithStdin is unavailable', async () => {
+    const { pm, spawnCalls } = createMockProcessManager({ withStdin: false });
     const provider = createCodexCliProvider(pm);
 
-    const promise = provider.generate(req({ phase: 'review' }));
+    const result = await provider.generate(req({ phase: 'review', prompt: YAML_PROMPT }));
+
+    expect(spawnCalls).toHaveLength(0);
+    expect(pm.spawn).not.toHaveBeenCalled();
+    expect(result.exitCode).toBe(1);
+    expect(result.providerError?.kind).toBe('unexpected_stop');
+    expect(result.providerError?.retryable).toBe(false);
+    expect(result.rawOutput).not.toContain(YAML_PROMPT);
+  });
+
+  it('pipes a YAML-frontmatter prompt through Codex stdin, never argv', async () => {
+    const { pm, trigger, spawnCalls } = createMockProcessManager();
+    const provider = createCodexCliProvider(pm);
+
+    const promise = provider.generate(req({ phase: 'review', prompt: YAML_PROMPT }));
     await new Promise((r) => setImmediate(r));
 
-    expect(spawnCalls[0].args[5]).toContain('ShipCode structured-output mode');
-    expect(spawnCalls[0].stdin).toBeUndefined();
+    expect(spawnCalls).toHaveLength(1);
+    expect(spawnCalls[0].stdin).toContain(YAML_PROMPT);
+    expect(spawnCalls[0].args.join(' ')).not.toContain('---');
 
     await trigger('exit', 'proc-1', 0);
     await promise;
@@ -1189,7 +1231,9 @@ describe('interactive structured bridge', () => {
     const toolsIdx = cmd.args.indexOf('--tools');
     expect(cmd.args[toolsIdx + 1]).toBe('Read,Write,Glob,Grep');
     expect(cmd.options).toEqual({ outputMode: 'raw' });
-    expect(cmd.stdin).toBeUndefined();
+    // Interactive commands carry no stdin at all — the prompt lives in the
+    // artifact the trailing instruction points at, never on the piped path.
+    expect('stdin' in cmd).toBe(false);
     const last = cmd.args[cmd.args.length - 1];
     expect(last).toContain(path.join(cwd, '.shipcode', 'runs', 'tid', 'plan-prompt.md'));
     expect(last).toContain(path.join(cwd, '.shipcode', 'runs', 'tid', 'plan-output.md'));

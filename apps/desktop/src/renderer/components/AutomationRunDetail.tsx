@@ -39,6 +39,7 @@ import {
   describeAutomationRun,
   getAutomationRunTotalTokens,
 } from '../features/automations/run-presentation';
+import { useCopyFeedback } from '../hooks/useCopyFeedback';
 import { useAppStore } from '../stores/app-store';
 import { formatTimestamp, SHORT_TIMESTAMP_FORMAT } from './format-timestamp';
 import { ApprovalSection } from './issue-detail/ApprovalSection';
@@ -56,7 +57,7 @@ function useAutomationRunDetailView() {
   const [activeTab, setActiveTab] = useState<'run' | 'plans' | 'diff' | 'history'>('run');
   const [expandedPlanId, setExpandedPlanId] = useState<string | null | undefined>(null);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
-  const [copiedBranch, setCopiedBranch] = useState(false);
+  const { copied: copiedBranch, copy: copyBranch } = useCopyFeedback();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
   const [doneStatusError, setDoneStatusError] = useState<string | null>(null);
@@ -258,11 +259,12 @@ function useAutomationRunDetailView() {
     [threadId, thread?.projectId, thread?.automationId, queryClient],
   );
 
-  const handleCopyBranch = useCallback((branch: string) => {
-    navigator.clipboard.writeText(branch);
-    setCopiedBranch(true);
-    setTimeout(() => setCopiedBranch(false), 1500);
-  }, []);
+  const handleCopyBranch = useCallback(
+    (branch: string) => {
+      void copyBranch(branch);
+    },
+    [copyBranch],
+  );
 
   const createPr = useMutation({
     mutationFn: (tid: string) =>

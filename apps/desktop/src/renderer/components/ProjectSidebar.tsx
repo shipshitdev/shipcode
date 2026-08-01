@@ -45,8 +45,9 @@ import {
   Wrench,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useAppSettings } from '../hooks/useAppSettings';
+import { COL_RESIZE_BODY_CLASS_NAMES, useDragResize } from '../hooks/useDragResize';
 import { NOTIFICATIONS_STALE_TIME, STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { type ProjectTab, useAppStore } from '../stores/app-store';
 import { toast } from '../stores/toast-store';
@@ -89,12 +90,7 @@ function useProjectSidebarView() {
   const viewMode = useAppStore((state) => state.viewMode);
   const settingsVisible = useAppStore((state) => state.settingsVisible);
   const selectProject = useAppStore((state) => state.selectProject);
-  const openOverview = useAppStore((state) => state.openOverview);
-  const openActivity = useAppStore((state) => state.openActivity);
-  const openInbox = useAppStore((state) => state.openInbox);
-  const openCosts = useAppStore((state) => state.openCosts);
-  const openSkills = useAppStore((state) => state.openSkills);
-  const openAutomations = useAppStore((state) => state.openAutomations);
+  const openView = useAppStore((state) => state.openView);
   const openProjectSettingsModal = useAppStore((state) => state.openProjectSettingsModal);
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const openCreateIssueModal = useAppStore((state) => state.openCreateIssueModal);
@@ -170,7 +166,7 @@ function useProjectSidebarView() {
     onSuccess: (_data, projectId) => {
       if (activeProjectId === projectId) {
         selectProject(null);
-        openOverview();
+        openView('overview');
       }
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
@@ -186,7 +182,7 @@ function useProjectSidebarView() {
     onSuccess: (_data, projectId) => {
       if (activeProjectId === projectId) {
         selectProject(null);
-        openOverview();
+        openView('overview');
       }
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
@@ -220,9 +216,14 @@ function useProjectSidebarView() {
     },
   });
 
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
-  const dragRef = useRef<{ startX: number; startW: number } | null>(null);
-  const resizeCleanupRef = useRef<(() => void) | null>(null);
+  // Left-anchored panel: dragging its right edge rightwards widens it.
+  const { size: sidebarWidth, handleResizeMouseDown } = useDragResize({
+    initialSize: SIDEBAR_DEFAULT,
+    axis: 'x',
+    min: SIDEBAR_MIN,
+    max: SIDEBAR_MAX,
+    bodyClassNames: COL_RESIZE_BODY_CLASS_NAMES,
+  });
 
   useEffect(() => {
     const unsubFire = window.shipcode.on('notification:fire', () => {
@@ -236,45 +237,6 @@ function useProjectSidebarView() {
       unsubDismiss();
     };
   }, [queryClient]);
-
-  const handleResizeMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      resizeCleanupRef.current?.();
-      resizeCleanupRef.current = null;
-      dragRef.current = { startX: e.clientX, startW: sidebarWidth };
-      const onMove = (ev: MouseEvent) => {
-        const drag = dragRef.current;
-        if (!drag) return;
-        const delta = ev.clientX - drag.startX;
-        const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, drag.startW + delta));
-        setSidebarWidth(next);
-      };
-      const cleanupResizeDrag = () => {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.body.classList.remove('cursor-col-resize', 'select-none');
-      };
-      const onUp = () => {
-        dragRef.current = null;
-        cleanupResizeDrag();
-        resizeCleanupRef.current = null;
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      document.body.classList.add('cursor-col-resize', 'select-none');
-      resizeCleanupRef.current = cleanupResizeDrag;
-    },
-    [sidebarWidth],
-  );
-
-  useEffect(() => {
-    return () => {
-      resizeCleanupRef.current?.();
-      resizeCleanupRef.current = null;
-      dragRef.current = null;
-    };
-  }, []);
 
   // Pinned projects always float to top and remain alphabetical; unpinned
   // projects keep the user's selected sort order.
@@ -358,7 +320,7 @@ function useProjectSidebarView() {
               'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
               !settingsVisible && viewMode === 'overview' && 'bg-tertiary text-primary font-medium',
             )}
-            onClick={() => openOverview()}
+            onClick={() => openView('overview')}
           >
             <LayoutGrid size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">Overview</span>
@@ -380,7 +342,7 @@ function useProjectSidebarView() {
               'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
               !settingsVisible && viewMode === 'inbox' && 'bg-tertiary text-primary font-medium',
             )}
-            onClick={() => openInbox()}
+            onClick={() => openView('inbox')}
           >
             <Inbox size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">Inbox</span>
@@ -400,7 +362,7 @@ function useProjectSidebarView() {
               'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
               !settingsVisible && viewMode === 'activity' && 'bg-tertiary text-primary font-medium',
             )}
-            onClick={() => openActivity()}
+            onClick={() => openView('activity')}
           >
             <Activity size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">Activity</span>
@@ -413,7 +375,7 @@ function useProjectSidebarView() {
               'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
               !settingsVisible && viewMode === 'skills' && 'bg-tertiary text-primary font-medium',
             )}
-            onClick={() => openSkills()}
+            onClick={() => openView('skills')}
           >
             <Sparkles size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">Skills</span>
@@ -428,7 +390,7 @@ function useProjectSidebarView() {
                 viewMode === 'automations' &&
                 'bg-tertiary text-primary font-medium',
             )}
-            onClick={() => openAutomations()}
+            onClick={() => openView('automations')}
           >
             <Clock3 size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">Automations</span>
@@ -441,7 +403,7 @@ function useProjectSidebarView() {
               'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
               !settingsVisible && viewMode === 'costs' && 'bg-tertiary text-primary font-medium',
             )}
-            onClick={() => openCosts()}
+            onClick={() => openView('costs')}
           >
             <DollarSign size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">Costs</span>

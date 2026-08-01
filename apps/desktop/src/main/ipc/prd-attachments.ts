@@ -4,10 +4,16 @@
  * Each CreateIssueModal instance creates a session here. Files are validated
  * (symlink check, magic byte detection) and copied into an isolated temp dir.
  * The session is cleared on submit or modal close.
+ *
+ * Every filesystem call is async: these run in the Electron main process and an
+ * attachment can be up to 10 MB, so a synchronous copy would freeze the whole
+ * app — renderer IPC, timers, and the pipeline scheduler included — for the
+ * duration of the copy.
  */
 
 import crypto from 'node:crypto';
-import fs from 'node:fs';
+import type { Stats } from 'node:fs';
+import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { StagedPrdAttachment } from '@shipcode/shared';
@@ -76,9 +82,12 @@ const sessions = new Map<string, AttachmentSession>();
 // Public API
 // ---------------------------------------------------------------------------
 
-export function createPrdAttachmentSession(senderId: string, projectId: string): string {
+export async function createPrdAttachmentSession(
+  senderId: string,
+  projectId: string,
+): Promise<string> {
   const sessionId = crypto.randomUUID();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `shipcode-prd-${sessionId.slice(0, 8)}-`));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), `shipcode-prd-${sessionId.slice(0, 8)}-`));
   sessions.set(sessionId, { senderId, projectId, tmpDir, attachments: [] });
   return sessionId;
 }
@@ -88,7 +97,16 @@ export interface StageResult {
   errors: string[];
 }
 
-export function stagePrdAttachments(sessionId: string, filePaths: string[]): StageResult {
+/**
+ * Files are staged one at a time on purpose: the per-file decisions are not
+ * independent. Each candidate is deduped against everything already staged and
+ * counted against PRD_ATTACHMENT_MAX_COUNT, which `break`s the loop mid-list.
+ * The cap is 6 files, so serial awaits cost nothing worth the lost determinism.
+ */
+export async function stagePrdAttachments(
+  sessionId: string,
+  filePaths: string[],
+): Promise<StageResult> {
   const session = sessions.get(sessionId);
   if (!session) throw new Error(`No attachment session: ${sessionId}`);
 
@@ -99,9 +117,9 @@ export function stagePrdAttachments(sessionId: string, filePaths: string[]): Sta
     const filePath = normalisePath(rawPath);
 
     // Guard: reject symlinks
-    let stat: fs.Stats;
+    let stat: Stats;
     try {
-      stat = fs.lstatSync(filePath);
+      stat = await fs.lstat(filePath);
     } catch {
       errors.push(`Cannot stat ${path.basename(filePath)}: file not found`);
       continue;
@@ -133,14 +151,13 @@ export function stagePrdAttachments(sessionId: string, filePaths: string[]): Sta
 
     // Magic byte validation
     const HEADER_BYTES = 12;
-    let header: Buffer;
+    const header = Buffer.alloc(HEADER_BYTES);
     try {
-      const fd = fs.openSync(filePath, 'r');
+      const handle = await fs.open(filePath, 'r');
       try {
-        header = Buffer.alloc(HEADER_BYTES);
-        fs.readSync(fd, header, 0, HEADER_BYTES, 0);
+        await handle.read(header, 0, HEADER_BYTES, 0);
       } finally {
-        fs.closeSync(fd);
+        await handle.close();
       }
     } catch {
       errors.push(`${path.basename(filePath)}: cannot read file`);
@@ -164,7 +181,7 @@ export function stagePrdAttachments(sessionId: string, filePaths: string[]): Sta
     const uniqueName = `${crypto.randomUUID().slice(0, 8)}-${path.basename(filePath)}`;
     const stagedPath = path.join(session.tmpDir, uniqueName);
     try {
-      fs.copyFileSync(filePath, stagedPath);
+      await fs.copyFile(filePath, stagedPath);
     } catch {
       errors.push(`${path.basename(filePath)}: failed to stage file`);
       continue;
@@ -180,11 +197,18 @@ export function stagePrdAttachments(sessionId: string, filePaths: string[]): Sta
     staged.push(attachment);
   }
 
+  // The modal can close (and clear the session) while the awaits above are in
+  // flight. Its temp dir — and every copy just made into it — is already gone,
+  // so report the closure instead of resurrecting a dead session.
+  if (!sessions.has(sessionId)) {
+    return { staged: [], errors: [...errors, 'Attachment session was closed'] };
+  }
+
   session.attachments.push(...staged);
   return { staged, errors };
 }
 
-export function removePrdAttachment(sessionId: string, filePath: string): void {
+export async function removePrdAttachment(sessionId: string, filePath: string): Promise<void> {
   const session = sessions.get(sessionId);
   if (!session) throw new Error(`No attachment session: ${sessionId}`);
 
@@ -194,22 +218,26 @@ export function removePrdAttachment(sessionId: string, filePath: string): void {
   );
   if (idx === -1) return;
 
+  // Drop it from the session synchronously so the renderer's next summary is
+  // correct even if the unlink below loses its race with a session clear.
   const [removed] = session.attachments.splice(idx, 1);
   try {
-    fs.unlinkSync(removed.stagedPath);
+    await fs.unlink(removed.stagedPath);
   } catch {
     // best-effort cleanup
   }
 }
 
-export function clearPrdAttachmentSession(sessionId: string): void {
+export async function clearPrdAttachmentSession(sessionId: string): Promise<void> {
   const session = sessions.get(sessionId);
   if (!session) return;
 
+  // Unregister before awaiting: a concurrent stage/remove must see the session
+  // as gone rather than write into a temp dir that is being torn down.
   sessions.delete(sessionId);
 
   try {
-    fs.rmSync(session.tmpDir, { recursive: true, force: true });
+    await fs.rm(session.tmpDir, { recursive: true, force: true });
   } catch {
     // best-effort cleanup
   }

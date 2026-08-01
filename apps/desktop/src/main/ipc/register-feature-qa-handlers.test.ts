@@ -125,22 +125,14 @@ describe('registerFeatureQaHandlers', () => {
         flowResults: [],
       },
     ] satisfies FeatureQaResult[];
-    const latest = {
-      ...results[0],
-      featureId: 'feature-latest',
-    };
     const deps = makeDeps(results);
-    vi.mocked(deps.queries.featureQaResults.latestByFeature).mockReturnValue(latest);
 
     registerFeatureQaHandlers(deps as never);
     const list = handlers.get('feature-qa:list-by-thread');
-    const latestByFeature = handlers.get('feature-qa:latest-by-feature');
-    if (!list || !latestByFeature) throw new Error('feature QA query handlers not registered');
+    if (!list) throw new Error('feature QA query handlers not registered');
 
     expect(list(undefined, { threadId: 'thread-1' })).toBe(results);
     expect(deps.queries.featureQaResults.listByThread).toHaveBeenCalledWith('thread-1');
-    expect(latestByFeature(undefined, { featureId: 'feature-latest' })).toBe(latest);
-    expect(deps.queries.featureQaResults.latestByFeature).toHaveBeenCalledWith('feature-latest');
   });
 
   it('opens the containing directory for attached evidence files', async () => {

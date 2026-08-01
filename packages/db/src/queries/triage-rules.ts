@@ -1,4 +1,4 @@
-import type { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync, StatementSync } from 'node:sqlite';
 import {
   ISO_NOW_SQL,
   normalizeTriageRuleDraft,
@@ -49,7 +49,7 @@ export class TriageRuleQueries {
 
     const normalized = normalizeTriageRuleDraft(draft);
     const id = normalized.id ?? nanoid();
-    this.insert(projectId, id, count, normalized);
+    this.insert(this.prepareInsert(), projectId, id, count, normalized);
 
     const created = this.getById(id);
     if (!created) throw new Error(`Failed to create triage rule ${id}`);
@@ -100,9 +100,10 @@ export class TriageRuleQueries {
     return transaction(this.db, () => {
       this.db.prepare('DELETE FROM triage_rules WHERE project_id = ?').run(projectId);
 
+      const insertRule = this.prepareInsert();
       drafts.forEach((draft, index) => {
         const normalized = normalizeTriageRuleDraft(draft);
-        this.insert(projectId, normalized.id ?? nanoid(), index, normalized);
+        this.insert(insertRule, projectId, normalized.id ?? nanoid(), index, normalized);
       });
 
       return this.list(projectId);
@@ -116,32 +117,40 @@ export class TriageRuleQueries {
     return row?.count ?? 0;
   }
 
-  private insert(projectId: string, id: string, orderIndex: number, draft: TriageRuleDraft): void {
-    this.db
-      .prepare(
-        `INSERT INTO triage_rules (
-           id, project_id, order_index, name, enabled, conditions, actions
-         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        id,
-        projectId,
-        orderIndex,
-        draft.name,
-        draft.enabled ? 1 : 0,
-        JSON.stringify(draft.conditions),
-        JSON.stringify(draft.actions),
-      );
+  /** Reusable INSERT — hoisted so batch writes prepare once, not once per rule. */
+  private prepareInsert(): StatementSync {
+    return this.db.prepare(
+      `INSERT INTO triage_rules (
+         id, project_id, order_index, name, enabled, conditions, actions
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+  }
+
+  private insert(
+    statement: StatementSync,
+    projectId: string,
+    id: string,
+    orderIndex: number,
+    draft: TriageRuleDraft,
+  ): void {
+    statement.run(
+      id,
+      projectId,
+      orderIndex,
+      draft.name,
+      draft.enabled ? 1 : 0,
+      JSON.stringify(draft.conditions),
+      JSON.stringify(draft.actions),
+    );
   }
 
   private compactOrder(projectId: string): void {
     const rules = this.list(projectId);
+    const reorder = this.db.prepare(
+      `UPDATE triage_rules SET order_index = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+    );
     rules.forEach((rule, index) => {
-      this.db
-        .prepare(
-          `UPDATE triage_rules SET order_index = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
-        )
-        .run(index, rule.id);
+      reorder.run(index, rule.id);
     });
   }
 }

@@ -2,26 +2,45 @@ import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DEFAULT_WORKTREE_ROOT, WORKTREE_DIR } from './constants';
+import { DEFAULT_WORKTREE_ROOT } from './constants';
 
 /**
- * Expand a user-facing worktreeRoot setting into either an absolute directory
- * or the sentinel 'project-local' (meaning: use <project>/.shipcode/worktrees).
+ * Expand a leading `~` against the current user's home directory.
+ *
+ * Returns `null` for anything that is not tilde-prefixed, so callers keep
+ * control of the non-tilde branches (absolute vs relative vs fallback), which
+ * differ between the worktree-root setting and the Add Project browser.
+ * `~user/…` is deliberately not supported and yields `null` too.
+ */
+export function expandTilde(value: string): string | null {
+  if (value === '~') return os.homedir();
+  if (value.startsWith('~/')) return path.join(os.homedir(), value.slice(2));
+  return null;
+}
+
+/**
+ * Expand a user-facing worktreeRoot setting into an absolute directory.
  *
  * Accepted inputs:
- *   null                 → DEFAULT_WORKTREE_ROOT (~/.shipcode/worktrees)
- *   ''                   → 'project-local'
+ *   null | undefined     → DEFAULT_WORKTREE_ROOT (~/.shipcode/worktrees)
+ *   '' (or whitespace)   → DEFAULT_WORKTREE_ROOT — see note below
  *   '~' | '~/…'          → os.homedir() joined with the remainder
  *   absolute path        → path.resolve(value)
  *   anything else        → throws (rejects '~user/…' and relative paths)
+ *
+ * Empty string used to select a `project-local` mode (worktrees under
+ * <project>/.shipcode/worktrees). That mode is retired: the settings store
+ * serializes `null` to `''` for every key, so `''` at rest is indistinguishable
+ * from "unset" and no UI ever offered the choice. It is accepted here — rather
+ * than rejected — so any `''` left in an existing database, IPC payload, or
+ * options bag resolves to the default root instead of throwing at worktree
+ * creation time.
  */
-export function expandWorktreeRoot(raw: string | null | undefined): string | 'project-local' {
-  const value = (raw ?? DEFAULT_WORKTREE_ROOT).trim();
-  if (value === '') return 'project-local';
-  if (value === '~') return os.homedir();
-  if (value.startsWith('~/')) {
-    return path.join(os.homedir(), value.slice(2));
-  }
+export function expandWorktreeRoot(raw: string | null | undefined): string {
+  const trimmed = (raw ?? '').trim();
+  const value = trimmed === '' ? DEFAULT_WORKTREE_ROOT : trimmed;
+  const expanded = expandTilde(value);
+  if (expanded !== null) return expanded;
   if (value.startsWith('~')) {
     throw new Error('~user paths are not supported; use ~/ or an absolute path');
   }
@@ -51,14 +70,81 @@ export function resolveWorktreeParent(
   projectPath: string,
   worktreeRoot: string | null | undefined,
 ): string {
-  const expanded = expandWorktreeRoot(worktreeRoot);
-  if (expanded === 'project-local') {
-    return path.join(projectPath, WORKTREE_DIR);
-  }
-  return path.join(expanded, projectSlug(projectPath));
+  return path.join(expandWorktreeRoot(worktreeRoot), projectSlug(projectPath));
 }
 
 const SAFE_BASENAME = /^[A-Za-z0-9._-]+$/;
+
+const OS_PATH_ALIAS_ROOTS = new Set(['/tmp', '/var', '/private/tmp', '/private/var']);
+
+/**
+ * macOS (and some Linux setups) expose lexical roots that are always symlinks:
+ * `/tmp`→`/private/tmp` and `/var`→`/private/var`. They ship with the OS and are
+ * not user-plantable, so walking through them is safe — unlike any other symlink
+ * on a workspace path, which a caller (or an attacker) could have created.
+ */
+export function isOsPathAliasRoot(candidate: string): boolean {
+  return OS_PATH_ALIAS_ROOTS.has(path.resolve(candidate));
+}
+
+/**
+ * Canonical form of `input` for equality comparisons: realpath-resolved as far
+ * as the path exists, with any missing tail re-appended verbatim. Two spellings
+ * of the same location (`/var/folders/…` and `/private/var/folders/…`) compare
+ * equal, so a caller's lexical path matches what Git persisted.
+ *
+ * Never throws for a missing path: `git worktree list` legitimately reports
+ * registrations whose directory has already been deleted.
+ */
+export function canonicalizeWorktreePath(input: string): string {
+  const resolved = path.resolve(input);
+  const missing: string[] = [];
+  let current = resolved;
+
+  while (true) {
+    try {
+      const real = realpathSync.native(current);
+      return missing.length > 0 ? path.join(real, ...missing) : real;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      // Walk up past segments that do not exist (or that sit under a file);
+      // anything else means we cannot canonicalize, so fail closed.
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return resolved;
+    missing.unshift(path.basename(current));
+    current = parent;
+  }
+}
+
+/**
+ * Reject every user-plantable symlink on `target`'s lexical path, including the
+ * final segment, allowing only OS alias roots. This is the check that stops a
+ * crafted link from redirecting a workspace outside its configured root — path
+ * *equality* is a separate concern handled by `canonicalizeWorktreePath`, which
+ * is why comparing realpaths is not a substitute for this walk.
+ */
+export function assertNoUnsafeSymlinkAncestors(target: string, label: string): void {
+  let ancestor = path.resolve(target);
+
+  while (true) {
+    let link = false;
+    try {
+      link = lstatSync(ancestor).isSymbolicLink();
+    } catch (error) {
+      // Missing ancestors are fine (callers may validate a path before it is
+      // created); anything else means we cannot prove containment, so fail closed.
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    if (link && !isOsPathAliasRoot(ancestor)) {
+      throw new Error(`${label} must not resolve through symlinks (symlink: ${ancestor})`);
+    }
+    const next = path.dirname(ancestor);
+    if (next === ancestor) break;
+    ancestor = next;
+  }
+}
 
 /**
  * Defense-in-depth check before spawning an agent CLI in a workspace.
@@ -69,11 +155,9 @@ const SAFE_BASENAME = /^[A-Za-z0-9._-]+$/;
  *   2. `path.basename(workspacePath)` must match `[A-Za-z0-9._-]+`.
  *      Rejects shell-metacharacter directory names that survived earlier
  *      sanitization (spaces, `$`, backticks, semicolons, etc.).
- *   3. Without a project identity, when `workspaceRoot` is set (i.e. not the
- *      `project-local` sentinel),
- *      `workspacePath` must live under the expanded root. Skipped for
- *      project-local mode (`worktreeRoot === ''`) since the worktree is
- *      under the project itself.
+ *   3. Without a project identity, `workspacePath` must live under the expanded
+ *      root. `workspaceRoot` of `null`/`''` expands to the default root, so
+ *      containment is always enforced on this branch.
  *   4. With `projectPath`, the existing workspace must resolve to a linked
  *      worktree registered to that exact Git repository at that exact path.
  *      This intentionally supersedes root containment because the configured
@@ -106,8 +190,7 @@ export function assertWorkspaceSafe(opts: {
     throw new Error(`workspacePath basename must match [A-Za-z0-9._-]+ (got: ${base})`);
   }
 
-  const expanded = expandWorktreeRoot(workspaceRoot);
-  const boundary = projectPath || expanded === 'project-local' ? null : expanded;
+  const boundary = projectPath ? null : expandWorktreeRoot(workspaceRoot);
 
   if (boundary && !isPathInside(boundary, resolved)) {
     throw new Error(
@@ -125,13 +208,13 @@ export function assertWorkspaceSafe(opts: {
 
 /** Reject an existing workspace whose Git common directory differs from the project. */
 export function assertGitWorkspaceIdentity(projectPath: string, workspacePath: string): void {
+  // Reject crafted links segment by segment rather than by comparing the whole
+  // path to its realpath: OS alias roots make realpath differ for every path
+  // under `/var` or `/tmp`, which is legitimate.
+  assertNoUnsafeSymlinkAncestors(workspacePath, 'workspacePath');
+
   const projectLayout = resolveGitLayout(projectPath);
   const workspaceLayout = resolveGitLayout(workspacePath);
-  if (workspaceLayout.workspaceReal !== path.resolve(workspacePath)) {
-    throw new Error(
-      `workspacePath must not resolve through symlinks (path: ${path.resolve(workspacePath)}, real: ${workspaceLayout.workspaceReal})`,
-    );
-  }
   if (projectLayout.commonDir !== workspaceLayout.commonDir) {
     throw new Error(
       `workspacePath belongs to a foreign Git repository (project: ${projectLayout.commonDir}, workspace: ${workspaceLayout.commonDir})`,
@@ -162,13 +245,9 @@ export function assertGitWorkspaceIdentity(projectPath: string, workspacePath: s
     );
   }
 
-  const registeredPathInput = path.resolve(path.dirname(registeredDotGit));
-  if (registeredPathInput !== path.resolve(workspacePath)) {
-    throw new Error(
-      `workspacePath does not match its Git-registered path (registered: ${registeredPathInput}, path: ${path.resolve(workspacePath)})`,
-    );
-  }
-  const registeredPath = resolveRealPath(registeredPathInput, 'registered worktree path');
+  // Git persists the canonical path, so compare canonical-to-canonical: the
+  // caller may legitimately spell the same location through an OS alias root.
+  const registeredPath = canonicalizeWorktreePath(path.dirname(registeredDotGit));
   if (registeredPath !== workspaceLayout.workspaceReal) {
     throw new Error(
       `workspacePath does not match its Git-registered path (registered: ${registeredPath}, path: ${workspaceLayout.workspaceReal})`,

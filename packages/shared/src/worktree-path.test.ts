@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DEFAULT_WORKTREE_ROOT, WORKTREE_DIR } from './constants';
+import { DEFAULT_WORKTREE_ROOT } from './constants';
 import {
   assertWorkspaceSafe,
   expandWorktreeRoot,
@@ -22,8 +22,10 @@ describe('expandWorktreeRoot', () => {
     expect(expandWorktreeRoot(undefined)).toBe(expected);
   });
 
-  it("returns 'project-local' sentinel for empty string", () => {
-    expect(expandWorktreeRoot('')).toBe('project-local');
+  it('returns default for empty string (project-local retired)', () => {
+    const expected = path.join(os.homedir(), DEFAULT_WORKTREE_ROOT.slice(2));
+    expect(expandWorktreeRoot('')).toBe(expected);
+    expect(expandWorktreeRoot('   ')).toBe(expected);
   });
 
   it('expands bare ~ to homedir', () => {
@@ -86,8 +88,10 @@ describe('projectSlug', () => {
 });
 
 describe('resolveWorktreeParent', () => {
-  it('returns <project>/.shipcode/worktrees for empty-string worktreeRoot', () => {
-    expect(resolveWorktreeParent('/tmp/my-proj', '')).toBe(path.join('/tmp/my-proj', WORKTREE_DIR));
+  it('treats empty-string worktreeRoot the same as null (project-local retired)', () => {
+    expect(resolveWorktreeParent('/tmp/my-proj', '')).toBe(
+      resolveWorktreeParent('/tmp/my-proj', null),
+    );
   });
 
   it('returns <home>/.shipcode/worktrees/<slug> for null worktreeRoot', () => {
@@ -176,13 +180,21 @@ describe('assertWorkspaceSafe', () => {
     ).toThrow(/absolute/);
   });
 
-  it('skips prefix check in project-local mode but enforces basename', () => {
+  it('enforces the default root for empty-string workspaceRoot (project-local retired)', () => {
+    // '' used to skip the containment check entirely (project-local mode).
+    // It now expands to the default root like null, so containment applies.
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: path.join(os.homedir(), '.shipcode/worktrees/proj-abc123/t-01'),
+        workspaceRoot: '',
+      }),
+    ).not.toThrow();
     expect(() =>
       assertWorkspaceSafe({
         workspacePath: '/anywhere/proj/.shipcode/worktrees/t-01',
         workspaceRoot: '',
       }),
-    ).not.toThrow();
+    ).toThrow(/under workspaceRoot/);
     expect(() =>
       assertWorkspaceSafe({
         workspacePath: '/anywhere/proj/.shipcode/worktrees/$(bad)',
@@ -227,6 +239,40 @@ describe('assertWorkspaceSafe', () => {
         projectPath,
       }),
     ).not.toThrow();
+  });
+
+  it('accepts a worktree under an OS-aliased temp root spelled either way', () => {
+    // macOS resolves os.tmpdir() through /var -> /private/var, so the caller's
+    // lexical path and Git's persisted canonical path differ. Both must pass.
+    const { projectPath, worktreePath } = createRepository('alias-root');
+    const realWorktreePath = realpathSync.native(worktreePath);
+
+    for (const candidate of new Set([worktreePath, realWorktreePath])) {
+      expect(() =>
+        assertWorkspaceSafe({
+          workspacePath: candidate,
+          workspaceRoot: path.dirname(candidate),
+          projectPath,
+        }),
+      ).not.toThrow();
+    }
+  });
+
+  it('rejects a worktree reached through a user-created symlinked parent', () => {
+    // Canonicalization alone would accept this: the link resolves to the real
+    // registered worktree. Only the ancestor walk catches the redirect.
+    const { projectPath, worktreePath } = createRepository('symlinked-parent');
+    const realRoot = path.dirname(worktreePath);
+    const linkedRoot = path.join(realRoot, 'linked-root');
+    symlinkSync(realRoot, linkedRoot, 'dir');
+
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: path.join(linkedRoot, path.basename(worktreePath)),
+        workspaceRoot: linkedRoot,
+        projectPath,
+      }),
+    ).toThrow(/must not resolve through symlinks/i);
   });
 
   it('rejects a symlink alias that does not match the Git-registered path', () => {

@@ -6,6 +6,7 @@ import {
   type Thread,
 } from '@shipcode/shared';
 import { app, type BrowserWindow, Notification } from 'electron';
+import { safeSend } from './safe-send';
 
 const DEDUPE_WINDOW_MS = 2_000;
 
@@ -118,9 +119,7 @@ export class NotificationService {
       metadata: { notificationId: record.id, notificationKind: kind },
     });
 
-    if (!this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send('notification:fire', record);
-    }
+    safeSend(this.mainWindow, 'notification:fire', record);
 
     if (settings.notificationOsEnabled && Notification.isSupported()) {
       const n = new Notification({
@@ -129,11 +128,12 @@ export class NotificationService {
         silent: !settings.notificationSoundEnabled,
       });
       n.on('click', () => {
+        // Guards the window activation below, not just the send.
         if (this.mainWindow.isDestroyed()) return;
         if (this.mainWindow.isMinimized()) this.mainWindow.restore();
         this.mainWindow.show();
         this.mainWindow.focus();
-        this.mainWindow.webContents.send('notification:focus-thread', {
+        safeSend(this.mainWindow, 'notification:focus-thread', {
           threadId: thread.id,
           projectId: thread.projectId,
         });
@@ -170,29 +170,23 @@ export class NotificationService {
     const active = this.notifications.listByThread(threadId);
     this.notifications.dismissByThread(threadId);
     this.refreshBadge();
-    if (!this.mainWindow.isDestroyed()) {
-      for (const n of active) {
-        this.mainWindow.webContents.send('notification:dismiss', { id: n.id });
-      }
+    for (const n of active) {
+      safeSend(this.mainWindow, 'notification:dismiss', { id: n.id });
     }
   }
 
   dismiss(id: string) {
     this.notifications.dismiss(id);
     this.refreshBadge();
-    if (!this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send('notification:dismiss', { id });
-    }
+    safeSend(this.mainWindow, 'notification:dismiss', { id });
   }
 
   dismissAll() {
     const active = this.notifications.listActive();
     this.notifications.dismissAll();
     this.refreshBadge();
-    if (!this.mainWindow.isDestroyed()) {
-      for (const n of active) {
-        this.mainWindow.webContents.send('notification:dismiss', { id: n.id });
-      }
+    for (const n of active) {
+      safeSend(this.mainWindow, 'notification:dismiss', { id: n.id });
     }
   }
 }

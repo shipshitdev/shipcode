@@ -1,7 +1,5 @@
-import { exec } from 'node:child_process';
-import fs from 'node:fs';
+import fs from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import type { TerminalEvent } from '@shipcode/agents';
 import {
   ClaudeNormalizer,
@@ -13,7 +11,6 @@ import {
   generateMemoryFiles,
   inspectRepoMemory,
   readMemoryFile,
-  shellExecEnv,
 } from '@shipcode/agents';
 import {
   type AgentType,
@@ -25,6 +22,7 @@ import {
   type ReasoningEffort,
 } from '@shipcode/shared';
 import log, { logProcessOutput } from '../logger.service';
+import { safeSend } from '../safe-send';
 import { assertPrdRewriteModelSupported, resolvePrdRewriteContext } from './helpers';
 import {
   clearPrdAttachmentSession,
@@ -34,25 +32,9 @@ import {
 } from './prd-attachments';
 import type { IpcHandlerDeps } from './types';
 
-const execAsync = promisify(exec);
-
 function supportHandlerError(err: unknown, fallback: string): string {
   if (err instanceof Error || typeof err === 'string') return clampError(err);
   return fallback;
-}
-
-function parseOnboardingRepoList(stdout: string): { id: string; name: string; private: boolean }[] {
-  const seen = new Set<string>();
-  const repos: { id: string; name: string; private: boolean }[] = [];
-  for (const line of stdout.trim().split('\n').filter(Boolean)) {
-    const parsed = JSON.parse(line) as { id?: string; name?: string; private?: boolean };
-    const name = parsed.name?.trim();
-    const id = parsed.id?.trim();
-    if (!id || !name || seen.has(name)) continue;
-    seen.add(name);
-    repos.push({ id, name, private: !!parsed.private });
-  }
-  return repos.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function registerSupportHandlers({
@@ -77,19 +59,6 @@ export function registerSupportHandlers({
   ipcMain.handle('onboarding:check-auth', async () => {
     const [health, ghAuth] = await Promise.all([checkSystemHealthWithAuth(), checkGhAuth()]);
     return { ...health, ghAuth };
-  });
-
-  ipcMain.handle('onboarding:list-repos', async () => {
-    try {
-      const { stdout } = await execAsync(
-        "gh api 'user/repos?per_page=100&affiliation=owner,collaborator,organization_member' --paginate --jq '.[] | {id: .node_id, name: .full_name, private: .private} | @json'",
-        { timeout: 20_000, env: shellExecEnv() },
-      );
-
-      return parseOnboardingRepoList(stdout);
-    } catch (err) {
-      throw new Error(supportHandlerError(err, 'Repository lookup failed'));
-    }
   });
 
   ipcMain.handle(
@@ -122,7 +91,7 @@ export function registerSupportHandlers({
       const skillPath = path.join(project.path, 'skills', 'writing-prds', 'SKILL.md');
       let skillContent: string;
       try {
-        skillContent = fs.readFileSync(skillPath, 'utf-8');
+        skillContent = await fs.readFile(skillPath, 'utf-8');
       } catch {
         skillContent =
           "You are drafting a PRD that will be consumed by the ShipCode pipeline's planner agent. " +
@@ -211,28 +180,43 @@ export function registerSupportHandlers({
 
   ipcMain.handle(
     'prd-attachments:create-session',
-    (_event, { senderId, projectId }: { senderId: string; projectId: string }) => {
-      const sessionId = createPrdAttachmentSession(senderId, projectId);
-      return { sessionId };
+    async (_event, { senderId, projectId }: { senderId: string; projectId: string }) => {
+      try {
+        const sessionId = await createPrdAttachmentSession(senderId, projectId);
+        return { sessionId };
+      } catch (err) {
+        log.error('[prd-attachments:create-session]', err);
+        throw new Error(supportHandlerError(err, 'Could not start attachment session'));
+      }
     },
   );
 
   ipcMain.handle(
     'prd-attachments:stage',
     async (_event, { sessionId, filePaths }: { sessionId: string; filePaths: string[] }) => {
-      return stagePrdAttachments(sessionId, filePaths);
+      try {
+        return await stagePrdAttachments(sessionId, filePaths);
+      } catch (err) {
+        log.error('[prd-attachments:stage]', err);
+        throw new Error(supportHandlerError(err, 'Could not stage attachments'));
+      }
     },
   );
 
   ipcMain.handle(
     'prd-attachments:remove',
-    (_event, { sessionId, filePath }: { sessionId: string; filePath: string }) => {
-      removePrdAttachment(sessionId, filePath);
+    async (_event, { sessionId, filePath }: { sessionId: string; filePath: string }) => {
+      try {
+        await removePrdAttachment(sessionId, filePath);
+      } catch (err) {
+        log.error('[prd-attachments:remove]', err);
+        throw new Error(supportHandlerError(err, 'Could not remove attachment'));
+      }
     },
   );
 
-  ipcMain.handle('prd-attachments:clear', (_event, { sessionId }: { sessionId: string }) => {
-    clearPrdAttachmentSession(sessionId);
+  ipcMain.handle('prd-attachments:clear', async (_event, { sessionId }: { sessionId: string }) => {
+    await clearPrdAttachmentSession(sessionId);
   });
 
   ipcMain.handle('memory:list', (_event, { projectId }: { projectId: string }) => {
@@ -269,12 +253,7 @@ export function registerSupportHandlers({
 
   function emitTerminalEvent(threadId: string, event: TerminalEvent) {
     const record = queries.terminalEvents.create(threadId, event);
-    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
-    try {
-      mainWindow.webContents.send('terminal:event', record);
-    } catch {
-      // webContents destroyed between check and send
-    }
+    safeSend(mainWindow, 'terminal:event', record);
   }
 
   function ensureNormalizer(processId: string, type: string, threadId: string) {
@@ -288,6 +267,8 @@ export function registerSupportHandlers({
   }
 
   processManager.on('output', (processId: string, data: string) => {
+    // Broader than a send guard: with no renderer left there is nobody to feed
+    // the normalizers for either, so the whole listener short-circuits.
     if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
     const proc = processManager.get(processId);
 
@@ -308,21 +289,19 @@ export function registerSupportHandlers({
 
     logProcessOutput(proc?.type ?? 'unknown', data);
 
-    try {
-      mainWindow.webContents.send('agent:output', {
-        processId,
-        chunk: data,
-        threadId: proc?.threadId,
-      });
-    } catch {
-      // webContents destroyed between check and send
-    }
+    safeSend(mainWindow, 'agent:output', {
+      processId,
+      chunk: data,
+      threadId: proc?.threadId,
+    });
   });
 
   processManager.on('stateChange', (processId: string, type: string, state: string) => {
     if (state === 'exited') {
       normalizers.delete(processId);
     }
+    // Broader than a send guard: the trailing terminal-event bookkeeping below
+    // only exists to drive the renderer, so the whole listener short-circuits.
     if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
     const proc = processManager.get(processId);
     const exitSuffix =
@@ -330,16 +309,12 @@ export function registerSupportHandlers({
     if (state === 'running' || state === 'exited') {
       log.info(`[process:${type}] ${processId} → ${state}${exitSuffix}`);
     }
-    try {
-      mainWindow.webContents.send('agent:state', {
-        processId,
-        type,
-        state,
-        threadId: proc?.threadId,
-      });
-    } catch {
-      // webContents destroyed between check and send
-    }
+    safeSend(mainWindow, 'agent:state', {
+      processId,
+      type,
+      state,
+      threadId: proc?.threadId,
+    });
 
     if ((state === 'running' || state === 'exited') && proc?.threadId) {
       const ts = formatClockTime(new Date());

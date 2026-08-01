@@ -32,11 +32,14 @@ function renderWithClient() {
     },
   });
 
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <CodeBrowser />
-    </QueryClientProvider>,
-  );
+  return {
+    queryClient,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <CodeBrowser />
+      </QueryClientProvider>,
+    ),
+  };
 }
 
 function makeWorktree(overrides: Partial<GitWorktreeSummary> = {}): GitWorktreeSummary {
@@ -194,6 +197,85 @@ describe('CodeBrowser', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Diff' }));
     expect(await screen.findByText('No uncommitted changes for this file.')).toBeInTheDocument();
+  });
+
+  /**
+   * Drives the *automatic* worktree switch: the worktree being browsed vanishes
+   * from a `git:visualizer-data` refetch, so the component falls back to another
+   * one on its own — the worktree picker is never touched.
+   */
+  function setupAutoSwitch(treeByWorktree: Record<string, CodeTreeEntry[]>) {
+    let worktrees = [
+      makeWorktree({
+        id: 'wt-shipcode',
+        kind: 'shipcode',
+        path: '/wt-shipcode',
+        branch: 'feature',
+      }),
+    ];
+
+    invokeMock.mockImplementation(async (channel: string, rawArgs?: unknown) => {
+      const args = rawArgs as { relativePath?: string; worktreePath?: string } | undefined;
+      if (channel === 'git:visualizer-data') return makeVisualizerData(worktrees);
+      if (channel === 'code:list-tree') {
+        if (args?.relativePath) return [];
+        return treeByWorktree[args?.worktreePath ?? ''] ?? [];
+      }
+      if (channel === 'code:read-file') {
+        return fileContent({ content: `from ${args?.worktreePath}` });
+      }
+      return null;
+    });
+    useAppStore.setState({ activeProjectId: 'project-1' } as never);
+
+    const { queryClient } = renderWithClient();
+
+    return async function switchToMainWorktree() {
+      worktrees = [makeWorktree()];
+      await queryClient.invalidateQueries({ queryKey: ['git-visualizer-data'] });
+    };
+  }
+
+  it('drops the open file when an automatic worktree switch loses that path', async () => {
+    const switchToMainWorktree = setupAutoSwitch({
+      '/wt-shipcode': [fileEntry({ name: 'app.ts', relativePath: 'app.ts' })],
+      '/repo': [fileEntry({ name: 'other.ts', relativePath: 'other.ts' })],
+    });
+
+    fireEvent.click(await screen.findByText('app.ts'));
+    expect(await screen.findByTestId('syntax-code')).toHaveTextContent('from /wt-shipcode');
+
+    await switchToMainWorktree();
+
+    // The selection is re-validated against the worktree it switched to...
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        'code:list-tree',
+        expect.objectContaining({ worktreePath: '/repo', relativePath: '' }),
+      );
+    });
+    // ...and dropped, instead of being re-resolved into a different file.
+    expect(screen.getByText('Select a file to view its contents.')).toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      'code:read-file',
+      expect.objectContaining({ worktreePath: '/repo' }),
+    );
+  });
+
+  it('keeps the open file across an automatic worktree switch when the path exists', async () => {
+    const switchToMainWorktree = setupAutoSwitch({
+      '/wt-shipcode': [fileEntry({ name: 'app.ts', relativePath: 'app.ts' })],
+      '/repo': [fileEntry({ name: 'app.ts', relativePath: 'app.ts' })],
+    });
+
+    fireEvent.click(await screen.findByText('app.ts'));
+    expect(await screen.findByTestId('syntax-code')).toHaveTextContent('from /wt-shipcode');
+
+    await switchToMainWorktree();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('syntax-code')).toHaveTextContent('from /repo');
+    });
   });
 
   it('clears the selected worktree when visualizer data has no worktrees', async () => {
