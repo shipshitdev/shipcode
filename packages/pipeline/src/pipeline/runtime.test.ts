@@ -747,10 +747,16 @@ describe('createPipelineRuntime', () => {
     expect(deps.processManager.kill).toHaveBeenCalledWith('proc-1');
   });
 
-  it('times out shell commands and escalates to SIGKILL when still running', async () => {
+  /**
+   * Escalation deliberately lives in the ProcessManager: only it sees the real
+   * exit event, so only it can cancel the pending SIGKILL. The runtime promise
+   * has already settled by then, which is exactly why its old inline
+   * `setTimeout` liveness check was dead code. These tests pin the runtime to
+   * one polite kill and no SIGKILL of its own.
+   */
+  it('times out shell commands and delegates the SIGKILL follow-up to the process manager', async () => {
     vi.useFakeTimers();
     const { deps } = makeDeps();
-    deps.processManager.get = vi.fn(() => ({ state: 'running' })) as never;
     const runtime = createPipelineRuntime(deps, {} as never);
     const promise = runtime.runShellCommand(
       'thread-1',
@@ -767,31 +773,30 @@ describe('createPipelineRuntime', () => {
     );
     expect(deps.processManager.kill).toHaveBeenCalledWith('proc-1');
 
-    await vi.advanceTimersByTimeAsync(5_000);
-    expect(deps.processManager.kill).toHaveBeenCalledWith('proc-1', 'SIGKILL');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(deps.processManager.kill).toHaveBeenCalledTimes(1);
+    expect(deps.processManager.kill).not.toHaveBeenCalledWith('proc-1', 'SIGKILL');
   });
 
-  it('does not escalate timed-out shell commands after the process exits', async () => {
+  it('kills the managed process once on abort and leaves escalation to the process manager', async () => {
     vi.useFakeTimers();
     const { deps } = makeDeps();
-    deps.processManager.get = vi.fn(() => ({ state: 'exited' })) as never;
     const runtime = createPipelineRuntime(deps, {} as never);
-    const promise = runtime.runShellCommand(
-      'thread-1',
-      '/repo',
-      'sleep 600',
-      new AbortController().signal,
-      { timeoutMs: 60_000 },
-    );
+    const abort = new AbortController();
+    const promise = runtime.runShellCommand('thread-1', '/repo', 'sleep 600', abort.signal, {
+      timeoutMs: 60_000,
+    });
     const rejection = promise.catch((error: unknown) => error);
 
-    await vi.advanceTimersByTimeAsync(60_000);
+    abort.abort();
     await expect(rejection).resolves.toEqual(
-      expect.objectContaining({ message: 'Command timed out after 1 minutes: sleep 600' }),
+      expect.objectContaining({ message: 'Command aborted: sleep 600' }),
     );
+    expect(deps.processManager.kill).toHaveBeenCalledWith('proc-1');
 
-    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.advanceTimersByTimeAsync(60_000);
     expect(deps.processManager.kill).toHaveBeenCalledTimes(1);
+    expect(deps.processManager.kill).not.toHaveBeenCalledWith('proc-1', 'SIGKILL');
   });
 
   it('ignores late shell process events after a command has settled', async () => {

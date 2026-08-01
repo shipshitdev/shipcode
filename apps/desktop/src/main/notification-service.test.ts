@@ -116,6 +116,7 @@ describe('NotificationService', () => {
     show: vi.fn(),
     focus: vi.fn(),
     webContents: {
+      isDestroyed: vi.fn(() => false),
       send: webContentsSendMock,
     },
   } as unknown as BrowserWindow;

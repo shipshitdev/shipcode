@@ -18,6 +18,7 @@ import {
 } from '@shipcode/shared';
 
 import { logEvent } from '../logger.service';
+import { safeSend } from '../safe-send';
 import {
   assertCliPhaseModelsSupported,
   resolveIssuePhaseModels,
@@ -498,9 +499,7 @@ export function registerPipelineHandlers({
     const record = runId
       ? queries.terminalEvents.create(threadId, event, runId)
       : queries.terminalEvents.create(threadId, event);
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('terminal:event', record);
-    }
+    safeSend(mainWindow, 'terminal:event', record);
     return record;
   };
 

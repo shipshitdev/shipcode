@@ -8,7 +8,7 @@ import {
   type ResolvedIssuePhaseModels,
   type Thread,
 } from '@shipcode/shared';
-import type { Pipeline } from './types';
+import type { Pipeline, PipelineStartOptions } from './types';
 
 const REUSABLE_THREAD_STATUSES = new Set<PipelinePhase>([
   PIPELINE_PHASE.failed,
@@ -16,11 +16,28 @@ const REUSABLE_THREAD_STATUSES = new Set<PipelinePhase>([
   PIPELINE_PHASE.idle,
 ]);
 
+/**
+ * Which entry path a launch represents.
+ *
+ * Both modes share the phase-model options bag, the plan/thread preparation
+ * order, and the failure handling — they differ only in how the thread is
+ * acquired, whether the thread carries a GitHub repo association, and which
+ * pipeline entry point dispatches the run. Keeping the difference as a mode
+ * here (rather than a second launcher) means a change to model routing or
+ * failure handling lands on both paths at once.
+ */
+export const ISSUE_LAUNCH_MODE = {
+  githubIssue: 'github-issue',
+  quickTask: 'quick-task',
+} as const;
+
+export type IssueLaunchMode = (typeof ISSUE_LAUNCH_MODE)[keyof typeof ISSUE_LAUNCH_MODE];
+
 export interface IssuePipelineLaunchDeps {
   threads: ThreadQueries;
   githubIssues: GitHubIssueQueries;
   plans: PlanQueries;
-  pipeline: Pick<Pipeline, 'startFromGitHubIssue'>;
+  pipeline: Pick<Pipeline, 'startFromGitHubIssue' | 'startFromQuickTask'>;
 }
 
 export interface IssuePipelineLaunchHooks {
@@ -35,6 +52,8 @@ export interface LaunchIssuePipelineInput {
   issue: GitHubIssueCacheRecord;
   phaseModels: ResolvedIssuePhaseModels;
   executorModelOverride?: string | null;
+  /** Defaults to `github-issue`. */
+  mode?: IssueLaunchMode;
 }
 
 export async function launchIssuePipeline(
@@ -43,23 +62,44 @@ export async function launchIssuePipeline(
   hooks: IssuePipelineLaunchHooks = {},
 ): Promise<Thread> {
   const { issue, phaseModels, project } = input;
-  const reusableThread = issue.threadId ? deps.threads.getById(issue.threadId) : null;
+  const isQuickTask = (input.mode ?? ISSUE_LAUNCH_MODE.githubIssue) === ISSUE_LAUNCH_MODE.quickTask;
+  const label = isQuickTask ? `Quick task ${issue.issueNumber}` : `Issue #${issue.issueNumber}`;
 
-  if (reusableThread && !REUSABLE_THREAD_STATUSES.has(reusableThread.status)) {
-    throw new Error(`Issue #${issue.issueNumber} already has active thread`);
+  const linkedThread = issue.threadId ? deps.threads.getById(issue.threadId) : null;
+
+  if (linkedThread && !REUSABLE_THREAD_STATUSES.has(linkedThread.status)) {
+    throw new Error(`${label} already has active thread`);
+  }
+
+  // Quick tasks are created with their thread already linked (see the
+  // `pipeline:create-quick-task` handler), so there is nothing to create here —
+  // a missing thread means the cache row is corrupt, not that a fresh run
+  // should be started against a synthetic sentinel issue number.
+  if (isQuickTask) {
+    if (!issue.threadId) throw new Error(`${label} has no linked thread`);
+    if (!linkedThread) throw new Error(`${label}: thread ${issue.threadId} missing`);
   }
 
   deps.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.planning);
   hooks.onIssueStarted?.();
 
   const thread =
-    reusableThread ?? deps.threads.create(issue.projectId, issue.body ?? issue.title, issue.title);
+    linkedThread ?? deps.threads.create(issue.projectId, issue.body ?? issue.title, issue.title);
 
-  if (reusableThread) {
+  if (linkedThread) {
     deps.threads.updateIssueContent(thread.id, issue.body ?? issue.title, issue.title);
   }
 
-  deps.threads.setGithubIssue(thread.id, issue.issueNumber, project.gitRemote);
+  if (isQuickTask) {
+    // Quick tasks have no GitHub repo association — the cache row holds a
+    // negative sentinel issue number, so `github_repo` must stay null or the
+    // pipeline's `isRealGithubIssueNumber` guards start seeing a repo they
+    // cannot address.
+    deps.threads.setGithubIssueNumber(thread.id, issue.issueNumber);
+  } else {
+    deps.threads.setGithubIssue(thread.id, issue.issueNumber, project.gitRemote);
+  }
+
   deps.githubIssues.linkThread(issue.id, thread.id);
   await hooks.onIssueLinked?.(thread);
 
@@ -74,33 +114,49 @@ export async function launchIssuePipeline(
     deps.plans.supersedeAll(thread.id);
     deps.plans.supersedeAllForIssue(issue.projectId, issue.issueNumber, thread.id);
 
-    await deps.pipeline.startFromGitHubIssue(
-      thread.id,
-      project.path,
-      {
-        number: issue.issueNumber,
-        title: issue.title,
-        body: issue.body,
-        labels: issue.labels,
-      },
-      phaseModels.executorModel,
-      {
-        worktreePath: thread.worktreePath,
-        baseBranch: project.defaultBranch,
-        executorModelOverride: input.executorModelOverride ?? null,
-        plannerModel: phaseModels.plannerModel,
-        reviewerModel: phaseModels.reviewerModel,
-        verifierModel: phaseModels.verifierModel,
-        plannerModelIdOverride: phaseModels.plannerModelId,
-        reviewerModelIdOverride: phaseModels.reviewerModelId,
-        executorModelIdOverride: phaseModels.executorModelId,
-        verifierModelIdOverride: phaseModels.verifierModelId,
-        plannerReasoningEffort: phaseModels.plannerReasoningEffort,
-        reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
-        executorReasoningEffort: phaseModels.executorReasoningEffort,
-        verifierReasoningEffort: phaseModels.verifierReasoningEffort,
-      },
-    );
+    const startOptions: PipelineStartOptions = {
+      worktreePath: thread.worktreePath,
+      baseBranch: project.defaultBranch,
+      executorModelOverride: input.executorModelOverride ?? null,
+      plannerModel: phaseModels.plannerModel,
+      reviewerModel: phaseModels.reviewerModel,
+      verifierModel: phaseModels.verifierModel,
+      plannerModelIdOverride: phaseModels.plannerModelId,
+      reviewerModelIdOverride: phaseModels.reviewerModelId,
+      executorModelIdOverride: phaseModels.executorModelId,
+      verifierModelIdOverride: phaseModels.verifierModelId,
+      plannerReasoningEffort: phaseModels.plannerReasoningEffort,
+      reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
+      executorReasoningEffort: phaseModels.executorReasoningEffort,
+      verifierReasoningEffort: phaseModels.verifierReasoningEffort,
+    };
+
+    if (isQuickTask) {
+      await deps.pipeline.startFromQuickTask(
+        thread.id,
+        project.path,
+        {
+          issueNumber: issue.issueNumber,
+          title: issue.title,
+          text: issue.body ?? issue.title,
+        },
+        phaseModels.executorModel,
+        startOptions,
+      );
+    } else {
+      await deps.pipeline.startFromGitHubIssue(
+        thread.id,
+        project.path,
+        {
+          number: issue.issueNumber,
+          title: issue.title,
+          body: issue.body,
+          labels: issue.labels,
+        },
+        phaseModels.executorModel,
+        startOptions,
+      );
+    }
   } catch (error) {
     await hooks.onLaunchError?.(error, thread);
     throw error;

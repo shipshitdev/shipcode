@@ -56,6 +56,7 @@ import { runAutoCommitWorkflow, runCleanupAnalyze, runCleanupApply } from '../gi
 import { applyLaunchAtLoginSetting } from '../launch-at-login';
 import log from '../logger.service';
 import { NotificationCredentialStore } from '../notification-credential-store';
+import { safeSend } from '../safe-send';
 import { encryptSecureSecret, isSecureSecretValue } from '../secure-secret';
 import { isSafeExternalUrl } from '../security';
 import { configureMainTelemetry, getTelemetryStatus } from '../telemetry';
@@ -1090,13 +1091,10 @@ export function registerProjectHandlers({
         if (!queries.githubIssues.resetToTodo(issue.id)) {
           queries.githubIssues.reconcileCompletedFromEvidence(issue.id);
         }
-        mainWindow.webContents.send('github:issues-updated', {
-          projectId: issue.projectId,
-          issues: queries.githubIssues.list(issue.projectId),
-        });
+        sendGithubIssuesUpdated(mainWindow, queries, issue.projectId);
       }
 
-      mainWindow.webContents.send('pipeline:phase', { threadId, phase: PIPELINE_PHASE.idle });
+      safeSend(mainWindow, 'pipeline:phase', { threadId, phase: PIPELINE_PHASE.idle });
       return { restored: true as const, checkpoint };
     },
   );
@@ -1517,6 +1515,10 @@ export function registerProjectHandlers({
           ),
         );
         if (removedWorktreePaths.size > 0) {
+          // Serial across threads on purpose: each call batches its own refs into
+          // one `update-ref` transaction, and every ref deletion in the repo
+          // contends on the same packed-refs lock. Concurrency here would only
+          // trade the lock's short retry timeout for skipped refs.
           for (const thread of queries.threads.list(project.id)) {
             if (!thread.worktreePath || !removedWorktreePaths.has(thread.worktreePath)) continue;
             try {

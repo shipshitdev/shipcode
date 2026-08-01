@@ -79,7 +79,7 @@ export interface AppSettings {
   onboardingVersion: number;
   // Sidebar project ordering preference (pinned projects always float to top first)
   projectSortOrder: 'alpha' | 'recent' | 'added';
-  // null = default (~/.shipcode/worktrees), '' = project-local legacy, else absolute or ~-prefixed
+  // null = default (~/.shipcode/worktrees), else absolute or ~-prefixed
   worktreeRoot: string | null;
   // null = default (~/), else absolute or ~-prefixed path for the Add Project explorer start dir
   addProjectStartsIn: string | null;

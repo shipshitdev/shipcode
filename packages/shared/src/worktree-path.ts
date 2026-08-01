@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DEFAULT_WORKTREE_ROOT, WORKTREE_DIR } from './constants';
+import { DEFAULT_WORKTREE_ROOT } from './constants';
 
 /**
  * Expand a leading `~` against the current user's home directory.
@@ -19,19 +19,26 @@ export function expandTilde(value: string): string | null {
 }
 
 /**
- * Expand a user-facing worktreeRoot setting into either an absolute directory
- * or the sentinel 'project-local' (meaning: use <project>/.shipcode/worktrees).
+ * Expand a user-facing worktreeRoot setting into an absolute directory.
  *
  * Accepted inputs:
- *   null                 → DEFAULT_WORKTREE_ROOT (~/.shipcode/worktrees)
- *   ''                   → 'project-local'
+ *   null | undefined     → DEFAULT_WORKTREE_ROOT (~/.shipcode/worktrees)
+ *   '' (or whitespace)   → DEFAULT_WORKTREE_ROOT — see note below
  *   '~' | '~/…'          → os.homedir() joined with the remainder
  *   absolute path        → path.resolve(value)
  *   anything else        → throws (rejects '~user/…' and relative paths)
+ *
+ * Empty string used to select a `project-local` mode (worktrees under
+ * <project>/.shipcode/worktrees). That mode is retired: the settings store
+ * serializes `null` to `''` for every key, so `''` at rest is indistinguishable
+ * from "unset" and no UI ever offered the choice. It is accepted here — rather
+ * than rejected — so any `''` left in an existing database, IPC payload, or
+ * options bag resolves to the default root instead of throwing at worktree
+ * creation time.
  */
-export function expandWorktreeRoot(raw: string | null | undefined): string | 'project-local' {
-  const value = (raw ?? DEFAULT_WORKTREE_ROOT).trim();
-  if (value === '') return 'project-local';
+export function expandWorktreeRoot(raw: string | null | undefined): string {
+  const trimmed = (raw ?? '').trim();
+  const value = trimmed === '' ? DEFAULT_WORKTREE_ROOT : trimmed;
   const expanded = expandTilde(value);
   if (expanded !== null) return expanded;
   if (value.startsWith('~')) {
@@ -63,11 +70,7 @@ export function resolveWorktreeParent(
   projectPath: string,
   worktreeRoot: string | null | undefined,
 ): string {
-  const expanded = expandWorktreeRoot(worktreeRoot);
-  if (expanded === 'project-local') {
-    return path.join(projectPath, WORKTREE_DIR);
-  }
-  return path.join(expanded, projectSlug(projectPath));
+  return path.join(expandWorktreeRoot(worktreeRoot), projectSlug(projectPath));
 }
 
 const SAFE_BASENAME = /^[A-Za-z0-9._-]+$/;
@@ -152,11 +155,9 @@ export function assertNoUnsafeSymlinkAncestors(target: string, label: string): v
  *   2. `path.basename(workspacePath)` must match `[A-Za-z0-9._-]+`.
  *      Rejects shell-metacharacter directory names that survived earlier
  *      sanitization (spaces, `$`, backticks, semicolons, etc.).
- *   3. Without a project identity, when `workspaceRoot` is set (i.e. not the
- *      `project-local` sentinel),
- *      `workspacePath` must live under the expanded root. Skipped for
- *      project-local mode (`worktreeRoot === ''`) since the worktree is
- *      under the project itself.
+ *   3. Without a project identity, `workspacePath` must live under the expanded
+ *      root. `workspaceRoot` of `null`/`''` expands to the default root, so
+ *      containment is always enforced on this branch.
  *   4. With `projectPath`, the existing workspace must resolve to a linked
  *      worktree registered to that exact Git repository at that exact path.
  *      This intentionally supersedes root containment because the configured
@@ -189,8 +190,7 @@ export function assertWorkspaceSafe(opts: {
     throw new Error(`workspacePath basename must match [A-Za-z0-9._-]+ (got: ${base})`);
   }
 
-  const expanded = expandWorktreeRoot(workspaceRoot);
-  const boundary = projectPath || expanded === 'project-local' ? null : expanded;
+  const boundary = projectPath ? null : expandWorktreeRoot(workspaceRoot);
 
   if (boundary && !isPathInside(boundary, resolved)) {
     throw new Error(

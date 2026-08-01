@@ -37,7 +37,13 @@ export type ContextGeneratorCli = GeneratorCli;
 export type RevisionCount = 0 | 1 | 2 | 3 | 4 | 5;
 export type PipelineSpeedProfile = 'smart_fast' | 'thorough';
 
-export type AgentState = 'starting' | 'running' | 'idle' | 'errored' | 'exited';
+/**
+ * `terminating` means a kill signal was sent but the OS has not reported exit
+ * yet. Only the real pty `exit` / child `close` event may set `exited` — a
+ * process that ignores SIGTERM stays `terminating` so escalation checks can
+ * still see it as alive.
+ */
+export type AgentState = 'starting' | 'running' | 'idle' | 'errored' | 'terminating' | 'exited';
 
 export interface AgentProcess {
   id: string;

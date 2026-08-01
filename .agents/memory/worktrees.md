@@ -3,7 +3,7 @@ name: project_worktrees
 description: Worktree defaults (~/.shipcode/worktrees/<slug>/<threadId>, AppSettings.worktreeRoot) + path-as-truth rule — WorktreeManager.remove(path, branch) takes concrete values, never recompute from threadId
 type: project
 status: active
-last_verified: 2026-07-02
+last_verified: 2026-08-01
 topics: [worktrees, git, cleanup, settings, api-design]
 ---
 
@@ -13,11 +13,19 @@ Every pipeline run happens in its own git worktree to isolate AI-generated chang
 - `projectSlug` = `<basename>-<sha256[:6]>`, deterministic, collision-safe.
 - Global-by-default because project-local worktrees bleed into iCloud/Dropbox-synced project dirs.
 
-**Setting:** `AppSettings.worktreeRoot`
+**Setting:** `AppSettings.worktreeRoot` — **two states, not three**
 - `null` → default (`~/.shipcode/worktrees`)
-- `''` (empty string) → legacy project-local (`<project>/.shipcode/worktrees`)
 - absolute path or `~`-prefix → custom root
 - relative paths and `~user/…` are **rejected at `settings:set` time**, not at worktree creation
+
+**Project-local mode is retired** (was `''` → `<project>/.shipcode/worktrees`). It was
+unreachable in practice: `SettingsStore.set()` serializes `null` to `''` for *every* key, so
+`''` at rest is the storage encoding of "unset" and was never distinguishable from the default;
+no UI ever offered the choice (the Settings input maps a blank field to `null`). `expandWorktreeRoot('')`
+now returns the default root rather than throwing, so any `''` surviving in an old database or an
+options bag degrades to the default instead of breaking worktree creation. Existing on-disk
+project-local worktrees keep validating because `assertWorkspaceSafe` authorizes a concrete
+workspace by its Git linked-worktree registration, never by re-deriving the parent from settings.
 
 **Grep-stable anchors:** `projectSlug` and `resolveWorktreeParent` in `packages/shared/src/worktree-path.ts`; `expandWorktreeRoot` is the validator. Don't hardcode `.shipcode/worktrees` anywhere — always go through `resolveWorktreeParent`.
 
@@ -32,3 +40,11 @@ Every pipeline run happens in its own git worktree to isolate AI-generated chang
 - Enumerate worktrees with `WorktreeManager.list()` (parses `git worktree list --porcelain`, filters by `shipcode/*` branch prefix) — don't glob the filesystem or substring-match the current `worktreeRoot`.
 - New worktree operations follow the same pattern: concrete values in the API, derive-once at creation, persist.
 - When deleting a project: iterate its threads via DB query, `remove(thread.worktreePath, thread.worktreeBranch)` for each, **then** delete the project row.
+
+## Never `git stash` from a worktree (dev workflow, hard rule)
+
+`refs/stash` is a **single repo-global ref shared by every worktree**, not per-worktree state. A `git stash push` in `.claude/worktrees/<name>` lands on the same stack the main checkout and every other worktree use, and a later `git stash pop` there takes whatever is on top — which may be another session's work, applied into the wrong tree while yours stays buried.
+
+**Instead:** `git diff > /tmp/x.patch` to snapshot, or read a clean tree with `git show <ref>:<path>`.
+
+**Recovery if it already happened:** stash commits survive as dangling objects. `git fsck --unreachable | grep commit`, match on `git log -1 --format=%s <sha>`, then `git restore --source=<sha> -- <paths>` for tracked files and `--source=<sha>^3` for the untracked ones the stash carried.

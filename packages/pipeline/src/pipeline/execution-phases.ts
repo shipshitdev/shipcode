@@ -237,6 +237,10 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
         const prior = deps.threads.getById(context.threadId);
         context.worktreePath = chosen.worktreePath;
         deps.threads.setWorktree(context.threadId, chosen.branch, chosen.worktreePath);
+        // Serial on purpose: `remove` runs `git worktree remove` then deletes the
+        // branch, and both mutate shared repo state (.git/worktrees, packed-refs)
+        // behind git's own locks. Running them concurrently trades a few hundred
+        // ms for lock contention and leaked worktree entries.
         for (const c of created) {
           if (c.label !== winner.label) {
             await wm.remove(c.worktreePath, c.branch).catch(() => undefined);
@@ -254,7 +258,8 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
         // Every worker failed, so promoteWinner never runs and the worker
         // worktrees/branches would otherwise leak on disk. Tear each down using
         // its concrete persisted path+branch (never recomputed from threadId —
-        // see .agents/memory/worktrees.md path-as-truth rule).
+        // see .agents/memory/worktrees.md path-as-truth rule). Serial for the
+        // same shared-repo-lock reason as promoteWinner above.
         for (const c of created) {
           await wm.remove(c.worktreePath, c.branch).catch(() => undefined);
         }

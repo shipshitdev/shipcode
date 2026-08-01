@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -41,8 +42,8 @@ const createdSessions: string[] = [];
 const PRD_ATTACHMENT_MAX_COUNT = 6;
 const PRD_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
 
-function openSession(): string {
-  const id = createPrdAttachmentSession('sender-1', 'project-1');
+async function openSession(): Promise<string> {
+  const id = await createPrdAttachmentSession('sender-1', 'project-1');
   createdSessions.push(id);
   return id;
 }
@@ -55,9 +56,9 @@ function tmpFile(ext: string, buf: Buffer): string {
   return p;
 }
 
-afterEach(() => {
+afterEach(async () => {
   for (const id of createdSessions) {
-    clearPrdAttachmentSession(id);
+    await clearPrdAttachmentSession(id);
   }
   createdSessions.length = 0;
   for (const f of tmpFiles) {
@@ -76,14 +77,14 @@ afterEach(() => {
 
 describe('prd-attachments', () => {
   describe('createPrdAttachmentSession', () => {
-    it('returns a uuid string', () => {
-      const id = openSession();
+    it('returns a uuid string', async () => {
+      const id = await openSession();
       expect(typeof id).toBe('string');
       expect(id.length).toBeGreaterThan(0);
     });
 
-    it('creates an empty session', () => {
-      const id = openSession();
+    it('creates an empty session', async () => {
+      const id = await openSession();
       const summary = getPrdAttachmentSessionSummary(id);
       expect(summary).not.toBeNull();
       expect(summary?.attachments).toHaveLength(0);
@@ -91,54 +92,72 @@ describe('prd-attachments', () => {
   });
 
   describe('stagePrdAttachments — happy path', () => {
-    it('stages a valid PNG file', () => {
-      const id = openSession();
+    it('stages a valid PNG file', async () => {
+      const id = await openSession();
       const png = tmpFile('.png', PNG_MAGIC);
-      const result = stagePrdAttachments(id, [png]);
+      const result = await stagePrdAttachments(id, [png]);
       expect(result.errors).toHaveLength(0);
       expect(result.staged).toHaveLength(1);
       expect(result.staged[0]?.mimeType).toBe('image/png');
       expect(result.staged[0]?.fileName).toBe(path.basename(png));
     });
 
-    it('stages a valid JPEG file', () => {
-      const id = openSession();
+    it('stages a valid JPEG file', async () => {
+      const id = await openSession();
       const jpg = tmpFile('.jpg', JPEG_MAGIC);
-      const result = stagePrdAttachments(id, [jpg]);
+      const result = await stagePrdAttachments(id, [jpg]);
       expect(result.errors).toHaveLength(0);
       expect(result.staged[0]?.mimeType).toBe('image/jpeg');
     });
 
-    it('stages a valid GIF file', () => {
-      const id = openSession();
+    it('stages a valid GIF file', async () => {
+      const id = await openSession();
       const gif = tmpFile('.gif', GIF_MAGIC);
-      const result = stagePrdAttachments(id, [gif]);
+      const result = await stagePrdAttachments(id, [gif]);
       expect(result.errors).toHaveLength(0);
       expect(result.staged[0]?.mimeType).toBe('image/gif');
     });
 
-    it('stages a valid WebP file', () => {
-      const id = openSession();
+    it('stages a valid WebP file', async () => {
+      const id = await openSession();
       const webp = tmpFile('.webp', WEBP_MAGIC);
-      const result = stagePrdAttachments(id, [webp]);
+      const result = await stagePrdAttachments(id, [webp]);
       expect(result.errors).toHaveLength(0);
       expect(result.staged[0]?.mimeType).toBe('image/webp');
     });
 
-    it('accumulates attachments across calls', () => {
-      const id = openSession();
+    it('accumulates attachments across calls', async () => {
+      const id = await openSession();
       const png1 = tmpFile('.png', PNG_MAGIC);
       const png2 = tmpFile('.png', PNG_MAGIC);
-      stagePrdAttachments(id, [png1]);
-      stagePrdAttachments(id, [png2]);
+      await stagePrdAttachments(id, [png1]);
+      await stagePrdAttachments(id, [png2]);
       const summary = getPrdAttachmentSessionSummary(id);
       expect(summary?.attachments).toHaveLength(2);
+    });
+
+    it('reports the closure when the session is cleared mid-stage', async () => {
+      const id = await openSession();
+      const png = tmpFile('.png', PNG_MAGIC);
+
+      // Clear the session while the copy is still in flight: its temp dir (and
+      // the copy inside it) is gone, so nothing may be recorded against it.
+      const copySpy = vi.spyOn(fsp, 'copyFile').mockImplementationOnce(async () => {
+        await clearPrdAttachmentSession(id);
+      });
+
+      const result = await stagePrdAttachments(id, [png]);
+      copySpy.mockRestore();
+
+      expect(result.staged).toHaveLength(0);
+      expect(result.errors).toContain('Attachment session was closed');
+      expect(getPrdAttachmentSessionSummary(id)).toBeNull();
     });
   });
 
   describe('stagePrdAttachments — rejection cases', () => {
-    it('rejects symlinks', () => {
-      const id = openSession();
+    it('rejects symlinks', async () => {
+      const id = await openSession();
       const target = tmpFile('.png', PNG_MAGIC);
       const linkPath = path.join(
         os.tmpdir(),
@@ -147,13 +166,13 @@ describe('prd-attachments', () => {
       fs.symlinkSync(target, linkPath);
       tmpFiles.push(linkPath);
 
-      const result = stagePrdAttachments(id, [linkPath]);
+      const result = await stagePrdAttachments(id, [linkPath]);
       expect(result.staged).toHaveLength(0);
       expect(result.errors[0]).toMatch(/symlinks/i);
     });
 
-    it('rejects directory symlinks', () => {
-      const id = openSession();
+    it('rejects directory symlinks', async () => {
+      const id = await openSession();
       const dirPath = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-dir-'));
       const linkPath = path.join(
         os.tmpdir(),
@@ -162,98 +181,103 @@ describe('prd-attachments', () => {
       fs.symlinkSync(dirPath, linkPath);
       tmpFiles.push(linkPath, dirPath);
 
-      const result = stagePrdAttachments(id, [linkPath]);
+      const result = await stagePrdAttachments(id, [linkPath]);
       expect(result.staged).toHaveLength(0);
       expect(result.errors[0]).toMatch(/symlinks/i);
     });
 
-    it('rejects files with invalid magic bytes', () => {
-      const id = openSession();
+    it('rejects files with invalid magic bytes', async () => {
+      const id = await openSession();
       const txt = tmpFile('.png', Buffer.from('not an image at all here!!'));
-      const result = stagePrdAttachments(id, [txt]);
+      const result = await stagePrdAttachments(id, [txt]);
       expect(result.staged).toHaveLength(0);
       expect(result.errors[0]).toMatch(/unsupported file type/i);
     });
 
-    it('rejects duplicate attachments', () => {
-      const id = openSession();
+    it('rejects duplicate attachments', async () => {
+      const id = await openSession();
       const png = tmpFile('.png', PNG_MAGIC);
-      stagePrdAttachments(id, [png]);
-      const result = stagePrdAttachments(id, [png]);
+      await stagePrdAttachments(id, [png]);
+      const result = await stagePrdAttachments(id, [png]);
       expect(result.staged).toHaveLength(0);
       expect(result.errors[0]).toMatch(/already attached/i);
     });
 
-    it('rejects files that exceed the size limit', () => {
-      const id = openSession();
+    it('rejects files that exceed the size limit', async () => {
+      const id = await openSession();
       const bigBuf = Buffer.concat([PNG_MAGIC, Buffer.alloc(PRD_ATTACHMENT_MAX_BYTES)]);
       const big = tmpFile('.png', bigBuf);
-      const result = stagePrdAttachments(id, [big]);
+      const result = await stagePrdAttachments(id, [big]);
       expect(result.staged).toHaveLength(0);
       expect(result.errors[0]).toMatch(/exceeds/i);
     });
 
-    it('stops staging when max count is reached', () => {
-      const id = openSession();
+    it('stops staging when max count is reached', async () => {
+      const id = await openSession();
       const files = Array.from({ length: PRD_ATTACHMENT_MAX_COUNT + 2 }, () =>
         tmpFile('.png', PNG_MAGIC),
       );
-      const result = stagePrdAttachments(id, files);
+      const result = await stagePrdAttachments(id, files);
       expect(result.staged).toHaveLength(PRD_ATTACHMENT_MAX_COUNT);
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
-    it('errors on non-existent path', () => {
-      const id = openSession();
-      const result = stagePrdAttachments(id, ['/non-existent-path/no-such-file.png']);
+    it('errors on non-existent path', async () => {
+      const id = await openSession();
+      const result = await stagePrdAttachments(id, ['/non-existent-path/no-such-file.png']);
       expect(result.staged).toHaveLength(0);
       expect(result.errors[0]).toMatch(/file not found/i);
     });
 
-    it('rejects directories and missing attachment sessions', () => {
-      const id = openSession();
+    it('rejects directories and missing attachment sessions', async () => {
+      const id = await openSession();
       const dirPath = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-attachment-dir-'));
       tmpFiles.push(dirPath);
 
-      const result = stagePrdAttachments(id, [dirPath]);
+      const result = await stagePrdAttachments(id, [dirPath]);
       expect(result.staged).toHaveLength(0);
       expect(result.errors[0]).toMatch(/directories are not allowed/i);
-      expect(() => stagePrdAttachments('missing-session', [])).toThrow(
+      await expect(stagePrdAttachments('missing-session', [])).rejects.toThrow(
         'No attachment session: missing-session',
       );
     });
 
-    it('reports read and copy failures while staging', () => {
-      const id = openSession();
+    it('reports read and copy failures while staging', async () => {
+      const id = await openSession();
       const readFail = tmpFile('.png', PNG_MAGIC);
-      const openSpy = vi.spyOn(fs, 'openSync').mockImplementationOnce(() => {
+      const openSpy = vi.spyOn(fsp, 'open').mockImplementationOnce(() => {
         throw new Error('cannot open');
       });
 
-      const readResult = stagePrdAttachments(id, [readFail]);
+      const readResult = await stagePrdAttachments(id, [readFail]);
       expect(readResult.staged).toHaveLength(0);
       expect(readResult.errors[0]).toMatch(/cannot read file/i);
       openSpy.mockRestore();
 
       const partialRead = tmpFile('.png', PNG_MAGIC);
-      const readSpy = vi.spyOn(fs, 'readSync').mockImplementationOnce(() => {
-        throw new Error('read failed');
-      });
-      const closeSpy = vi.spyOn(fs, 'closeSync');
+      const closeSpy = vi.fn(async () => undefined);
+      const handleSpy = vi.spyOn(fsp, 'open').mockImplementationOnce(
+        async () =>
+          ({
+            read: async () => {
+              throw new Error('read failed');
+            },
+            close: closeSpy,
+          }) as unknown as Awaited<ReturnType<typeof fsp.open>>,
+      );
 
-      const partialReadResult = stagePrdAttachments(id, [partialRead]);
+      const partialReadResult = await stagePrdAttachments(id, [partialRead]);
       expect(partialReadResult.staged).toHaveLength(0);
       expect(partialReadResult.errors[0]).toMatch(/cannot read file/i);
       expect(closeSpy).toHaveBeenCalledTimes(1);
-      readSpy.mockRestore();
-      closeSpy.mockRestore();
+      handleSpy.mockRestore();
 
       const copyFail = tmpFile('.png', PNG_MAGIC);
-      const copySpy = vi.spyOn(fs, 'copyFileSync').mockImplementationOnce(() => {
+      const copySpy = vi.spyOn(fsp, 'copyFile').mockImplementationOnce(() => {
         throw new Error('copy failed');
       });
 
-      const copyResult = stagePrdAttachments(id, [copyFail]);
+      const copyResult = await stagePrdAttachments(id, [copyFail]);
       expect(copyResult.staged).toHaveLength(0);
       expect(copyResult.errors[0]).toMatch(/failed to stage file/i);
       copySpy.mockRestore();
@@ -261,80 +285,80 @@ describe('prd-attachments', () => {
   });
 
   describe('removePrdAttachment', () => {
-    it('removes an attachment by originalPath', () => {
-      const id = openSession();
+    it('removes an attachment by originalPath', async () => {
+      const id = await openSession();
       const png = tmpFile('.png', PNG_MAGIC);
-      const { staged } = stagePrdAttachments(id, [png]);
+      const { staged } = await stagePrdAttachments(id, [png]);
       expect(staged).toHaveLength(1);
 
-      removePrdAttachment(id, staged[0]?.originalPath);
+      await removePrdAttachment(id, staged[0]?.originalPath);
       const summary = getPrdAttachmentSessionSummary(id);
       expect(summary?.attachments).toHaveLength(0);
     });
 
-    it('deletes the staged copy on removal', () => {
-      const id = openSession();
+    it('deletes the staged copy on removal', async () => {
+      const id = await openSession();
       const png = tmpFile('.png', PNG_MAGIC);
-      const { staged } = stagePrdAttachments(id, [png]);
+      const { staged } = await stagePrdAttachments(id, [png]);
       const stagedPath = staged[0]?.stagedPath;
       expect(fs.existsSync(stagedPath)).toBe(true);
 
-      removePrdAttachment(id, staged[0]?.originalPath);
+      await removePrdAttachment(id, staged[0]?.originalPath);
       expect(fs.existsSync(stagedPath)).toBe(false);
     });
 
-    it('removes by stagedPath, ignores missing attachments, and tolerates unlink failures', () => {
-      const id = openSession();
+    it('removes by stagedPath, ignores missing attachments, and tolerates unlink failures', async () => {
+      const id = await openSession();
       const png = tmpFile('.png', PNG_MAGIC);
-      const { staged } = stagePrdAttachments(id, [png]);
+      const { staged } = await stagePrdAttachments(id, [png]);
       expect(staged).toHaveLength(1);
 
-      removePrdAttachment(id, '/tmp/not-attached.png');
+      await removePrdAttachment(id, '/tmp/not-attached.png');
       expect(getPrdAttachmentSessionSummary(id)?.attachments).toHaveLength(1);
 
-      const unlinkSpy = vi.spyOn(fs, 'unlinkSync').mockImplementationOnce(() => {
+      const unlinkSpy = vi.spyOn(fsp, 'unlink').mockImplementationOnce(() => {
         throw new Error('unlink failed');
       });
-      removePrdAttachment(id, staged[0]?.stagedPath);
+      await removePrdAttachment(id, staged[0]?.stagedPath);
       expect(getPrdAttachmentSessionSummary(id)?.attachments).toHaveLength(0);
       unlinkSpy.mockRestore();
 
-      expect(() => removePrdAttachment('missing-session', png)).toThrow(
+      await expect(removePrdAttachment('missing-session', png)).rejects.toThrow(
         'No attachment session: missing-session',
       );
     });
   });
 
   describe('clearPrdAttachmentSession', () => {
-    it('removes all attachments and the temp dir', () => {
-      const id = openSession();
+    it('removes all attachments and the temp dir', async () => {
+      const id = await openSession();
       const summary = getPrdAttachmentSessionSummary(id);
       const tmpDir = (summary as unknown as { tmpDir?: string })?.tmpDir;
 
       const png = tmpFile('.png', PNG_MAGIC);
-      const { staged } = stagePrdAttachments(id, [png]);
+      const { staged } = await stagePrdAttachments(id, [png]);
       const stagedPath = staged[0]?.stagedPath;
 
-      clearPrdAttachmentSession(id);
+      await clearPrdAttachmentSession(id);
 
       expect(getPrdAttachmentSessionSummary(id)).toBeNull();
       expect(fs.existsSync(stagedPath)).toBe(false);
       if (tmpDir) expect(fs.existsSync(tmpDir)).toBe(false);
     });
 
-    it('is idempotent (no throw on double-clear)', () => {
-      const id = openSession();
-      clearPrdAttachmentSession(id);
-      expect(() => clearPrdAttachmentSession(id)).not.toThrow();
+    it('is idempotent (no throw on double-clear)', async () => {
+      const id = await openSession();
+      await clearPrdAttachmentSession(id);
+      await expect(clearPrdAttachmentSession(id)).resolves.toBeUndefined();
     });
 
-    it('tolerates temp directory cleanup failures', () => {
-      const id = openSession();
-      const rmSpy = vi.spyOn(fs, 'rmSync').mockImplementationOnce(() => {
+    it('tolerates temp directory cleanup failures', async () => {
+      const id = await openSession();
+      const rmSpy = vi.spyOn(fsp, 'rm').mockImplementationOnce(() => {
         throw new Error('rm failed');
       });
 
-      expect(() => clearPrdAttachmentSession(id)).not.toThrow();
+      await expect(clearPrdAttachmentSession(id)).resolves.toBeUndefined();
       expect(getPrdAttachmentSessionSummary(id)).toBeNull();
       rmSpy.mockRestore();
     });

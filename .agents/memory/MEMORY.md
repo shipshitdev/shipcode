@@ -22,7 +22,7 @@ Loaded after `~/.agents/memory/MEMORY.md` (global). Project-scoped facts only. D
 ## Worktrees
 
 - **Default:** `~/.shipcode/worktrees/<projectSlug>/<threadId>` where `projectSlug = <basename>-<sha256[:6]>`.
-- **`AppSettings.worktreeRoot`:** `null`=default, `''`=legacy project-local, absolute/tilde=custom. Validation at `settings:set`.
+- **`AppSettings.worktreeRoot`:** `null`=default, absolute/tilde=custom. Two states only — project-local (`''`) is **retired**; `''` is just the storage encoding of `null`. Validation at `settings:set`.
 - **Grep-stable anchors:** `projectSlug`, `resolveWorktreeParent` in `packages/shared/src/worktree-path.ts`.
 - See: `worktrees.md`.
 
@@ -57,6 +57,7 @@ Where things live:
 - **Pipe `claude -p` prompts via stdin, never argv.** Argparser breaks on `---` YAML. Reuse `runCliWithStdin` in `packages/agents/src/cli-stdin-runner.ts` (one-shot; PRD path is `enhancePrdDraft` → `runPrdCliWithStdin` → `runNoToolsTextGeneration` → `runCliWithStdin`) or `ProcessManager.spawnWithStdin` (managed). No fallback may move a prompt into argv — fail loudly instead. See: `claude-cli.md`.
 - **Do not use `claude -p` for interactive terminal mode.** Interactive mode launches the real terminal CLI, wraps raw output in our own terminal events, and uses process exit as completion. See: `interactive-cli-run-modes.md`.
 - **`WorktreeManager.remove(path, branch)` takes concrete values** — never recompute from `threadId`. See: `worktrees.md`.
+- **Never call `webContents.send` directly in the main process.** Every send goes through `safeSend` in `apps/desktop/src/main/safe-send.ts` — a raw send throws on a destroyed window and that throw escapes the IPC handler, reporting an already-successful write as a failure. See: `ipc-errors.md`.
 - **Clamp IPC errors** to first-line + ~280 chars; log full trace to main-process console only. See: `ipc-errors.md`.
 - **No synchronous git on the pipeline execute path.** It freezes the Electron main event loop. Use the async transport in `packages/git/src/git-exec.ts`, and hold `withGitLock` across any stage→commit sequence. See: `git-transport.md`.
 - **Never compare a timestamp column against `datetime('now', ...)`.** Columns are written with `ISO_NOW_SQL` (`...THH:MM:SS.sssZ`); `datetime()` returns the naive space-separated shape. SQLite compares them as strings, and `'T'` (0x54) > `' '` (0x20) at index 10, so same-calendar-day comparisons are always false. Build the cutoff in JS and bind `new Date(...).toISOString()`. See the docblock in `packages/shared/src/sqlite-time.ts`.

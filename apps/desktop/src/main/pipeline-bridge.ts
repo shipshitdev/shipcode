@@ -17,6 +17,7 @@ import type { BrowserWindow } from 'electron';
 import type { ChatNotificationService } from './chat-notification-service';
 import log, { logEvent } from './logger.service';
 import type { NotificationService } from './notification-service';
+import { safeSend } from './safe-send';
 import { capturePipelineFailure, type TelemetryBreadcrumb } from './telemetry';
 
 interface EmitterDeps {
@@ -194,13 +195,7 @@ export function createElectronEmitter(
     const record = runId
       ? deps.terminalEvents.create(threadId, event, runId)
       : deps.terminalEvents.create(threadId, event);
-    if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
-      try {
-        mainWindow.webContents.send('terminal:event', record);
-      } catch {
-        /* destroyed between check and send */
-      }
-    }
+    safeSend(mainWindow, 'terminal:event', record);
     return record;
   }
 
@@ -277,8 +272,7 @@ export function createElectronEmitter(
   }
 
   function invalidateDashboardImmediate() {
-    if (mainWindow.isDestroyed()) return;
-    mainWindow.webContents.send('dashboard:invalidate', {
+    safeSend(mainWindow, 'dashboard:invalidate', {
       kinds: ['stats', 'activity', 'running', 'recent'],
     });
   }
@@ -420,17 +414,11 @@ export function createElectronEmitter(
   return {
     emit(event: PipelineEvent) {
       if (event.type === 'pipeline:output') {
-        if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
-          try {
-            mainWindow.webContents.send('agent:output', {
-              processId: `test-${event.threadId}`,
-              chunk: event.chunk,
-              threadId: event.threadId,
-            });
-          } catch {
-            /* destroyed between check and send */
-          }
-        }
+        safeSend(mainWindow, 'agent:output', {
+          processId: `test-${event.threadId}`,
+          chunk: event.chunk,
+          threadId: event.threadId,
+        });
         return;
       }
 
@@ -449,13 +437,7 @@ export function createElectronEmitter(
       }
 
       // 1. Forward to renderer (always — preserves existing behaviour).
-      if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
-        try {
-          mainWindow.webContents.send(event.type, event);
-        } catch {
-          /* render frame disposed during HMR */
-        }
-      }
+      safeSend(mainWindow, event.type, event);
 
       // Resolve thread once per event for shared logging/notifications.
       const thread = deps.threads.getById(event.threadId) ?? null;
