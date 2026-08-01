@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -227,6 +227,40 @@ describe('assertWorkspaceSafe', () => {
         projectPath,
       }),
     ).not.toThrow();
+  });
+
+  it('accepts a worktree under an OS-aliased temp root spelled either way', () => {
+    // macOS resolves os.tmpdir() through /var -> /private/var, so the caller's
+    // lexical path and Git's persisted canonical path differ. Both must pass.
+    const { projectPath, worktreePath } = createRepository('alias-root');
+    const realWorktreePath = realpathSync.native(worktreePath);
+
+    for (const candidate of new Set([worktreePath, realWorktreePath])) {
+      expect(() =>
+        assertWorkspaceSafe({
+          workspacePath: candidate,
+          workspaceRoot: path.dirname(candidate),
+          projectPath,
+        }),
+      ).not.toThrow();
+    }
+  });
+
+  it('rejects a worktree reached through a user-created symlinked parent', () => {
+    // Canonicalization alone would accept this: the link resolves to the real
+    // registered worktree. Only the ancestor walk catches the redirect.
+    const { projectPath, worktreePath } = createRepository('symlinked-parent');
+    const realRoot = path.dirname(worktreePath);
+    const linkedRoot = path.join(realRoot, 'linked-root');
+    symlinkSync(realRoot, linkedRoot, 'dir');
+
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: path.join(linkedRoot, path.basename(worktreePath)),
+        workspaceRoot: linkedRoot,
+        projectPath,
+      }),
+    ).toThrow(/must not resolve through symlinks/i);
   });
 
   it('rejects a symlink alias that does not match the Git-registered path', () => {

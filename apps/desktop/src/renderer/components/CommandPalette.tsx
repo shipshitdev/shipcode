@@ -52,7 +52,7 @@ type RunAction = (fn: () => void | Promise<void>) => void;
 
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
-import { useAppStore } from '../stores/app-store';
+import { type GlobalViewMode, useAppStore } from '../stores/app-store';
 import { toast } from '../stores/toast-store';
 
 /**
@@ -85,11 +85,7 @@ function CommandPaletteContent() {
   const activeIssue = useAppStore((state) => state.activeIssue);
   const activeAutomationThreadId = useAppStore((state) => state.activeAutomationThreadId);
   const hasDetailView = activeIssue !== null || activeAutomationThreadId !== null;
-  const openOverview = useAppStore((state) => state.openOverview);
-  const openActivity = useAppStore((state) => state.openActivity);
-  const openInbox = useAppStore((state) => state.openInbox);
-  const openCosts = useAppStore((state) => state.openCosts);
-  const openSkills = useAppStore((state) => state.openSkills);
+  const openView = useAppStore((state) => state.openView);
   const openAssistant = useAppStore((state) => state.openAssistant);
   const openTerminalTab = useAppStore((state) => state.openTerminalTab);
   const setProjectTab = useAppStore((state) => state.setProjectTab);
@@ -207,11 +203,7 @@ function CommandPaletteContent() {
         />
         <GotoCommandGroup
           runAction={runAction}
-          openOverview={openOverview}
-          openInbox={openInbox}
-          openActivity={openActivity}
-          openCosts={openCosts}
-          openSkills={openSkills}
+          openView={openView}
           openAssistant={openAssistant}
           openTerminalTab={openTerminalTab}
           openPullRequests={() => setProjectTab('pull-requests')}
@@ -430,22 +422,14 @@ function QuickActionsCommandGroup({
 
 function GotoCommandGroup({
   runAction,
-  openOverview,
-  openInbox,
-  openActivity,
-  openCosts,
-  openSkills,
+  openView,
   openAssistant,
   openTerminalTab,
   openPullRequests,
   toggleSettings,
 }: {
   runAction: RunAction;
-  openOverview: () => void;
-  openInbox: () => void;
-  openActivity: () => void;
-  openCosts: () => void;
-  openSkills: () => void;
+  openView: (mode: GlobalViewMode) => void;
   openAssistant: () => void;
   openTerminalTab: () => void;
   openPullRequests: () => void;
@@ -456,21 +440,31 @@ function GotoCommandGroup({
       title: 'Overview',
       description: 'Project dashboard and status',
       icon: LayoutDashboard,
-      action: openOverview,
+      action: () => openView('overview'),
     },
-    { title: 'Inbox', description: 'Notifications and updates', icon: Inbox, action: openInbox },
+    {
+      title: 'Inbox',
+      description: 'Notifications and updates',
+      icon: Inbox,
+      action: () => openView('inbox'),
+    },
     {
       title: 'Activity',
       description: 'Recent pipeline and project events',
       icon: Activity,
-      action: openActivity,
+      action: () => openView('activity'),
     },
-    { title: 'Costs', description: 'AI model usage and spend', icon: Wallet, action: openCosts },
+    {
+      title: 'Costs',
+      description: 'AI model usage and spend',
+      icon: Wallet,
+      action: () => openView('costs'),
+    },
     {
       title: 'Skills',
       description: 'Manage pipeline prompt skills',
       icon: Sparkles,
-      action: openSkills,
+      action: () => openView('skills'),
     },
     {
       title: 'Copilot',

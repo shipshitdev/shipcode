@@ -7,7 +7,8 @@ import type {
 } from '@shipcode/shared';
 import { formatClockTime, PIPELINE_PHASE, THREAD_KIND } from '@shipcode/shared';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useDragResize } from '../../hooks/useDragResize';
 import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';
 import { useAppStore } from '../../stores/app-store';
 import {
@@ -177,54 +178,40 @@ export function useTerminalDrawer() {
   );
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
-  const [height, setHeight] = useState(DEFAULT_HEIGHT);
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef<{ y: number; h: number } | null>(null);
+  const onDragStart = useCallback(() => setTerminalMaximized(false), [setTerminalMaximized]);
+  // Bottom-anchored drawer: dragging its top edge upwards grows it. The rendered
+  // height is measured at mousedown because maximize/minimize can leave state
+  // and layout out of step.
+  const {
+    size: height,
+    setSize: setHeight,
+    isDragging,
+    handleResizeMouseDown,
+  } = useDragResize({
+    initialSize: DEFAULT_HEIGHT,
+    axis: 'y',
+    direction: -1,
+    min: MIN_HEIGHT,
+    measureStartSize: (event) => event.currentTarget.parentElement?.getBoundingClientRect().height,
+    onDragStart,
+  });
   const isMaximized = height >= FULL_HEIGHT;
   const isMinimized = height <= MINIMIZED_HEIGHT;
-
-  const handleResizeMouseDown = useCallback(
-    (event: React.MouseEvent) => {
-      event.preventDefault();
-      const measuredHeight = event.currentTarget.parentElement?.getBoundingClientRect().height;
-      const currentHeight = measuredHeight && measuredHeight > 0 ? measuredHeight : height;
-      dragStartRef.current = { y: event.clientY, h: currentHeight };
-      setTerminalMaximized(false);
-      setIsDragging(true);
-
-      const onMove = (moveEvent: MouseEvent) => {
-        if (!dragStartRef.current) return;
-        const delta = dragStartRef.current.y - moveEvent.clientY;
-        setHeight(Math.max(MIN_HEIGHT, dragStartRef.current.h + delta));
-      };
-
-      const onUp = () => {
-        dragStartRef.current = null;
-        setIsDragging(false);
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onUp);
-      };
-
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onUp);
-    },
-    [height, setTerminalMaximized],
-  );
 
   const toggleMaximize = useCallback(() => {
     setHeight((current) => (current >= FULL_HEIGHT ? DEFAULT_HEIGHT : FULL_HEIGHT));
     setTerminalMaximized(false);
-  }, [setTerminalMaximized]);
+  }, [setHeight, setTerminalMaximized]);
 
   const resetHeight = useCallback(() => {
     setHeight(DEFAULT_HEIGHT);
     setTerminalMaximized(false);
-  }, [setTerminalMaximized]);
+  }, [setHeight, setTerminalMaximized]);
 
   const toggleMinimized = useCallback(() => {
     setHeight((current) => (current <= MINIMIZED_HEIGHT ? DEFAULT_HEIGHT : MINIMIZED_HEIGHT));
     setTerminalMaximized(false);
-  }, [setTerminalMaximized]);
+  }, [setHeight, setTerminalMaximized]);
 
   const handleRunningTargetSelect = useCallback(
     (target: TerminalDrawerTarget) => {

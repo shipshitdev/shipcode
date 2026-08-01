@@ -8,7 +8,7 @@ import { ChevronDown, Loader2, Pencil, Play, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
 import { AUTOMATION_RELATIVE_TIME_OPTIONS } from './automation-time';
-import { describeAutomationRun } from './run-presentation';
+import { automationStatusColor, describeAutomationRun } from './run-presentation';
 
 const RUN_HISTORY_LIMIT = 5;
 
@@ -22,12 +22,6 @@ function describeCron(expr: string): string {
     return `Invalid: ${expr}`;
   }
 }
-
-const STATUS_COLOR: Record<string, string> = {
-  running: 'bg-agent/10 text-agent border-agent/25',
-  completed: 'bg-success/12 text-success border-success/25',
-  failed: 'bg-danger/12 text-danger border-danger/25',
-};
 
 export function AutomationsView() {
   const openCreateAutomationModal = useAppStore((s) => s.openCreateAutomationModal);
@@ -172,8 +166,7 @@ function AutomationCard({
                 <span
                   className={cn(
                     'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium',
-                    STATUS_COLOR[automation.lastStatus] ??
-                      'bg-tertiary text-secondary border-border',
+                    automationStatusColor(automation.lastStatus),
                   )}
                 >
                   {automation.lastStatus}
