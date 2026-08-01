@@ -1,8 +1,10 @@
-import { lstatSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { SimpleGit } from 'simple-git';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  assertRegisteredWorktree,
   assertSafeWorktreeBranch,
   assertWorktreeCreateTarget,
   parseRegisteredWorktrees,
@@ -67,5 +69,25 @@ branch refs/heads/ship/42
     const parent = path.join(configured, 'project');
     expect(lstatSync(parent).isSymbolicLink()).toBe(false);
     expect(() => assertWorktreeCreateTarget(parent, path.join(parent, '42'))).toThrow(/symlink/i);
+  });
+
+  it('matches a registration spelled through an OS path alias root', async () => {
+    // macOS registers `/private/var/…` while callers hold the `/var/…` spelling
+    // of the same directory; both must resolve to the same registration.
+    const root = mkdtempSync(path.join(os.tmpdir(), 'shipcode-alias-registration-'));
+    tempRoots.push(root);
+    const registeredPath = path.join(realpathSync.native(root), '42');
+    const git = {
+      raw: async () => `worktree ${registeredPath}\nHEAD abc123\nbranch refs/heads/ship/42\n`,
+    } as unknown as SimpleGit;
+
+    await expect(
+      assertRegisteredWorktree({
+        git,
+        projectPath: root,
+        worktreePath: path.join(root, '42'),
+        branch: 'ship/42',
+      }),
+    ).resolves.toEqual({ path: registeredPath, branch: 'ship/42' });
   });
 });

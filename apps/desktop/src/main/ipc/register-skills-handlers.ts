@@ -214,15 +214,6 @@ export function registerSkillsHandlers({ ipcMain, queries }: IpcHandlerDeps): vo
     },
   );
 
-  ipcMain.handle('skills:list-quarantined', () => {
-    return queries.skills.listQuarantined().map((row) => ({
-      phase: row.phase,
-      projectId: row.projectId,
-      statusReason: row.statusReason,
-      updatedAt: row.updatedAt,
-    }));
-  });
-
   ipcMain.handle('skills:get-writing-prds-info', (_event, { projectId }: { projectId: string }) => {
     const project = queries.projects.getById(projectId);
     if (!project) throw new Error(`Project ${projectId} not found`);

@@ -13,6 +13,7 @@ import {
 import {
   LabeledModelSelect,
   SettingsSection,
+  SettingsSelectRow,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -272,28 +273,22 @@ function pipelineSettingsSection({
               />
             </SettingsRow>
             {settings.claudeExecuteSandboxEnabled && (
-              <SettingsRow
+              <SettingsSelectRow
                 label="Sandbox network policy"
                 description="Outbound allowlist for sandboxed Claude execute. Anthropic only is tightest; Anthropic + GitHub also permits GitHub and the npm registry for branch pushes and dependency installs."
-              >
-                <Select
-                  value={settings.claudeExecuteSandboxNetworkPolicy}
-                  onValueChange={(value) =>
-                    onUpdate({
-                      claudeExecuteSandboxNetworkPolicy:
-                        value as AppSettings['claudeExecuteSandboxNetworkPolicy'],
-                    })
-                  }
-                >
-                  <SelectTrigger className="w-[190px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="anthropic-only">Anthropic only</SelectItem>
-                    <SelectItem value="anthropic-github">Anthropic + GitHub</SelectItem>
-                  </SelectContent>
-                </Select>
-              </SettingsRow>
+                value={settings.claudeExecuteSandboxNetworkPolicy}
+                options={[
+                  { value: 'anthropic-only', label: 'Anthropic only' },
+                  { value: 'anthropic-github', label: 'Anthropic + GitHub' },
+                ]}
+                onValueChange={(value) =>
+                  onUpdate({
+                    claudeExecuteSandboxNetworkPolicy:
+                      value as AppSettings['claudeExecuteSandboxNetworkPolicy'],
+                  })
+                }
+                triggerClassName="w-[190px]"
+              />
             )}
           </SettingsSection>
 
@@ -424,52 +419,40 @@ function pipelineSettingsSection({
                 step={1}
               />
             </SettingsRow>
-            <SettingsRow
+            <SettingsSelectRow
               label="Default speed profile"
               description="Smart fast runs contained work in one execution pass. Thorough keeps task-graph decomposition and node verification."
-            >
-              <Select
-                value={settings.pipelineSpeedProfile}
-                onValueChange={(value) =>
-                  onUpdate({
-                    pipelineSpeedProfile: value as AppSettings['pipelineSpeedProfile'],
-                  })
-                }
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="smart_fast">Smart fast</SelectItem>
-                  <SelectItem value="thorough">Thorough</SelectItem>
-                </SelectContent>
-              </Select>
-            </SettingsRow>
-            <SettingsRow
+              value={settings.pipelineSpeedProfile}
+              options={[
+                { value: 'smart_fast', label: 'Smart fast' },
+                { value: 'thorough', label: 'Thorough' },
+              ]}
+              onValueChange={(value) =>
+                onUpdate({
+                  pipelineSpeedProfile: value as AppSettings['pipelineSpeedProfile'],
+                })
+              }
+              triggerClassName="w-[180px]"
+            />
+            <SettingsSelectRow
               label="Default revisions"
               description="How many review-to-revise cycles ShipCode runs before approval or execution. 0 skips plan review for the fastest path."
-            >
-              <Select
-                value={String(settings.revisionCount)}
-                onValueChange={(value) =>
-                  onUpdate({
-                    revisionCount: Number.parseInt(value, 10) as AppSettings['revisionCount'],
-                  })
-                }
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">0 · Skip review</SelectItem>
-                  <SelectItem value="1">1 revision</SelectItem>
-                  <SelectItem value="2">2 revisions</SelectItem>
-                  <SelectItem value="3">3 revisions</SelectItem>
-                  <SelectItem value="4">4 revisions</SelectItem>
-                  <SelectItem value="5">5 revisions</SelectItem>
-                </SelectContent>
-              </Select>
-            </SettingsRow>
+              value={String(settings.revisionCount)}
+              options={[
+                { value: '0', label: '0 · Skip review' },
+                { value: '1', label: '1 revision' },
+                { value: '2', label: '2 revisions' },
+                { value: '3', label: '3 revisions' },
+                { value: '4', label: '4 revisions' },
+                { value: '5', label: '5 revisions' },
+              ]}
+              onValueChange={(value) =>
+                onUpdate({
+                  revisionCount: Number.parseInt(value, 10) as AppSettings['revisionCount'],
+                })
+              }
+              triggerClassName="w-[180px]"
+            />
           </SettingsSection>
         </TabsContent>
 
@@ -501,119 +484,98 @@ function pipelineSettingsSection({
           </SettingsSection>
 
           <SettingsSection title="Format Defaults">
-            <SettingsRow
+            <SettingsSelectRow
               label="Format CLI"
               description="Powers Format in the PRD editor and automation prompt formatter. Automations with an explicit executor override use that provider first; inherited automations use this default."
-            >
-              <Select
-                value={settings.prdRewriteCli}
-                onValueChange={(value) => {
-                  const nextCli = value as AppSettings['prdRewriteCli'];
-                  onUpdate({
-                    prdRewriteCli: nextCli,
-                    prdRewriteReasoningEffort: resolveProviderReasoningEffort(
-                      nextCli as Extract<ExecutorModel, 'claude' | 'codex'>,
-                      settings.prdRewriteReasoningEffort,
-                      nextCli === 'claude'
-                        ? settings.prdRewriteClaudeModel
-                        : settings.prdRewriteCodexModel,
-                    ).effective as AppSettings['prdRewriteReasoningEffort'],
-                  });
-                }}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="claude">Claude CLI</SelectItem>
-                  <SelectItem value="codex">Codex CLI</SelectItem>
-                </SelectContent>
-              </Select>
-            </SettingsRow>
-            <SettingsRow
+              value={settings.prdRewriteCli}
+              options={[
+                { value: 'claude', label: 'Claude CLI' },
+                { value: 'codex', label: 'Codex CLI' },
+              ]}
+              onValueChange={(value) => {
+                const nextCli = value as AppSettings['prdRewriteCli'];
+                onUpdate({
+                  prdRewriteCli: nextCli,
+                  prdRewriteReasoningEffort: resolveProviderReasoningEffort(
+                    nextCli as Extract<ExecutorModel, 'claude' | 'codex'>,
+                    settings.prdRewriteReasoningEffort,
+                    nextCli === 'claude'
+                      ? settings.prdRewriteClaudeModel
+                      : settings.prdRewriteCodexModel,
+                  ).effective as AppSettings['prdRewriteReasoningEffort'],
+                });
+              }}
+              triggerClassName="w-[180px]"
+            />
+            <SettingsSelectRow
               label="Format model"
               description="Preferred model for PRD and automation prompt formatting on the selected CLI."
-            >
-              <Select
-                value={prdRewriteModelValue ?? '__default__'}
-                onValueChange={(value) => {
-                  const nextModelId = value === '__default__' ? null : value;
-                  onUpdate(
-                    prdRewriteProvider === 'claude'
-                      ? {
-                          prdRewriteClaudeModel: nextModelId,
-                          prdRewriteReasoningEffort: resolveProviderReasoningEffort(
-                            'claude',
-                            settings.prdRewriteReasoningEffort,
-                            nextModelId,
-                          ).effective as AppSettings['prdRewriteReasoningEffort'],
-                        }
-                      : {
-                          prdRewriteCodexModel: nextModelId,
-                          prdRewriteReasoningEffort: resolveProviderReasoningEffort(
-                            'codex',
-                            settings.prdRewriteReasoningEffort,
-                            nextModelId,
-                          ).effective as AppSettings['prdRewriteReasoningEffort'],
-                        },
-                  );
-                }}
-              >
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__default__">
-                    {prdRewriteProvider === 'claude' ? 'Claude default' : 'Codex default'}
-                  </SelectItem>
-                  {prdRewriteModelValue &&
-                  !prdRewriteModelOptions.some(
-                    (option) => option.value === prdRewriteModelValue,
-                  ) ? (
-                    <SelectItem
-                      value={prdRewriteModelValue}
-                      disabled={!prdRewriteModelAvailability.available}
-                    >
-                      {prdRewriteModelValue}
-                      {!prdRewriteModelAvailability.available ? ' (Unavailable)' : ''}
-                    </SelectItem>
-                  ) : null}
-                  {prdRewriteModelOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingsRow>
-            <SettingsRow
+              value={prdRewriteModelValue ?? '__default__'}
+              options={[
+                {
+                  value: '__default__',
+                  label: prdRewriteProvider === 'claude' ? 'Claude default' : 'Codex default',
+                },
+                ...(prdRewriteModelValue &&
+                !prdRewriteModelOptions.some((option) => option.value === prdRewriteModelValue)
+                  ? [
+                      {
+                        value: prdRewriteModelValue,
+                        label: `${prdRewriteModelValue}${
+                          !prdRewriteModelAvailability.available ? ' (Unavailable)' : ''
+                        }`,
+                        disabled: !prdRewriteModelAvailability.available,
+                      },
+                    ]
+                  : []),
+                ...prdRewriteModelOptions.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                })),
+              ]}
+              onValueChange={(value) => {
+                const nextModelId = value === '__default__' ? null : value;
+                onUpdate(
+                  prdRewriteProvider === 'claude'
+                    ? {
+                        prdRewriteClaudeModel: nextModelId,
+                        prdRewriteReasoningEffort: resolveProviderReasoningEffort(
+                          'claude',
+                          settings.prdRewriteReasoningEffort,
+                          nextModelId,
+                        ).effective as AppSettings['prdRewriteReasoningEffort'],
+                      }
+                    : {
+                        prdRewriteCodexModel: nextModelId,
+                        prdRewriteReasoningEffort: resolveProviderReasoningEffort(
+                          'codex',
+                          settings.prdRewriteReasoningEffort,
+                          nextModelId,
+                        ).effective as AppSettings['prdRewriteReasoningEffort'],
+                      },
+                );
+              }}
+              triggerClassName="w-[220px]"
+            />
+            <SettingsSelectRow
               label={
                 prdRewriteProvider === 'claude'
                   ? 'Format thinking budget'
                   : 'Format reasoning effort'
               }
               description="Reasoning setting for PRD and automation prompt formatting."
-            >
-              <Select
-                value={prdRewriteDisplayedEffort}
-                onValueChange={(value) =>
-                  onUpdate({
-                    prdRewriteReasoningEffort: value as AppSettings['prdRewriteReasoningEffort'],
-                  })
-                }
-              >
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {prdRewriteSupportedEfforts.map((effort) => (
-                    <SelectItem key={effort} value={effort}>
-                      {formatReasoningEffortLabel(effort)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingsRow>
+              value={prdRewriteDisplayedEffort}
+              options={prdRewriteSupportedEfforts.map((effort) => ({
+                value: effort,
+                label: formatReasoningEffortLabel(effort),
+              }))}
+              onValueChange={(value) =>
+                onUpdate({
+                  prdRewriteReasoningEffort: value as AppSettings['prdRewriteReasoningEffort'],
+                })
+              }
+              triggerClassName="w-[140px]"
+            />
             {!prdRewriteEffortResolution.exact && prdRewriteProvider !== 'claude' && (
               <div className="mb-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-300">
                 {prdRewriteEffortResolution.message}
@@ -659,90 +621,74 @@ function pipelineSettingsSection({
             title="Issue triage"
             description="Board review model for classifying Backlog issues and applying high-confidence labels."
           >
-            <SettingsRow label="Triage provider" htmlFor="triage-provider">
-              <Select
-                value={settings.triageModel}
-                onValueChange={(value) =>
-                  onUpdate({
-                    triageModel: value as AppSettings['triageModel'],
-                    triageModelId: null,
-                    triageReasoningEffort: normalizeEffort(
-                      value as ExecutorModel,
-                      settings.triageReasoningEffort,
-                      null,
-                    ),
-                  })
-                }
-              >
-                <SelectTrigger id="triage-provider" className="w-[160px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="claude">Anthropic</SelectItem>
-                  <SelectItem value="codex">OpenAI</SelectItem>
-                  <SelectItem value="openrouter">OpenRouter</SelectItem>
-                </SelectContent>
-              </Select>
-            </SettingsRow>
-            <SettingsRow label="Triage model" htmlFor="triage-model">
-              <Select
-                value={settings.triageModelId ?? '__default__'}
-                onValueChange={(value) => {
-                  const nextModelId = value === '__default__' ? null : value;
-                  onUpdate({
-                    triageModelId: nextModelId,
-                    triageReasoningEffort: normalizeEffort(
-                      settings.triageModel,
-                      settings.triageReasoningEffort,
-                      nextModelId,
-                    ),
-                  });
-                }}
-              >
-                <SelectTrigger id="triage-model" className="w-[220px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__default__">Default small model</SelectItem>
-                  {settings.triageModelId && !triageKnownModelValues.has(settings.triageModelId) ? (
-                    <SelectItem value={settings.triageModelId}>{settings.triageModelId}</SelectItem>
-                  ) : null}
-                  {triageModelOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingsRow>
-            <SettingsRow
+            <SettingsSelectRow
+              id="triage-provider"
+              label="Triage provider"
+              value={settings.triageModel}
+              options={[
+                { value: 'claude', label: 'Anthropic' },
+                { value: 'codex', label: 'OpenAI' },
+                { value: 'openrouter', label: 'OpenRouter' },
+              ]}
+              onValueChange={(value) =>
+                onUpdate({
+                  triageModel: value as AppSettings['triageModel'],
+                  triageModelId: null,
+                  triageReasoningEffort: normalizeEffort(
+                    value as ExecutorModel,
+                    settings.triageReasoningEffort,
+                    null,
+                  ),
+                })
+              }
+              triggerClassName="w-[160px]"
+            />
+            <SettingsSelectRow
+              id="triage-model"
+              label="Triage model"
+              value={settings.triageModelId ?? '__default__'}
+              options={[
+                { value: '__default__', label: 'Default small model' },
+                ...(settings.triageModelId && !triageKnownModelValues.has(settings.triageModelId)
+                  ? [{ value: settings.triageModelId, label: settings.triageModelId }]
+                  : []),
+                ...triageModelOptions.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                })),
+              ]}
+              onValueChange={(value) => {
+                const nextModelId = value === '__default__' ? null : value;
+                onUpdate({
+                  triageModelId: nextModelId,
+                  triageReasoningEffort: normalizeEffort(
+                    settings.triageModel,
+                    settings.triageReasoningEffort,
+                    nextModelId,
+                  ),
+                });
+              }}
+              triggerClassName="w-[220px]"
+            />
+            <SettingsSelectRow
+              id="triage-reasoning"
               label={
                 settings.triageModel === 'claude'
                   ? 'Triage thinking budget'
                   : 'Triage reasoning effort'
               }
-              htmlFor="triage-reasoning"
-            >
-              <Select
-                value={triageEffortResolution.effective}
-                onValueChange={(value) =>
-                  onUpdate({
-                    triageReasoningEffort: value as AppSettings['triageReasoningEffort'],
-                  })
-                }
-              >
-                <SelectTrigger id="triage-reasoning" className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {triageSupportedEfforts.map((effort) => (
-                    <SelectItem key={effort} value={effort}>
-                      {formatReasoningEffortLabel(effort as AppSettings['triageReasoningEffort'])}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingsRow>
+              value={triageEffortResolution.effective}
+              options={triageSupportedEfforts.map((effort) => ({
+                value: effort,
+                label: formatReasoningEffortLabel(effort as AppSettings['triageReasoningEffort']),
+              }))}
+              onValueChange={(value) =>
+                onUpdate({
+                  triageReasoningEffort: value as AppSettings['triageReasoningEffort'],
+                })
+              }
+              triggerClassName="w-[140px]"
+            />
             <SettingsRow
               label="Auto-apply threshold"
               htmlFor="triage-threshold"
