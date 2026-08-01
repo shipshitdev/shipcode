@@ -28,6 +28,7 @@ import { Bell, Bot, Gauge, ListTodo, PackageCheck, Timer } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 import { useAppStore } from '../stores/app-store';
+import { githubIssuesQueryKey } from '../stores/issue-cache-projection';
 
 interface StatCardProps {
   label: string;
@@ -88,7 +89,6 @@ function useOverviewView() {
   const selectProject = useAppStore((s) => s.selectProject);
   const selectThread = useAppStore((s) => s.selectThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
-  const setGithubIssues = useAppStore((s) => s.setGithubIssues);
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const openTerminal = useAppStore((s) => s.openTerminal);
   const openView = useAppStore((s) => s.openView);
@@ -147,7 +147,7 @@ function useOverviewView() {
       const issues = await window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
         projectId,
       });
-      setGithubIssues(issues);
+      queryClient.setQueryData(githubIssuesQueryKey(projectId), issues);
       const match = issues.find((i) => i.threadId === threadId) ?? null;
       if (match) selectIssue(match);
     } catch {

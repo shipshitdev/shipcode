@@ -11,11 +11,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
+import { githubIssuesQueryKey, useIssueCacheProjection } from '../stores/issue-cache-projection';
 import { useIpc } from './useIpc';
 
 const listeners = new Map<string, (...args: unknown[]) => void>();
 
+// Mirrors App.tsx: the projection mounts alongside the IPC listeners so store
+// state stays derived from the github-issues query cache.
 function TestHarness() {
+  useIssueCacheProjection();
   useIpc();
   return null;
 }
@@ -150,6 +154,12 @@ describe('useIpc terminal scoping', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
     });
+    // The query cache owns issue records, so seed it to match whatever issues the
+    // test staged in the store — the same relationship the real app maintains.
+    const { activeProjectId, githubIssues } = useAppStore.getState();
+    if (activeProjectId) {
+      queryClient.setQueryData(githubIssuesQueryKey(activeProjectId), githubIssues);
+    }
     const view = render(
       <QueryClientProvider client={queryClient}>
         <TestHarness />
@@ -579,7 +589,8 @@ describe('useIpc terminal scoping', () => {
 
   it('maps agent output to threads and throttles last-activity updates', () => {
     const nowSpy = vi.spyOn(Date, 'now');
-    nowSpy.mockReturnValueOnce(1_000).mockReturnValueOnce(1_000);
+    // Held (not `Once`) so unrelated Date.now() consumers cannot shift the clock.
+    nowSpy.mockReturnValue(1_000);
 
     renderHarness();
 
@@ -598,7 +609,7 @@ describe('useIpc terminal scoping', () => {
     });
     expect(useAppStore.getState().lastActivityByThread['thread-1']).toBe(1_000);
 
-    nowSpy.mockReturnValueOnce(1_600).mockReturnValueOnce(1_600);
+    nowSpy.mockReturnValue(1_600);
     listeners.get('agent:output')?.({
       processId: 'proc-1',
       threadId: 'thread-1',

@@ -293,7 +293,6 @@ function useIssuesPanelView() {
   const setTerminalThread = useAppStore((state) => state.setTerminalThread);
   const openTerminal = useAppStore((state) => state.openTerminal);
   const requestCommentComposer = useAppStore((state) => state.requestCommentComposer);
-  const setGithubIssues = useAppStore((state) => state.setGithubIssues);
   const pendingCreatedIssues = useAppStore((state) => state.pendingCreatedIssues);
   const previousTaskStatusByIdRef = useRef<Map<string, IssuePipelineStatus> | null>(null);
   if (previousTaskStatusByIdRef.current === null) {
@@ -340,11 +339,6 @@ function useIssuesPanelView() {
       ? [...scopedPendingIssues, ...cachedIssues]
       : cachedIssues;
   }, [activeProjectId, issuesData, pendingCreatedIssues]);
-
-  useEffect(() => {
-    if (issuesData === undefined) return;
-    setGithubIssues(issuesData);
-  }, [issuesData, setGithubIssues]);
 
   const refreshIssues = useMutation({
     mutationFn: (projectId: string) =>
@@ -648,16 +642,10 @@ function useIssuesPanelView() {
     id: string,
     patch: Partial<Pick<GitHubIssueCacheRecord, 'pipelineStatus' | 'state'>>,
   ) => {
+    // Query cache only — the app store follows via subscribeIssueCacheProjection.
     queryClient.setQueryData<GitHubIssueCacheRecord[]>(queryKey, (prev) =>
       prev ? prev.map((issue) => (issue.id === id ? { ...issue, ...patch } : issue)) : prev,
     );
-    useAppStore.setState((state) => ({
-      githubIssues: state.githubIssues.map((issue) =>
-        issue.id === id ? { ...issue, ...patch } : issue,
-      ),
-      activeIssue:
-        state.activeIssue?.id === id ? { ...state.activeIssue, ...patch } : state.activeIssue,
-    }));
   };
 
   const patchThreadOptimistic = (
