@@ -102,11 +102,11 @@ export async function enhancePrdDraft(opts: EnhancePrdOptions): Promise<Generate
 /**
  * Spawn the selected CLI with no prompt argv and pipe the prompt through stdin.
  *
- * Argv piping is deliberate: the prompt starts with YAML frontmatter (`---`)
+ * Stdin piping is deliberate: the prompt starts with YAML frontmatter (`---`)
  * which Claude CLI's argparser would reject as an unknown flag if passed as an
  * argument. Codex supports stdin via `exec -`, so both paths stay symmetric.
- * See `packages/agents/src/github/gh-cli.ts:117` for the same stdin pattern
- * used by `gh issue create --body-file -`.
+ * See `GhCli.spawnWithStdin` in `packages/agents/src/github/gh-cli.ts` for the
+ * same stdin pattern used by `gh issue create --body-file -`.
  */
 function runPrdCliWithStdin(
   cli: GeneratorCli,

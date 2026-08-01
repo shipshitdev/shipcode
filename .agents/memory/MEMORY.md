@@ -54,7 +54,7 @@ Where things live:
 
 ## Hard rules (from past incidents)
 
-- **Pipe `claude -p` prompts via stdin, never argv.** Argparser breaks on `---` YAML. Reuse `runClaudeWithStdin` in `packages/agents/src/prd-generator.ts`. See: `claude-cli.md`.
+- **Pipe `claude -p` prompts via stdin, never argv.** Argparser breaks on `---` YAML. Reuse `runCliWithStdin` in `packages/agents/src/cli-stdin-runner.ts` (one-shot; PRD path is `enhancePrdDraft` → `runPrdCliWithStdin` → `runNoToolsTextGeneration` → `runCliWithStdin`) or `ProcessManager.spawnWithStdin` (managed). No fallback may move a prompt into argv — fail loudly instead. See: `claude-cli.md`.
 - **Do not use `claude -p` for interactive terminal mode.** Interactive mode launches the real terminal CLI, wraps raw output in our own terminal events, and uses process exit as completion. See: `interactive-cli-run-modes.md`.
 - **`WorktreeManager.remove(path, branch)` takes concrete values** — never recompute from `threadId`. See: `worktrees.md`.
 - **Clamp IPC errors** to first-line + ~280 chars; log full trace to main-process console only. See: `ipc-errors.md`.
