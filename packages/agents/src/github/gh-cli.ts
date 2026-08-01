@@ -1,4 +1,4 @@
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
   type GitHubIssue,
@@ -18,6 +18,7 @@ import {
   SHIPCODE_AGENT_LABELS,
 } from '@shipcode/shared';
 import { shellExecEnv } from '../health-check';
+import { runWithStdin } from '../spawn-with-stdin';
 import {
   buildCheckSummaries,
   buildUnresolvedReviewComments,
@@ -812,66 +813,25 @@ export class GhCli {
    * that would need shell-escaping with --body.
    */
   private spawnWithStdin(command: string, args: string[], input: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const proc = spawn(command, args, {
-        cwd: this.cwd,
-        env: this.env,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      let stdout = '';
-      let stderr = '';
-      // A stdin EPIPE is normally followed by a 'close' event, so every path
-      // funnels through these guards to settle the promise exactly once.
-      let settled = false;
-      const settleResolve = (value: string) => {
-        if (settled) return;
-        settled = true;
-        resolve(value);
-      };
-      const settleReject = (err: Error) => {
-        if (settled) return;
-        settled = true;
-        reject(err);
-      };
-      let stdinError: Error | null = null;
-      // gh can exit before draining stdin (auth failure, rate limit, bad
-      // args). Without this listener the resulting EPIPE is an unhandled
-      // stream error that takes down the main process instead of rejecting
-      // this promise. The 'close' handler owns the rejection so callers get
-      // the exit code and stderr rather than a bare EPIPE.
-      proc.stdin.on('error', (err: Error) => {
-        stdinError = err;
-      });
-      proc.stdout.on('data', (chunk) => {
-        stdout += chunk;
-      });
-      proc.stderr.on('data', (chunk) => {
-        stderr += chunk;
-      });
-      proc.on('error', settleReject);
-      proc.on('close', (code) => {
-        // Exit 0 means gh completed the write. A late EPIPE from end()-ing an
-        // already-closed pipe is not worth failing an operation that landed —
-        // these calls (issue comments especially) are not safe to retry.
-        if (code === 0) {
-          settleResolve(stdout);
-          return;
-        }
+    // gh can exit before draining stdin (auth failure, rate limit, bad args).
+    // `runWithStdin` owns the stdin 'error' listener that keeps the resulting
+    // EPIPE from becoming an unhandled stream error in the main process, and
+    // resolves on exit 0 even after a late stdin failure — gh reported the
+    // write done, and these calls (issue comments especially) are not safe to
+    // retry. Anything else rejects once, with the exit code and stderr.
+    return runWithStdin({
+      command,
+      args,
+      input,
+      cwd: this.cwd,
+      env: this.env,
+      formatSpawnError: (err) => err,
+      formatExitError: ({ code, stderr, stdinError }) => {
         const stdinDetail = stdinError ? ` (stdin write failed: ${stdinError.message})` : '';
-        settleReject(
-          new Error(
-            `${command} ${args.join(' ')} exited with code ${code}: ${stderr.trim()}${stdinDetail}`,
-          ),
+        return new Error(
+          `${command} ${args.join(' ')} exited with code ${code}: ${stderr.trim()}${stdinDetail}`,
         );
-      });
-      try {
-        proc.stdin.write(input);
-        proc.stdin.end();
-      } catch (err) {
-        // Synchronous throw (ERR_STREAM_DESTROYED) when the pipe is already
-        // gone; keep it for the 'close' message rather than racing it.
-        stdinError = err instanceof Error ? err : new Error(String(err));
-      }
+      },
     });
   }
 

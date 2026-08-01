@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process';
 import type { GeneratorCli } from '@shipcode/shared';
 import { classifyPoolExhaustion, markPoolExhausted } from './agent-sdk-pool-state';
 import { extractCliFailureMessage, formatCliSpawnFailure } from './cli-error';
+import { MAX_COLLECTED_OUTPUT_CHARS, runWithStdin } from './spawn-with-stdin';
 
 const SAFE_CLI_ENV_KEYS = new Set([
   'PATH',
@@ -44,103 +44,39 @@ export function runCliWithStdin(options: {
   timeoutMs: number;
   envKeyAllowlist?: readonly string[];
 }): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(options.cli, options.args, {
-      cwd: options.cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: filteredCliEnvFor(options.envKeyAllowlist),
-    });
+  const label = options.cli === 'claude' ? 'Claude CLI' : 'Codex CLI';
 
-    let stdout = '';
-    let stderr = '';
-    proc.stdout.on('data', (chunk) => {
-      stdout += chunk;
-    });
-    proc.stderr.on('data', (chunk) => {
-      stderr += chunk;
-    });
-
-    const label = options.cli === 'claude' ? 'Claude CLI' : 'Codex CLI';
-    const timer = setTimeout(() => {
-      proc.kill('SIGTERM');
-      reject(new Error(`${label} timed out after ${options.timeoutMs}ms`));
-    }, options.timeoutMs);
-
-    proc.on('error', (err) => {
-      clearTimeout(timer);
-      reject(new Error(formatCliSpawnFailure(label, err.message)));
-    });
-
-    proc.on('close', (code) => {
-      clearTimeout(timer);
-      if (code === 0) {
-        resolve(stdout);
-        return;
-      }
-      const tidy = extractCliFailureMessage(stdout, stderr);
+  return runWithStdin({
+    command: options.cli,
+    args: options.args,
+    input: options.input,
+    cwd: options.cwd,
+    env: filteredCliEnvFor(options.envKeyAllowlist),
+    timeoutMs: options.timeoutMs,
+    formatSpawnError: (err) => new Error(formatCliSpawnFailure(label, err.message)),
+    formatTimeoutError: (timeoutMs) => new Error(`${label} timed out after ${timeoutMs}ms`),
+    // Callers parse a JSON envelope out of stdout, so a truncated success would
+    // only resurface as a confusing parse error further downstream.
+    formatTruncatedOutputError: () =>
+      new Error(`${label} produced more than ${MAX_COLLECTED_OUTPUT_CHARS} characters of output`),
+    formatExitError: ({ code, stdout, stderr, stdinError, truncated }) => {
+      const detail = [
+        extractCliFailureMessage(stdout, stderr),
+        stdinError ? `stdin write failed: ${stdinError.message}` : null,
+        truncated ? 'output truncated' : null,
+      ]
+        .filter(Boolean)
+        .join('; ');
       // These one-shot generators run `claude -p`, so they draw from the
       // rationed Agent-SDK credit pool. Flag exhaustion so the UI alerts and
       // the pipeline falls back to interactive; the one-shot itself still fails.
       if (options.cli === 'claude' && classifyPoolExhaustion(stdout, stderr, code ?? 1)) {
         markPoolExhausted('Claude Agent-SDK credit pool exhausted');
-        reject(
-          new Error(`${label} exited ${code}: Agent-SDK credit pool exhausted. ${tidy}`.trim()),
+        return new Error(
+          `${label} exited ${code}: Agent-SDK credit pool exhausted. ${detail}`.trim(),
         );
-        return;
       }
-      reject(new Error(`${label} exited ${code}: ${tidy}`));
-    });
-
-    writeStdin(proc.stdin, options.input).catch((err: unknown) => {
-      proc.kill?.('SIGTERM');
-      reject(err instanceof Error ? err : new Error(String(err)));
-    });
-  });
-}
-
-async function writeStdin(stdin: NodeJS.WritableStream, input: string): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const canObserveBackpressure =
-      typeof stdin.once === 'function' &&
-      typeof stdin.off === 'function' &&
-      typeof stdin.on === 'function';
-    if (!canObserveBackpressure) {
-      stdin.write(input);
-      stdin.end();
-      resolve();
-      return;
-    }
-
-    let ended = false;
-    const onError = (err: Error) => {
-      cleanup();
-      if (ended && 'code' in err && err.code === 'EPIPE') {
-        resolve();
-        return;
-      }
-      reject(err);
-    };
-    const cleanup = () => {
-      stdin.off('error', onError);
-      stdin.off('drain', onDrain);
-    };
-    const onDrain = () => {
-      ended = true;
-      stdin.end(() => {
-        cleanup();
-        resolve();
-      });
-    };
-
-    stdin.once('error', onError);
-    if (stdin.write(input) !== false) {
-      ended = true;
-      stdin.end(() => {
-        cleanup();
-        resolve();
-      });
-      return;
-    }
-    stdin.once('drain', onDrain);
+      return new Error(`${label} exited ${code}: ${detail}`);
+    },
   });
 }
