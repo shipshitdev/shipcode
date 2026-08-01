@@ -678,21 +678,37 @@ function useIssuesPanelView() {
 
   const repoUrl = githubRepoUrl(project?.gitRemote);
   const projectsUrl = project?.githubProjectUrl?.trim() ? project.githubProjectUrl.trim() : null;
-  const handleIssueClick = (issue: GitHubIssueCacheRecord) => {
-    if (isAutomationIssue(issue) && issue.threadId) {
-      selectAutomationThread(issue.threadId);
-      setTerminalThread(issue.threadId);
-      openTerminal();
-      return;
-    }
+  // Board rows are memoized leaves; keep every handler that reaches them
+  // referentially stable so a poll that changes nothing re-renders nothing.
+  const handleIssueClick = useCallback(
+    (issue: GitHubIssueCacheRecord) => {
+      if (isAutomationIssue(issue) && issue.threadId) {
+        selectAutomationThread(issue.threadId);
+        setTerminalThread(issue.threadId);
+        openTerminal();
+        return;
+      }
 
-    selectIssue(issue);
-  };
-  const handleIssueComment = (issue: GitHubIssueCacheRecord) => {
-    handleIssueClick(issue);
-    if (isAutomationIssue(issue)) return;
-    requestCommentComposer(issue.id);
-  };
+      selectIssue(issue);
+    },
+    [openTerminal, selectAutomationThread, selectIssue, setTerminalThread],
+  );
+  const handleIssueComment = useCallback(
+    (issue: GitHubIssueCacheRecord) => {
+      handleIssueClick(issue);
+      if (isAutomationIssue(issue)) return;
+      requestCommentComposer(issue.id);
+    },
+    [handleIssueClick, requestCommentComposer],
+  );
+  const handleOpenPullRequest = useCallback((url: string) => {
+    window.shipcode.invoke('shell:open-external', { url }).catch((err) => {
+      log.error('[threadpanel] open-pull-request failed', { url, err });
+    });
+  }, []);
+  const handleArchiveIssue = useCallback((issue: GitHubIssueCacheRecord) => {
+    setArchiveConfirm({ type: 'one', issue });
+  }, []);
 
   const handleFetchPlanSteps = useCallback(
     async (threadId: string) => {
@@ -785,11 +801,7 @@ function useIssuesPanelView() {
             log.error('[threadpanel] open-external failed', { url, err });
           })
         }
-        onOpenPullRequest={(url) =>
-          window.shipcode.invoke('shell:open-external', { url }).catch((err) => {
-            log.error('[threadpanel] open-pull-request failed', { url, err });
-          })
-        }
+        onOpenPullRequest={handleOpenPullRequest}
         onBaseBranchChange={(branch) => {
           // Optimistic cache update so the toolbar reflects the new branch
           // on the same frame as the click, without waiting for IPC.
@@ -843,7 +855,7 @@ function useIssuesPanelView() {
               );
             });
         }}
-        onArchiveIssue={(issue) => setArchiveConfirm({ type: 'one', issue })}
+        onArchiveIssue={handleArchiveIssue}
         onArchiveAllDone={() => {
           const closedCount = boardIssues.filter((i) =>
             ARCHIVABLE_PIPELINE_STATUSES.includes(i.pipelineStatus),
