@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DEFAULT_WORKTREE_ROOT, WORKTREE_DIR } from './constants';
+import { DEFAULT_WORKTREE_ROOT } from './constants';
 import {
   assertWorkspaceSafe,
   expandWorktreeRoot,
@@ -22,8 +22,10 @@ describe('expandWorktreeRoot', () => {
     expect(expandWorktreeRoot(undefined)).toBe(expected);
   });
 
-  it("returns 'project-local' sentinel for empty string", () => {
-    expect(expandWorktreeRoot('')).toBe('project-local');
+  it('returns default for empty string (project-local retired)', () => {
+    const expected = path.join(os.homedir(), DEFAULT_WORKTREE_ROOT.slice(2));
+    expect(expandWorktreeRoot('')).toBe(expected);
+    expect(expandWorktreeRoot('   ')).toBe(expected);
   });
 
   it('expands bare ~ to homedir', () => {
@@ -86,8 +88,10 @@ describe('projectSlug', () => {
 });
 
 describe('resolveWorktreeParent', () => {
-  it('returns <project>/.shipcode/worktrees for empty-string worktreeRoot', () => {
-    expect(resolveWorktreeParent('/tmp/my-proj', '')).toBe(path.join('/tmp/my-proj', WORKTREE_DIR));
+  it('treats empty-string worktreeRoot the same as null (project-local retired)', () => {
+    expect(resolveWorktreeParent('/tmp/my-proj', '')).toBe(
+      resolveWorktreeParent('/tmp/my-proj', null),
+    );
   });
 
   it('returns <home>/.shipcode/worktrees/<slug> for null worktreeRoot', () => {
@@ -176,13 +180,21 @@ describe('assertWorkspaceSafe', () => {
     ).toThrow(/absolute/);
   });
 
-  it('skips prefix check in project-local mode but enforces basename', () => {
+  it('enforces the default root for empty-string workspaceRoot (project-local retired)', () => {
+    // '' used to skip the containment check entirely (project-local mode).
+    // It now expands to the default root like null, so containment applies.
+    expect(() =>
+      assertWorkspaceSafe({
+        workspacePath: path.join(os.homedir(), '.shipcode/worktrees/proj-abc123/t-01'),
+        workspaceRoot: '',
+      }),
+    ).not.toThrow();
     expect(() =>
       assertWorkspaceSafe({
         workspacePath: '/anywhere/proj/.shipcode/worktrees/t-01',
         workspaceRoot: '',
       }),
-    ).not.toThrow();
+    ).toThrow(/under workspaceRoot/);
     expect(() =>
       assertWorkspaceSafe({
         workspacePath: '/anywhere/proj/.shipcode/worktrees/$(bad)',

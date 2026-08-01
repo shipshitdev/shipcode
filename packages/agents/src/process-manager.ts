@@ -204,7 +204,7 @@ export interface ManagedProcessSpawnOptions {
    * When provided, the spawn site asserts `cwd` is a canonical linked worktree
    * registered to `projectPath`. Defense-in-depth — see `assertWorkspaceSafe`.
    * Pipeline worktree spawns opt in; instant terminals at the project root do not.
-   * `null` matches the AppSettings default; `''` means project-local mode.
+   * `null` matches the AppSettings default (~/.shipcode/worktrees).
    */
   workspaceRoot?: string | null;
   /** Exact repository root used to reject worktrees from foreign repositories. */

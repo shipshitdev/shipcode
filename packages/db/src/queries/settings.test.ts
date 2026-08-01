@@ -182,8 +182,15 @@ describe('SettingsQueries', () => {
       expect(settings.get().worktreeRoot).toBe('/tmp/shipcode-wt');
     });
 
-    it('round-trips empty string (legacy project-local)', () => {
+    it("reads empty string as null — '' is the storage encoding of unset", () => {
       settings.set({ worktreeRoot: '' });
+      expect(settings.get().worktreeRoot).toBeNull();
+    });
+
+    it('reads a pre-existing empty-string row as null (retired project-local upgrade)', () => {
+      // Rows written when '' still meant project-local must resolve to the
+      // default root on upgrade, not throw.
+      db.prepare("INSERT INTO settings (key, value) VALUES ('worktreeRoot', '')").run();
       expect(settings.get().worktreeRoot).toBeNull();
     });
 
