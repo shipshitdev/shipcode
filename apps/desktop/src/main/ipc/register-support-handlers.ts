@@ -1,5 +1,5 @@
 import { exec } from 'node:child_process';
-import fs from 'node:fs';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { TerminalEvent } from '@shipcode/agents';
@@ -122,7 +122,7 @@ export function registerSupportHandlers({
       const skillPath = path.join(project.path, 'skills', 'writing-prds', 'SKILL.md');
       let skillContent: string;
       try {
-        skillContent = fs.readFileSync(skillPath, 'utf-8');
+        skillContent = await fs.readFile(skillPath, 'utf-8');
       } catch {
         skillContent =
           "You are drafting a PRD that will be consumed by the ShipCode pipeline's planner agent. " +
@@ -211,28 +211,43 @@ export function registerSupportHandlers({
 
   ipcMain.handle(
     'prd-attachments:create-session',
-    (_event, { senderId, projectId }: { senderId: string; projectId: string }) => {
-      const sessionId = createPrdAttachmentSession(senderId, projectId);
-      return { sessionId };
+    async (_event, { senderId, projectId }: { senderId: string; projectId: string }) => {
+      try {
+        const sessionId = await createPrdAttachmentSession(senderId, projectId);
+        return { sessionId };
+      } catch (err) {
+        log.error('[prd-attachments:create-session]', err);
+        throw new Error(supportHandlerError(err, 'Could not start attachment session'));
+      }
     },
   );
 
   ipcMain.handle(
     'prd-attachments:stage',
     async (_event, { sessionId, filePaths }: { sessionId: string; filePaths: string[] }) => {
-      return stagePrdAttachments(sessionId, filePaths);
+      try {
+        return await stagePrdAttachments(sessionId, filePaths);
+      } catch (err) {
+        log.error('[prd-attachments:stage]', err);
+        throw new Error(supportHandlerError(err, 'Could not stage attachments'));
+      }
     },
   );
 
   ipcMain.handle(
     'prd-attachments:remove',
-    (_event, { sessionId, filePath }: { sessionId: string; filePath: string }) => {
-      removePrdAttachment(sessionId, filePath);
+    async (_event, { sessionId, filePath }: { sessionId: string; filePath: string }) => {
+      try {
+        await removePrdAttachment(sessionId, filePath);
+      } catch (err) {
+        log.error('[prd-attachments:remove]', err);
+        throw new Error(supportHandlerError(err, 'Could not remove attachment'));
+      }
     },
   );
 
-  ipcMain.handle('prd-attachments:clear', (_event, { sessionId }: { sessionId: string }) => {
-    clearPrdAttachmentSession(sessionId);
+  ipcMain.handle('prd-attachments:clear', async (_event, { sessionId }: { sessionId: string }) => {
+    await clearPrdAttachmentSession(sessionId);
   });
 
   ipcMain.handle('memory:list', (_event, { projectId }: { projectId: string }) => {
