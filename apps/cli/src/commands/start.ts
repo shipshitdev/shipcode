@@ -1,4 +1,5 @@
 import { createInterface } from 'node:readline';
+import { markCliFailure } from '../exit-code';
 import { runCommand } from './run';
 
 export async function startCommand() {
@@ -16,5 +17,6 @@ export async function startCommand() {
     await runCommand(answer.trim());
   } else {
     console.log('No issue number provided.');
+    markCliFailure();
   }
 }

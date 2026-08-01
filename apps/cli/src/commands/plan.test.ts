@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   createCliContextMock,
@@ -85,6 +85,7 @@ describe('planCommand', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    process.exitCode = undefined;
     requireOnboardingMock.mockReturnValue(true);
     routeFromLabelsMock.mockReturnValue({
       executorModel: 'openrouter',
@@ -138,6 +139,12 @@ describe('planCommand', () => {
     });
   });
 
+  afterEach(() => {
+    // The failure branches mark the process as failed on purpose; clear it so
+    // the command under test cannot fail the vitest worker.
+    process.exitCode = undefined;
+  });
+
   it('fetches the issue, routes labels, starts the pipeline, and prints the generated plan', async () => {
     await planCommand('42');
 
@@ -160,6 +167,7 @@ describe('planCommand', () => {
     expect(logSpy).toHaveBeenCalledWith('\n--- Plan Output ---');
     expect(logSpy).toHaveBeenCalledWith(JSON.stringify(structuredPlan, null, 2));
     expect(logSpy).toHaveBeenCalledWith('\nThread status: approval');
+    expect(process.exitCode).toBeUndefined();
   });
 
   it('returns before doing work when onboarding is incomplete', async () => {
@@ -217,7 +225,7 @@ describe('planCommand', () => {
     expect(errorSpy).toHaveBeenCalledWith('Thread not found after pipeline run.');
   });
 
-  it('prints the no-output branch when no structured plan is available', async () => {
+  it('prints the no-output branch and exits non-zero when no structured plan is available', async () => {
     getLatestPlanMock.mockReturnValueOnce(null);
 
     await planCommand('42');
@@ -225,5 +233,25 @@ describe('planCommand', () => {
     expect(logSpy).toHaveBeenCalledWith(
       '\nNo plan generated (pipeline may have failed or entered clarification).',
     );
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('exits non-zero when the pipeline ends in a failed state', async () => {
+    const base = createCliContextMock();
+    const failed = { id: 'thread-1', status: 'failed' };
+    createCliContextMock.mockReturnValueOnce({
+      ...base,
+      threads: {
+        getById: vi.fn(() => failed),
+        getByProjectAndGithubIssue: vi.fn(() => failed),
+      },
+    });
+
+    await planCommand('42');
+
+    // The plan itself printed fine — the failed thread status is what fails.
+    expect(logSpy).toHaveBeenCalledWith('\n--- Plan Output ---');
+    expect(logSpy).toHaveBeenCalledWith('\nThread status: failed');
+    expect(process.exitCode).toBe(1);
   });
 });
