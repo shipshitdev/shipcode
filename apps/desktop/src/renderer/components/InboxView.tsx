@@ -26,6 +26,7 @@ import type React from 'react';
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
+import { githubIssuesQueryKey } from '../stores/issue-cache-projection';
 
 const PAGE_SIZE = 25;
 const INBOX_LOADING_ROW_KEYS = [
@@ -221,7 +222,7 @@ function useInboxView() {
         projectId: n.projectId,
       });
       if (navTokenRef.current === token) {
-        useAppStore.getState().setGithubIssues(issues);
+        queryClient.setQueryData(githubIssuesQueryKey(n.projectId), issues);
         let match = issues.find((i) => i.threadId === n.threadId) ?? null;
         if (!match && navTokenRef.current === token) {
           const thread = await window.shipcode.invoke<Thread | null>('thread:get', {

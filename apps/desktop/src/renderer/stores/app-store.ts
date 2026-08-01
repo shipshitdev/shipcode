@@ -123,6 +123,12 @@ interface AppState {
 
   // Verification & issues
   currentVerification: VerificationResult | null;
+  /**
+   * Read-only projection of the `['github-issues', activeProjectId]` query cache,
+   * for the synchronous `getState()` consumers that cannot call a hook. The query
+   * cache owns these records — write there and let `issue-cache-projection.ts`
+   * follow. See that module for the full ownership contract.
+   */
   githubIssues: GitHubIssueCacheRecord[];
   pendingCreatedIssues: GitHubIssueCacheRecord[];
 
@@ -212,7 +218,6 @@ interface AppState {
   setPipelinePhase: (phase: PipelinePhase) => void;
   setSystemHealth: (health: SystemHealth) => void;
   setVerification: (verification: VerificationResult | null) => void;
-  setGithubIssues: (issues: GitHubIssueCacheRecord[]) => void;
   addPendingCreatedIssue: (issue: GitHubIssueCacheRecord) => void;
   removePendingCreatedIssue: (id: string) => void;
   appendAgentOutput: (processId: string, chunk: string) => void;
@@ -519,7 +524,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           },
     ),
   setVerification: (verification) => set({ currentVerification: verification }),
-  setGithubIssues: (issues) => set({ githubIssues: issues }),
   addPendingCreatedIssue: (issue) =>
     set((s) => ({
       pendingCreatedIssues: [

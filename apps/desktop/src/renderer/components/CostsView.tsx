@@ -27,10 +27,11 @@ import {
   TableHeader,
   TableRow,
 } from '@shipshitdev/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Coins } from 'lucide-react';
 import { useReducer } from 'react';
 import { useAppStore } from '../stores/app-store';
+import { githubIssuesQueryKey } from '../stores/issue-cache-projection';
 import { CostByProjectChart } from './costs/CostByProjectChart';
 import { PhaseDurationsChart } from './costs/PhaseDurationsChart';
 import { TokensByPhaseChart } from './costs/TokensByPhaseChart';
@@ -118,7 +119,7 @@ export function CostsView() {
   const selectProject = useAppStore((state) => state.selectProject);
   const selectThread = useAppStore((state) => state.selectThread);
   const selectIssue = useAppStore((state) => state.selectIssue);
-  const setGithubIssues = useAppStore((state) => state.setGithubIssues);
+  const queryClient = useQueryClient();
   // Default to tokens because token counts are exact for every provider,
   // whereas USD amounts are only real for OpenRouter (billed) and are
   // best-effort estimates for Claude/Codex CLI runs priced from published rates.
@@ -138,7 +139,7 @@ export function CostsView() {
       const issues = await window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
         projectId,
       });
-      setGithubIssues(issues);
+      queryClient.setQueryData(githubIssuesQueryKey(projectId), issues);
       const match = issues.find((i) => i.threadId === threadId) ?? null;
       if (match) selectIssue(match);
     } finally {

@@ -525,7 +525,6 @@ describe('app-store', () => {
       useAppStore.getState().setReview({ approved: true } as never);
       useAppStore.getState().setVerification({ passed: true } as never);
       useAppStore.getState().setSystemHealth({ git: { available: true } } as never);
-      useAppStore.getState().setGithubIssues([makeIssue({ id: 'issue-updated' })]);
 
       expect(useAppStore.getState()).toMatchObject({
         currentPlan: { tasks: [] },
@@ -533,7 +532,6 @@ describe('app-store', () => {
         currentVerification: { passed: true },
         systemHealth: { git: { available: true } },
       });
-      expect(useAppStore.getState().githubIssues[0]?.id).toBe('issue-updated');
     });
   });
 
