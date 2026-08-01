@@ -58,6 +58,7 @@ Where things live:
 - **Do not use `claude -p` for interactive terminal mode.** Interactive mode launches the real terminal CLI, wraps raw output in our own terminal events, and uses process exit as completion. See: `interactive-cli-run-modes.md`.
 - **`WorktreeManager.remove(path, branch)` takes concrete values** — never recompute from `threadId`. See: `worktrees.md`.
 - **Clamp IPC errors** to first-line + ~280 chars; log full trace to main-process console only. See: `ipc-errors.md`.
+- **No synchronous git on the pipeline execute path.** It freezes the Electron main event loop. Use the async transport in `packages/git/src/git-exec.ts`, and hold `withGitLock` across any stage→commit sequence. See: `git-transport.md`.
 
 ## References
 
@@ -76,6 +77,7 @@ Where things live:
 - `pipeline.md` — phase flow, state machine, provider routing
 - `worktrees.md` — default paths, settings, path-as-truth rule, cleanup pattern
 - `claude-cli.md` — stdin-not-argv rule for claude CLI
+- `git-transport.md` — async-only git on the execute path; `withGitLock` for stage→commit atomicity
 - `interactive-cli-run-modes.md` — interactive-vs-programmatic terminal routing and event model
 - `ipc-errors.md` — clamp IPC errors at main-process boundary
 - `skills.md` — skills/memory folder layout, symlink rules

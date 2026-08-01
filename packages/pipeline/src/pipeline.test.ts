@@ -36,6 +36,17 @@ const { mockPromptArtifacts } = vi.hoisted(() => ({
   mockPromptArtifacts: new Map<string, string>(),
 }));
 
+const { mockExecSync, runMockedGit } = vi.hoisted(() => {
+  const mockExecSync = vi.fn();
+  return {
+    mockExecSync,
+    runMockedGit: async (cwd: string, args: string[]): Promise<string> => {
+      const stdout: string = mockExecSync(['git', ...args].join(' '), { cwd });
+      return stdout.trim();
+    },
+  };
+});
+
 vi.mock('@shipcode/git', () => {
   class WorktreeManager {
     create = mockWorktreeCreate;
@@ -58,6 +69,14 @@ vi.mock('@shipcode/git', () => {
     }),
     resolveHeadCommit: vi.fn().mockResolvedValue('head-sha'),
     resolveCurrentBranch: vi.fn().mockResolvedValue('main'),
+    // The execute path drives git through the async transport now; route it to
+    // the same mockExecSync sink so per-test git stubs keep one command shape.
+    runGit: vi.fn(runMockedGit),
+    // Inline, no queueing — serialization is covered by the git-exec unit tests.
+    withGitLock: vi.fn(
+      async (cwd: string, fn: (run: (args: string[]) => Promise<string>) => Promise<unknown>) =>
+        fn((args) => runMockedGit(cwd, args)),
+    ),
   };
 });
 
@@ -65,7 +84,6 @@ vi.mock('./pipeline/worktree-target-guard', () => ({
   assertPersistedWorktreeTarget: vi.fn(async () => undefined),
 }));
 
-const { mockExecSync } = vi.hoisted(() => ({ mockExecSync: vi.fn() }));
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   return {
@@ -3400,6 +3418,7 @@ Custom prompt`,
     it('no context → no-op', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
     });
@@ -3410,6 +3429,7 @@ Custom prompt`,
       vi.mocked(mock.deps.plans.getLatest).mockReturnValue(makePlanRecord({ structured: null }));
 
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -3430,6 +3450,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mock.deps.verifications.create).toHaveBeenCalledWith(
         't1',
@@ -3457,6 +3478,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -3480,6 +3502,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mock.deps.verifications.create).toHaveBeenCalledWith(
         't1',
@@ -3524,6 +3547,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mock.deps.diffs.replaceForThread).toHaveBeenCalledWith('t1', [
         {
@@ -3559,6 +3583,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('git add -A'),
@@ -3601,6 +3626,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
       const exitP = mock.trigger('exit', 'proc-2', 0);
       await vi.advanceTimersByTimeAsync(0);
@@ -3633,6 +3659,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
       await mock.trigger(
         'output',
         'proc-2',
@@ -3682,6 +3709,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
       await mock.trigger(
         'output',
         'proc-2',
@@ -3752,6 +3780,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -3777,6 +3806,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('git add -A'),
@@ -3814,6 +3844,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       // proc-2 is verification process
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_PASSED_JSON));
@@ -3848,6 +3879,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
       const exitP = mock.trigger('exit', 'proc-2', 0);
@@ -3878,6 +3910,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
       context.cancelled = true;
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_PASSED_JSON));
       await mock.trigger('exit', 'proc-2', 0);
@@ -3902,6 +3935,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
       await mock.trigger('exit', 'proc-2', 0);
@@ -3942,6 +3976,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
       const exitP = mock.trigger('exit', 'proc-2', 0);
@@ -4113,6 +4148,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
       await mock.trigger('output', 'proc-2', 'verifier did not emit a block');
       await mock.trigger('exit', 'proc-2', 0);
 
@@ -4994,6 +5030,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
       const exitP = mock.trigger('exit', 'proc-2', 0);
@@ -5038,6 +5075,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
       await mock.trigger('exit', 'proc-2', 0);
@@ -5066,6 +5104,7 @@ Custom prompt`,
     it('no context → no-op', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startCommitAndPush('t1');
+      await flush();
 
       expect(mockExecSync).not.toHaveBeenCalled();
     });
@@ -5080,6 +5119,7 @@ Custom prompt`,
       });
 
       await pipeline.startCommitAndPush('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -5101,6 +5141,7 @@ Custom prompt`,
       });
 
       await pipeline.startCommitAndPush('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -5147,6 +5188,7 @@ Custom prompt`,
       });
 
       await pipeline.startCommitAndPush('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -5169,6 +5211,7 @@ Custom prompt`,
       });
 
       await pipeline.startCommitAndPush('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -5220,6 +5263,7 @@ Custom prompt`,
       });
 
       await pipeline.startCommitAndPush('t1');
+      await flush();
 
       expect(pushAttempts).toBe(0);
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(

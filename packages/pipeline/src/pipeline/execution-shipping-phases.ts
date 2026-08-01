@@ -96,7 +96,7 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
         return { next: 'failed' };
       }
 
-      const diffBase = resolveWorktreeDiffBase(context);
+      const diffBase = await resolveWorktreeDiffBase(context);
       const ahead = diffBase
         ? execFileSync('git', ['log', `${diffBase}..HEAD`, '--oneline'], {
             cwd,
