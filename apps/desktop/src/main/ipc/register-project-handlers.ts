@@ -1517,6 +1517,10 @@ export function registerProjectHandlers({
           ),
         );
         if (removedWorktreePaths.size > 0) {
+          // Serial across threads on purpose: each call batches its own refs into
+          // one `update-ref` transaction, and every ref deletion in the repo
+          // contends on the same packed-refs lock. Concurrency here would only
+          // trade the lock's short retry timeout for skipped refs.
           for (const thread of queries.threads.list(project.id)) {
             if (!thread.worktreePath || !removedWorktreePaths.has(thread.worktreePath)) continue;
             try {
