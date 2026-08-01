@@ -89,12 +89,7 @@ function useProjectSidebarView() {
   const viewMode = useAppStore((state) => state.viewMode);
   const settingsVisible = useAppStore((state) => state.settingsVisible);
   const selectProject = useAppStore((state) => state.selectProject);
-  const openOverview = useAppStore((state) => state.openOverview);
-  const openActivity = useAppStore((state) => state.openActivity);
-  const openInbox = useAppStore((state) => state.openInbox);
-  const openCosts = useAppStore((state) => state.openCosts);
-  const openSkills = useAppStore((state) => state.openSkills);
-  const openAutomations = useAppStore((state) => state.openAutomations);
+  const openView = useAppStore((state) => state.openView);
   const openProjectSettingsModal = useAppStore((state) => state.openProjectSettingsModal);
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const openCreateIssueModal = useAppStore((state) => state.openCreateIssueModal);
@@ -170,7 +165,7 @@ function useProjectSidebarView() {
     onSuccess: (_data, projectId) => {
       if (activeProjectId === projectId) {
         selectProject(null);
-        openOverview();
+        openView('overview');
       }
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
@@ -186,7 +181,7 @@ function useProjectSidebarView() {
     onSuccess: (_data, projectId) => {
       if (activeProjectId === projectId) {
         selectProject(null);
-        openOverview();
+        openView('overview');
       }
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
@@ -358,7 +353,7 @@ function useProjectSidebarView() {
               'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
               !settingsVisible && viewMode === 'overview' && 'bg-tertiary text-primary font-medium',
             )}
-            onClick={() => openOverview()}
+            onClick={() => openView('overview')}
           >
             <LayoutGrid size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">Overview</span>
@@ -380,7 +375,7 @@ function useProjectSidebarView() {
               'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
               !settingsVisible && viewMode === 'inbox' && 'bg-tertiary text-primary font-medium',
             )}
-            onClick={() => openInbox()}
+            onClick={() => openView('inbox')}
           >
             <Inbox size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">Inbox</span>
@@ -400,7 +395,7 @@ function useProjectSidebarView() {
               'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
               !settingsVisible && viewMode === 'activity' && 'bg-tertiary text-primary font-medium',
             )}
-            onClick={() => openActivity()}
+            onClick={() => openView('activity')}
           >
             <Activity size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">Activity</span>
@@ -413,7 +408,7 @@ function useProjectSidebarView() {
               'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
               !settingsVisible && viewMode === 'skills' && 'bg-tertiary text-primary font-medium',
             )}
-            onClick={() => openSkills()}
+            onClick={() => openView('skills')}
           >
             <Sparkles size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">Skills</span>
@@ -428,7 +423,7 @@ function useProjectSidebarView() {
                 viewMode === 'automations' &&
                 'bg-tertiary text-primary font-medium',
             )}
-            onClick={() => openAutomations()}
+            onClick={() => openView('automations')}
           >
             <Clock3 size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">Automations</span>
@@ -441,7 +436,7 @@ function useProjectSidebarView() {
               'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
               !settingsVisible && viewMode === 'costs' && 'bg-tertiary text-primary font-medium',
             )}
-            onClick={() => openCosts()}
+            onClick={() => openView('costs')}
           >
             <DollarSign size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">Costs</span>

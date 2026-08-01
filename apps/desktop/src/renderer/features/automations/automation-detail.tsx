@@ -35,7 +35,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export function AutomationDetail() {
   const automationId = useAppStore((s) => s.activeAutomationDetailId);
-  const openAutomations = useAppStore((s) => s.openAutomations);
+  const openView = useAppStore((s) => s.openView);
   const selectAutomationThread = useAppStore((s) => s.selectAutomationThread);
   const openCreateAutomationModal = useAppStore((s) => s.openCreateAutomationModal);
 
@@ -76,7 +76,7 @@ export function AutomationDetail() {
           type="button"
           variant="ghost"
           size="icon"
-          onClick={openAutomations}
+          onClick={() => openView('automations')}
           aria-label="Back to automations"
           className="size-6 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
         >
