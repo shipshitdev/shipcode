@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { captureRendererException } from '../telemetry';
@@ -49,7 +49,7 @@ describe('ErrorBoundary', () => {
     }) as unknown as typeof boundary.setState;
     Object.assign(boundary.state, ErrorBoundary.getDerivedStateFromError(error));
     boundary.componentDidCatch(error, { componentStack: '\n    at BrokenChild' });
-    const { rerender } = render(boundary.render() as ReactElement);
+    render(boundary.render() as ReactElement);
 
     expect(await screen.findByText('Something went wrong')).toBeInTheDocument();
     expect(screen.getByText(/Error: render exploded/)).toBeInTheDocument();
@@ -67,11 +67,13 @@ describe('ErrorBoundary', () => {
         expect.stringContaining('Error: render exploded'),
       );
     });
-    Object.assign(boundary.state, { isCopied: true });
-    rerender(boundary.render() as ReactElement);
-    expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
-    vi.advanceTimersByTime(2000);
-    expect(boundary.setState).toHaveBeenCalledWith({ isCopied: false });
+    // Copy feedback lives in the CopyTraceButton subcomponent's own hook state.
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
 
