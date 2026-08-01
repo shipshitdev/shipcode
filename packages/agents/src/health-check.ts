@@ -1,8 +1,6 @@
-import { exec, execFile } from 'node:child_process';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 import type {
   AppSettings,
   ChatIntegrationHealth,
@@ -29,6 +27,7 @@ import {
   normalizeReasoningModelId,
   OPENROUTER_API_BASE,
 } from '@shipcode/shared';
+import { execAsync, execFileAsync } from '@shipcode/shared/exec-async';
 import * as pty from 'node-pty';
 import { clearPoolExhausted, isPoolExhausted } from './agent-sdk-pool-state';
 import { checkDesktopApps } from './desktop-app-health';
@@ -47,9 +46,6 @@ import {
 export { checkDesktopApps } from './desktop-app-health';
 export { parseClaudeUsageText, parseCodexStatusText } from './provider-usage-parsers';
 export { shellExecEnv } from './shell-env';
-
-const execAsync = promisify(exec);
-const execFileAsync = promisify(execFile);
 
 const CLI_USAGE_TIMEOUT_MS = 20_000;
 const CLI_USAGE_OUTPUT_TAIL = 8_192;

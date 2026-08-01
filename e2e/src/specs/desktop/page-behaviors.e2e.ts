@@ -21,7 +21,7 @@ test.describe('page behavior contracts', () => {
   test('overview stat cards navigate to inbox and activity', async ({ harness }) => {
     const { page } = harness;
 
-    await harness.callStore('openOverview');
+    await harness.callStore('openView', 'overview');
     await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible({
       timeout: 15_000,
     });
@@ -30,7 +30,7 @@ test.describe('page behavior contracts', () => {
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
     expect((await harness.getState()).viewMode).toBe('inbox');
 
-    await harness.callStore('openOverview');
+    await harness.callStore('openView', 'overview');
     await page.getByText('Shipped (7d)', { exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Activity', exact: true })).toBeVisible({
       timeout: 15_000,
@@ -41,7 +41,7 @@ test.describe('page behavior contracts', () => {
   test('costs view toggles between tokens and USD display modes', async ({ harness }) => {
     const { page } = harness;
 
-    await harness.callStore('openCosts');
+    await harness.callStore('openView', 'costs');
     await expect(page.getByRole('heading', { name: 'Costs', exact: true })).toBeVisible({
       timeout: 15_000,
     });
@@ -59,7 +59,7 @@ test.describe('page behavior contracts', () => {
   test('skills view switches phase and exposes unsaved draft state', async ({ harness }) => {
     const { page } = harness;
 
-    await harness.callStore('openSkills');
+    await harness.callStore('openView', 'skills');
     await expect(page.getByRole('heading', { name: 'Skills', exact: true })).toBeVisible({
       timeout: 15_000,
     });
@@ -83,7 +83,7 @@ test.describe('page behavior contracts', () => {
     const { page } = harness;
 
     await selectSeedProject(harness);
-    await harness.callStore('openAutomations');
+    await harness.callStore('openView', 'automations');
     await expect(page.getByRole('heading', { name: 'Automations', exact: true })).toBeVisible({
       timeout: 15_000,
     });

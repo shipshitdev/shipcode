@@ -32,30 +32,46 @@ import { GhCli } from './gh-cli';
  * helper the test can call to drive the promise to resolution/rejection.
  */
 function createFakeProc() {
+  type FakeStdin = EventEmitter & { write: (chunk: string) => boolean; end: () => void };
   const proc = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter;
     stderr: EventEmitter;
-    stdin: { write: (chunk: string) => boolean; end: () => void };
+    stdin: FakeStdin;
   };
   proc.stdout = new EventEmitter();
   proc.stderr = new EventEmitter();
   const stdinWrites: string[] = [];
   let stdinEnded = false;
-  proc.stdin = {
-    write: (chunk: string) => {
-      stdinWrites.push(chunk);
-      return true;
-    },
-    end: () => {
-      stdinEnded = true;
-    },
+  // `writeThrows` reproduces a pipe that is already destroyed when we write.
+  let writeThrows: Error | null = null;
+  const stdin = new EventEmitter() as FakeStdin;
+  stdin.write = (chunk: string) => {
+    if (writeThrows) throw writeThrows;
+    stdinWrites.push(chunk);
+    return true;
   };
+  stdin.end = () => {
+    stdinEnded = true;
+  };
+  proc.stdin = stdin;
   const complete = (code: number, stderrChunk?: string) => {
     if (stderrChunk !== undefined) proc.stderr.emit('data', stderrChunk);
     proc.emit('close', code);
   };
   const fail = (err: Error) => proc.emit('error', err);
-  return { proc, stdinWrites, isStdinEnded: () => stdinEnded, complete, fail };
+  const failStdin = (err: Error) => proc.stdin.emit('error', err);
+  const throwOnWrite = (err: Error) => {
+    writeThrows = err;
+  };
+  return {
+    proc,
+    stdinWrites,
+    isStdinEnded: () => stdinEnded,
+    complete,
+    fail,
+    failStdin,
+    throwOnWrite,
+  };
 }
 
 function success(stdout: string) {
@@ -2624,6 +2640,72 @@ describe('GhCli', () => {
       fail(new Error('ENOENT'));
 
       await expect(promise).rejects.toThrow('ENOENT');
+    });
+  });
+
+  describe('stdin failures', () => {
+    it('rejects with the exit code and the stdin error when gh dies mid-write', async () => {
+      const { proc, complete, failStdin } = createFakeProc();
+      mockSpawn.mockReturnValueOnce(proc);
+
+      const promise = gh.editIssueBody(42, 'body');
+      await Promise.resolve();
+
+      // gh exited before draining stdin; without a stdin 'error' listener this
+      // would be an unhandled stream error in the main process.
+      failStdin(Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }));
+      complete(1, 'gh: authentication required');
+
+      await expect(promise).rejects.toThrow(/exited with code 1/);
+      await expect(promise).rejects.toThrow(/gh: authentication required/);
+      await expect(promise).rejects.toThrow(/stdin write failed: write EPIPE/);
+    });
+
+    it('resolves when the stdin error is followed by a clean exit', async () => {
+      const { proc, complete, failStdin } = createFakeProc();
+      mockSpawn.mockReturnValueOnce(proc);
+
+      const promise = gh.addIssueComment(42, 'comment');
+      await waitForSpawnCall();
+
+      // A late EPIPE from end()-ing an already-closed pipe must not fail an
+      // operation gh reported as successful — these writes are not idempotent.
+      failStdin(Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }));
+      complete(0);
+
+      await expect(promise).resolves.toBeUndefined();
+    });
+
+    it('settles once when a stdin error is followed by a process error and close', async () => {
+      const { proc, complete, fail, failStdin } = createFakeProc();
+      mockSpawn.mockReturnValueOnce(proc);
+
+      const promise = gh.editIssueBody(42, 'body');
+      await Promise.resolve();
+
+      failStdin(new Error('write EPIPE'));
+      fail(new Error('spawn failed'));
+      complete(1, 'ignored, promise already settled');
+
+      await expect(promise).rejects.toThrow('spawn failed');
+    });
+
+    it('rejects rather than throwing when the write itself throws', async () => {
+      const { proc, complete, throwOnWrite } = createFakeProc();
+      throwOnWrite(
+        Object.assign(new Error('Cannot call write after a stream was destroyed'), {
+          code: 'ERR_STREAM_DESTROYED',
+        }),
+      );
+      mockSpawn.mockReturnValueOnce(proc);
+
+      const promise = gh.editIssueBody(42, 'body');
+      await Promise.resolve();
+
+      complete(1, 'gh: rate limit exceeded');
+
+      await expect(promise).rejects.toThrow(/exited with code 1/);
+      await expect(promise).rejects.toThrow(/stdin write failed: Cannot call write/);
     });
   });
 });

@@ -14,6 +14,12 @@
  *   It's a no-op for already-tagged strings and retrofits a `Z` onto older
  *   rows stored with the naive format, so legacy data displays correctly
  *   without a schema migration.
+ * - **Comparisons:** never compare a stored timestamp against
+ *   `datetime('now', ...)`. SQLite compares these columns as plain strings, and
+ *   at index 10 the ISO `'T'` (0x54) sorts *after* the naive `' '` (0x20) — so
+ *   `iso_column <= datetime('now', '-N seconds')` is always false whenever both
+ *   sides fall on the same calendar date. Build the cutoff in JS and bind
+ *   `new Date(Date.now() - ms).toISOString()` instead.
  */
 
 /**

@@ -719,8 +719,8 @@ describe('ProjectSidebar', () => {
 
   it('cleans up active resize listeners and body classes on unmount', async () => {
     mockSidebarData(invokeMock);
-    const addListenerSpy = vi.spyOn(document, 'addEventListener');
-    const removeListenerSpy = vi.spyOn(document, 'removeEventListener');
+    const addListenerSpy = vi.spyOn(window, 'addEventListener');
+    const removeListenerSpy = vi.spyOn(window, 'removeEventListener');
     const { unmount } = renderWithProviders();
 
     const resizeHandle = await screen.findByRole('button', { name: 'Resize project sidebar' });

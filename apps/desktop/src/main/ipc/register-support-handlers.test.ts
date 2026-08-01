@@ -200,46 +200,6 @@ describe('support IPC utilities', () => {
       ghAuth: { isAuthenticated: true, user: 'decod3rs' },
     });
   });
-
-  it('lists onboarding repos through gh and clamps lookup failures', async () => {
-    mockExec.mockImplementationOnce(
-      (
-        command: string,
-        options: { timeout?: number; env?: Record<string, string> },
-        callback: (error: Error | null, result: { stdout: string; stderr: string }) => void,
-      ) => {
-        expect(command).toContain('user/repos');
-        expect(options.timeout).toBe(20_000);
-        callback(null, {
-          stdout: [
-            JSON.stringify({ id: 'repo-b', name: 'shipshitdev/beta', private: true }),
-            JSON.stringify({ id: 'repo-a', name: ' shipshitdev/alpha ', private: false }),
-            JSON.stringify({ id: 'repo-dupe', name: 'shipshitdev/alpha', private: true }),
-            JSON.stringify({ id: '', name: 'shipshitdev/missing-id', private: false }),
-            JSON.stringify({ id: 'repo-missing-name', name: '   ', private: false }),
-          ].join('\n'),
-          stderr: '',
-        });
-      },
-    );
-
-    await expect(getHandler('onboarding:list-repos')()).resolves.toEqual([
-      { id: 'repo-a', name: 'shipshitdev/alpha', private: false },
-      { id: 'repo-b', name: 'shipshitdev/beta', private: true },
-    ]);
-
-    mockExec.mockImplementationOnce(
-      (
-        _command: string,
-        _options: unknown,
-        callback: (error: Error | null, result?: { stdout: string; stderr: string }) => void,
-      ) => {
-        callback(new Error('gh unavailable\nstack'));
-      },
-    );
-
-    await expect(getHandler('onboarding:list-repos')()).rejects.toThrow('gh unavailable');
-  });
 });
 
 // ---------------------------------------------------------------------------

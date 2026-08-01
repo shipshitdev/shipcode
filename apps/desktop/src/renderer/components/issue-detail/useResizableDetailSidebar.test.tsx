@@ -15,8 +15,8 @@ function mouseDownEvent(clientX: number) {
 
 describe('useResizableDetailSidebar', () => {
   it('cleans up active resize listeners and body classes on unmount mid-drag', () => {
-    const addListenerSpy = vi.spyOn(document, 'addEventListener');
-    const removeListenerSpy = vi.spyOn(document, 'removeEventListener');
+    const addListenerSpy = vi.spyOn(window, 'addEventListener');
+    const removeListenerSpy = vi.spyOn(window, 'removeEventListener');
     const { result, unmount } = renderHook(() => useResizableDetailSidebar());
 
     act(() => {
@@ -45,7 +45,7 @@ describe('useResizableDetailSidebar', () => {
   });
 
   it('does not leak listeners across repeated mousedown starts', () => {
-    const removeListenerSpy = vi.spyOn(document, 'removeEventListener');
+    const removeListenerSpy = vi.spyOn(window, 'removeEventListener');
     const { result, unmount } = renderHook(() => useResizableDetailSidebar());
 
     act(() => {

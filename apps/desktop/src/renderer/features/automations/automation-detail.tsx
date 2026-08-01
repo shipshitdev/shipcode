@@ -9,7 +9,11 @@ import { formatTimestamp, SHORT_TIMESTAMP_FORMAT } from '../../components/format
 import { useAppStore } from '../../stores/app-store';
 import { AutomationPromptMarkdown } from './automation-prompt-markdown';
 import { AUTOMATION_RELATIVE_TIME_OPTIONS } from './automation-time';
-import { describeAutomationRun, getAutomationRunTotalTokens } from './run-presentation';
+import {
+  automationStatusColor,
+  describeAutomationRun,
+  getAutomationRunTotalTokens,
+} from './run-presentation';
 
 function describeCron(expr: string): string {
   try {
@@ -27,15 +31,9 @@ function formatTokens(run: Thread): string | null {
   return total > 0 ? formatTokenCount(total) : null;
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  running: 'bg-agent/10 text-agent border-agent/25',
-  completed: 'bg-success/12 text-success border-success/25',
-  failed: 'bg-danger/12 text-danger border-danger/25',
-};
-
 export function AutomationDetail() {
   const automationId = useAppStore((s) => s.activeAutomationDetailId);
-  const openAutomations = useAppStore((s) => s.openAutomations);
+  const openView = useAppStore((s) => s.openView);
   const selectAutomationThread = useAppStore((s) => s.selectAutomationThread);
   const openCreateAutomationModal = useAppStore((s) => s.openCreateAutomationModal);
 
@@ -76,7 +74,7 @@ export function AutomationDetail() {
           type="button"
           variant="ghost"
           size="icon"
-          onClick={openAutomations}
+          onClick={() => openView('automations')}
           aria-label="Back to automations"
           className="size-6 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
         >
@@ -93,7 +91,7 @@ export function AutomationDetail() {
               <span
                 className={cn(
                   'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium',
-                  STATUS_COLOR[automation.lastStatus] ?? 'bg-tertiary text-secondary border-border',
+                  automationStatusColor(automation.lastStatus),
                 )}
               >
                 {automation.lastStatus}

@@ -7,7 +7,7 @@ import {
   createCodexCliProvider,
   createProviderRegistry,
 } from '@shipcode/agents';
-import { captureCheckpoint, resolveHeadCommit } from '@shipcode/git';
+import { captureCheckpoint, resolveCurrentBranch, resolveHeadCommit } from '@shipcode/git';
 import type { TaskGraphAssessment, TaskGraphWithNodes } from '@shipcode/shared';
 import {
   DEFAULT_SETTINGS,
@@ -958,7 +958,6 @@ describe('createPipeline', () => {
     });
     mockExecSync.mockReset();
     mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'feat/test-branch';
       if (cmd === 'git rev-parse HEAD') return 'abc123';
       if (cmd === 'git status --porcelain') return '';
       return '';
@@ -3235,7 +3234,6 @@ Custom prompt`,
       process.env.SHELL = '/bin/zsh';
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd === '/bin/zsh -ilc printf "%s" "$PATH"') return `${binDir}:/usr/bin:/bin`;
-        if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'feat/test-branch';
         if (cmd === 'git rev-parse HEAD') return 'abc123';
         if (cmd === 'git status --porcelain') return '';
         return '';
@@ -3430,6 +3428,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mock.deps.verifications.create).toHaveBeenCalledWith(
         't1',
@@ -3480,6 +3479,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mock.deps.verifications.create).toHaveBeenCalledWith(
         't1',
@@ -3524,6 +3524,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mock.deps.diffs.replaceForThread).toHaveBeenCalledWith('t1', [
         {
@@ -3559,6 +3560,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('git add -A'),
@@ -3601,6 +3603,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
       const exitP = mock.trigger('exit', 'proc-2', 0);
       await vi.advanceTimersByTimeAsync(0);
@@ -3633,6 +3636,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
       await mock.trigger(
         'output',
         'proc-2',
@@ -3682,6 +3686,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
       await mock.trigger(
         'output',
         'proc-2',
@@ -3752,6 +3757,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -3814,6 +3820,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       // proc-2 is verification process
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_PASSED_JSON));
@@ -3848,6 +3855,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
       const exitP = mock.trigger('exit', 'proc-2', 0);
@@ -3902,6 +3910,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
       await mock.trigger('exit', 'proc-2', 0);
@@ -4113,6 +4122,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
       await mock.trigger('output', 'proc-2', 'verifier did not emit a block');
       await mock.trigger('exit', 'proc-2', 0);
 
@@ -4994,6 +5004,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
       const exitP = mock.trigger('exit', 'proc-2', 0);
@@ -5038,6 +5049,7 @@ Custom prompt`,
       });
 
       await pipeline.startVerification('t1');
+      await flush();
 
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
       await mock.trigger('exit', 'proc-2', 0);
@@ -5147,6 +5159,7 @@ Custom prompt`,
       });
 
       await pipeline.startCommitAndPush('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -5188,7 +5201,6 @@ Custom prompt`,
         if (cmd.startsWith('git rev-parse --verify')) return 'abc123';
         if (cmd.startsWith('git rev-parse HEAD')) return 'headsha';
         if (cmd.startsWith('git log')) return 'abc123 some commit';
-        if (cmd.startsWith('git rev-parse --abbrev-ref')) return 'feat/branch';
         if (cmd.startsWith('git push')) {
           pushAttempts++;
           if (pushAttempts === 1) throw new Error('transient push failed');
@@ -5300,6 +5312,7 @@ Custom prompt`,
       });
 
       await pipeline.startShipping('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -5326,6 +5339,7 @@ Custom prompt`,
       });
 
       await pipeline.startShipping('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -5417,6 +5431,7 @@ Custom prompt`,
       });
 
       await pipeline.startShipping('t1');
+      await flush();
 
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
@@ -5476,9 +5491,10 @@ Custom prompt`,
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('symbolic-ref')) return 'origin/develop';
         if (cmd === 'git rev-parse develop') return 'forksha';
-        if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'shipcode/7-bug';
         return '';
       });
+
+      vi.mocked(resolveCurrentBranch).mockResolvedValueOnce('shipcode/7-bug');
 
       const pipeline = createPipeline(mock.deps);
       const issue = {
@@ -5510,7 +5526,6 @@ Custom prompt`,
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('symbolic-ref')) return 'origin/develop';
         if (cmd === 'git rev-parse develop') return 'forksha';
-        if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'develop';
         return '';
       });
 
