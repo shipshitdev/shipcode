@@ -457,7 +457,6 @@ describe('registerPipelineHandlers', () => {
       const finding = { id: 'finding-1', threadId: 'thread-1', status: 'open' };
       queries.verifications.getLatest.mockReturnValue(verification);
       queries.reviewFindings.listByThread.mockReturnValue([finding]);
-      queries.reviewFindings.listOpenByThread.mockReturnValue([finding]);
       queries.reviewFindings.updateStatus.mockReturnValue({ ...finding, status: 'ignored' });
       (
         queries as typeof queries & {
@@ -469,16 +468,9 @@ describe('registerPipelineHandlers', () => {
 
       const verificationHandler = handlers.get('verification:get');
       const findingsHandler = handlers.get('review-findings:list-thread');
-      const openFindingsHandler = handlers.get('review-findings:list-open');
       const updateFindingHandler = handlers.get('review-findings:update-status');
       const taskGraphHandler = handlers.get('task-graph:get-latest');
-      if (
-        !verificationHandler ||
-        !findingsHandler ||
-        !openFindingsHandler ||
-        !updateFindingHandler ||
-        !taskGraphHandler
-      ) {
+      if (!verificationHandler || !findingsHandler || !updateFindingHandler || !taskGraphHandler) {
         throw new Error('read handlers not registered');
       }
 
@@ -486,7 +478,6 @@ describe('registerPipelineHandlers', () => {
       expect(findingsHandler(undefined, { threadId: 'thread-1', includeClosed: true })).toEqual([
         finding,
       ]);
-      expect(openFindingsHandler(undefined, { threadId: 'thread-1' })).toEqual([finding]);
       expect(
         updateFindingHandler(undefined, { findingId: 'finding-1', status: 'ignored' }),
       ).toEqual({ ...finding, status: 'ignored' });
@@ -495,7 +486,6 @@ describe('registerPipelineHandlers', () => {
       expect(queries.reviewFindings.listByThread).toHaveBeenCalledWith('thread-1', {
         includeClosed: true,
       });
-      expect(queries.reviewFindings.listOpenByThread).toHaveBeenCalledWith('thread-1');
       expect(queries.reviewFindings.updateStatus).toHaveBeenCalledWith('finding-1', 'ignored');
       expect(
         (
@@ -1685,31 +1675,6 @@ describe('registerPipelineHandlers', () => {
         expect.objectContaining({ objective: 'Test plan' }),
         'Resume the interrupted revision pass using the latest plan and reviewer context.',
       );
-    });
-  });
-
-  describe('pipeline:skip-review', () => {
-    it('moves the latest plan to approval and emits the phase transition', async () => {
-      queries.threads.getById.mockReturnValue(
-        makeThread({
-          githubIssueNumber: null,
-          autonomous: true,
-          reviewRound: 1,
-        }),
-      );
-
-      const handler = handlers.get('pipeline:skip-review');
-      if (!handler) throw new Error('pipeline:skip-review handler not registered');
-
-      await handler(undefined, { threadId: 'thread-1' });
-
-      expect(queries.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approval');
-      expect(queries.threads.updateStatus).toHaveBeenCalledWith('thread-1', 'approval');
-      expect(emitter.emit).toHaveBeenCalledWith({
-        type: 'pipeline:phase',
-        threadId: 'thread-1',
-        phase: 'approval',
-      });
     });
   });
 
@@ -3422,8 +3387,7 @@ describe('registerPipelineHandlers', () => {
       const activity = handlers.get('dashboard:get-activity');
       const countActivity = handlers.get('dashboard:count-activity');
       const recentTasks = handlers.get('dashboard:get-recent-tasks');
-      const countRecentTasks = handlers.get('dashboard:count-recent-tasks');
-      if (!overview || !activity || !countActivity || !recentTasks || !countRecentTasks) {
+      if (!overview || !activity || !countActivity || !recentTasks) {
         throw new Error('dashboard handlers not registered');
       }
 
@@ -3436,12 +3400,10 @@ describe('registerPipelineHandlers', () => {
       activity(undefined, { limit: 3, offset: 4, projectId: 'project-1' });
       countActivity(undefined, { projectId: 'project-1' });
       recentTasks(undefined, { limit: 5, offset: 6 });
-      countRecentTasks(undefined, undefined);
 
       expect(queries.activity.listRecent).toHaveBeenCalledWith(3, 'project-1', 4);
       expect(queries.activity.countRecent).toHaveBeenCalledWith('project-1');
       expect(queries.dashboard.getRecentTasks).toHaveBeenCalledWith(5, 6);
-      expect(queries.dashboard.countRecentTasks).toHaveBeenCalled();
     });
 
     it('returns dashboard stats, issue activity, and default activity pagination', () => {

@@ -8,16 +8,17 @@ import {
   type ReasoningEffort,
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
-import {
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  SettingsRow,
-} from '@shipshitdev/ui';
+import { SettingsSelectRow } from '@shipcode/ui';
+import { Input, SettingsRow } from '@shipshitdev/ui';
 import { getModelOptions, PROVIDER_DISPLAY } from '../model-provider-options-data';
+
+const PHASE_PROVIDER_ORDER = [
+  'claude',
+  'codex',
+  'gemini',
+  'cursor',
+  'openrouter',
+] as const satisfies readonly ExecutorModel[];
 
 export function PhaseModelRow({
   label,
@@ -71,67 +72,40 @@ export function PhaseModelRow({
 
   return (
     <>
-      <SettingsRow label={label} htmlFor={htmlFor}>
-        <Select value={modelValue} onValueChange={onModelChange}>
-          <SelectTrigger id={htmlFor} className="w-[160px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {validProviders.includes('claude') && (
-              <SelectItem value="claude" disabled={!!disabledProviders?.claude}>
-                Anthropic{disabledProviders?.claude ? ` (${disabledProviders.claude})` : ''}
-              </SelectItem>
-            )}
-            {validProviders.includes('codex') && (
-              <SelectItem value="codex" disabled={!!disabledProviders?.codex}>
-                OpenAI{disabledProviders?.codex ? ` (${disabledProviders.codex})` : ''}
-              </SelectItem>
-            )}
-            {validProviders.includes('gemini') && (
-              <SelectItem value="gemini" disabled={!!disabledProviders?.gemini}>
-                Google{disabledProviders?.gemini ? ` (${disabledProviders.gemini})` : ''}
-              </SelectItem>
-            )}
-            {validProviders.includes('cursor') && (
-              <SelectItem value="cursor" disabled={!!disabledProviders?.cursor}>
-                Cursor{disabledProviders?.cursor ? ` (${disabledProviders.cursor})` : ''}
-              </SelectItem>
-            )}
-            {validProviders.includes('openrouter') && (
-              <SelectItem value="openrouter" disabled={!!disabledProviders?.openrouter}>
-                OpenRouter
-                {disabledProviders?.openrouter ? ` (${disabledProviders.openrouter})` : ''}
-              </SelectItem>
-            )}
-          </SelectContent>
-        </Select>
-      </SettingsRow>
+      <SettingsSelectRow
+        id={htmlFor}
+        label={label}
+        value={modelValue}
+        options={PHASE_PROVIDER_ORDER.filter((option) => validProviders.includes(option)).map(
+          (option) => ({
+            value: option,
+            label: `${PROVIDER_DISPLAY[option]}${
+              disabledProviders?.[option] ? ` (${disabledProviders[option]})` : ''
+            }`,
+            disabled: !!disabledProviders?.[option],
+          }),
+        )}
+        onValueChange={onModelChange}
+        triggerClassName="w-[160px]"
+      />
       {modelValue === 'openrouter' && (
-        <SettingsRow label="OpenRouter model" htmlFor={`${htmlFor}-or-model`}>
-          <Select
-            value={openrouterSelection}
-            onValueChange={(value) =>
-              onOpenrouterModelChange(value === '__default__' ? null : value)
-            }
-          >
-            <SelectTrigger id={`${htmlFor}-or-model`} className="w-[220px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__default__">
-                Default paid model ({PROVIDER_DISPLAY.openrouter})
-              </SelectItem>
-              {openrouterModelValue && !knownOpenRouterValues.has(openrouterModelValue) ? (
-                <SelectItem value={openrouterModelValue}>{openrouterModelValue}</SelectItem>
-              ) : null}
-              {openrouterModelOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </SettingsRow>
+        <SettingsSelectRow
+          id={`${htmlFor}-or-model`}
+          label="OpenRouter model"
+          value={openrouterSelection}
+          options={[
+            { value: '__default__', label: `Default paid model (${PROVIDER_DISPLAY.openrouter})` },
+            ...(openrouterModelValue && !knownOpenRouterValues.has(openrouterModelValue)
+              ? [{ value: openrouterModelValue, label: openrouterModelValue }]
+              : []),
+            ...openrouterModelOptions.map((option) => ({
+              value: option.value,
+              label: option.label,
+            })),
+          ]}
+          onValueChange={(value) => onOpenrouterModelChange(value === '__default__' ? null : value)}
+          triggerClassName="w-[220px]"
+        />
       )}
       {modelValue === 'openrouter' && (
         <SettingsRow
@@ -160,26 +134,17 @@ export function PhaseModelRow({
           />
         </SettingsRow>
       )}
-      <SettingsRow
+      <SettingsSelectRow
+        id={`${htmlFor}-reasoning`}
         label={provider === 'claude' ? 'Thinking budget' : 'Reasoning effort'}
-        htmlFor={`${htmlFor}-reasoning`}
-      >
-        <Select
-          value={displayedEffortValue}
-          onValueChange={(value) => onReasoningEffortChange(value as ReasoningEffort)}
-        >
-          <SelectTrigger id={`${htmlFor}-reasoning`} className="w-[120px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {supportedEfforts.map((effort) => (
-              <SelectItem key={effort} value={effort}>
-                {formatReasoningEffortLabel(effort)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </SettingsRow>
+        value={displayedEffortValue}
+        options={supportedEfforts.map((effort) => ({
+          value: effort,
+          label: formatReasoningEffortLabel(effort),
+        }))}
+        onValueChange={(value) => onReasoningEffortChange(value as ReasoningEffort)}
+        triggerClassName="w-[120px]"
+      />
       {!effortResolution.exact && provider !== 'claude' && (
         <div className="mb-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-300">
           {effortResolution.message}

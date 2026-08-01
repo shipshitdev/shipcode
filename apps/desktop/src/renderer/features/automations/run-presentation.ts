@@ -9,6 +9,19 @@ type AutomationRunSummary = Pick<
   | 'totalTokensPrompt'
 >;
 
+const STATUS_COLOR: Record<string, string> = {
+  running: 'bg-agent/10 text-agent border-agent/25',
+  completed: 'bg-success/12 text-success border-success/25',
+  failed: 'bg-danger/12 text-danger border-danger/25',
+};
+
+const STATUS_COLOR_FALLBACK = 'bg-tertiary text-secondary border-border';
+
+/** Badge palette for an automation's last run status, shared by the list and detail views. */
+export function automationStatusColor(status: string | null | undefined): string {
+  return (status && STATUS_COLOR[status]) || STATUS_COLOR_FALLBACK;
+}
+
 export function getAutomationRunTotalTokens(run: AutomationRunSummary): number {
   return (run.totalTokensPrompt ?? 0) + (run.totalTokensCompletion ?? 0);
 }

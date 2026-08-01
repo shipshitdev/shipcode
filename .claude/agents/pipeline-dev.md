@@ -40,7 +40,7 @@ You work on the backend pipeline that turns GitHub issues into PRs. You know the
 
 ## Hard rules
 
-- **Pipe `claude -p` via stdin, never argv.** Argparser breaks on `---` YAML. Use `runClaudeWithStdin` from `packages/agents/src/prd-generator.ts`.
+- **Pipe `claude -p` via stdin, never argv.** Argparser breaks on `---` YAML. Use `runCliWithStdin` from `packages/agents/src/cli-stdin-runner.ts`, or `ProcessManager.spawnWithStdin` for managed processes.
 - **`WorktreeManager.remove(path, branch)` takes concrete persisted values.** Never recompute from `threadId`.
 - **Clamp IPC errors** to first-line + ~280 chars at main-process boundary.
 - **Verification failures with structured findings → retry from execution**, not verification. Preserve `context.testOutput` for verifier evidence.

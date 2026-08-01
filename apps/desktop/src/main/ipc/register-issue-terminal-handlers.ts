@@ -2,7 +2,6 @@ import { GhCli } from '@shipcode/agents';
 import {
   buildIssueTerminalGithubComment,
   startIssueTerminalSession,
-  summarizeIssueTerminalSession,
 } from '../issue-terminal-session';
 import type { IpcHandlerDeps } from './types';
 
@@ -14,10 +13,6 @@ export function registerIssueTerminalHandlers({
 }: IpcHandlerDeps): void {
   ipcMain.handle('issue-terminal:start', (_event, args) =>
     startIssueTerminalSession({ args, queries, processManager, mainWindow }),
-  );
-
-  ipcMain.handle('issue-terminal:summarize', (_event, { threadId }: { threadId: string }) =>
-    summarizeIssueTerminalSession(queries, threadId),
   );
 
   ipcMain.handle(

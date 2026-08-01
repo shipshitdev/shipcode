@@ -975,15 +975,4 @@ export function registerInstantHandlers({
       log.info(`[instant] cancelled interactive terminal thread ${threadId}`);
     }
   });
-
-  // --- instant:list ---
-  ipcMain.handle('instant:list', () => {
-    return queries.threads.listInstant();
-  });
-
-  // --- instant:cleanup ---
-  ipcMain.handle('instant:cleanup', () => {
-    const count = queries.threads.deleteOlderThan('instant', 7);
-    return { deleted: count };
-  });
 }

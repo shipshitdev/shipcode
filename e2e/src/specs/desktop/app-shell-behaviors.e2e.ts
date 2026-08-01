@@ -111,7 +111,7 @@ test.describe('app shell behavior contracts', () => {
   test('command palette navigates to a top-level view', async ({ harness }) => {
     const { page } = harness;
 
-    await harness.callStore('openOverview');
+    await harness.callStore('openView', 'overview');
     await harness.callStore('openCommandPalette');
 
     const dialog = page.getByRole('dialog');
@@ -185,7 +185,7 @@ test.describe('app shell behavior contracts', () => {
     const { page } = harness;
 
     await selectSeedProject(harness);
-    await harness.callStore('openAutomations');
+    await harness.callStore('openView', 'automations');
     await expect(page.getByRole('heading', { name: 'Automations', exact: true })).toBeVisible({
       timeout: 15_000,
     });

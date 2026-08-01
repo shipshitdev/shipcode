@@ -29,7 +29,6 @@ import type {
   GitHubIssueCacheRecord,
   GitHubIssueComment,
   GitHubIssueTriageResult,
-  GitState,
   GitVisualizerData,
   HeatmapDayRecord,
   HeatmapQueryArgs,
@@ -234,7 +233,6 @@ export interface IpcInvokeChannels {
   };
   'pipeline:resume': { args: { threadId: string }; result: undefined };
   'pipeline:cancel': { args: { threadId: string }; result: undefined };
-  'pipeline:skip-review': { args: { threadId: string }; result: undefined };
   'pipeline:create-pr': {
     args: { threadId: string };
     result: { prNumber: number; prUrl: string };
@@ -248,13 +246,8 @@ export interface IpcInvokeChannels {
   };
   'plan:update': { args: { planId: string; structured: ShipCodePlan }; result: undefined };
 
-  'review:get': { args: { planId: string }; result: ReviewRecord | null };
   'review-findings:list-thread': {
     args: { threadId: string; includeClosed?: boolean };
-    result: ReviewFindingRecord[];
-  };
-  'review-findings:list-open': {
-    args: { threadId: string };
     result: ReviewFindingRecord[];
   };
   'review-findings:update-status': {
@@ -266,7 +259,6 @@ export interface IpcInvokeChannels {
 
   'diff:list': { args: { threadId: string }; result: DiffRecord[] };
 
-  'git:status': { args: { projectId: string }; result: GitState };
   'git:commit': { args: { projectId: string; message: string }; result: string };
   'git:push': { args: { projectId: string }; result: undefined };
   'git:list-branches': { args: { projectId: string; fetch?: boolean }; result: string[] };
@@ -534,7 +526,6 @@ export interface IpcInvokeChannels {
 
   // Onboarding
   'onboarding:check-auth': { args: undefined; result: SystemHealth & { ghAuth: GhAuthStatus } };
-  'onboarding:list-repos': { args: undefined; result: OnboardingRepo[] };
 
   // AI-assisted PRD enhancement (in-place refinement of a draft PRD body)
   'ai:enhance-prd': {
@@ -599,7 +590,6 @@ export interface IpcInvokeChannels {
   };
   'dashboard:count-activity': { args: { projectId?: string }; result: number };
   'dashboard:get-recent-tasks': { args: { limit?: number; offset?: number }; result: RecentTask[] };
-  'dashboard:count-recent-tasks': { args: undefined; result: number };
 
   // Cost tracking
   'costs:get-summary': { args: undefined; result: CostSummary };
@@ -611,10 +601,6 @@ export interface IpcInvokeChannels {
   'feature-qa:list-by-thread': {
     args: { threadId: string };
     result: FeatureQaResult[];
-  };
-  'feature-qa:latest-by-feature': {
-    args: { featureId: string };
-    result: FeatureQaResult | null;
   };
   'feature-qa:get-server': {
     args: { threadId: string };
@@ -694,7 +680,6 @@ export interface IpcInvokeChannels {
     result: { content: string };
   };
   'skills:reset': { args: { projectId: string | null; phase: string }; result: unknown };
-  'skills:list-quarantined': { args: undefined; result: unknown };
   'skills:get-writing-prds-info': {
     args: { projectId: string };
     result: WritingPrdsSkillInfo;
@@ -747,8 +732,6 @@ export interface IpcInvokeChannels {
     result: { threadId: string };
   };
   'instant:cancel': { args: { threadId: string }; result: undefined };
-  'instant:list': { args: undefined; result: Thread[] };
-  'instant:cleanup': { args: undefined; result: { deleted: number } };
 
   // Issue-scoped resumable chat sessions
   'issue-chat:get-session': {
@@ -811,10 +794,6 @@ export interface IpcInvokeChannels {
       worktreePath: string;
       promptArtifactPath: string;
     };
-  };
-  'issue-terminal:summarize': {
-    args: { threadId: string };
-    result: { summary: string; conversationId: string };
   };
   'issue-terminal:github-comment-preview': {
     args: { threadId: string };
