@@ -2,7 +2,7 @@
 
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { Archive, ChevronDown, ChevronRight, Loader2, Lock, Maximize2, User } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { IssueExternalBlockers, StalenessDot } from '@/kanban-board/IssueCardParts';
 import {
   type GitHubIssueCacheRecord,
@@ -12,6 +12,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Badge } from '@/primitives/badge';
 import { Button } from '@/primitives/button';
+import { ColumnHeader } from './ColumnHeader';
 import {
   ACTIVE_STATUSES,
   COLUMNS,
@@ -19,7 +20,6 @@ import {
   LIST_COLUMN_DROP_ID,
   LIST_COLUMN_LABEL,
 } from './constants';
-import { ColumnHeader } from './ColumnHeader';
 import { StatusCircleIcon } from './StatusCircleIcon';
 import type {
   ColumnKey,
@@ -59,7 +59,7 @@ interface DraggableListRowProps {
   approvedAwaitingExecution?: boolean;
 }
 
-function DraggableListRow({
+function DraggableListRowComponent({
   issue,
   revisionBadge,
   approvalBadge,
@@ -287,6 +287,9 @@ function DraggableListRow({
     </div>
   );
 }
+
+const DraggableListRow = memo(DraggableListRowComponent);
+DraggableListRow.displayName = 'DraggableListRow';
 
 interface ListSectionBlockProps {
   columnKey: ColumnKey;

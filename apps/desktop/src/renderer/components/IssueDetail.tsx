@@ -67,6 +67,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useAppSettings } from '../hooks/useAppSettings';
+import { useCopyFeedback } from '../hooks/useCopyFeedback';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { toast } from '../stores/toast-store';
@@ -106,11 +107,6 @@ const EXECUTOR_EDITABLE_STATUSES = new Set<IssuePipelineStatus>([
   ISSUE_PIPELINE_STATUS.closed,
 ]);
 const ISSUE_META_DOT = <span className="mx-1.5 text-border">·</span>;
-
-function clearStoredTimeout(ref: { current: ReturnType<typeof setTimeout> | null }) {
-  const timeout = ref.current;
-  if (timeout) clearTimeout(timeout);
-}
 
 type IssueDetailUiState = {
   activeTab: IssueDetailTab;
@@ -175,13 +171,7 @@ function useIssueDetailView() {
   const showRawOutputThreadRef = useRef<string | null>(null);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showMarkAsDoneConfirm, setShowMarkAsDoneConfirm] = useState(false);
-  const [branchCopyState, setBranchCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
-  const branchCopyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    return () => {
-      clearStoredTimeout(branchCopyResetRef);
-    };
-  }, []);
+  const { status: branchCopyState, copy: copyBranchNameToClipboard } = useCopyFeedback();
 
   const { detailSidebarWidth, handleDetailResizeMouseDown } = useResizableDetailSidebar();
 
@@ -890,14 +880,7 @@ function useIssueDetailView() {
     : null;
   const handleCopyBranchName = async () => {
     if (!issueBranchName) return;
-    if (branchCopyResetRef.current) clearTimeout(branchCopyResetRef.current);
-    try {
-      await navigator.clipboard.writeText(issueBranchName);
-      setBranchCopyState('copied');
-    } catch {
-      setBranchCopyState('error');
-    }
-    branchCopyResetRef.current = setTimeout(() => setBranchCopyState('idle'), 1500);
+    await copyBranchNameToClipboard(issueBranchName);
   };
   const handleOpenPullRequest = async () => {
     if (!linkedPrUrl) return;

@@ -35,6 +35,7 @@ import { ImageIcon, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
+import { githubIssuesQueryKey } from '../stores/issue-cache-projection';
 import { toast } from '../stores/toast-store';
 
 /**
@@ -484,24 +485,18 @@ function useCreateIssueModalView() {
             pipelineStatus: ISSUE_PIPELINE_STATUS.planning,
           };
 
+          const wasSelected = useAppStore.getState().activeIssue?.id === pendingIssue.id;
+
+          // Query cache only — the app store follows via subscribeIssueCacheProjection.
           queryClient.setQueryData<GitHubIssueCacheRecord[]>(
-            ['github-issues', projectId],
+            githubIssuesQueryKey(projectId),
             (previous) => upsertIssueRecord(previous ?? [], planningIssue, pendingIssue.id),
           );
           removePendingCreatedIssue(pendingIssue.id);
 
-          const store = useAppStore.getState();
-          if (store.activeProjectId === projectId) {
-            useAppStore.setState({
-              githubIssues: upsertIssueRecord(store.githubIssues, planningIssue, pendingIssue.id),
-              activeIssue:
-                selectOnComplete || store.activeIssue?.id === pendingIssue.id
-                  ? planningIssue
-                  : store.activeIssue,
-            });
-          }
-
-          if (selectOnComplete) {
+          // The upsert swaps the placeholder id for the real one, so re-select
+          // explicitly rather than expecting the projection to carry it across.
+          if (selectOnComplete || wasSelected) {
             selectIssue(planningIssue);
           }
 

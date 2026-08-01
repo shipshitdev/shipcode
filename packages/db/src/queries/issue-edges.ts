@@ -100,30 +100,29 @@ export class IssueEdgeQueries {
         )
         .run(projectId, sourceBodyIssueId);
 
+      const insertEdge = this.db.prepare(
+        `INSERT OR IGNORE INTO issue_edges (
+           id,
+           project_id,
+           source_issue_id,
+           target_issue_id,
+           edge_type,
+           origin,
+           source_body_issue_id
+         ) VALUES (?, ?, ?, ?, ?, 'body', ?)`,
+      );
       for (const edge of edges) {
         if (edge.sourceIssueId === edge.targetIssueId) {
           continue;
         }
-        this.db
-          .prepare(
-            `INSERT OR IGNORE INTO issue_edges (
-               id,
-               project_id,
-               source_issue_id,
-               target_issue_id,
-               edge_type,
-               origin,
-               source_body_issue_id
-             ) VALUES (?, ?, ?, ?, ?, 'body', ?)`,
-          )
-          .run(
-            nanoid(),
-            projectId,
-            edge.sourceIssueId,
-            edge.targetIssueId,
-            edge.edgeType,
-            sourceBodyIssueId,
-          );
+        insertEdge.run(
+          nanoid(),
+          projectId,
+          edge.sourceIssueId,
+          edge.targetIssueId,
+          edge.edgeType,
+          sourceBodyIssueId,
+        );
       }
     });
 

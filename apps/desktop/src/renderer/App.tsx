@@ -28,6 +28,7 @@ import { useIpc } from './hooks/useIpc';
 import { useTelemetryStatus } from './hooks/useTelemetryStatus';
 import { STABLE_APP_STATE_STALE_TIME } from './query-stale-times';
 import { useAppStore } from './stores/app-store';
+import { useIssueCacheProjection } from './stores/issue-cache-projection';
 import { syncRendererTelemetry } from './telemetry';
 
 const VIEW_LOADING_CARD_KEYS = ['view-card-1', 'view-card-2', 'view-card-3'];
@@ -147,6 +148,8 @@ const AddProjectExplorer = lazy(() =>
 
 export function App() {
   useGlobalKeyboard();
+  // Must mount before useIpc so cache writes from the first IPC events project.
+  useIssueCacheProjection();
   useIpc();
   const queryClient = useQueryClient();
   const terminalVisible = useAppStore((state) => state.terminalVisible);

@@ -164,7 +164,7 @@ function makeBaseSettings(overrides: Record<string, unknown> = {}) {
 
 const makeMainWindow = () => ({
   isDestroyed: vi.fn(() => false),
-  webContents: { send: vi.fn() },
+  webContents: { isDestroyed: vi.fn(() => false), send: vi.fn() },
 });
 
 describe('PipelineScheduler', () => {
@@ -211,6 +211,7 @@ describe('PipelineScheduler', () => {
         })),
         updateIssueContent: vi.fn(),
         setGithubIssue: vi.fn(),
+        setGithubIssueNumber: vi.fn(),
         setPhaseModels: vi.fn(),
         setAutomationId: vi.fn(),
         resetFailureTracking: vi.fn(),
@@ -688,6 +689,50 @@ describe('PipelineScheduler', () => {
         }),
         undefined,
       );
+    });
+
+    it('stamps the sentinel issue number without a github repo association', async () => {
+      await scheduler.startQuickTaskOrQueue('project-1', -1);
+
+      expect(queries.threads.setGithubIssueNumber).toHaveBeenCalledWith('thread-quick', -1);
+      expect(queries.threads.setGithubIssue).not.toHaveBeenCalled();
+    });
+
+    it('marks the quick task thread failed when phase-model validation rejects', async () => {
+      vi.mocked(assertCliPhaseModelsSupported).mockRejectedValueOnce(
+        new Error('codex CLI not installed'),
+      );
+
+      await expect(scheduler.startQuickTaskOrQueue('project-1', -1)).rejects.toThrow(
+        'codex CLI not installed',
+      );
+
+      // Validation runs inside the shared launcher's try, so the thread is not
+      // stranded in `planning` the way the forked quick-task path left it.
+      expect(transitionThreadPhase).toHaveBeenCalledWith(
+        mainWindow,
+        queries,
+        expect.anything(),
+        expect.objectContaining({
+          threadId: 'thread-quick',
+          phase: 'failed',
+          errorMessage: 'codex CLI not installed',
+        }),
+        undefined,
+      );
+      expect(queries.threads.setPhaseModels).not.toHaveBeenCalled();
+      expect(pipeline.startFromQuickTask).not.toHaveBeenCalled();
+    });
+
+    it('refuses to relaunch a quick task onto an already-running thread', async () => {
+      queries.threads.getById.mockReturnValue({ ...quickThread, status: 'executing' });
+
+      await expect(scheduler.startQuickTaskOrQueue('project-1', -1)).rejects.toThrow(
+        'Quick task -1 already has active thread',
+      );
+
+      expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalled();
+      expect(pipeline.startFromQuickTask).not.toHaveBeenCalled();
     });
   });
 

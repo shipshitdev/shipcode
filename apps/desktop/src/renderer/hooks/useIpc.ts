@@ -11,6 +11,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useAppStore } from '../stores/app-store';
+import { githubIssuesQueryKey } from '../stores/issue-cache-projection';
 import { toast } from '../stores/toast-store';
 
 const TERMINAL_EVENT_BATCH_MS = 50;
@@ -188,23 +189,14 @@ export function useIpc() {
           const mappedStatus: IssuePipelineStatus =
             data.phase === PIPELINE_PHASE.idle ? ISSUE_PIPELINE_STATUS.todo : data.phase;
           updateThreadPanelThreadStatus(store.activeProjectId, data.threadId, data.phase);
+          // Query cache only — the app store follows via subscribeIssueCacheProjection.
           queryClient.setQueryData<GitHubIssueCacheRecord[]>(
-            ['github-issues', store.activeProjectId],
+            githubIssuesQueryKey(store.activeProjectId),
             (prev) =>
               prev?.map((i) =>
                 i.threadId === data.threadId ? { ...i, pipelineStatus: mappedStatus } : i,
               ),
           );
-          const nextIssues = store.githubIssues.map((issue) =>
-            issue.threadId === data.threadId ? { ...issue, pipelineStatus: mappedStatus } : issue,
-          );
-          useAppStore.setState((state) => ({
-            githubIssues: nextIssues,
-            activeIssue:
-              state.activeIssue?.threadId === data.threadId
-                ? { ...state.activeIssue, pipelineStatus: mappedStatus }
-                : state.activeIssue,
-          }));
         }
       }),
     );
@@ -239,22 +231,11 @@ export function useIpc() {
 
     unsubscribers.push(
       window.shipcode.on('github:issues-updated', (data) => {
-        const store = useAppStore.getState();
-        if (data.projectId === store.activeProjectId) {
-          store.setGithubIssues(data.issues);
-        }
-        if (data.projectId) {
-          queryClient.setQueryData(['github-issues', data.projectId], data.issues);
-          queryClient.invalidateQueries({ queryKey: ['thread-panel-data', data.projectId] });
-        }
-
-        if (data.projectId === store.activeProjectId && store.activeIssue) {
-          const refreshed = data.issues.find((issue) => issue.id === store.activeIssue?.id) ?? null;
-          useAppStore.setState((state) => ({
-            activeIssue: refreshed,
-            activeThreadId: refreshed?.threadId ?? state.activeThreadId,
-          }));
-        }
+        if (!data.projectId) return;
+        // Query cache only — the app store's githubIssues/activeIssue follow via
+        // subscribeIssueCacheProjection.
+        queryClient.setQueryData(githubIssuesQueryKey(data.projectId), data.issues);
+        queryClient.invalidateQueries({ queryKey: ['thread-panel-data', data.projectId] });
       }),
     );
 

@@ -5,7 +5,7 @@ import type {
   Thread,
 } from '@shipcode/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { launchIssuePipeline } from './issue-launch';
+import { ISSUE_LAUNCH_MODE, launchIssuePipeline } from './issue-launch';
 
 const project = {
   id: 'project-1',
@@ -95,17 +95,22 @@ describe('launchIssuePipeline', () => {
     create: vi.fn(() => newThread),
     updateIssueContent: vi.fn(),
     setGithubIssue: vi.fn(),
+    setGithubIssueNumber: vi.fn(),
     setPhaseModels: vi.fn(),
     resetFailureTracking: vi.fn(),
   };
   const githubIssues = { updatePipelineStatus: vi.fn(), linkThread: vi.fn() };
   const plans = { supersedeAll: vi.fn(), supersedeAllForIssue: vi.fn() };
-  const pipeline = { startFromGitHubIssue: vi.fn(async () => undefined) };
+  const pipeline = {
+    startFromGitHubIssue: vi.fn(async () => undefined),
+    startFromQuickTask: vi.fn(async () => undefined),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
     threads.getById.mockReturnValue(null);
     pipeline.startFromGitHubIssue.mockResolvedValue(undefined);
+    pipeline.startFromQuickTask.mockResolvedValue(undefined);
   });
 
   it('creates, links, prepares, and launches a thread through one coordinator', async () => {
@@ -258,5 +263,170 @@ describe('launchIssuePipeline', () => {
     expect(threads.setPhaseModels).not.toHaveBeenCalled();
     expect(plans.supersedeAll).not.toHaveBeenCalled();
     expect(pipeline.startFromGitHubIssue).not.toHaveBeenCalled();
+  });
+
+  describe('quick-task mode', () => {
+    const quickThread = makeThread({ id: 'thread-quick', title: 'Local fix', prompt: 'Fix it' });
+    const quickIssue = makeIssue({
+      id: 'issue-quick',
+      issueNumber: -1,
+      title: 'Local fix',
+      body: 'Fix it',
+      labels: [],
+      threadId: 'thread-quick',
+      isQuickMode: true,
+    });
+
+    const deps = () => ({
+      threads: threads as never,
+      githubIssues: githubIssues as never,
+      plans: plans as never,
+      pipeline,
+    });
+
+    it('dispatches through startFromQuickTask with the shared phase-model options bag', async () => {
+      threads.getById.mockReturnValue(quickThread);
+      const validatePhaseModels = vi.fn(async () => undefined);
+      const onIssueStarted = vi.fn();
+      const onIssueLinked = vi.fn();
+
+      const result = await launchIssuePipeline(
+        deps(),
+        { project, issue: quickIssue, phaseModels, mode: ISSUE_LAUNCH_MODE.quickTask },
+        { validatePhaseModels, onIssueStarted, onIssueLinked },
+      );
+
+      expect(result).toBe(quickThread);
+      expect(threads.create).not.toHaveBeenCalled();
+      expect(githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-quick', 'planning');
+      expect(onIssueStarted).toHaveBeenCalledOnce();
+      expect(onIssueLinked).toHaveBeenCalledWith(quickThread);
+      expect(validatePhaseModels).toHaveBeenCalledWith(phaseModels);
+      expect(threads.setPhaseModels).toHaveBeenCalledWith('thread-quick', phaseModels);
+      expect(threads.resetFailureTracking).toHaveBeenCalledWith('thread-quick');
+      expect(plans.supersedeAll).toHaveBeenCalledWith('thread-quick');
+      expect(pipeline.startFromGitHubIssue).not.toHaveBeenCalled();
+      expect(pipeline.startFromQuickTask).toHaveBeenCalledWith(
+        'thread-quick',
+        '/repo',
+        { issueNumber: -1, title: 'Local fix', text: 'Fix it' },
+        'openrouter',
+        expect.objectContaining({
+          baseBranch: 'master',
+          worktreePath: '/tmp/worktree',
+          plannerModel: 'codex',
+          reviewerModel: 'claude',
+          verifierModel: 'codex',
+          plannerModelIdOverride: 'gpt-5.6-sol',
+          reviewerModelIdOverride: 'claude-opus-4-8',
+          executorModelIdOverride: 'openrouter/auto',
+          verifierModelIdOverride: null,
+          plannerReasoningEffort: 'high',
+          reviewerReasoningEffort: 'high',
+          executorReasoningEffort: 'low',
+          verifierReasoningEffort: 'medium',
+        }),
+      );
+    });
+
+    it('stamps the sentinel issue number without a github repo association', async () => {
+      threads.getById.mockReturnValue(quickThread);
+
+      await launchIssuePipeline(deps(), {
+        project,
+        issue: quickIssue,
+        phaseModels,
+        mode: ISSUE_LAUNCH_MODE.quickTask,
+      });
+
+      expect(threads.setGithubIssueNumber).toHaveBeenCalledWith('thread-quick', -1);
+      expect(threads.setGithubIssue).not.toHaveBeenCalled();
+    });
+
+    it('never creates a thread for a quick task with no linked thread', async () => {
+      await expect(
+        launchIssuePipeline(deps(), {
+          project,
+          issue: makeIssue({ ...quickIssue, threadId: null }),
+          phaseModels,
+          mode: ISSUE_LAUNCH_MODE.quickTask,
+        }),
+      ).rejects.toThrow('Quick task -1 has no linked thread');
+
+      expect(threads.create).not.toHaveBeenCalled();
+      expect(githubIssues.updatePipelineStatus).not.toHaveBeenCalled();
+      expect(pipeline.startFromQuickTask).not.toHaveBeenCalled();
+    });
+
+    it('fails when the linked thread row is missing', async () => {
+      threads.getById.mockReturnValue(null);
+
+      await expect(
+        launchIssuePipeline(deps(), {
+          project,
+          issue: quickIssue,
+          phaseModels,
+          mode: ISSUE_LAUNCH_MODE.quickTask,
+        }),
+      ).rejects.toThrow('Quick task -1: thread thread-quick missing');
+
+      expect(pipeline.startFromQuickTask).not.toHaveBeenCalled();
+    });
+
+    it('rejects a quick task whose thread is already running', async () => {
+      threads.getById.mockReturnValue(makeThread({ id: 'thread-quick', status: 'executing' }));
+
+      await expect(
+        launchIssuePipeline(deps(), {
+          project,
+          issue: quickIssue,
+          phaseModels,
+          mode: ISSUE_LAUNCH_MODE.quickTask,
+        }),
+      ).rejects.toThrow('Quick task -1 already has active thread');
+
+      expect(githubIssues.updatePipelineStatus).not.toHaveBeenCalled();
+      expect(pipeline.startFromQuickTask).not.toHaveBeenCalled();
+    });
+
+    it('routes quick-task validation failures through onLaunchError', async () => {
+      threads.getById.mockReturnValue(quickThread);
+      const error = new Error('unsupported model / missing API key');
+      const onLaunchError = vi.fn();
+
+      await expect(
+        launchIssuePipeline(
+          deps(),
+          { project, issue: quickIssue, phaseModels, mode: ISSUE_LAUNCH_MODE.quickTask },
+          {
+            validatePhaseModels: vi.fn(async () => {
+              throw error;
+            }),
+            onLaunchError,
+          },
+        ),
+      ).rejects.toBe(error);
+
+      expect(onLaunchError).toHaveBeenCalledWith(error, quickThread);
+      expect(threads.setPhaseModels).not.toHaveBeenCalled();
+      expect(pipeline.startFromQuickTask).not.toHaveBeenCalled();
+    });
+
+    it('routes quick-task dispatch failures through onLaunchError', async () => {
+      threads.getById.mockReturnValue(quickThread);
+      const error = new Error('worktree busy');
+      const onLaunchError = vi.fn();
+      pipeline.startFromQuickTask.mockRejectedValueOnce(error);
+
+      await expect(
+        launchIssuePipeline(
+          deps(),
+          { project, issue: quickIssue, phaseModels, mode: ISSUE_LAUNCH_MODE.quickTask },
+          { onLaunchError },
+        ),
+      ).rejects.toBe(error);
+
+      expect(onLaunchError).toHaveBeenCalledWith(error, quickThread);
+    });
   });
 });

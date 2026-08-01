@@ -1,4 +1,5 @@
 import type { AgentType } from '@shipcode/shared';
+import { stripAnsi } from '@shipcode/shared';
 import type { ProcessManager } from '../process-manager';
 import { measurePromptPayload } from '../prompt-scope';
 import { awaitManagedProcess } from './managed-process';
@@ -28,9 +29,7 @@ type ProcessManagerWithStdin = ProcessManager & {
   ) => ReturnType<ProcessManager['spawn']>;
 };
 
-export function stripAnsi(value: string): string {
-  return value.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g'), '');
-}
+export { stripAnsi };
 
 export interface JsonResultEnvelope {
   /** Object keys, in priority order, that may carry the final text. */

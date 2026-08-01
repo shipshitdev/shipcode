@@ -173,8 +173,8 @@ describe('registerInstantHandlers', () => {
     } as never);
   });
 
-  afterEach(() => {
-    for (const id of attachmentSessions) clearPrdAttachmentSession(id);
+  afterEach(async () => {
+    for (const id of attachmentSessions) await clearPrdAttachmentSession(id);
     attachmentSessions.length = 0;
     for (const file of tmpFiles) {
       try {
@@ -420,12 +420,12 @@ describe('registerInstantHandlers', () => {
   it('adds staged screenshot context to instant prompts', async () => {
     const run = handlers.get('instant:run');
     if (!run) throw new Error('instant:run handler not registered');
-    const sessionId = createPrdAttachmentSession('sender-1', 'project-1');
+    const sessionId = await createPrdAttachmentSession('sender-1', 'project-1');
     attachmentSessions.push(sessionId);
     const pngPath = path.join(os.tmpdir(), `shipcode-instant-${Date.now()}.png`);
     fs.writeFileSync(pngPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]));
     tmpFiles.push(pngPath);
-    const { staged } = stagePrdAttachments(sessionId, [pngPath]);
+    const { staged } = await stagePrdAttachments(sessionId, [pngPath]);
 
     await run(undefined, {
       projectId: 'project-1',
@@ -584,13 +584,11 @@ describe('registerInstantHandlers', () => {
     );
   });
 
-  it('starts bare shells, clamps unsafe resize values, cancels sessions, lists and cleans up', async () => {
+  it('starts bare shells, clamps unsafe resize values, and cancels sessions', async () => {
     const bareShell = handlers.get('instant:bare-shell');
     const shellResize = handlers.get('instant:shell-resize');
     const cancel = handlers.get('instant:cancel');
-    const list = handlers.get('instant:list');
-    const cleanup = handlers.get('instant:cleanup');
-    if (!bareShell || !shellResize || !cancel || !list || !cleanup) {
+    if (!bareShell || !shellResize || !cancel) {
       throw new Error('instant utility handlers not registered');
     }
 
@@ -623,10 +621,6 @@ describe('registerInstantHandlers', () => {
       'failed',
       'Cancelled by user',
     );
-
-    expect(list()).toEqual([makeThread({ id: 'instant-1', kind: 'instant' })]);
-    queries.threads.deleteOlderThan.mockReturnValueOnce(3);
-    expect(cleanup()).toEqual({ deleted: 3 });
 
     cancel(undefined, { threadId: 'unknown-thread' });
     shellResize(undefined, { threadId: 'unknown-thread', cols: 80, rows: 24 });

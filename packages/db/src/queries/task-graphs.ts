@@ -102,60 +102,58 @@ export class TaskGraphQueries {
           JSON.stringify(draft.assessment),
         );
 
+      const insertNode = this.db.prepare(
+        `INSERT INTO task_nodes (
+           id,
+           graph_id,
+           stable_key,
+           order_index,
+           title,
+           description,
+           status,
+           files,
+           acceptance_criteria,
+           surfaces,
+           agent_role,
+           suggested_executor_model,
+           suggested_reasoning_effort,
+           github_issue_number
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
       for (const node of draft.nodes) {
         const nodeId = nanoid();
         nodeIdByStableKey.set(node.stableKey, nodeId);
-        this.db
-          .prepare(
-            `INSERT INTO task_nodes (
-               id,
-               graph_id,
-               stable_key,
-               order_index,
-               title,
-               description,
-               status,
-               files,
-               acceptance_criteria,
-               surfaces,
-               agent_role,
-               suggested_executor_model,
-               suggested_reasoning_effort,
-               github_issue_number
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .run(
-            nodeId,
-            graphId,
-            node.stableKey,
-            node.order,
-            node.title,
-            node.description,
-            node.status,
-            JSON.stringify(node.files),
-            JSON.stringify(node.acceptanceCriteria),
-            JSON.stringify(node.surfaces),
-            node.agentRole,
-            node.suggestedExecutorModel,
-            node.suggestedReasoningEffort,
-            node.githubIssueNumber,
-          );
+        insertNode.run(
+          nodeId,
+          graphId,
+          node.stableKey,
+          node.order,
+          node.title,
+          node.description,
+          node.status,
+          JSON.stringify(node.files),
+          JSON.stringify(node.acceptanceCriteria),
+          JSON.stringify(node.surfaces),
+          node.agentRole,
+          node.suggestedExecutorModel,
+          node.suggestedReasoningEffort,
+          node.githubIssueNumber,
+        );
       }
 
+      const insertEdge = this.db.prepare(
+        `INSERT INTO task_edges (
+           id,
+           graph_id,
+           source_node_id,
+           target_node_id,
+           edge_type
+         ) VALUES (?, ?, ?, ?, ?)`,
+      );
       for (const edge of draft.edges) {
         const sourceNodeId = nodeIdByStableKey.get(edge.sourceStableKey) as string;
         const targetNodeId = nodeIdByStableKey.get(edge.targetStableKey) as string;
-        this.db
-          .prepare(
-            `INSERT INTO task_edges (
-               id,
-               graph_id,
-               source_node_id,
-               target_node_id,
-               edge_type
-             ) VALUES (?, ?, ?, ?, ?)`,
-          )
-          .run(nanoid(), graphId, sourceNodeId, targetNodeId, edge.edgeType);
+        insertEdge.run(nanoid(), graphId, sourceNodeId, targetNodeId, edge.edgeType);
       }
     });
 
@@ -246,42 +244,44 @@ export class TaskGraphQueries {
     transaction(this.db, () => {
       this.updateNodeStatus(nodeId, 'completed');
 
-      const dependentRows = asRows<{ target_node_id: string }>(
+      // One grouped pass over every dependent of the completed node, instead of
+      // a blocker-count query per dependent (N+1 on the hot completion path —
+      // it scaled with graph width). Promotion never flips a node to
+      // 'completed', so blocker counts are stable for the whole pass and the
+      // batched result is equivalent to re-counting per dependent.
+      // `ORDER BY MIN(rowid)` preserves the edge-insertion order the
+      // per-dependent loop promoted in.
+      const promotableRows = asRows<{ target_node_id: string }>(
         this.db
           .prepare(
-            `SELECT target_node_id
-               FROM task_edges
-              WHERE graph_id = ?
-                AND source_node_id = ?
-                AND edge_type IN ('depends_on', 'blocks')`,
+            `SELECT dependent.target_node_id AS target_node_id
+               FROM task_edges AS dependent
+               LEFT JOIN task_edges AS blocker
+                      ON blocker.graph_id = dependent.graph_id
+                     AND blocker.target_node_id = dependent.target_node_id
+                     AND blocker.edge_type IN ('depends_on', 'blocks')
+               LEFT JOIN task_nodes AS blocker_source
+                      ON blocker_source.id = blocker.source_node_id
+                     AND blocker_source.status != 'completed'
+              WHERE dependent.graph_id = ?
+                AND dependent.source_node_id = ?
+                AND dependent.edge_type IN ('depends_on', 'blocks')
+              GROUP BY dependent.target_node_id
+             HAVING COUNT(blocker_source.id) = 0
+              ORDER BY MIN(dependent.rowid) ASC`,
           )
           .all(node.graphId, nodeId),
       );
 
-      for (const { target_node_id: targetNodeId } of dependentRows) {
-        const blockers = this.db
-          .prepare(
-            `SELECT COUNT(*) AS count
-               FROM task_edges AS edge
-               INNER JOIN task_nodes AS source ON source.id = edge.source_node_id
-              WHERE edge.graph_id = ?
-                AND edge.target_node_id = ?
-                AND edge.edge_type IN ('depends_on', 'blocks')
-                AND source.status != 'completed'`,
-          )
-          .get(node.graphId, targetNodeId) as { count: number };
-
-        if (blockers.count === 0) {
-          this.db
-            .prepare(
-              `UPDATE task_nodes
-                  SET status = 'ready',
-                      updated_at = ${ISO_NOW_SQL}
-                WHERE id = ?
-                  AND status IN ('pending', 'blocked')`,
-            )
-            .run(targetNodeId);
-        }
+      const promoteNode = this.db.prepare(
+        `UPDATE task_nodes
+            SET status = 'ready',
+                updated_at = ${ISO_NOW_SQL}
+          WHERE id = ?
+            AND status IN ('pending', 'blocked')`,
+      );
+      for (const { target_node_id: targetNodeId } of promotableRows) {
+        promoteNode.run(targetNodeId);
       }
 
       const remaining = this.db

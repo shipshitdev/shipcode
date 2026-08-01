@@ -10,7 +10,7 @@ vi.mock('./health-check', () => ({
   shellExecEnv: () => ({ PATH: '/usr/bin' }),
 }));
 
-import { runCliWithStdin } from './cli-stdin-runner';
+import { KILL_GRACE_MS, runCliWithStdin } from './cli-stdin-runner';
 import { createFakeProc } from './test-fake-proc';
 
 describe('runCliWithStdin', () => {
@@ -99,6 +99,54 @@ describe('runCliWithStdin', () => {
     vi.advanceTimersByTime(250);
 
     await expect(promise).rejects.toThrow('Claude CLI timed out after 250ms');
+    expect(fake.proc.kill).toHaveBeenCalledWith('SIGTERM');
+  });
+
+  it('escalates to SIGKILL when a timed-out CLI ignores SIGTERM', async () => {
+    vi.useFakeTimers();
+    const fake = createFakeProc({ kill: true });
+    mockSpawn.mockReturnValueOnce(fake.proc);
+
+    const promise = runCliWithStdin({
+      cli: 'claude',
+      args: ['-p'],
+      input: 'PROMPT',
+      cwd: '/repo',
+      timeoutMs: 250,
+    });
+
+    vi.advanceTimersByTime(250);
+    await expect(promise).rejects.toThrow('Claude CLI timed out after 250ms');
+
+    // The fake never emits `close`, standing in for a CLI that traps SIGTERM.
+    vi.advanceTimersByTime(KILL_GRACE_MS - 1);
+    expect(fake.proc.kill).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(1);
+    expect(fake.proc.kill).toHaveBeenCalledTimes(2);
+    expect(fake.proc.kill).toHaveBeenLastCalledWith('SIGKILL');
+  });
+
+  it('cancels the pending SIGKILL when a timed-out CLI exits on SIGTERM', async () => {
+    vi.useFakeTimers();
+    const fake = createFakeProc({ kill: true });
+    mockSpawn.mockReturnValueOnce(fake.proc);
+
+    const promise = runCliWithStdin({
+      cli: 'claude',
+      args: ['-p'],
+      input: 'PROMPT',
+      cwd: '/repo',
+      timeoutMs: 250,
+    });
+
+    vi.advanceTimersByTime(250);
+    await expect(promise).rejects.toThrow('Claude CLI timed out after 250ms');
+
+    fake.close(143);
+    vi.advanceTimersByTime(KILL_GRACE_MS * 2);
+
+    expect(fake.proc.kill).toHaveBeenCalledTimes(1);
     expect(fake.proc.kill).toHaveBeenCalledWith('SIGTERM');
   });
 });

@@ -69,7 +69,92 @@ function upsertTerminalEvents(
   return merged;
 }
 
+// Renderer caches keyed by thread/process id have no natural delete point: a
+// thread is never explicitly "closed", so every thread the user touches leaves
+// an entry behind for the life of the session. Each write bounds the key count
+// and evicts the least-recently-written entries.
+//
+// Canonical streams are the expensive one (up to MAX_CANONICAL_TERMINAL_EVENTS
+// records per thread), so they get the tighter bound. They are also persisted
+// in the main process: an evicted thread re-hydrates from `terminal:list` the
+// next time its transcript mounts, so eviction costs one IPC round trip, not
+// data.
+const MAX_STREAM_THREADS = 20;
+const MAX_TRACKED_THREADS = 100;
+const MAX_TRACKED_PROCESSES = 100;
+
+const NO_PINNED_KEYS: ReadonlySet<string> = new Set();
+
+/**
+ * Writes `key` into a keyed record, dropping the least-recently-written entries
+ * once it exceeds `limit`. Object key order is insertion order, so removing
+ * `key` before re-adding it keeps iteration order as a recency list. Keys in
+ * `pinned` are never evicted — they belong to threads the UI is rendering right
+ * now, which would otherwise blank and refetch.
+ */
+function setBounded<T>(
+  record: Record<string, T>,
+  key: string,
+  value: T,
+  limit: number,
+  pinned: ReadonlySet<string> = NO_PINNED_KEYS,
+): { next: Record<string, T>; evicted: string[] } {
+  const { [key]: _replaced, ...rest } = record;
+  const next: Record<string, T> = { ...rest, [key]: value };
+
+  const overflow = Object.keys(next).length - limit;
+  if (overflow <= 0) return { next, evicted: [] };
+
+  const evicted = Object.keys(next)
+    .filter((candidate) => candidate !== key && !pinned.has(candidate))
+    .slice(0, overflow);
+  if (evicted.length === 0) return { next, evicted };
+
+  const dropped = new Set(evicted);
+  return {
+    next: Object.fromEntries(Object.entries(next).filter(([id]) => !dropped.has(id))),
+    evicted,
+  };
+}
+
+/** Threads the UI is reading right now — evicting these would blank a live view. */
+function pinnedThreadIds(state: AppState): ReadonlySet<string> {
+  const pinned = new Set(state.terminalPaneThreadIds);
+  if (state.activeThreadId) pinned.add(state.activeThreadId);
+  if (state.terminalThreadId) pinned.add(state.terminalThreadId);
+  if (state.assistantThreadId) pinned.add(state.assistantThreadId);
+  return pinned;
+}
+
+/**
+ * Commits a thread's canonical stream under the stream-thread bound, keeping the
+ * module-level id index in lockstep — evicting one without the other would just
+ * move the leak into the index.
+ */
+function commitCanonicalStream(
+  state: AppState,
+  threadId: string,
+  events: TerminalEventRecord[],
+): Pick<AppState, 'canonicalTerminalStream'> {
+  const { next, evicted } = setBounded(
+    state.canonicalTerminalStream,
+    threadId,
+    events,
+    MAX_STREAM_THREADS,
+    pinnedThreadIds(state),
+  );
+  for (const id of evicted) _terminalIdIndex.delete(id);
+  return { canonicalTerminalStream: next };
+}
+
 type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills' | 'automations';
+
+/**
+ * Top-level destinations that are not scoped to a project. The `project` view is
+ * entered through `selectProject`/`selectThread`/`navigateToIssue`, which carry
+ * the project context those views need.
+ */
+export type GlobalViewMode = Exclude<ViewMode, 'project'>;
 
 export type ProjectTab = 'issues' | 'git' | 'code' | 'pull-requests' | 'terminal' | 'insights';
 export type TerminalPaneMode = 'replay' | 'live';
@@ -123,6 +208,12 @@ interface AppState {
 
   // Verification & issues
   currentVerification: VerificationResult | null;
+  /**
+   * Read-only projection of the `['github-issues', activeProjectId]` query cache,
+   * for the synchronous `getState()` consumers that cannot call a hook. The query
+   * cache owns these records — write there and let `issue-cache-projection.ts`
+   * follow. See that module for the full ownership contract.
+   */
   githubIssues: GitHubIssueCacheRecord[];
   pendingCreatedIssues: GitHubIssueCacheRecord[];
 
@@ -182,12 +273,7 @@ interface AppState {
 
   // Actions
   setViewMode: (mode: ViewMode) => void;
-  openOverview: () => void;
-  openActivity: () => void;
-  openInbox: () => void;
-  openCosts: () => void;
-  openSkills: () => void;
-  openAutomations: () => void;
+  openView: (mode: GlobalViewMode) => void;
   selectProject: (id: string | null) => void;
   selectThread: (id: string | null) => void;
   selectIssue: (issue: GitHubIssueCacheRecord | null) => void;
@@ -212,7 +298,6 @@ interface AppState {
   setPipelinePhase: (phase: PipelinePhase) => void;
   setSystemHealth: (health: SystemHealth) => void;
   setVerification: (verification: VerificationResult | null) => void;
-  setGithubIssues: (issues: GitHubIssueCacheRecord[]) => void;
   addPendingCreatedIssue: (issue: GitHubIssueCacheRecord) => void;
   removePendingCreatedIssue: (id: string) => void;
   appendAgentOutput: (processId: string, chunk: string) => void;
@@ -323,64 +408,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   canonicalTerminalStream: {},
 
   setViewMode: (mode) => set({ viewMode: mode }),
-  openOverview: () =>
+  openView: (mode) =>
     set({
-      viewMode: 'overview',
-      activeIssue: null,
-      activeAutomationThreadId: null,
-      activeAutomationDetailId: null,
-      terminalMaximized: false,
-      currentPlan: null,
-      currentReview: null,
-      currentVerification: null,
-    }),
-  openActivity: () =>
-    set({
-      viewMode: 'activity',
-      activeIssue: null,
-      activeAutomationThreadId: null,
-      activeAutomationDetailId: null,
-      terminalMaximized: false,
-      currentPlan: null,
-      currentReview: null,
-      currentVerification: null,
-    }),
-  openInbox: () =>
-    set({
-      viewMode: 'inbox',
-      activeIssue: null,
-      activeAutomationThreadId: null,
-      activeAutomationDetailId: null,
-      terminalMaximized: false,
-      currentPlan: null,
-      currentReview: null,
-      currentVerification: null,
-    }),
-  openCosts: () =>
-    set({
-      viewMode: 'costs',
-      activeIssue: null,
-      activeAutomationThreadId: null,
-      activeAutomationDetailId: null,
-      terminalMaximized: false,
-      currentPlan: null,
-      currentReview: null,
-      currentVerification: null,
-    }),
-  openSkills: () =>
-    set({
-      viewMode: 'skills',
-      activeIssue: null,
-      activeAutomationThreadId: null,
-      activeAutomationDetailId: null,
-      terminalMaximized: false,
-      currentPlan: null,
-      currentReview: null,
-      currentVerification: null,
-    }),
-  openAutomations: () =>
-    set({
-      viewMode: 'automations',
+      viewMode: mode,
       activeIssue: null,
       activeAutomationThreadId: null,
       activeAutomationDetailId: null,
@@ -519,7 +549,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           },
     ),
   setVerification: (verification) => set({ currentVerification: verification }),
-  setGithubIssues: (issues) => set({ githubIssues: issues }),
   addPendingCreatedIssue: (issue) =>
     set((s) => ({
       pendingCreatedIssues: [
@@ -536,7 +565,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => {
       const prev = s.agentOutputs[processId] ?? [];
       const next = prev.length >= 800 ? [...prev.slice(-799), chunk] : [...prev, chunk];
-      return { agentOutputs: { ...s.agentOutputs, [processId]: next } };
+      return {
+        agentOutputs: setBounded(s.agentOutputs, processId, next, MAX_TRACKED_PROCESSES).next,
+      };
     }),
   clearAgentOutput: (processId) =>
     set((s) => {
@@ -544,7 +575,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { agentOutputs: rest };
     }),
   mapProcessToThread: (processId, threadId) =>
-    set((s) => ({ processToThread: { ...s.processToThread, [processId]: threadId } })),
+    set((s) => ({
+      processToThread: setBounded(s.processToThread, processId, threadId, MAX_TRACKED_PROCESSES)
+        .next,
+    })),
   logTerminalEvent: (line) =>
     set((s) => {
       const next = [...s.terminalEvents, line];
@@ -552,12 +586,28 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
   setTerminalThread: (id) => set({ terminalThreadId: id }),
   setCurrentModel: (threadId, model) =>
-    set((s) => ({ currentModels: { ...s.currentModels, [threadId]: model } })),
+    set((s) => ({
+      currentModels: setBounded(
+        s.currentModels,
+        threadId,
+        model,
+        MAX_TRACKED_THREADS,
+        pinnedThreadIds(s),
+      ).next,
+    })),
   logTerminalEventForThread: (threadId, line) =>
     set((s) => {
       const prev = s.terminalEventsByThread[threadId] ?? [];
       const next = prev.length >= 200 ? [...prev.slice(-199), line] : [...prev, line];
-      return { terminalEventsByThread: { ...s.terminalEventsByThread, [threadId]: next } };
+      return {
+        terminalEventsByThread: setBounded(
+          s.terminalEventsByThread,
+          threadId,
+          next,
+          MAX_TRACKED_THREADS,
+          pinnedThreadIds(s),
+        ).next,
+      };
     }),
   appendCanonicalEvent: (threadId, event, meta) =>
     set((s) => {
@@ -570,14 +620,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         createdAt: meta?.createdAt ?? new Date().toISOString(),
       };
       const trimmed = upsertTerminalEvents(threadId, prev, [record]);
-      return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: trimmed } };
+      return commitCanonicalStream(s, threadId, trimmed);
     }),
   appendCanonicalEvents: (threadId, events) =>
     set((s) => {
       if (events.length === 0) return s;
       const prev = s.canonicalTerminalStream[threadId] ?? [];
       const trimmed = upsertTerminalEvents(threadId, prev, events);
-      return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: trimmed } };
+      return commitCanonicalStream(s, threadId, trimmed);
     }),
   hydrateCanonicalEvents: (threadId, events) =>
     set((s) => {
@@ -594,10 +644,18 @@ export const useAppStore = create<AppState>((set, get) => ({
           : deduped;
       // Reset the index cache for this thread since we rebuilt from scratch
       _terminalIdIndex.delete(threadId);
-      return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: trimmed } };
+      return commitCanonicalStream(s, threadId, trimmed);
     }),
   touchLastActivity: (threadId) =>
-    set((s) => ({ lastActivityByThread: { ...s.lastActivityByThread, [threadId]: Date.now() } })),
+    set((s) => ({
+      lastActivityByThread: setBounded(
+        s.lastActivityByThread,
+        threadId,
+        Date.now(),
+        MAX_TRACKED_THREADS,
+        pinnedThreadIds(s),
+      ).next,
+    })),
   addNotification: (notification) =>
     set((s) => {
       // Replace existing record with same id (re-fired) or prepend new.
@@ -718,6 +776,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const nextIds = s.terminalPaneThreadIds.includes(threadId)
         ? s.terminalPaneThreadIds
         : [...s.terminalPaneThreadIds, threadId].slice(0, 4);
+      // At the pane cap the new thread is dropped from nextIds. Writing its meta
+      // anyway would strand an entry that removeTerminalPane never cleans up.
+      if (!nextIds.includes(threadId)) return s;
       const existingMeta = s.terminalPaneMetaByThread[threadId];
       const nextMeta = {
         ...existingMeta,

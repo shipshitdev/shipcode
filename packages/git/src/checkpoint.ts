@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import path from 'node:path';
@@ -106,6 +107,67 @@ async function runGit(cwd: string, args: string[], env?: Record<string, string>)
   const git = env ? simpleGit(cwd).env(buildScopedGitEnv(env)) : simpleGit(cwd);
   const stdout = await git.raw(args);
   return stdout.trim();
+}
+
+/**
+ * Run a git command that reads its input from stdin.
+ *
+ * simple-git has no stdin channel, so this is the one place in the module that
+ * spawns git directly — used solely for `update-ref --stdin`, whose batch form
+ * has no argv equivalent.
+ */
+function runGitWithStdin(cwd: string, args: string[], input: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', args, { cwd, stdio: ['pipe', 'ignore', 'pipe'] });
+    let stderr = '';
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.stdin.on('error', reject);
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`git ${args.join(' ')} exited with ${code}: ${stderr.trim()}`));
+    });
+    child.stdin.end(input);
+  });
+}
+
+/**
+ * Delete a set of checkpoint refs in a single `update-ref` transaction.
+ *
+ * These deletions are logically independent, but they are *not* safe to run
+ * concurrently: git takes `packed-refs.lock` for any ref deletion, so parallel
+ * `update-ref -d` processes contend on one lock with a short retry timeout and
+ * start failing. Batching is the win a `Promise.all` cannot be — one process,
+ * one lock, one pass.
+ *
+ * The transaction is all-or-nothing (a ref deleted out from under us fails the
+ * whole batch), so on any failure we fall back to the per-ref loop. That keeps
+ * the documented best-effort contract: skip what cannot be deleted, return how
+ * many actually were.
+ */
+async function deleteRefsBatch(repoPath: string, refNames: string[]): Promise<number> {
+  if (refNames.length === 0) return 0;
+
+  // `-z` format: `delete SP <ref> NUL [<old-oid>] NUL`. An empty old-oid deletes
+  // unconditionally, and NUL separators sidestep refname quoting entirely.
+  const commands = refNames.map((refName) => `delete ${refName}\0\0`).join('');
+  try {
+    await runGitWithStdin(repoPath, ['update-ref', '-z', '--stdin'], commands);
+    return refNames.length;
+  } catch {
+    let deleted = 0;
+    for (const refName of refNames) {
+      try {
+        await runGit(repoPath, ['update-ref', '-d', refName]);
+        deleted++;
+      } catch {
+        // Best-effort cleanup — a stale ref must never block teardown.
+      }
+    }
+    return deleted;
+  }
 }
 
 /**
@@ -311,16 +373,10 @@ export async function deleteThreadCheckpointRefs(
       (newerThanTurn === undefined || ref.turn > newerThanTurn) &&
       (olderThanTurn === undefined || ref.turn < olderThanTurn),
   );
-  let deleted = 0;
-  for (const ref of targets) {
-    try {
-      await runGit(repoPath, ['update-ref', '-d', ref.refName]);
-      deleted++;
-    } catch {
-      // Best-effort cleanup — a stale ref must never block teardown.
-    }
-  }
-  return deleted;
+  return deleteRefsBatch(
+    repoPath,
+    targets.map((ref) => ref.refName),
+  );
 }
 
 /**
@@ -334,16 +390,9 @@ export async function deleteAllCheckpointRefs(repoPath: string): Promise<number>
     `${CHECKPOINT_REF_ROOT}/`,
   ]);
   if (!output) return 0;
-  let deleted = 0;
-  for (const refName of output.split('\n')) {
-    const trimmed = refName.trim();
-    if (!trimmed) continue;
-    try {
-      await runGit(repoPath, ['update-ref', '-d', trimmed]);
-      deleted++;
-    } catch {
-      // Best-effort cleanup — a stale ref must never block teardown.
-    }
-  }
-  return deleted;
+  const refNames = output
+    .split('\n')
+    .map((refName) => refName.trim())
+    .filter(Boolean);
+  return deleteRefsBatch(repoPath, refNames);
 }

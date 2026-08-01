@@ -1105,8 +1105,7 @@ export function registerGitHubHandlers({
         state: issue.state,
       });
 
-      const allIssues = queries.githubIssues.list(projectId);
-      mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues });
+      sendGithubIssuesUpdated(mainWindow, queries, projectId);
 
       if (parseGithubProjectUrl(project.githubProjectUrl) && issue.url) {
         projectAttachWarning = await attachIssueToConfiguredProjectBoard(
@@ -1234,8 +1233,7 @@ export function registerGitHubHandlers({
         state: issue.state,
       });
 
-      const allIssues = queries.githubIssues.list(projectId);
-      mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues });
+      sendGithubIssuesUpdated(mainWindow, queries, projectId);
       return queries.githubIssues.getByNumber(projectId, issueNumber);
     },
   );
@@ -1337,11 +1335,7 @@ export function registerGitHubHandlers({
             issueType: priorityResult.issueTypes?.get(issue.issueNumber) ?? null,
           });
         }
-        const refreshedIssues = queries.githubIssues.list(projectId);
-        mainWindow.webContents.send('github:issues-updated', {
-          projectId,
-          issues: refreshedIssues,
-        });
+        sendGithubIssuesUpdated(mainWindow, queries, projectId);
       } catch (err) {
         log.warn('[github:sync-to-project-board] priority sync failed', err);
       }

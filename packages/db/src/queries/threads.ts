@@ -527,15 +527,26 @@ export class ThreadQueries {
     return this.listAwaitingWithApprovedPlans()[0] ?? null;
   }
 
+  /**
+   * Find threads parked in an agent-running phase whose `updated_at` is older
+   * than `thresholdMs`.
+   *
+   * The cutoff is built in JS and bound as a canonical ISO-8601 UTC string so
+   * it matches the format {@link ISO_NOW_SQL} writes. SQLite compares these as
+   * plain strings: `datetime('now', ...)` yields the naive `YYYY-MM-DD HH:MM:SS`
+   * shape, and at index 10 `'T'` (0x54) sorts *after* `' '` (0x20), so an
+   * ISO-stored `updated_at` never compared `<=` a naive cutoff on the same
+   * calendar date — the watchdog silently matched nothing.
+   */
   getStuck(thresholdMs: number): Thread[] {
-    const thresholdSec = Math.floor(thresholdMs / 1000);
+    const cutoff = new Date(Date.now() - thresholdMs).toISOString();
     const rows = this.db
       .prepare(
         `SELECT * FROM threads
          WHERE status IN (${Array(AGENT_RUNNING_PHASES.length).fill('?').join(',')})
-           AND updated_at <= datetime('now', '-' || ? || ' seconds')`,
+           AND updated_at <= ?`,
       )
-      .all(...AGENT_RUNNING_PHASES, thresholdSec);
+      .all(...AGENT_RUNNING_PHASES, cutoff);
     return asRows<ThreadRow>(rows).map(mapThread);
   }
 

@@ -17,12 +17,16 @@ Edit those files, then run: bash scripts/sync-agent-memory.sh
 
 **Why:** Claude CLI's argparser reads `---` (YAML frontmatter) as an unknown flag, and any `--foo` token inside a markdown code block in the prompt gets misparsed too. On non-zero exit Claude echoes the full command line to stderr, which used to land in the Create PRD modal as a wall of red text. Real incident, fixed 2026-04-10.
 
-**The existing pattern:** `spawnWithStdin(command, args, input)` in `packages/agents/src/github/gh-cli.ts`; `runClaudeWithStdin(prompt, cwd, timeoutMs)` in `packages/agents/src/prd-generator.ts` implements the same shape for Claude.
+**The existing patterns:**
+- `runCliWithStdin({ cli, args, input, cwd, timeoutMs, envKeyAllowlist })` in `packages/agents/src/cli-stdin-runner.ts` — the canonical one-shot helper. PRD generation reaches it via `enhancePrdDraft` → `runPrdCliWithStdin` → `runNoToolsTextGeneration` → `runCliWithStdin`. (`runClaudeWithStdin` in `prd-generator.ts` is gone — do not cite it.)
+- `spawnWithStdin(command, args, input)` in `packages/agents/src/github/gh-cli.ts` (~line 814) — the same shape for `gh`.
+- `ProcessManager.spawnWithStdin(...)` in `packages/agents/src/process-manager.ts` — for managed, long-running pipeline processes. `runCli` in `packages/agents/src/providers/cli-provider.ts` and `runStdinCli` in `providers/stdin-cli-runner.ts` both go through it, and both **fail loudly** when it is missing rather than moving the prompt to argv.
 
 **How to apply:**
 - Never do `execFile('claude', ['-p', prompt, ...])`. Never do `execa('claude', ['-p', prompt])`.
 - Always use `spawn('claude', [...flags], { stdio: ['pipe', 'pipe', 'pipe'] })` + `proc.stdin.write(prompt); proc.stdin.end()`.
-- When adding a new spawn site, reuse `runClaudeWithStdin` from `prd-generator.ts` or copy its shape.
+- When adding a new spawn site, reuse `runCliWithStdin` from `cli-stdin-runner.ts` (one-shot) or `ProcessManager.spawnWithStdin` (managed) — never copy a prompt into an arg list.
+- No stdin fallback may re-inject the prompt into argv. If a stdin pipe is unavailable, return an actionable error instead of degrading to a corruptible command line.
 - Wrap the spawn in a `setTimeout` for the timeout.
 - On non-zero exit, build the error message from **stderr only**, clamped to first 3 lines / 300 chars. Never include stdout. Never include the prompt.
 - See also: `.agents/memory/ipc-errors.md` — the renderer-side second layer of error clamping.
@@ -63,6 +67,18 @@ Edit those files, then run: bash scripts/sync-agent-memory.sh
 
 ---
 ### ipc-errors.md
+
+## One guarded path from main to renderer (hard rule)
+
+**Rule:** no `webContents.send` outside `apps/desktop/src/main/safe-send.ts`. Main-process events go through `safeSend(window, channel, payload)`, which returns a boolean and never throws.
+
+**Why:** a raw send throws once the window or its `webContents` is destroyed, and that throw escapes the IPC handler that produced it — so a GitHub write that already succeeded is reported to the caller as a failure while the remote state has in fact changed. Renderer notification is best-effort: if nobody is listening, dropping it is correct, not an error.
+
+**How to apply:**
+- Both the `isDestroyed` guard and the `try/catch` are required. The guard can never be atomic with the send, and dev-mode HMR leaves disposed render frames behind.
+- Use the exported `canSendToRenderer` type predicate only to skip work that exists purely to build a payload (a DB read, a git call) — not before a plain send, which `safeSend` already guards.
+- A guard that protects more than the send (window `restore`/`focus`, feeding a normalizer) stays as an early return, with a comment saying what else it covers.
+- Test window mocks must stub `webContents.isDestroyed`, not just `webContents.send`.
 
 **Rule:** Clamp all IPC error messages to first-line + ~280 chars before sending to renderer. Log the full stack trace to the main-process console only.
 
@@ -154,11 +170,19 @@ Every pipeline run happens in its own git worktree to isolate AI-generated chang
 - `projectSlug` = `<basename>-<sha256[:6]>`, deterministic, collision-safe.
 - Global-by-default because project-local worktrees bleed into iCloud/Dropbox-synced project dirs.
 
-**Setting:** `AppSettings.worktreeRoot`
+**Setting:** `AppSettings.worktreeRoot` — **two states, not three**
 - `null` → default (`~/.shipcode/worktrees`)
-- `''` (empty string) → legacy project-local (`<project>/.shipcode/worktrees`)
 - absolute path or `~`-prefix → custom root
 - relative paths and `~user/…` are **rejected at `settings:set` time**, not at worktree creation
+
+**Project-local mode is retired** (was `''` → `<project>/.shipcode/worktrees`). It was
+unreachable in practice: `SettingsStore.set()` serializes `null` to `''` for *every* key, so
+`''` at rest is the storage encoding of "unset" and was never distinguishable from the default;
+no UI ever offered the choice (the Settings input maps a blank field to `null`). `expandWorktreeRoot('')`
+now returns the default root rather than throwing, so any `''` surviving in an old database or an
+options bag degrades to the default instead of breaking worktree creation. Existing on-disk
+project-local worktrees keep validating because `assertWorkspaceSafe` authorizes a concrete
+workspace by its Git linked-worktree registration, never by re-deriving the parent from settings.
 
 **Grep-stable anchors:** `projectSlug` and `resolveWorktreeParent` in `packages/shared/src/worktree-path.ts`; `expandWorktreeRoot` is the validator. Don't hardcode `.shipcode/worktrees` anywhere — always go through `resolveWorktreeParent`.
 
@@ -173,6 +197,14 @@ Every pipeline run happens in its own git worktree to isolate AI-generated chang
 - Enumerate worktrees with `WorktreeManager.list()` (parses `git worktree list --porcelain`, filters by `shipcode/*` branch prefix) — don't glob the filesystem or substring-match the current `worktreeRoot`.
 - New worktree operations follow the same pattern: concrete values in the API, derive-once at creation, persist.
 - When deleting a project: iterate its threads via DB query, `remove(thread.worktreePath, thread.worktreeBranch)` for each, **then** delete the project row.
+
+## Never `git stash` from a worktree (dev workflow, hard rule)
+
+`refs/stash` is a **single repo-global ref shared by every worktree**, not per-worktree state. A `git stash push` in `.claude/worktrees/<name>` lands on the same stack the main checkout and every other worktree use, and a later `git stash pop` there takes whatever is on top — which may be another session's work, applied into the wrong tree while yours stays buried.
+
+**Instead:** `git diff > /tmp/x.patch` to snapshot, or read a clean tree with `git show <ref>:<path>`.
+
+**Recovery if it already happened:** stash commits survive as dangling objects. `git fsck --unreachable | grep commit`, match on `git log -1 --format=%s <sha>`, then `git restore --source=<sha> -- <paths>` for tracked files and `--source=<sha>^3` for the untracked ones the stash carried.
 
 ---
 ### Read on demand (low-priority — open the file when the topic comes up)

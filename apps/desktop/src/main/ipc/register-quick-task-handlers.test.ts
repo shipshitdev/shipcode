@@ -69,7 +69,7 @@ describe('registerQuickTaskHandlers', () => {
 
   const mainWindow = {
     isDestroyed: vi.fn(() => false),
-    webContents: { send: vi.fn() },
+    webContents: { isDestroyed: vi.fn(() => false), send: vi.fn() },
   };
 
   let queries: {

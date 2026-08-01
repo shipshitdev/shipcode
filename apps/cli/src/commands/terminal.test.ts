@@ -59,6 +59,7 @@ describe('terminalCommand', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    process.exitCode = undefined;
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'shipcode-cli-terminal-'));
     stdinDescriptors = {
       isTTY: Object.getOwnPropertyDescriptor(process.stdin, 'isTTY'),
@@ -69,6 +70,9 @@ describe('terminalCommand', () => {
   });
 
   afterEach(async () => {
+    // A failed session marks the process as failed on purpose; clear it so the
+    // command under test cannot make the vitest worker itself report a failure.
+    process.exitCode = undefined;
     for (const [key, descriptor] of Object.entries(stdinDescriptors)) {
       if (descriptor) {
         Object.defineProperty(process.stdin, key, descriptor);
@@ -157,6 +161,8 @@ describe('terminalCommand', () => {
       'failed',
       'Interactive claude exited with code 2',
     );
+    // The DB records the failure; the shell has to see it too.
+    expect(process.exitCode).toBe(1);
   });
 
   it('forwards stdin and records a successful codex terminal summary', async () => {
@@ -237,6 +243,7 @@ describe('terminalCommand', () => {
       }),
     );
     expect(updateStatus).toHaveBeenLastCalledWith('thread-2', 'completed', undefined);
+    expect(process.exitCode).toBeUndefined();
   });
 });
 
