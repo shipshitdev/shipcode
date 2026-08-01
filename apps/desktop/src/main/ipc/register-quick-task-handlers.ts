@@ -2,6 +2,7 @@ import { clampError } from '@shipcode/shared';
 import log from '../logger.service';
 import { PipelineScheduler } from '../pipeline-scheduler';
 import { sendGithubIssuesUpdated } from './helpers';
+import { requireProject } from './lookups';
 import type { IpcHandlerDeps } from './types';
 
 const QUICK_TITLE_MAX = 60;
@@ -40,8 +41,7 @@ export function registerQuickTaskHandlers({
   ipcMain.handle(
     'pipeline:create-quick-task',
     async (_event, { projectId, text }: { projectId: string; text: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      requireProject(queries, projectId);
 
       const trimmed = text.trim();
       if (!trimmed) throw new Error('Quick task text is empty');

@@ -65,8 +65,10 @@ import {
   enrichProjectPath,
   enrichProjectPaths,
   persistGithubProjectConfiguration,
+  requireEnrichedProject,
   sendGithubIssuesUpdated,
 } from './helpers';
+import { requireProject, requireThread } from './lookups';
 import { registerProjectCodeBrowserHandlers } from './register-project-code-browser-handlers';
 import type { IpcHandlerDeps } from './types';
 
@@ -729,8 +731,7 @@ export function registerProjectHandlers({
   );
 
   ipcMain.handle('project:get-setup', async (_event, { projectId }: { projectId: string }) => {
-    const project = queries.projects.getById(projectId);
-    if (!project) throw new Error(`Project ${projectId} not found`);
+    const project = requireProject(queries, projectId);
     return detectProjectSetup(project.path);
   });
 
@@ -746,8 +747,7 @@ export function registerProjectHandlers({
         contract: import('@shipcode/shared').RepoSetupContract;
       },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       const saved = writeProjectSetup(project.path, contract);
       return inspectProjectSetup(project.path) ?? saved;
     },
@@ -756,8 +756,7 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'project:relink-path',
     async (_event, { projectId, path: projectPath }: { projectId: string; path: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       if (!fs.existsSync(projectPath)) {
         throw new Error(`Selected folder does not exist: ${projectPath}`);
       }
@@ -895,8 +894,7 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'project:set-name',
     async (_event, { projectId, name }: { projectId: string; name: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      requireProject(queries, projectId);
 
       const trimmed = name.trim();
       if (!trimmed) {
@@ -904,8 +902,7 @@ export function registerProjectHandlers({
       }
 
       queries.projects.updateName(projectId, trimmed);
-      const updated = enrichProjectPath(queries.projects.getById(projectId));
-      if (!updated) throw new Error(`Project ${projectId} not found after name update`);
+      const updated = requireEnrichedProject(queries, projectId, 'after name update');
       return updated;
     },
   );
@@ -915,10 +912,7 @@ export function registerProjectHandlers({
   });
 
   ipcMain.handle('thread-panel:get-data', async (_event, { projectId }: { projectId: string }) => {
-    const project = enrichProjectPath(queries.projects.getById(projectId));
-    if (!project) {
-      throw new Error(`Project ${projectId} not found`);
-    }
+    const project = requireEnrichedProject(queries, projectId);
 
     const git = new GitService(project.path);
     const threads = queries.threads.list(projectId);
@@ -949,8 +943,7 @@ export function registerProjectHandlers({
   });
 
   ipcMain.handle('thread:mark-done', (_event, { threadId }: { threadId: string }) => {
-    const thread = queries.threads.getById(threadId);
-    if (!thread) throw new Error(`Thread ${threadId} not found`);
+    const thread = requireThread(queries, threadId);
 
     const MARKABLE_STATUSES: ReadonlySet<string> = new Set([
       PIPELINE_PHASE.failed,
@@ -967,8 +960,7 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'thread:set-done-status',
     (_event, { threadId, status }: { threadId: string; status: 'completed' | 'closed' }) => {
-      const thread = queries.threads.getById(threadId);
-      if (!thread) throw new Error(`Thread ${threadId} not found`);
+      const thread = requireThread(queries, threadId);
       if (thread.status !== PIPELINE_PHASE.completed) {
         throw new Error(`Cannot change done status while in ${thread.status} phase`);
       }
@@ -979,8 +971,7 @@ export function registerProjectHandlers({
         queries.threads.clearDoneAt(threadId);
       }
 
-      const updated = queries.threads.getById(threadId);
-      if (!updated) throw new Error(`Thread ${threadId} not found after status update`);
+      const updated = requireThread(queries, threadId, 'after status update');
       return updated;
     },
   );
@@ -1143,8 +1134,7 @@ export function registerProjectHandlers({
   });
 
   ipcMain.handle('git:status', async (_event, { projectId }: { projectId: string }) => {
-    const project = queries.projects.getById(projectId);
-    if (!project) throw new Error(`Project ${projectId} not found`);
+    const project = requireProject(queries, projectId);
     const git = new GitService(project.path);
     return git.getStatus();
   });
@@ -1152,16 +1142,14 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'git:commit',
     async (_event, { projectId, message }: { projectId: string; message: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       const git = new GitService(project.path);
       return git.commit(message);
     },
   );
 
   ipcMain.handle('git:push', async (_event, { projectId }: { projectId: string }) => {
-    const project = queries.projects.getById(projectId);
-    if (!project) throw new Error(`Project ${projectId} not found`);
+    const project = requireProject(queries, projectId);
     const git = new GitService(project.path);
     return git.push();
   });
@@ -1336,8 +1324,7 @@ export function registerProjectHandlers({
   });
 
   ipcMain.handle('project:list-triage-rules', (_event, { projectId }: { projectId: string }) => {
-    const project = queries.projects.getById(projectId);
-    if (!project) throw new Error(`Project ${projectId} not found`);
+    requireProject(queries, projectId);
     const triageRules = queries.triageRules;
     if (!triageRules) throw new Error('Triage rules are unavailable');
     try {
@@ -1351,8 +1338,7 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'project:replace-triage-rules',
     (_event, { projectId, rules }: { projectId: string; rules: TriageRuleDraft[] }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      requireProject(queries, projectId);
       const triageRules = queries.triageRules;
       if (!triageRules) throw new Error('Triage rules are unavailable');
       if (!Array.isArray(rules)) {
@@ -1379,8 +1365,7 @@ export function registerProjectHandlers({
         target,
       }: { projectId: string; target: ProjectOpenTarget | 'default' | 'default-terminal' },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       if (!fs.existsSync(project.path)) {
         throw new Error(`Project folder does not exist: ${project.path}`);
       }
@@ -1399,8 +1384,7 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'git:list-branches',
     async (_event, { projectId, fetch }: { projectId: string; fetch?: boolean }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       const git = new GitService(project.path);
       if (fetch) {
         await git.fetch();
@@ -1410,16 +1394,14 @@ export function registerProjectHandlers({
   );
 
   ipcMain.handle('git:visualizer-data', async (_event, { projectId }: { projectId: string }) => {
-    const project = enrichProjectPath(queries.projects.getById(projectId));
-    if (!project) throw new Error(`Project ${projectId} not found`);
+    const project = requireEnrichedProject(queries, projectId);
     return buildGitVisualizerData(project, queries);
   });
 
   ipcMain.handle(
     'git:worktree-diff',
     async (_event, { projectId, worktreePath }: { projectId: string; worktreePath: string }) => {
-      const project = enrichProjectPath(queries.projects.getById(projectId));
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireEnrichedProject(queries, projectId);
 
       const data = await buildGitVisualizerData(project, queries);
       const worktree = data.worktrees.find((entry) => entry.path === worktreePath);
@@ -1436,8 +1418,7 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'git:auto-commit',
     async (_event, { projectId, worktreePath }: { projectId: string; worktreePath: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       if (isWorktreeLocked(worktreePath)) {
         throw new Error('Auto-commit already running for this worktree');
       }
@@ -1476,8 +1457,7 @@ export function registerProjectHandlers({
   );
 
   ipcMain.handle('git:cleanup-analyze', async (_event, { projectId }: { projectId: string }) => {
-    const project = queries.projects.getById(projectId);
-    if (!project) throw new Error(`Project ${projectId} not found`);
+    const project = requireProject(queries, projectId);
     const settings = queries.settings.get();
     try {
       return await runCleanupAnalyze({
@@ -1498,8 +1478,7 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'git:cleanup-apply',
     async (_event, { projectId, itemIds }: { projectId: string; itemIds: string[] }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       const settings = queries.settings.get();
       try {
         const analyzed = await runCleanupAnalyze({
@@ -1566,8 +1545,7 @@ export function registerProjectHandlers({
     'project:set-default-branch',
     async (_event, { projectId, branch }: { projectId: string; branch: string }) => {
       if (!branch || typeof branch !== 'string') throw new Error('branch is required');
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const git = new GitService(project.path);
       const branches = await git.listBranches(project.defaultBranch);
@@ -1576,8 +1554,7 @@ export function registerProjectHandlers({
       }
 
       queries.projects.updateDefaultBranch(projectId, branch);
-      const updated = enrichProjectPath(queries.projects.getById(projectId));
-      if (!updated) throw new Error(`Project ${projectId} not found after default branch update`);
+      const updated = requireEnrichedProject(queries, projectId, 'after default branch update');
       return updated;
     },
   );
@@ -1585,8 +1562,7 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'project:refresh-git-remote',
     async (_event, { projectId }: { projectId: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const git = new GitService(project.path);
       const remote = await git.getRemoteUrl();
@@ -1594,8 +1570,7 @@ export function registerProjectHandlers({
       if (changed) {
         queries.projects.updateGitRemote(projectId, remote);
       }
-      const updated = enrichProjectPath(queries.projects.getById(projectId));
-      if (!updated) throw new Error(`Project ${projectId} not found after remote refresh`);
+      const updated = requireEnrichedProject(queries, projectId, 'after remote refresh');
       return { project: updated, remote, changed };
     },
   );
@@ -1603,8 +1578,7 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'project:set-github-project-url',
     async (_event, { projectId, url }: { projectId: string; url: string | null }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const result = validateGithubProjectUrl(url);
       if (!result.ok) {
@@ -1623,8 +1597,7 @@ export function registerProjectHandlers({
         source: 'project:set-github-project-url',
       });
 
-      const updated = enrichProjectPath(queries.projects.getById(projectId));
-      if (!updated) throw new Error(`Project ${projectId} not found after GitHub URL update`);
+      const updated = requireEnrichedProject(queries, projectId, 'after GitHub URL update');
       return updated;
     },
   );
@@ -1646,8 +1619,7 @@ export function registerProjectHandlers({
         };
       },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       // The renderer never sees the stored webhook: redactProjectSecrets encodes
       // "configured" as '' and "unset" as null. So '' means "keep what is stored"
@@ -1674,10 +1646,11 @@ export function registerProjectHandlers({
       };
 
       queries.projects.updateNotificationRouting(projectId, encryptedRouting);
-      const updated = enrichProjectPath(queries.projects.getById(projectId));
-      if (!updated) {
-        throw new Error(`Project ${projectId} not found after notification routing update`);
-      }
+      const updated = requireEnrichedProject(
+        queries,
+        projectId,
+        'after notification routing update',
+      );
       return updated;
     },
   );
@@ -1697,14 +1670,10 @@ export function registerProjectHandlers({
       if (typeof requireApproval !== 'boolean') {
         throw new Error(`Invalid requireApproval value: ${String(requireApproval)}`);
       }
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      requireProject(queries, projectId);
 
       queries.projects.updateRequireApprovalOverride(projectId, requireApproval);
-      const updated = enrichProjectPath(queries.projects.getById(projectId));
-      if (!updated) {
-        throw new Error(`Project ${projectId} not found after approval update`);
-      }
+      const updated = requireEnrichedProject(queries, projectId, 'after approval update');
       return updated;
     },
   );
@@ -1738,8 +1707,7 @@ export function registerProjectHandlers({
         };
       },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const settings = queries.settings.get();
       const candidateProject = { ...project, ...overrides };
@@ -1763,8 +1731,7 @@ export function registerProjectHandlers({
         ),
       };
       queries.projects.updateModelOverrides(projectId, normalizedOverrides);
-      const updated = enrichProjectPath(queries.projects.getById(projectId));
-      if (!updated) throw new Error(`Project ${projectId} not found after model override update`);
+      const updated = requireEnrichedProject(queries, projectId, 'after model override update');
       return updated;
     },
   );
@@ -1772,8 +1739,7 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'project:set-notify-github-user',
     (_event, { projectId, handle }: { projectId: string; handle: string | null }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      requireProject(queries, projectId);
       queries.projects.updateNotifyGithubUser(projectId, handle);
       const updated = enrichProjectPath(queries.projects.getById(projectId));
       if (!updated)

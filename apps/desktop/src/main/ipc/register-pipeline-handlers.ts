@@ -26,6 +26,7 @@ import {
   transitionThreadPhase,
   tryParsePlan,
 } from './helpers';
+import { requireProject, requireThread } from './lookups';
 import {
   buildExecutionResumeContext,
   clampAutoFixFailureOutput,
@@ -197,11 +198,9 @@ export function registerPipelineHandlers({
   );
 
   ipcMain.handle('pipeline:start', async (_event, { threadId }: { threadId: string }) => {
-    const thread = queries.threads.getById(threadId);
-    if (!thread) throw new Error(`Thread ${threadId} not found`);
+    const thread = requireThread(queries, threadId);
 
-    const project = queries.projects.getById(thread.projectId);
-    if (!project) throw new Error(`Project ${thread.projectId} not found`);
+    const project = requireProject(queries, thread.projectId);
     const settings = queries.settings.get();
     const phaseModels = resolveProjectPhaseModels(settings, project);
     await assertCliPhaseModelsSupported(phaseModels);
@@ -301,8 +300,7 @@ export function registerPipelineHandlers({
         }
       }
 
-      const project = queries.projects.getById(thread.projectId);
-      if (!project) throw new Error(`Project ${thread.projectId} not found`);
+      const project = requireProject(queries, thread.projectId);
 
       queries.threads.resolveClarification(
         threadId,
@@ -348,8 +346,7 @@ export function registerPipelineHandlers({
   );
 
   ipcMain.handle('pipeline:approve', async (_event, { threadId }: { threadId: string }) => {
-    const thread = queries.threads.getById(threadId);
-    if (!thread) throw new Error(`Thread ${threadId} not found`);
+    const thread = requireThread(queries, threadId);
 
     const latestPlan = queries.plans.getLatest(threadId);
     if (!latestPlan) throw new Error('No plan available to approve');
@@ -450,11 +447,9 @@ export function registerPipelineHandlers({
       throw new Error('Stop the active pipeline before starting a stabilization pass');
     }
 
-    const thread = queries.threads.getById(threadId);
-    if (!thread) throw new Error(`Thread ${threadId} not found`);
+    const thread = requireThread(queries, threadId);
 
-    const project = queries.projects.getById(thread.projectId);
-    if (!project) throw new Error(`Project ${thread.projectId} not found`);
+    const project = requireProject(queries, thread.projectId);
 
     const issue = thread.githubIssueNumber
       ? queries.githubIssues.getByNumber(project.id, thread.githubIssueNumber)
@@ -534,8 +529,7 @@ export function registerPipelineHandlers({
         };
       }
 
-      const thread = queries.threads.getById(threadId);
-      if (!thread) throw new Error(`Thread ${threadId} not found`);
+      const thread = requireThread(queries, threadId);
 
       try {
         queries.agentConversations.insert({
@@ -613,8 +607,7 @@ export function registerPipelineHandlers({
   );
 
   ipcMain.handle('pipeline:pause', (_event, { threadId }: { threadId: string }) => {
-    const thread = queries.threads.getById(threadId);
-    if (!thread) throw new Error(`Thread ${threadId} not found`);
+    const thread = requireThread(queries, threadId);
     if (!PAUSABLE_PHASE_SET.has(thread.status)) {
       throw new Error(`Cannot pause task while in ${thread.status} phase`);
     }
@@ -660,8 +653,7 @@ export function registerPipelineHandlers({
       throw new Error('Task is already running');
     }
 
-    const thread = queries.threads.getById(threadId);
-    if (!thread) throw new Error(`Thread ${threadId} not found`);
+    const thread = requireThread(queries, threadId);
     if (thread.status !== PIPELINE_PHASE.paused) {
       throw new Error(`Cannot resume task while in ${thread.status} phase`);
     }
@@ -669,8 +661,7 @@ export function registerPipelineHandlers({
       throw new Error('Paused task is missing a resumable phase');
     }
 
-    const project = queries.projects.getById(thread.projectId);
-    if (!project) throw new Error(`Project ${thread.projectId} not found`);
+    const project = requireProject(queries, thread.projectId);
     const issue =
       thread.githubIssueNumber != null
         ? queries.githubIssues.getByNumber(project.id, thread.githubIssueNumber)
@@ -755,16 +746,14 @@ export function registerPipelineHandlers({
       throw new Error('Stop the active pipeline before retrying');
     }
 
-    const thread = queries.threads.getById(threadId);
-    if (!thread) throw new Error(`Thread ${threadId} not found`);
+    const thread = requireThread(queries, threadId);
 
     // Clear any previous closed marker so a retried thread doesn't stay classified as closed.
     if (thread.doneAt) {
       queries.threads.clearDoneAt(threadId);
     }
 
-    const project = queries.projects.getById(thread.projectId);
-    if (!project) throw new Error(`Project ${thread.projectId} not found`);
+    const project = requireProject(queries, thread.projectId);
 
     const settings = queries.settings.get();
     const issue = thread.githubIssueNumber
@@ -911,8 +900,7 @@ export function registerPipelineHandlers({
         throw new Error('Stop the active pipeline before auto-fixing');
       }
 
-      const thread = queries.threads.getById(threadId);
-      if (!thread) throw new Error(`Thread ${threadId} not found`);
+      const thread = requireThread(queries, threadId);
 
       const clippedOutput = clampAutoFixFailureOutput(failureOutput);
       if (!clippedOutput) throw new Error('No failure output available for Auto Fix');
@@ -1030,11 +1018,9 @@ export function registerPipelineHandlers({
     createPrInFlight.add(threadId);
 
     try {
-      const thread = queries.threads.getById(threadId);
-      if (!thread) throw new Error(`Thread ${threadId} not found`);
+      const thread = requireThread(queries, threadId);
 
-      const project = queries.projects.getById(thread.projectId);
-      if (!project) throw new Error(`Project ${thread.projectId} not found`);
+      const project = requireProject(queries, thread.projectId);
 
       if (!thread.worktreeBranch) {
         throw new Error('No branch available for this run');

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { inspectProjectSetup, type RunningServer, ServerLifecycleManager } from '@shipcode/agents';
 import { WorktreeManager } from '@shipcode/git';
 import { shell } from 'electron';
+import { requireProject } from './lookups';
 import type { IpcHandlerDeps } from './types';
 
 interface ManualQaServerSession {
@@ -69,8 +70,7 @@ export function registerFeatureQaHandlers({
       const existing = getLiveManualQaServer(threadId, processManager);
       if (existing) return existing;
 
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const thread = queries.threads.getById(threadId);
       if (!thread || thread.projectId !== projectId) {

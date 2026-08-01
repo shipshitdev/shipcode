@@ -43,6 +43,7 @@ import type { BrowserWindow } from 'electron';
 import type { ChatNotificationService } from '../chat-notification-service';
 import log from '../logger.service';
 import type { NotificationService } from '../notification-service';
+import { notFoundError } from './lookups';
 import type { Queries } from './types';
 
 /**
@@ -85,6 +86,18 @@ export function enrichProjectPaths(projects: import('@shipcode/shared').Project[
       setupError: setup.error,
     });
   });
+}
+
+/**
+ * `requireProject` for the handlers that return a project to the renderer, so
+ * the row carries the `pathExists`/`setupStatus` enrichment and has its secrets
+ * redacted before it crosses the IPC boundary. Lives here rather than in
+ * `./lookups` because enrichment is what needs the heavy imports.
+ */
+export function requireEnrichedProject(queries: Queries, projectId: string, context?: string) {
+  const project = enrichProjectPath(queries.projects.getById(projectId));
+  if (!project) throw notFoundError('Project', projectId, context);
+  return project;
 }
 
 /**

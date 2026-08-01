@@ -48,6 +48,7 @@ import {
   sendGithubIssuesUpdated,
   syncLinkedPullRequestFeedback,
 } from './helpers';
+import { requireProject } from './lookups';
 import { registerGitHubIssueOverrideHandlers } from './register-github-issue-override-handlers';
 import { refreshIssueBodyEdges } from './register-issue-graph-handlers';
 import type { IpcHandlerDeps } from './types';
@@ -353,8 +354,7 @@ export function registerGitHubHandlers({
 
       const refreshPromise = (async () => {
         const startedAt = Date.now();
-        let project = queries.projects.getById(projectId);
-        if (!project) throw new Error(`Project ${projectId} not found`);
+        let project = requireProject(queries, projectId);
         if (!fs.existsSync(project.path)) {
           throw new Error(
             `Project path no longer exists: ${project.path}. Re-add the repository from a valid path.`,
@@ -634,8 +634,7 @@ export function registerGitHubHandlers({
   );
 
   ipcMain.handle('github:triage-issues', async (_event, { projectId }: { projectId: string }) => {
-    const project = queries.projects.getById(projectId);
-    if (!project) throw new Error(`Project ${projectId} not found`);
+    const project = requireProject(queries, projectId);
     if (!fs.existsSync(project.path)) {
       throw new Error(
         `Project path no longer exists: ${project.path}. Re-add the repository from a valid path.`,
@@ -739,8 +738,7 @@ export function registerGitHubHandlers({
         issueNumber,
       }: { projectId: string; issueId: string; issueNumber: number },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const issue = getActiveIssueById(queries, projectId, issueId);
       if (!issue) throw new Error(`Issue ${issueId} not found in project ${projectId}`);
@@ -795,8 +793,7 @@ export function registerGitHubHandlers({
         issueNumber,
       }: { projectId: string; issueId: string; issueNumber: number },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       // Automation issues are renderer-only (no github_issue_cache row).
       // Their issueId follows the pattern "automation:<threadId>".
@@ -835,8 +832,7 @@ export function registerGitHubHandlers({
   ipcMain.handle(
     'github:mark-done',
     async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
       assertRealGithubIssue(issue, 'close on GitHub');
@@ -888,8 +884,7 @@ export function registerGitHubHandlers({
   ipcMain.handle(
     'github:close-issue',
     async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
@@ -917,8 +912,7 @@ export function registerGitHubHandlers({
   ipcMain.handle(
     'github:reopen-issue',
     async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
@@ -950,8 +944,7 @@ export function registerGitHubHandlers({
         priority?: string | null;
       },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
@@ -1004,8 +997,7 @@ export function registerGitHubHandlers({
   ipcMain.handle(
     'github:archive-all-done',
     async (_event, { projectId }: { projectId: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const closedIssues = queries.githubIssues.listClosed(projectId);
       const githubClosedIssues = closedIssues.filter(
@@ -1077,8 +1069,7 @@ export function registerGitHubHandlers({
         prdMetadata?: PrdMetadataFields;
       },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const ghCli = new GhCli(project.path);
       // Project complexity + blast radius onto native issue labels (#45) so the
@@ -1188,8 +1179,7 @@ export function registerGitHubHandlers({
         prdMetadata?: PrdMetadataFields;
       },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const cachedIssue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!cachedIssue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
@@ -1253,8 +1243,7 @@ export function registerGitHubHandlers({
   ipcMain.handle(
     'github:sync-to-project-board',
     async (_event, { projectId }: { projectId: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const projectUrl = project.githubProjectUrl;
       if (!projectUrl) {
@@ -1367,8 +1356,7 @@ export function registerGitHubHandlers({
   ipcMain.handle(
     'github:list-repo-labels',
     async (_event, { projectId }: { projectId: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       const ghCli = new GhCli(project.path);
       return ghCli.listRepoLabelsWithMeta();
     },
@@ -1377,8 +1365,7 @@ export function registerGitHubHandlers({
   ipcMain.handle(
     'github:ensure-shipcode-labels',
     async (_event, { projectId }: { projectId: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       const ghCli = new GhCli(project.path);
       const result = await ghCli.ensureLabels(SHIPCODE_DEFAULT_LABELS);
       log.info(
@@ -1391,8 +1378,7 @@ export function registerGitHubHandlers({
   ipcMain.handle(
     'github:check-project-readiness',
     async (_event, { projectId }: { projectId: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       if (!fs.existsSync(project.path)) {
         throw new Error(
           `Project path no longer exists: ${project.path}. Re-add the repository from a valid path.`,
@@ -1422,8 +1408,7 @@ export function registerGitHubHandlers({
   ipcMain.handle(
     'github:start-issue',
     async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
@@ -1477,8 +1462,7 @@ export function registerGitHubHandlers({
         maxTasks: number;
       },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       let eligible = queries.githubIssues.getEligibleTodoIssues(projectId, priorities);
       if (maxTasks > 0) eligible = eligible.slice(0, maxTasks);
@@ -1544,8 +1528,7 @@ export function registerGitHubHandlers({
       _event,
       { projectId, issueNumber, body }: { projectId: string; issueNumber: number; body: string },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
       assertRealGithubIssue(issue, 'comment on GitHub');
@@ -1578,8 +1561,7 @@ export function registerGitHubHandlers({
         return inFlight;
       }
 
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
       assertRealGithubIssue(issue, 'list comments from GitHub');
@@ -1602,8 +1584,7 @@ export function registerGitHubHandlers({
   ipcMain.handle(
     'github:rewrite-issue',
     async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const cachedIssue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!cachedIssue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);

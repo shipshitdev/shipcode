@@ -14,7 +14,7 @@ import { clampError } from '@shipcode/shared';
 import type { IpcMainInvokeEvent } from 'electron';
 
 import log from '../logger.service';
-import { enrichProjectPath } from './helpers';
+import { requireEnrichedProject } from './helpers';
 import type { IpcHandlerDeps } from './types';
 
 const execFileAsync = promisify(execFile);
@@ -140,8 +140,7 @@ export function registerProjectCodeBrowserHandlers({
         relativePath,
       }: { projectId: string; worktreePath: string; relativePath?: string },
     ): Promise<CodeTreeEntry[]> => {
-      const project = enrichProjectPath(queries.projects.getById(projectId));
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireEnrichedProject(queries, projectId);
       await assertWorktreeBelongsToProject(project, worktreePath);
 
       const dirPath = await resolveWithinWorktree(worktreePath, relativePath ?? '.');
@@ -218,8 +217,7 @@ export function registerProjectCodeBrowserHandlers({
         relativePath,
       }: { projectId: string; worktreePath: string; relativePath: string },
     ): Promise<CodeFileContent> => {
-      const project = enrichProjectPath(queries.projects.getById(projectId));
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireEnrichedProject(queries, projectId);
       await assertWorktreeBelongsToProject(project, worktreePath);
 
       const filePath = await resolveWithinWorktree(worktreePath, relativePath);
@@ -259,8 +257,7 @@ export function registerProjectCodeBrowserHandlers({
         relativePath,
       }: { projectId: string; worktreePath: string; relativePath: string },
     ): Promise<DiffRecord | null> => {
-      const project = enrichProjectPath(queries.projects.getById(projectId));
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireEnrichedProject(queries, projectId);
       await assertWorktreeBelongsToProject(project, worktreePath);
       await resolveWithinWorktree(worktreePath, relativePath);
 

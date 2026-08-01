@@ -26,6 +26,7 @@ import {
 } from '@shipcode/shared';
 import log, { logProcessOutput } from '../logger.service';
 import { assertPrdRewriteModelSupported, resolvePrdRewriteContext } from './helpers';
+import { requireProject } from './lookups';
 import {
   clearPrdAttachmentSession,
   createPrdAttachmentSession,
@@ -102,8 +103,7 @@ export function registerSupportHandlers({
         attachmentSessionId,
       }: { projectId: string; draftBody: string; attachmentSessionId: string | null },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       if (attachmentSessionId) {
         throw new Error(
@@ -164,8 +164,7 @@ export function registerSupportHandlers({
         reasoningEffort?: ReasoningEffort | null;
       },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const settings = queries.settings.get();
       const selectedProvider =
@@ -236,16 +235,14 @@ export function registerSupportHandlers({
   });
 
   ipcMain.handle('memory:list', (_event, { projectId }: { projectId: string }) => {
-    const project = queries.projects.getById(projectId);
-    if (!project) throw new Error(`Project ${projectId} not found`);
+    const project = requireProject(queries, projectId);
     return inspectRepoMemory(project.path);
   });
 
   ipcMain.handle(
     'memory:generate',
     async (_event, { projectId, cli }: { projectId: string; cli: GeneratorCli }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       try {
         const result = await generateMemoryFiles(project.path, cli);
         return { success: result.success, error: result.error };
@@ -259,8 +256,7 @@ export function registerSupportHandlers({
   ipcMain.handle(
     'memory:read',
     (_event, { projectId, name }: { projectId: string; name: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       return { content: readMemoryFile(project.path, name) };
     },
   );
