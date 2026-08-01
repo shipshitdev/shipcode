@@ -1,4 +1,6 @@
+import { PIPELINE_PHASE } from '@shipcode/shared';
 import { sanitizeCliText } from '../adapters/cli-emitter';
+import { markCliFailure } from '../exit-code';
 import { requireOnboarding } from './guard';
 import { loadIssuePipelineInput, startIssuePipeline } from './issue-pipeline';
 import { waitForThreadTerminal } from './pipeline-wait';
@@ -43,10 +45,13 @@ export async function reviewCommand(issueNumber: string) {
       console.log(sanitizeCliText(JSON.stringify(review, null, 2)));
     } else {
       console.log('\nNo review generated (pipeline may have stopped before review phase).');
+      markCliFailure();
     }
   } else {
     console.log('\nNo plan generated (pipeline may have failed before plan phase).');
+    markCliFailure();
   }
 
   console.log(`\nThread status: ${sanitizeCliText(thread.status)}`);
+  if (thread.status === PIPELINE_PHASE.failed) markCliFailure();
 }
