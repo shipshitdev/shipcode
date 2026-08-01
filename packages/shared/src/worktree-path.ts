@@ -5,6 +5,20 @@ import path from 'node:path';
 import { DEFAULT_WORKTREE_ROOT, WORKTREE_DIR } from './constants';
 
 /**
+ * Expand a leading `~` against the current user's home directory.
+ *
+ * Returns `null` for anything that is not tilde-prefixed, so callers keep
+ * control of the non-tilde branches (absolute vs relative vs fallback), which
+ * differ between the worktree-root setting and the Add Project browser.
+ * `~user/…` is deliberately not supported and yields `null` too.
+ */
+export function expandTilde(value: string): string | null {
+  if (value === '~') return os.homedir();
+  if (value.startsWith('~/')) return path.join(os.homedir(), value.slice(2));
+  return null;
+}
+
+/**
  * Expand a user-facing worktreeRoot setting into either an absolute directory
  * or the sentinel 'project-local' (meaning: use <project>/.shipcode/worktrees).
  *
@@ -18,10 +32,8 @@ import { DEFAULT_WORKTREE_ROOT, WORKTREE_DIR } from './constants';
 export function expandWorktreeRoot(raw: string | null | undefined): string | 'project-local' {
   const value = (raw ?? DEFAULT_WORKTREE_ROOT).trim();
   if (value === '') return 'project-local';
-  if (value === '~') return os.homedir();
-  if (value.startsWith('~/')) {
-    return path.join(os.homedir(), value.slice(2));
-  }
+  const expanded = expandTilde(value);
+  if (expanded !== null) return expanded;
   if (value.startsWith('~')) {
     throw new Error('~user paths are not supported; use ~/ or an absolute path');
   }

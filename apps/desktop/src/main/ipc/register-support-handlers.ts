@@ -21,6 +21,7 @@ import {
   providerDisplay,
   type ReasoningEffort,
 } from '@shipcode/shared';
+import { execAsync } from '@shipcode/shared/exec-async';
 import log, { logProcessOutput } from '../logger.service';
 import { assertPrdRewriteModelSupported, resolvePrdRewriteContext } from './helpers';
 import {

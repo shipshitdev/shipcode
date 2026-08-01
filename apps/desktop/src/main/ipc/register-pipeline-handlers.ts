@@ -14,6 +14,7 @@ import {
   resolveRequireApproval,
   resolveRequireApprovalForIssue,
   resolveThreadPhasePresentation,
+  shortHash,
 } from '@shipcode/shared';
 
 import { logEvent } from '../logger.service';
@@ -933,7 +934,7 @@ export function registerPipelineHandlers({
 
       emitTerminalEvent(threadId, {
         kind: 'lifecycle',
-        message: `Auto Fix restoring checkpoint ${checkpoint.label} (${checkpoint.commitSha.slice(0, 12)})`,
+        message: `Auto Fix restoring checkpoint ${checkpoint.label} (${shortHash(checkpoint.commitSha)})`,
       });
       emitTerminalEvent(threadId, {
         kind: 'raw',
