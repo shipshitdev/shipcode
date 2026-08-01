@@ -1,5 +1,5 @@
-import { execFileSync } from 'node:child_process';
 import { buildIssueRunPrompt } from '@shipcode/agents';
+import { resolveCurrentBranch } from '@shipcode/git';
 import {
   type PipelinePhase,
   resolvePipelineSpeedProfile,
@@ -219,17 +219,6 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     }
   }
 
-  function resolveCurrentBranch(projectPath: string, worktreePath: string | null | undefined) {
-    try {
-      return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd: worktreePath ?? projectPath,
-        encoding: 'utf-8',
-      }).trim();
-    } catch {
-      return null;
-    }
-  }
-
   async function startFromGitHubIssue(
     threadId: string,
     projectPath: string,
@@ -298,7 +287,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       projectPath,
       worktreePath,
       baseBranch,
-      currentBranch: worktreePath ? resolveCurrentBranch(projectPath, worktreePath) : null,
+      currentBranch: worktreePath ? await resolveCurrentBranch(worktreePath) : null,
     });
     launch(threadId, () =>
       planning.startPlanGeneration(threadId, prompt, projectPath, worktreePath),
