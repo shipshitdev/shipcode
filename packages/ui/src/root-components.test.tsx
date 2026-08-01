@@ -18,6 +18,7 @@ import { PlanViewer } from '@/PlanViewer';
 import { ReviewViewer } from '@/ReviewViewer';
 import { SecureCredentialField } from '@/SecureCredentialField';
 import { SettingsSection } from '@/SettingsSection';
+import { SettingsSelectRow } from '@/SettingsSelectRow';
 import { StartupProgress } from '@/StartupProgress';
 import { TaskGraphViewer } from '@/TaskGraphViewer';
 import { VerificationViewer } from '@/VerificationViewer';
@@ -300,6 +301,41 @@ describe('root UI components', () => {
       labeledSelect.container.querySelector('[data-slot="labeled-model-select"]'),
     ).not.toBeNull();
     labeledSelect.cleanup();
+  });
+
+  it('connects settings select rows to their labels and supports label-only rows', () => {
+    const labelledRow = renderIntoDom(
+      <SettingsSelectRow
+        id="theme"
+        label="Theme"
+        description="Follow the system appearance."
+        value="dark"
+        options={[
+          { value: 'dark', label: 'Dark' },
+          { value: 'light', label: 'Light' },
+        ]}
+        onValueChange={vi.fn()}
+        triggerClassName="w-[180px]"
+      />,
+    );
+    expect(labelledRow.container.querySelector('label')?.htmlFor).toBe('theme');
+    expect(labelledRow.container.textContent).toContain('Follow the system appearance.');
+    const trigger = labelledRow.container.querySelector('[data-slot="settings-select-row"]');
+    expect(trigger).not.toBeNull();
+    expect(trigger?.className).toContain('w-[180px]');
+    labelledRow.cleanup();
+
+    const anonymousRow = renderIntoDom(
+      <SettingsSelectRow
+        label="Mode"
+        value="split"
+        options={[{ value: 'split', label: 'Split' }]}
+        onValueChange={vi.fn()}
+      />,
+    );
+    expect(anonymousRow.container.querySelector('label')).toBeNull();
+    expect(anonymousRow.container.textContent).toContain('Mode');
+    anonymousRow.cleanup();
   });
 
   it('renders app availability, paths, and errors in app picker sections', () => {

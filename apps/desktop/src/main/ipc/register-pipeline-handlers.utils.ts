@@ -5,6 +5,7 @@ import {
   EXECUTION_PHASES,
   PAUSABLE_PIPELINE_PHASES,
   PIPELINE_PHASE,
+  shortHash,
   stripAnsi,
 } from '@shipcode/shared';
 
@@ -167,7 +168,7 @@ export async function buildExecutionResumeContext(
     `Last error: ${thread.lastError ?? (isPaused ? 'Paused by user' : 'Unknown interruption')}`,
     `Worktree: ${thread.worktreePath}`,
     checkpoint
-      ? `Last checkpoint: ${checkpoint.label} (${checkpoint.commitSha.slice(0, 12)})`
+      ? `Last checkpoint: ${checkpoint.label} (${shortHash(checkpoint.commitSha)})`
       : 'Last checkpoint: none recorded; using HEAD as the diff base.',
     '',
     '<current_git_status>',

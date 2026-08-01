@@ -4,6 +4,7 @@ import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckIcon, CopyIcon, MessageSquarePlusIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
+import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 
 const PHASE_COLORS: Record<string, string> = {
   plan: 'bg-blue-500/15 text-blue-400',
@@ -33,6 +34,8 @@ const ALL_PHASES = [
   'issue_chat',
 ] as const;
 const COLLAPSE_LINE_THRESHOLD = 30;
+/** Feedback key for the "Copy all" button, which has no conversation id of its own. */
+const COPY_ALL_KEY = '__all__';
 type GithubPostState = 'hidden' | 'idle' | 'posting' | 'posted';
 
 interface ConversationsTabProps {
@@ -45,8 +48,9 @@ export function ConversationsTab({ threadId, projectId, issueNumber }: Conversat
   const queryClient = useQueryClient();
   const [selectedPhases, setSelectedPhases] = useState<Set<string>>(new Set(ALL_PHASES));
   const [expandedTurns, setExpandedTurns] = useState<Set<string>>(new Set());
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [postedId, setPostedId] = useState<string | null>(null);
+  const { isCopied, copy } = useCopyFeedback();
+  // Same transient-confirmation mechanic, no clipboard write — the "Posted" badge on a turn.
+  const { isCopied: isPosted, flash: flashPosted } = useCopyFeedback();
 
   const { data: conversations = [], isLoading } = useQuery<AgentConversationRecord[]>({
     queryKey: ['agent-conversations', threadId],
@@ -93,21 +97,20 @@ export function ConversationsTab({ threadId, projectId, issueNumber }: Conversat
     });
   }, []);
 
-  const copyTurn = useCallback(async (conv: AgentConversationRecord) => {
-    const md = `**${conv.speaker}** (${conv.phase}, ${conv.role})\n\n${conv.content}`;
-    await navigator.clipboard.writeText(md);
-    setCopiedId(conv.id);
-    setTimeout(() => setCopiedId(null), 1500);
-  }, []);
+  const copyTurn = useCallback(
+    async (conv: AgentConversationRecord) => {
+      const md = `**${conv.speaker}** (${conv.phase}, ${conv.role})\n\n${conv.content}`;
+      await copy(md, conv.id);
+    },
+    [copy],
+  );
 
   const copyAll = useCallback(async () => {
     const md = filtered
       .map((c) => `### ${c.speaker} — ${c.phase} (${c.role})\n\n${c.content}`)
       .join('\n\n---\n\n');
-    await navigator.clipboard.writeText(md);
-    setCopiedId('__all__');
-    setTimeout(() => setCopiedId(null), 1500);
-  }, [filtered]);
+    await copy(md, COPY_ALL_KEY);
+  }, [copy, filtered]);
 
   const postTurn = useMutation({
     mutationFn: (conv: AgentConversationRecord) =>
@@ -117,8 +120,7 @@ export function ConversationsTab({ threadId, projectId, issueNumber }: Conversat
         body: `### ShipCode issue chat reply\n\n${conv.content}`,
       }),
     onSuccess: (_result, conv) => {
-      setPostedId(conv.id);
-      setTimeout(() => setPostedId(null), 1500);
+      flashPosted(conv.id);
       queryClient.invalidateQueries({ queryKey: ['issue-comments', projectId, issueNumber] });
     },
   });
@@ -169,7 +171,7 @@ export function ConversationsTab({ threadId, projectId, issueNumber }: Conversat
         ))}
         <div className="ml-auto">
           <Button variant="ghost" size="sm" onClick={copyAll} className="h-7 text-xs gap-1">
-            {copiedId === '__all__' ? (
+            {isCopied(COPY_ALL_KEY) ? (
               <CheckIcon className="size-3" />
             ) : (
               <CopyIcon className="size-3" />
@@ -191,7 +193,7 @@ export function ConversationsTab({ threadId, projectId, issueNumber }: Conversat
               ? 'hidden'
               : postTurn.isPending && postTurn.variables?.id === conv.id
                 ? 'posting'
-                : postedId === conv.id
+                : isPosted(conv.id)
                   ? 'posted'
                   : 'idle';
             return (
@@ -199,7 +201,7 @@ export function ConversationsTab({ threadId, projectId, issueNumber }: Conversat
                 key={conv.id}
                 conv={conv}
                 isExpanded={expandedTurns.has(conv.id)}
-                isCopied={copiedId === conv.id}
+                isCopied={isCopied(conv.id)}
                 onToggleExpand={() => toggleExpand(conv.id)}
                 onCopy={() => copyTurn(conv)}
                 onPostToGithub={canPostToGithub ? () => confirmAndPostTurn(conv) : undefined}

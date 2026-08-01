@@ -820,22 +820,58 @@ export class GhCli {
       });
       let stdout = '';
       let stderr = '';
+      // A stdin EPIPE is normally followed by a 'close' event, so every path
+      // funnels through these guards to settle the promise exactly once.
+      let settled = false;
+      const settleResolve = (value: string) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+      const settleReject = (err: Error) => {
+        if (settled) return;
+        settled = true;
+        reject(err);
+      };
+      let stdinError: Error | null = null;
+      // gh can exit before draining stdin (auth failure, rate limit, bad
+      // args). Without this listener the resulting EPIPE is an unhandled
+      // stream error that takes down the main process instead of rejecting
+      // this promise. The 'close' handler owns the rejection so callers get
+      // the exit code and stderr rather than a bare EPIPE.
+      proc.stdin.on('error', (err: Error) => {
+        stdinError = err;
+      });
       proc.stdout.on('data', (chunk) => {
         stdout += chunk;
       });
       proc.stderr.on('data', (chunk) => {
         stderr += chunk;
       });
-      proc.on('error', reject);
+      proc.on('error', settleReject);
       proc.on('close', (code) => {
-        if (code === 0) resolve(stdout);
-        else
-          reject(
-            new Error(`${command} ${args.join(' ')} exited with code ${code}: ${stderr.trim()}`),
-          );
+        // Exit 0 means gh completed the write. A late EPIPE from end()-ing an
+        // already-closed pipe is not worth failing an operation that landed —
+        // these calls (issue comments especially) are not safe to retry.
+        if (code === 0) {
+          settleResolve(stdout);
+          return;
+        }
+        const stdinDetail = stdinError ? ` (stdin write failed: ${stdinError.message})` : '';
+        settleReject(
+          new Error(
+            `${command} ${args.join(' ')} exited with code ${code}: ${stderr.trim()}${stdinDetail}`,
+          ),
+        );
       });
-      proc.stdin.write(input);
-      proc.stdin.end();
+      try {
+        proc.stdin.write(input);
+        proc.stdin.end();
+      } catch (err) {
+        // Synchronous throw (ERR_STREAM_DESTROYED) when the pipe is already
+        // gone; keep it for the 'close' message rather than racing it.
+        stdinError = err instanceof Error ? err : new Error(String(err));
+      }
     });
   }
 

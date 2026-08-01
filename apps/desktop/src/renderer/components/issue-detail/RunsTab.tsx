@@ -1,13 +1,13 @@
 import type {
   PipelineRunStatus,
   PipelineRunTimelineEntry,
-  PipelineStepStatus,
   TerminalEventRecord,
 } from '@shipcode/shared';
 import {
   formatCost,
   formatDurationMilliseconds,
   formatRelativeTime,
+  formatTokenCount,
   MODEL_DISPLAY,
   stripAnsi,
   truncate,
@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { renderTerminalEvent } from '../terminal-drawer/render-terminal-event';
+import { STEP_STATUS_VARIANT } from './helpers';
 
 const RUN_LOADING_KEYS = ['run-loading-1', 'run-loading-2', 'run-loading-3'];
 
@@ -32,14 +33,6 @@ const RUN_STATUS_VARIANT: Record<
   cancelled: 'warning',
   paused: 'warning',
   interrupted: 'danger',
-};
-
-const STEP_STATUS_VARIANT: Record<PipelineStepStatus, 'default' | 'success' | 'danger'> = {
-  started: 'default',
-  completed: 'success',
-  failed: 'danger',
-  aborted: 'danger',
-  clarification_requested: 'default',
 };
 
 function formatRunSource(source: string): string {
@@ -71,9 +64,10 @@ function runTotals(entry: PipelineRunTimelineEntry) {
 }
 
 function formatTokenTotal(promptTokens: number, completionTokens: number): string {
-  const total = promptTokens + completionTokens;
-  if (total === 0) return 'tokens pending';
-  return total >= 1000 ? `${Math.round(total / 1000)}k tokens` : `${total} tokens`;
+  return formatTokenCount(promptTokens + completionTokens, {
+    zero: 'tokens pending',
+    suffix: ' tokens',
+  });
 }
 
 function RunTimelineCard({
