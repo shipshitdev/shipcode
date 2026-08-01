@@ -230,6 +230,82 @@ describe('TaskGraphQueries', () => {
     ]);
   });
 
+  it('promotes every unblocked dependent of a wide fan-out in one completion', () => {
+    // 9 steps: step-1 fans out to step-2..step-8, and step-9 is a second
+    // blocker on step-5 and step-6. Completing step-1 must promote exactly the
+    // dependents whose *other* prerequisites are already done — the batched
+    // blocker count has to agree with the per-dependent count it replaced.
+    const widePlan = plan({
+      steps: Array.from({ length: 9 }, (_, index) => ({
+        order: index + 1,
+        description: `Step ${index + 1}`,
+        files: [`packages/db/src/step-${index + 1}.ts`],
+        rationale: 'wide graph',
+      })),
+    });
+    const planRecord = plans.create(threadId, 'raw', widePlan, 1);
+    const graph = taskGraphs.replaceForPlan(threadId, planRecord.id, widePlan);
+    const nodeByKey = new Map(graph.nodes.map((node) => [node.stableKey, node]));
+    const nodeId = (key: string) => (nodeByKey.get(key) as (typeof graph.nodes)[number]).id;
+
+    // Replace the linear chain with the fan-out shape.
+    db.prepare('DELETE FROM task_edges WHERE graph_id = ?').run(graph.id);
+    const insertEdge = db.prepare(
+      `INSERT INTO task_edges (id, graph_id, source_node_id, target_node_id, edge_type)
+       VALUES (?, ?, ?, ?, 'depends_on')`,
+    );
+    for (let target = 2; target <= 8; target++) {
+      insertEdge.run(`fan-${target}`, graph.id, nodeId('step-1'), nodeId(`step-${target}`));
+    }
+    insertEdge.run('extra-5', graph.id, nodeId('step-9'), nodeId('step-5'));
+    insertEdge.run('extra-6', graph.id, nodeId('step-9'), nodeId('step-6'));
+
+    const after = taskGraphs.markNodeCompletedAndPromote(nodeId('step-1'));
+
+    expect(after.nodes.map((node) => [node.stableKey, node.status])).toEqual([
+      ['step-1', 'completed'],
+      ['step-2', 'ready'],
+      ['step-3', 'ready'],
+      ['step-4', 'ready'],
+      // step-9 is still pending, so these two stay blocked behind it.
+      ['step-5', 'pending'],
+      ['step-6', 'pending'],
+      ['step-7', 'ready'],
+      ['step-8', 'ready'],
+      // Not a dependent of step-1 at all.
+      ['step-9', 'pending'],
+    ]);
+    expect(after.status).toBe('active');
+  });
+
+  it('promotes a dependent once its last remaining blocker completes', () => {
+    const widePlan = plan({
+      steps: Array.from({ length: 3 }, (_, index) => ({
+        order: index + 1,
+        description: `Step ${index + 1}`,
+        files: [`packages/db/src/step-${index + 1}.ts`],
+        rationale: 'diamond',
+      })),
+    });
+    const planRecord = plans.create(threadId, 'raw', widePlan, 1);
+    const graph = taskGraphs.replaceForPlan(threadId, planRecord.id, widePlan);
+    // step-3 depends on both step-1 (chain) and step-2 (added).
+    db.prepare(
+      `INSERT INTO task_edges (id, graph_id, source_node_id, target_node_id, edge_type)
+       VALUES ('diamond', ?, ?, ?, 'depends_on')`,
+    ).run(graph.id, graph.nodes[0].id, graph.nodes[2].id);
+
+    const afterFirst = taskGraphs.markNodeCompletedAndPromote(graph.nodes[0].id);
+    expect(afterFirst.nodes.map((node) => node.status)).toEqual(['completed', 'ready', 'pending']);
+
+    const afterSecond = taskGraphs.markNodeCompletedAndPromote(graph.nodes[1].id);
+    expect(afterSecond.nodes.map((node) => node.status)).toEqual([
+      'completed',
+      'completed',
+      'ready',
+    ]);
+  });
+
   it('leaves dependents pending while another prerequisite is incomplete', () => {
     const planRecord = plans.create(threadId, 'raw', plan(), 1);
     const graph = taskGraphs.replaceForPlan(threadId, planRecord.id, plan());
