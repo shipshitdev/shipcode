@@ -1130,23 +1130,12 @@ export function registerProjectHandlers({
     },
   );
 
-  ipcMain.handle('review:get', (_event, { planId }: { planId: string }) => {
-    return queries.reviews.getByPlanId(planId);
-  });
-
   ipcMain.handle('review:list-by-plans', (_event, { planIds }: { planIds: string[] }) => {
     return queries.reviews.listByPlanIds(planIds);
   });
 
   ipcMain.handle('diff:list', (_event, { threadId }: { threadId: string }) => {
     return queries.diffs.list(threadId);
-  });
-
-  ipcMain.handle('git:status', async (_event, { projectId }: { projectId: string }) => {
-    const project = queries.projects.getById(projectId);
-    if (!project) throw new Error(`Project ${projectId} not found`);
-    const git = new GitService(project.path);
-    return git.getStatus();
   });
 
   ipcMain.handle(
