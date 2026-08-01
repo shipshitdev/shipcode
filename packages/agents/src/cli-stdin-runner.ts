@@ -3,6 +3,9 @@ import type { GeneratorCli } from '@shipcode/shared';
 import { classifyPoolExhaustion, markPoolExhausted } from './agent-sdk-pool-state';
 import { extractCliFailureMessage, formatCliSpawnFailure } from './cli-error';
 
+/** Grace period between the polite SIGTERM and the SIGKILL that follows it. */
+export const KILL_GRACE_MS = 5_000;
+
 const SAFE_CLI_ENV_KEYS = new Set([
   'PATH',
   'HOME',
@@ -61,18 +64,44 @@ export function runCliWithStdin(options: {
     });
 
     const label = options.cli === 'claude' ? 'Claude CLI' : 'Codex CLI';
+
+    // A CLI that traps SIGTERM would otherwise survive the timeout and keep
+    // running (and keep burning credits) long after we stopped listening.
+    let killTimer: ReturnType<typeof setTimeout> | null = null;
+    const terminate = () => {
+      proc.kill?.('SIGTERM');
+      if (killTimer) return;
+      killTimer = setTimeout(() => {
+        killTimer = null;
+        try {
+          proc.kill?.('SIGKILL');
+        } catch {
+          // Already gone.
+        }
+      }, KILL_GRACE_MS);
+      killTimer.unref?.();
+    };
+
     const timer = setTimeout(() => {
-      proc.kill('SIGTERM');
+      terminate();
       reject(new Error(`${label} timed out after ${options.timeoutMs}ms`));
     }, options.timeoutMs);
 
-    proc.on('error', (err) => {
+    const clearTimers = () => {
       clearTimeout(timer);
+      if (killTimer) {
+        clearTimeout(killTimer);
+        killTimer = null;
+      }
+    };
+
+    proc.on('error', (err) => {
+      clearTimers();
       reject(new Error(formatCliSpawnFailure(label, err.message)));
     });
 
     proc.on('close', (code) => {
-      clearTimeout(timer);
+      clearTimers();
       if (code === 0) {
         resolve(stdout);
         return;
@@ -92,7 +121,7 @@ export function runCliWithStdin(options: {
     });
 
     writeStdin(proc.stdin, options.input).catch((err: unknown) => {
-      proc.kill?.('SIGTERM');
+      terminate();
       reject(err instanceof Error ? err : new Error(String(err)));
     });
   });

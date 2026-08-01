@@ -33,7 +33,7 @@ vi.mock('@shipcode/shared/worktree-path', () => ({
   assertWorkspaceSafe: mockAssertWorkspaceSafe,
 }));
 
-import { ProcessManager } from './process-manager';
+import { KILL_ESCALATION_GRACE_MS, ProcessManager } from './process-manager';
 
 interface MockPty {
   pid: number;
@@ -558,7 +558,9 @@ describe('ProcessManager registry hygiene', () => {
     const proc = manager.spawnWithStdin('codex', 'codex', ['exec', '-'], '/tmp', '');
 
     expect(() => child.stdin.emit('error', new Error('EPIPE'))).not.toThrow();
-    expect(proc.state).toBe('running');
+    // The stdin error triggers a kill, but only the real `close` event may
+    // declare the child dead — until then it is `terminating`, not `exited`.
+    expect(proc.state).toBe('terminating');
   });
 
   it('kills the child when writing stdin throws during spawn', () => {
@@ -574,7 +576,7 @@ describe('ProcessManager registry hygiene', () => {
 
     expect(output.join('')).toContain('Error writing prompt to codex');
     expect(child.kill).toHaveBeenCalledWith('SIGTERM');
-    expect(proc.state).toBe('running');
+    expect(proc.state).toBe('terminating');
   });
 
   it('formats non-Error stdin write failures during spawn', () => {
@@ -600,6 +602,9 @@ describe('ProcessManager registry hygiene', () => {
     manager.kill(proc.id);
 
     expect(child.kill).toHaveBeenCalledTimes(1);
+    expect(proc.state).toBe('terminating');
+
+    child.__close(0);
     expect(proc.state).toBe('exited');
   });
 
@@ -990,5 +995,193 @@ describe('ProcessManager registry hygiene', () => {
 
     expect(manager.get(running.id)).toBeDefined();
     expect(manager.get(exited.id)).toBeUndefined();
+  });
+});
+
+describe('ProcessManager kill escalation', () => {
+  let manager: ProcessManager;
+
+  beforeEach(() => {
+    manager = new ProcessManager();
+    mockPtySpawn.mockReset();
+    mockChildSpawn.mockReset();
+    mockExecFileSync.mockReset();
+    mockAssertWorkspaceSafe.mockReset();
+    mockExecFileSync.mockReturnValue('');
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    manager.removeAllListeners();
+  });
+
+  it('marks a signalled process terminating, not exited, until the OS reports exit', () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+    const proc = manager.spawn('claude', 'claude', [], '/tmp');
+    const states: string[] = [];
+    manager.on('stateChange', (_id: string, _type: string, state: string) => states.push(state));
+
+    manager.kill(proc.id);
+
+    // The bug this guards: marking `exited` here made every downstream liveness
+    // check a no-op against a process that ignored the signal.
+    expect(proc.state).toBe('terminating');
+    expect(manager.get(proc.id)).toBeDefined();
+
+    pty.__exit(143);
+    expect(proc.state).toBe('exited');
+    expect(states).toEqual(['terminating', 'exited']);
+  });
+
+  it('escalates to SIGKILL when the process outlives the grace period', () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+    const proc = manager.spawn('claude', 'claude', [], '/tmp');
+    const output: string[] = [];
+    manager.on('output', (_id: string, chunk: string) => output.push(chunk));
+
+    manager.kill(proc.id);
+    expect(pty.kill).toHaveBeenCalledTimes(1);
+
+    // One tick short of the grace period: still only the polite signal.
+    vi.advanceTimersByTime(KILL_ESCALATION_GRACE_MS - 1);
+    expect(pty.kill).toHaveBeenCalledTimes(1);
+    expect(proc.state).toBe('terminating');
+
+    vi.advanceTimersByTime(1);
+    expect(pty.kill).toHaveBeenCalledTimes(2);
+    expect(pty.kill).toHaveBeenLastCalledWith('SIGKILL');
+    expect(output.join('')).toContain('SIGKILL');
+
+    // Even SIGKILL does not settle the state — the exit event does.
+    expect(proc.state).toBe('terminating');
+    pty.__exit(137);
+    expect(proc.state).toBe('exited');
+  });
+
+  it('cancels the pending SIGKILL when the process exits cleanly', () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+    const proc = manager.spawn('claude', 'claude', [], '/tmp');
+
+    manager.kill(proc.id);
+    pty.__exit(0);
+    expect(proc.state).toBe('exited');
+
+    vi.advanceTimersByTime(KILL_ESCALATION_GRACE_MS * 2);
+    expect(pty.kill).toHaveBeenCalledTimes(1);
+    expect(pty.kill).not.toHaveBeenCalledWith('SIGKILL');
+    // biome-ignore lint/complexity/useLiteralKeys: private timer map inspection is intentional.
+    expect(manager['escalationTimers'].size).toBe(0);
+  });
+
+  it('never escalates onto a process that reused the id', () => {
+    const first = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(first);
+    const proc = manager.spawn('claude', 'claude', [], '/tmp');
+
+    manager.kill(proc.id);
+    first.__exit(0);
+
+    // Simulate a fresh process landing on the same id before the (already
+    // cleared) timer would have fired.
+    const second = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(second);
+    const replacement = manager.spawn('claude', 'claude', [], '/tmp');
+    // biome-ignore lint/complexity/useLiteralKeys: private registry rebinding is intentional in this test.
+    manager['processes'].set(proc.id, { ...replacement, id: proc.id });
+
+    vi.advanceTimersByTime(KILL_ESCALATION_GRACE_MS * 2);
+    expect(second.kill).not.toHaveBeenCalled();
+  });
+
+  it('escalates piped children through the process group when detached', () => {
+    const child = createMockChild();
+    child.pid = 4242;
+    mockChildSpawn.mockReturnValueOnce(child);
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    try {
+      const proc = manager.spawnWithStdin(
+        'shell',
+        '/bin/sh',
+        ['-c', 'trap "" TERM; sleep 600'],
+        '/tmp',
+        '',
+        undefined,
+        { detached: true },
+      );
+
+      manager.kill(proc.id);
+      expect(killSpy).toHaveBeenCalledWith(-4242, 'SIGTERM');
+
+      vi.advanceTimersByTime(KILL_ESCALATION_GRACE_MS);
+      expect(killSpy).toHaveBeenCalledWith(-4242, 'SIGKILL');
+      expect(proc.state).toBe('terminating');
+
+      child.__close(null, 'SIGKILL');
+      expect(proc.state).toBe('exited');
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
+  it('does not schedule an escalation when the caller already sent SIGKILL', () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+    const proc = manager.spawn('claude', 'claude', [], '/tmp');
+
+    manager.kill(proc.id, 'SIGKILL');
+
+    // biome-ignore lint/complexity/useLiteralKeys: private timer map inspection is intentional.
+    expect(manager['escalationTimers'].size).toBe(0);
+    vi.advanceTimersByTime(KILL_ESCALATION_GRACE_MS * 2);
+    expect(pty.kill).toHaveBeenCalledTimes(1);
+    expect(pty.kill).toHaveBeenCalledWith('SIGKILL');
+  });
+
+  it('honours an explicit escalateAfterMs of 0 as an opt-out', () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+    const proc = manager.spawn('claude', 'claude', [], '/tmp');
+
+    manager.kill(proc.id, undefined, { escalateAfterMs: 0 });
+
+    vi.advanceTimersByTime(KILL_ESCALATION_GRACE_MS * 2);
+    expect(pty.kill).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not restart the escalation clock on a repeated kill', () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+    const proc = manager.spawn('claude', 'claude', [], '/tmp');
+
+    manager.kill(proc.id);
+    vi.advanceTimersByTime(KILL_ESCALATION_GRACE_MS - 100);
+    manager.kill(proc.id);
+    expect(pty.kill).toHaveBeenCalledTimes(2);
+
+    vi.advanceTimersByTime(100);
+    expect(pty.kill).toHaveBeenCalledTimes(3);
+    expect(pty.kill).toHaveBeenLastCalledWith('SIGKILL');
+  });
+
+  it('killStalled escalates a process that ignores the stall SIGHUP', () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+    const proc = manager.spawn('claude', 'claude', [], '/tmp');
+
+    vi.advanceTimersByTime(60_000);
+    expect(manager.killStalled(30_000)).toEqual([proc.id]);
+    expect(pty.kill).toHaveBeenCalledTimes(1);
+
+    // A second watchdog tick must not re-signal a process already terminating
+    // with its escalation armed.
+    expect(manager.killStalled(30_000)).toEqual([]);
+    expect(pty.kill).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(KILL_ESCALATION_GRACE_MS);
+    expect(pty.kill).toHaveBeenLastCalledWith('SIGKILL');
   });
 });

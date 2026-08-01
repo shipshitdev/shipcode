@@ -20,7 +20,9 @@ function getLiveManualQaServer(
   if (!session) return null;
 
   const proc = processManager.get(session.server.processId);
-  if (!proc || proc.state === 'exited') {
+  // `terminating` means the server was already signalled — it may still be
+  // holding the port, but it is no longer a server we can hand to the user.
+  if (!proc || proc.state === 'exited' || proc.state === 'terminating') {
     manualQaServers.delete(threadId);
     return null;
   }
