@@ -55,10 +55,6 @@ export function registerFeatureQaHandlers({
     return queries.featureQaResults.listByThread(args.threadId);
   });
 
-  ipcMain.handle('feature-qa:latest-by-feature', (_event, args: { featureId: string }) => {
-    return queries.featureQaResults.latestByFeature(args.featureId);
-  });
-
   ipcMain.handle('feature-qa:get-server', (_event, { threadId }: { threadId: string }) => {
     return getLiveManualQaServer(threadId, processManager);
   });

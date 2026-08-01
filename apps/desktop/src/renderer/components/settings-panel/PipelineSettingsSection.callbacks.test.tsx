@@ -10,8 +10,56 @@ import { PipelineSettingsSection } from './PipelineSettingsSection';
 
 vi.mock('@shipcode/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shipcode/ui')>();
+  const selectValues = [
+    'claude',
+    'codex',
+    'openrouter',
+    'gemini',
+    '__default__',
+    'gpt-5.4-mini',
+    'openrouter/auto',
+    'none',
+    'low',
+    'medium',
+    'high',
+    'smart_fast',
+    'thorough',
+    '0',
+    '3',
+  ];
   return {
     ...actual,
+    SettingsSelectRow: ({
+      label,
+      description,
+      options,
+      onValueChange,
+      value,
+    }: {
+      label: string;
+      description?: string;
+      options: readonly { value: string; label: string }[];
+      onValueChange: (value: string) => void;
+      value: string;
+    }) => (
+      <div data-select-value={value}>
+        <span>{label}</span>
+        {description ? <span>{description}</span> : null}
+        {options.map((option) => (
+          <div key={option.value}>{option.label}</div>
+        ))}
+        {selectValues.map((next) => (
+          <button
+            key={next}
+            type="button"
+            data-testid={`select-${value}-${next}`}
+            onClick={() => onValueChange(next)}
+          >
+            select {next}
+          </button>
+        ))}
+      </div>
+    ),
     LabeledModelSelect: ({
       value,
       options,

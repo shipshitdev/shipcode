@@ -2,12 +2,11 @@
 
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PhaseModelRow } from './PhaseModelRow';
 
-vi.mock('@shipshitdev/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shipshitdev/ui')>();
+vi.mock('@shipcode/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/ui')>();
   const selectValues = [
     'claude',
     'codex',
@@ -20,17 +19,25 @@ vi.mock('@shipshitdev/ui', async (importOriginal) => {
 
   return {
     ...actual,
-    Select: ({
-      children,
+    SettingsSelectRow: ({
+      label,
+      description,
+      options,
       onValueChange,
       value,
     }: {
-      children: ReactNode;
+      label: string;
+      description?: string;
+      options: readonly { value: string; label: string }[];
       onValueChange: (value: string) => void;
       value: string;
     }) => (
       <div data-select-value={value}>
-        {children}
+        <span>{label}</span>
+        {description ? <span>{description}</span> : null}
+        {options.map((option) => (
+          <div key={option.value}>{option.label}</div>
+        ))}
         {selectValues.map((next) => (
           <button
             key={next}
@@ -43,12 +50,6 @@ vi.mock('@shipshitdev/ui', async (importOriginal) => {
         ))}
       </div>
     ),
-    SelectContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-    SelectItem: ({ children }: { children: ReactNode; disabled?: boolean; value: string }) => (
-      <div>{children}</div>
-    ),
-    SelectTrigger: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-    SelectValue: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
   };
 });
 

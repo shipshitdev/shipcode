@@ -180,20 +180,11 @@ describe('registerSkillsHandlers', () => {
     registerSkillsHandlers({ ipcMain, queries } as never);
   });
 
-  it('lists, reads, writes, resets, and reports quarantined skills', async () => {
+  it('lists, reads, writes, and resets skills', async () => {
     const listForView = getHandler('skills:list-for-view');
     const read = getHandler('skills:read');
     const write = getHandler('skills:write');
     const reset = getHandler('skills:reset');
-    const listQuarantined = getHandler('skills:list-quarantined');
-    queries.skills.listQuarantined.mockReturnValue([
-      {
-        phase: 'plan-generation',
-        projectId: 'project-1',
-        statusReason: 'Missing USER_PROMPT',
-        updatedAt: '2026-05-08T00:00:00.000Z',
-      },
-    ] as never);
 
     expect(listForView(null, { projectId: 'project-1' })).toEqual([
       expect.objectContaining({
@@ -218,14 +209,6 @@ describe('registerSkillsHandlers', () => {
       expect.objectContaining({ id: 'project-1:plan-generation' }),
     );
     expect(queries.skills.delete).toHaveBeenCalledWith('project-1', 'plan-generation');
-    expect(listQuarantined()).toEqual([
-      {
-        phase: 'plan-generation',
-        projectId: 'project-1',
-        statusReason: 'Missing USER_PROMPT',
-        updatedAt: '2026-05-08T00:00:00.000Z',
-      },
-    ]);
   });
 
   it('falls back to the global skill row when the project row is inactive', () => {

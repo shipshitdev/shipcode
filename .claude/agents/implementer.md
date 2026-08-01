@@ -31,7 +31,7 @@ You write production code across all packages and apps. You follow existing patt
 - **Find 3+ existing examples** before writing new code. Match the pattern exactly.
 - **Right package, right place.** No app logic in `shared`. No orchestration in `ui`. No UI in `pipeline`.
 - **UI components from `packages/ui` first.** Check before creating app-local components.
-- **Pipe `claude -p` via stdin** — never argv. Use `runClaudeWithStdin` from `packages/agents`.
+- **Pipe `claude -p` via stdin** — never argv. Use `runCliWithStdin` from `packages/agents/src/cli-stdin-runner.ts`.
 - **`WorktreeManager.remove(path, branch)`** takes concrete persisted values — never recompute from threadId.
 - **Clamp IPC errors** to first-line + ~280 chars at main-process boundary.
 - **Tailwind v4 only.** `@theme` in CSS, not `tailwind.config.js`. Slash opacity syntax.

@@ -27,6 +27,14 @@ describe('ThreadQueries', () => {
     db.close();
   });
 
+  /** Canonical ISO-8601 UTC timestamp `ms` milliseconds in the past. */
+  const isoAgo = (ms: number) => new Date(Date.now() - ms).toISOString();
+
+  /** Overwrite `updated_at` using the same ISO format ISO_NOW_SQL writes. */
+  const seedUpdatedAt = (threadId: string, isoTimestamp: string) => {
+    db.prepare('UPDATE threads SET updated_at = ? WHERE id = ?').run(isoTimestamp, threadId);
+  };
+
   it('create() returns a thread with idle status', () => {
     const t = threads.create(projectId, 'fix the bug', 'Bug fix');
     expect(t.id).toBeTruthy();
@@ -538,12 +546,10 @@ describe('ThreadQueries', () => {
     const recentPipeline = threads.create(projectId, 'recent', 'Recent');
     threads.updateStatus(active.id, 'executing');
 
-    db.prepare("UPDATE threads SET updated_at = datetime('now', '-2 hours') WHERE id = ?").run(
-      active.id,
-    );
-    db.prepare("UPDATE threads SET updated_at = datetime('now', '-10 days') WHERE id = ?").run(
-      oldInstant.id,
-    );
+    // Seed in the canonical ISO format production writes (ISO_NOW_SQL), not
+    // SQLite's naive datetime('now') shape — getStuck compares strings.
+    seedUpdatedAt(active.id, isoAgo(2 * 60 * 60 * 1000));
+    seedUpdatedAt(oldInstant.id, isoAgo(10 * 24 * 60 * 60 * 1000));
 
     expect(threads.getOrphaned().map((thread) => thread.id)).toContain(active.id);
     expect(threads.getStuck(60 * 60 * 1000).map((thread) => thread.id)).toContain(active.id);
@@ -553,6 +559,32 @@ describe('ThreadQueries', () => {
     expect(threads.deleteOlderThan('instant', 7)).toBe(1);
     expect(threads.getById(oldInstant.id)).toBeNull();
     expect(threads.getById(recentPipeline.id)).toBeTruthy();
+  });
+
+  // Regression: the watchdog polls every 30s with a 120s threshold, so cutoff and
+  // updated_at always land on the same calendar date. Comparing an ISO updated_at
+  // against SQLite's naive datetime('now', ...) was always false there ('T' 0x54 >
+  // ' ' 0x20 at index 10), so the watchdog never fired in production.
+  it('getStuck() flags stale threads when the cutoff falls on the same calendar day', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-05-14T12:00:00.000Z'));
+
+      const stale = threads.create(projectId, 'stale', 'Stale');
+      const fresh = threads.create(projectId, 'fresh', 'Fresh');
+      threads.updateStatus(stale.id, 'executing');
+      threads.updateStatus(fresh.id, 'executing');
+
+      seedUpdatedAt(stale.id, '2026-05-14T11:55:00.000Z'); // 5 min old — past the threshold
+      seedUpdatedAt(fresh.id, '2026-05-14T11:59:30.000Z'); // 30 s old — still healthy
+
+      const stuckIds = threads.getStuck(120_000).map((thread) => thread.id);
+
+      expect(stuckIds).toContain(stale.id);
+      expect(stuckIds).not.toContain(fresh.id);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // ─── Tier 3: telemetry columns ────────────────────────────────

@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { buildPRBody, GhCli, type PrReviewEvent } from '@shipcode/agents';
+import { resolveCurrentBranch } from '@shipcode/git';
 import {
   clampError,
   type GitHubPrCheckSummary,
@@ -15,6 +16,17 @@ import {
 } from './review-findings';
 import type { PhaseOutcome, PipelineHelperEnv } from './shared';
 import { assertPersistedWorktreeTarget } from './worktree-target-guard';
+
+/**
+ * Commit/push and shipping both treat an unresolvable branch as fatal, so the
+ * shared `null`-on-failure resolver is wrapped to throw here and let the
+ * existing catch blocks emit the failed phase.
+ */
+async function requireCurrentBranch(cwd: string): Promise<string> {
+  const branch = await resolveCurrentBranch(cwd);
+  if (!branch) throw new Error('git rev-parse --abbrev-ref HEAD failed to resolve a branch');
+  return branch;
+}
 
 export function resolveFormalPrReviewEvent(
   decision: 'approve' | 'request_changes' | 'reject' | null,
@@ -113,10 +125,7 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
         return { next: 'failed' };
       }
 
-      branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd,
-        encoding: 'utf-8',
-      }).trim();
+      branch = await requireCurrentBranch(cwd);
     } catch (preflightErr) {
       // Raw git stderr is multiline; keep the full trace in the main-process log
       // and hand the renderer a clamped single line.
@@ -177,10 +186,7 @@ export function createShippingPhaseHandlers({ deps, contextHelpers, runtime }: P
     const cwd = context.worktreePath ?? context.projectPath;
 
     try {
-      const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd,
-        encoding: 'utf-8',
-      }).trim();
+      const branch = await requireCurrentBranch(cwd);
       const latestPlan = deps.plans.getLatest(threadId);
       const plan = latestPlan?.structured;
       const title = plan?.objective ?? `ShipCode: Issue #${context.githubIssueNumber}`;
