@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { DiffRecord, GitWorktreeSummary } from '@/lib/shipcode';
+import { shortHash } from '@/lib/shipcode';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/primitives/badge';
 import { Button } from '@/primitives/button';
@@ -28,7 +29,7 @@ export interface GitVisualizerProps {
 }
 
 function formatShortSha(value: string) {
-  return value ? value.slice(0, 7) : 'unknown';
+  return shortHash(value, 7) || 'unknown';
 }
 
 function formatDirtySummary(worktree: GitWorktreeSummary) {

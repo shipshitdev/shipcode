@@ -1,7 +1,5 @@
-import { exec } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import type { TerminalEvent } from '@shipcode/agents';
 import {
   ClaudeNormalizer,
@@ -24,6 +22,7 @@ import {
   providerDisplay,
   type ReasoningEffort,
 } from '@shipcode/shared';
+import { execAsync } from '@shipcode/shared/exec-async';
 import log, { logProcessOutput } from '../logger.service';
 import { assertPrdRewriteModelSupported, resolvePrdRewriteContext } from './helpers';
 import {
@@ -33,8 +32,6 @@ import {
   stagePrdAttachments,
 } from './prd-attachments';
 import type { IpcHandlerDeps } from './types';
-
-const execAsync = promisify(exec);
 
 function supportHandlerError(err: unknown, fallback: string): string {
   if (err instanceof Error || typeof err === 'string') return clampError(err);
