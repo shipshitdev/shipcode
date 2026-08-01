@@ -28,7 +28,6 @@ import {
   type ManagedCliFailureContext,
   type ManagedCliModelContext,
   type ManagedCliProviderConfig,
-  materializeStdinArgsForLegacySpawn,
   PHASE_FENCE_TAG,
   type ProgrammaticCliCommand,
   type ProgrammaticExecutePreflight,
@@ -577,6 +576,5 @@ export const _internals = {
   phaseOutputArtifactPath,
   isInteractiveStructured,
   readPhaseOutputArtifact,
-  materializeStdinArgsForLegacySpawn,
   stripCodexProtocol,
 };

@@ -2,6 +2,7 @@ import type {
   ExecutorModel,
   PipelineCheckpoint,
   PipelinePhase,
+  PipelineStepStatus,
   PlanRecord,
   RetryAction,
   ReviewRecord,
@@ -15,11 +16,21 @@ import {
   PIPELINE_EXECUTOR_PROVIDERS,
   PIPELINE_PHASE,
   shipCodePlanSchema,
+  shortHash,
   stripAnsi,
 } from '@shipcode/shared';
 
 export { formatRelativeTime as timeAgo } from '@shipcode/shared';
 export { stripAnsi };
+
+/** Badge variant per pipeline step status, shared by the Runs and Costs tabs. */
+export const STEP_STATUS_VARIANT: Record<PipelineStepStatus, 'default' | 'success' | 'danger'> = {
+  started: 'default',
+  completed: 'success',
+  failed: 'danger',
+  aborted: 'danger',
+  clarification_requested: 'default',
+};
 
 export const ACTIVE_PHASES: PipelinePhase[] = [
   PIPELINE_PHASE.planning,
@@ -325,7 +336,7 @@ export function resolveIssueRetryPresentation({
 export function buildRestoreCheckpointConfirmMessage(checkpoint: PipelineCheckpoint): string {
   const target = checkpoint.refName
     ? "this checkpoint's snapshot, including the uncommitted changes captured with it"
-    : `commit ${checkpoint.commitSha.slice(0, 12)}`;
+    : `commit ${shortHash(checkpoint.commitSha)}`;
   return [
     `Restore checkpoint "${checkpoint.label}"?`,
     `This reverts ALL uncommitted changes in the worktree — including any manual edits you made — and resets it to ${target}. A "Before restore" snapshot is saved first, so you can recover the current state from the checkpoint list.`,

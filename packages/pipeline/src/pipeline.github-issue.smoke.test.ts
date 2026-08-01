@@ -108,8 +108,12 @@ function createSmokeDeps() {
   const listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
   let spawnCount = 0;
 
+  // Mirrors the real ProcessManager, which always exposes spawnWithStdin: the
+  // CLI providers pipe every prompt through stdin and refuse to start a run
+  // when that is unavailable, so a mock without it never spawns at all.
   const processManager = {
     spawn: vi.fn(() => ({ id: `proc-${++spawnCount}` })),
+    spawnWithStdin: vi.fn(() => ({ id: `proc-${++spawnCount}` })),
     kill: vi.fn(),
     on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       const eventListeners = listeners[event] ?? [];
@@ -381,18 +385,31 @@ describe('startFromGitHubIssue — smoke', () => {
 
     await pipeline.startFromGitHubIssue('t-smoke', '/proj', issue, 'claude');
 
-    const spawnMock = smoke.deps.processManager.spawn as unknown as {
-      mock: { calls: unknown[][] };
+    const pm = smoke.deps.processManager as unknown as {
+      spawn: { mock: { calls: unknown[][] } };
+      spawnWithStdin: { mock: { calls: unknown[][] } };
     };
-    expect(spawnMock.mock.calls.length).toBeGreaterThan(0);
-    const allArgs = spawnMock.mock.calls
+
+    // The prompt is piped through stdin (never argv), so the prompt assertions
+    // read the stdin payload. argv is still swept for the forbidden protocol so
+    // a regression that leaks the prompt into a command line is still caught.
+    const stdinCalls = pm.spawnWithStdin.mock.calls;
+    expect(stdinCalls.length).toBeGreaterThan(0);
+    const prompt = stdinCalls
+      .map((call) => call[4])
+      .filter((input): input is string => typeof input === 'string')
+      .join('\n');
+    const argv = [...pm.spawn.mock.calls, ...stdinCalls]
       .flatMap((call) => (Array.isArray(call[2]) ? (call[2] as unknown[]) : []))
-      .filter((a): a is string => typeof a === 'string');
-    const combined = allArgs.join('\n');
-    expect(combined).not.toContain('workpad_protocol');
-    expect(combined).not.toContain('## ShipCode Workpad');
-    expect(combined).toContain('NO network access');
-    expect(combined).toContain('#42');
+      .filter((a): a is string => typeof a === 'string')
+      .join('\n');
+
+    expect(prompt).not.toContain('workpad_protocol');
+    expect(prompt).not.toContain('## ShipCode Workpad');
+    expect(argv).not.toContain('workpad_protocol');
+    expect(argv).not.toContain('## ShipCode Workpad');
+    expect(prompt).toContain('NO network access');
+    expect(prompt).toContain('#42');
   });
 
   it('sets autonomous=true and seeds context fields from the issue', async () => {

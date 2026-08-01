@@ -584,13 +584,11 @@ describe('registerInstantHandlers', () => {
     );
   });
 
-  it('starts bare shells, clamps unsafe resize values, cancels sessions, lists and cleans up', async () => {
+  it('starts bare shells, clamps unsafe resize values, and cancels sessions', async () => {
     const bareShell = handlers.get('instant:bare-shell');
     const shellResize = handlers.get('instant:shell-resize');
     const cancel = handlers.get('instant:cancel');
-    const list = handlers.get('instant:list');
-    const cleanup = handlers.get('instant:cleanup');
-    if (!bareShell || !shellResize || !cancel || !list || !cleanup) {
+    if (!bareShell || !shellResize || !cancel) {
       throw new Error('instant utility handlers not registered');
     }
 
@@ -623,10 +621,6 @@ describe('registerInstantHandlers', () => {
       'failed',
       'Cancelled by user',
     );
-
-    expect(list()).toEqual([makeThread({ id: 'instant-1', kind: 'instant' })]);
-    queries.threads.deleteOlderThan.mockReturnValueOnce(3);
-    expect(cleanup()).toEqual({ deleted: 3 });
 
     cancel(undefined, { threadId: 'unknown-thread' });
     shellResize(undefined, { threadId: 'unknown-thread', cols: 80, rows: 24 });

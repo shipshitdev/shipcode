@@ -1,7 +1,5 @@
-import { exec, execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import {
   checkClaudeAuth,
   checkCodexAuth,
@@ -16,10 +14,8 @@ import {
   type GitHubLabelDefinition,
   SHIPCODE_DEFAULT_LABELS,
 } from '@shipcode/shared';
+import { execAsync, execFileAsync } from '@shipcode/shared/exec-async';
 import { sanitizeCliText } from '../adapters/cli-emitter';
-
-const execAsync = promisify(exec);
-const execFileAsync = promisify(execFile);
 
 async function listGithubLabelNames(cwd: string): Promise<string[]> {
   const { stdout } = await execAsync('gh label list --json name -q ".[].name"', {

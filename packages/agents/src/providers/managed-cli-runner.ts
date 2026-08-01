@@ -44,7 +44,13 @@ import type {
 /** ProcessManager process TYPE tags owned by this family. */
 export type ManagedCliAgentId = 'claude' | 'codex';
 
-export type CliRunResult = ManagedProcessResult;
+export interface CliRunResult extends ManagedProcessResult {
+  /** The process manager cannot pipe stdin, so the run never started. */
+  unavailable?: boolean;
+}
+
+const STDIN_SPAWN_UNAVAILABLE =
+  'This process manager cannot pipe a prompt through stdin (no spawnWithStdin). ShipCode never passes a prompt as a CLI argument, so the run was not started.';
 
 type SpawnOptions = Parameters<ProcessManager['spawn']>[5];
 
@@ -172,27 +178,6 @@ type ProcessManagerWithStdin = ProcessManager & {
   ) => ReturnType<ProcessManager['spawn']>;
 };
 
-/**
- * Fallback for ProcessManagers without `spawnWithStdin`: fold the stdin payload
- * back into the argv placeholder the command already reserved for it (`-p -`,
- * `exec -`). Only reachable on the legacy spawn path.
- */
-export function materializeStdinArgsForLegacySpawn(args: string[], stdin?: string): string[] {
-  if (stdin === undefined) return args;
-  const promptFlagIndex = args.indexOf('-p');
-  if (promptFlagIndex !== -1 && args[promptFlagIndex + 1] === '-') {
-    return args.map((arg, index) => (index === promptFlagIndex + 1 ? stdin : arg));
-  }
-  if (promptFlagIndex !== -1) {
-    return [...args.slice(0, promptFlagIndex + 1), stdin, ...args.slice(promptFlagIndex + 1)];
-  }
-  const execIndex = args.indexOf('exec');
-  if (execIndex !== -1 && args[execIndex + 1] === '-') {
-    return args.map((arg, index) => (index === execIndex + 1 ? stdin : arg));
-  }
-  return args;
-}
-
 function commandStdin(command: CliCommand): string | undefined {
   return 'stdin' in command ? command.stdin : undefined;
 }
@@ -229,9 +214,16 @@ export async function runCli(
       ...(options ?? {}),
       ...(workspaceRoot !== undefined ? { workspaceRoot, projectPath } : {}),
     };
-    const processManagerWithStdin = processManager as ProcessManagerWithStdin;
-    if (stdin !== undefined && processManagerWithStdin.spawnWithStdin) {
-      process = processManagerWithStdin.spawnWithStdin(
+    if (stdin !== undefined) {
+      const spawnWithStdin = (processManager as ProcessManagerWithStdin).spawnWithStdin;
+      if (typeof spawnWithStdin !== 'function') {
+        // A prompt must NEVER travel via argv (Claude's argparser reads `---`
+        // frontmatter as flags and a failing CLI echoes the whole command
+        // line). Fail loudly instead of degrading — mirrors stdin-cli-runner.
+        return { rawOutput: STDIN_SPAWN_UNAVAILABLE, exitCode: 1, unavailable: true };
+      }
+      process = spawnWithStdin.call(
+        processManager,
         agentId,
         command,
         args,
@@ -241,14 +233,7 @@ export async function runCli(
         spawnOptions,
       );
     } else {
-      process = processManager.spawn(
-        agentId,
-        command,
-        materializeStdinArgsForLegacySpawn(args, stdin),
-        cwd,
-        threadId,
-        spawnOptions,
-      );
+      process = processManager.spawn(agentId, command, args, cwd, threadId, spawnOptions);
     }
   } catch (err) {
     // ProcessManager synthesizes an exit event for missing binaries etc.
@@ -611,6 +596,19 @@ export function createManagedCliProvider(
         );
       } finally {
         if (cleanup) await cleanup();
+      }
+
+      if (result.unavailable) {
+        return {
+          rawOutput: STDIN_SPAWN_UNAVAILABLE,
+          exitCode: result.exitCode,
+          promptTelemetry,
+          providerError: {
+            kind: 'unexpected_stop',
+            message: STDIN_SPAWN_UNAVAILABLE,
+            retryable: false,
+          },
+        };
       }
 
       if (spawnFailure && result.exitCode === 127) {
