@@ -22,7 +22,7 @@ Loaded after `~/.agents/memory/MEMORY.md` (global). Project-scoped facts only. D
 ## Worktrees
 
 - **Default:** `~/.shipcode/worktrees/<projectSlug>/<threadId>` where `projectSlug = <basename>-<sha256[:6]>`.
-- **`AppSettings.worktreeRoot`:** `null`=default, `''`=legacy project-local, absolute/tilde=custom. Validation at `settings:set`.
+- **`AppSettings.worktreeRoot`:** `null`=default, absolute/tilde=custom. Two states only — project-local (`''`) is **retired**; `''` is just the storage encoding of `null`. Validation at `settings:set`.
 - **Grep-stable anchors:** `projectSlug`, `resolveWorktreeParent` in `packages/shared/src/worktree-path.ts`.
 - See: `worktrees.md`.
 

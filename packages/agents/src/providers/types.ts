@@ -168,7 +168,6 @@ export interface ProviderRequest {
    * When provided (including `null`), the CLI provider asserts the spawn cwd
    * is a canonical linked worktree registered to `projectPath`:
    *   - `null`             → default ~/.shipcode/worktrees root
-   *   - `''`               → project-local (legacy) creation mode
    *   - absolute / `~/x`   → custom worktree root
    * Omit the field entirely (`undefined`) to disable the check — e.g. instant
    * terminals running at the project root.

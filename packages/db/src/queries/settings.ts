@@ -434,7 +434,8 @@ export class SettingsQueries {
 
   set(patch: Partial<AppSettings>): void {
     // Validate worktreeRoot up-front so malformed values (relative paths, ~user/…) never reach the DB.
-    if ('worktreeRoot' in patch && patch.worktreeRoot != null && patch.worktreeRoot !== '') {
+    // '' is not special-cased: it expands to the default root like null does.
+    if ('worktreeRoot' in patch && patch.worktreeRoot != null) {
       expandWorktreeRoot(patch.worktreeRoot);
     }
     // Same path validation for addProjectStartsIn.
@@ -656,8 +657,11 @@ function validateBranchFormat(format: string): void {
 }
 
 function readWorktreeRoot(raw: string | undefined): string | null {
-  // Treat missing, empty string, and the JS literal 'null' (legacy from pre-fix serializer)
-  // as "use the default".
+  // `set()` serializes null to '' for every key, so '' at rest is the storage
+  // encoding of "unset" — this is the exact inverse of the write path, not a
+  // collapse of a distinct state. (The retired project-local mode also wrote '';
+  // it resolves to the default root, which is what those rows now mean.)
+  // 'null' is the JS literal left by the pre-fix serializer.
   if (raw == null || raw === '' || raw === 'null') return null;
   return raw;
 }
