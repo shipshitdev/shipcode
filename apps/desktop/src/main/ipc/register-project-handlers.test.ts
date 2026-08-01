@@ -3818,9 +3818,6 @@ describe('registerProjectHandlers', () => {
       }),
     ).rejects.toThrow(`Project ${baseProject.id} not found`);
     await expect(
-      handlers.get('git:status')?.(undefined, { projectId: baseProject.id }),
-    ).rejects.toThrow(`Project ${baseProject.id} not found`);
-    await expect(
       handlers.get('git:commit')?.(undefined, { projectId: baseProject.id, message: 'commit' }),
     ).rejects.toThrow(`Project ${baseProject.id} not found`);
     await expect(
@@ -4145,9 +4142,6 @@ describe('registerProjectHandlers', () => {
       commands: { test: 'bun test' },
     });
 
-    await expect(
-      handlers.get('git:status')?.(undefined, { projectId: project.id }),
-    ).resolves.toMatchObject({ branch: 'main' });
     await expect(
       handlers.get('git:commit')?.(undefined, { projectId: project.id, message: 'checkpoint' }),
     ).resolves.toEqual({ hash: 'abc123' });
@@ -4602,7 +4596,6 @@ describe('registerProjectHandlers', () => {
       structured: { objective: 'Ship' },
     });
     expect(queries.plans.updateStructured).toHaveBeenCalledWith('plan-1', { objective: 'Ship' });
-    expect(handlers.get('review:get')?.(undefined, { planId: 'plan-1' })).toEqual(review);
     expect(handlers.get('review:list-by-plans')?.(undefined, { planIds: ['plan-1'] })).toEqual([
       review,
     ]);

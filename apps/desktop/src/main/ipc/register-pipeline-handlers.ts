@@ -13,8 +13,6 @@ import {
   resolveExecutorModelForIssue,
   resolveRequireApproval,
   resolveRequireApprovalForIssue,
-  resolveRevisionCount,
-  resolveRevisionCountForIssue,
   resolveThreadPhasePresentation,
 } from '@shipcode/shared';
 
@@ -116,14 +114,6 @@ export function registerPipelineHandlers({
       }
     },
   );
-
-  ipcMain.handle('review-findings:list-open', (_event, { threadId }: { threadId: string }) => {
-    try {
-      return queries.reviewFindings.listOpenByThread(threadId);
-    } catch (error) {
-      throwClampedIpcError('review-findings:list-open', error);
-    }
-  });
 
   ipcMain.handle(
     'review-findings:update-status',
@@ -980,46 +970,6 @@ export function registerPipelineHandlers({
     },
   );
 
-  ipcMain.handle('pipeline:skip-review', async (_event, { threadId }: { threadId: string }) => {
-    const thread = queries.threads.getById(threadId);
-    const latestPlan = queries.plans.getLatest(threadId);
-    if (latestPlan) {
-      queries.plans.updateStatus(latestPlan.id, 'approval');
-    }
-    logEvent('pipeline:approval-gate', {
-      threadId,
-      outcome: 'approval',
-      reviewDecision: 'approve',
-      planVersion: latestPlan?.version ?? null,
-      requireApproval: resolveEffectiveRequireApproval(threadId),
-      autonomous: thread?.autonomous ?? false,
-      reviewRound: thread?.reviewRound ?? 0,
-      revisionCount:
-        thread?.projectId && thread.githubIssueNumber != null
-          ? resolveRevisionCountForIssue(
-              queries.settings.get(),
-              queries.projects.getById(thread.projectId),
-              queries.githubIssues.getByNumber(thread.projectId, thread.githubIssueNumber),
-            )
-          : resolveRevisionCount(
-              queries.settings.get(),
-              thread?.projectId ? queries.projects.getById(thread.projectId) : null,
-            ),
-      hasCriticalOrMajor: false,
-      reasons: ['manualSkipReview'],
-    });
-    transitionThreadPhase(
-      mainWindow,
-      queries,
-      emitter,
-      {
-        threadId,
-        phase: PIPELINE_PHASE.approval,
-      },
-      ghSync,
-    );
-  });
-
   const GH_TIMEOUT_MS = 30_000;
   const createPrInFlight = new Set<string>();
 
@@ -1182,10 +1132,6 @@ export function registerPipelineHandlers({
       return queries.dashboard.getRecentTasks(limit ?? 20, offset ?? 0);
     },
   );
-
-  ipcMain.handle('dashboard:count-recent-tasks', () => {
-    return queries.dashboard.countRecentTasks();
-  });
 
   ipcMain.handle('costs:get-summary', () => {
     return queries.costs.getSummary();
