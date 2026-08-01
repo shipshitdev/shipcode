@@ -18,8 +18,16 @@ export type {
   PullRequestSnapshot,
 } from './cleanup-analyzer';
 export { analyzeCleanup } from './cleanup-analyzer';
+export type { GitRunner } from './git-exec';
+export { buildScopedGitEnv, runGit, runGitUnlocked, withGitLock } from './git-exec';
 export { GitService } from './git-service';
 export { WorktreeManager } from './worktree';
+export type { WorktreeArtifact, WorktreeArtifactCleanupResult } from './worktree-artifacts';
+export {
+  DEFAULT_WORKTREE_ARTIFACT_PATHS,
+  listWorktreeArtifacts,
+  pruneWorktreeArtifacts,
+} from './worktree-artifacts';
 export type { RegisteredWorktree } from './worktree-safety';
 export {
   assertCanonicalWorktreePath,
@@ -29,9 +37,3 @@ export {
   listRegisteredWorktrees,
   parseRegisteredWorktrees,
 } from './worktree-safety';
-export type { WorktreeArtifact, WorktreeArtifactCleanupResult } from './worktree-artifacts';
-export {
-  DEFAULT_WORKTREE_ARTIFACT_PATHS,
-  listWorktreeArtifacts,
-  pruneWorktreeArtifacts,
-} from './worktree-artifacts';

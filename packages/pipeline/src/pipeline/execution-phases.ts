@@ -16,7 +16,7 @@ import {
   shellExecEnv,
   summarizePromptMaterials,
 } from '@shipcode/agents';
-import { resolveCurrentBranch, WorktreeManager } from '@shipcode/git';
+import { resolveCurrentBranch, runGit, WorktreeManager, withGitLock } from '@shipcode/git';
 import {
   buildTaskNodePlan,
   clampTextBlock,
@@ -511,35 +511,35 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
 
   // ─── Per-node verification helpers ───────────────────────────────────────────
 
-  function captureNodeAnchorSha(context: PipelineContext): string {
+  // Both helpers run once per node on the execute path (and again per fan-out
+  // worker), so they must never block the Electron main thread — async git
+  // only, through the shared @shipcode/git transport.
+  async function captureNodeAnchorSha(context: PipelineContext): Promise<string> {
     const cwd = context.worktreePath ?? context.projectPath;
     try {
-      return execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim();
+      return await runGit(cwd, ['rev-parse', 'HEAD']);
     } catch {
       return '';
     }
   }
 
-  function computeNodeDiff(context: PipelineContext, anchorSha: string): string {
+  async function computeNodeDiff(context: PipelineContext, anchorSha: string): Promise<string> {
     if (!anchorSha) return '';
     const cwd = context.worktreePath ?? context.projectPath;
     try {
-      // Commit any uncommitted work so git diff captures it
-      const dirty = execFileSync('git', ['status', '--porcelain'], {
-        cwd,
-        encoding: 'utf-8',
-      }).trim();
-      if (dirty) {
-        execFileSync('git', ['add', '-A'], { cwd, encoding: 'utf-8' });
-        execFileSync('git', ['commit', '--no-verify', '-m', '[shipcode] node checkpoint'], {
-          cwd,
-          encoding: 'utf-8',
-        });
-      }
-      return execFileSync('git', ['diff', `${anchorSha}..HEAD`], {
-        cwd,
-        encoding: 'utf-8',
-        maxBuffer: 5 * 1024 * 1024,
+      // One lock around status → add → commit → diff. Awaiting between these
+      // would otherwise let another thread on the same working tree stage into
+      // the index mid-sequence (or collide on index.lock); the lock restores
+      // the atomicity execFileSync used to provide for free. Fan-out workers
+      // each own a distinct worktree, so they still run fully in parallel.
+      return await withGitLock(cwd, async (run) => {
+        // Commit any uncommitted work so git diff captures it
+        const dirty = await run(['status', '--porcelain']);
+        if (dirty) {
+          await run(['add', '-A']);
+          await run(['commit', '--no-verify', '-m', '[shipcode] node checkpoint']);
+        }
+        return await run(['diff', `${anchorSha}..HEAD`]);
       });
     } catch {
       return '';
@@ -630,10 +630,10 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     const context = activePipelines.get(threadId);
     if (!context) return 'failed';
 
-    let diff = computeNodeDiff(context, context.nodeAnchorSha ?? '');
+    let diff = await computeNodeDiff(context, context.nodeAnchorSha ?? '');
     if (!diff.trim()) {
-      const cumulativeBase = resolveWorktreeDiffBase(context);
-      const cumulativeDiff = cumulativeBase ? computeNodeDiff(context, cumulativeBase) : '';
+      const cumulativeBase = await resolveWorktreeDiffBase(context);
+      const cumulativeDiff = cumulativeBase ? await computeNodeDiff(context, cumulativeBase) : '';
       if (!cumulativeDiff.trim()) {
         // No scoped or cumulative changes produced — treat as needing retry.
         return 'retry';
@@ -912,7 +912,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           // fails the run; an 'unknown' probe (bad diff base, transient git
           // error) must not fail an otherwise-successful task graph — the probe
           // failure is already logged inside probeWorktreeChanges.
-          if (probeWorktreeChanges(context) === 'clean') {
+          if ((await probeWorktreeChanges(context)) === 'clean') {
             emitPhase(
               threadId,
               'failed',
@@ -1010,7 +1010,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
     // Capture HEAD before execution for per-node diff scoping
     if (activeTaskNode) {
-      context.nodeAnchorSha = captureNodeAnchorSha(context);
+      context.nodeAnchorSha = await captureNodeAnchorSha(context);
     }
 
     try {
@@ -1154,7 +1154,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         // confirmed-clean tree fails; an 'unknown' probe result (bad diff base,
         // transient git error) proceeds, since real changes may sit in the
         // worktree — the probe failure is already logged.
-        if (probeWorktreeChanges(context) === 'clean') {
+        if ((await probeWorktreeChanges(context)) === 'clean') {
           const errSnippet = extractExecutionErrorSnippet(response.rawOutput);
           emitPhase(
             threadId,
@@ -1589,7 +1589,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     context.verifiedSha = headSha;
     deps.projectFailures?.resolveOwnedByThread(threadId, headSha);
 
-    const diffBase = resolveWorktreeDiffBase(context);
+    const diffBase = await resolveWorktreeDiffBase(context);
     let diff: string;
     try {
       diff = diffBase

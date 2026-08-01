@@ -59,6 +59,7 @@ Where things live:
 - **`WorktreeManager.remove(path, branch)` takes concrete values** — never recompute from `threadId`. See: `worktrees.md`.
 - **Never call `webContents.send` directly in the main process.** Every send goes through `safeSend` in `apps/desktop/src/main/safe-send.ts` — a raw send throws on a destroyed window and that throw escapes the IPC handler, reporting an already-successful write as a failure. See: `ipc-errors.md`.
 - **Clamp IPC errors** to first-line + ~280 chars; log full trace to main-process console only. See: `ipc-errors.md`.
+- **No synchronous git on the pipeline execute path.** It freezes the Electron main event loop. Use the async transport in `packages/git/src/git-exec.ts`, and hold `withGitLock` across any stage→commit sequence. See: `git-transport.md`.
 - **Never compare a timestamp column against `datetime('now', ...)`.** Columns are written with `ISO_NOW_SQL` (`...THH:MM:SS.sssZ`); `datetime()` returns the naive space-separated shape. SQLite compares them as strings, and `'T'` (0x54) > `' '` (0x20) at index 10, so same-calendar-day comparisons are always false. Build the cutoff in JS and bind `new Date(...).toISOString()`. See the docblock in `packages/shared/src/sqlite-time.ts`.
 
 ## References
@@ -78,6 +79,7 @@ Where things live:
 - `pipeline.md` — phase flow, state machine, provider routing
 - `worktrees.md` — default paths, settings, path-as-truth rule, cleanup pattern
 - `claude-cli.md` — stdin-not-argv rule for claude CLI
+- `git-transport.md` — async-only git on the execute path; `withGitLock` for stage→commit atomicity
 - `interactive-cli-run-modes.md` — interactive-vs-programmatic terminal routing and event model
 - `ipc-errors.md` — clamp IPC errors at main-process boundary
 - `skills.md` — skills/memory folder layout, symlink rules

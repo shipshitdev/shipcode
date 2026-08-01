@@ -1,5 +1,5 @@
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { type GitRunner, withGitLock } from '@shipcode/git';
 import { type FeatureQaResult, stripAnsi } from '@shipcode/shared';
 import type { PipelineContext } from '../types';
 
@@ -202,29 +202,30 @@ export function extractImplicatedFiles(value: string): string[] {
 export type WorktreeChangeStatus = 'clean' | 'dirty' | 'unknown';
 
 /**
+ * Async — git runs off the main thread so the Electron UI, IPC, and the
+ * pipeline heartbeat keep moving while the probe is in flight.
+ *
  * @knipignore
  */
-export function probeWorktreeChanges(context: PipelineContext): WorktreeChangeStatus {
+export async function probeWorktreeChanges(
+  context: PipelineContext,
+): Promise<WorktreeChangeStatus> {
   const cwd = context.worktreePath ?? context.projectPath;
   try {
-    const status = execFileSync('git', ['status', '--porcelain'], {
-      cwd,
-      encoding: 'utf-8',
-      maxBuffer: 1024 * 1024,
-    }).trim();
-    if (status.length > 0) return 'dirty';
+    // One lock for the whole probe: status and the base-vs-HEAD diff must
+    // observe the same index, not one straddling another thread's stage/commit.
+    return await withGitLock(cwd, async (run) => {
+      const status = await run(['status', '--porcelain']);
+      if (status.length > 0) return 'dirty' as const;
 
-    const baseRef = resolveWorktreeDiffBase(context);
-    if (baseRef) {
-      const diff = execFileSync('git', ['diff', '--name-only', `${baseRef}..HEAD`], {
-        cwd,
-        encoding: 'utf-8',
-        maxBuffer: 1024 * 1024,
-      }).trim();
-      if (diff.length > 0) return 'dirty';
-    }
+      const baseRef = await resolveDiffBaseWith(run, context);
+      if (baseRef) {
+        const diff = await run(['diff', '--name-only', `${baseRef}..HEAD`]);
+        if (diff.length > 0) return 'dirty' as const;
+      }
 
-    return 'clean';
+      return 'clean' as const;
+    });
   } catch (error) {
     // A failed git probe is NOT evidence of a clean tree — real changes may sit
     // in the worktree. Report 'unknown' so callers proceed instead of failing an
@@ -247,18 +248,28 @@ function formatWorktreeProbeError(error: unknown): string {
  * Older/quick-task contexts can have an empty forkPointSha, so fall back to the
  * branch merge-base and finally the previous commit instead of diffing `..HEAD`.
  *
+ * Async — see probeWorktreeChanges for why nothing here may run synchronously.
+ *
  * @knipignore
  */
-export function resolveWorktreeDiffBase(context: PipelineContext): string | null {
+export async function resolveWorktreeDiffBase(context: PipelineContext): Promise<string | null> {
   const cwd = context.worktreePath ?? context.projectPath;
+  return withGitLock(cwd, (run) => resolveDiffBaseWith(run, context));
+}
+
+/**
+ * Lock-free body of resolveWorktreeDiffBase, so callers that already hold the
+ * working tree's lock (probeWorktreeChanges) can reuse it without deadlocking
+ * on the non-reentrant lock.
+ */
+async function resolveDiffBaseWith(
+  run: GitRunner,
+  context: PipelineContext,
+): Promise<string | null> {
   const forkPointSha = context.forkPointSha?.trim();
   if (forkPointSha) {
     try {
-      return execFileSync('git', ['rev-parse', '--verify', `${forkPointSha}^{commit}`], {
-        cwd,
-        encoding: 'utf-8',
-        maxBuffer: 1024 * 1024,
-      }).trim();
+      return await run(['rev-parse', '--verify', `${forkPointSha}^{commit}`]);
     } catch {
       // Fall back below; persisted fork points can be missing in older records.
     }
@@ -276,22 +287,14 @@ export function resolveWorktreeDiffBase(context: PipelineContext): string | null
 
   for (const baseRef of baseCandidates) {
     try {
-      return execFileSync('git', ['merge-base', baseRef, 'HEAD'], {
-        cwd,
-        encoding: 'utf-8',
-        maxBuffer: 1024 * 1024,
-      }).trim();
+      return await run(['merge-base', baseRef, 'HEAD']);
     } catch {
       // Try the next available base ref.
     }
   }
 
   try {
-    return execFileSync('git', ['rev-parse', 'HEAD~1'], {
-      cwd,
-      encoding: 'utf-8',
-      maxBuffer: 1024 * 1024,
-    }).trim();
+    return await run(['rev-parse', 'HEAD~1']);
   } catch {
     return null;
   }

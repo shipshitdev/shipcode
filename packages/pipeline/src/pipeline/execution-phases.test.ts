@@ -69,8 +69,16 @@ vi.mock('node:child_process', async (importOriginal) => {
 // with worktreePath: process.cwd(), and real capture git (simple-git) awaits
 // internal promises that fake timers starve, hanging the suite. Checkpoint
 // bookkeeping is not under test in this file.
+//
+// The async transport (runGit/withGitLock) is stubbed for the same reason and
+// routed through mockExecFileSync, so per-test git stubs keep the one
+// `(command, args) => stdout` shape whether the callsite is sync or async.
 vi.mock('@shipcode/git', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shipcode/git')>();
+  const run = async (cwd: string, args: string[]): Promise<string> => {
+    const stdout: string = await mockExecFileSync('git', args, { cwd, encoding: 'utf-8' });
+    return stdout.trim();
+  };
   return {
     ...actual,
     captureCheckpoint: vi.fn(async () => ({
@@ -82,6 +90,12 @@ vi.mock('@shipcode/git', async (importOriginal) => {
     })),
     resolveHeadCommit: vi.fn(async () => 'head-sha'),
     resolveCurrentBranch: vi.fn(async () => 'main'),
+    runGit: vi.fn(run),
+    // Inline, no queueing — serialization is covered by the git-exec unit tests.
+    withGitLock: vi.fn(
+      async (cwd: string, fn: (r: (args: string[]) => Promise<string>) => Promise<unknown>) =>
+        fn((args) => run(cwd, args)),
+    ),
   };
 });
 
@@ -513,7 +527,7 @@ describe('execution phase helpers', () => {
     expect(extractImplicatedFiles('no test files mentioned')).toEqual([]);
   });
 
-  it('detects worktree changes from status and fork-point diff', () => {
+  it('detects worktree changes from status and fork-point diff', async () => {
     const context = {
       projectPath: '/project',
       worktreePath: '/worktree',
@@ -524,7 +538,7 @@ describe('execution phase helpers', () => {
       if (args[0] === 'status') return ' M src/a.ts\n';
       return '';
     });
-    expect(probeWorktreeChanges(context)).toBe('dirty');
+    await expect(probeWorktreeChanges(context)).resolves.toBe('dirty');
 
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
       if (args[0] === 'status') return '';
@@ -532,14 +546,16 @@ describe('execution phase helpers', () => {
       if (args[0] === 'diff') return 'src/a.ts\n';
       return '';
     });
-    expect(probeWorktreeChanges(context)).toBe('dirty');
+    await expect(probeWorktreeChanges(context)).resolves.toBe('dirty');
 
     mockExecFileSync.mockImplementation(() => '');
-    expect(probeWorktreeChanges(context)).toBe('clean');
-    expect(probeWorktreeChanges({ projectPath: '/project' } as PipelineContext)).toBe('clean');
-    expect(
+    await expect(probeWorktreeChanges(context)).resolves.toBe('clean');
+    await expect(
+      probeWorktreeChanges({ projectPath: '/project' } as PipelineContext),
+    ).resolves.toBe('clean');
+    await expect(
       probeWorktreeChanges({ projectPath: '/project', forkPointSha: 'base' } as PipelineContext),
-    ).toBe('clean');
+    ).resolves.toBe('clean');
 
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
       if (args[0] === 'status') return '';
@@ -547,38 +563,38 @@ describe('execution phase helpers', () => {
       if (args[0] === 'diff' && args.includes('merge-base-sha..HEAD')) return 'src/a.ts\n';
       return '';
     });
-    expect(
+    await expect(
       probeWorktreeChanges({
         projectPath: '/project',
         forkPointSha: '',
         baseBranch: 'main',
       } as PipelineContext),
-    ).toBe('dirty');
+    ).resolves.toBe('dirty');
   });
 
-  it('resolves a diff base from fork point, base branch merge-base, then previous commit', () => {
+  it('resolves a diff base from fork point, base branch merge-base, then previous commit', async () => {
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
       if (args[0] === 'rev-parse' && args[2] === 'base^{commit}') return 'base\n';
       return '';
     });
-    expect(
+    await expect(
       resolveWorktreeDiffBase({
         projectPath: '/project',
         forkPointSha: 'base',
       } as PipelineContext),
-    ).toBe('base');
+    ).resolves.toBe('base');
 
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
       if (args[0] === 'merge-base' && args[1] === 'main') return 'merge-base-sha\n';
       return '';
     });
-    expect(
+    await expect(
       resolveWorktreeDiffBase({
         projectPath: '/project',
         forkPointSha: '',
         baseBranch: 'main',
       } as PipelineContext),
-    ).toBe('merge-base-sha');
+    ).resolves.toBe('merge-base-sha');
 
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
       if (args[0] === 'rev-parse' && args[2] === 'stale^{commit}') {
@@ -588,13 +604,13 @@ describe('execution phase helpers', () => {
       if (args[0] === 'rev-parse' && args[1] === 'HEAD~1') return 'parent-sha\n';
       return '';
     });
-    expect(
+    await expect(
       resolveWorktreeDiffBase({
         projectPath: '/project',
         forkPointSha: 'stale',
         baseBranch: 'missing',
       } as PipelineContext),
-    ).toBe('parent-sha');
+    ).resolves.toBe('parent-sha');
   });
 });
 
