@@ -1,5 +1,6 @@
 import { Button } from '@shipshitdev/ui';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { useCopyFeedback } from '../hooks/useCopyFeedback';
 import { captureRendererException } from '../telemetry';
 
 interface ErrorBoundaryProps {
@@ -10,13 +11,66 @@ interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
   componentStack: string | null;
-  isCopied: boolean;
+}
+
+/**
+ * Split out of the boundary itself because the shared copy-feedback hook — and its
+ * unmount cleanup — cannot run inside a class component.
+ */
+function CopyTraceButton({ trace }: { trace: string }) {
+  const { copied, copy } = useCopyFeedback({ resetMs: 2000 });
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      onClick={() => void copy(trace)}
+      className="inline-flex items-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-400 transition-colors hover:bg-red-500/20"
+    >
+      {copied ? (
+        <>
+          <svg
+            aria-hidden="true"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Copied
+        </>
+      ) : (
+        <>
+          <svg
+            aria-hidden="true"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          Copy
+        </>
+      )}
+    </Button>
+  );
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false, error: null, componentStack: null, isCopied: false };
+    this.state = { hasError: false, error: null, componentStack: null };
   }
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
@@ -49,13 +103,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     }
     return parts.join('\n');
   }
-
-  private handleCopy = async () => {
-    const trace = this.getFullTrace();
-    await navigator.clipboard.writeText(trace);
-    this.setState({ isCopied: true });
-    setTimeout(() => this.setState({ isCopied: false }), 2000);
-  };
 
   private handleReload = () => {
     window.location.reload();
@@ -104,49 +151,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           {trace && (
             <div className="w-full overflow-hidden rounded-lg border border-red-500/20 bg-red-500/5 text-left">
               <div className="flex items-center justify-end border-b border-red-500/15 px-3 py-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={this.handleCopy}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-400 transition-colors hover:bg-red-500/20"
-                >
-                  {this.state.isCopied ? (
-                    <>
-                      <svg
-                        aria-hidden="true"
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        aria-hidden="true"
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                      </svg>
-                      Copy
-                    </>
-                  )}
-                </Button>
+                <CopyTraceButton trace={trace} />
               </div>
               <pre className="max-h-64 w-full overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-red-300 select-text">
                 {trace}
