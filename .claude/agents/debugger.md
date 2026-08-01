@@ -31,7 +31,7 @@ You investigate bugs, failures, and unexpected behavior in the ShipCode monorepo
 ## Common ShipCode failure patterns
 
 - **IPC errors too large** — main process sends full stack trace to renderer, crashes serialization. Fix: clamp to first-line + ~280 chars.
-- **`claude -p` argv breakage** — YAML with `---` in argv breaks argparser. Fix: pipe via stdin using `runClaudeWithStdin`.
+- **`claude -p` argv breakage** — YAML with `---` in argv breaks argparser. Fix: pipe via stdin using `runCliWithStdin` (`packages/agents/src/cli-stdin-runner.ts`) or `ProcessManager.spawnWithStdin`.
 - **Worktree path recomputation** — `WorktreeManager.remove` called with recomputed path instead of persisted value. Fix: use concrete stored values.
 - **Verification retry loop** — structured verification failure retries verification instead of execution. Fix: route to execute phase, preserve `testOutput`.
 - **Missing context initialization** — new `PipelineContext` field added to type but not initialized at all creation sites. Fix: grep all `PipelineContext` construction.

@@ -20,32 +20,8 @@ import type {
   IssueRevisionBadge,
   PhaseSection,
   PlanStepSummary,
-  RowTone,
 } from './types';
-import {
-  isApprovedAwaitingExecutionIssue,
-  issueMatchesColumn,
-  issueMatchesSection,
-  sectionToneFor,
-} from './utils';
-
-const SECTION_HEADER_CLASS: Record<RowTone, string> = {
-  default: 'bg-secondary text-muted-foreground',
-  success: 'bg-secondary text-muted-foreground',
-  done: 'bg-secondary text-muted-foreground',
-  agent: 'bg-secondary text-muted-foreground',
-  danger: 'bg-secondary text-muted-foreground',
-  warning: 'bg-secondary text-muted-foreground',
-};
-
-const SECTION_COUNT_CLASS: Record<RowTone, string> = {
-  default: 'border-border/60 bg-tertiary text-muted-foreground',
-  success: 'border-border/60 bg-tertiary text-muted-foreground',
-  done: 'border-border/60 bg-tertiary text-muted-foreground',
-  agent: 'border-border/60 bg-tertiary text-muted-foreground',
-  danger: 'border-border/60 bg-tertiary text-muted-foreground',
-  warning: 'border-border/60 bg-tertiary text-muted-foreground',
-};
+import { isApprovedAwaitingExecutionIssue, issueMatchesColumn, issueMatchesSection } from './utils';
 
 const EMPTY_PHASE_CHIP_MAP = new Map<string, IssuePhaseChip | null>();
 const EMPTY_REVISION_BADGE_MAP = new Map<string, IssueRevisionBadge | null>();
@@ -279,7 +255,6 @@ function SectionBlock({
   });
   const count = issues.length;
   const empty = count === 0;
-  const tone = sectionToneFor(columnKey, section.key);
 
   return (
     <div
@@ -293,7 +268,7 @@ function SectionBlock({
         className={cn(
           'sticky top-0 z-20 flex w-full items-center justify-between gap-2 border-b border-transparent px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide',
           'transition-colors',
-          compact ? 'bg-secondary text-secondary' : SECTION_HEADER_CLASS[tone],
+          compact ? 'bg-secondary text-secondary' : 'bg-secondary text-muted-foreground',
           section.droppable && isOver && 'border-accent/50 bg-tertiary text-primary',
         )}
       >
@@ -326,9 +301,7 @@ function SectionBlock({
           <span
             className={cn(
               'min-w-[18px] rounded-full border px-1.5 py-px text-center text-[10px] font-medium',
-              compact
-                ? 'border-border/60 bg-tertiary text-muted-foreground'
-                : SECTION_COUNT_CLASS[tone],
+              'border-border/60 bg-tertiary text-muted-foreground',
             )}
           >
             {count}

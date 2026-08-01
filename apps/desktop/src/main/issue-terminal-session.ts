@@ -369,34 +369,6 @@ Terminal output is available in the session transcript.`;
   };
 }
 
-export async function summarizeIssueTerminalSession(
-  queries: Queries,
-  threadId: string,
-): Promise<{ summary: string; conversationId: string }> {
-  const thread = queries.threads.getById(threadId);
-  if (!thread?.worktreePath) throw new Error(`Thread ${threadId} has no worktree path`);
-  const latestPrompt = queries.agentConversations
-    .listByThread(threadId, { phase: PHASE, role: 'prompt' })
-    .at(-1);
-  const provider = latestPrompt?.provider === 'codex-cli' ? 'codex' : 'claude';
-  const summaryPath = path.join(
-    thread.worktreePath,
-    '.shipcode',
-    'runs',
-    threadId,
-    'session-summary.md',
-  );
-  return importSessionSummary({
-    queries,
-    threadId,
-    provider,
-    summaryPath,
-    fallback: `Interactive terminal session summary is not available yet.
-Worktree: ${thread.worktreePath}
-Terminal output is available in the session transcript.`,
-  });
-}
-
 export function buildIssueTerminalGithubComment(queries: Queries, threadId: string): string {
   const thread = queries.threads.getById(threadId);
   const conversations = queries.agentConversations.listByThread(threadId, {

@@ -4,17 +4,8 @@ import {
   type IntegrationStatus,
   PINNED_MODEL_DEFAULTS,
 } from '@shipcode/shared';
-import { SettingsSection } from '@shipcode/ui';
-import {
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  SettingsRow,
-  Switch,
-} from '@shipshitdev/ui';
+import { SettingsSection, SettingsSelectRow } from '@shipcode/ui';
+import { Input, SettingsRow, Switch } from '@shipshitdev/ui';
 import { getModelOptions, PROVIDER_DISPLAY } from '../model-provider-options-data';
 
 const AUTO_COMMIT_PROVIDERS = [
@@ -86,51 +77,35 @@ export function AutoCommitSettingsSection({
             onCheckedChange={(checked: boolean) => onUpdate({ autoCommitEnabled: !!checked })}
           />
         </SettingsRow>
-        <SettingsRow
+        <SettingsSelectRow
+          id="auto-commit-provider"
           label="Provider"
-          htmlFor="auto-commit-provider"
           description="CLI or OpenRouter provider used for commit grouping and messages."
-        >
-          <Select value={provider} onValueChange={updateProvider}>
-            <SelectTrigger id="auto-commit-provider" className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {AUTO_COMMIT_PROVIDERS.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {PROVIDER_DISPLAY[option]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </SettingsRow>
-        <SettingsRow
+          value={provider}
+          options={AUTO_COMMIT_PROVIDERS.map((option) => ({
+            value: option,
+            label: PROVIDER_DISPLAY[option],
+          }))}
+          onValueChange={updateProvider}
+          triggerClassName="w-[180px]"
+        />
+        <SettingsSelectRow
+          id="auto-commit-model"
           label="Model"
-          htmlFor="auto-commit-model"
           description="Model used to group changed files and write commit messages."
-        >
-          <Select
-            value={modelSelection}
-            onValueChange={(value: string) =>
-              onUpdate({ autoCommitModel: value === '__default__' ? provider : value })
-            }
-          >
-            <SelectTrigger id="auto-commit-model" className="w-[260px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__default__">{PROVIDER_DISPLAY[provider]} default</SelectItem>
-              {!usesProviderDefault && !knownModelValues.has(settings.autoCommitModel) ? (
-                <SelectItem value={settings.autoCommitModel}>{settings.autoCommitModel}</SelectItem>
-              ) : null}
-              {modelOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </SettingsRow>
+          value={modelSelection}
+          options={[
+            { value: '__default__', label: `${PROVIDER_DISPLAY[provider]} default` },
+            ...(!usesProviderDefault && !knownModelValues.has(settings.autoCommitModel)
+              ? [{ value: settings.autoCommitModel, label: settings.autoCommitModel }]
+              : []),
+            ...modelOptions.map((option) => ({ value: option.value, label: option.label })),
+          ]}
+          onValueChange={(value) =>
+            onUpdate({ autoCommitModel: value === '__default__' ? provider : value })
+          }
+          triggerClassName="w-[260px]"
+        />
         <SettingsRow
           label="Custom model"
           htmlFor="auto-commit-custom-model"
@@ -153,26 +128,20 @@ export function AutoCommitSettingsSection({
             }}
           />
         </SettingsRow>
-        <SettingsRow
+        <SettingsSelectRow
+          id="auto-commit-mode"
           label="Mode"
-          htmlFor="auto-commit-mode"
           description="Split = LLM groups files into multiple commits by intent. Single = one commit for everything."
-        >
-          <Select
-            value={settings.autoCommitMode}
-            onValueChange={(value: string) =>
-              onUpdate({ autoCommitMode: value as AppSettings['autoCommitMode'] })
-            }
-          >
-            <SelectTrigger id="auto-commit-mode" className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="split">Split (LLM decides)</SelectItem>
-              <SelectItem value="single">Single commit</SelectItem>
-            </SelectContent>
-          </Select>
-        </SettingsRow>
+          value={settings.autoCommitMode}
+          options={[
+            { value: 'split', label: 'Split (LLM decides)' },
+            { value: 'single', label: 'Single commit' },
+          ]}
+          onValueChange={(value) =>
+            onUpdate({ autoCommitMode: value as AppSettings['autoCommitMode'] })
+          }
+          triggerClassName="w-[180px]"
+        />
       </SettingsSection>
 
       <SettingsSection title="Cleanup criteria">

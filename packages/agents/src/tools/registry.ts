@@ -37,6 +37,15 @@ const ALL_TOOLS: ReadonlyArray<Tool<unknown>> = [
 
 const BY_NAME = new Map<string, Tool<unknown>>(ALL_TOOLS.map((t) => [t.name, t]));
 
+/**
+ * Every tool name the registry knows about, regardless of phase allowlist.
+ * Used by phase harnesses' drift tests to assert that a system prompt never
+ * names a tool the phase does not actually expose.
+ */
+export function getAllToolNames(): string[] {
+  return ALL_TOOLS.map((tool) => tool.name);
+}
+
 export function getToolSchemas(allowedNames?: ReadonlySet<string>): OpenAIFunctionSchema[] {
   return ALL_TOOLS.filter((tool) => !allowedNames || allowedNames.has(tool.name)).map(
     toOpenAISchema,

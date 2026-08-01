@@ -16,7 +16,7 @@ import {
   shellExecEnv,
   summarizePromptMaterials,
 } from '@shipcode/agents';
-import { WorktreeManager } from '@shipcode/git';
+import { resolveCurrentBranch, WorktreeManager } from '@shipcode/git';
 import {
   buildTaskNodePlan,
   clampTextBlock,
@@ -30,6 +30,7 @@ import {
   PIPELINE_PHASE,
   parseUnifiedDiff,
   type ShipCodePlan,
+  shortHash,
   type TaskNodeRecord,
   VERIFICATION_FENCE_TAG,
   workspaceVerifiableCriteria,
@@ -492,7 +493,7 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
     });
 
     if (record.status === 'resolved') {
-      const sha = record.resolvedCommitSha ? ` at ${record.resolvedCommitSha.slice(0, 12)}` : '';
+      const sha = record.resolvedCommitSha ? ` at ${shortHash(record.resolvedCommitSha)}` : '';
       return `Shared test failure already resolved by ${record.resolvedByThreadId ?? 'another thread'}${sha}. Rebase or cherry-pick that fix before retrying this worktree.`;
     }
 
@@ -1579,15 +1580,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
 
     const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim();
-    let branch: string | null = null;
-    try {
-      branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd,
-        encoding: 'utf-8',
-      }).trim();
-    } catch {
-      branch = null;
-    }
+    const branch = await resolveCurrentBranch(cwd);
     context.verifiedSha = headSha;
     deps.projectFailures?.resolveOwnedByThread(threadId, headSha);
 

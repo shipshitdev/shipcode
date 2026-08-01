@@ -17,7 +17,7 @@ import { expect, test } from '../../fixtures/electron-app';
  * notification:list query result, so live-pushed records appear immediately
  * without a DB round-trip.
  *
- * Navigation: harness.callStore('openInbox') sets viewMode='inbox' which
+ * Navigation: harness.callStore('openView', 'inbox') sets viewMode='inbox' which
  * renders InboxView (lazy-loaded via Suspense).
  */
 
@@ -54,7 +54,7 @@ test.describe('inbox — live push notification row (flow 9a)', () => {
     await harness.fire('notification:fire', notification);
 
     // Navigate to inbox.
-    await harness.callStore('openInbox');
+    await harness.callStore('openView', 'inbox');
 
     // Wait for the InboxView to mount (lazy Suspense).
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
@@ -73,7 +73,7 @@ test.describe('inbox — empty state (flow 9a2)', () => {
   test('inbox shows "All caught up" when no notifications exist', async ({ harness }) => {
     const { page } = harness;
 
-    await harness.callStore('openInbox');
+    await harness.callStore('openView', 'inbox');
 
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
 
@@ -143,7 +143,7 @@ test.describe('inbox — live notification:fire push (flow 9b)', () => {
     await harness.fire('notification:fire', notification);
 
     // Navigate to inbox.
-    await harness.callStore('openInbox');
+    await harness.callStore('openView', 'inbox');
 
     // Wait for InboxView to render.
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
@@ -170,7 +170,7 @@ test.describe('inbox — live notification:fire push (flow 9b)', () => {
     };
 
     await harness.fire('notification:fire', notification);
-    await harness.callStore('openInbox');
+    await harness.callStore('openView', 'inbox');
 
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
 
@@ -241,7 +241,7 @@ test.describe('inbox — sort and filter controls (flow 9c)', () => {
       dismissedAt: null,
     });
 
-    await harness.callStore('openInbox');
+    await harness.callStore('openView', 'inbox');
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
 
     // Both rows should appear somewhere in the table.
@@ -278,7 +278,7 @@ test.describe('inbox — sort and filter controls (flow 9c)', () => {
       dismissedAt: null,
     });
 
-    await harness.callStore('openInbox');
+    await harness.callStore('openView', 'inbox');
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
 
     // Wait for rows to appear before filtering.
@@ -329,7 +329,7 @@ test.describe('inbox — sort and filter controls (flow 9c)', () => {
       dismissedAt: null,
     });
 
-    await harness.callStore('openInbox');
+    await harness.callStore('openView', 'inbox');
     await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
 
     // The sort button starts as "Newest" — click to switch to Oldest.

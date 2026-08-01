@@ -16,6 +16,7 @@ import {
   getCapabilitySupportedReasoningEfforts,
   getSupportedReasoningEfforts,
   resolveProviderReasoningEffort,
+  shortHash,
 } from '@shipcode/shared';
 import { CollapsibleSection, TaskGraphViewer } from '@shipcode/ui';
 import {
@@ -685,7 +686,7 @@ function usePipelineTabView({
                   <div className="text-[12px] font-medium text-primary">{checkpoint.label}</div>
                   <div className="truncate text-[11px] text-muted-foreground">
                     {checkpoint.branch ? `${checkpoint.branch} · ` : ''}
-                    {checkpoint.commitSha.slice(0, 12)} · {formatTimestamp(checkpoint.createdAt)}
+                    {shortHash(checkpoint.commitSha)} · {formatTimestamp(checkpoint.createdAt)}
                   </div>
                 </div>
                 <Button

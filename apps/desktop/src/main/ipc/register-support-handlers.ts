@@ -1,7 +1,5 @@
-import { exec } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import type { TerminalEvent } from '@shipcode/agents';
 import {
   ClaudeNormalizer,
@@ -13,7 +11,6 @@ import {
   generateMemoryFiles,
   inspectRepoMemory,
   readMemoryFile,
-  shellExecEnv,
 } from '@shipcode/agents';
 import {
   type AgentType,
@@ -24,6 +21,7 @@ import {
   providerDisplay,
   type ReasoningEffort,
 } from '@shipcode/shared';
+import { execAsync } from '@shipcode/shared/exec-async';
 import log, { logProcessOutput } from '../logger.service';
 import { assertPrdRewriteModelSupported, resolvePrdRewriteContext } from './helpers';
 import {
@@ -34,25 +32,9 @@ import {
 } from './prd-attachments';
 import type { IpcHandlerDeps } from './types';
 
-const execAsync = promisify(exec);
-
 function supportHandlerError(err: unknown, fallback: string): string {
   if (err instanceof Error || typeof err === 'string') return clampError(err);
   return fallback;
-}
-
-function parseOnboardingRepoList(stdout: string): { id: string; name: string; private: boolean }[] {
-  const seen = new Set<string>();
-  const repos: { id: string; name: string; private: boolean }[] = [];
-  for (const line of stdout.trim().split('\n').filter(Boolean)) {
-    const parsed = JSON.parse(line) as { id?: string; name?: string; private?: boolean };
-    const name = parsed.name?.trim();
-    const id = parsed.id?.trim();
-    if (!id || !name || seen.has(name)) continue;
-    seen.add(name);
-    repos.push({ id, name, private: !!parsed.private });
-  }
-  return repos.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function registerSupportHandlers({
@@ -77,19 +59,6 @@ export function registerSupportHandlers({
   ipcMain.handle('onboarding:check-auth', async () => {
     const [health, ghAuth] = await Promise.all([checkSystemHealthWithAuth(), checkGhAuth()]);
     return { ...health, ghAuth };
-  });
-
-  ipcMain.handle('onboarding:list-repos', async () => {
-    try {
-      const { stdout } = await execAsync(
-        "gh api 'user/repos?per_page=100&affiliation=owner,collaborator,organization_member' --paginate --jq '.[] | {id: .node_id, name: .full_name, private: .private} | @json'",
-        { timeout: 20_000, env: shellExecEnv() },
-      );
-
-      return parseOnboardingRepoList(stdout);
-    } catch (err) {
-      throw new Error(supportHandlerError(err, 'Repository lookup failed'));
-    }
   });
 
   ipcMain.handle(
