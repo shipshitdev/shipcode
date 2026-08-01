@@ -1,16 +1,6 @@
 import { type AppSettings, DEFAULT_SETTINGS, type TelemetryStatus } from '@shipcode/shared';
-import { SettingsSection } from '@shipcode/ui';
-import {
-  Button,
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  SettingsRow,
-  Switch,
-} from '@shipshitdev/ui';
+import { SettingsSection, SettingsSelectRow } from '@shipcode/ui';
+import { Button, Input, SettingsRow, Switch } from '@shipshitdev/ui';
 
 export function GeneralSettingsSection({
   settings,
@@ -35,66 +25,48 @@ export function GeneralSettingsSection({
       <h3 className="mb-5">General</h3>
 
       <SettingsSection title="Appearance">
-        <SettingsRow
+        <SettingsSelectRow
+          id="theme"
           label="Theme"
-          htmlFor="theme"
           description="Follow the system appearance or force ShipCode into light or dark mode."
-        >
-          <Select
-            value={settings.theme}
-            onValueChange={(value) => onUpdate({ theme: value as AppSettings['theme'] })}
-          >
-            <SelectTrigger id="theme" className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="system">System</SelectItem>
-              <SelectItem value="dark">Dark</SelectItem>
-              <SelectItem value="light">Light</SelectItem>
-            </SelectContent>
-          </Select>
-        </SettingsRow>
-        <SettingsRow
+          value={settings.theme}
+          options={[
+            { value: 'system', label: 'System' },
+            { value: 'dark', label: 'Dark' },
+            { value: 'light', label: 'Light' },
+          ]}
+          onValueChange={(value) => onUpdate({ theme: value as AppSettings['theme'] })}
+          triggerClassName="w-[180px]"
+        />
+        <SettingsSelectRow
+          id="font-style"
           label="Font style"
-          htmlFor="font-style"
           description="Switch the main app typeface without affecting code or terminal monospace text."
-        >
-          <Select
-            value={settings.fontStyle}
-            onValueChange={(value) => onUpdate({ fontStyle: value as AppSettings['fontStyle'] })}
-          >
-            <SelectTrigger id="font-style" className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="dm-sans">DM Sans</SelectItem>
-              <SelectItem value="system">System UI</SelectItem>
-              <SelectItem value="serif">Editorial Serif</SelectItem>
-            </SelectContent>
-          </Select>
-        </SettingsRow>
-        <SettingsRow
+          value={settings.fontStyle}
+          options={[
+            { value: 'dm-sans', label: 'DM Sans' },
+            { value: 'system', label: 'System UI' },
+            { value: 'serif', label: 'Editorial Serif' },
+          ]}
+          onValueChange={(value) => onUpdate({ fontStyle: value as AppSettings['fontStyle'] })}
+          triggerClassName="w-[180px]"
+        />
+        <SettingsSelectRow
+          id="font-size"
           label="Font size"
-          htmlFor="font-size"
           description="Adjust the base UI text size across the desktop app."
-        >
-          <Select
-            value={String(settings.fontSize)}
-            onValueChange={(value) =>
-              onUpdate({ fontSize: Number(value) as AppSettings['fontSize'] })
-            }
-          >
-            <SelectTrigger id="font-size" className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="12">Small</SelectItem>
-              <SelectItem value="13">Default</SelectItem>
-              <SelectItem value="14">Large</SelectItem>
-              <SelectItem value="15">Extra large</SelectItem>
-            </SelectContent>
-          </Select>
-        </SettingsRow>
+          value={String(settings.fontSize)}
+          options={[
+            { value: '12', label: 'Small' },
+            { value: '13', label: 'Default' },
+            { value: '14', label: 'Large' },
+            { value: '15', label: 'Extra large' },
+          ]}
+          onValueChange={(value) =>
+            onUpdate({ fontSize: Number(value) as AppSettings['fontSize'] })
+          }
+          triggerClassName="w-[180px]"
+        />
       </SettingsSection>
 
       <SettingsSection title="Startup">

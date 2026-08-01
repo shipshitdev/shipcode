@@ -31,6 +31,7 @@ import {
   MAX_DUPLICATE_TOOL_CALLS,
   MAX_EXECUTE_TOTAL_TOKENS,
   MAX_TOOL_CALL_ITERATIONS,
+  SHELL_ALLOWLIST,
 } from '@shipcode/shared';
 import { assertWorkspaceSafe } from '@shipcode/shared/worktree-path';
 import type { TerminalEvent } from '../terminal-events';
@@ -43,21 +44,72 @@ import { normalizeOpenRouterReasoningEffort } from './reasoning';
 import type { ProviderRequest, ProviderResponse } from './types';
 
 /**
- * System prompt for the tool-call execute loop. Deliberately terse —
- * the user prompt (from pipeline.ts startExecution) already carries
- * the plan JSON and instructions.
+ * Tools this phase exposes. Mirrors the Edit/Write/Bash/Glob/Grep/Read set
+ * the claude and codex execute paths get via `PHASE_TOOL_POLICIES.execute` —
+ * `shell` is the read-only stand-in for Bash, backed by the strict execFile
+ * allowlist in tools/shell-readonly.ts (git read-only subcommands, ls, tree).
+ *
+ * This set is the single source of truth: `EXECUTE_SYSTEM_PROMPT` is derived
+ * from it, so the prompt cannot advertise a tool the harness would reject.
+ * Exported for the drift test in openrouter-execute.test.ts.
  */
-const EXECUTE_SYSTEM_PROMPT =
-  `You are ShipCode's autonomous execution agent. Implement the approved plan by calling the provided tools.
+export const OPENROUTER_EXECUTE_TOOLS: ReadonlySet<string> = new Set([
+  'edit',
+  'write',
+  'read',
+  'glob',
+  'grep',
+  'shell',
+]);
+
+/**
+ * One line per tool, keyed by registry tool name. Only entries whose tool is
+ * actually in OPENROUTER_EXECUTE_TOOLS are emitted; anything absent from this
+ * map falls back to pointing at the tool's own schema description.
+ *
+ * Keep each line honest about what the tool can ACTUALLY do. The previous
+ * prose advertised `shell` for "tests, typecheck" — neither is reachable
+ * (SHELL_ALLOWLIST excludes every interpreter and package manager), which
+ * invited the model to narrate command output it never obtained.
+ */
+const EXECUTE_TOOL_GUIDANCE: Record<string, string> = {
+  edit: 'apply a targeted change to an existing file',
+  write: 'create a file or replace its entire contents',
+  read: 'read a file before you change it',
+  glob: 'locate files by path pattern',
+  grep: 'search file contents',
+  shell:
+    `run ONE allowlisted command to inspect the worktree. Only these binaries exist: ${SHELL_ALLOWLIST.join(', ')} — ` +
+    'git is restricted to non-mutating subcommands (push/commit/reset/checkout are rejected), and there is no way to ' +
+    'run test runners, typecheckers, interpreters, or package managers from here. Test and typecheck runs belong to ' +
+    'the VERIFY phase, which happens after execute',
+};
+
+/**
+ * Build the execute system prompt from the phase's tool allowlist.
+ *
+ * Deliberately terse — the user prompt (from pipeline.ts startExecution)
+ * already carries the plan JSON and instructions.
+ */
+function buildExecuteSystemPrompt(allowed: ReadonlySet<string>): string {
+  const toolLines = [...allowed].map(
+    (name) => `- ${name}: ${EXECUTE_TOOL_GUIDANCE[name] ?? 'see the tool schema for usage'}`,
+  );
+
+  return `You are ShipCode's autonomous execution agent. Implement the approved plan by calling the provided tools.
+
+These are the ONLY tools that exist this phase. Calling anything else is rejected outright:
+${toolLines.join('\n')}
 
 Rules:
 - Only modify files necessary for the plan. Do not make unrelated refactors.
-- Use edit/write to change files, read/glob/grep to navigate, shell for read-only checks (tests, typecheck, git status, git diff).
-- Never call git push, reset, checkout, commit, or any mutating subcommand — those are blocked.
+- Never state the result of a command you did not actually run. If a check you want is not in the list above, say it was not available instead of describing what it would have printed.
 - When done, emit a final short assistant message confirming what you changed. Do not call any more tools after that.
 - If the plan cannot be completed with the available tools, explain why and stop.`.trim();
+}
 
-const OPENROUTER_EXECUTE_TOOLS = new Set(['edit', 'write', 'read', 'glob', 'grep']);
+/** Exported for the prompt/allowlist drift test. */
+export const EXECUTE_SYSTEM_PROMPT = buildExecuteSystemPrompt(OPENROUTER_EXECUTE_TOOLS);
 
 export interface ExecuteDeps {
   client: OpenRouterClient;

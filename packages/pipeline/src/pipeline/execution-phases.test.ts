@@ -615,7 +615,6 @@ describe('execution phase handlers', () => {
     mockShellExecEnv.mockReset();
     mockShellExecEnv.mockImplementation(() => ({ ...process.env, PATH: process.env.PATH ?? '' }));
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'rev-parse') return 'head-sha\n';
       if (args[0] === 'status') return ' M src/a.ts\n';
       return '';
@@ -848,7 +847,6 @@ describe('execution phase handlers', () => {
     const context = makeContext({ autonomous: false, worktreePath: process.cwd() });
     const harness = makeExecutionHarness(context);
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'rev-parse') return 'head-sha\n';
       return '';
     });
@@ -1013,7 +1011,6 @@ describe('execution phase handlers', () => {
       .mockResolvedValueOnce({ rawOutput: 'done', exitCode: 0 })
       .mockResolvedValueOnce({ rawOutput: 'not verification json', exitCode: 0 });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'rev-parse') return 'anchor-sha\n';
       if (args[0] === 'status') return '';
       if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
@@ -1072,7 +1069,6 @@ describe('execution phase handlers', () => {
     });
     let headCalls = 0;
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'rev-parse') {
         headCalls++;
         if (headCalls === 1) return 'head-sha\n';
@@ -1130,7 +1126,6 @@ describe('execution phase handlers', () => {
       exitCode: 0,
     });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'rev-parse') return 'head-sha\n';
       if (args[0] === 'status') return '';
       if (args[0] === 'diff') throw new Error('diff failed');
@@ -1180,7 +1175,6 @@ describe('execution phase handlers', () => {
       return { rawOutput: 'done', exitCode: 0 };
     });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'rev-parse') return 'head-sha\n';
       if (args[0] === 'status') return '';
       if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
@@ -1240,7 +1234,6 @@ describe('execution phase handlers', () => {
       return { rawOutput: 'done', exitCode: 0 };
     });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'rev-parse') return 'head-sha\n';
       if (args[0] === 'status') return '';
       if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
@@ -1293,7 +1286,6 @@ describe('execution phase handlers', () => {
       return { rawOutput: verificationFailed, exitCode: 0 };
     });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'rev-parse') return 'anchor-sha\n';
       if (args[0] === 'status') return '';
       if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
@@ -1385,7 +1377,6 @@ describe('execution phase handlers', () => {
       .mockResolvedValueOnce({ rawOutput: 'done', exitCode: 0 })
       .mockResolvedValueOnce({ rawOutput: verificationPassed, exitCode: 0 });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'rev-parse') return 'anchor-sha\n';
       if (args[0] === 'status') return '';
       if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
@@ -1455,7 +1446,6 @@ describe('execution phase handlers', () => {
       .mockResolvedValueOnce({ rawOutput: 'done', exitCode: 0 })
       .mockResolvedValueOnce({ rawOutput: verificationPassed, exitCode: 0 });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'rev-parse') return 'anchor-sha\n';
       if (args[0] === 'status') return '';
       if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
@@ -1534,7 +1524,6 @@ describe('execution phase handlers', () => {
 
     let diffCalls = 0;
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'rev-parse' && args[1] === 'HEAD') return 'head-sha\n';
       if (args[0] === 'rev-parse' && args[1] === '--verify') return 'base-sha\n';
       if (args[0] === 'status') return '';
@@ -1597,7 +1586,6 @@ describe('execution phase handlers', () => {
       .mockResolvedValueOnce({ rawOutput: 'done', exitCode: 0 })
       .mockResolvedValueOnce({ rawOutput: verificationFailed, exitCode: 0 });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'rev-parse') return 'anchor-sha\n';
       if (args[0] === 'status') return '';
       if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
@@ -2170,7 +2158,6 @@ describe('execution phase handlers', () => {
       unresolvedReviewComments: [],
     });
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'pr' && args[1] === 'list') {
         return JSON.stringify([
           { number: 17, url: 'https://github.com/acme/repo/pull/17', isDraft: true },
@@ -2204,7 +2191,6 @@ describe('execution phase handlers', () => {
       harness.deps as never as { threads: { setGithubPr: ReturnType<typeof vi.fn> } }
     ).threads.setGithubPr = vi.fn();
     mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return 'shipcode/issue-42\n';
       if (args[0] === 'pr' && args[1] === 'list') {
         return JSON.stringify([
           { number: 17, url: 'https://github.com/acme/repo/pull/17', isDraft: true },

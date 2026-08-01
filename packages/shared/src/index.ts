@@ -33,6 +33,7 @@ export * from './reasoning-effort';
 export * from './retry-action';
 export * from './schemas';
 export * from './shipcode-run-contract';
+export * from './short-hash';
 export * from './skills-types';
 export * from './sqlite-time';
 export * from './staleness';
@@ -42,5 +43,7 @@ export * from './triage-rules';
 export * from './truncate';
 export * from './types';
 export * from './unified-diff';
-// worktree-path uses node:path — import directly from '@shipcode/shared/worktree-path'
-// to avoid Vite externalization warnings in renderer code.
+// worktree-path uses node:path and exec-async uses node:child_process — import
+// those directly from '@shipcode/shared/worktree-path' and
+// '@shipcode/shared/exec-async' to avoid Vite externalization warnings in
+// renderer code.

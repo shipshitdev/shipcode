@@ -91,8 +91,7 @@ function useOverviewView() {
   const setGithubIssues = useAppStore((s) => s.setGithubIssues);
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const openTerminal = useAppStore((s) => s.openTerminal);
-  const openActivity = useAppStore((s) => s.openActivity);
-  const openInbox = useAppStore((s) => s.openInbox);
+  const openView = useAppStore((s) => s.openView);
 
   const AGENT_CARD_LIMIT = 4;
   const PAGE_SIZE = 5;
@@ -191,7 +190,7 @@ function useOverviewView() {
                   | 'agent'
                   | 'default',
                 icon: <ListTodo size={18} />,
-                onClick: openInbox,
+                onClick: () => openView('inbox'),
               },
               {
                 label: 'Pending Approvals',
@@ -203,7 +202,7 @@ function useOverviewView() {
                   | 'danger'
                   | 'default',
                 icon: <Bell size={18} />,
-                onClick: openInbox,
+                onClick: () => openView('inbox'),
               },
               {
                 label: 'Shipped (7d)',
@@ -211,7 +210,7 @@ function useOverviewView() {
                 subtitle: stats ? `${stats.failedLast7d} failed` : '—',
                 tone: 'success' as const,
                 icon: <PackageCheck size={18} />,
-                onClick: openActivity,
+                onClick: () => openView('activity'),
               },
             ].map((card) => (
               <div key={card.label} className="flex-1 min-w-0">
@@ -391,7 +390,7 @@ function useOverviewView() {
                 <Button
                   variant="ghost"
                   size="xs"
-                  onClick={openActivity}
+                  onClick={() => openView('activity')}
                   className="h-auto px-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent capitalize"
                 >
                   View all →
@@ -470,7 +469,7 @@ function useOverviewView() {
                 <Button
                   variant="ghost"
                   size="xs"
-                  onClick={openInbox}
+                  onClick={() => openView('inbox')}
                   className="h-auto px-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent capitalize"
                 >
                   View all →

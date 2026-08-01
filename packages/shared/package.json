@@ -13,6 +13,10 @@
     "./worktree-path": {
       "types": "./dist/worktree-path.d.ts",
       "import": "./dist/worktree-path.js"
+    },
+    "./exec-async": {
+      "types": "./dist/exec-async.d.ts",
+      "import": "./dist/exec-async.js"
     }
   },
   "scripts": {

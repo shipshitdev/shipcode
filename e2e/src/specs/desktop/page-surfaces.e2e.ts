@@ -54,7 +54,7 @@ const ISSUE_THREAD_ID = 'e2e-surface-thread';
 const DESKTOP_VIEW_SURFACES = [
   {
     id: 'desktop-overview',
-    action: 'openOverview',
+    mode: 'overview',
     assert: async (page: Page) => {
       await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible({
         timeout: 15_000,
@@ -63,7 +63,7 @@ const DESKTOP_VIEW_SURFACES = [
   },
   {
     id: 'desktop-activity',
-    action: 'openActivity',
+    mode: 'activity',
     assert: async (page: Page) => {
       await expect(page.getByRole('heading', { name: 'Activity', exact: true })).toBeVisible({
         timeout: 15_000,
@@ -72,14 +72,14 @@ const DESKTOP_VIEW_SURFACES = [
   },
   {
     id: 'desktop-inbox',
-    action: 'openInbox',
+    mode: 'inbox',
     assert: async (page: Page) => {
       await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
     },
   },
   {
     id: 'desktop-costs',
-    action: 'openCosts',
+    mode: 'costs',
     assert: async (page: Page) => {
       await expect(page.getByRole('heading', { name: 'Costs', exact: true })).toBeVisible({
         timeout: 15_000,
@@ -88,7 +88,7 @@ const DESKTOP_VIEW_SURFACES = [
   },
   {
     id: 'desktop-skills',
-    action: 'openSkills',
+    mode: 'skills',
     assert: async (page: Page) => {
       await expect(page.getByRole('heading', { name: 'Skills', exact: true })).toBeVisible({
         timeout: 15_000,
@@ -97,7 +97,7 @@ const DESKTOP_VIEW_SURFACES = [
   },
   {
     id: 'desktop-automations',
-    action: 'openAutomations',
+    mode: 'automations',
     assert: async (page: Page) => {
       await expect(page.getByRole('heading', { name: 'Automations', exact: true })).toBeVisible({
         timeout: 15_000,
@@ -255,7 +255,7 @@ test.describe('desktop page coverage manifest', () => {
     );
 
     for (const surface of DESKTOP_VIEW_SURFACES) {
-      await harness.callStore(surface.action);
+      await harness.callStore('openView', surface.mode);
       await surface.assert(harness.page);
     }
   });
