@@ -1,14 +1,6 @@
 import type { AppSettings, DeveloperInfo } from '@shipcode/shared';
-import { SettingsSection } from '@shipcode/ui';
-import {
-  Button,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  SettingsRow,
-} from '@shipshitdev/ui';
+import { SettingsSection, SettingsSelectRow } from '@shipcode/ui';
+import { Button, SettingsRow } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Check, Copy, FolderOpen, Terminal } from 'lucide-react';
 import { useState } from 'react';
@@ -121,23 +113,20 @@ export function DeveloperSettingsSection({
             Open in Finder
           </Button>
         </SettingsRow>
-        <SettingsRow
+        <SettingsSelectRow
+          id="dev-log-level"
           label="File log level"
-          htmlFor="dev-log-level"
           description="Changes what severity gets written to the log file. Takes effect immediately."
-        >
-          <Select value={settings.devLogLevel} onValueChange={handleLogLevelChange}>
-            <SelectTrigger id="dev-log-level" className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="error">Error</SelectItem>
-              <SelectItem value="warn">Warn</SelectItem>
-              <SelectItem value="info">Info</SelectItem>
-              <SelectItem value="debug">Debug</SelectItem>
-            </SelectContent>
-          </Select>
-        </SettingsRow>
+          value={settings.devLogLevel}
+          options={[
+            { value: 'error', label: 'Error' },
+            { value: 'warn', label: 'Warn' },
+            { value: 'info', label: 'Info' },
+            { value: 'debug', label: 'Debug' },
+          ]}
+          onValueChange={handleLogLevelChange}
+          triggerClassName="w-[180px]"
+        />
       </SettingsSection>
     </>
   );
