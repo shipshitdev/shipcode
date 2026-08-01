@@ -34,6 +34,7 @@ class BrowserWindowMock extends EventEmitter {
   isMinimized = vi.fn(() => false);
   isVisible = vi.fn(() => true);
   webContents = Object.assign(new EventEmitter(), {
+    isDestroyed: vi.fn(() => false),
     send: vi.fn(),
     openDevTools: vi.fn(),
     session: {

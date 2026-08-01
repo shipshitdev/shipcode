@@ -23,6 +23,7 @@ import {
 } from './ipc/helpers';
 import type { IpcHandlerDeps } from './ipc/types';
 import log from './logger.service';
+import { safeSend } from './safe-send';
 
 export interface PipelineSchedulerDeps {
   queries: IpcHandlerDeps['queries'];
@@ -576,15 +577,12 @@ export class PipelineScheduler {
 
   private _sendIssuesUpdated(projectId: string): void {
     try {
-      const win = this.deps.getMainWindow();
-      if (!win.isDestroyed()) {
-        win.webContents.send('github:issues-updated', {
-          projectId,
-          issues: this.deps.queries.githubIssues.list(projectId),
-        });
-      }
+      safeSend(this.deps.getMainWindow(), 'github:issues-updated', {
+        projectId,
+        issues: this.deps.queries.githubIssues.list(projectId),
+      });
     } catch {
-      /* window destroyed */
+      /* getMainWindow() throws when there is no window at all */
     }
   }
 

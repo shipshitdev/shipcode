@@ -68,6 +68,18 @@ Edit those files, then run: bash scripts/sync-agent-memory.sh
 ---
 ### ipc-errors.md
 
+## One guarded path from main to renderer (hard rule)
+
+**Rule:** no `webContents.send` outside `apps/desktop/src/main/safe-send.ts`. Main-process events go through `safeSend(window, channel, payload)`, which returns a boolean and never throws.
+
+**Why:** a raw send throws once the window or its `webContents` is destroyed, and that throw escapes the IPC handler that produced it — so a GitHub write that already succeeded is reported to the caller as a failure while the remote state has in fact changed. Renderer notification is best-effort: if nobody is listening, dropping it is correct, not an error.
+
+**How to apply:**
+- Both the `isDestroyed` guard and the `try/catch` are required. The guard can never be atomic with the send, and dev-mode HMR leaves disposed render frames behind.
+- Use the exported `canSendToRenderer` type predicate only to skip work that exists purely to build a payload (a DB read, a git call) — not before a plain send, which `safeSend` already guards.
+- A guard that protects more than the send (window `restore`/`focus`, feeding a normalizer) stays as an early return, with a comment saying what else it covers.
+- Test window mocks must stub `webContents.isDestroyed`, not just `webContents.send`.
+
 **Rule:** Clamp all IPC error messages to first-line + ~280 chars before sending to renderer. Log the full stack trace to the main-process console only.
 
 **Why:** Unclamped stderr from agent processes produces red walls of text in the renderer (e.g. CreatePRDModal incident). The renderer has no scrollable error surface — it renders inline. A 5000-char stack trace in a modal is unusable.
@@ -185,6 +197,14 @@ workspace by its Git linked-worktree registration, never by re-deriving the pare
 - Enumerate worktrees with `WorktreeManager.list()` (parses `git worktree list --porcelain`, filters by `shipcode/*` branch prefix) — don't glob the filesystem or substring-match the current `worktreeRoot`.
 - New worktree operations follow the same pattern: concrete values in the API, derive-once at creation, persist.
 - When deleting a project: iterate its threads via DB query, `remove(thread.worktreePath, thread.worktreeBranch)` for each, **then** delete the project row.
+
+## Never `git stash` from a worktree (dev workflow, hard rule)
+
+`refs/stash` is a **single repo-global ref shared by every worktree**, not per-worktree state. A `git stash push` in `.claude/worktrees/<name>` lands on the same stack the main checkout and every other worktree use, and a later `git stash pop` there takes whatever is on top — which may be another session's work, applied into the wrong tree while yours stays buried.
+
+**Instead:** `git diff > /tmp/x.patch` to snapshot, or read a clean tree with `git show <ref>:<path>`.
+
+**Recovery if it already happened:** stash commits survive as dangling objects. `git fsck --unreachable | grep commit`, match on `git log -1 --format=%s <sha>`, then `git restore --source=<sha> -- <paths>` for tracked files and `--source=<sha>^3` for the untracked ones the stash carried.
 
 ---
 ### Read on demand (low-priority — open the file when the topic comes up)

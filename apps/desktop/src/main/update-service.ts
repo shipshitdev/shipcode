@@ -1,6 +1,7 @@
 import { fetchWithTimeout, type UpdateStatus } from '@shipcode/shared';
 import { app, type BrowserWindow } from 'electron';
 import log from './logger.service';
+import { safeSend } from './safe-send';
 
 const RELEASES_API_URL = 'https://api.github.com/repos/shipshitdev/shipcode/releases/latest';
 const POLL_INTERVAL_MS = 30 * 60_000; // 30 min
@@ -184,11 +185,6 @@ export class UpdateService {
 
   private update(patch: Partial<UpdateStatus>): void {
     this.status = { ...this.status, ...patch };
-    if (this.mainWindow.isDestroyed() || this.mainWindow.webContents.isDestroyed()) return;
-    try {
-      this.mainWindow.webContents.send('update:status-changed', this.status);
-    } catch {
-      // window destroyed mid-send
-    }
+    safeSend(this.mainWindow, 'update:status-changed', this.status);
   }
 }

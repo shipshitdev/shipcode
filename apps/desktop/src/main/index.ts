@@ -132,11 +132,12 @@ import { registerIpcHandlers } from './ipc';
 import { transitionThreadPhase } from './ipc/helpers';
 import { notifyIssueGraphPipelinePhaseChange } from './ipc/register-issue-graph-handlers';
 import { applyLaunchAtLoginSetting } from './launch-at-login';
-import { NotificationService } from './notification-service';
 import { NotificationCredentialStore } from './notification-credential-store';
+import { NotificationService } from './notification-service';
 import { createElectronEmitter } from './pipeline-bridge';
 import { PipelineScheduler } from './pipeline-scheduler';
 import { ResourceMonitor } from './resource-monitor';
+import { safeSend } from './safe-send';
 import { SplashScreen } from './splash-screen';
 import { UpdateService } from './update-service';
 import { WorkflowWatchManager } from './workflow-watch-manager';
@@ -419,7 +420,7 @@ function createWindow() {
       } else {
         log.warn(`[workflow-watch] reload failed: ${event.warning?.message ?? 'unknown error'}`);
       }
-      mainWindow?.webContents.send('workflow:reloaded', {
+      safeSend(mainWindow, 'workflow:reloaded', {
         path: event.path,
         ok: event.ok,
         warning: event.warning?.message ?? null,
@@ -466,9 +467,7 @@ function createWindow() {
       },
       interruptedRun?.id ?? thread.currentRunId ?? null,
     );
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('terminal:event', record);
-    }
+    safeSend(mainWindow, 'terminal:event', record);
     transitionThreadPhase(
       requireMainWindow(),
       queries,
