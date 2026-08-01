@@ -58,6 +58,7 @@ Where things live:
 - **Do not use `claude -p` for interactive terminal mode.** Interactive mode launches the real terminal CLI, wraps raw output in our own terminal events, and uses process exit as completion. See: `interactive-cli-run-modes.md`.
 - **`WorktreeManager.remove(path, branch)` takes concrete values** — never recompute from `threadId`. See: `worktrees.md`.
 - **Clamp IPC errors** to first-line + ~280 chars; log full trace to main-process console only. See: `ipc-errors.md`.
+- **Never compare a timestamp column against `datetime('now', ...)`.** Columns are written with `ISO_NOW_SQL` (`...THH:MM:SS.sssZ`); `datetime()` returns the naive space-separated shape. SQLite compares them as strings, and `'T'` (0x54) > `' '` (0x20) at index 10, so same-calendar-day comparisons are always false. Build the cutoff in JS and bind `new Date(...).toISOString()`. See the docblock in `packages/shared/src/sqlite-time.ts`.
 
 ## References
 
