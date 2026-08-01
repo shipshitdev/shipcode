@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@shipshitdev/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import {
   ChevronDown,
@@ -102,7 +102,24 @@ function getFileIcon(name: string): LucideIcon {
 
 const EMPTY_WORKTREES: GitWorktreeSummary[] = [];
 
+const CODE_TREE_STALE_TIME = 10_000;
+
 type ViewMode = 'source' | 'diff';
+
+/**
+ * The open file, tagged with the worktree it was resolved against. Keeping the
+ * two together is what makes a stale selection detectable after the worktree
+ * changes underneath it.
+ */
+interface CodeSelection {
+  worktreePath: string;
+  relativePath: string;
+}
+
+function parentDirOf(relativePath: string): string {
+  const lastSlash = relativePath.lastIndexOf('/');
+  return lastSlash === -1 ? '' : relativePath.slice(0, lastSlash);
+}
 
 interface TreeNodeProps {
   projectId: string;
@@ -134,7 +151,7 @@ function TreeNode({
         relativePath: entry.relativePath,
       }),
     enabled: isDir && expanded,
-    staleTime: 10_000,
+    staleTime: CODE_TREE_STALE_TIME,
   });
 
   return (
@@ -334,8 +351,9 @@ function FileViewer({
 
 export function CodeBrowser() {
   const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const queryClient = useQueryClient();
   const [selectedWorktreePath, setSelectedWorktreePath] = useState<string | null>(null);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [selection, setSelection] = useState<CodeSelection | null>(null);
 
   const { data, isLoading: worktreesLoading } = useQuery<GitVisualizerData>({
     queryKey: ['git-visualizer-data', activeProjectId],
@@ -363,6 +381,52 @@ export function CodeBrowser() {
     [worktrees, selectedWorktreePath],
   );
 
+  // Never render a selection that belongs to a different worktree: its contents
+  // would come from a tree the user never picked it in. A carried-over
+  // selection stays hidden until the effect below re-validates it.
+  const selectedPath =
+    selection && selection.worktreePath === selectedWorktreePath ? selection.relativePath : null;
+
+  // Single reconciliation point for *every* worktree change — the automatic
+  // fallback above and the manual picker both land here, so the two paths
+  // cannot drift apart again. The open file survives the switch only when the
+  // exact same path exists in the new worktree; otherwise it is dropped rather
+  // than silently re-resolved against a tree it never came from.
+  useEffect(() => {
+    if (!activeProjectId || !selectedWorktreePath) return;
+    if (!selection || selection.worktreePath === selectedWorktreePath) return;
+
+    const worktreePath = selectedWorktreePath;
+    const { relativePath } = selection;
+    const parentPath = parentDirOf(relativePath);
+    let cancelled = false;
+
+    void queryClient
+      .fetchQuery<CodeTreeEntry[]>({
+        queryKey: ['code-tree', activeProjectId, worktreePath, parentPath],
+        queryFn: () =>
+          window.shipcode.invoke('code:list-tree', {
+            projectId: activeProjectId,
+            worktreePath,
+            relativePath: parentPath,
+          }),
+        staleTime: CODE_TREE_STALE_TIME,
+      })
+      .then(
+        (entries) => entries.some((e) => e.type === 'file' && e.relativePath === relativePath),
+        // Parent directory missing in the new worktree — nothing to keep.
+        () => false,
+      )
+      .then((exists) => {
+        if (cancelled) return;
+        setSelection(exists ? { worktreePath, relativePath } : null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectId, queryClient, selectedWorktreePath, selection]);
+
   const { data: rootEntries, isLoading: treeLoading } = useQuery<CodeTreeEntry[]>({
     queryKey: ['code-tree', activeProjectId, selectedWorktreePath, ''],
     queryFn: () =>
@@ -371,7 +435,7 @@ export function CodeBrowser() {
         worktreePath: selectedWorktreePath ?? '',
       }),
     enabled: !!activeProjectId && !!selectedWorktreePath,
-    staleTime: 10_000,
+    staleTime: CODE_TREE_STALE_TIME,
   });
 
   if (!activeProjectId) {
@@ -396,10 +460,7 @@ export function CodeBrowser() {
           ) : (
             <Select
               value={selectedWorktreePath ?? ''}
-              onValueChange={(value) => {
-                setSelectedWorktreePath(value || null);
-                setSelectedPath(null);
-              }}
+              onValueChange={(value) => setSelectedWorktreePath(value || null)}
             >
               <SelectTrigger className="h-7 w-full text-xs">
                 <SelectValue />
@@ -441,7 +502,12 @@ export function CodeBrowser() {
                 entry={entry}
                 depth={0}
                 selectedPath={selectedPath}
-                onSelect={(e) => setSelectedPath(e.relativePath)}
+                onSelect={(e) =>
+                  setSelection({
+                    worktreePath: selectedWorktreePath,
+                    relativePath: e.relativePath,
+                  })
+                }
               />
             ))}
         </div>
