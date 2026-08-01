@@ -4,37 +4,41 @@ import type { DeveloperInfo } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeveloperSettingsSection } from './DeveloperSettingsSection';
 
-vi.mock('@shipshitdev/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shipshitdev/ui')>();
+vi.mock('@shipcode/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/ui')>();
+  const selectValues = ['error', 'warn', 'info', 'debug'];
 
   return {
     ...actual,
-    Select: ({
-      children,
+    SettingsSelectRow: ({
+      label,
+      description,
+      options,
       onValueChange,
       value,
     }: {
-      children: ReactNode;
+      label: string;
+      description?: string;
+      options: readonly { value: string; label: string }[];
       onValueChange: (value: string) => void;
       value: string;
     }) => (
       <div data-select-value={value}>
-        {children}
-        {['error', 'warn', 'info', 'debug'].map((next) => (
+        <span>{label}</span>
+        {description ? <span>{description}</span> : null}
+        {options.map((option) => (
+          <div key={option.value}>{option.label}</div>
+        ))}
+        {selectValues.map((next) => (
           <button key={next} type="button" onClick={() => onValueChange(next)}>
             {next}
           </button>
         ))}
       </div>
     ),
-    SelectContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-    SelectItem: ({ children }: { children: ReactNode; value: string }) => <div>{children}</div>,
-    SelectTrigger: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-    SelectValue: () => <span />,
   };
 });
 

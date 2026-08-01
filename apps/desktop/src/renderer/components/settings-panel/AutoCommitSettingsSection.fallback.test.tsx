@@ -3,7 +3,6 @@
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../model-provider-options-data', () => ({
@@ -16,22 +15,27 @@ vi.mock('../model-provider-options-data', () => ({
   getModelOptions: () => [],
 }));
 
-vi.mock('@shipshitdev/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shipshitdev/ui')>();
+vi.mock('@shipcode/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/ui')>();
 
   return {
     ...actual,
-    Select: ({
-      children,
+    SettingsSelectRow: ({
+      label,
+      options,
       onValueChange,
       value,
     }: {
-      children: ReactNode;
+      label: string;
+      options: readonly { value: string; label: string }[];
       onValueChange: (value: string) => void;
       value: string;
     }) => (
       <div data-select-value={value}>
-        {children}
+        <span>{label}</span>
+        {options.map((option) => (
+          <div key={option.value}>{option.label}</div>
+        ))}
         <button
           type="button"
           data-testid={`select-${value}-claude`}
@@ -41,10 +45,6 @@ vi.mock('@shipshitdev/ui', async (importOriginal) => {
         </button>
       </div>
     ),
-    SelectContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-    SelectItem: ({ children }: { children: ReactNode; value: string }) => <div>{children}</div>,
-    SelectTrigger: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-    SelectValue: () => <span />,
   };
 });
 

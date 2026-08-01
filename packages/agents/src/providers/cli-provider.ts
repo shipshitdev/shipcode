@@ -30,8 +30,13 @@ import {
   type ProviderResponse,
 } from './types';
 
-type CliRunResult = ManagedProcessResult;
+interface CliRunResult extends ManagedProcessResult {
+  /** The process manager cannot pipe stdin, so the run never started. */
+  unavailable?: boolean;
+}
 
+const STDIN_SPAWN_UNAVAILABLE =
+  'This process manager cannot pipe a prompt through stdin (no spawnWithStdin). ShipCode never passes a prompt as a CLI argument, so the run was not started.';
 const SRT_POLICY_FAILURE =
   'srt sandbox policy setup failed. Verify sandbox settings, the worktree path, and temporary-directory permissions.';
 const SRT_UNAVAILABLE =
@@ -57,25 +62,15 @@ type ProcessManagerWithStdin = ProcessManager & {
   ) => ReturnType<ProcessManager['spawn']>;
 };
 
-function materializeStdinArgsForLegacySpawn(args: string[], stdin?: string): string[] {
-  if (stdin === undefined) return args;
-  const promptFlagIndex = args.indexOf('-p');
-  if (promptFlagIndex !== -1 && args[promptFlagIndex + 1] === '-') {
-    return args.map((arg, index) => (index === promptFlagIndex + 1 ? stdin : arg));
-  }
-  if (promptFlagIndex !== -1) {
-    return [...args.slice(0, promptFlagIndex + 1), stdin, ...args.slice(promptFlagIndex + 1)];
-  }
-  const execIndex = args.indexOf('exec');
-  if (execIndex !== -1 && args[execIndex + 1] === '-') {
-    return args.map((arg, index) => (index === execIndex + 1 ? stdin : arg));
-  }
-  return args;
-}
-
 /**
  * Spawn a CLI via ProcessManager, accumulate output, wait for exit,
  * honoring the abort signal. Shared by both Claude and Codex providers.
+ *
+ * A prompt is ALWAYS piped through stdin. If the process manager cannot pipe
+ * stdin, the run fails loudly instead of degrading to an argv prompt — the
+ * Claude argparser reads `---` frontmatter (and any `--flag` inside a fenced
+ * block) as unknown flags, and a failing CLI echoes the whole command line.
+ * Mirrors the same guard in `stdin-cli-runner.ts`.
  */
 async function runCli(
   processManager: ProcessManager,
@@ -105,9 +100,13 @@ async function runCli(
       ...(options ?? {}),
       ...(workspaceRoot !== undefined ? { workspaceRoot, projectPath } : {}),
     };
-    const processManagerWithStdin = processManager as ProcessManagerWithStdin;
-    if (stdin !== undefined && processManagerWithStdin.spawnWithStdin) {
-      process = processManagerWithStdin.spawnWithStdin(
+    if (stdin !== undefined) {
+      const spawnWithStdin = (processManager as ProcessManagerWithStdin).spawnWithStdin;
+      if (typeof spawnWithStdin !== 'function') {
+        return { rawOutput: STDIN_SPAWN_UNAVAILABLE, exitCode: 1, unavailable: true };
+      }
+      process = spawnWithStdin.call(
+        processManager,
         agentId,
         command,
         args,
@@ -117,14 +116,7 @@ async function runCli(
         spawnOptions,
       );
     } else {
-      process = processManager.spawn(
-        agentId,
-        command,
-        materializeStdinArgsForLegacySpawn(args, stdin),
-        cwd,
-        threadId,
-        spawnOptions,
-      );
+      process = processManager.spawn(agentId, command, args, cwd, threadId, spawnOptions);
     }
   } catch (err) {
     // ProcessManager synthesizes an exit event for missing binaries etc.
@@ -760,6 +752,18 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
       } finally {
         if (sandboxCleanup) await sandboxCleanup();
       }
+      if (result.unavailable) {
+        return {
+          rawOutput: STDIN_SPAWN_UNAVAILABLE,
+          exitCode: result.exitCode,
+          promptTelemetry,
+          providerError: {
+            kind: 'unexpected_stop',
+            message: STDIN_SPAWN_UNAVAILABLE,
+            retryable: false,
+          },
+        };
+      }
       if (commandOverride && result.exitCode === 127) {
         // A synchronous ProcessManager spawn error can carry arbitrary local
         // exception text. Keep the sandbox launch failure actionable without
@@ -908,6 +912,19 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
         { ...(command.options ?? {}), envKeyAllowlist: [...CODEX_ENV_KEYS] },
         req.onProcessStart,
       );
+      if (result.unavailable) {
+        return {
+          rawOutput: STDIN_SPAWN_UNAVAILABLE,
+          exitCode: result.exitCode,
+          resolvedModel: req.modelHint ?? 'codex',
+          promptTelemetry,
+          providerError: {
+            kind: 'unexpected_stop',
+            message: STDIN_SPAWN_UNAVAILABLE,
+            retryable: false,
+          },
+        };
+      }
       const rawOutput = stripCodexProtocol(result.rawOutput, {
         includeCommandOutput: req.phase === 'execute',
       });
@@ -1019,6 +1036,5 @@ export const _internals = {
   phaseOutputArtifactPath,
   isInteractiveStructured,
   readPhaseOutputArtifact,
-  materializeStdinArgsForLegacySpawn,
   stripCodexProtocol,
 };
