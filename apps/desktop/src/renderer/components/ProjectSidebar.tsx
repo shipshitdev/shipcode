@@ -45,8 +45,9 @@ import {
   Wrench,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useAppSettings } from '../hooks/useAppSettings';
+import { COL_RESIZE_BODY_CLASS_NAMES, useDragResize } from '../hooks/useDragResize';
 import { NOTIFICATIONS_STALE_TIME, STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { type ProjectTab, useAppStore } from '../stores/app-store';
 import { toast } from '../stores/toast-store';
@@ -220,9 +221,14 @@ function useProjectSidebarView() {
     },
   });
 
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
-  const dragRef = useRef<{ startX: number; startW: number } | null>(null);
-  const resizeCleanupRef = useRef<(() => void) | null>(null);
+  // Left-anchored panel: dragging its right edge rightwards widens it.
+  const { size: sidebarWidth, handleResizeMouseDown } = useDragResize({
+    initialSize: SIDEBAR_DEFAULT,
+    axis: 'x',
+    min: SIDEBAR_MIN,
+    max: SIDEBAR_MAX,
+    bodyClassNames: COL_RESIZE_BODY_CLASS_NAMES,
+  });
 
   useEffect(() => {
     const unsubFire = window.shipcode.on('notification:fire', () => {
@@ -236,45 +242,6 @@ function useProjectSidebarView() {
       unsubDismiss();
     };
   }, [queryClient]);
-
-  const handleResizeMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      resizeCleanupRef.current?.();
-      resizeCleanupRef.current = null;
-      dragRef.current = { startX: e.clientX, startW: sidebarWidth };
-      const onMove = (ev: MouseEvent) => {
-        const drag = dragRef.current;
-        if (!drag) return;
-        const delta = ev.clientX - drag.startX;
-        const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, drag.startW + delta));
-        setSidebarWidth(next);
-      };
-      const cleanupResizeDrag = () => {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.body.classList.remove('cursor-col-resize', 'select-none');
-      };
-      const onUp = () => {
-        dragRef.current = null;
-        cleanupResizeDrag();
-        resizeCleanupRef.current = null;
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      document.body.classList.add('cursor-col-resize', 'select-none');
-      resizeCleanupRef.current = cleanupResizeDrag;
-    },
-    [sidebarWidth],
-  );
-
-  useEffect(() => {
-    return () => {
-      resizeCleanupRef.current?.();
-      resizeCleanupRef.current = null;
-      dragRef.current = null;
-    };
-  }, []);
 
   // Pinned projects always float to top and remain alphabetical; unpinned
   // projects keep the user's selected sort order.
