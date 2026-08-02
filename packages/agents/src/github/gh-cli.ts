@@ -1045,6 +1045,45 @@ export class GhCli {
     };
   }
 
+  /**
+   * Apply label additions and removals to an issue in a single `gh issue edit`
+   * invocation.
+   *
+   * Two properties matter to callers that swap one state label for another:
+   *
+   * 1. **One invocation.** A crash, network drop, or process exit between two
+   *    separate `gh` calls can leave an issue with no state label at all —
+   *    invisible to board views and saved searches. There is no such window
+   *    here: the additions and removals travel together, and `gh` resolves the
+   *    final label set for a single API write.
+   * 2. **It throws.** Unlike `setIssueLabelPresence`, which is a best-effort
+   *    marker sync, failures propagate so a caller that owns retry and failure
+   *    reporting (the pipeline's GH sync queue) can see them.
+   */
+  async editIssueLabels(
+    issueNumber: number,
+    changes: { add?: readonly string[]; remove?: readonly string[] },
+  ): Promise<void> {
+    const add = uniqueLabels(changes.add ?? []);
+    const addSet = new Set(add);
+    // An added label wins over a removal of the same name — never hand `gh`
+    // contradictory flags for one label.
+    const remove = uniqueLabels(changes.remove ?? []).filter((label) => !addSet.has(label));
+    if (add.length === 0 && remove.length === 0) return;
+
+    await execFileAsync(
+      'gh',
+      [
+        'issue',
+        'edit',
+        String(issueNumber),
+        ...add.flatMap((label) => ['--add-label', label]),
+        ...remove.flatMap((label) => ['--remove-label', label]),
+      ],
+      { cwd: this.cwd, env: this.env },
+    );
+  }
+
   async setIssueLabelPresence(issueNumber: number, label: string, present: boolean): Promise<void> {
     let current: string[] = [];
     try {
