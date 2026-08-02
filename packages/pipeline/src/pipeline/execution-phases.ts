@@ -1584,7 +1584,22 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       return { next: 'failed' };
     }
 
-    const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim();
+    // Guarded like the pre-verification commit above: a deleted worktree or a
+    // corrupt repo makes `rev-parse` throw, and an unguarded throw here unwinds
+    // to the dispatch-loop catch in pipeline.ts, which fails the thread without
+    // the phase-local cleanup (`activePipelines.delete`) the rest of this
+    // handler performs.
+    let headSha: string;
+    try {
+      headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim();
+    } catch (headError) {
+      const msg = headError instanceof Error ? headError.message : String(headError);
+      console.error(`[pipeline] verification HEAD lookup failed for thread ${threadId}:`, msg);
+      emitPhase(threadId, 'failed', `Verification could not resolve HEAD: ${msg}`);
+      activePipelines.delete(threadId);
+      return { next: 'failed' };
+    }
+
     const branch = await resolveCurrentBranch(cwd);
     // verifiedSha stays here on purpose: it records the sha handed to the
     // verifier and is read by the commit preflight as a "HEAD moved after
