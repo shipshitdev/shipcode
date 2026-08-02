@@ -2087,6 +2087,80 @@ describe('execution phase handlers', () => {
     expect(harness.runtime.runProviderPhase).toHaveBeenCalledTimes(1);
   });
 
+  // Verification-failure retries return a bare `{ next: 'execute', plan }` with no
+  // carry, unlike the node-verification and PR-stabilization retries that ride
+  // `carry.stabilizationFeedback`. That is deliberate: this retry's feedback travels
+  // through the persisted verification record instead (verify writes it, the next
+  // execute reads it back via formatVerificationRetryFeedback), so the executor is
+  // not re-invoked with an identical prompt. Nothing asserted that hand-off
+  // end-to-end — verify-persists and execute-reads were only covered separately —
+  // so an added carry would silently double the feedback and a dropped read would
+  // silently waste the retry. This pins the seam.
+  it('feeds the verifier failure into the retried execution prompt', async () => {
+    // worktreePath must exist: the retried execute otherwise detours into real
+    // worktree creation and never reaches the provider.
+    const context = makeContext({ verificationRetries: 0, worktreePath: process.cwd() });
+    const harness = makeExecutionHarness(context);
+    // Stateful stand-in for VerificationQueries: create() persists and getLatest()
+    // reads back. That round trip is the channel under test, so the harness default
+    // (getLatest always null) would hide the hand-off.
+    let latestVerification: unknown = null;
+    (harness.deps as never as { verifications: unknown }).verifications = {
+      create: vi.fn(
+        (
+          threadId: string,
+          planId: string,
+          rawOutput: string,
+          structured: { result?: string } | null,
+        ) => {
+          latestVerification = {
+            threadId,
+            planId,
+            rawOutput,
+            structured,
+            result: structured?.result ?? 'failed',
+          };
+          return latestVerification;
+        },
+      ),
+      getLatest: vi.fn(() => latestVerification),
+    };
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: verificationFailed,
+      exitCode: 0,
+    });
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'status') return '';
+      if (args[0] === 'rev-parse') return 'head-sha\n';
+      if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
+      return '';
+    });
+
+    const outcome = (await harness.handlers.startVerification('thread-1')) as {
+      next: string;
+      andThen?: { next: string; plan: never; carry?: never };
+    };
+    expect(outcome.next).toBe('retry');
+    const andThen = outcome.andThen;
+    if (andThen?.next !== 'execute') throw new Error('expected a re-execute retry outcome');
+
+    // Dispatch the retry exactly as the pipeline loop does (pipeline.ts:89):
+    // startExecution(threadId, outcome.plan, outcome.carry).
+    vi.mocked(harness.runtime.runProviderPhase).mockReset();
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: 'done',
+      exitCode: 0,
+    });
+    await harness.handlers.startExecution('thread-1', andThen.plan, andThen.carry);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const retryPrompt = vi.mocked(harness.runtime.runProviderPhase).mock.calls[0]?.[2] as string;
+    expect(retryPrompt).toContain('<previous_verification_failure>');
+    expect(retryPrompt).toContain('Summary: not ok');
+    expect(retryPrompt).toContain('- works: missing');
+    expect(retryPrompt).toContain('- [blocker] src/a.ts: missing file');
+  });
+
   it('persists test and runtime QA output with a failed verification retry', async () => {
     const context = makeContext({ verificationRetries: 0 });
     const harness = makeExecutionHarness(context);
