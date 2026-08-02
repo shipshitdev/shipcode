@@ -24,6 +24,23 @@ export interface IssueGroupExecutionPreview {
   groups: string[][];
 }
 
+export interface IssueGroupRunState {
+  getReadyIssueIds(): string[];
+  getBlockedIssueIds(): string[];
+  /** Issues that can never launch because a hard prerequisite failed. */
+  getAbandonedIssueIds(): string[];
+  /**
+   * True once no selected issue can still start or finish — every issue has
+   * either reported a terminal phase or been parked behind a failed
+   * prerequisite. Callers use this to drop the run from their active map;
+   * without it a group containing a failure stays resident forever, and a
+   * later re-run of the failed issue would silently resume the group.
+   */
+  isSettled(): boolean;
+  /** Returns the issues released by this completion, in preview order. */
+  markIssueCompleted(issueId: string, succeeded: boolean): string[];
+}
+
 const HARD_EDGE_TYPES = new Set<IssueGraphEdgeType>(['blocks', 'depends_on']);
 
 export class IssueGroupSchedulerError extends Error {}
@@ -43,7 +60,7 @@ export function buildIssueGroupExecutionPreview(
   return { issueOrder: orderedIssueIds, groups };
 }
 
-export function createIssueGroupRunState(input: RunStateInput) {
+export function createIssueGroupRunState(input: RunStateInput): IssueGroupRunState {
   const preview = buildIssueGroupExecutionPreview(input);
   const selection = new Set(preview.issueOrder);
   const previewIndexByIssueId = new Map(
@@ -52,8 +69,13 @@ export function createIssueGroupRunState(input: RunStateInput) {
   const hardEdges = filterRelevantHardEdges(selection, input.edges);
   const pendingPrerequisiteCounts = new Map<string, number>();
   const dependentsByIssueId = new Map<string, string[]>();
-  const completedSuccessfully = new Set<string>();
-  const completedIssues = new Set<string>();
+  /**
+   * Issues whose first terminal result has already been accounted for. This is
+   * the idempotency key for `markIssueCompleted` — see the comment there.
+   */
+  const settledIssueIds = new Set<string>();
+  /** Issues parked behind a failed prerequisite; they can never become ready. */
+  const abandonedIssueIds = new Set<string>();
   const ready = new Set(preview.groups[0] ?? []);
 
   for (const issueId of selection) {
@@ -74,20 +96,61 @@ export function createIssueGroupRunState(input: RunStateInput) {
       (a, b) => (previewIndexByIssueId.get(a) as number) - (previewIndexByIssueId.get(b) as number),
     );
 
+  /**
+   * A failed issue never decrements its dependents' pending counts, so every
+   * issue downstream of it is unreachable — including dependents whose other
+   * prerequisites did succeed. Park the whole subtree so the run can settle
+   * instead of waiting forever on issues that will never start.
+   */
+  const abandonDependentsOf = (rootIssueId: string): void => {
+    const queue = [...(dependentsByIssueId.get(rootIssueId) as string[])];
+
+    while (queue.length > 0) {
+      const issueId = queue.pop() as string;
+      if (settledIssueIds.has(issueId) || abandonedIssueIds.has(issueId)) continue;
+      abandonedIssueIds.add(issueId);
+      ready.delete(issueId);
+      queue.push(...(dependentsByIssueId.get(issueId) as string[]));
+    }
+  };
+
   return {
     getReadyIssueIds(): string[] {
       return sortByPreviewOrder(ready);
     },
     getBlockedIssueIds(): string[] {
       return sortByPreviewOrder(
-        [...selection].filter((issueId) => !ready.has(issueId) && !completedIssues.has(issueId)),
+        [...selection].filter(
+          (issueId) =>
+            !ready.has(issueId) && !settledIssueIds.has(issueId) && !abandonedIssueIds.has(issueId),
+        ),
+      );
+    },
+    getAbandonedIssueIds(): string[] {
+      return sortByPreviewOrder(abandonedIssueIds);
+    },
+    isSettled(): boolean {
+      return [...selection].every(
+        (issueId) => settledIssueIds.has(issueId) || abandonedIssueIds.has(issueId),
       );
     },
     markIssueCompleted(issueId: string, succeeded: boolean): string[] {
+      if (!selection.has(issueId)) return [];
+      // Completion notifications fire on every qualifying terminal phase event,
+      // and a failed issue's thread is reusable — so the same issue can report
+      // a terminal phase more than once. Counting it twice would decrement its
+      // dependents' pending counts twice and launch them while a sibling
+      // prerequisite is still executing. Only the first terminal result for an
+      // issue moves the run forward.
+      if (settledIssueIds.has(issueId) || abandonedIssueIds.has(issueId)) return [];
+
       ready.delete(issueId);
-      completedIssues.add(issueId);
-      if (!selection.has(issueId) || !succeeded) return [];
-      completedSuccessfully.add(issueId);
+      settledIssueIds.add(issueId);
+
+      if (!succeeded) {
+        abandonDependentsOf(issueId);
+        return [];
+      }
 
       const newlyReady: string[] = [];
       for (const dependentIssueId of dependentsByIssueId.get(issueId) as string[]) {
