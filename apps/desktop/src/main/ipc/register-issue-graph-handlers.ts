@@ -156,28 +156,35 @@ export function registerIssueGraphHandlers({
 export function notifyIssueGraphPipelinePhaseChange(input: {
   threadId: string;
   phase: PipelinePhase;
+  /**
+   * Set when reconciliation cancelled the run (issue closed upstream, or tagged with
+   * a terminal label). Cancellation only surfaces as an `idle` phase, which is not
+   * terminal on its own — without this flag the issue is never marked done here and
+   * the whole group silently stops making progress.
+   */
+  cancelled?: boolean;
 }): void {
-  if (
-    !runtimeDeps ||
-    (input.phase !== PIPELINE_PHASE.completed && input.phase !== PIPELINE_PHASE.failed)
-  ) {
-    return;
-  }
+  const isTerminal =
+    input.cancelled === true ||
+    input.phase === PIPELINE_PHASE.completed ||
+    input.phase === PIPELINE_PHASE.failed;
+  if (!runtimeDeps || !isTerminal) return;
   const deps = runtimeDeps;
 
-  const completedIssue = deps.queries.githubIssues.getByThreadId(input.threadId);
-  if (!completedIssue) return;
+  const terminalIssue = deps.queries.githubIssues.getByThreadId(input.threadId);
+  if (!terminalIssue) return;
+
+  // A cancelled issue is failed-like: it releases no dependents, but it does close
+  // out the issue so the run can settle.
+  const succeeded = input.cancelled !== true && input.phase === PIPELINE_PHASE.completed;
 
   for (const [runId, run] of activeGroupedRuns) {
     const selectedIssueIds = new Set(run.selectedIssueIds);
-    if (run.projectId !== completedIssue.projectId || !selectedIssueIds.has(completedIssue.id)) {
+    if (run.projectId !== terminalIssue.projectId || !selectedIssueIds.has(terminalIssue.id)) {
       continue;
     }
 
-    const newlyReadyIssueIds = run.runState.markIssueCompleted(
-      completedIssue.id,
-      input.phase === PIPELINE_PHASE.completed,
-    );
+    const newlyReadyIssueIds = run.runState.markIssueCompleted(terminalIssue.id, succeeded);
 
     const issuesById = new Map(
       deps.queries.githubIssues.list(run.projectId).map((issue) => [issue.id, issue]),
@@ -191,12 +198,14 @@ export function notifyIssueGraphPipelinePhaseChange(input: {
       deps.scheduler.startOrQueue(run.projectId, issue.issueNumber).catch(() => {});
     }
 
-    if (
-      run.selectedIssueIds.every((issueId) => {
-        const issue = issuesById.get(issueId);
-        return issue ? ISSUE_GROUP_TERMINAL_STATUSES.has(issue.pipelineStatus) : true;
-      })
-    ) {
+    // Retire the run once nothing can still advance it. The run state settles even
+    // when stranded dependents never reach a terminal issue status of their own,
+    // which is exactly the case after a cancellation.
+    const everySelectedIssueTerminal = run.selectedIssueIds.every((issueId) => {
+      const issue = issuesById.get(issueId);
+      return issue ? ISSUE_GROUP_TERMINAL_STATUSES.has(issue.pipelineStatus) : true;
+    });
+    if (run.runState.isSettled() || everySelectedIssueTerminal) {
       activeGroupedRuns.delete(runId);
     }
   }

@@ -74,6 +74,26 @@ export function createIssueGroupRunState(input: RunStateInput) {
       (a, b) => (previewIndexByIssueId.get(a) as number) - (previewIndexByIssueId.get(b) as number),
     );
 
+  // Dependents of an issue that finished unsuccessfully (failed or cancelled) can
+  // never become ready — nothing is left to decrement their pending-prerequisite
+  // count. Derived on demand rather than stored so a retry that later succeeds
+  // revives its dependents instead of leaving them permanently written off.
+  const collectUnreachableIssueIds = (): Set<string> => {
+    const unreachable = new Set<string>();
+    const queue = [...completedIssues].filter((issueId) => !completedSuccessfully.has(issueId));
+
+    while (queue.length > 0) {
+      const issueId = queue.pop() as string;
+      for (const dependentIssueId of dependentsByIssueId.get(issueId) ?? []) {
+        if (completedIssues.has(dependentIssueId) || unreachable.has(dependentIssueId)) continue;
+        unreachable.add(dependentIssueId);
+        queue.push(dependentIssueId);
+      }
+    }
+
+    return unreachable;
+  };
+
   return {
     getReadyIssueIds(): string[] {
       return sortByPreviewOrder(ready);
@@ -83,10 +103,27 @@ export function createIssueGroupRunState(input: RunStateInput) {
         [...selection].filter((issueId) => !ready.has(issueId) && !completedIssues.has(issueId)),
       );
     },
+    getUnreachableIssueIds(): string[] {
+      return sortByPreviewOrder(collectUnreachableIssueIds());
+    },
+    /**
+     * True once no selected issue can still make progress: every one has either
+     * finished or been stranded behind an unsuccessful prerequisite. Callers use
+     * this to retire the run instead of tracking it forever.
+     */
+    isSettled(): boolean {
+      const unreachable = collectUnreachableIssueIds();
+      return [...selection].every(
+        (issueId) => completedIssues.has(issueId) || unreachable.has(issueId),
+      );
+    },
     markIssueCompleted(issueId: string, succeeded: boolean): string[] {
       ready.delete(issueId);
       completedIssues.add(issueId);
       if (!selection.has(issueId) || !succeeded) return [];
+      // A repeated success for the same issue must not decrement its dependents
+      // twice, which would release them before their other prerequisites land.
+      if (completedSuccessfully.has(issueId)) return [];
       completedSuccessfully.add(issueId);
 
       const newlyReady: string[] = [];
