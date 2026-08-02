@@ -6,6 +6,7 @@ import type { AgentState, AgentType } from '@shipcode/shared';
 import { assertWorkspaceSafe } from '@shipcode/shared/worktree-path';
 import { nanoid } from 'nanoid';
 import * as pty from 'node-pty';
+import { pipeStdin } from './spawn-with-stdin';
 
 export type ProcessManagerAgentCommand =
   | Extract<AgentType, 'claude' | 'codex' | 'gemini' | 'grok' | 'gh'>
@@ -566,35 +567,20 @@ export class ProcessManager extends EventEmitter {
       finalize(code ?? (signal ? 130 : 0));
     });
 
-    child.stdin.on('error', () => {
-      // EPIPE is expected when a CLI exits before consuming all stdin.
-      // The close/error handlers above own the final lifecycle event.
+    // The shared pipe owns the stdin 'error' listener — an EPIPE from a CLI
+    // that exits before consuming its prompt would otherwise be an unhandled
+    // stream error. The close/error handlers above still own the final
+    // lifecycle event; this only reports the write failure and stops the child.
+    pipeStdin(child.stdin, input, {
+      keepOpen: options.keepStdinOpen === true,
+      onError: (err) => {
+        emitOutput(`\x1b[31mError writing prompt to ${command}: ${err.message}\x1b[0m\r\n`);
+        // Route through kill() so the SIGTERM→SIGKILL escalation timer arms —
+        // a child that ignores SIGTERM after a failed prompt write must not
+        // linger (see KILL_ESCALATION_GRACE_MS).
+        this.kill(id);
+      },
     });
-
-    const shouldKeepStdinOpen = options.keepStdinOpen === true;
-    const finishStdin = () => {
-      if (!shouldKeepStdinOpen) child.stdin.end();
-    };
-    const handleStdinError = (err: Error) => {
-      child.stdin.off('drain', finishStdin);
-      emitOutput(`\x1b[31mError writing prompt to ${command}: ${err.message}\x1b[0m\r\n`);
-      this.kill(id);
-    };
-
-    child.stdin.once('error', handleStdinError);
-    try {
-      if (child.stdin.write(input) !== false) {
-        if (shouldKeepStdinOpen) {
-          child.stdin.off('error', handleStdinError);
-          return managed;
-        }
-        child.stdin.end();
-      } else {
-        child.stdin.once('drain', finishStdin);
-      }
-    } catch (err) {
-      handleStdinError(err instanceof Error ? err : new Error(String(err)));
-    }
 
     return managed;
   }

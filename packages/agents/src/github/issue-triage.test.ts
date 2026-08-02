@@ -111,7 +111,7 @@ function createFakeProc() {
   const proc = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter;
     stderr: EventEmitter;
-    stdin: {
+    stdin: EventEmitter & {
       write: ReturnType<typeof vi.fn>;
       end: ReturnType<typeof vi.fn>;
     };
@@ -119,10 +119,12 @@ function createFakeProc() {
   };
   proc.stdout = new EventEmitter();
   proc.stderr = new EventEmitter();
-  proc.stdin = {
+  // An EventEmitter, not a plain object: the shared stdin pipe attaches an
+  // 'error' listener before writing.
+  proc.stdin = Object.assign(new EventEmitter(), {
     write: vi.fn(),
     end: vi.fn(),
-  };
+  });
   proc.kill = vi.fn();
   return {
     proc,
