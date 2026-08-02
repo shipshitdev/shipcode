@@ -201,6 +201,72 @@ describe('createIssueGroupRunState', () => {
     expect(state.markIssueCompleted('issue-1', true)).toEqual(['issue-3', 'issue-4']);
   });
 
+  it('does not release dependents twice when the same success is reported again', () => {
+    const state = createIssueGroupRunState({
+      selectedIssueIds: ['issue-1', 'issue-2', 'issue-3'],
+      nodes,
+      edges: [
+        { sourceIssueId: 'issue-1', targetIssueId: 'issue-3', edgeType: 'blocks' },
+        { sourceIssueId: 'issue-2', targetIssueId: 'issue-3', edgeType: 'depends_on' },
+      ],
+    });
+
+    expect(state.markIssueCompleted('issue-1', true)).toEqual([]);
+    expect(state.markIssueCompleted('issue-1', true)).toEqual([]);
+    expect(state.getBlockedIssueIds()).toEqual(['issue-3']);
+    expect(state.markIssueCompleted('issue-2', true)).toEqual(['issue-3']);
+  });
+
+  it('settles the run when an unsuccessful prerequisite strands its dependents', () => {
+    const state = createIssueGroupRunState({
+      selectedIssueIds: ['issue-1', 'issue-3', 'issue-4'],
+      nodes,
+      edges: [
+        { sourceIssueId: 'issue-1', targetIssueId: 'issue-3', edgeType: 'blocks' },
+        { sourceIssueId: 'issue-3', targetIssueId: 'issue-4', edgeType: 'blocks' },
+      ],
+    });
+
+    expect(state.isSettled()).toBe(false);
+    expect(state.markIssueCompleted('issue-1', false)).toEqual([]);
+
+    expect(state.getAbandonedIssueIds()).toEqual(['issue-3', 'issue-4']);
+    expect(state.isSettled()).toBe(true);
+  });
+
+  it('ignores a later success for an issue that already settled as failed', () => {
+    const state = createIssueGroupRunState({
+      selectedIssueIds: ['issue-1', 'issue-3'],
+      nodes,
+      edges: [{ sourceIssueId: 'issue-1', targetIssueId: 'issue-3', edgeType: 'blocks' }],
+    });
+
+    state.markIssueCompleted('issue-1', false);
+    expect(state.isSettled()).toBe(true);
+
+    // First terminal result wins: a retry succeeding later must not resurrect a
+    // settled run or auto-launch abandoned dependents — the user relaunches the
+    // group explicitly instead.
+    expect(state.markIssueCompleted('issue-1', true)).toEqual([]);
+    expect(state.getAbandonedIssueIds()).toEqual(['issue-3']);
+    expect(state.isSettled()).toBe(true);
+  });
+
+  it('settles once every selected issue completes successfully', () => {
+    const state = createIssueGroupRunState({
+      selectedIssueIds: ['issue-1', 'issue-3'],
+      nodes,
+      edges: [{ sourceIssueId: 'issue-1', targetIssueId: 'issue-3', edgeType: 'blocks' }],
+    });
+
+    state.markIssueCompleted('issue-1', true);
+    expect(state.isSettled()).toBe(false);
+
+    state.markIssueCompleted('issue-3', true);
+    expect(state.isSettled()).toBe(true);
+    expect(state.getAbandonedIssueIds()).toEqual([]);
+  });
+
   it('handles empty selections and unknown completions', () => {
     const state = createIssueGroupRunState({
       selectedIssueIds: ['missing'],

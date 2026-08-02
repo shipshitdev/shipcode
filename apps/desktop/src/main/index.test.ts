@@ -444,7 +444,23 @@ describe('main index bootstrap', () => {
     await expect(
       reconciliationOptions.issueStateProvider.getIssueState('/tmp/repo', 42),
     ).resolves.toEqual(ghIssueMock);
+    notifyIssueGraphPipelinePhaseChangeMock.mockClear();
     reconciliationOptions.onReconciliationCancel('thread-2', 'closed upstream');
+    expect(notifyIssueGraphPipelinePhaseChangeMock).toHaveBeenCalledWith({
+      threadId: 'thread-2',
+      phase: 'idle',
+      cancelled: true,
+    });
+
+    notifyIssueGraphPipelinePhaseChangeMock.mockImplementationOnce(() => {
+      throw new Error('group tracking failed');
+    });
+    reconciliationOptions.onReconciliationCancel('thread-2', 'closed upstream');
+    expect(logMock.error).toHaveBeenCalledWith(
+      '[reconcile] grouped run tracking error:',
+      expect.objectContaining({ message: 'group tracking failed' }),
+    );
+
     reconciliationOptions.log('reconciled');
 
     const openRouterOptions = (

@@ -415,6 +415,18 @@ function createWindow() {
       },
     },
     onReconciliationCancel: (threadId, reason) => {
+      // Cancellation is terminal for grouped runs, but it only reports `idle`, which
+      // the group tracker ignores. Flag it explicitly so the issue is closed out and
+      // its dependents stop waiting on a run that will never finish.
+      try {
+        notifyIssueGraphPipelinePhaseChange({
+          threadId,
+          phase: PIPELINE_PHASE.idle,
+          cancelled: true,
+        });
+      } catch (err) {
+        log.error('[reconcile] grouped run tracking error:', err);
+      }
       onPipelineTerminal?.({ threadId, phase: PIPELINE_PHASE.idle });
       log.info(`[reconcile] ${reason}`);
     },
