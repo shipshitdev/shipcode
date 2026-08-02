@@ -4,6 +4,7 @@ import path from 'node:path';
 import { GhCli } from '@shipcode/agents';
 import type { PullRequestDetailResponse } from '@shipcode/shared';
 import log from '../logger.service';
+import { requireProject } from './lookups';
 import type { IpcHandlerDeps } from './types';
 
 export function registerPullRequestHandlers({ ipcMain, queries }: IpcHandlerDeps): void {
@@ -14,8 +15,7 @@ export function registerPullRequestHandlers({ ipcMain, queries }: IpcHandlerDeps
       _event,
       { projectId, filter, limit }: { projectId: string; filter?: string; limit?: number },
     ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project not found: ${projectId}`);
+      const project = requireProject(queries, projectId);
       const cli = new GhCli(project.path);
       const result = await cli.listPullRequests({ state: filter as never, limit });
       log.info(
@@ -32,8 +32,7 @@ export function registerPullRequestHandlers({ ipcMain, queries }: IpcHandlerDeps
       _event,
       { projectId, prNumber }: { projectId: string; prNumber: number },
     ): Promise<PullRequestDetailResponse> => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project not found: ${projectId}`);
+      const project = requireProject(queries, projectId);
       const cli = new GhCli(project.path);
       const result = await cli.getPullRequestDetail(prNumber);
       const linkedIssue = queries.githubIssues.getByLinkedPrNumber(projectId, prNumber);

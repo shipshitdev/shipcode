@@ -3,6 +3,7 @@ import {
   buildIssueTerminalGithubComment,
   startIssueTerminalSession,
 } from '../issue-terminal-session';
+import { requireProject, requireThread } from './lookups';
 import type { IpcHandlerDeps } from './types';
 
 export function registerIssueTerminalHandlers({
@@ -25,12 +26,10 @@ export function registerIssueTerminalHandlers({
   ipcMain.handle(
     'issue-terminal:github-comment-post',
     async (_event, { threadId, body }: { threadId: string; body: string }) => {
-      const thread = queries.threads.getById(threadId);
-      if (!thread) throw new Error(`Thread not found: ${threadId}`);
+      const thread = requireThread(queries, threadId);
       if (!thread.githubIssueNumber)
         throw new Error(`Thread ${threadId} is not linked to an issue`);
-      const project = queries.projects.getById(thread.projectId);
-      if (!project) throw new Error(`Project not found: ${thread.projectId}`);
+      const project = requireProject(queries, thread.projectId);
       const gh = new GhCli(project.path);
       await gh.addIssueComment(thread.githubIssueNumber, body);
       const comments = await gh.listIssueComments(thread.githubIssueNumber);

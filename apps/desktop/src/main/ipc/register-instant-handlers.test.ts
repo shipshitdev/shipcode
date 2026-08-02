@@ -319,7 +319,7 @@ describe('registerInstantHandlers', () => {
         scope: 'project',
         cli: 'codex',
       }),
-    ).rejects.toThrow('Project not found: missing-project');
+    ).rejects.toThrow('Project missing-project not found');
   });
 
   it('builds low-effort Claude run args without model or thinking flags', async () => {
@@ -564,7 +564,7 @@ describe('registerInstantHandlers', () => {
         projectId: 'missing-project',
         cli: 'codex',
       }),
-    ).rejects.toThrow('Project not found: missing-project');
+    ).rejects.toThrow('Project missing-project not found');
 
     // No projectId falls back to __instant__ project with homedir cwd
     await expect(
@@ -629,7 +629,7 @@ describe('registerInstantHandlers', () => {
 
     queries.projects.getById.mockReturnValueOnce(null);
     await expect(bareShell(undefined, { projectId: 'missing-project' })).rejects.toThrow(
-      'Project not found: missing-project',
+      'Project missing-project not found',
     );
 
     queries.projects.getById.mockReturnValueOnce({

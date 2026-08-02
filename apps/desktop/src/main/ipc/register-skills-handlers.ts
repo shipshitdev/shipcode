@@ -20,6 +20,7 @@ import {
 import { shell } from 'electron';
 import log from '../logger.service';
 import { assertPrdRewriteModelSupported, buildSkillRow, resolvePrdRewriteContext } from './helpers';
+import { requireProject } from './lookups';
 import type { IpcHandlerDeps } from './types';
 
 function getWritingPrdsPaths(projectPath: string) {
@@ -215,8 +216,7 @@ export function registerSkillsHandlers({ ipcMain, queries }: IpcHandlerDeps): vo
   );
 
   ipcMain.handle('skills:get-writing-prds-info', (_event, { projectId }: { projectId: string }) => {
-    const project = queries.projects.getById(projectId);
-    if (!project) throw new Error(`Project ${projectId} not found`);
+    const project = requireProject(queries, projectId);
 
     const paths = getWritingPrdsPaths(project.path);
     return {
@@ -232,8 +232,7 @@ export function registerSkillsHandlers({ ipcMain, queries }: IpcHandlerDeps): vo
   ipcMain.handle(
     'skills:open-writing-prds',
     async (_event, { projectId }: { projectId: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
 
       const { openTargetPath } = getWritingPrdsPaths(project.path);
       const openError = await shell.openPath(openTargetPath);
@@ -252,8 +251,7 @@ export function registerSkillsHandlers({ ipcMain, queries }: IpcHandlerDeps): vo
       }: { projectId: string; bundle?: RepoSkillBundleKey; force?: boolean },
     ) => {
       try {
-        const project = queries.projects.getById(projectId);
-        if (!project) throw new Error(`Project ${projectId} not found`);
+        const project = requireProject(queries, projectId);
         if (!isRepoSkillBundleKey(bundle)) {
           throw new Error(`Unknown repo skill bundle: ${bundle}`);
         }

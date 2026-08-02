@@ -11,6 +11,7 @@ import type { IpcMainInvokeEvent } from 'electron';
 
 import log from '../logger.service';
 import { sendGithubIssuesUpdated } from './helpers';
+import { requireProject } from './lookups';
 import type { IpcHandlerDeps } from './types';
 
 type IssueOverrideArgs = {
@@ -106,8 +107,7 @@ export function registerGitHubIssueOverrideHandlers({
       if (trimmed && !/^[a-zA-Z0-9._:/@-]+$/.test(trimmed)) {
         throw new Error(`Invalid model ID: ${trimmed}`);
       }
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      const project = requireProject(queries, projectId);
       const provider = resolvePhaseModelForIssue(queries.settings.get(), project, issue, phase);
       queries.githubIssues.updatePhaseModelIdOverride(
         issue.id,
@@ -129,8 +129,7 @@ export function registerGitHubIssueOverrideHandlers({
   handleIssueOverride(
     'github:clear-all-phase-overrides-for-project',
     (_event, { projectId }: { projectId: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
+      requireProject(queries, projectId);
 
       const clearedCount = queries.githubIssues.clearAllPhaseOverridesForProject(projectId);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);

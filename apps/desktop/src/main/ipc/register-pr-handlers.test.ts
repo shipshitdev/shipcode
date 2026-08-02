@@ -68,7 +68,7 @@ describe('registerPullRequestHandlers', () => {
     if (!missingHandler) throw new Error('github:list-prs handler missing');
 
     await expect(missingHandler(undefined, { projectId: 'missing' })).rejects.toThrow(
-      'Project not found: missing',
+      'Project missing not found',
     );
   });
 

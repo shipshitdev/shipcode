@@ -17,6 +17,7 @@ import {
   unregisterInteractiveTerminalSession,
 } from '../terminal-session-registry';
 import { assertPrdRewriteModelSupported } from './helpers';
+import { requireProject, requireThread } from './lookups';
 import { getPrdAttachmentSessionSummary } from './prd-attachments';
 import type { IpcHandlerDeps } from './types';
 
@@ -476,8 +477,7 @@ export function registerInstantHandlers({
         projectId = instantProject.id;
       } else {
         if (!args.projectId) throw new Error('projectId is required for project/custom scope');
-        const project = queries.projects.getById(args.projectId);
-        if (!project) throw new Error(`Project not found: ${args.projectId}`);
+        const project = requireProject(queries, args.projectId);
         cwd = project.path;
         projectId = project.id;
       }
@@ -619,8 +619,7 @@ export function registerInstantHandlers({
       let projectId: string;
       let cwd: string;
       if (args.projectId) {
-        const project = queries.projects.getById(args.projectId);
-        if (!project) throw new Error(`Project not found: ${args.projectId}`);
+        const project = requireProject(queries, args.projectId);
         projectId = project.id;
         cwd = project.path;
       } else {
@@ -706,11 +705,9 @@ export function registerInstantHandlers({
   ipcMain.handle(
     'instant:fix-thread-failure',
     async (_event, args: { threadId: string; failureOutput: string }) => {
-      const sourceThread = queries.threads.getById(args.threadId);
-      if (!sourceThread) throw new Error(`Thread ${args.threadId} not found`);
+      const sourceThread = requireThread(queries, args.threadId);
 
-      const project = queries.projects.getById(sourceThread.projectId);
-      if (!project) throw new Error(`Project ${sourceThread.projectId} not found`);
+      const project = requireProject(queries, sourceThread.projectId);
 
       const failureOutput = clampFailureOutput(args.failureOutput);
       if (!failureOutput) throw new Error('No failure output available');
@@ -829,8 +826,7 @@ export function registerInstantHandlers({
 
   // --- instant:bare-shell — spawns the user's login shell (no AI CLI) ---
   ipcMain.handle('instant:bare-shell', async (_event, args: { projectId: string }) => {
-    const project = queries.projects.getById(args.projectId);
-    if (!project) throw new Error(`Project not found: ${args.projectId}`);
+    const project = requireProject(queries, args.projectId);
 
     const userShell = process.env.SHELL || '/bin/zsh';
     const title = `Terminal — ${project.name ?? project.path.split('/').pop()}`;
