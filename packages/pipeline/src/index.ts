@@ -3,6 +3,7 @@ export { GhSyncQueue, type GhSyncWriteOpts } from './gh-sync-queue';
 export {
   buildIssueGroupExecutionPreview,
   createIssueGroupRunState,
+  type IssueGroupRunState,
   IssueGroupSchedulerError,
 } from './issue-group-scheduler';
 export {

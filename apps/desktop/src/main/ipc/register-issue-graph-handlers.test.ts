@@ -345,6 +345,68 @@ describe('registerIssueGraphHandlers', () => {
     expect(startOrQueueMock).toHaveBeenCalledWith('project-1', 2);
   });
 
+  it('drops a grouped run whose dependents were parked by a failure', async () => {
+    // Scoped to its own project so grouped runs left behind by the tests above
+    // cannot match these notifications and mask a leak.
+    const graph = makeGraph();
+    const deps = makeDeps({
+      ...graph,
+      projectId: 'project-2',
+      nodes: graph.nodes.map((node) => ({ ...node, projectId: 'project-2' })),
+      edges: graph.edges.map((edge) => ({ ...edge, projectId: 'project-2' })),
+    });
+    vi.mocked(deps.queries.githubIssues.list).mockReturnValue([
+      {
+        id: 'issue-1',
+        projectId: 'project-2',
+        issueNumber: 1,
+        pipelineStatus: ISSUE_PIPELINE_STATUS.failed,
+        threadId: 'thread-1',
+      },
+      {
+        id: 'issue-2',
+        projectId: 'project-2',
+        issueNumber: 2,
+        // Parked, never launched — this status never becomes terminal, which is
+        // exactly what used to pin the run in the active map forever.
+        pipelineStatus: ISSUE_PIPELINE_STATUS.todo,
+        threadId: 'thread-2',
+      },
+    ] as never);
+    vi.mocked(deps.queries.githubIssues.getByThreadId).mockImplementation((threadId: string) =>
+      threadId === 'thread-1'
+        ? ({
+            id: 'issue-1',
+            projectId: 'project-2',
+            issueNumber: 1,
+            pipelineStatus: ISSUE_PIPELINE_STATUS.failed,
+            threadId: 'thread-1',
+          } as never)
+        : null,
+    );
+    registerIssueGraphHandlers(deps as never);
+
+    const confirm = handlers.get('issue-graph:confirm-run');
+    if (!confirm) throw new Error('issue-graph:confirm-run handler missing');
+
+    // issue-1 blocks issue-2, so only issue-1 starts.
+    await confirm(undefined, { projectId: 'project-2', selectedIssueIds: ['issue-1', 'issue-2'] });
+    startOrQueueMock.mockClear();
+
+    notifyIssueGraphPipelinePhaseChange({ threadId: 'thread-1', phase: PIPELINE_PHASE.failed });
+    expect(startOrQueueMock).not.toHaveBeenCalled();
+
+    // The run is looked up per notification, and `list` is only reached once a
+    // run matches — so no call here means no entry survived in the active map.
+    vi.mocked(deps.queries.githubIssues.list).mockClear();
+    // The user fixes and re-runs issue-1 by itself. The group is gone, so its
+    // dependent must not be launched off the back of that single-issue run.
+    notifyIssueGraphPipelinePhaseChange({ threadId: 'thread-1', phase: PIPELINE_PHASE.completed });
+
+    expect(deps.queries.githubIssues.list).not.toHaveBeenCalled();
+    expect(startOrQueueMock).not.toHaveBeenCalled();
+  });
+
   it('refreshes body-derived dependency edges and skips unknown issue references', () => {
     const issueEdges = {
       replaceBodyEdges: vi.fn(),

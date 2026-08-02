@@ -341,6 +341,18 @@ function createWindow() {
   // so every GitHub write for a given issue serializes through one queue.
   const ghSyncService = createGhSyncService({
     getProject: (projectId) => queries.projects.getById(projectId),
+    // A write that exhausted its retries is permanent drift — reconciliation
+    // only reads GitHub → pipeline, so nothing will backfill it. Surface it in
+    // the app log where the other nonfatal pipeline failures land.
+    onSyncFailure: ({ opts, attempts, error }) => {
+      log.error('[gh-status-sync] giving up on GitHub write', {
+        repo: opts.repoFullName ?? opts.projectPath,
+        issueNumber: opts.issueNumber,
+        pipelineStatus: opts.pipelineStatus,
+        attempts,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    },
   });
 
   const pipelineDeps = {

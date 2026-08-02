@@ -15,13 +15,19 @@ export function mapPhaseToIssuePipelineStatus(phase: PipelinePhase): IssuePipeli
 
 /**
  * Optional side-effect callbacks for syncing pipeline state changes to GitHub.
- * All callbacks are fire-and-forget — errors are swallowed to avoid blocking
- * the pipeline.
+ *
+ * `syncToGithub` is called fire-and-forget: the pipeline never blocks on it and
+ * a sync failure never fails a phase. Its promise does reflect the real write
+ * outcome though — it rejects once the write has exhausted its retries — so a
+ * caller that wants to react can. The queue behind it owns retry and reports
+ * persistent failures itself, so handling the rejection here is belt-and-braces
+ * rather than the only alarm.
  */
 export interface GhSyncDeps {
   getProject: (projectId: string) => Project | null;
   syncToGithub: (opts: {
     projectPath: string;
+    repoFullName?: string | null;
     projectUrl: string | null;
     issueNumber: number;
     pipelineStatus: IssuePipelineStatus;
@@ -69,13 +75,14 @@ export function syncThreadAndIssuePhase(
       void ghSync
         .syncToGithub({
           projectPath: project.path,
+          repoFullName: project.githubRepoFullName,
           projectUrl: project.githubProjectUrl,
           issueNumber: thread.githubIssueNumber,
           pipelineStatus,
           statusMapping: project.githubStatusMapping,
         })
         .catch((err) => {
-          console.warn('[phase-sync] gh status sync failed silently', err);
+          console.warn('[phase-sync] gh status sync failed', err);
         });
     }
   }

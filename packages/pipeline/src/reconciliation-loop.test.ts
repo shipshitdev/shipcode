@@ -252,24 +252,31 @@ describe('createReconciliationLoop', () => {
   });
 
   describe('start / stop', () => {
-    it('start() schedules ticks and stop() clears them', () => {
+    it('start() schedules ticks and stop() clears them', async () => {
       const pipeline = createMockPipeline(new Map());
       const issueProvider = createMockIssueStateProvider({});
 
       deps = { pipeline, issueStateProvider: issueProvider, log: vi.fn() };
       const loop = createReconciliationLoop(deps, { intervalMs: 5000 });
 
+      // Each tick must be allowed to settle between firings, otherwise the
+      // re-entrancy guard (correctly) skips the next one.
+      const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
       loop.start();
       expect(pipeline.listActive).not.toHaveBeenCalled();
 
       vi.advanceTimersByTime(5000);
+      await settle();
       expect(pipeline.listActive).toHaveBeenCalledTimes(1);
 
       vi.advanceTimersByTime(5000);
+      await settle();
       expect(pipeline.listActive).toHaveBeenCalledTimes(2);
 
       loop.stop();
       vi.advanceTimersByTime(10_000);
+      await settle();
       expect(pipeline.listActive).toHaveBeenCalledTimes(2);
     });
 
@@ -334,6 +341,120 @@ describe('createReconciliationLoop', () => {
       loop.start();
       loop.stop();
       loop.stop(); // No-op after stop
+    });
+  });
+
+  describe('re-entrancy', () => {
+    /** Only setInterval is faked, so real timers still flush the microtask queue. */
+    function flush() {
+      return new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    /** An issue provider that hangs until the returned release() is called. */
+    function createGatedIssueStateProvider(state: { state: 'open' | 'closed'; labels: string[] }) {
+      let release = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const provider: IssueStateProvider = {
+        getIssueState: vi.fn(async () => {
+          await gate;
+          return state;
+        }),
+      };
+      return { provider, release: () => release() };
+    }
+
+    it('skips an interval firing while the previous tick is still running', async () => {
+      const contexts = new Map([['t1', { githubIssueNumber: 42, projectPath: '/proj' }]]);
+      const pipeline = createMockPipeline(contexts);
+      const { provider, release } = createGatedIssueStateProvider({ state: 'open', labels: [] });
+      const log = vi.fn();
+
+      deps = { pipeline, issueStateProvider: provider, log };
+      const loop = createReconciliationLoop(deps, { intervalMs: 1000 });
+
+      loop.start();
+      vi.advanceTimersByTime(1000);
+      await flush();
+      expect(pipeline.listActive).toHaveBeenCalledTimes(1);
+      expect(provider.getIssueState).toHaveBeenCalledTimes(1);
+
+      // Two more firings land while tick 1 is still awaiting GitHub.
+      vi.advanceTimersByTime(2000);
+      await flush();
+      expect(pipeline.listActive).toHaveBeenCalledTimes(1);
+      expect(provider.getIssueState).toHaveBeenCalledTimes(1);
+      expect(log).toHaveBeenCalledWith(
+        '[reconcile] previous tick still running — skipping this interval',
+      );
+
+      // Once tick 1 settles, the next firing runs normally.
+      release();
+      await flush();
+      vi.advanceTimersByTime(1000);
+      await flush();
+      expect(pipeline.listActive).toHaveBeenCalledTimes(2);
+
+      loop.stop();
+    });
+
+    it('does not cancel a thread twice for the same closed issue', async () => {
+      const contexts = new Map([['t1', { githubIssueNumber: 42, projectPath: '/proj' }]]);
+      const pipeline = createMockPipeline(contexts);
+      const { provider, release } = createGatedIssueStateProvider({ state: 'closed', labels: [] });
+      const onCancel = vi.fn();
+
+      deps = {
+        pipeline,
+        issueStateProvider: provider,
+        onReconciliationCancel: onCancel,
+        log: vi.fn(),
+      };
+      const loop = createReconciliationLoop(deps, { intervalMs: 1000 });
+
+      loop.start();
+      vi.advanceTimersByTime(1000);
+      await flush();
+
+      // Three further firings while the closed-issue lookup is still in flight.
+      vi.advanceTimersByTime(3000);
+      await flush();
+
+      release();
+      await flush();
+
+      expect(pipeline.cancel).toHaveBeenCalledTimes(1);
+      expect(pipeline.cancel).toHaveBeenCalledWith('t1');
+      expect(onCancel).toHaveBeenCalledTimes(1);
+
+      loop.stop();
+    });
+
+    it('recovers the guard after a tick throws', async () => {
+      const pipeline = createMockPipeline(new Map());
+      vi.mocked(pipeline.listActive).mockImplementationOnce(() => {
+        throw new Error('boom');
+      });
+      const issueStateProvider = createMockIssueStateProvider({});
+      const log = vi.fn();
+      const loop = createReconciliationLoop(
+        { pipeline, issueStateProvider, log },
+        {
+          intervalMs: 1000,
+        },
+      );
+
+      loop.start();
+      vi.advanceTimersByTime(1000);
+      await flush();
+      expect(log).toHaveBeenCalledWith('[reconcile] tick failed: boom');
+
+      vi.advanceTimersByTime(1000);
+      await flush();
+      expect(pipeline.listActive).toHaveBeenCalledTimes(2);
+
+      loop.stop();
     });
   });
 

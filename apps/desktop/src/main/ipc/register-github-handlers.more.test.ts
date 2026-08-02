@@ -40,6 +40,7 @@ const {
   ensureLabelsMock,
   addIssueToProjectMock,
   setIssueLabelPresenceMock,
+  editIssueLabelsMock,
   setIssueProjectMetadataMock,
   syncIssueLabelsMock,
   applyTriageRulesOnceMock,
@@ -63,6 +64,7 @@ const {
   listRepoLabelsWithMetaMock: vi.fn(async () => [] as Array<unknown>),
   addIssueToProjectMock: vi.fn(async () => ({ alreadyPresent: false })),
   setIssueLabelPresenceMock: vi.fn(async () => undefined),
+  editIssueLabelsMock: vi.fn(async () => undefined),
   setIssueProjectMetadataMock: vi.fn(async () => [] as string[]),
   syncIssueLabelsMock: vi.fn(async () => undefined),
   ensureLabelsMock: vi.fn(async () => ({
@@ -95,6 +97,7 @@ vi.mock('@shipcode/agents', async () => {
     ensureLabels = ensureLabelsMock;
     addIssueToProject = addIssueToProjectMock;
     setIssueLabelPresence = setIssueLabelPresenceMock;
+    editIssueLabels = editIssueLabelsMock;
     setIssueProjectMetadata = setIssueProjectMetadataMock;
     syncIssueLabels = syncIssueLabelsMock;
   }
@@ -2000,7 +2003,8 @@ describe('registerGitHubHandlers – branch coverage supplement', () => {
       freshPrSyncIssue,
     ]);
 
-    // setIssueLabelPresence must NOT be called – PR sync was skipped via TTL
+    // No label write must happen – PR sync was skipped via TTL
     expect(setIssueLabelPresenceMock).not.toHaveBeenCalled();
+    expect(editIssueLabelsMock).not.toHaveBeenCalled();
   });
 });
