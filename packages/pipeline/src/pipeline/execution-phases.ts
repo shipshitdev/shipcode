@@ -1601,8 +1601,12 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
 
     const branch = await resolveCurrentBranch(cwd);
+    // verifiedSha stays here on purpose: it records the sha handed to the
+    // verifier and is read by the commit preflight as a "HEAD moved after
+    // verification" guard, including on paths that reach commit without a
+    // fresh pass. Shared-failure resolution, by contrast, only happens once
+    // the verifier has actually passed — see the passed branch below.
     context.verifiedSha = headSha;
-    deps.projectFailures?.resolveOwnedByThread(threadId, headSha);
 
     const diffBase = await resolveWorktreeDiffBase(context);
     let diff: string;
@@ -1786,6 +1790,12 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       }
 
       if (result.data.result === 'passed') {
+        // Only a passing verdict resolves the shared failures this thread owns.
+        // Resolving earlier (at the top of the phase) recorded a fix against a
+        // sha the verifier had not judged, and `claimOrCreate` never re-opens a
+        // resolved row — so a later failure left the owning thread permanently
+        // blocked by its own unverified "resolution".
+        deps.projectFailures?.resolveOwnedByThread(threadId, headSha);
         resetPhaseState(context);
         return { next: 'commit' };
       }

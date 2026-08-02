@@ -41,6 +41,7 @@ const {
   ensureLabelsMock,
   addIssueToProjectMock,
   setIssueLabelPresenceMock,
+  editIssueLabelsMock,
   setIssueProjectMetadataMock,
   syncIssueLabelsMock,
 } = vi.hoisted(() => ({
@@ -71,6 +72,7 @@ const {
   listRepoLabelsWithMetaMock: vi.fn(async () => [] as Array<unknown>),
   addIssueToProjectMock: vi.fn(async () => ({ alreadyPresent: false })),
   setIssueLabelPresenceMock: vi.fn(async () => undefined),
+  editIssueLabelsMock: vi.fn(async () => undefined),
   setIssueProjectMetadataMock: vi.fn(async () => [] as string[]),
   syncIssueLabelsMock: vi.fn(async () => undefined),
   ensureLabelsMock: vi.fn(
@@ -104,6 +106,7 @@ vi.mock('@shipcode/agents', async () => {
     ensureLabels = ensureLabelsMock;
     addIssueToProject = addIssueToProjectMock;
     setIssueLabelPresence = setIssueLabelPresenceMock;
+    editIssueLabels = editIssueLabelsMock;
     setIssueProjectMetadata = setIssueProjectMetadataMock;
     syncIssueLabels = syncIssueLabelsMock;
   }
@@ -341,6 +344,8 @@ describe('registerGitHubHandlers', () => {
     addIssueToProjectMock.mockResolvedValue({ alreadyPresent: false });
     setIssueLabelPresenceMock.mockReset();
     setIssueLabelPresenceMock.mockResolvedValue(undefined);
+    editIssueLabelsMock.mockReset();
+    editIssueLabelsMock.mockResolvedValue(undefined);
     setIssueProjectMetadataMock.mockReset();
     setIssueProjectMetadataMock.mockResolvedValue([]);
     syncIssueLabelsMock.mockReset();
@@ -905,24 +910,18 @@ describe('registerGitHubHandlers', () => {
       'thread-failed',
     );
     await vi.waitFor(() => {
-      expect(setIssueLabelPresenceMock).toHaveBeenCalledWith(
-        50,
-        'shipcode:pipeline:planning',
-        false,
-      );
-      expect(setIssueLabelPresenceMock).toHaveBeenCalledWith(50, 'shipcode:pipeline:failed', true);
-      expect(setIssueLabelPresenceMock).toHaveBeenCalledWith(62, 'shipcode:pipeline:queued', false);
+      // Add and remove ride in one edit, so the issue is never left label-less.
+      expect(editIssueLabelsMock).toHaveBeenCalledWith(50, {
+        add: ['shipcode:pipeline:failed'],
+        remove: ['shipcode:pipeline:planning'],
+      });
+      expect(editIssueLabelsMock).toHaveBeenCalledWith(62, {
+        add: ['shipcode:pipeline:executing'],
+        remove: ['shipcode:pipeline:queued'],
+      });
     });
-    expect(setIssueLabelPresenceMock).not.toHaveBeenCalledWith(
-      60,
-      'shipcode:pipeline:queued',
-      false,
-    );
-    expect(setIssueLabelPresenceMock).not.toHaveBeenCalledWith(
-      61,
-      'shipcode:pipeline:queued',
-      false,
-    );
+    expect(editIssueLabelsMock).not.toHaveBeenCalledWith(60, expect.anything());
+    expect(editIssueLabelsMock).not.toHaveBeenCalledWith(61, expect.anything());
   });
 
   it('serializes new issue project board attachments during refresh', async () => {
