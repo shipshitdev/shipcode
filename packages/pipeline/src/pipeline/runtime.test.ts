@@ -10,6 +10,7 @@ import {
 } from '@shipcode/agents';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createGhSyncService } from '../gh-sync';
 import type { PipelineContext, PipelineDeps } from '../types';
 import { buildPhasePayload } from './context';
 import { buildFrozenInstallFallback, createPipelineRuntime, resolveSetupShell } from './runtime';
@@ -24,7 +25,7 @@ const { mockExecFile, mockLoadRepoSetupContract, mockGhCli } = vi.hoisted(() => 
     closeIssue: vi.fn(),
     reopenIssue: vi.fn(),
     getIssue: vi.fn(),
-    setIssueLabelPresence: vi.fn(),
+    editIssueLabels: vi.fn(),
     setIssueProjectMetadata: vi.fn(),
     getRepoMetadata: vi.fn(),
   },
@@ -146,6 +147,17 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
     cpuQueueLastNotifiedAt: null,
     ...overrides,
   } as PipelineContext;
+}
+
+/**
+ * gh sync service with instant retries, so failure-path tests settle inside the
+ * test's wait window instead of paying the real exponential backoff.
+ */
+function fastGhSync(deps: { projects: { getById: (id: string) => unknown } }) {
+  return createGhSyncService({
+    getProject: (projectId) => deps.projects.getById(projectId) as never,
+    queueOptions: { sleep: async () => {} },
+  });
 }
 
 function makeDeps(provider?: AgentProvider) {
@@ -1736,7 +1748,7 @@ describe('createPipelineRuntime', () => {
       labels: ['shipcode:pipeline:planning', 'bug'],
     });
     mockGhCli.setIssueProjectMetadata.mockResolvedValue(undefined);
-    mockGhCli.setIssueLabelPresence.mockResolvedValue(undefined);
+    mockGhCli.editIssueLabels.mockResolvedValue(undefined);
     const { deps } = makeDeps();
     deps.threads.getById = vi.fn(() => ({
       id: 'thread-1',
@@ -1768,22 +1780,21 @@ describe('createPipelineRuntime', () => {
       projectUrl: 'https://github.com/orgs/acme/projects/1',
       metadata: { status: 'In Progress' },
     });
-    expect(mockGhCli.setIssueLabelPresence).toHaveBeenCalledWith(
-      42,
-      'shipcode:pipeline:planning',
-      false,
-    );
-    expect(mockGhCli.setIssueLabelPresence).toHaveBeenCalledWith(
-      42,
-      'shipcode:pipeline:executing',
-      true,
-    );
+    // Single edit: the add and the remove ship together, so the issue is never
+    // momentarily left without a pipeline label.
+    expect(mockGhCli.editIssueLabels).toHaveBeenCalledTimes(1);
+    expect(mockGhCli.editIssueLabels).toHaveBeenCalledWith(42, {
+      add: ['shipcode:pipeline:executing'],
+      remove: ['shipcode:pipeline:planning'],
+    });
   });
 
   it('swallows GitHub project and label sync failures', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockGhCli.setIssueProjectMetadata.mockRejectedValue(new Error('project offline'));
     mockGhCli.getIssue.mockRejectedValue(new Error('issue offline'));
     const { deps } = makeDeps();
+    deps.ghSync = fastGhSync(deps) as never;
     deps.threads.getById = vi.fn(() => ({
       id: 'thread-1',
       projectId: 'project-1',
@@ -1807,8 +1818,11 @@ describe('createPipelineRuntime', () => {
     runtime.emitPhase('thread-1', 'executing');
     await new Promise((resolve) => setTimeout(resolve, 10));
 
+    // Failures are retried and reported, never rethrown into the pipeline.
     expect(mockGhCli.setIssueProjectMetadata).toHaveBeenCalled();
     expect(mockGhCli.getIssue).toHaveBeenCalledWith(42);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
   });
 
   it.each([
@@ -1818,7 +1832,7 @@ describe('createPipelineRuntime', () => {
   ] as const)('syncs GitHub project status mapping for %s phases', async (phase, statusName) => {
     mockGhCli.getIssue.mockResolvedValue({ labels: [] });
     mockGhCli.setIssueProjectMetadata.mockResolvedValue(undefined);
-    mockGhCli.setIssueLabelPresence.mockResolvedValue(undefined);
+    mockGhCli.editIssueLabels.mockResolvedValue(undefined);
     const { deps } = makeDeps();
     deps.threads.getById = vi.fn(() => ({
       id: 'thread-1',
@@ -1853,7 +1867,7 @@ describe('createPipelineRuntime', () => {
   it('skips GitHub project metadata writes when no mapped status name exists', async () => {
     mockGhCli.getIssue.mockResolvedValue({ labels: [] });
     mockGhCli.setIssueProjectMetadata.mockResolvedValue(undefined);
-    mockGhCli.setIssueLabelPresence.mockResolvedValue(undefined);
+    mockGhCli.editIssueLabels.mockResolvedValue(undefined);
     const { deps } = makeDeps();
     deps.threads.getById = vi.fn(() => ({
       id: 'thread-1',
@@ -1882,7 +1896,7 @@ describe('createPipelineRuntime', () => {
       labels: ['shipcode:pipeline:executing', 'enhancement'],
     });
     mockGhCli.setIssueProjectMetadata.mockResolvedValue(undefined);
-    mockGhCli.setIssueLabelPresence.mockResolvedValue(undefined);
+    mockGhCli.editIssueLabels.mockResolvedValue(undefined);
     const { deps } = makeDeps();
     deps.threads.getById = vi.fn(() => ({
       id: 'thread-1',
@@ -1904,19 +1918,16 @@ describe('createPipelineRuntime', () => {
     runtime.emitPhase('thread-1', 'executing');
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    expect(mockGhCli.setIssueLabelPresence).toHaveBeenCalledTimes(1);
-    expect(mockGhCli.setIssueLabelPresence).toHaveBeenCalledWith(
-      42,
-      'shipcode:pipeline:executing',
-      true,
-    );
+    // Nothing to add, nothing stale to remove — the edit is skipped entirely.
+    expect(mockGhCli.getIssue).toHaveBeenCalledWith(42);
+    expect(mockGhCli.editIssueLabels).not.toHaveBeenCalled();
   });
 
   it('syncs pipeline labels even when GitHub project status mapping is not configured', async () => {
     mockGhCli.getIssue.mockResolvedValue({
       labels: ['shipcode:pipeline:queued', 'enhancement'],
     });
-    mockGhCli.setIssueLabelPresence.mockResolvedValue(undefined);
+    mockGhCli.editIssueLabels.mockResolvedValue(undefined);
     const { deps } = makeDeps();
     deps.threads.getById = vi.fn(() => ({
       id: 'thread-1',
@@ -1937,24 +1948,24 @@ describe('createPipelineRuntime', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(mockGhCli.setIssueProjectMetadata).not.toHaveBeenCalled();
-    expect(mockGhCli.setIssueLabelPresence).toHaveBeenCalledWith(
-      42,
-      'shipcode:pipeline:queued',
-      false,
-    );
-    expect(mockGhCli.setIssueLabelPresence).toHaveBeenCalledWith(
-      42,
-      'shipcode:pipeline:paused',
-      true,
-    );
+    expect(mockGhCli.editIssueLabels).toHaveBeenCalledWith(42, {
+      add: ['shipcode:pipeline:paused'],
+      remove: ['shipcode:pipeline:queued'],
+    });
   });
 
-  it('logs queued GitHub sync writer failures', async () => {
-    vi.mocked(GhCli).mockImplementationOnce(function GhCli() {
+  it('logs queued GitHub sync writer failures once the retries are exhausted', async () => {
+    const boom = function GhCli() {
       throw new Error('gh unavailable');
-    } as never);
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    } as never;
+    // One per retry attempt, so the implementation never leaks into later tests.
+    vi.mocked(GhCli)
+      .mockImplementationOnce(boom)
+      .mockImplementationOnce(boom)
+      .mockImplementationOnce(boom);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { deps } = makeDeps();
+    deps.ghSync = fastGhSync(deps) as never;
     deps.threads.getById = vi.fn(() => ({
       id: 'thread-1',
       projectId: 'project-1',
@@ -1978,10 +1989,12 @@ describe('createPipelineRuntime', () => {
     runtime.emitPhase('thread-1', 'executing');
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    expect(warn).toHaveBeenCalledWith(
-      '[gh-status-sync] queued write failed',
+    expect(GhCli).toHaveBeenCalledTimes(3);
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('issue #42'),
       expect.objectContaining({ message: 'gh unavailable' }),
     );
+    error.mockRestore();
   });
 
   it('swallows phase log transition failures before syncing thread state', () => {

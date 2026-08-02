@@ -191,7 +191,14 @@ export function notifyIssueGraphPipelinePhaseChange(input: {
       deps.scheduler.startOrQueue(run.projectId, issue.issueNumber).catch(() => {});
     }
 
+    // Two independent ways a run finishes. `isSettled` is authoritative for
+    // issues the run itself tracked: it also covers the ones parked behind a
+    // failed prerequisite, whose cached pipeline status stays `todo` forever
+    // and would otherwise pin the run in this map. The status scan still
+    // catches issues that left the run through another route — closed, or
+    // dropped from the cache entirely — without ever reporting a phase.
     if (
+      run.runState.isSettled() ||
       run.selectedIssueIds.every((issueId) => {
         const issue = issuesById.get(issueId);
         return issue ? ISSUE_GROUP_TERMINAL_STATUSES.has(issue.pipelineStatus) : true;

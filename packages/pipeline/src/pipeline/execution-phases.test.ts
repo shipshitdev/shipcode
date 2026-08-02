@@ -2161,6 +2161,52 @@ describe('execution phase handlers', () => {
     expect(retryPrompt).toContain('- [blocker] src/a.ts: missing file');
   });
 
+  it('leaves owned shared failures unresolved when verification fails', async () => {
+    const context = makeContext({ verificationRetries: 0 });
+    const harness = makeExecutionHarness(context);
+    const resolveOwnedByThread = vi.fn(() => 0);
+    harness.deps.projectFailures = { claimOrCreate: vi.fn(), resolveOwnedByThread };
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: verificationFailed,
+      exitCode: 0,
+    });
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'status') return '';
+      if (args[0] === 'rev-parse') return 'head-sha\n';
+      if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
+      return '';
+    });
+
+    await harness.handlers.startVerification('thread-1');
+
+    // Resolving here would record a fix against a sha the verifier rejected,
+    // and claimOrCreate never re-opens a resolved row — the owning thread would
+    // be blocked by its own unverified "resolution" on the next test run.
+    expect(resolveOwnedByThread).not.toHaveBeenCalled();
+  });
+
+  it('resolves owned shared failures once verification passes', async () => {
+    const context = makeContext({ verificationRetries: 0 });
+    const harness = makeExecutionHarness(context);
+    const resolveOwnedByThread = vi.fn(() => 1);
+    harness.deps.projectFailures = { claimOrCreate: vi.fn(), resolveOwnedByThread };
+    vi.mocked(harness.runtime.runProviderPhase).mockResolvedValue({
+      rawOutput: verificationPassed,
+      exitCode: 0,
+    });
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'status') return '';
+      if (args[0] === 'rev-parse') return 'head-sha\n';
+      if (args[0] === 'diff') return 'diff --git a/src/a.ts b/src/a.ts\n';
+      return '';
+    });
+
+    const outcome = await harness.handlers.startVerification('thread-1');
+
+    expect(outcome).toEqual({ next: 'commit' });
+    expect(resolveOwnedByThread).toHaveBeenCalledWith('thread-1', 'head-sha');
+  });
+
   it('persists test and runtime QA output with a failed verification retry', async () => {
     const context = makeContext({ verificationRetries: 0 });
     const harness = makeExecutionHarness(context);

@@ -198,10 +198,7 @@ describe('syncThreadAndIssuePhase', () => {
     // Let microtask flush
     await new Promise((r) => setTimeout(r, 10));
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[phase-sync] gh status sync failed silently',
-      expect.any(Error),
-    );
+    expect(warnSpy).toHaveBeenCalledWith('[phase-sync] gh status sync failed', expect.any(Error));
     warnSpy.mockRestore();
   });
 
