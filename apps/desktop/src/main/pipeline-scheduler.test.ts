@@ -178,6 +178,8 @@ describe('PipelineScheduler', () => {
     startFromQuickTask: ReturnType<typeof vi.fn>;
     startFromAutomation: ReturnType<typeof vi.fn>;
     initializeContext: ReturnType<typeof vi.fn>;
+    reserveLaunch: ReturnType<typeof vi.fn>;
+    releaseLaunch: ReturnType<typeof vi.fn>;
   };
   let mainWindow: ReturnType<typeof makeMainWindow>;
   let scheduler: PipelineScheduler;
@@ -306,6 +308,9 @@ describe('PipelineScheduler', () => {
       },
     });
     queries = makeQueries();
+    // Backed by a real per-test set, matching `createPipeline` — a stub that
+    // always grants would hide a launcher that leaks or double-claims a thread.
+    const launchReservations = new Set<string>();
     pipeline = {
       listActive: vi.fn(() => []),
       listActiveInPhases: vi.fn(() => []),
@@ -315,6 +320,14 @@ describe('PipelineScheduler', () => {
       startFromQuickTask: vi.fn(async () => undefined),
       startFromAutomation: vi.fn(async () => undefined),
       initializeContext: vi.fn(),
+      reserveLaunch: vi.fn((threadId: string) => {
+        if (launchReservations.has(threadId)) return false;
+        launchReservations.add(threadId);
+        return true;
+      }),
+      releaseLaunch: vi.fn((threadId: string) => {
+        launchReservations.delete(threadId);
+      }),
     };
     mainWindow = makeMainWindow();
     scheduler = new PipelineScheduler({

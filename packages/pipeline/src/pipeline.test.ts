@@ -6205,6 +6205,48 @@ Custom prompt`,
     });
   });
 
+  // ─── reserveLaunch / releaseLaunch ──────────────────────────────────
+
+  describe('reserveLaunch', () => {
+    it('refuses a second claim on the same thread until it is released', () => {
+      const pipeline = createPipeline(mock.deps);
+
+      expect(pipeline.reserveLaunch('t1')).toBe(true);
+      expect(pipeline.reserveLaunch('t1')).toBe(false);
+
+      pipeline.releaseLaunch('t1');
+      expect(pipeline.reserveLaunch('t1')).toBe(true);
+    });
+
+    it('does not block unrelated threads', () => {
+      const pipeline = createPipeline(mock.deps);
+
+      expect(pipeline.reserveLaunch('t1')).toBe(true);
+      expect(pipeline.reserveLaunch('t2')).toBe(true);
+    });
+
+    it('refuses a thread that is already running, without any reservation', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      // The two halves of the guard are one union: a launcher must be turned
+      // away by an active context just as it is by an in-flight reservation.
+      expect(pipeline.reserveLaunch('t1')).toBe(false);
+    });
+
+    it('leaves a running pipeline untouched when its reservation is released', async () => {
+      const pipeline = createPipeline(mock.deps);
+      expect(pipeline.reserveLaunch('t1')).toBe(true);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      // The hand-off after a successful launch must clear only the claim —
+      // never the live context that now guards the thread.
+      pipeline.releaseLaunch('t1');
+      expect(pipeline.getContext('t1')).toBeDefined();
+      expect(pipeline.reserveLaunch('t1')).toBe(false);
+    });
+  });
+
   // ─── listActiveInPhases ─────────────────────────────────────────────
 
   describe('listActiveInPhases', () => {

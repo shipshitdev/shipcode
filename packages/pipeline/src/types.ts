@@ -631,6 +631,26 @@ export interface Pipeline {
     threadId: string,
     seed: Partial<PipelineContext> & Pick<PipelineContext, 'projectPath'>,
   ) => PipelineContext;
+  /**
+   * Claim `threadId` for a launch whose context is not seeded yet. Returns
+   * `false` when the thread already has a running pipeline or another in-flight
+   * launch.
+   *
+   * A launcher cannot guard re-entry on `thread.status` alone: `activePipelines`
+   * is only populated once `startFrom*` seeds the context, and a launch awaits
+   * real I/O (model validation, renderer refresh) before reaching that point.
+   * The reservation covers exactly that window, and is checked together with
+   * `activePipelines` so the two behave as one guard rather than two competing
+   * ones.
+   */
+  reserveLaunch: (threadId: string) => boolean;
+  /**
+   * Drop a reservation taken by `reserveLaunch` — either because the launch
+   * failed before dispatch, or because startup finished and `activePipelines`
+   * (which `reserveLaunch` also consults) now covers the thread. Only clears the
+   * reservation, so it can never tear down a live run's context.
+   */
+  releaseLaunch: (threadId: string) => void;
   cancel: (threadId: string) => void;
   pause: (threadId: string) => void;
   getContext: (threadId: string) => PipelineContext | undefined;

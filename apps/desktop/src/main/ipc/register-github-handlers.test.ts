@@ -1451,6 +1451,8 @@ describe('registerGitHubHandlers', () => {
     const pipeline = {
       listActive: vi.fn(() => []),
       startFromGitHubIssue: vi.fn(async () => undefined),
+      reserveLaunch: vi.fn(() => true),
+      releaseLaunch: vi.fn(),
     };
 
     registerGitHubHandlers({
@@ -1535,6 +1537,8 @@ describe('registerGitHubHandlers', () => {
       listActiveInPhases: vi.fn(() => []),
       startFromGitHubIssue: vi.fn(),
       startFromQuickTask: vi.fn(),
+      reserveLaunch: vi.fn(() => true),
+      releaseLaunch: vi.fn(),
     };
 
     registerGitHubHandlers({
