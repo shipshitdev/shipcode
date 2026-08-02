@@ -38,6 +38,8 @@ function createMockPipeline(contexts: Map<string, Partial<PipelineContext>> = ne
     startFromQuickTask: vi.fn(),
     startFromAutomation: vi.fn(),
     initializeContext: vi.fn(),
+    reserveLaunch: vi.fn(() => true),
+    releaseLaunch: vi.fn(),
     listActiveInPhases: vi.fn(() => []),
   } as unknown as Pipeline;
 }

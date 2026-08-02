@@ -37,7 +37,10 @@ export interface IssuePipelineLaunchDeps {
   threads: ThreadQueries;
   githubIssues: GitHubIssueQueries;
   plans: PlanQueries;
-  pipeline: Pick<Pipeline, 'startFromGitHubIssue' | 'startFromQuickTask'>;
+  pipeline: Pick<
+    Pipeline,
+    'startFromGitHubIssue' | 'startFromQuickTask' | 'reserveLaunch' | 'releaseLaunch'
+  >;
 }
 
 export interface IssuePipelineLaunchHooks {
@@ -80,87 +83,126 @@ export async function launchIssuePipeline(
     if (!linkedThread) throw new Error(`${label}: thread ${issue.threadId} missing`);
   }
 
-  deps.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.planning);
-  hooks.onIssueStarted?.();
-
-  const thread =
-    linkedThread ?? deps.threads.create(issue.projectId, issue.body ?? issue.title, issue.title);
-
-  if (linkedThread) {
-    deps.threads.updateIssueContent(thread.id, issue.body ?? issue.title, issue.title);
+  // `linkedThread.status` alone cannot close the re-launch door: the pipeline
+  // only registers the thread in `activePipelines` once `startFrom*` seeds its
+  // context, and everything between here and there — the renderer refresh in
+  // `onIssueLinked`, model validation, GitHub synthesis — is awaited work. Two
+  // launches racing through that window both read a reusable status and both
+  // proceed. Claiming the thread synchronously, before the first `await`, is
+  // what makes the guard hold; the pipeline checks the claim and
+  // `activePipelines` together so the two act as one guard, not two.
+  if (linkedThread && !deps.pipeline.reserveLaunch(linkedThread.id)) {
+    throw new Error(`${label} already has active thread`);
   }
 
-  if (isQuickTask) {
-    // Quick tasks have no GitHub repo association — the cache row holds a
-    // negative sentinel issue number, so `github_repo` must stay null or the
-    // pipeline's `isRealGithubIssueNumber` guards start seeing a repo they
-    // cannot address.
-    deps.threads.setGithubIssueNumber(thread.id, issue.issueNumber);
-  } else {
-    deps.threads.setGithubIssue(thread.id, issue.issueNumber, project.gitRemote);
-  }
-
-  deps.githubIssues.linkThread(issue.id, thread.id);
-  await hooks.onIssueLinked?.(thread);
+  // The reservation must survive every exit below, so the claim is released in
+  // a `finally` rather than at each return/throw. On success that release is a
+  // hand-off, not a gap: `startFrom*` seeds `activePipelines` synchronously
+  // before it awaits anything, so the guard is already covered by the time this
+  // unwinds.
+  let reservedThreadId = linkedThread?.id ?? null;
 
   try {
-    // validatePhaseModels can reject (unsupported model / missing API key). Keep it —
-    // and the phase-model persistence below — inside the try so onLaunchError fires
-    // and the thread transitions out of `planning` instead of being stranded there.
-    await hooks.validatePhaseModels?.(phaseModels);
+    deps.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.planning);
+    hooks.onIssueStarted?.();
 
-    deps.threads.setPhaseModels(thread.id, phaseModels);
-    deps.threads.resetFailureTracking(thread.id);
-    deps.plans.supersedeAll(thread.id);
-    deps.plans.supersedeAllForIssue(issue.projectId, issue.issueNumber, thread.id);
+    const thread =
+      linkedThread ?? deps.threads.create(issue.projectId, issue.body ?? issue.title, issue.title);
 
-    const startOptions: PipelineStartOptions = {
-      worktreePath: thread.worktreePath,
-      baseBranch: project.defaultBranch,
-      executorModelOverride: input.executorModelOverride ?? null,
-      plannerModel: phaseModels.plannerModel,
-      reviewerModel: phaseModels.reviewerModel,
-      verifierModel: phaseModels.verifierModel,
-      plannerModelIdOverride: phaseModels.plannerModelId,
-      reviewerModelIdOverride: phaseModels.reviewerModelId,
-      executorModelIdOverride: phaseModels.executorModelId,
-      verifierModelIdOverride: phaseModels.verifierModelId,
-      plannerReasoningEffort: phaseModels.plannerReasoningEffort,
-      reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
-      executorReasoningEffort: phaseModels.executorReasoningEffort,
-      verifierReasoningEffort: phaseModels.verifierReasoningEffort,
-    };
+    if (linkedThread) {
+      deps.threads.updateIssueContent(thread.id, issue.body ?? issue.title, issue.title);
+    } else {
+      // A freshly created thread id cannot collide, but claiming it keeps the
+      // pipeline's view of in-flight launches complete — a concurrent launch
+      // that reaches this thread by another path sees it as taken.
+      reservedThreadId = thread.id;
+      deps.pipeline.reserveLaunch(thread.id);
+    }
 
     if (isQuickTask) {
-      await deps.pipeline.startFromQuickTask(
-        thread.id,
-        project.path,
-        {
-          issueNumber: issue.issueNumber,
-          title: issue.title,
-          text: issue.body ?? issue.title,
-        },
-        phaseModels.executorModel,
-        startOptions,
-      );
+      // Quick tasks have no GitHub repo association — the cache row holds a
+      // negative sentinel issue number, so `github_repo` must stay null or the
+      // pipeline's `isRealGithubIssueNumber` guards start seeing a repo they
+      // cannot address.
+      deps.threads.setGithubIssueNumber(thread.id, issue.issueNumber);
     } else {
-      await deps.pipeline.startFromGitHubIssue(
-        thread.id,
-        project.path,
-        {
-          number: issue.issueNumber,
-          title: issue.title,
-          body: issue.body,
-          labels: issue.labels,
-        },
-        phaseModels.executorModel,
-        startOptions,
-      );
+      deps.threads.setGithubIssue(thread.id, issue.issueNumber, project.gitRemote);
     }
-  } catch (error) {
-    await hooks.onLaunchError?.(error, thread);
-    throw error;
-  }
 
-  return thread;
+    deps.githubIssues.linkThread(issue.id, thread.id);
+    await hooks.onIssueLinked?.(thread);
+
+    try {
+      // validatePhaseModels can reject (unsupported model / missing API key). Keep it —
+      // and the phase-model persistence below — inside the try so onLaunchError fires
+      // and the thread transitions out of `planning` instead of being stranded there.
+      await hooks.validatePhaseModels?.(phaseModels);
+
+      deps.threads.setPhaseModels(thread.id, phaseModels);
+      deps.threads.resetFailureTracking(thread.id);
+      deps.plans.supersedeAll(thread.id);
+      deps.plans.supersedeAllForIssue(issue.projectId, issue.issueNumber, thread.id);
+
+      const startOptions: PipelineStartOptions = {
+        worktreePath: thread.worktreePath,
+        baseBranch: project.defaultBranch,
+        executorModelOverride: input.executorModelOverride ?? null,
+        plannerModel: phaseModels.plannerModel,
+        reviewerModel: phaseModels.reviewerModel,
+        verifierModel: phaseModels.verifierModel,
+        plannerModelIdOverride: phaseModels.plannerModelId,
+        reviewerModelIdOverride: phaseModels.reviewerModelId,
+        executorModelIdOverride: phaseModels.executorModelId,
+        verifierModelIdOverride: phaseModels.verifierModelId,
+        plannerReasoningEffort: phaseModels.plannerReasoningEffort,
+        reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
+        executorReasoningEffort: phaseModels.executorReasoningEffort,
+        verifierReasoningEffort: phaseModels.verifierReasoningEffort,
+      };
+
+      if (isQuickTask) {
+        await deps.pipeline.startFromQuickTask(
+          thread.id,
+          project.path,
+          {
+            issueNumber: issue.issueNumber,
+            title: issue.title,
+            text: issue.body ?? issue.title,
+          },
+          phaseModels.executorModel,
+          startOptions,
+        );
+      } else {
+        await deps.pipeline.startFromGitHubIssue(
+          thread.id,
+          project.path,
+          {
+            number: issue.issueNumber,
+            title: issue.title,
+            body: issue.body,
+            labels: issue.labels,
+          },
+          phaseModels.executorModel,
+          startOptions,
+        );
+      }
+    } catch (error) {
+      // Release ahead of the hook: `onLaunchError` transitions the thread back
+      // to a relaunchable status, so the claim must already be gone by the time
+      // anything can act on that transition. Null the slot so the outer
+      // `finally` cannot release a second time — during the hook's await a
+      // concurrent launch may legitimately re-reserve this thread, and a
+      // second release here would steal that fresh claim mid-flight.
+      if (reservedThreadId) {
+        deps.pipeline.releaseLaunch(reservedThreadId);
+        reservedThreadId = null;
+      }
+      await hooks.onLaunchError?.(error, thread);
+      throw error;
+    }
+
+    return thread;
+  } finally {
+    if (reservedThreadId) deps.pipeline.releaseLaunch(reservedThreadId);
+  }
 }

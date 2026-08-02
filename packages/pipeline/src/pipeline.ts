@@ -24,6 +24,14 @@ import type {
 
 export function createPipeline(deps: PipelineDeps): Pipeline {
   const activePipelines = new Map<string, PipelineContext>();
+  /**
+   * Threads whose launch is in flight but whose context has not been seeded into
+   * `activePipelines` yet. A launcher reserves the thread before its first
+   * `await` and hands off once `startFrom*` returns, which keeps the re-launch
+   * guard closed across the whole startup — `activePipelines` alone leaves it
+   * open for as long as model validation and issue synthesis take.
+   */
+  const launchReservations = new Set<string>();
   const contextHelpers = createPipelineContextHelpers(deps, activePipelines);
   const runtime = createPipelineRuntime(deps, contextHelpers);
   const planning = createPlanningPhaseHandlers({ deps, contextHelpers, runtime });
@@ -412,6 +420,22 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     launch(threadId, () => execution.startExecution(threadId, synthesizedPlan));
   }
 
+  /**
+   * Both halves of the re-launch guard are consulted here, so a duplicate launch
+   * is rejected whether the first one is still starting up (reservation) or
+   * already running (`activePipelines`). Safe to call without synchronization:
+   * the check and the claim are one synchronous step.
+   */
+  function reserveLaunch(threadId: string): boolean {
+    if (activePipelines.has(threadId) || launchReservations.has(threadId)) return false;
+    launchReservations.add(threadId);
+    return true;
+  }
+
+  function releaseLaunch(threadId: string): void {
+    launchReservations.delete(threadId);
+  }
+
   function cancel(threadId: string) {
     haltActivePipeline(threadId);
 
@@ -466,6 +490,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     startFromQuickTask,
     startFromAutomation,
     initializeContext: contextHelpers.ensureContext,
+    reserveLaunch,
+    releaseLaunch,
     cancel,
     pause,
     getContext: (threadId: string) => activePipelines.get(threadId),

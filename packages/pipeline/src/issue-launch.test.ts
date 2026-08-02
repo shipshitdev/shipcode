@@ -101,13 +101,26 @@ describe('launchIssuePipeline', () => {
   };
   const githubIssues = { updatePipelineStatus: vi.fn(), linkThread: vi.fn() };
   const plans = { supersedeAll: vi.fn(), supersedeAllForIssue: vi.fn() };
+  // Mirrors the real reservation set in `createPipeline` rather than stubbing it
+  // to a constant — the launcher's TOCTOU guard is only meaningful if a second
+  // claim on the same thread is actually refused.
+  const launchReservations = new Set<string>();
   const pipeline = {
     startFromGitHubIssue: vi.fn(async () => undefined),
     startFromQuickTask: vi.fn(async () => undefined),
+    reserveLaunch: vi.fn((threadId: string) => {
+      if (launchReservations.has(threadId)) return false;
+      launchReservations.add(threadId);
+      return true;
+    }),
+    releaseLaunch: vi.fn((threadId: string) => {
+      launchReservations.delete(threadId);
+    }),
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    launchReservations.clear();
     threads.getById.mockReturnValue(null);
     pipeline.startFromGitHubIssue.mockResolvedValue(undefined);
     pipeline.startFromQuickTask.mockResolvedValue(undefined);
@@ -214,6 +227,132 @@ describe('launchIssuePipeline', () => {
     expect(githubIssues.updatePipelineStatus).not.toHaveBeenCalled();
     expect(githubIssues.linkThread).not.toHaveBeenCalled();
     expect(pipeline.startFromGitHubIssue).not.toHaveBeenCalled();
+  });
+
+  it('rejects a second launch that races the first across the validate await', async () => {
+    const reusableThread = makeThread({ id: 'thread-existing' });
+    threads.getById.mockReturnValue(reusableThread);
+
+    // Hold the first launch inside `validatePhaseModels` — the exact window the
+    // status check leaves open, since the thread is still `idle` in the DB and
+    // no context has been seeded yet.
+    let finishValidation: () => void = () => {};
+    const validationGate = new Promise<void>((resolve) => {
+      finishValidation = resolve;
+    });
+    const deps = () => ({
+      threads: threads as never,
+      githubIssues: githubIssues as never,
+      plans: plans as never,
+      pipeline,
+    });
+    const input = {
+      project,
+      issue: makeIssue({ threadId: 'thread-existing' }),
+      phaseModels,
+    };
+
+    const first = launchIssuePipeline(deps(), input, {
+      validatePhaseModels: vi.fn(async () => {
+        await validationGate;
+      }),
+    });
+    const second = launchIssuePipeline(deps(), input);
+
+    await expect(second).rejects.toThrow('Issue #42 already has active thread');
+    // The loser must not have touched shared launch state on its way out.
+    expect(githubIssues.updatePipelineStatus).toHaveBeenCalledOnce();
+    expect(githubIssues.linkThread).toHaveBeenCalledOnce();
+
+    finishValidation();
+    await expect(first).resolves.toBe(reusableThread);
+    expect(pipeline.startFromGitHubIssue).toHaveBeenCalledOnce();
+  });
+
+  it('releases the reservation on a failed launch so a retry can claim the thread', async () => {
+    const reusableThread = makeThread({ id: 'thread-existing' });
+    threads.getById.mockReturnValue(reusableThread);
+    const error = new Error('provider unavailable');
+    pipeline.startFromGitHubIssue.mockRejectedValueOnce(error);
+
+    // `onLaunchError` moves the thread back to a relaunchable status, so the
+    // claim has to be gone before it runs — otherwise the retry it invites is
+    // refused by a reservation nobody owns.
+    let reservedInsideErrorHook: boolean | null = null;
+    const onLaunchError = vi.fn(() => {
+      reservedInsideErrorHook = launchReservations.has('thread-existing');
+    });
+
+    const deps = () => ({
+      threads: threads as never,
+      githubIssues: githubIssues as never,
+      plans: plans as never,
+      pipeline,
+    });
+    const input = {
+      project,
+      issue: makeIssue({ threadId: 'thread-existing' }),
+      phaseModels,
+    };
+
+    await expect(launchIssuePipeline(deps(), input, { onLaunchError })).rejects.toBe(error);
+    expect(reservedInsideErrorHook).toBe(false);
+    expect(launchReservations.size).toBe(0);
+
+    await expect(launchIssuePipeline(deps(), input)).resolves.toBe(reusableThread);
+    expect(pipeline.startFromGitHubIssue).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not release a concurrent claim taken while onLaunchError awaits', async () => {
+    const reusableThread = makeThread({ id: 'thread-existing' });
+    threads.getById.mockReturnValue(reusableThread);
+    const error = new Error('provider unavailable');
+    pipeline.startFromGitHubIssue.mockRejectedValueOnce(error);
+
+    // The catch releases the claim before awaiting the hook, so a concurrent
+    // launch can legitimately re-reserve the thread during that await. The
+    // outer finally must not release again — that would strip the concurrent
+    // launch's fresh claim mid-flight and reopen the TOCTOU window.
+    const onLaunchError = vi.fn(async () => {
+      expect(pipeline.reserveLaunch('thread-existing')).toBe(true);
+    });
+
+    const deps = () => ({
+      threads: threads as never,
+      githubIssues: githubIssues as never,
+      plans: plans as never,
+      pipeline,
+    });
+    const input = {
+      project,
+      issue: makeIssue({ threadId: 'thread-existing' }),
+      phaseModels,
+    };
+
+    await expect(launchIssuePipeline(deps(), input, { onLaunchError })).rejects.toBe(error);
+    expect(onLaunchError).toHaveBeenCalledTimes(1);
+    expect(launchReservations.has('thread-existing')).toBe(true);
+  });
+
+  it('hands the reservation off to the running pipeline once a launch succeeds', async () => {
+    const reusableThread = makeThread({ id: 'thread-existing' });
+    threads.getById.mockReturnValue(reusableThread);
+
+    await launchIssuePipeline(
+      {
+        threads: threads as never,
+        githubIssues: githubIssues as never,
+        plans: plans as never,
+        pipeline,
+      },
+      { project, issue: makeIssue({ threadId: 'thread-existing' }), phaseModels },
+    );
+
+    // `startFrom*` seeds `activePipelines` synchronously, which is what keeps
+    // the guard closed after this hand-off — a leaked reservation would block
+    // every legitimate relaunch of the thread for the rest of the process.
+    expect(launchReservations.size).toBe(0);
+    expect(pipeline.releaseLaunch).toHaveBeenCalledWith('thread-existing');
   });
 
   it('reports launch failures with the prepared thread and rethrows', async () => {
