@@ -349,13 +349,13 @@ function resolveLinkedPullRequestPipelineStatus(
   return ISSUE_PIPELINE_STATUS.completed;
 }
 
-async function syncCachedIssuePipelineLabel(
+function syncCachedIssuePipelineLabel(
   ghSync: GhSyncDeps | undefined,
   project: import('@shipcode/shared').Project,
   issue: GitHubIssueCacheRecord,
   queries: Queries,
   status: import('@shipcode/shared').IssuePipelineStatus,
-): Promise<void> {
+): void {
   const targetLabel = pipelineLabelForStatus(status);
   const staleLabels = new Set(issue.labels.filter(isPipelineStateLabel));
   const currentStatusLabel = pipelineLabelForStatus(issue.pipelineStatus);
@@ -374,13 +374,22 @@ async function syncCachedIssuePipelineLabel(
   }
 
   if (!ghSync) return;
-  await ghSync.syncToGithub({
-    projectPath: project.path,
-    projectUrl: project.githubProjectUrl,
-    issueNumber: issue.issueNumber,
-    pipelineStatus: status,
-    statusMapping: project.githubStatusMapping,
-  });
+  // Fire-and-forget: the local cache above is what the UI reads, and the queue
+  // owns retry plus persistent-failure reporting for the GitHub write. Awaiting
+  // it here would put GH round-trips (and their retries) on the IPC path and
+  // turn a sync failure into a failed IPC call.
+  void ghSync
+    .syncToGithub({
+      projectPath: project.path,
+      repoFullName: project.githubRepoFullName,
+      projectUrl: project.githubProjectUrl,
+      issueNumber: issue.issueNumber,
+      pipelineStatus: status,
+      statusMapping: project.githubStatusMapping,
+    })
+    .catch((err) => {
+      log.warn('[ipc] cached issue pipeline label sync failed', err);
+    });
 }
 
 export async function syncLinkedPullRequestFeedback(
@@ -418,7 +427,7 @@ export async function syncLinkedPullRequestFeedback(
     queries.githubIssues.reconcileCompletedFromEvidence(issue.id);
     if (PR_REVIEW_PIPELINE_STATUSES.has(issue.pipelineStatus)) {
       queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.completed);
-      await syncCachedIssuePipelineLabel(
+      syncCachedIssuePipelineLabel(
         ghSync,
         project,
         issue,
@@ -443,7 +452,7 @@ export async function syncLinkedPullRequestFeedback(
   if (issue.pipelineStatus !== reviewStatus) {
     queries.githubIssues.updatePipelineStatus(issue.id, reviewStatus);
   }
-  await syncCachedIssuePipelineLabel(ghSync, project, issue, queries, reviewStatus);
+  syncCachedIssuePipelineLabel(ghSync, project, issue, queries, reviewStatus);
   if (queries.reviewFindings) {
     const latestPlan = queries.plans.getLatest(thread.id);
     const findings = buildPullRequestFeedbackFindingInputs({

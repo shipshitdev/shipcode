@@ -164,6 +164,7 @@ function updateIssuePipelineStatus(
   void ghSync
     .syncToGithub({
       projectPath: project.path,
+      repoFullName: project.githubRepoFullName,
       projectUrl: project.githubProjectUrl,
       issueNumber: issue.issueNumber,
       pipelineStatus: status,
@@ -226,6 +227,7 @@ function syncOpenIssueState(
       void ghSync
         .syncToGithub({
           projectPath: project.path,
+          repoFullName: project.githubRepoFullName,
           projectUrl: project.githubProjectUrl,
           issueNumber: issue.issueNumber,
           pipelineStatus: localPipelineStatus,
@@ -251,6 +253,7 @@ function syncOpenIssueState(
     void ghSync
       .syncToGithub({
         projectPath: project.path,
+        repoFullName: project.githubRepoFullName,
         projectUrl: project.githubProjectUrl,
         issueNumber: issue.issueNumber,
         pipelineStatus: localPipelineStatus,

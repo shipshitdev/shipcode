@@ -65,12 +65,15 @@ export function createReconciliationLoop(
   const log = deps.log ?? console.log;
 
   let timer: ReturnType<typeof setInterval> | null = null;
+  let inFlight: Promise<unknown> | null = null;
 
   async function tick(): Promise<ReconciliationTickResult> {
     const result: ReconciliationTickResult = { checked: 0, cancelled: [], errors: [] };
     const active = deps.pipeline.listActive();
 
-    // Batch by projectPath → issueNumbers to minimize GH API calls
+    // Group by projectPath so a project's threads are checked together.
+    // This is grouping, not batching — every thread below still costs one
+    // getIssueState call, which is why a tick can outlive its interval.
     const byProject = new Map<string, Array<{ threadId: string; issueNumber: number }>>();
     for (const summary of active) {
       const context = deps.pipeline.getContext(summary.threadId);
@@ -123,9 +126,22 @@ export function createReconciliationLoop(
   function start() {
     if (timer) return;
     timer = setInterval(() => {
-      tick().catch((err) => {
-        log(`[reconcile] tick failed: ${err instanceof Error ? err.message : String(err)}`);
-      });
+      // Re-entrancy guard. A tick makes one sequential gh call per thread, so a
+      // slow GitHub can push it past intervalMs. Overlapping ticks would both
+      // observe the same closed issue and cancel the thread twice — and because
+      // cancel() re-resolves the runId from the DB, the second cancel can land
+      // on a run that was already relaunched. Skip instead of stacking.
+      if (inFlight) {
+        log('[reconcile] previous tick still running — skipping this interval');
+        return;
+      }
+      inFlight = tick()
+        .catch((err) => {
+          log(`[reconcile] tick failed: ${err instanceof Error ? err.message : String(err)}`);
+        })
+        .finally(() => {
+          inFlight = null;
+        });
     }, intervalMs);
   }
 

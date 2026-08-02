@@ -542,6 +542,7 @@ export class PipelineScheduler {
     void this.deps.ghSync
       .syncToGithub({
         projectPath: project.path,
+        repoFullName: project.githubRepoFullName,
         projectUrl: project.githubProjectUrl,
         issueNumber,
         pipelineStatus: status,
