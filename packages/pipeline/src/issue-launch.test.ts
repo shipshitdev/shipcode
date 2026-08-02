@@ -303,6 +303,37 @@ describe('launchIssuePipeline', () => {
     expect(pipeline.startFromGitHubIssue).toHaveBeenCalledTimes(2);
   });
 
+  it('does not release a concurrent claim taken while onLaunchError awaits', async () => {
+    const reusableThread = makeThread({ id: 'thread-existing' });
+    threads.getById.mockReturnValue(reusableThread);
+    const error = new Error('provider unavailable');
+    pipeline.startFromGitHubIssue.mockRejectedValueOnce(error);
+
+    // The catch releases the claim before awaiting the hook, so a concurrent
+    // launch can legitimately re-reserve the thread during that await. The
+    // outer finally must not release again — that would strip the concurrent
+    // launch's fresh claim mid-flight and reopen the TOCTOU window.
+    const onLaunchError = vi.fn(async () => {
+      expect(pipeline.reserveLaunch('thread-existing')).toBe(true);
+    });
+
+    const deps = () => ({
+      threads: threads as never,
+      githubIssues: githubIssues as never,
+      plans: plans as never,
+      pipeline,
+    });
+    const input = {
+      project,
+      issue: makeIssue({ threadId: 'thread-existing' }),
+      phaseModels,
+    };
+
+    await expect(launchIssuePipeline(deps(), input, { onLaunchError })).rejects.toBe(error);
+    expect(onLaunchError).toHaveBeenCalledTimes(1);
+    expect(launchReservations.has('thread-existing')).toBe(true);
+  });
+
   it('hands the reservation off to the running pipeline once a launch succeeds', async () => {
     const reusableThread = makeThread({ id: 'thread-existing' });
     threads.getById.mockReturnValue(reusableThread);

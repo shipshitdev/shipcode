@@ -189,8 +189,14 @@ export async function launchIssuePipeline(
     } catch (error) {
       // Release ahead of the hook: `onLaunchError` transitions the thread back
       // to a relaunchable status, so the claim must already be gone by the time
-      // anything can act on that transition.
-      if (reservedThreadId) deps.pipeline.releaseLaunch(reservedThreadId);
+      // anything can act on that transition. Null the slot so the outer
+      // `finally` cannot release a second time — during the hook's await a
+      // concurrent launch may legitimately re-reserve this thread, and a
+      // second release here would steal that fresh claim mid-flight.
+      if (reservedThreadId) {
+        deps.pipeline.releaseLaunch(reservedThreadId);
+        reservedThreadId = null;
+      }
       await hooks.onLaunchError?.(error, thread);
       throw error;
     }
