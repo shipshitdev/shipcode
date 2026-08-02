@@ -23,6 +23,7 @@ vi.mock('@shipcode/pipeline', () => ({
   createIssueGroupRunState: vi.fn(() => ({
     getReadyIssueIds: () => ['issue-1', 'issue-2'],
     markIssueCompleted: () => ['issue-2'],
+    isSettled: () => false,
   })),
 }));
 
