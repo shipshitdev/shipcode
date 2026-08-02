@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { RuntimeQaServerConfig } from '@shipcode/shared';
+import { clampError, type RuntimeQaServerConfig } from '@shipcode/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineContext } from '../types';
 import {
@@ -2085,6 +2085,45 @@ describe('execution phase handlers', () => {
       andThen: { next: 'execute', plan },
     });
     expect(harness.runtime.runProviderPhase).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails the phase when the verification HEAD lookup throws, with a clamp-safe message', async () => {
+    const context = makeContext();
+    const harness = makeExecutionHarness(context);
+    // A deleted worktree makes `git rev-parse HEAD` throw with multi-KB stderr
+    // attached to the message. Unguarded, that unwound to the dispatch-loop
+    // catch in pipeline.ts and skipped this handler's own cleanup.
+    mockExecFileSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'status') return '';
+      if (args[0] === 'rev-parse') {
+        throw new Error(
+          `Command failed: git rev-parse HEAD\nfatal: not a git repository: '${context.worktreePath}'\n${'    at gitFrame\n'.repeat(300)}`,
+        );
+      }
+      return '';
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const outcome = await harness.handlers.startVerification('thread-1');
+
+    expect(outcome).toEqual({ next: 'failed' });
+    expect(harness.activePipelines.has('thread-1')).toBe(false);
+    expect(consoleError).toHaveBeenCalled();
+
+    const failure = vi
+      .mocked(harness.runtime.emitPhase)
+      .mock.calls.find(([, phase]) => phase === 'failed');
+    expect(failure?.[2]).toContain('Verification could not resolve HEAD');
+
+    // emitPhase clamps to first line + 280 chars before anything reaches the
+    // renderer, so the phase-identifying prefix has to lead: clamping must
+    // leave the useful part intact and drop the stack tail.
+    const clamped = clampError(failure?.[2]);
+    expect(clamped.startsWith('Verification could not resolve HEAD:')).toBe(true);
+    expect(clamped).not.toContain('at gitFrame');
+    expect(clamped.length).toBeLessThanOrEqual(280);
+
+    consoleError.mockRestore();
   });
 
   it('leaves owned shared failures unresolved when verification fails', async () => {
