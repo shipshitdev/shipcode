@@ -36,13 +36,20 @@ const { mockPromptArtifacts } = vi.hoisted(() => ({
   mockPromptArtifacts: new Map<string, string>(),
 }));
 
-const { mockExecSync, runMockedGit } = vi.hoisted(() => {
+const { mockExecSync, runMockedGit, forkPointCandidateRefs } = vi.hoisted(() => {
   const mockExecSync = vi.fn();
   return {
     mockExecSync,
     runMockedGit: async (cwd: string, args: string[]): Promise<string> => {
       const stdout: string = mockExecSync(['git', ...args].join(' '), { cwd });
       return stdout.trim();
+    },
+    // Same candidate ladder as the real resolveForkPointSha: blank base probes
+    // nothing, and an already-remote-qualified base is never double-prefixed.
+    forkPointCandidateRefs: (baseBranch: string): string[] => {
+      const base = baseBranch.trim();
+      if (!base) return [];
+      return Array.from(new Set([base, base.startsWith('origin/') ? base : `origin/${base}`]));
     },
   };
 });
@@ -87,7 +94,7 @@ vi.mock('@shipcode/git', () => {
     // Same sink as the rest of git: the run bootstrap resolves its fork point
     // through this helper, so per-test `git rev-parse` stubs keep driving it.
     resolveForkPointSha: vi.fn(async (cwd: string, baseBranch: string) => {
-      for (const ref of [baseBranch, `origin/${baseBranch}`]) {
+      for (const ref of forkPointCandidateRefs(baseBranch)) {
         try {
           const sha = await runMockedGit(cwd, ['rev-parse', '--verify', `${ref}^{commit}`]);
           if (sha) return sha;
