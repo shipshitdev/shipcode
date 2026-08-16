@@ -64,10 +64,16 @@ const OPENROUTER_MODEL_ALIASES: Record<string, string> = {
   'anthropic/claude-opus-4-8': OPENROUTER_MODEL_IDS.claudeOpus48,
 };
 
+// Anthropic models whose thinking is adaptive upstream, so OpenRouter ignores
+// reasoning.effort entirely. Fable 5 belongs here despite never offering `none` on the
+// Claude CLI path: over OpenRouter `none` only clears `include_reasoning` (it withholds
+// reasoning tokens from the response) instead of claiming the model stopped thinking, so it
+// stays a truthful choice for an always-thinking model.
 const OPENROUTER_ADAPTIVE_CLAUDE_MODELS = new Set<string>([
   OPENROUTER_MODEL_IDS.claudeSonnet46,
   OPENROUTER_MODEL_IDS.claudeOpus46,
   OPENROUTER_MODEL_IDS.claudeOpus48,
+  OPENROUTER_MODEL_IDS.claudeFable5,
 ]);
 
 const OPENROUTER_NO_REASONING_MODELS = new Set<string>([OPENROUTER_MODEL_IDS.qwen3CoderFree]);

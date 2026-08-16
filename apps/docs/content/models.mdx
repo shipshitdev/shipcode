@@ -13,7 +13,7 @@ The source of truth is [`model-catalog.ts`](https://github.com/shipshitdev/shipc
 | Gemini CLI | `gemini-2.5-pro`, `gemini-2.5-flash` | ✓ | ✓ | ✓ | ✓ |
 | Cursor CLI | `auto` | — | — | ✓ | — |
 | Grok CLI | `grok-4.5` | — | — | ✓ | — |
-| OpenRouter | `openrouter/auto`, `openrouter/free`, `anthropic/claude-sonnet-4.6`, `anthropic/claude-opus-4.8`, `qwen/qwen3.6-plus`, `qwen/qwen3-coder:free` | ✓ | ✓ | ✓ | ✓ |
+| OpenRouter | `openrouter/auto`, `openrouter/free`, `anthropic/claude-sonnet-4.6`, `anthropic/claude-opus-4.8`, `anthropic/claude-fable-5`, `openai/gpt-5.6-sol`, `openai/gpt-5.6-terra`, `openai/gpt-5.6-luna`, `qwen/qwen3.6-plus`, `qwen/qwen3-coder:free` | ✓ | ✓ | ✓ | ✓ |
 
 Codex publishes its installed model catalog through `codex debug models`; the models above are ShipCode's conservative fallback options when an older CLI cannot report capabilities. Cursor and Grok are execute-only because their headless CLIs cannot guarantee a read-only planning, review, or verification run.
 
@@ -91,16 +91,16 @@ ShipCode normalizes the shared `none`, `minimal`, `low`, `medium`, `high`, and `
 | Provider or model | Effective choices | Normalization rules |
 |-------------------|-------------------|---------------------|
 | Claude, except Fable 5 | None, Medium, High | Minimal/Low → None; Extra high → High |
-| Fable 5 | Medium, High | None/Minimal/Low → Medium; Extra high → High |
+| Fable 5 on Claude CLI | Medium, High | None/Minimal/Low → Medium; Extra high → High |
 | Codex | Low, Medium, High, Extra high | None/Minimal → Low |
 | Gemini | Low, Medium, High | None/Minimal → Low; Extra high → High |
 | Cursor | None | The CLI selects reasoning automatically |
 | Grok | None | The CLI selects reasoning automatically |
-| OpenRouter Claude models | None, High | Any non-None value uses adaptive thinking |
+| OpenRouter Claude models, incl. `anthropic/claude-fable-5` | None, High | Any non-None value uses adaptive thinking |
 | OpenRouter Qwen 3 Coder Free | None | Reasoning controls are disabled |
 | Other OpenRouter models | Provider-dependent | The requested effort may be remapped upstream |
 
-Fable 5 always uses adaptive thinking, so ShipCode never offers a no-thinking mode for it. A configured effort is normalized before the provider runs, and the effective value is what ShipCode records and displays.
+Fable 5 always uses adaptive thinking, so the Claude CLI path never offers a no-thinking mode for it. Over OpenRouter, None does not disable thinking — it only stops ShipCode requesting reasoning tokens back — so it stays available there. A configured effort is normalized before the provider runs, and the effective value is what ShipCode records and displays.
 
 ## See also
 

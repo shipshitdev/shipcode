@@ -234,6 +234,67 @@ describe('reasoning-effort', () => {
     );
   });
 
+  it('treats OpenRouter Fable 5 as adaptive, unlike Fable 5 on the Claude CLI', () => {
+    expect(getSupportedReasoningEfforts('openrouter', 'anthropic/claude-fable-5')).toEqual([
+      'none',
+      'high',
+    ]);
+    expect(formatProviderReasoningEffort('openrouter', 'xhigh', 'anthropic/claude-fable-5')).toBe(
+      'high',
+    );
+    expect(
+      resolveProviderReasoningEffort('openrouter', 'medium', 'anthropic/claude-fable-5'),
+    ).toEqual({
+      configured: 'medium',
+      effective: 'high',
+      exact: false,
+      message:
+        'anthropic/claude-fable-5 uses adaptive thinking on OpenRouter. reasoning.effort is ignored, so ShipCode treats any non-none value as the model default.',
+    });
+    // `none` only clears include_reasoning over OpenRouter, so it stays exact here even
+    // though the Claude CLI path refuses it for an always-thinking model.
+    expect(
+      resolveProviderReasoningEffort('openrouter', 'none', 'anthropic/claude-fable-5'),
+    ).toEqual({
+      configured: 'none',
+      effective: 'none',
+      exact: true,
+      message: null,
+    });
+    expect(getSupportedReasoningEfforts('claude', 'claude-fable-5')).toEqual(['medium', 'high']);
+  });
+
+  // The GPT-5.6 tiers advertise reasoning_effort upstream, so they intentionally fall through
+  // to the full ladder with the generic remap warning rather than getting a bespoke clamp.
+  it('keeps the OpenRouter GPT-5.6 tiers on the generic remap path', () => {
+    for (const modelId of [
+      'openai/gpt-5.6-sol',
+      'openai/gpt-5.6-terra',
+      'openai/gpt-5.6-luna',
+    ] as const) {
+      expect(getSupportedReasoningEfforts('openrouter', modelId)).toEqual([
+        'none',
+        'minimal',
+        'low',
+        'medium',
+        'high',
+        'xhigh',
+      ]);
+      expect(resolveProviderReasoningEffort('openrouter', 'xhigh', modelId)).toEqual({
+        configured: 'xhigh',
+        effective: 'xhigh',
+        exact: false,
+        message: `${modelId} accepts reasoning via OpenRouter, but OpenRouter may remap unsupported effort levels to the nearest supported level.`,
+      });
+      expect(resolveProviderReasoningEffort('openrouter', 'none', modelId)).toEqual({
+        configured: 'none',
+        effective: 'none',
+        exact: true,
+        message: null,
+      });
+    }
+  });
+
   it('disables reasoning entirely for OpenRouter models without reasoning support', () => {
     expect(getSupportedReasoningEfforts('openrouter', 'qwen/qwen3-coder:free')).toEqual(['none']);
     expect(resolveProviderReasoningEffort('openrouter', 'none', 'qwen/qwen3-coder:free')).toEqual({
