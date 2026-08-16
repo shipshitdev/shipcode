@@ -1,4 +1,4 @@
-import type { CleanupCriteria, CleanupItem } from '@shipcode/shared';
+import { type CleanupCriteria, type CleanupItem, isShipCodeBranch } from '@shipcode/shared';
 
 export interface PullRequestSnapshot {
   number: number;
@@ -62,7 +62,7 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
   const isVerifiedMerged = (value: { aheadCount?: number; compareRef?: string | null }) =>
     value.compareRef != null && (value.aheadCount ?? 0) === 0;
   const isManagedBranch = (branch: string) =>
-    managedSet.has(branch) || prByHead.has(branch) || /^(shipcode\/|ship\/\d+)/.test(branch);
+    managedSet.has(branch) || prByHead.has(branch) || isShipCodeBranch(branch);
   const worktreeBranches = new Set(input.worktrees.map((wt) => wt.branch));
 
   for (const wt of input.worktrees) {

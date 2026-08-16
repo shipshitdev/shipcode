@@ -107,7 +107,7 @@ describe('normalizeBranches', () => {
     ).toEqual(['main']);
   });
 
-  it('13. ship/{N}-slug branches are filtered (ShipCode worktree branches)', () => {
+  it('13. legacy ship/{N}-slug branches are still filtered (pre-shipcode/ worktree branches)', () => {
     expect(
       normalizeBranches({
         raw: ['main', 'ship/42-add-keyboard-shortcut', 'ship/7-fix-bug'],
@@ -116,16 +116,32 @@ describe('normalizeBranches', () => {
     ).toEqual(['main']);
   });
 
-  it('14. feat/something is NOT filtered (user branches)', () => {
+  it('14. feat/something and ship-lookalikes are NOT filtered (user branches)', () => {
     expect(
       normalizeBranches({
         raw: ['main', 'feat/my-feature', 'feat/42-api-hardening'],
         defaultBranch: 'main',
       }),
     ).toEqual(['main', 'feat/42-api-hardening', 'feat/my-feature']);
+
+    expect(
+      normalizeBranches({
+        raw: ['main', 'shipyard/x', 'ship/abc'],
+        defaultBranch: 'main',
+      }),
+    ).toEqual(['main', 'ship/abc', 'shipyard/x']);
   });
 
-  it('15. remote ship/{N}-slug branches are also filtered', () => {
+  it('14b. shipcode/{N}-slug issue branches (current default format) are filtered', () => {
+    expect(
+      normalizeBranches({
+        raw: ['main', 'shipcode/42-add-keyboard-shortcut', 'remotes/origin/shipcode/7-fix-bug'],
+        defaultBranch: 'main',
+      }),
+    ).toEqual(['main']);
+  });
+
+  it('15. remote legacy ship/{N}-slug branches are also filtered', () => {
     expect(
       normalizeBranches({
         raw: ['main', 'remotes/origin/ship/42-add-shortcut'],

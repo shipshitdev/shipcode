@@ -88,10 +88,10 @@ describe('KanbanBoard branch-copy affordance', () => {
       copyBranchItem().dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(writeText).toHaveBeenCalledWith('ship/80-copy-branch-name-action');
+    expect(writeText).toHaveBeenCalledWith('shipcode/80-copy-branch-name-action');
     expect(onIssueClick).not.toHaveBeenCalled();
     expect(view.container.textContent).toContain('Copied');
-    expect(view.container.textContent).toContain('ship/80-copy-branch-name-action');
+    expect(view.container.textContent).toContain('shipcode/80-copy-branch-name-action');
 
     view.cleanup();
   });

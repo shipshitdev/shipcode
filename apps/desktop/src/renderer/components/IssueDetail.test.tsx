@@ -773,7 +773,7 @@ describe('IssueDetail', () => {
           onboardingVersion: 2,
           projectSortOrder: 'recent',
           worktreeRoot: null,
-          worktreeBranchFormat: 'ship/{id}-{slug}',
+          worktreeBranchFormat: 'shipcode/{id}-{slug}',
           revisionCount: 2,
           requireApproval: false,
           plannerReasoningEffort: 'high',
@@ -1201,7 +1201,7 @@ describe('IssueDetail', () => {
           onboardingVersion: 2,
           projectSortOrder: 'recent',
           worktreeRoot: null,
-          worktreeBranchFormat: 'ship/{id}-{slug}',
+          worktreeBranchFormat: 'shipcode/{id}-{slug}',
           revisionCount: 2,
           requireApproval: false,
           plannerReasoningEffort: 'high',
@@ -1404,7 +1404,7 @@ describe('IssueDetail', () => {
     });
 
     invokeMock.mockImplementation(async (channel) => {
-      if (channel === 'settings:get') return { worktreeBranchFormat: 'ship/{id}-{slug}' };
+      if (channel === 'settings:get') return { worktreeBranchFormat: 'shipcode/{id}-{slug}' };
       return [];
     });
 
@@ -1415,12 +1415,12 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     const copyButton = await screen.findByTestId('copy-branch-name');
-    expect(copyButton).toHaveAttribute('title', 'Copy branch name (ship/42-issue-title)');
+    expect(copyButton).toHaveAttribute('title', 'Copy branch name (shipcode/42-issue-title)');
 
     fireEvent.click(copyButton);
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith('ship/42-issue-title');
+      expect(writeText).toHaveBeenCalledWith('shipcode/42-issue-title');
     });
     await waitFor(() => {
       expect(screen.getByTestId('copy-branch-name')).toHaveAttribute('title', 'Copied!');

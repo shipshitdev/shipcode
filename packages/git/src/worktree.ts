@@ -1,5 +1,10 @@
 import path from 'node:path';
-import { formatIssueBranch as formatIssueBranchShared, slugifyIssueTitle } from '@shipcode/shared';
+import {
+  formatIssueBranch as formatIssueBranchShared,
+  isShipCodeBranch,
+  SHIPCODE_BRANCH_PREFIX,
+  slugifyIssueTitle,
+} from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
 import { type SimpleGit, simpleGit } from 'simple-git';
 import { resolveDefaultBranch } from './default-branch';
@@ -43,15 +48,12 @@ export interface WorktreeManagerOptions {
   /**
    * Branch naming format for issue-based worktrees.
    * Tokens: {id} = issue number, {slug} = slugified issue title.
-   * Default: 'ship/{id}-{slug}'.
+   * Default: 'shipcode/{id}-{slug}'.
    */
   branchFormat?: string;
 }
 
 const slugify = slugifyIssueTitle;
-
-/** ShipCode-managed branch prefixes for list() filtering. */
-const SHIPCODE_BRANCH_RE = /^(shipcode\/|ship\/\d+)/;
 
 /**
  * Prevent `git worktree add -b` from writing branch tracking config while
@@ -97,8 +99,7 @@ export class WorktreeManager {
       return this.formatIssueBranch(idOrNumber, title ?? '');
     }
     const slug = title ? slugify(title) : '';
-    if (slug) return `shipcode/${slug}`;
-    return `shipcode/${idOrNumber}`;
+    return `${SHIPCODE_BRANCH_PREFIX}${slug || idOrNumber}`;
   }
 
   /** Worktree path for an issue-based worktree. */
@@ -367,11 +368,11 @@ export class WorktreeManager {
   /**
    * List all ShipCode worktrees in this project by branch-name prefix.
    * Returns { path, branch } pairs so callers can act on either identifier.
-   * Matches both legacy `shipcode/` and `ship/{N}-` branch patterns.
+   * Matches the `shipcode/` prefix and legacy `ship/{N}-` issue branches.
    */
   async list(): Promise<Array<{ path: string; branch: string }>> {
     return (await listRegisteredWorktrees(this.git)).flatMap((worktree) =>
-      worktree.branch && SHIPCODE_BRANCH_RE.test(worktree.branch)
+      worktree.branch && isShipCodeBranch(worktree.branch)
         ? [{ path: worktree.path, branch: worktree.branch }]
         : [],
     );

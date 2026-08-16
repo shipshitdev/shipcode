@@ -1,3 +1,4 @@
+import { DEFAULT_BRANCH_FORMAT } from './branch-name';
 import { PINNED_MODEL_DEFAULTS } from './model-catalog';
 import { type AppSettings, type ExecutorModel, PIPELINE_PHASE, type PipelinePhase } from './types';
 
@@ -110,7 +111,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   projectSortOrder: 'recent',
   worktreeRoot: null,
   addProjectStartsIn: null,
-  worktreeBranchFormat: 'ship/{id}-{slug}',
+  worktreeBranchFormat: DEFAULT_BRANCH_FORMAT,
   revisionCount: 0,
   pipelineSpeedProfile: 'smart_fast',
   requireApproval: false,
