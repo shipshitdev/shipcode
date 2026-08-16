@@ -69,6 +69,15 @@ vi.mock('@shipcode/git', () => {
     }),
     resolveHeadCommit: vi.fn().mockResolvedValue('head-sha'),
     resolveCurrentBranch: vi.fn().mockResolvedValue('main'),
+    // Same sink as the rest of git: the run bootstrap resolves its fork point
+    // through this helper, so per-test `git rev-parse` stubs keep driving it.
+    resolveForkPointSha: vi.fn(async (cwd: string, baseBranch: string) => {
+      try {
+        return await runMockedGit(cwd, ['rev-parse', '--verify', `${baseBranch}^{commit}`]);
+      } catch {
+        return '';
+      }
+    }),
     // The execute path drives git through the async transport now; route it to
     // the same mockExecSync sink so per-test git stubs keep one command shape.
     runGit: vi.fn(runMockedGit),

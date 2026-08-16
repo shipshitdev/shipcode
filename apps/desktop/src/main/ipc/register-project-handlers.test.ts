@@ -90,7 +90,9 @@ const {
   gitPushMock: vi.fn(async () => ({ pushed: true })),
   // Default: the first candidate exists, i.e. the ordinary repo with a local
   // trunk and a matching origin ref.
-  gitResolveFirstExistingRefMock: vi.fn(async (refs: string[]) => refs[0] ?? null),
+  gitResolveFirstExistingRefMock: vi.fn(
+    async (refs: string[]): Promise<string | null> => refs[0] ?? null,
+  ),
   configureMainTelemetryMock: vi.fn(async () => undefined),
   applyLaunchAtLoginSettingMock: vi.fn(() => 'applied'),
   ensureLabelsMock: vi.fn(async () => ({ created: [], alreadyPresent: [], failed: [] })),

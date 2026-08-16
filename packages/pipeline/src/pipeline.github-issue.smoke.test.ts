@@ -46,6 +46,12 @@ vi.mock('@shipcode/git', () => {
     }),
     resolveHeadCommit: vi.fn().mockResolvedValue('head-sha'),
     resolveCurrentBranch: vi.fn().mockResolvedValue('main'),
+    // Routed through the same execSync sink the rest of this file stubs, so the
+    // bootstrap's fork point still comes from the test's `rev-parse` response.
+    resolveForkPointSha: vi.fn(async (cwd: string, baseBranch: string) => {
+      const stdout: string = mockExecSync(`git rev-parse --verify ${baseBranch}^{commit}`, { cwd });
+      return stdout?.trim() ?? '';
+    }),
   };
 });
 
