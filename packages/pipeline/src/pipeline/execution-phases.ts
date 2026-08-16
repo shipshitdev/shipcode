@@ -37,6 +37,7 @@ import {
 } from '@shipcode/shared';
 import { computeRetryDelayMs } from '../retry-scheduler';
 import type { ExecutePhaseCarry, PipelineContext, VerifyPhaseCarry } from '../types';
+import { resolveFanOutJudgeModel } from '../workflow-loader';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { buildPhasePayload, resetPhaseState } from './context';
 import { captureExecutionCheckpoint } from './execution-checkpoint';
@@ -132,7 +133,15 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
     });
     const baseBranch = context.baseBranch || undefined;
     const signal = context.abort.signal;
-    const judgeModelId = agentPolicy.fanOutJudgeModel;
+    // Unset `fan_out_judge_model` resolves to Fable 5 on a Claude run and stays
+    // null (verifier phase model) on every other executor — see
+    // `resolveFanOutJudgeModel`. Non-null flips the judge onto that model's
+    // inferred provider just below, so the resolver must never hand a Claude id
+    // to a non-Claude run.
+    const judgeModelId = resolveFanOutJudgeModel(
+      agentPolicy.fanOutJudgeModel,
+      context.executorModel,
+    );
     const created: Array<{ label: string; worktreePath: string; branch: string }> = [];
 
     const captureDiff = async (worktree: {

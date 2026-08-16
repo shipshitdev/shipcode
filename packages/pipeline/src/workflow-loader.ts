@@ -1,5 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import type { ExecutorModel } from '@shipcode/shared';
+import { CLAUDE_MODEL_IDS, isClaudeRollingModelAlias, resolveModelAlias } from '@shipcode/shared';
 import { parse as parseYaml } from 'yaml';
 import { DEFAULT_MAX_RETRY_BACKOFF_MS } from './retry-scheduler';
 
@@ -7,6 +9,19 @@ export const DEFAULT_MAX_CONCURRENT_AGENTS = 10;
 export const DEFAULT_MAX_TURNS = 20;
 const DEFAULT_FAN_OUT_WORKER_COUNT = 3;
 export const MAX_FAN_OUT_WORKER_COUNT = 8;
+
+/**
+ * Judge model used when a fan-out run leaves `agent.fan_out_judge_model` unset
+ * AND the run's executor is the Claude CLI. Picking/merging N candidate diffs is
+ * the single most judgment-dense step in a fan-out execute, so it gets the
+ * strongest model rather than inheriting whatever the verifier phase is pinned
+ * to (which a repo may have deliberately set cheap).
+ *
+ * Deliberately a concrete id, not the rolling `fable` alias: the judge site
+ * infers the provider from this string via `inferProviderFromModel`, which only
+ * recognizes the `claude-` prefix.
+ */
+const DEFAULT_FAN_OUT_JUDGE_CLAUDE_MODEL: string = CLAUDE_MODEL_IDS.fable5;
 
 export type ExecuteOrchestration = 'single' | 'fan-out';
 
@@ -39,15 +54,20 @@ export interface WorkflowAgentPolicy {
   /**
    * Execute-phase orchestration. `single` (default) runs one executor agent.
    * `fan-out` runs `fanOutWorkerCount` cheap workers in isolated worktrees and
-   * has a judge (Opus by default) pick/merge the best result — opt-in per repo
-   * via `agent.execute_orchestration: fan-out` in WORKFLOW.md.
+   * has a judge (Fable 5 by default on Claude runs) pick/merge the best result
+   * — opt-in per repo via `agent.execute_orchestration: fan-out` in WORKFLOW.md.
    */
   executeOrchestration: ExecuteOrchestration;
   /** Number of parallel workers when `executeOrchestration` is `fan-out`. */
   fanOutWorkerCount: number;
   /**
-   * Model id for the fan-out judge. `null` falls back to the verifier phase
-   * model. Set to an Opus id to spend the expensive reasoning only on judging.
+   * Configured model id for the fan-out judge, or `null` when WORKFLOW.md leaves
+   * it unset. This is the raw policy value — resolve the *effective* judge model
+   * with `resolveFanOutJudgeModel`, which applies the Fable 5 default on Claude
+   * runs and keeps every other executor on its verifier phase model.
+   *
+   * Slug aliases are normalized at parse time, so `fable-5` / `fable5` land here
+   * as `claude-fable-5`.
    */
   fanOutJudgeModel: string | null;
 }
@@ -117,8 +137,47 @@ function parseFanOutWorkerCount(raw: unknown): number {
   return Math.min(n, MAX_FAN_OUT_WORKER_COUNT);
 }
 
+/**
+ * Normalize `agent.fan_out_judge_model` from front matter.
+ *
+ * Values run through `resolveModelAlias` so a human-typed shorthand becomes the
+ * concrete id the judge site needs — `fable-5` / `fable5` → `claude-fable-5`.
+ * The provider is fixed to `claude` for that call because the loader parses
+ * WORKFLOW.md with no knowledge of the run's executor, and `claude` is the one
+ * provider for which the resolver never throws: slug aliases are
+ * provider-agnostic, and a bare rolling family alias (`fable`, `opus`, …) is
+ * passed through instead of being rejected. Honoring a rolling alias is then the
+ * job of `resolveFanOutJudgeModel`, which does know the executor.
+ */
 function parseFanOutJudgeModel(raw: unknown): string | null {
-  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  return resolveModelAlias('claude', raw);
+}
+
+/**
+ * Resolve the effective fan-out judge model for a run.
+ *
+ * - An explicit `fan_out_judge_model` always wins, except for a bare rolling
+ *   Claude alias on a non-Claude executor: that alias is Claude-CLI-only (see
+ *   `resolveModelAlias`, which throws on it for every other provider), so it is
+ *   dropped rather than handed to a CLI that will reject the id.
+ * - Unset on a Claude run resolves to Fable 5 — judging fan-out candidates is
+ *   exactly the strongest-model job, and it should not silently inherit a
+ *   cost-tuned verifier phase model.
+ * - Unset on any other executor stays `null`, which keeps the judge on the
+ *   verifier phase model of that run's own provider. Defaulting a Claude id here
+ *   would force a Claude CLI onto a codex/gemini/cursor/grok/openrouter run,
+ *   since the judge site derives its provider from this very string.
+ */
+export function resolveFanOutJudgeModel(
+  configured: string | null,
+  executorModel: ExecutorModel,
+): string | null {
+  if (configured) {
+    if (isClaudeRollingModelAlias(configured) && executorModel !== 'claude') return null;
+    return configured;
+  }
+  return executorModel === 'claude' ? DEFAULT_FAN_OUT_JUDGE_CLAUDE_MODEL : null;
 }
 
 function parsePerStateCaps(raw: unknown): Record<string, number> {
