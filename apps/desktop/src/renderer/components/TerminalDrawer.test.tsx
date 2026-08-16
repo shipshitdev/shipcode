@@ -255,6 +255,13 @@ describe('TerminalDrawer', () => {
         'Console output will appear when you select or start an issue in this project.',
       ),
     ).toBeInTheDocument();
+    // The branch is tagged so an E2E failure reports "empty state rendered"
+    // rather than "transcript element(s) not found".
+    expect(screen.getByTestId('terminal-drawer-empty-state')).toHaveAttribute(
+      'data-empty-reason',
+      'no-target',
+    );
+    expect(screen.queryByTestId('terminal-transcript')).not.toBeInTheDocument();
   });
 
   it('uses the exit animation while closing', () => {
@@ -635,6 +642,10 @@ describe('TerminalDrawer', () => {
     renderWithProviders();
 
     expect(await screen.findByText('No issue selected for this project')).toBeInTheDocument();
+    expect(screen.getByTestId('terminal-drawer-empty-state')).toHaveAttribute(
+      'data-empty-reason',
+      'no-target',
+    );
     expect(screen.queryByText('ShipCode Assistant')).not.toBeInTheDocument();
   });
 

@@ -38,6 +38,17 @@ export interface SeedIssue {
   updatedAt?: string | null;
   /** Link this cached issue to a deterministic completed pipeline thread fixture. */
   linkedThread?: boolean;
+  /**
+   * Link this cached issue to a bare idle thread — a real `threads` row and a
+   * real `github_issues.thread_id` link, but no plan/run/diff/terminal-event
+   * artifacts.
+   *
+   * Specs that drive the terminal drawer need `thread:get` to resolve and the
+   * cached issue record to carry a `threadId`, without any pre-existing console
+   * output that would defeat an empty-transcript assertion. Mutually exclusive
+   * with `linkedThread`, which seeds a fully completed pipeline.
+   */
+  linkedIdleThread?: boolean;
 }
 
 export interface SeedOptions {
@@ -138,6 +149,12 @@ export function seedDatabase(dataDir: string, options: SeedOptions = {}): SeedRe
             projectId: project.id,
             projectPath,
           });
+        } else if (issue.linkedIdleThread) {
+          issueThreads[issue.issueNumber] = seedIdleIssueThread(db, {
+            issue: cachedIssue,
+            issueQueries,
+            projectId: project.id,
+          });
         }
       }
     }
@@ -192,6 +209,38 @@ export function seedDatabase(dataDir: string, options: SeedOptions = {}): SeedRe
   } finally {
     closeDatabase();
   }
+}
+
+/**
+ * Create a bare idle thread and link it to `issue`, returning the thread id.
+ *
+ * Both directions of the link are durable database state: the `threads` row is
+ * what `thread:get` returns, and `github_issues.thread_id` is what
+ * `github:list-issues` returns. `useTerminalDrawer` resolves its display target
+ * from whichever lands first and re-resolves to the same target on every
+ * refetch, so a spec that opens the drawer on this thread never depends on
+ * injected renderer state that a later query can overwrite.
+ *
+ * Deliberately creates no plan, run, diff, or terminal event: the thread must
+ * start with an empty console so empty-transcript assertions stay meaningful.
+ */
+function seedIdleIssueThread(
+  db: DatabaseSync,
+  {
+    issue,
+    issueQueries,
+    projectId,
+  }: {
+    issue: GitHubIssueCacheRecord;
+    issueQueries: GitHubIssueQueries;
+    projectId: string;
+  },
+): string {
+  const threads = new ThreadQueries(db);
+  const thread = threads.create(projectId, issue.body || issue.title, issue.title);
+  threads.setGithubIssue(thread.id, issue.issueNumber, 'shipshitdev/shipcode-e2e');
+  issueQueries.linkThread(issue.id, thread.id);
+  return thread.id;
 }
 
 function seedLinkedIssueThread(
