@@ -4,6 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerPipelineHandlers } from './register-pipeline-handlers';
 
 const execFileMock = vi.hoisted(() => vi.fn());
+const resolveForkPointShaMock = vi.hoisted(() =>
+  vi.fn<(cwd: string, baseBranch: string) => Promise<string>>(),
+);
+
+vi.mock('@shipcode/git', () => ({
+  resolveForkPointSha: resolveForkPointShaMock,
+}));
 
 vi.mock('../logger.service', () => ({
   default: {
@@ -246,6 +253,8 @@ describe('registerPipelineHandlers', () => {
   beforeEach(() => {
     handlers.clear();
     vi.clearAllMocks();
+    resolveForkPointShaMock.mockReset();
+    resolveForkPointShaMock.mockResolvedValue('');
     execFileMock.mockReset();
     execFileMock.mockImplementation(
       (
@@ -702,6 +711,34 @@ describe('registerPipelineHandlers', () => {
         'Fix it',
         '/tmp/project',
         null,
+      );
+    });
+
+    // Regression for #533: the handler used to rev-parse the bare default
+    // branch, so a clone whose trunk is only `origin/master` started every run
+    // with an empty fork point and no diff base.
+    it('records the fork point resolved through the origin ref ladder', async () => {
+      queries.projects.getById.mockReturnValue({
+        id: 'project-1',
+        name: 'Test Repo',
+        path: '/tmp/project',
+        gitRemote: 'https://github.com/acme/repo.git',
+        defaultBranch: 'master',
+      });
+      resolveForkPointShaMock.mockResolvedValue('origin-master-sha');
+
+      const handler = handlers.get('pipeline:start');
+      if (!handler) throw new Error('pipeline:start handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(resolveForkPointShaMock).toHaveBeenCalledWith('/tmp/project', 'master');
+      expect(pipeline.initializeContext).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({
+          baseBranch: 'master',
+          forkPointSha: 'origin-master-sha',
+        }),
       );
     });
 

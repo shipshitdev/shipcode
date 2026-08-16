@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineDeps, PipelineStartOptions } from '../types';
-import type { PipelineContextHelpers } from './shared';
 import { bootstrapPipelineRun } from './run-bootstrap';
+import type { PipelineContextHelpers } from './shared';
 
-const { mockExecFileSync } = vi.hoisted(() => ({
-  mockExecFileSync: vi.fn(),
+const { mockGetDefaultBranch, mockResolveForkPointSha } = vi.hoisted(() => ({
+  mockGetDefaultBranch: vi.fn<() => Promise<string>>(),
+  mockResolveForkPointSha: vi.fn<(cwd: string, baseBranch: string) => Promise<string>>(),
 }));
 
-vi.mock('node:child_process', () => ({
-  execFileSync: vi.fn((command: string, args: string[] = [], options?: object) =>
-    mockExecFileSync([command, ...args].join(' '), options),
-  ),
+vi.mock('@shipcode/git', () => ({
+  GitService: class {
+    getDefaultBranch = mockGetDefaultBranch;
+  },
+  resolveForkPointSha: mockResolveForkPointSha,
 }));
 
 const settings = {
@@ -46,16 +48,14 @@ function makeHarness() {
 
 describe('bootstrapPipelineRun', () => {
   beforeEach(() => {
-    mockExecFileSync.mockReset();
+    mockGetDefaultBranch.mockReset();
+    mockResolveForkPointSha.mockReset();
+    mockGetDefaultBranch.mockResolvedValue('develop');
+    mockResolveForkPointSha.mockResolvedValue('fork-sha');
   });
 
   for (const githubIssueNumber of [42, null]) {
-    it(`seeds the shared autonomous context for githubIssueNumber=${githubIssueNumber}`, () => {
-      mockExecFileSync.mockImplementation((command: string) => {
-        if (command.includes('symbolic-ref')) return 'origin/develop';
-        if (command.includes('rev-parse')) return 'fork-sha';
-        return '';
-      });
+    it(`seeds the shared autonomous context for githubIssueNumber=${githubIssueNumber}`, async () => {
       const harness = makeHarness();
       const options: PipelineStartOptions = {
         worktreePath: '/tmp/worktree',
@@ -73,7 +73,7 @@ describe('bootstrapPipelineRun', () => {
         verifierReasoningEffort: 'high',
       };
 
-      const result = bootstrapPipelineRun(harness.deps, harness.contextHelpers, {
+      const result = await bootstrapPipelineRun(harness.deps, harness.contextHelpers, {
         threadId: 'thread-1',
         projectPath: '/repo',
         githubIssueNumber,
@@ -141,14 +141,13 @@ describe('bootstrapPipelineRun', () => {
     });
   }
 
-  it('falls back to main and an empty fork point while applying setting defaults', () => {
-    mockExecFileSync.mockImplementation(() => {
-      throw new Error('git unavailable');
-    });
+  it('falls back to main and an empty fork point while applying setting defaults', async () => {
+    mockGetDefaultBranch.mockRejectedValue(new Error('git unavailable'));
+    mockResolveForkPointSha.mockResolvedValue('');
     const harness = makeHarness();
     harness.createRun.mockReturnValue(null);
 
-    const result = bootstrapPipelineRun(harness.deps, harness.contextHelpers, {
+    const result = await bootstrapPipelineRun(harness.deps, harness.contextHelpers, {
       threadId: 'thread-2',
       projectPath: '/repo',
       githubIssueNumber: null,
@@ -177,15 +176,12 @@ describe('bootstrapPipelineRun', () => {
     );
   });
 
-  it('uses an explicit base branch without probing origin HEAD', () => {
-    mockExecFileSync.mockImplementation((command: string) => {
-      if (command.includes('symbolic-ref')) throw new Error('unexpected origin probe');
-      if (command === 'git rev-parse release') return 'release-sha';
-      return '';
-    });
+  it('uses an explicit base branch without probing origin HEAD', async () => {
+    mockGetDefaultBranch.mockRejectedValue(new Error('unexpected origin probe'));
+    mockResolveForkPointSha.mockResolvedValue('release-sha');
     const harness = makeHarness();
 
-    const result = bootstrapPipelineRun(harness.deps, harness.contextHelpers, {
+    const result = await bootstrapPipelineRun(harness.deps, harness.contextHelpers, {
       threadId: 'thread-3',
       projectPath: '/repo',
       githubIssueNumber: 7,
@@ -196,10 +192,35 @@ describe('bootstrapPipelineRun', () => {
     });
 
     expect(result).toMatchObject({ baseBranch: 'release', forkPointSha: 'release-sha' });
-    expect(mockExecFileSync).toHaveBeenCalledOnce();
-    expect(mockExecFileSync).toHaveBeenCalledWith(
-      'git rev-parse release',
-      expect.objectContaining({ cwd: '/repo' }),
+    expect(mockGetDefaultBranch).not.toHaveBeenCalled();
+    expect(mockResolveForkPointSha).toHaveBeenCalledWith('/repo', 'release');
+  });
+
+  // Regression for #533: a clone that only ever ran ShipCode worktrees has
+  // `origin/master` but no local `master`. The old resolver hardcoded 'main' on
+  // any probe failure and then rev-parsed the bare name, so both the base
+  // branch and the fork point came out wrong.
+  it('records the origin trunk and its fork point for a repo with no local master', async () => {
+    mockGetDefaultBranch.mockResolvedValue('master');
+    mockResolveForkPointSha.mockImplementation(async (_cwd, baseBranch) =>
+      baseBranch === 'master' ? 'origin-master-sha' : '',
+    );
+    const harness = makeHarness();
+
+    const result = await bootstrapPipelineRun(harness.deps, harness.contextHelpers, {
+      threadId: 'thread-4',
+      projectPath: '/repo',
+      githubIssueNumber: 533,
+      githubIssueTitle: 'Master-only trunk',
+      executorModel: 'claude',
+      createRun: harness.createRun,
+    });
+
+    expect(result).toMatchObject({ baseBranch: 'master', forkPointSha: 'origin-master-sha' });
+    expect(mockResolveForkPointSha).toHaveBeenCalledWith('/repo', 'master');
+    expect(harness.updateAutonomousFields).toHaveBeenCalledWith(
+      'thread-4',
+      expect.objectContaining({ baseBranch: 'master', forkPointSha: 'origin-master-sha' }),
     );
   });
 });

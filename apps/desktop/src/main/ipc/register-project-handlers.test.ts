@@ -32,6 +32,7 @@ const {
   gitGetStatusMock,
   gitListBranchesMock,
   gitPushMock,
+  gitResolveFirstExistingRefMock,
   configureMainTelemetryMock,
   applyLaunchAtLoginSettingMock,
   ensureLabelsMock,
@@ -73,7 +74,7 @@ const {
   gitGetDiffAgainstHeadMock: vi.fn(async () => ''),
   gitGetDiffStatMock: vi.fn(async () => ''),
   gitGetRemoteUrlMock: vi.fn(async () => 'git@github.com:shipshitdev/shipcode.git'),
-  gitGetStatusMock: vi.fn(async () => ({
+  gitGetStatusMock: vi.fn(async (_path?: string, _compareRef?: string) => ({
     branch: 'main',
     commitHash: 'abc123',
     isDirty: false,
@@ -87,6 +88,9 @@ const {
   })),
   gitListBranchesMock: vi.fn(async () => ['main', 'develop']),
   gitPushMock: vi.fn(async () => ({ pushed: true })),
+  // Default: the first candidate exists, i.e. the ordinary repo with a local
+  // trunk and a matching origin ref.
+  gitResolveFirstExistingRefMock: vi.fn(async (refs: string[]) => refs[0] ?? null),
   configureMainTelemetryMock: vi.fn(async () => undefined),
   applyLaunchAtLoginSettingMock: vi.fn(() => 'applied'),
   ensureLabelsMock: vi.fn(async () => ({ created: [], alreadyPresent: [], failed: [] })),
@@ -213,6 +217,7 @@ vi.mock('@shipcode/git', () => ({
     getStatus = gitGetStatusMock;
     listBranches = gitListBranchesMock;
     push = gitPushMock;
+    resolveFirstExistingRef = gitResolveFirstExistingRefMock;
   },
   WorktreeManager: class {
     list = worktreeListMock;
@@ -3058,6 +3063,54 @@ describe('registerProjectHandlers', () => {
       filePath: 'src/app.ts',
     });
     expect(gitGetDiffAgainstHeadMock).toHaveBeenCalledWith(worktreePath);
+  });
+
+  // Regression for #533: ShipCode worktrees are created with
+  // branch.autoSetupMerge=false, so they have no @{upstream} and depend entirely
+  // on this compare ref. Passing the bare default-branch name made every
+  // worktree in an origin-only clone report 0/unknown ahead-behind.
+  it('compares worktree entries against origin/<default> when no local trunk exists', async () => {
+    const worktreePath = '/tmp/worktrees/project-1/thread-1';
+    const project = { ...baseProject, defaultBranch: 'master' };
+    const thread = {
+      id: 'thread-1',
+      title: 'Fix the thing',
+      status: 'completed',
+      worktreeBranch: 'shipcode/thread-1',
+      worktreePath,
+      githubIssueNumber: null,
+    };
+    worktreeListMock.mockResolvedValueOnce([{ path: worktreePath, branch: 'shipcode/thread-1' }]);
+    gitResolveFirstExistingRefMock.mockImplementationOnce(
+      async (refs: string[]) => refs.find((ref) => ref === 'origin/master') ?? null,
+    );
+
+    const queries = {
+      projects: { getById: vi.fn(() => project) },
+      settings: { get: vi.fn(() => ({ worktreeRoot: '/tmp/worktrees' })) },
+      threads: { list: vi.fn(() => [thread]) },
+      githubIssues: { getByThreadId: vi.fn(() => null) },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const visualizerData = handlers.get('git:visualizer-data');
+    if (!visualizerData) throw new Error('git:visualizer-data handler not registered');
+
+    await visualizerData(undefined, { projectId: project.id });
+
+    expect(gitResolveFirstExistingRefMock).toHaveBeenCalledWith(['origin/master', 'master']);
+    expect(gitGetStatusMock).toHaveBeenCalledWith(project.path, 'origin/master');
+    expect(gitGetStatusMock).toHaveBeenCalledWith(worktreePath, 'origin/master');
   });
 
   it('restores checkpoints and resets linked GitHub issues to todo', async () => {

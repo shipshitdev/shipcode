@@ -233,10 +233,19 @@ async function buildGitVisualizerData(
       })),
     ];
 
+  // ShipCode worktrees are created with branch.autoSetupMerge=false, so they
+  // have no @{upstream} and fall back entirely to this ref. Comparing them
+  // against the bare default-branch name showed 0/unknown ahead-behind in every
+  // repo whose trunk exists only as `origin/<default>`, so resolve the same
+  // ladder the cleanup analyzer uses and share one ref across all entries.
+  const compareRef =
+    (await git.resolveFirstExistingRef([
+      `origin/${project.defaultBranch}`,
+      project.defaultBranch,
+    ])) ?? `origin/${project.defaultBranch}`;
+
   const worktrees = await Promise.all(
     entries.map(async (entry) => {
-      const compareRef =
-        entry.kind === 'main' ? `origin/${project.defaultBranch}` : project.defaultBranch;
       const status = await git.getStatus(entry.path, compareRef);
       const thread =
         entry.kind === 'shipcode'
@@ -710,7 +719,11 @@ export function registerProjectHandlers({
         }
 
         return enrichProjectPath(queries.projects.getById(project.id));
-      } catch {
+      } catch (error) {
+        // Swallowing this used to leave the project on the schema default
+        // ('main') with no trace, which reads as a wrong trunk rather than a
+        // failed detection. Keep the project, but make the cause diagnosable.
+        log.warn(`[project:add] git info detection failed for ${projectPath}:`, error);
         return enrichProjectPath(queries.projects.getById(project.id));
       }
     },
@@ -774,8 +787,10 @@ export function registerProjectHandlers({
         const remote = await git.getRemoteUrl();
         const branch = await git.getDefaultBranch();
         queries.projects.updateGitInfo(projectId, remote, branch);
-      } catch {
-        // Preserve the new path even if git metadata refresh fails.
+      } catch (error) {
+        // Preserve the new path even if git metadata refresh fails — but say so,
+        // otherwise the project keeps a stale default branch with no signal.
+        log.warn(`[project:relink-path] git info refresh failed for ${projectPath}:`, error);
       }
 
       return enrichProjectPath(queries.projects.getById(projectId));
