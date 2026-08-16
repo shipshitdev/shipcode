@@ -54,8 +54,23 @@ vi.mock('@shipcode/git', () => {
     assertRegistered = vi.fn().mockResolvedValue(undefined);
   }
   class GitService {
+    constructor(readonly repoPath: string = '/proj') {}
     listBranches = vi.fn().mockResolvedValue([]);
-    getDefaultBranch = vi.fn().mockResolvedValue('main');
+    // Mirrors resolveDefaultBranch through the same execSync sink as the rest of
+    // git, so per-test `symbolic-ref` stubs keep driving the base branch. The
+    // real ladder's tail is 'main', and so is ours when the probe yields nothing.
+    getDefaultBranch = vi.fn(async () => {
+      try {
+        const head = await runMockedGit(this.repoPath, [
+          'symbolic-ref',
+          'refs/remotes/origin/HEAD',
+          '--short',
+        ]);
+        return head.replace('origin/', '') || 'main';
+      } catch {
+        return 'main';
+      }
+    });
   }
   return {
     WorktreeManager,
@@ -72,11 +87,15 @@ vi.mock('@shipcode/git', () => {
     // Same sink as the rest of git: the run bootstrap resolves its fork point
     // through this helper, so per-test `git rev-parse` stubs keep driving it.
     resolveForkPointSha: vi.fn(async (cwd: string, baseBranch: string) => {
-      try {
-        return await runMockedGit(cwd, ['rev-parse', '--verify', `${baseBranch}^{commit}`]);
-      } catch {
-        return '';
+      for (const ref of [baseBranch, `origin/${baseBranch}`]) {
+        try {
+          const sha = await runMockedGit(cwd, ['rev-parse', '--verify', `${ref}^{commit}`]);
+          if (sha) return sha;
+        } catch {
+          // Unstubbed ref: fall through to the remote-qualified candidate.
+        }
       }
+      return '';
     }),
     // The execute path drives git through the async transport now; route it to
     // the same mockExecSync sink so per-test git stubs keep one command shape.
@@ -5528,7 +5547,7 @@ Custom prompt`,
     it('wraps normal GitHub issues in the ShipCode run contract before planning', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('symbolic-ref')) return 'origin/develop';
-        if (cmd === 'git rev-parse develop') return 'forksha';
+        if (cmd === 'git rev-parse --verify develop^{commit}') return 'forksha';
         return '';
       });
 
@@ -5563,7 +5582,7 @@ Custom prompt`,
     it('does not resolve the project checkout branch before a worktree exists', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('symbolic-ref')) return 'origin/develop';
-        if (cmd === 'git rev-parse develop') return 'forksha';
+        if (cmd === 'git rev-parse --verify develop^{commit}') return 'forksha';
         return '';
       });
 
@@ -5888,7 +5907,7 @@ Custom prompt`,
     it('uses an explicit quick-task base branch without probing origin HEAD', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('symbolic-ref')) throw new Error('should not probe remote HEAD');
-        if (cmd.includes('rev-parse develop')) return 'develop-sha';
+        if (cmd.includes('rev-parse --verify develop')) return 'develop-sha';
         return '';
       });
       const pipeline = createPipeline(mock.deps);
