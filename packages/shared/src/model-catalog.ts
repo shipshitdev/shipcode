@@ -72,14 +72,32 @@ export const GROK_FALLBACK_MODEL_IDS = {
 export type GrokFallbackModelId =
   (typeof GROK_FALLBACK_MODEL_IDS)[keyof typeof GROK_FALLBACK_MODEL_IDS];
 
+// Every slug here must appear verbatim in `GET https://openrouter.ai/api/v1/models`.
+// OpenRouter uses dot-separated versions (`claude-opus-4.8`), unlike the dash-separated
+// Anthropic CLI IDs, and it does not alias one spelling to the other — a wrong spelling
+// is a hard 404 mid-run. `checkOpenRouterHealth` in packages/agents/src/health-check.ts
+// scans the live catalog for the configured slug and reports `model_deprecated`, so a
+// guessed entry surfaces as a broken preset rather than a caught mistake. Verify against
+// the live list before adding, and never transcribe an ID from memory.
+//
+// The rule covers this table and OPENROUTER_MODEL_OPTIONS, which are *offers* — a slug here
+// is one ShipCode invites a user to run. It deliberately does not cover KNOWN_MODEL_LABELS,
+// whose extra keys are display-only tolerance for ids a user may already have saved or may
+// paste by hand; see the comment there.
+//
+// Every entry below was re-verified against the live catalog on 2026-08-17 (414 models).
+// `qwen/qwen3-coder:free` was removed in that pass: OpenRouter no longer serves it.
 export const OPENROUTER_MODEL_IDS = {
   autoPaid: 'openrouter/auto',
   autoFree: 'openrouter/free',
   claudeSonnet46: 'anthropic/claude-sonnet-4.6',
   claudeOpus46: 'anthropic/claude-opus-4.6',
   claudeOpus48: 'anthropic/claude-opus-4.8',
+  claudeFable5: 'anthropic/claude-fable-5',
+  gpt56Sol: 'openai/gpt-5.6-sol',
+  gpt56Terra: 'openai/gpt-5.6-terra',
+  gpt56Luna: 'openai/gpt-5.6-luna',
   qwen36Plus: 'qwen/qwen3.6-plus',
-  qwen3CoderFree: 'qwen/qwen3-coder:free',
 } as const;
 
 export type OpenRouterModelId = (typeof OPENROUTER_MODEL_IDS)[keyof typeof OPENROUTER_MODEL_IDS];
@@ -123,8 +141,11 @@ export const OPENROUTER_MODEL_OPTIONS = [
   { value: OPENROUTER_MODEL_IDS.autoFree, label: 'Auto (free)' },
   { value: OPENROUTER_MODEL_IDS.claudeSonnet46, label: 'Claude Sonnet 4.6' },
   { value: OPENROUTER_MODEL_IDS.claudeOpus48, label: 'Claude Opus 4.8' },
+  { value: OPENROUTER_MODEL_IDS.claudeFable5, label: 'Claude Fable 5' },
+  { value: OPENROUTER_MODEL_IDS.gpt56Sol, label: 'GPT-5.6 Sol' },
+  { value: OPENROUTER_MODEL_IDS.gpt56Terra, label: 'GPT-5.6 Terra' },
+  { value: OPENROUTER_MODEL_IDS.gpt56Luna, label: 'GPT-5.6 Luna' },
   { value: OPENROUTER_MODEL_IDS.qwen36Plus, label: 'Qwen 3.6 Plus' },
-  { value: OPENROUTER_MODEL_IDS.qwen3CoderFree, label: 'Qwen 3 Coder Free' },
 ] as const satisfies readonly KnownModelOption<OpenRouterModelId>[];
 
 // Human-readable CLI names surfaced in availability / reasoning-effort warnings.
@@ -203,6 +224,21 @@ export const KNOWN_MODEL_LABELS: Record<string, string> = {
   grok: CURATED_MODEL_LABELS[PINNED_MODEL_DEFAULTS.grok.phase],
   openrouter: 'OpenRouter',
   ...CURATED_MODEL_LABELS,
+  // The dash-spelled `anthropic/...-4-6` / `-4-8` keys below are deliberate tolerance
+  // aliases, not duplicates: OpenRouter serves the dotted spelling (which arrives via the
+  // CURATED_MODEL_LABELS spread) while Anthropic's own CLI IDs are dash-separated, so users
+  // paste both. Only slugs whose version segment contains a dot need a dash twin — hence
+  // nothing here for `anthropic/claude-fable-5` (no dotted segment) or the
+  // `openai/gpt-5.6-*` tiers (Codex publishes those dotted too, so the dotted form is what
+  // users type).
+  //
+  // These keys are exempt from the live-catalog rule that governs OPENROUTER_MODEL_IDS, and
+  // several of them are not served by OpenRouter at all (the dash spellings never were;
+  // `openai/gpt-5-codex` was delisted). That is fine — a label is not an offer. Its only job
+  // is to render a friendly name for an id a user already has saved or types by hand, and a
+  // model going away is exactly when someone is most likely to be holding a stale id and
+  // least served by seeing a raw slug. Removing a label breaks that reader without
+  // un-breaking the model, so labels outlive their models on purpose.
   'anthropic/claude-sonnet-4-6': CURATED_MODEL_LABELS[OPENROUTER_MODEL_IDS.claudeSonnet46],
   [OPENROUTER_MODEL_IDS.claudeOpus46]: 'Claude Opus 4.6',
   'anthropic/claude-opus-4-6': 'Claude Opus 4.6',
@@ -218,6 +254,13 @@ export function getKnownModelLabel(modelId: string | null | undefined): string |
 // Human-friendly shorthands a user can type in a model field instead of an
 // exact id. Keys are matched case-insensitively. Bare Claude family names are
 // handled separately because they are rolling aliases only for Claude CLI.
+//
+// This table is intentionally single-namespace, so it resolves to CLI ids only: `fable-5`
+// yields `claude-fable-5` and `sol` yields `gpt-5.6-sol` for every provider, including
+// OpenRouter, where neither is a valid slug. OpenRouter selections must therefore be typed
+// vendor-prefixed (`anthropic/claude-fable-5`, `openai/gpt-5.6-sol`) and are offered
+// verbatim in OPENROUTER_MODEL_OPTIONS. Adding OpenRouter twins here would need a
+// provider-scoped table — a bare `fable-5` cannot mean both ids at once.
 export const MODEL_SLUG_ALIASES: Record<string, string> = {
   'opus-4.8': CLAUDE_MODEL_IDS.opus48,
   'opus4.8': CLAUDE_MODEL_IDS.opus48,

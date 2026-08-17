@@ -45,6 +45,7 @@ import {
   migrateV66,
   migrateV67,
   migrateV68,
+  migrateV69,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -1667,5 +1668,125 @@ describe('migrateV68', () => {
   it('is idempotent', () => {
     migrateThrough(db, migrateV68);
     expect(() => migrateV68(db)).not.toThrow();
+  });
+});
+
+describe('migrateV69', () => {
+  let db: DatabaseSync;
+  const DEAD = 'qwen/qwen3-coder:free';
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('clears delisted-model selections at every scope but keeps other models', () => {
+    migrateThrough(db, migrateV68);
+    db.exec(`
+      INSERT INTO settings (key, value) VALUES
+        ('openrouterExecutorModel', '${DEAD}'),
+        ('openrouterExplicitFallback', '${DEAD}'),
+        ('triageModelId', '${DEAD}'),
+        ('autoCommitModel', '${DEAD}'),
+        ('openrouterPlannerModel', 'anthropic/claude-fable-5'),
+        ('prdRewriteCodexModel', 'gpt-5.6-luna'),
+        ('theme', '${DEAD}');
+      INSERT INTO projects (id, name, path, git_remote, default_branch, created_at, updated_at,
+                            planner_model_id_override, verifier_model_id_override)
+      VALUES ('p1', 't', '/tmp', 'git@x', 'main', datetime('now'), datetime('now'),
+              '${DEAD}', 'qwen/qwen3.6-plus');
+      INSERT INTO github_issue_cache
+        (id, project_id, issue_number, title, labels, state, pipeline_status, executor_model_id_override)
+      VALUES ('i1', 'p1', 1, 'Issue', '[]', 'open', 'queued', '${DEAD}');
+      INSERT INTO automations
+        (id, project_id, name, prompt, cron_expr, enabled, executor_provider, executor_model_id,
+         created_at, updated_at)
+      VALUES ('a1', 'p1', 'nightly', 'go', '0 0 * * *', 1, 'openrouter', '${DEAD}',
+              datetime('now'), datetime('now'));
+    `);
+
+    migrateV69(db);
+
+    expect(
+      (
+        db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as {
+          version: number;
+        }
+      ).version,
+    ).toBe(69);
+
+    // Every key holding the dead slug is gone entirely, so the loader falls back to
+    // DEFAULT_SETTINGS instead of reading a slug that 404s. `triageModelId` and
+    // `autoCommitModel` are in that set despite not being `openrouter*`-prefixed: both hold an
+    // OpenRouter slug when their companion provider is openrouter, and `autoCommitProvider`
+    // defaults to openrouter. `prdRewriteCodexModel` is the other side of that coin — a
+    // provider-agnostic model key whose value is live, so it must survive.
+    const keys = (
+      db.prepare('SELECT key FROM settings ORDER BY key').all() as { key: string }[]
+    ).map((r) => r.key);
+    expect(keys).toEqual(['openrouterPlannerModel', 'prdRewriteCodexModel', 'theme']);
+
+    // A non-model key that happens to hold the same string is not a model selection and
+    // must survive — the migration is keyed on the column's meaning, not the value alone.
+    expect(
+      (db.prepare("SELECT value FROM settings WHERE key = 'theme'").get() as { value: string })
+        .value,
+    ).toBe(DEAD);
+
+    const project = db
+      .prepare(
+        "SELECT planner_model_id_override AS p, verifier_model_id_override AS v FROM projects WHERE id = 'p1'",
+      )
+      .get() as { p: string | null; v: string | null };
+    expect(project.p).toBeNull();
+    expect(project.v).toBe('qwen/qwen3.6-plus');
+
+    expect(
+      (
+        db
+          .prepare("SELECT executor_model_id_override AS e FROM github_issue_cache WHERE id = 'i1'")
+          .get() as { e: string | null }
+      ).e,
+    ).toBeNull();
+
+    // Cron automations resolve this column ahead of project/global defaults.
+    expect(
+      (
+        db.prepare("SELECT executor_model_id AS m FROM automations WHERE id = 'a1'").get() as {
+          m: string | null;
+        }
+      ).m,
+    ).toBeNull();
+  });
+
+  it('leaves resolved-model history untouched', () => {
+    migrateThrough(db, migrateV68);
+    db.exec(`
+      INSERT INTO projects (id, name, path, git_remote, default_branch, created_at, updated_at)
+      VALUES ('p1', 't', '/tmp', 'git@x', 'main', datetime('now'), datetime('now'));
+      INSERT INTO threads (id, project_id, prompt, title, status, created_at, updated_at,
+                           executor_resolved_model)
+      VALUES ('t1', 'p1', 'go', 'T', 'idle', datetime('now'), datetime('now'), '${DEAD}');
+    `);
+
+    migrateV69(db);
+
+    // What actually ran is evidence, not configuration. Rewriting it would falsify the
+    // per-phase telemetry the app reports.
+    expect(
+      (
+        db.prepare("SELECT executor_resolved_model AS m FROM threads WHERE id = 't1'").get() as {
+          m: string | null;
+        }
+      ).m,
+    ).toBe(DEAD);
+  });
+
+  it('is idempotent', () => {
+    migrateThrough(db, migrateV69);
+    expect(() => migrateV69(db)).not.toThrow();
   });
 });

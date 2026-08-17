@@ -4,8 +4,8 @@ import {
   CLAUDE_ROLLING_MODEL_ALIASES,
   CODEX_FALLBACK_MODEL_OPTIONS,
   GEMINI_FALLBACK_MODEL_OPTIONS,
-  getKnownModelLabel,
   GROK_FALLBACK_MODEL_OPTIONS,
+  getKnownModelLabel,
   OPENROUTER_MODEL_IDS,
   OPENROUTER_MODEL_OPTIONS,
   PINNED_MODEL_DEFAULTS,
@@ -100,6 +100,58 @@ describe('model-catalog', () => {
     expect(getKnownModelLabel('gpt-5.6-luna')).toBe('GPT-5.6 Luna');
   });
 
+  // Slugs pinned here were matched verbatim against GET
+  // https://openrouter.ai/api/v1/models on 2026-08-16. OpenRouter 404s an unknown slug
+  // mid-run, so these literals guard against a dash/dot or vendor-prefix regression.
+  it('exposes the verified OpenRouter Fable 5 and GPT-5.6 slugs', () => {
+    expect(OPENROUTER_MODEL_IDS.claudeFable5).toBe('anthropic/claude-fable-5');
+    expect(OPENROUTER_MODEL_IDS.gpt56Sol).toBe('openai/gpt-5.6-sol');
+    expect(OPENROUTER_MODEL_IDS.gpt56Terra).toBe('openai/gpt-5.6-terra');
+    expect(OPENROUTER_MODEL_IDS.gpt56Luna).toBe('openai/gpt-5.6-luna');
+
+    const values = OPENROUTER_MODEL_OPTIONS.map((option) => option.value);
+    expect(values).toContain('anthropic/claude-fable-5');
+    expect(values).toContain('openai/gpt-5.6-sol');
+    expect(values).toContain('openai/gpt-5.6-terra');
+    expect(values).toContain('openai/gpt-5.6-luna');
+
+    expect(getKnownModelLabel('anthropic/claude-fable-5')).toBe('Claude Fable 5');
+    expect(getKnownModelLabel('openai/gpt-5.6-sol')).toBe('GPT-5.6 Sol');
+    expect(getKnownModelLabel('openai/gpt-5.6-terra')).toBe('GPT-5.6 Terra');
+    expect(getKnownModelLabel('openai/gpt-5.6-luna')).toBe('GPT-5.6 Luna');
+  });
+
+  // Labels reach the pickers through OPENROUTER_MODEL_OPTIONS (or an explicit
+  // KNOWN_MODEL_LABELS entry). An id added to OPENROUTER_MODEL_IDS alone renders unlabelled,
+  // so assert the whole set resolves rather than only the ids this PR touched.
+  it('labels every OpenRouter catalog id', () => {
+    for (const modelId of Object.values(OPENROUTER_MODEL_IDS)) {
+      expect(getKnownModelLabel(modelId), `missing label for ${modelId}`).not.toBeNull();
+    }
+  });
+
+  // OpenRouter delisted `qwen/qwen3-coder:free` (absent from the live catalog on 2026-08-17),
+  // so it must not be offered again. It reads like a plausible free-tier default, which is
+  // exactly how a delisted slug gets re-added from memory — this pins the removal.
+  it('never re-offers the delisted Qwen 3 Coder Free slug', () => {
+    const dead = 'qwen/qwen3-coder:free';
+    expect(Object.values<string>({ ...OPENROUTER_MODEL_IDS })).not.toContain(dead);
+    expect(OPENROUTER_MODEL_OPTIONS.map((option) => option.value)).not.toContain(dead);
+    // The label map is exempt on purpose (it serves users holding a stale id), so a
+    // surviving label here is not a leak of the offer.
+  });
+
+  // The bare GPT-5.6 tiers stay Codex-CLI ids; OpenRouter needs the vendor prefix. Both
+  // spellings must keep resolving so a shared label lookup cannot collapse them.
+  it('keeps bare and OpenRouter-prefixed GPT-5.6 slugs distinct', () => {
+    expect(getKnownModelLabel('gpt-5.6-sol')).toBe('GPT-5.6 Sol');
+    expect(getKnownModelLabel('openai/gpt-5.6-sol')).toBe('GPT-5.6 Sol');
+    expect(CODEX_FALLBACK_MODEL_OPTIONS.map((option) => option.value)).not.toContain(
+      'openai/gpt-5.6-sol',
+    );
+    expect(OPENROUTER_MODEL_OPTIONS.map((option) => option.value)).not.toContain('gpt-5.6-sol');
+  });
+
   it('exposes Grok 4.5 as a selectable Grok fallback option', () => {
     expect(GROK_FALLBACK_MODEL_OPTIONS.map((option) => option.value)).toEqual(['grok-4.5']);
     expect(getKnownModelLabel('grok-4.5')).toBe('Grok 4.5');
@@ -153,6 +205,27 @@ describe('model-catalog', () => {
     it('passes already-canonical ids through unchanged', () => {
       expect(resolveModelAlias('claude', 'claude-opus-4-8')).toBe('claude-opus-4-8');
       expect(resolveModelAlias('openrouter', 'openrouter/auto')).toBe('openrouter/auto');
+    });
+
+    it('passes the verified OpenRouter slugs through untouched', () => {
+      for (const modelId of Object.values(OPENROUTER_MODEL_IDS)) {
+        expect(resolveModelAlias('openrouter', modelId)).toBe(modelId);
+        expect(resolveModelAlias('openrouter', `  ${modelId}  `)).toBe(modelId);
+      }
+    });
+
+    // MODEL_SLUG_ALIASES is single-namespace by design, so these shorthands resolve to CLI
+    // ids for every provider. Pinned so nobody "fixes" it into emitting a CLI id that
+    // OpenRouter would 404 on, and so the vendor-prefixed slug stays the documented input.
+    it('never resolves bare shorthands to OpenRouter slugs', () => {
+      expect(resolveModelAlias('openrouter', 'fable-5')).toBe('claude-fable-5');
+      expect(resolveModelAlias('openrouter', 'sol')).toBe('gpt-5.6-sol');
+      expect(resolveModelAlias('openrouter', 'terra')).toBe('gpt-5.6-terra');
+      expect(resolveModelAlias('openrouter', 'luna')).toBe('gpt-5.6-luna');
+      expect(resolveModelAlias('openrouter', 'anthropic/claude-fable-5')).toBe(
+        'anthropic/claude-fable-5',
+      );
+      expect(resolveModelAlias('openrouter', 'openai/gpt-5.6-sol')).toBe('openai/gpt-5.6-sol');
     });
 
     it('returns null for nullish or blank input', () => {

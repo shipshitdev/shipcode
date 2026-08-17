@@ -74,6 +74,7 @@ import {
   migrateV66,
   migrateV67,
   migrateV68,
+  migrateV69,
 } from './migrations/v63-v80';
 
 export {
@@ -145,6 +146,7 @@ export {
   migrateV66,
   migrateV67,
   migrateV68,
+  migrateV69,
 };
 
 /**
@@ -229,6 +231,7 @@ export const MIGRATIONS = [
   migrateV66,
   migrateV67,
   migrateV68,
+  migrateV69,
 ] as const satisfies ReadonlyArray<(db: DatabaseSync) => void>;
 
 /**

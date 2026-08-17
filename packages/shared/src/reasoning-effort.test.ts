@@ -234,20 +234,84 @@ describe('reasoning-effort', () => {
     );
   });
 
-  it('disables reasoning entirely for OpenRouter models without reasoning support', () => {
-    expect(getSupportedReasoningEfforts('openrouter', 'qwen/qwen3-coder:free')).toEqual(['none']);
-    expect(resolveProviderReasoningEffort('openrouter', 'none', 'qwen/qwen3-coder:free')).toEqual({
-      configured: 'none',
-      effective: 'none',
-      exact: true,
-      message: null,
-    });
+  // OpenRouter reports Fable 5 as `reasoning.mandatory: true` with supported efforts
+  // max/xhigh/high/medium/low — so it is neither adaptive (the efforts are honoured) nor
+  // able to accept `none`. Both directions matter: `xhigh` must survive untouched, and
+  // `none` must be lifted to the supported floor instead of promising no reasoning.
+  it('honours OpenRouter Fable 5 efforts and refuses none, unlike Fable 5 on the Claude CLI', () => {
+    expect(getSupportedReasoningEfforts('openrouter', 'anthropic/claude-fable-5')).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
+    for (const configured of ['low', 'medium', 'high', 'xhigh'] as const) {
+      expect(
+        resolveProviderReasoningEffort('openrouter', configured, 'anthropic/claude-fable-5'),
+      ).toEqual({ configured, effective: configured, exact: true, message: null });
+    }
+    for (const configured of ['none', 'minimal'] as const) {
+      expect(
+        resolveProviderReasoningEffort('openrouter', configured, 'anthropic/claude-fable-5'),
+      ).toEqual({
+        configured,
+        effective: 'low',
+        exact: false,
+        message:
+          'anthropic/claude-fable-5 always reasons on OpenRouter and supports Low, Medium, High, and Extra high effort. Using Low.',
+      });
+    }
+    // The CLI path stays narrower — it exposes thinking budgets, not OpenRouter's ladder.
+    expect(getSupportedReasoningEfforts('claude', 'claude-fable-5')).toEqual(['medium', 'high']);
+  });
+
+  // The GPT-5.6 tiers advertise reasoning_effort upstream, so they intentionally fall through
+  // to the full ladder with the generic remap warning rather than getting a bespoke clamp.
+  it('keeps the OpenRouter GPT-5.6 tiers on the generic remap path', () => {
+    for (const modelId of [
+      'openai/gpt-5.6-sol',
+      'openai/gpt-5.6-terra',
+      'openai/gpt-5.6-luna',
+    ] as const) {
+      expect(getSupportedReasoningEfforts('openrouter', modelId)).toEqual([
+        'none',
+        'minimal',
+        'low',
+        'medium',
+        'high',
+        'xhigh',
+      ]);
+      expect(resolveProviderReasoningEffort('openrouter', 'xhigh', modelId)).toEqual({
+        configured: 'xhigh',
+        effective: 'xhigh',
+        exact: false,
+        message: `${modelId} accepts reasoning via OpenRouter, but OpenRouter may remap unsupported effort levels to the nearest supported level.`,
+      });
+      expect(resolveProviderReasoningEffort('openrouter', 'none', modelId)).toEqual({
+        configured: 'none',
+        effective: 'none',
+        exact: true,
+        message: null,
+      });
+    }
+  });
+
+  // `qwen/qwen3-coder:free` was the only curated model with no reasoning controls, so the
+  // no-reasoning branch went away when OpenRouter delisted it. A delisted slug is now just an
+  // unknown one: it must fall through to the generic ladder rather than keep a private
+  // clamp, since nothing in the catalog can vouch for what it supports.
+  it('gives a delisted OpenRouter slug the generic ladder, not a private clamp', () => {
+    expect(getSupportedReasoningEfforts('openrouter', 'qwen/qwen3-coder:free')).toEqual([
+      'none',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
     expect(
       resolveProviderReasoningEffort('openrouter', 'medium', 'qwen/qwen3-coder:free'),
-    ).toMatchObject({
-      effective: 'none',
-      exact: false,
-    });
+    ).toMatchObject({ effective: 'medium', exact: false });
   });
 
   it('maps Gemini unsupported efforts to supported reasoning levels', () => {

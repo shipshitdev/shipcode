@@ -54,9 +54,6 @@ const OPENROUTER_ADAPTIVE_CLAUDE_EFFORTS = [
   'none',
   'high',
 ] as const satisfies readonly ReasoningEffort[];
-const OPENROUTER_DISABLED_REASONING_EFFORTS = [
-  'none',
-] as const satisfies readonly ReasoningEffort[];
 
 const OPENROUTER_MODEL_ALIASES: Record<string, string> = {
   'anthropic/claude-sonnet-4-6': OPENROUTER_MODEL_IDS.claudeSonnet46,
@@ -64,13 +61,52 @@ const OPENROUTER_MODEL_ALIASES: Record<string, string> = {
   'anthropic/claude-opus-4-8': OPENROUTER_MODEL_IDS.claudeOpus48,
 };
 
+// Anthropic models ShipCode treats as adaptive over OpenRouter: it offers `none` or `high`
+// and sends nothing more granular.
+//
+// Live catalog note (2026-08-17): OpenRouter advertises `reasoning_effort` and a
+// `supported_efforts` list for all three of these (`max`/`high`/`medium`/`low`, plus `xhigh`
+// on Opus 4.8), so the effort is *not* ignored upstream the way this set assumes — the
+// two-value offer is coarser than what the models accept. That is pre-existing behaviour and
+// changing it moves the wire payload for saved selections, so it is left alone here and
+// tracked separately; only Fable 5 was corrected, because this PR is what put it on this
+// path. Anything added to this set from now on needs its live `reasoning` metadata checked
+// first, exactly as the catalog itself does.
 const OPENROUTER_ADAPTIVE_CLAUDE_MODELS = new Set<string>([
   OPENROUTER_MODEL_IDS.claudeSonnet46,
   OPENROUTER_MODEL_IDS.claudeOpus46,
   OPENROUTER_MODEL_IDS.claudeOpus48,
 ]);
 
-const OPENROUTER_NO_REASONING_MODELS = new Set<string>([OPENROUTER_MODEL_IDS.qwen3CoderFree]);
+// OpenRouter reports `anthropic/claude-fable-5` as `reasoning.mandatory: true` with
+// `supported_efforts: ["max","xhigh","high","medium","low"]` and `default_effort: "high"`
+// (live catalog, 2026-08-17). Two consequences, both of which cost this model a place in the
+// adaptive set above:
+//
+//   1. `none` is not a value the model accepts, and the reasoning cannot be switched off, so
+//      offering `none` would promise something the wire cannot deliver.
+//   2. The remaining efforts are honoured rather than ignored, so clamping every non-none
+//      value to `high` would throw away a control the model actually exposes.
+//
+// `max` has no ShipCode equivalent, so the offer list is the four levels the
+// `ReasoningEffort` union can express. Below-floor selections land on `low` — the same
+// nearest-supported rule Codex and Gemini use — rather than on `default_effort`, so asking
+// for less reasoning never silently asks for more.
+const OPENROUTER_MANDATORY_REASONING_EFFORTS = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+] as const satisfies readonly ReasoningEffort[];
+const OPENROUTER_MANDATORY_REASONING_MODELS = new Set<string>([OPENROUTER_MODEL_IDS.claudeFable5]);
+const OPENROUTER_MANDATORY_REASONING_MESSAGE =
+  'always reasons on OpenRouter and supports Low, Medium, High, and Extra high effort.';
+
+// No curated OpenRouter model currently lacks reasoning support. The set, its `['none']`
+// effort list, and both call sites were removed with `qwen/qwen3-coder:free` (the sole
+// member, delisted upstream) rather than left empty: an empty Set makes every lookup dead
+// code that reads as if a case is still handled. Re-add the pair if a curated model turns up
+// with no reasoning controls — the shape to restore is in git history for this line.
 const REASONING_EFFORT_LABELS: Record<ReasoningEffort, string> = {
   none: 'None',
   minimal: 'Minimal',
@@ -135,12 +171,12 @@ export function getSupportedReasoningEfforts(
     return GROK_REASONING_EFFORTS;
   }
 
-  if (normalizedModelId && OPENROUTER_ADAPTIVE_CLAUDE_MODELS.has(normalizedModelId)) {
-    return OPENROUTER_ADAPTIVE_CLAUDE_EFFORTS;
+  if (normalizedModelId && OPENROUTER_MANDATORY_REASONING_MODELS.has(normalizedModelId)) {
+    return OPENROUTER_MANDATORY_REASONING_EFFORTS;
   }
 
-  if (normalizedModelId && OPENROUTER_NO_REASONING_MODELS.has(normalizedModelId)) {
-    return OPENROUTER_DISABLED_REASONING_EFFORTS;
+  if (normalizedModelId && OPENROUTER_ADAPTIVE_CLAUDE_MODELS.has(normalizedModelId)) {
+    return OPENROUTER_ADAPTIVE_CLAUDE_EFFORTS;
   }
 
   return ALL_REASONING_EFFORTS;
@@ -262,16 +298,16 @@ export function resolveProviderReasoningEffort(
     };
   }
 
-  if (normalizedModelId && OPENROUTER_NO_REASONING_MODELS.has(normalizedModelId)) {
-    if (configured === 'none') {
-      return { configured, effective: 'none', exact: true, message: null };
+  if (normalizedModelId && OPENROUTER_MANDATORY_REASONING_MODELS.has(normalizedModelId)) {
+    if (configured === 'none' || configured === 'minimal') {
+      return {
+        configured,
+        effective: 'low',
+        exact: false,
+        message: `${normalizedModelId} ${OPENROUTER_MANDATORY_REASONING_MESSAGE} Using ${formatReasoningEffortLabel('low')}.`,
+      };
     }
-    return {
-      configured,
-      effective: 'none',
-      exact: false,
-      message: `${normalizedModelId} does not expose OpenRouter reasoning controls. ShipCode disables reasoning for this model.`,
-    };
+    return { configured, effective: configured, exact: true, message: null };
   }
 
   if (normalizedModelId && OPENROUTER_ADAPTIVE_CLAUDE_MODELS.has(normalizedModelId)) {

@@ -147,7 +147,7 @@ describe('CostsQueries', () => {
       `UPDATE threads
          SET status = 'executing',
              executor_model = 'openrouter',
-             executor_resolved_model = 'qwen/qwen3-coder:free',
+             executor_resolved_model = 'qwen/qwen3.6-plus',
              total_cost_usd = 0.30
        WHERE id = ?`,
     ).run(executor.id);
@@ -164,7 +164,7 @@ describe('CostsQueries', () => {
     const rows = costs.listTasks();
     expect(rows.map((row) => [row.title, row.provider, row.model])).toEqual([
       ['Verifier', 'claude', 'anthropic/claude-sonnet-4-6'],
-      ['Executor', 'openrouter', 'qwen/qwen3-coder:free'],
+      ['Executor', 'openrouter', 'qwen/qwen3.6-plus'],
       ['Reviewer', 'codex', 'openai/gpt-5-codex'],
       ['Planner', 'claude', 'claude'],
     ]);

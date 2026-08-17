@@ -96,11 +96,11 @@ describe('createOpenRouterProvider', () => {
   });
 
   it('execute phase uses the executor model setting when no model hint is present', async () => {
-    const stub = makeStubClient({ content: 'no tools', model: 'qwen/qwen3-coder:free' });
+    const stub = makeStubClient({ content: 'no tools', model: 'qwen/qwen3.6-plus' });
     const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
     const provider = createOpenRouterProvider({
       getApiKey: () => 'k',
-      getSettings: () => settings({ openrouterExecutorModel: 'qwen/qwen3-coder:free' }),
+      getSettings: () => settings({ openrouterExecutorModel: 'qwen/qwen3.6-plus' }),
       createClient: () => stub,
     });
 
@@ -108,7 +108,7 @@ describe('createOpenRouterProvider', () => {
 
     expect(res.exitCode).toBe(1);
     expect(chatSpy.mock.calls[0][0]).toEqual(
-      expect.objectContaining({ model: 'qwen/qwen3-coder:free' }),
+      expect.objectContaining({ model: 'qwen/qwen3.6-plus' }),
     );
   });
 
@@ -200,7 +200,7 @@ describe('createOpenRouterProvider', () => {
     const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
     const provider = createOpenRouterProvider({
       getApiKey: () => 'k',
-      getSettings: () => settings({ openrouterPlannerModel: 'qwen/qwen3-coder:free' }),
+      getSettings: () => settings({ openrouterPlannerModel: 'qwen/qwen3.6-plus' }),
       createClient: () => stub,
     });
 
@@ -362,22 +362,50 @@ describe('createOpenRouterProvider', () => {
     );
   });
 
-  it('disables reasoning for OpenRouter models without reasoning support', async () => {
+  // This used to assert the `['none']` clamp for a model with no reasoning controls, whose
+  // sole member (`qwen/qwen3-coder:free`) OpenRouter delisted. The clamp went with it, but the
+  // behaviour worth pinning is the general one: a *model-specific* normalization overrides the
+  // configured effort on the wire. Sonnet 4.6 carries the surviving adaptive clamp, so the
+  // test rides that one — `medium` must not reach OpenRouter verbatim.
+  it('sends a model-specific clamp rather than the configured effort', async () => {
     const stub = makeStubClient();
     const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
     const provider = createOpenRouterProvider({
       getApiKey: () => 'k',
-      getSettings: () => settings({ openrouterPlannerModel: 'qwen/qwen3-coder:free' }),
+      getSettings: () => settings({ openrouterPlannerModel: 'anthropic/claude-sonnet-4.6' }),
       createClient: () => stub,
     });
 
-    await provider.generate(req({ phase: 'plan', phaseHints: { reasoningEffort: 'high' } }));
+    await provider.generate(req({ phase: 'plan', phaseHints: { reasoningEffort: 'medium' } }));
 
     expect(chatSpy.mock.calls[0][0]).toEqual(
       expect.objectContaining({
-        model: 'qwen/qwen3-coder:free',
-        include_reasoning: false,
-        reasoning: { effort: 'none' },
+        model: 'anthropic/claude-sonnet-4.6',
+        include_reasoning: true,
+        reasoning: { effort: 'high' },
+      }),
+    );
+  });
+
+  // Fable 5 is the opposite case and worth its own row: OpenRouter mandates its reasoning, so
+  // a configured `none` must be lifted to the supported floor instead of switching reasoning
+  // off — and `include_reasoning`, derived from the *normalized* effort, follows it up.
+  it('lifts a none selection to the floor for a mandatory-reasoning model', async () => {
+    const stub = makeStubClient();
+    const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
+    const provider = createOpenRouterProvider({
+      getApiKey: () => 'k',
+      getSettings: () => settings({ openrouterPlannerModel: 'anthropic/claude-fable-5' }),
+      createClient: () => stub,
+    });
+
+    await provider.generate(req({ phase: 'plan', phaseHints: { reasoningEffort: 'none' } }));
+
+    expect(chatSpy.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        model: 'anthropic/claude-fable-5',
+        include_reasoning: true,
+        reasoning: { effort: 'low' },
       }),
     );
   });
@@ -387,14 +415,14 @@ describe('createOpenRouterProvider', () => {
     const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
     const provider = createOpenRouterProvider({
       getApiKey: () => 'k',
-      getSettings: () => settings({ openrouterReviewerModel: 'qwen/qwen3-coder:free' }),
+      getSettings: () => settings({ openrouterReviewerModel: 'qwen/qwen3.6-plus' }),
       createClient: () => stub,
     });
 
     await provider.generate(req({ phase: 'review' }));
 
     expect(chatSpy.mock.calls[0][0]).toEqual(
-      expect.objectContaining({ model: 'qwen/qwen3-coder:free' }),
+      expect.objectContaining({ model: 'qwen/qwen3.6-plus' }),
     );
   });
 

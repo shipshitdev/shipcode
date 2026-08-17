@@ -101,7 +101,7 @@ function makeStubClient(): OpenRouterClientType {
         '```shipcode-issue-triage\n{"issues":[{"issueNumber":12,"confidence":0.9,"suggestedAgent":"codex","suggestedLabels":["shipcode:agent:codex"],"shouldStart":true,"needsHuman":false,"rationale":"Ready"}]}\n```',
       toolCalls: [],
       finishReason: 'stop',
-      model: 'qwen/qwen3-coder:free',
+      model: 'qwen/qwen3.6-plus',
       usage: null,
     })),
   } as unknown as OpenRouterClientType;
@@ -206,6 +206,12 @@ describe('issue triage', () => {
     ]);
   });
 
+  // Both branches are asserted here because the flag is derived (`effort !== 'none'`), not
+  // configured: a regression that forwarded the *configured* effort instead of the normalized
+  // one would still look right in whichever branch happened to agree. The `high` case used to
+  // reach `none` via a model with no reasoning controls (`qwen/qwen3-coder:free`, since
+  // delisted); it now rides Sonnet 4.6's adaptive clamp, which is the surviving normalization
+  // that rewrites a non-none effort while still letting `none` through exactly.
   it('derives OpenRouter include_reasoning from normalized triage effort', async () => {
     const client = makeStubClient();
     const chatSpy = client.chat as unknown as ReturnType<typeof vi.fn>;
@@ -214,15 +220,33 @@ describe('issue triage', () => {
       issues: [baseIssue],
       apiKey: 'k',
       settings: triageSettings({
-        triageModelId: 'qwen/qwen3-coder:free',
-        triageReasoningEffort: 'high',
+        triageModelId: 'anthropic/claude-sonnet-4.6',
+        triageReasoningEffort: 'medium',
       }),
       createOpenRouterClient: () => client,
     });
 
     expect(chatSpy.mock.calls[0][0]).toEqual(
       expect.objectContaining({
-        model: 'qwen/qwen3-coder:free',
+        model: 'anthropic/claude-sonnet-4.6',
+        include_reasoning: true,
+        reasoning: { effort: 'high' },
+      }),
+    );
+
+    await triageGitHubIssues({
+      issues: [baseIssue],
+      apiKey: 'k',
+      settings: triageSettings({
+        triageModelId: 'anthropic/claude-sonnet-4.6',
+        triageReasoningEffort: 'none',
+      }),
+      createOpenRouterClient: () => client,
+    });
+
+    expect(chatSpy.mock.calls[1][0]).toEqual(
+      expect.objectContaining({
+        model: 'anthropic/claude-sonnet-4.6',
         include_reasoning: false,
         reasoning: { effort: 'none' },
       }),

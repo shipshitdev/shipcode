@@ -1905,7 +1905,7 @@ describe('checkOpenRouterAuth', () => {
       )
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify({ data: [{ id: 'qwen/qwen3-coder:free' }, { id: 'openrouter/auto' }] }),
+          JSON.stringify({ data: [{ id: 'anthropic/claude-fable-5' }, { id: 'openrouter/auto' }] }),
           { status: 200 },
         ),
       );
@@ -1922,7 +1922,7 @@ describe('checkOpenRouterAuth', () => {
       )
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify({ data: [{ id: 'qwen/qwen3-coder:free' }, { id: 'openrouter/auto' }] }),
+          JSON.stringify({ data: [{ id: 'anthropic/claude-fable-5' }, { id: 'openrouter/auto' }] }),
           { status: 200 },
         ),
       );

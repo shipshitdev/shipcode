@@ -62,8 +62,25 @@ describe('executorReasoningOptions', () => {
   });
 
   it('respects OpenRouter per-model reasoning support', () => {
-    expect(values('openrouter', 'qwen/qwen3-coder:free')).toEqual(['inherit', 'none']);
     expect(values('openrouter', 'anthropic/claude-opus-4.8')).toEqual(['inherit', 'none', 'high']);
+    // Fable 5 is the one curated slug OpenRouter marks mandatory-reasoning: no `none`, but the
+    // efforts it does advertise are offered rather than collapsed to the adaptive pair above.
+    expect(values('openrouter', 'anthropic/claude-fable-5')).toEqual([
+      'inherit',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
+    expect(values('openrouter', 'qwen/qwen3.6-plus')).toEqual([
+      'inherit',
+      'none',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
   });
 
   it('keeps the form renderable for an incompatible free-form model id', () => {

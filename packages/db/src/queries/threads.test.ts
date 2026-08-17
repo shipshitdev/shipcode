@@ -608,7 +608,7 @@ describe('ThreadQueries', () => {
       threads.setResolvedModel(t.id, 'plan', 'anthropic/claude-sonnet-4-6');
       threads.setResolvedModel(t.id, 'review', 'openai/gpt-5-codex');
       threads.setResolvedModel(t.id, 'revision', 'anthropic/claude-opus-4-6');
-      threads.setResolvedModel(t.id, 'execute', 'qwen/qwen3-coder:free');
+      threads.setResolvedModel(t.id, 'execute', 'qwen/qwen3.6-plus');
       threads.setResolvedModel(t.id, 'verify', 'anthropic/claude-sonnet-4-6');
 
       const updated = threads.getById(t.id);
@@ -617,7 +617,7 @@ describe('ThreadQueries', () => {
       expect(updated.plannerResolvedModel).toBe('anthropic/claude-sonnet-4-6');
       expect(updated.reviewerResolvedModel).toBe('openai/gpt-5-codex');
       expect(updated.revisorResolvedModel).toBe('anthropic/claude-opus-4-6');
-      expect(updated.executorResolvedModel).toBe('qwen/qwen3-coder:free');
+      expect(updated.executorResolvedModel).toBe('qwen/qwen3.6-plus');
       expect(updated.verifierResolvedModel).toBe('anthropic/claude-sonnet-4-6');
     });
 
