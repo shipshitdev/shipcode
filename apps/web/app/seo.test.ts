@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { metadata as downloadMetadata } from './download/layout';
 import { listDocPaths, listPublicPagePaths, mdxFileToDocsPath } from './public-pages';
-import robots from './robots';
+import robots, { dynamic as robotsDynamic } from './robots';
 import {
   homeDiscoveryMetadata,
   SITE_CANONICAL,
@@ -12,7 +12,7 @@ import {
   sitemapUrl,
   WEB_APP_PATHS,
 } from './site';
-import sitemap from './sitemap';
+import sitemap, { dynamic as sitemapDynamic } from './sitemap';
 
 describe('public marketing SEO', () => {
   it('keeps the canonical host on shipcode.shipshit.dev', () => {
@@ -83,5 +83,7 @@ describe('public marketing SEO', () => {
       userAgent: '*',
       allow: '/',
     });
+    expect(robotsDynamic).toBe('force-static');
+    expect(sitemapDynamic).toBe('force-static');
   });
 });

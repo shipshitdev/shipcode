@@ -2,6 +2,8 @@ import type { MetadataRoute } from 'next';
 import { listPublicPagePaths } from './public-pages';
 import { sitemapUrl } from './site';
 
+export const dynamic = 'force-static';
+
 export default function sitemap(): MetadataRoute.Sitemap {
   return listPublicPagePaths().map((path) => ({
     url: sitemapUrl(path),
