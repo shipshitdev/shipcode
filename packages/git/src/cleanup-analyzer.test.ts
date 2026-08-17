@@ -125,7 +125,7 @@ describe('analyzeCleanup', () => {
         worktrees: [
           {
             path: '/wt/no-pr',
-            branch: 'ship/77-clean',
+            branch: 'shipcode/77-clean',
             dirty: false,
             aheadCount: 0,
             behindCount: 0,
@@ -141,9 +141,62 @@ describe('analyzeCleanup', () => {
         id: 'wt-no-pr:/wt/no-pr',
         kind: 'worktree-no-pr-clean',
         worktreePath: '/wt/no-pr',
+        branch: 'shipcode/77-clean',
+      }),
+    ]);
+  });
+
+  it('still recognizes legacy ship/{id} worktree branches as managed', () => {
+    const items = analyzeCleanup(
+      input({
+        worktrees: [
+          {
+            path: '/wt/legacy',
+            branch: 'ship/77-clean',
+            dirty: false,
+            aheadCount: 0,
+            behindCount: 0,
+            compareRef: 'main',
+          },
+        ],
+        criteria: { ...ALL_ON, worktreeNoPrCleanTree: true },
+      }),
+    );
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        kind: 'worktree-no-pr-clean',
         branch: 'ship/77-clean',
       }),
     ]);
+  });
+
+  it('does not treat unmanaged branches as ShipCode worktrees for the no-PR rule', () => {
+    const items = analyzeCleanup(
+      input({
+        worktrees: [
+          {
+            path: '/wt/user',
+            branch: 'shipyard/77-clean',
+            dirty: false,
+            aheadCount: 0,
+            behindCount: 0,
+            compareRef: 'main',
+          },
+          {
+            path: '/wt/user-2',
+            branch: 'ship/not-an-issue',
+            dirty: false,
+            aheadCount: 0,
+            behindCount: 0,
+            compareRef: 'main',
+          },
+        ],
+        criteria: { ...ALL_ON, worktreeNoPrCleanTree: true },
+      }),
+    );
+
+    expect(items).toEqual([]);
   });
 
   it('flags closed-PR worktrees with clean verified trees', () => {

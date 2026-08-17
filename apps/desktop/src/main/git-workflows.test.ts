@@ -108,7 +108,7 @@ async function createFixtureRepo() {
   tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-cleanup-'));
   const remotePath = path.join(tempRoot, 'origin.git');
   const repoPath = path.join(tempRoot, 'repo');
-  const worktreePath = path.join(tempRoot, 'worktree-ship-12-done');
+  const worktreePath = path.join(tempRoot, 'worktree-shipcode-12-done');
 
   fs.mkdirSync(repoPath);
   await execFileAsync('git', ['init', '--bare', remotePath]);
@@ -120,20 +120,20 @@ async function createFixtureRepo() {
   await writeAndCommit(repoPath, 'README.md', 'initial\n', 'initial commit');
   await git(repoPath, ['push', '-u', 'origin', 'main']);
 
-  await git(repoPath, ['checkout', '-b', 'ship/12-done']);
+  await git(repoPath, ['checkout', '-b', 'shipcode/12-done']);
   await writeAndCommit(repoPath, 'done.txt', 'done\n', 'done branch');
-  await git(repoPath, ['push', '-u', 'origin', 'ship/12-done']);
+  await git(repoPath, ['push', '-u', 'origin', 'shipcode/12-done']);
 
   await git(repoPath, ['checkout', 'main']);
-  await git(repoPath, ['merge', '--no-ff', 'ship/12-done', '-m', 'merge done']);
+  await git(repoPath, ['merge', '--no-ff', 'shipcode/12-done', '-m', 'merge done']);
   await git(repoPath, ['push', 'origin', 'main']);
 
-  await git(repoPath, ['checkout', '-b', 'ship/99-unmerged', 'main']);
+  await git(repoPath, ['checkout', '-b', 'shipcode/99-unmerged', 'main']);
   await writeAndCommit(repoPath, 'unmerged.txt', 'unmerged\n', 'unmerged branch');
-  await git(repoPath, ['push', '-u', 'origin', 'ship/99-unmerged']);
+  await git(repoPath, ['push', '-u', 'origin', 'shipcode/99-unmerged']);
   await git(repoPath, ['checkout', 'main']);
 
-  await git(repoPath, ['worktree', 'add', worktreePath, 'ship/12-done']);
+  await git(repoPath, ['worktree', 'add', worktreePath, 'shipcode/12-done']);
 
   return { repoPath, worktreePath };
 }
@@ -375,13 +375,13 @@ describe('cleanup git workflows', () => {
       project,
       criteria,
       activeSummaries: [],
-      managedBranches: ['ship/12-done', 'ship/99-unmerged'],
+      managedBranches: ['shipcode/12-done', 'shipcode/99-unmerged'],
     });
 
     expect(analysis.baseRef).toBe('origin/main');
     expect(analysis.items.map((item) => [item.kind, item.branch])).toEqual([
-      ['worktree-no-pr-clean', 'ship/12-done'],
-      ['remote-branch-merged', 'ship/12-done'],
+      ['worktree-no-pr-clean', 'shipcode/12-done'],
+      ['remote-branch-merged', 'shipcode/12-done'],
     ]);
 
     const result = await runCleanupApply({
@@ -395,18 +395,18 @@ describe('cleanup git workflows', () => {
     expect(result.succeeded).toEqual(analysis.items.map((item) => item.id));
     expect(fs.existsSync(worktreePath)).toBe(false);
     await expect(
-      gitCan(repoPath, ['show-ref', '--verify', 'refs/heads/ship/12-done']),
+      gitCan(repoPath, ['show-ref', '--verify', 'refs/heads/shipcode/12-done']),
     ).resolves.toBe(false);
-    await expect(git(repoPath, ['ls-remote', '--heads', 'origin', 'ship/12-done'])).resolves.toBe(
-      '',
-    );
+    await expect(
+      git(repoPath, ['ls-remote', '--heads', 'origin', 'shipcode/12-done']),
+    ).resolves.toBe('');
 
     await expect(
-      gitCan(repoPath, ['show-ref', '--verify', 'refs/heads/ship/99-unmerged']),
+      gitCan(repoPath, ['show-ref', '--verify', 'refs/heads/shipcode/99-unmerged']),
     ).resolves.toBe(true);
     await expect(
-      git(repoPath, ['ls-remote', '--heads', 'origin', 'ship/99-unmerged']),
-    ).resolves.toContain('refs/heads/ship/99-unmerged');
+      git(repoPath, ['ls-remote', '--heads', 'origin', 'shipcode/99-unmerged']),
+    ).resolves.toContain('refs/heads/shipcode/99-unmerged');
   }, 20_000);
 
   it('filters active worktrees while retaining merged PR branch cleanup candidates', async () => {
@@ -419,13 +419,13 @@ describe('cleanup git workflows', () => {
         number: 12,
         url: 'https://github.test/acme/repo/pull/12',
         state: 'MERGED',
-        headRefName: 'ship/12-done',
+        headRefName: 'shipcode/12-done',
       },
       {
         number: 99,
         url: 'https://github.test/acme/repo/pull/99',
         state: 'CLOSED',
-        headRefName: 'ship/99-unmerged',
+        headRefName: 'shipcode/99-unmerged',
       },
     ]);
 
@@ -433,7 +433,7 @@ describe('cleanup git workflows', () => {
       project: makeProject(repoPath),
       criteria: { ...DEFAULT_SETTINGS.cleanupCriteria, worktreeNoPrCleanTree: true },
       activeSummaries: [{ worktreePath }, { worktreePath: null }],
-      managedBranches: ['ship/12-done', 'ship/99-unmerged'],
+      managedBranches: ['shipcode/12-done', 'shipcode/99-unmerged'],
     });
 
     expect(listPullRequestsMock).toHaveBeenCalledWith({ state: 'all', limit: 200 });
@@ -442,7 +442,7 @@ describe('cleanup git workflows', () => {
     ).toBe(false);
     expect(analysis.items.map((item) => [item.kind, item.branch])).toContainEqual([
       'remote-branch-merged',
-      'ship/12-done',
+      'shipcode/12-done',
     ]);
   }, 20_000);
 
@@ -458,7 +458,7 @@ describe('cleanup git workflows', () => {
       project: makeProject(repoPath),
       criteria: { ...DEFAULT_SETTINGS.cleanupCriteria, worktreeNoPrCleanTree: true },
       activeSummaries: [],
-      managedBranches: ['ship/12-done', 'ship/99-unmerged'],
+      managedBranches: ['shipcode/12-done', 'shipcode/99-unmerged'],
     });
 
     expect(listPullRequestsMock).toHaveBeenCalledWith({ state: 'all', limit: 200 });
@@ -479,7 +479,7 @@ describe('cleanup git workflows', () => {
         {
           id: 'dirty-worktree',
           kind: 'worktree-no-pr-clean',
-          branch: 'ship/12-done',
+          branch: 'shipcode/12-done',
           worktreePath,
           dirty: false,
           aheadCount: 0,
@@ -497,7 +497,7 @@ describe('cleanup git workflows', () => {
         {
           id: 'unmerged-remote',
           kind: 'remote-branch-merged',
-          branch: 'ship/99-unmerged',
+          branch: 'shipcode/99-unmerged',
           remote: 'origin',
           aheadCount: 1,
           behindCount: 0,
@@ -546,7 +546,7 @@ describe('cleanup git workflows', () => {
         {
           id: 'artifacts',
           kind: 'worktree-artifacts',
-          branch: 'ship/12-done',
+          branch: 'shipcode/12-done',
           worktreePath,
           artifactPaths: ['node_modules', '.next'],
         },
@@ -561,7 +561,7 @@ describe('cleanup git workflows', () => {
     expect(fs.existsSync(path.join(worktreePath, '.next'))).toBe(false);
     expect(fs.existsSync(path.join(worktreePath, 'source.txt'))).toBe(true);
     await expect(
-      gitCan(repoPath, ['show-ref', '--verify', 'refs/heads/ship/12-done']),
+      gitCan(repoPath, ['show-ref', '--verify', 'refs/heads/shipcode/12-done']),
     ).resolves.toBe(true);
   }, 20_000);
 
@@ -570,8 +570,8 @@ describe('cleanup git workflows', () => {
       import('./git-workflows'),
       createFixtureRepo(),
     ]);
-    const aheadWorktreePath = path.join(tempRoot ?? repoPath, 'worktree-ship-99-unmerged');
-    await git(repoPath, ['worktree', 'add', aheadWorktreePath, 'ship/99-unmerged']);
+    const aheadWorktreePath = path.join(tempRoot ?? repoPath, 'worktree-shipcode-99-unmerged');
+    await git(repoPath, ['worktree', 'add', aheadWorktreePath, 'shipcode/99-unmerged']);
     await git(repoPath, ['branch', 'skip/me', 'main']);
     await git(repoPath, ['branch', 'local/merged-cleanup', 'main']);
 
@@ -589,7 +589,7 @@ describe('cleanup git workflows', () => {
         {
           id: 'ahead-worktree',
           kind: 'worktree-no-pr-clean',
-          branch: 'ship/99-unmerged',
+          branch: 'shipcode/99-unmerged',
           worktreePath: aheadWorktreePath,
           dirty: false,
           aheadCount: 0,
@@ -599,7 +599,7 @@ describe('cleanup git workflows', () => {
         {
           id: 'remove-error',
           kind: 'worktree-no-pr-clean',
-          branch: 'ship/12-done',
+          branch: 'shipcode/12-done',
           worktreePath,
           dirty: false,
           aheadCount: 0,

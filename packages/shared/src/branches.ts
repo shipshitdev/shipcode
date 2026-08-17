@@ -9,14 +9,17 @@
  *   - Remote-only branches keep their "<remote>/<branch>" prefix so they
  *     resolve as distinct refs on multi-remote repos.
  *   - When both local "foo" and "origin/foo" exist, the local wins (dedupe).
- *   - Internal `shipcode/*` branches are filtered out (they're worktree
- *     implementation branches, not user-pickable bases).
+ *   - ShipCode-managed branches (`shipcode/*`, plus legacy `ship/{id}…`) are
+ *     filtered out — they're worktree implementation branches, not
+ *     user-pickable bases.
  *   - HEAD pointer entries ("HEAD -> origin/main") and detached HEAD markers
  *     ("(HEAD detached at sha)", "(no branch, ...)") are filtered.
  *   - Sort: project default first (whether local or remote-only), then
  *     common defaults (main/master/develop/trunk) if present, then rest
  *     alphabetically with locals before remote-only.
  */
+import { isShipCodeBranch } from './branch-name';
+
 export interface NormalizeBranchesInput {
   /** BranchSummary.all from simple-git */
   raw: string[];
@@ -25,7 +28,6 @@ export interface NormalizeBranchesInput {
 }
 
 const COMMON_DEFAULTS = ['main', 'master', 'develop', 'trunk'];
-const SHIPCODE_BRANCH_RE = /^(shipcode\/|ship\/\d+)/;
 
 export function normalizeBranches({ raw, defaultBranch }: NormalizeBranchesInput): string[] {
   const locals = new Set<string>();
@@ -43,11 +45,11 @@ export function normalizeBranches({ raw, defaultBranch }: NormalizeBranchesInput
       const firstSlash = stripped.indexOf('/');
       if (firstSlash < 0) continue;
       const branchPart = stripped.slice(firstSlash + 1);
-      if (SHIPCODE_BRANCH_RE.test(branchPart)) continue;
+      if (isShipCodeBranch(branchPart)) continue;
       if (branchPart === 'HEAD') continue;
       remoteOnly.add(stripped);
     } else {
-      if (SHIPCODE_BRANCH_RE.test(name)) continue;
+      if (isShipCodeBranch(name)) continue;
       locals.add(name);
     }
   }

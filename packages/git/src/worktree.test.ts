@@ -71,14 +71,14 @@ branch refs/heads/${branch}
     expect(manager.getWorktreePath('thread-1')).toBe(
       '/tmp/shipcode-worktrees/project-9a1fd1/thread-1',
     );
-    expect(manager.getBranchName(42, '')).toBe('ship/42');
+    expect(manager.getBranchName(42, '')).toBe('shipcode/42');
     expect(manager.getWorktreePath(42, '')).toBe('/tmp/shipcode-worktrees/project-9a1fd1/42');
   });
 
   it('formats untitled issue branches and paths through default options', () => {
     const manager = new WorktreeManager('/repo/project');
 
-    expect(manager.getBranchName(42, undefined as never)).toBe('ship/42');
+    expect(manager.getBranchName(42, undefined as never)).toBe('shipcode/42');
     expect(manager.getWorktreePath(42, undefined as never)).toBe(defaultUntitledIssueWorktreePath);
   });
 
@@ -91,6 +91,10 @@ worktree /tmp/shipcode-worktrees/42-fix-openrouter
 HEAD def456
 branch refs/heads/ship/42-fix-openrouter
 
+worktree /tmp/shipcode-worktrees/43-fix-codex
+HEAD def457
+branch refs/heads/shipcode/43-fix-codex
+
 worktree /tmp/shipcode-worktrees/thread-1
 HEAD ghi789
 branch refs/heads/shipcode/thread-1
@@ -98,14 +102,23 @@ branch refs/heads/shipcode/thread-1
 worktree /tmp/other
 HEAD zyx987
 branch refs/heads/feature/not-ours
+
+worktree /tmp/lookalike
+HEAD zyx988
+branch refs/heads/shipyard/not-ours
 `);
 
     const manager = new WorktreeManager('/repo/project');
 
     await expect(manager.list()).resolves.toEqual([
+      // Legacy branches created before the shipcode/ unification still list.
       {
         path: '/tmp/shipcode-worktrees/42-fix-openrouter',
         branch: 'ship/42-fix-openrouter',
+      },
+      {
+        path: '/tmp/shipcode-worktrees/43-fix-codex',
+        branch: 'shipcode/43-fix-codex',
       },
       {
         path: '/tmp/shipcode-worktrees/thread-1',
@@ -125,7 +138,7 @@ branch refs/heads/feature/not-ours
 
     await expect(manager.create(42, 'Fix OpenRouter Tier 1!', 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
-      branch: 'ship/42-fix-openrouter-tier-1',
+      branch: 'shipcode/42-fix-openrouter-tier-1',
       baseRef: 'origin/main',
       baseStale: false,
     });
@@ -141,7 +154,7 @@ branch refs/heads/feature/not-ours
       'worktree',
       'add',
       '-b',
-      'ship/42-fix-openrouter-tier-1',
+      'shipcode/42-fix-openrouter-tier-1',
       '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
       'origin/main',
     ]);
@@ -159,7 +172,7 @@ branch refs/heads/feature/not-ours
 
     await expect(manager.create(42, 'Fix OpenRouter Tier 1!', 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
-      branch: 'ship/42-fix-openrouter-tier-1',
+      branch: 'shipcode/42-fix-openrouter-tier-1',
       baseRef: 'main',
       baseStale: true,
     });
@@ -173,7 +186,7 @@ branch refs/heads/feature/not-ours
       'worktree',
       'add',
       '-b',
-      'ship/42-fix-openrouter-tier-1',
+      'shipcode/42-fix-openrouter-tier-1',
       '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
       'main',
     ]);
@@ -190,7 +203,7 @@ branch refs/heads/feature/not-ours
 
     await expect(manager.create(42, 'Fix OpenRouter Tier 1!', 'origin/main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
-      branch: 'ship/42-fix-openrouter-tier-1',
+      branch: 'shipcode/42-fix-openrouter-tier-1',
       baseRef: 'origin/main',
       baseStale: false,
     });
@@ -204,7 +217,7 @@ branch refs/heads/feature/not-ours
       'worktree',
       'add',
       '-b',
-      'ship/42-fix-openrouter-tier-1',
+      'shipcode/42-fix-openrouter-tier-1',
       '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
       'origin/main',
     ]);
@@ -219,7 +232,7 @@ branch refs/heads/feature/not-ours
 
     await expect(manager.create(42, undefined as never, 'main')).resolves.toEqual({
       worktreePath: defaultUntitledIssueWorktreePath,
-      branch: 'ship/42',
+      branch: 'shipcode/42',
       baseRef: 'origin/main',
       baseStale: false,
     });
@@ -237,7 +250,7 @@ branch refs/heads/feature/not-ours
 
     await expect(manager.create(42, 'Fix OpenRouter')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter',
-      branch: 'ship/42-fix-openrouter',
+      branch: 'shipcode/42-fix-openrouter',
       baseRef: 'origin/main',
       baseStale: false,
     });
@@ -348,7 +361,7 @@ branch refs/heads/feature/not-ours
 
     await expect(manager.create(42, 'Fix OpenRouter', 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-2',
-      branch: 'ship/42-fix-openrouter-2',
+      branch: 'shipcode/42-fix-openrouter-2',
       baseRef: 'origin/main',
       baseStale: false,
     });
@@ -367,7 +380,7 @@ branch refs/heads/feature/not-ours
 
     await expect(manager.create(42, 'Fix OpenRouter', 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-3',
-      branch: 'ship/42-fix-openrouter-3',
+      branch: 'shipcode/42-fix-openrouter-3',
       baseRef: 'origin/main',
       baseStale: false,
     });
@@ -386,7 +399,7 @@ branch refs/heads/feature/not-ours
 
     await expect(manager.create(42, 'Fix OpenRouter', 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-3',
-      branch: 'ship/42-fix-openrouter-3',
+      branch: 'shipcode/42-fix-openrouter-3',
       baseRef: 'origin/main',
       baseStale: false,
     });
@@ -411,7 +424,7 @@ branch refs/heads/feature/not-ours
 
     await expect(manager.create(42, 'Fix OpenRouter', 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-2',
-      branch: 'ship/42-fix-openrouter-2',
+      branch: 'shipcode/42-fix-openrouter-2',
       baseRef: 'origin/main',
       baseStale: false,
     });
@@ -429,7 +442,7 @@ branch refs/heads/feature/not-ours
 
     await expect(manager.create(42, undefined as never, 'main')).resolves.toEqual({
       worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-2',
-      branch: 'ship/42-2',
+      branch: 'shipcode/42-2',
       baseRef: 'origin/main',
       baseStale: false,
     });

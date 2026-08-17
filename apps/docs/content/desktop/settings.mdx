@@ -19,7 +19,7 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 | `terminalOpenTarget` | `terminal` | Default app for opening terminal sessions |
 | `terminalScrollback` | 10000 | Max lines retained in the Terminal drawer per thread |
 | `worktreeRoot` | `~/.shipcode/worktrees` | Where isolated pipeline worktrees live — set to a blank string for legacy project-local behavior |
-| `worktreeBranchFormat` | `ship/{id}-{slug}` | Branch template for generated worktree branches |
+| `worktreeBranchFormat` | `shipcode/{id}-{slug}` | Branch template for generated issue worktree branches (non-issue worktrees use `shipcode/{slug}`) |
 | `addProjectStartsIn` | — | Optional starting folder for the add-project file browser |
 
 ## Privacy and Error Reporting

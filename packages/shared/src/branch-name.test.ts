@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_BRANCH_FORMAT, formatIssueBranch, slugifyIssueTitle } from './branch-name';
+import {
+  DEFAULT_BRANCH_FORMAT,
+  formatIssueBranch,
+  isShipCodeBranch,
+  SHIPCODE_BRANCH_PREFIX,
+  slugifyIssueTitle,
+} from './branch-name';
 
 describe('slugifyIssueTitle', () => {
   it('lowercases, replaces non-alphanumerics with dashes, trims edges', () => {
@@ -19,7 +25,7 @@ describe('slugifyIssueTitle', () => {
 describe('formatIssueBranch', () => {
   it('uses default format when none supplied', () => {
     expect(formatIssueBranch(80, 'Copy branch name action')).toBe(
-      'ship/80-copy-branch-name-action',
+      'shipcode/80-copy-branch-name-action',
     );
   });
 
@@ -28,7 +34,7 @@ describe('formatIssueBranch', () => {
   });
 
   it('strips a trailing dash when the slug is empty', () => {
-    expect(formatIssueBranch(7, '!!!')).toBe('ship/7');
+    expect(formatIssueBranch(7, '!!!')).toBe('shipcode/7');
   });
 
   it('treats null and empty-string formats as the default', () => {
@@ -37,6 +43,33 @@ describe('formatIssueBranch', () => {
   });
 
   it('exports the default template constant', () => {
-    expect(DEFAULT_BRANCH_FORMAT).toBe('ship/{id}-{slug}');
+    expect(DEFAULT_BRANCH_FORMAT).toBe('shipcode/{id}-{slug}');
+    expect(SHIPCODE_BRANCH_PREFIX).toBe('shipcode/');
+  });
+});
+
+describe('isShipCodeBranch', () => {
+  it('matches the shipcode/ prefix for issue and non-issue worktrees', () => {
+    expect(isShipCodeBranch('shipcode/x')).toBe(true);
+    expect(isShipCodeBranch('shipcode/42-add-keyboard-shortcut')).toBe(true);
+    expect(isShipCodeBranch('shipcode/thread-1')).toBe(true);
+  });
+
+  it('still matches legacy ship/{id} issue branches', () => {
+    expect(isShipCodeBranch('ship/12-x')).toBe(true);
+    expect(isShipCodeBranch('ship/7')).toBe(true);
+  });
+
+  it('rejects lookalike and user branches', () => {
+    expect(isShipCodeBranch('shipyard/x')).toBe(false);
+    expect(isShipCodeBranch('ship/abc')).toBe(false);
+    expect(isShipCodeBranch('main')).toBe(false);
+    expect(isShipCodeBranch('feat/42-api-hardening')).toBe(false);
+    expect(isShipCodeBranch('')).toBe(false);
+  });
+
+  it('anchors at the start so nested names do not match', () => {
+    expect(isShipCodeBranch('user/shipcode/x')).toBe(false);
+    expect(isShipCodeBranch('release/ship/12-x')).toBe(false);
   });
 });

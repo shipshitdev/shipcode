@@ -1,9 +1,9 @@
 ---
 name: project_worktrees
-description: Worktree defaults (~/.shipcode/worktrees/<slug>/<threadId>, AppSettings.worktreeRoot) + path-as-truth rule — WorktreeManager.remove(path, branch) takes concrete values, never recompute from threadId
+description: Worktree defaults (~/.shipcode/worktrees/<slug>/<threadId>, AppSettings.worktreeRoot), shipcode/ branch naming + isShipCodeBranch recognition, and the path-as-truth rule — WorktreeManager.remove(path, branch) takes concrete values, never recompute from threadId
 type: project
 status: active
-last_verified: 2026-08-01
+last_verified: 2026-08-16
 topics: [worktrees, git, cleanup, settings, api-design]
 ---
 
@@ -29,6 +29,16 @@ workspace by its Git linked-worktree registration, never by re-deriving the pare
 
 **Grep-stable anchors:** `projectSlug` and `resolveWorktreeParent` in `packages/shared/src/worktree-path.ts`; `expandWorktreeRoot` is the validator. Don't hardcode `.shipcode/worktrees` anywhere — always go through `resolveWorktreeParent`.
 
+## Branch naming
+
+Every branch ShipCode creates lives under one prefix — `shipcode/`.
+
+- **Issue worktrees:** `shipcode/{id}-{slug}`, from the user-overridable `AppSettings.worktreeBranchFormat` (Settings → General → Branch format). `DEFAULT_BRANCH_FORMAT` in `packages/shared/src/branch-name.ts` is the default; `packages/db/src/queries/settings.ts` validates custom templates (`{id}` required, must produce a legal git ref).
+- **Non-issue worktrees** (Quick Task, automations, fan-out workers, chat threads): `shipcode/{slug}`, falling back to `shipcode/{threadId}` when there's no title. Built in `WorktreeManager.getBranchName`, not from the setting.
+- **Legacy `ship/{id}-{slug}`** was the issue default before the unification (#532). Nothing creates it any more, but existing repos still carry those branches.
+
+**Recognition has one source of truth:** `isShipCodeBranch(name)` in `packages/shared/src/branch-name.ts`, which matches `SHIPCODE_BRANCH_PREFIX` *and* legacy `ship/\d+`. Never re-inline the regex — it used to be duplicated in `branches.ts`, `worktree.ts`, and `cleanup-analyzer.ts` and drifted. Callers: `WorktreeManager.list()`, the cleanup analyzer's managed-branch check, and the base-branch selector filter in `normalizeBranches`. The `\d+` guard is what keeps user branches like `ship/my-feature` out of ShipCode-managed listings.
+
 ## Path-as-truth rule (hard rule)
 
 `WorktreeManager.remove(path, branch)` accepts concrete values. **Never recompute the worktree path from `threadId`** at cleanup time.
@@ -37,7 +47,7 @@ workspace by its Git linked-worktree registration, never by re-deriving the pare
 
 **How to apply:**
 - Pass `thread.worktreePath` from the DB directly to `remove()` — never re-derive via `resolveWorktreeParent`.
-- Enumerate worktrees with `WorktreeManager.list()` (parses `git worktree list --porcelain`, filters by `shipcode/*` branch prefix) — don't glob the filesystem or substring-match the current `worktreeRoot`.
+- Enumerate worktrees with `WorktreeManager.list()` (parses `git worktree list --porcelain`, filters with `isShipCodeBranch`) — don't glob the filesystem or substring-match the current `worktreeRoot`.
 - New worktree operations follow the same pattern: concrete values in the API, derive-once at creation, persist.
 - When deleting a project: iterate its threads via DB query, `remove(thread.worktreePath, thread.worktreeBranch)` for each, **then** delete the project row.
 
