@@ -218,7 +218,7 @@ function seedLinkedIssueThread(
   const terminalEvents = new TerminalEventQueries(db);
 
   const thread = threads.create(projectId, issue.body || issue.title, issue.title);
-  const branch = `ship/${issue.issueNumber}-issue-detail-behavior`;
+  const branch = `shipcode/${issue.issueNumber}-issue-detail-behavior`;
   threads.setGithubIssue(thread.id, issue.issueNumber, 'shipshitdev/shipcode-e2e');
   threads.setWorktree(thread.id, branch, projectPath);
   threads.setPhaseModels(thread.id, {
