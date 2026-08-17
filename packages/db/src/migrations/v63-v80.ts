@@ -246,6 +246,13 @@ export function migrateV68(db: DatabaseSync): void {
  * For `settings` that means deleting the key — the loader reads a missing key as "unset" and
  * applies DEFAULT_SETTINGS — so a DELETE, not an UPDATE to a sentinel.
  *
+ * The key list is not "every key starting with openrouter". `triageModelId` and
+ * `autoCommitModel` are provider-agnostic fields that hold an OpenRouter slug whenever their
+ * companion provider (`triageModel` / `autoCommitProvider`) is set to openrouter — and
+ * `autoCommitProvider` *defaults* to openrouter, so `autoCommitModel` is an OpenRouter model
+ * id out of the box. Matching on the value rather than the key prefix is what makes including
+ * them safe: a Claude or Codex id in either field can never equal this slug.
+ *
  * Deliberately does NOT touch threads.*_resolved_model or the cost rows: those record what
  * actually ran on a past pipeline. They are history, not configuration, and rewriting them
  * would falsify the telemetry this app is built to trust.
@@ -267,7 +274,9 @@ export function migrateV69(db: DatabaseSync): void {
            'openrouterExecutorModel',
            'openrouterDefaultPaidModel',
            'openrouterDefaultFreeModel',
-           'openrouterExplicitFallback'
+           'openrouterExplicitFallback',
+           'triageModelId',
+           'autoCommitModel'
          );
 
       UPDATE projects

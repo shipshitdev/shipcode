@@ -1689,7 +1689,10 @@ describe('migrateV69', () => {
       INSERT INTO settings (key, value) VALUES
         ('openrouterExecutorModel', '${DEAD}'),
         ('openrouterExplicitFallback', '${DEAD}'),
+        ('triageModelId', '${DEAD}'),
+        ('autoCommitModel', '${DEAD}'),
         ('openrouterPlannerModel', 'anthropic/claude-fable-5'),
+        ('prdRewriteCodexModel', 'gpt-5.6-luna'),
         ('theme', '${DEAD}');
       INSERT INTO projects (id, name, path, git_remote, default_branch, created_at, updated_at,
                             planner_model_id_override, verifier_model_id_override)
@@ -1710,12 +1713,16 @@ describe('migrateV69', () => {
       ).version,
     ).toBe(69);
 
-    // The two OpenRouter model keys are gone entirely, so the loader falls back to
-    // DEFAULT_SETTINGS instead of reading a slug that 404s.
+    // Every key holding the dead slug is gone entirely, so the loader falls back to
+    // DEFAULT_SETTINGS instead of reading a slug that 404s. `triageModelId` and
+    // `autoCommitModel` are in that set despite not being `openrouter*`-prefixed: both hold an
+    // OpenRouter slug when their companion provider is openrouter, and `autoCommitProvider`
+    // defaults to openrouter. `prdRewriteCodexModel` is the other side of that coin — a
+    // provider-agnostic model key whose value is live, so it must survive.
     const keys = (
       db.prepare('SELECT key FROM settings ORDER BY key').all() as { key: string }[]
     ).map((r) => r.key);
-    expect(keys).toEqual(['openrouterPlannerModel', 'theme']);
+    expect(keys).toEqual(['openrouterPlannerModel', 'prdRewriteCodexModel', 'theme']);
 
     // A non-model key that happens to hold the same string is not a model selection and
     // must survive — the migration is keyed on the column's meaning, not the value alone.
