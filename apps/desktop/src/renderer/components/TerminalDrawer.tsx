@@ -37,6 +37,31 @@ function TerminalDrawerTranscript({
   );
 }
 
+/**
+ * Shown whenever the drawer cannot resolve a thread to stream.
+ *
+ * `reason` is surfaced as a DOM attribute so a failing E2E run reports "the
+ * empty-state branch rendered, and why" instead of a bare "terminal-transcript
+ * element(s) not found" — the two are otherwise indistinguishable from the
+ * outside, and telling them apart used to cost a full debugging pass.
+ */
+function TerminalDrawerEmptyState({ reason }: { reason: 'no-target' | 'no-thread' }) {
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 flex items-center justify-center p-6"
+      data-testid="terminal-drawer-empty-state"
+      data-empty-reason={reason}
+    >
+      <div className="max-w-sm text-center">
+        <div className="text-sm font-medium text-primary">No issue selected for this project</div>
+        <div className="mt-1 text-xs leading-5 text-secondary">
+          Console output will appear when you select or start an issue in this project.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TerminalDrawer({ isExiting = false }: { isExiting?: boolean }) {
   const {
     approvedAwaitingExecution,
@@ -105,16 +130,7 @@ export function TerminalDrawer({ isExiting = false }: { isExiting?: boolean }) {
       />
       <div className="relative flex-1 overflow-hidden min-h-0">
         {showEmptyState ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
-            <div className="max-w-sm text-center">
-              <div className="text-sm font-medium text-primary">
-                No issue selected for this project
-              </div>
-              <div className="mt-1 text-xs leading-5 text-secondary">
-                Console output will appear when you select or start an issue in this project.
-              </div>
-            </div>
-          </div>
+          <TerminalDrawerEmptyState reason="no-target" />
         ) : displayTarget && terminalThreadId ? (
           <TerminalDrawerTranscript
             approvedAwaitingExecution={approvedAwaitingExecution}
@@ -123,16 +139,7 @@ export function TerminalDrawer({ isExiting = false }: { isExiting?: boolean }) {
             onOpenTarget={handleRunningTargetSelect}
           />
         ) : (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
-            <div className="max-w-sm text-center">
-              <div className="text-sm font-medium text-primary">
-                No issue selected for this project
-              </div>
-              <div className="mt-1 text-xs leading-5 text-secondary">
-                Console output will appear when you select or start an issue in this project.
-              </div>
-            </div>
-          </div>
+          <TerminalDrawerEmptyState reason="no-thread" />
         )}
       </div>
     </div>

@@ -14,95 +14,62 @@ import { expect, type Harness, test } from '../../fixtures/electron-app';
  * Setup contract:
  *   - TerminalDrawer only mounts when terminalVisible=true AND activeIssue=null
  *     AND projectTab!='terminal'. See App.tsx line ~387.
- *   - useTerminalDrawer resolves displayTarget by searching githubIssues for an
- *     issue whose threadId matches terminalThreadId. When displayTarget is null,
- *     showEmptyState=true and ThreadConsoleTranscript never mounts.
- *   - Fix: inject a synthetic GitHubIssueCacheRecord into githubIssues with the
- *     matching threadId so displayTarget resolves without setting activeIssue
- *     (which would prevent TerminalDrawer mounting).
+ *   - useTerminalDrawer resolves displayTarget from either an issue in
+ *     githubIssues whose threadId matches terminalThreadId, or the thread
+ *     returned by the `thread:get` query for that id. When displayTarget is
+ *     null, showEmptyState=true and ThreadConsoleTranscript never mounts.
+ *   - The target therefore comes entirely from *seeded database state* (see
+ *     `linkedIdleThread` in fixtures/seed.ts), never from a renderer-state
+ *     injection. store.githubIssues is a read-only projection of the
+ *     ['github-issues', projectId] query cache — anything written into it
+ *     directly is erased the moment that query refetches, which is exactly how
+ *     this suite went red on the scheduled macOS runs.
  *   - tool_start / lifecycle(info) / raw(info) events are grouped into
  *     WorkLogCard by groupTranscriptEvents. TerminalTranscript.tsx wraps each
  *     WorkLogCard item in data-testid="terminal-event-{kind}" so assertions work.
  */
 
-const THREAD_ID = 'e2e-terminal-thread-1';
-
-/** Minimal GitHubIssueCacheRecord shape sufficient to satisfy issueTarget(). */
-function fakeIssue(projectId: string) {
-  return {
-    id: 'e2e-fake-issue-id',
-    projectId,
-    issueNumber: 42,
-    title: 'E2E terminal test issue',
-    body: null,
-    labels: [],
-    assignee: null,
-    author: 'e2e-bot',
-    state: 'open',
-    // pipelineStatus must NOT be in AGENT_ACTIVE_STATUSES or the drawer would
-    // auto-open when selectIssue is called — but we never call selectIssue here,
-    // so any value is fine. Use 'todo' (idle equivalent).
-    pipelineStatus: 'todo',
-    threadId: THREAD_ID,
-    claimedAt: null,
-    claimedBy: null,
-    lastPhaseUpdate: null,
-    lastStatusLabel: null,
-    linkedPrNumber: null,
-    linkedPrUrl: null,
-    linkedPrIsDraft: false,
-    ciBlocked: false,
-    failingChecks: [],
-    unresolvedReviewComments: [],
-    unresolvedReviewCommentCount: 0,
-    prLastSyncAt: null,
-    fetchedAt: new Date().toISOString(),
-    priorityRank: null,
-    priorityRaw: null,
-    priorityFetchedAt: null,
-    plannerModelOverride: null,
-    reviewerModelOverride: null,
-    executorModelOverride: null,
-    verifierModelOverride: null,
-    plannerModelIdOverride: null,
-    reviewerModelIdOverride: null,
-    executorModelIdOverride: null,
-    verifierModelIdOverride: null,
-    plannerReasoningEffortOverride: null,
-    reviewerReasoningEffortOverride: null,
-    executorReasoningEffortOverride: null,
-    verifierReasoningEffortOverride: null,
-    revisionCountOverride: null,
-    requireApprovalOverride: null,
-    executionRunId: null,
-    executionLockedAt: null,
-    executionLockOwner: null,
-  };
-}
+const ISSUE_NUMBER = 42;
 
 /**
- * Open the terminal drawer with a resolved displayTarget.
+ * Open the terminal drawer on the seeded thread and return its id.
  *
- * Steps:
- *  1. selectProject → sets viewMode='project', activeIssue=null, githubIssues=[]
- *  2. setState injects: githubIssues with the fake issue (so useTerminalDrawer
- *     can find it via issueTargets), terminalVisible=true, terminalThreadId=THREAD_ID
- *  3. activeIssue stays null → TerminalDrawer mounts
+ * Both resolution paths are backed by real rows the seed created, so each one
+ * survives every refetch of the issue list and of `thread:get`:
+ *   - `github_issue_cache.thread_id` → issueTargets → explicitTarget
+ *   - `threads.id`                   → thread:get   → explicitThreadTarget
+ *
+ * Whichever query lands first resolves displayTarget to the same thread, and
+ * neither can be clobbered by the other. No waiting on an unrelated element as
+ * a proxy for readiness, and no timeout inflation.
  */
-async function openDrawer(harness: Harness, projectId: string) {
-  await harness.callStore('selectProject', projectId);
-  // Wait for the github:list-issues query to settle before injecting. Otherwise
-  // its async onSuccess overwrites store.githubIssues (with a threadId-less
-  // record) AFTER our injection, leaving useTerminalDrawer's displayTarget null.
-  // Once settled, staleTime prevents a refetch so the injected record sticks.
-  await expect(harness.page.getByTestId('issue-card-42')).toBeVisible({ timeout: 15_000 });
+async function openDrawer(harness: Harness): Promise<string> {
+  const threadId = harness.seed.issueThreads[ISSUE_NUMBER];
+  if (!threadId) {
+    throw new Error(
+      `[e2e] seed did not link a thread to issue #${ISSUE_NUMBER} — check linkedIdleThread in seedOptions`,
+    );
+  }
+
+  await harness.callStore('selectProject', harness.seed.projectId);
   await harness.setState({
-    githubIssues: [fakeIssue(projectId)],
     terminalVisible: true,
-    terminalThreadId: THREAD_ID,
+    terminalThreadId: threadId,
     activeIssue: null,
   });
-  await expect(harness.page.getByTestId('terminal-drawer')).toBeVisible({ timeout: 10_000 });
+
+  await expect(harness.page.getByTestId('terminal-drawer')).toBeVisible({ timeout: 15_000 });
+  // Assert the drawer left its empty-state branch before asserting the
+  // transcript. The empty state carries its own test id, so an unresolved
+  // target fails as "expected 0 empty-state elements, got 1" instead of a bare
+  // "terminal-transcript element(s) not found" that cannot be told apart from
+  // a transcript that simply has not painted yet.
+  await expect(harness.page.getByTestId('terminal-drawer-empty-state')).toHaveCount(0, {
+    timeout: 15_000,
+  });
+  await expect(harness.page.getByTestId('terminal-transcript')).toBeVisible({ timeout: 15_000 });
+
+  return threadId;
 }
 
 test.describe('terminal drawer — transcript rendering', () => {
@@ -111,15 +78,17 @@ test.describe('terminal drawer — transcript rendering', () => {
       onboarded: true,
       issues: [
         {
-          issueNumber: 42,
+          issueNumber: ISSUE_NUMBER,
           title: 'E2E terminal test issue',
+          // Real thread row + real issue→thread link, with an empty console.
+          linkedIdleThread: true,
         },
       ],
     },
   });
 
   test('drawer opens and empty state shows before any events', async ({ harness }) => {
-    await openDrawer(harness, harness.seed.projectId);
+    await openDrawer(harness);
 
     await expect(harness.page.getByTestId('terminal-drawer')).toBeVisible();
     // Transcript should be present (may show empty message or pending label)
@@ -127,13 +96,13 @@ test.describe('terminal drawer — transcript rendering', () => {
   });
 
   test('renders a text event row after terminal:event push', async ({ harness }) => {
-    await openDrawer(harness, harness.seed.projectId);
+    const threadId = await openDrawer(harness);
 
     await expect(harness.page.getByTestId('terminal-drawer')).toBeVisible();
 
     await harness.fire('terminal:event', {
-      id: `${THREAD_ID}:1:text`,
-      threadId: THREAD_ID,
+      id: `${threadId}:1:text`,
+      threadId,
       runId: null,
       event: { kind: 'text', content: 'Hello from the assistant' },
       createdAt: new Date().toISOString(),
@@ -149,7 +118,7 @@ test.describe('terminal drawer — transcript rendering', () => {
   });
 
   test('renders a tool_start event row', async ({ harness }) => {
-    await openDrawer(harness, harness.seed.projectId);
+    const threadId = await openDrawer(harness);
 
     await expect(harness.page.getByTestId('terminal-drawer')).toBeVisible();
 
@@ -157,8 +126,8 @@ test.describe('terminal drawer — transcript rendering', () => {
     // TerminalTranscript.tsx wraps each WorkLogCard row in
     // data-testid="terminal-event-{kind}" — so the assertion works.
     await harness.fire('terminal:event', {
-      id: `${THREAD_ID}:2:tool_start`,
-      threadId: THREAD_ID,
+      id: `${threadId}:2:tool_start`,
+      threadId,
       runId: null,
       event: {
         kind: 'tool_start',
@@ -175,7 +144,7 @@ test.describe('terminal drawer — transcript rendering', () => {
   });
 
   test('renders a lifecycle event row', async ({ harness }) => {
-    await openDrawer(harness, harness.seed.projectId);
+    const threadId = await openDrawer(harness);
 
     await expect(harness.page.getByTestId('terminal-drawer')).toBeVisible();
 
@@ -184,8 +153,8 @@ test.describe('terminal drawer — transcript rendering', () => {
     // now wraps the element in data-testid="terminal-event-lifecycle".
     // Use an error-severity message so the row renders as a visible error card.
     await harness.fire('terminal:event', {
-      id: `${THREAD_ID}:3:lifecycle`,
-      threadId: THREAD_ID,
+      id: `${threadId}:3:lifecycle`,
+      threadId,
       runId: null,
       event: { kind: 'lifecycle', message: 'Pipeline error occurred' },
       createdAt: new Date().toISOString(),
@@ -199,13 +168,13 @@ test.describe('terminal drawer — transcript rendering', () => {
   });
 
   test('renders a done event row', async ({ harness }) => {
-    await openDrawer(harness, harness.seed.projectId);
+    const threadId = await openDrawer(harness);
 
     await expect(harness.page.getByTestId('terminal-drawer')).toBeVisible();
 
     await harness.fire('terminal:event', {
-      id: `${THREAD_ID}:4:done`,
-      threadId: THREAD_ID,
+      id: `${threadId}:4:done`,
+      threadId,
       runId: null,
       event: { kind: 'done', totalCostUsd: 0.0012 },
       createdAt: new Date().toISOString(),
@@ -220,31 +189,31 @@ test.describe('terminal drawer — transcript rendering', () => {
   });
 
   test('multiple events accumulate in the transcript', async ({ harness }) => {
-    await openDrawer(harness, harness.seed.projectId);
+    const threadId = await openDrawer(harness);
 
     await expect(harness.page.getByTestId('terminal-drawer')).toBeVisible();
 
     const now = new Date().toISOString();
 
     await harness.fire('terminal:event', {
-      id: `${THREAD_ID}:10:turn_start`,
-      threadId: THREAD_ID,
+      id: `${threadId}:10:turn_start`,
+      threadId,
       runId: null,
       event: { kind: 'turn_start', turn: 1 },
       createdAt: now,
     });
 
     await harness.fire('terminal:event', {
-      id: `${THREAD_ID}:11:text`,
-      threadId: THREAD_ID,
+      id: `${threadId}:11:text`,
+      threadId,
       runId: null,
       event: { kind: 'text', content: 'Analysing requirements' },
       createdAt: now,
     });
 
     await harness.fire('terminal:event', {
-      id: `${THREAD_ID}:12:tool_start`,
-      threadId: THREAD_ID,
+      id: `${threadId}:12:tool_start`,
+      threadId,
       runId: null,
       event: {
         kind: 'tool_start',
@@ -267,7 +236,7 @@ test.describe('terminal drawer — transcript rendering', () => {
   });
 
   test('transcript shows empty state message before events arrive', async ({ harness }) => {
-    await openDrawer(harness, harness.seed.projectId);
+    await openDrawer(harness);
 
     await expect(harness.page.getByTestId('terminal-drawer')).toBeVisible();
     await expect(harness.page.getByTestId('terminal-transcript')).toBeVisible();
@@ -279,7 +248,7 @@ test.describe('terminal drawer — transcript rendering', () => {
   });
 
   test('events for a different threadId do not appear in the transcript', async ({ harness }) => {
-    await openDrawer(harness, harness.seed.projectId);
+    await openDrawer(harness);
 
     await expect(harness.page.getByTestId('terminal-drawer')).toBeVisible();
 
