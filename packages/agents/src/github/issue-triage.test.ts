@@ -210,8 +210,8 @@ describe('issue triage', () => {
   // configured: a regression that forwarded the *configured* effort instead of the normalized
   // one would still look right in whichever branch happened to agree. The `high` case used to
   // reach `none` via a model with no reasoning controls (`qwen/qwen3-coder:free`, since
-  // delisted); it now rides the adaptive-Claude clamp, which is the surviving normalization
-  // that rewrites a non-none effort.
+  // delisted); it now rides Sonnet 4.6's adaptive clamp, which is the surviving normalization
+  // that rewrites a non-none effort while still letting `none` through exactly.
   it('derives OpenRouter include_reasoning from normalized triage effort', async () => {
     const client = makeStubClient();
     const chatSpy = client.chat as unknown as ReturnType<typeof vi.fn>;
@@ -220,7 +220,7 @@ describe('issue triage', () => {
       issues: [baseIssue],
       apiKey: 'k',
       settings: triageSettings({
-        triageModelId: 'anthropic/claude-fable-5',
+        triageModelId: 'anthropic/claude-sonnet-4.6',
         triageReasoningEffort: 'medium',
       }),
       createOpenRouterClient: () => client,
@@ -228,7 +228,7 @@ describe('issue triage', () => {
 
     expect(chatSpy.mock.calls[0][0]).toEqual(
       expect.objectContaining({
-        model: 'anthropic/claude-fable-5',
+        model: 'anthropic/claude-sonnet-4.6',
         include_reasoning: true,
         reasoning: { effort: 'high' },
       }),
@@ -238,7 +238,7 @@ describe('issue triage', () => {
       issues: [baseIssue],
       apiKey: 'k',
       settings: triageSettings({
-        triageModelId: 'anthropic/claude-fable-5',
+        triageModelId: 'anthropic/claude-sonnet-4.6',
         triageReasoningEffort: 'none',
       }),
       createOpenRouterClient: () => client,
@@ -246,7 +246,7 @@ describe('issue triage', () => {
 
     expect(chatSpy.mock.calls[1][0]).toEqual(
       expect.objectContaining({
-        model: 'anthropic/claude-fable-5',
+        model: 'anthropic/claude-sonnet-4.6',
         include_reasoning: false,
         reasoning: { effort: 'none' },
       }),

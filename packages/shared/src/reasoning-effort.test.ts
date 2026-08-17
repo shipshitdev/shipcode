@@ -234,33 +234,34 @@ describe('reasoning-effort', () => {
     );
   });
 
-  it('treats OpenRouter Fable 5 as adaptive, unlike Fable 5 on the Claude CLI', () => {
+  // OpenRouter reports Fable 5 as `reasoning.mandatory: true` with supported efforts
+  // max/xhigh/high/medium/low — so it is neither adaptive (the efforts are honoured) nor
+  // able to accept `none`. Both directions matter: `xhigh` must survive untouched, and
+  // `none` must be lifted to the supported floor instead of promising no reasoning.
+  it('honours OpenRouter Fable 5 efforts and refuses none, unlike Fable 5 on the Claude CLI', () => {
     expect(getSupportedReasoningEfforts('openrouter', 'anthropic/claude-fable-5')).toEqual([
-      'none',
+      'low',
+      'medium',
       'high',
+      'xhigh',
     ]);
-    expect(formatProviderReasoningEffort('openrouter', 'xhigh', 'anthropic/claude-fable-5')).toBe(
-      'high',
-    );
-    expect(
-      resolveProviderReasoningEffort('openrouter', 'medium', 'anthropic/claude-fable-5'),
-    ).toEqual({
-      configured: 'medium',
-      effective: 'high',
-      exact: false,
-      message:
-        'anthropic/claude-fable-5 uses adaptive thinking on OpenRouter. reasoning.effort is ignored, so ShipCode treats any non-none value as the model default.',
-    });
-    // `none` only clears include_reasoning over OpenRouter, so it stays exact here even
-    // though the Claude CLI path refuses it for an always-thinking model.
-    expect(
-      resolveProviderReasoningEffort('openrouter', 'none', 'anthropic/claude-fable-5'),
-    ).toEqual({
-      configured: 'none',
-      effective: 'none',
-      exact: true,
-      message: null,
-    });
+    for (const configured of ['low', 'medium', 'high', 'xhigh'] as const) {
+      expect(
+        resolveProviderReasoningEffort('openrouter', configured, 'anthropic/claude-fable-5'),
+      ).toEqual({ configured, effective: configured, exact: true, message: null });
+    }
+    for (const configured of ['none', 'minimal'] as const) {
+      expect(
+        resolveProviderReasoningEffort('openrouter', configured, 'anthropic/claude-fable-5'),
+      ).toEqual({
+        configured,
+        effective: 'low',
+        exact: false,
+        message:
+          'anthropic/claude-fable-5 always reasons on OpenRouter and supports Low, Medium, High, and Extra high effort. Using Low.',
+      });
+    }
+    // The CLI path stays narrower — it exposes thinking budgets, not OpenRouter's ladder.
     expect(getSupportedReasoningEfforts('claude', 'claude-fable-5')).toEqual(['medium', 'high']);
   });
 

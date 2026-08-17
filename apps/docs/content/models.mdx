@@ -96,10 +96,11 @@ ShipCode normalizes the shared `none`, `minimal`, `low`, `medium`, `high`, and `
 | Gemini | Low, Medium, High | None/Minimal → Low; Extra high → High |
 | Cursor | None | The CLI selects reasoning automatically |
 | Grok | None | The CLI selects reasoning automatically |
-| OpenRouter Claude models, incl. `anthropic/claude-fable-5` | None, High | Any non-None value uses adaptive thinking |
+| OpenRouter Claude Sonnet 4.6 / Opus 4.6 / Opus 4.8 | None, High | Any non-None value uses adaptive thinking |
+| `anthropic/claude-fable-5` on OpenRouter | Low, Medium, High, Extra high | None/Minimal → Low |
 | Other OpenRouter models | Provider-dependent | The requested effort may be remapped upstream |
 
-Fable 5 always uses adaptive thinking, so the Claude CLI path never offers a no-thinking mode for it. Over OpenRouter, None does not disable thinking — it only stops ShipCode requesting reasoning tokens back — so it stays available there. A configured effort is normalized before the provider runs, and the effective value is what ShipCode records and displays.
+Fable 5 always uses adaptive thinking, so neither path offers a no-thinking mode for it: the Claude CLI exposes Medium and High budgets, and OpenRouter reports the model as mandatory-reasoning with Low through Extra high available, so a None selection is lifted to Low rather than switching reasoning off. A configured effort is normalized before the provider runs, and the effective value is what ShipCode records and displays.
 
 ## See also
 

@@ -365,9 +365,32 @@ describe('createOpenRouterProvider', () => {
   // This used to assert the `['none']` clamp for a model with no reasoning controls, whose
   // sole member (`qwen/qwen3-coder:free`) OpenRouter delisted. The clamp went with it, but the
   // behaviour worth pinning is the general one: a *model-specific* normalization overrides the
-  // configured effort on the wire. The adaptive-Claude clamp is the surviving instance, so the
-  // test now rides that one — `medium` must not reach OpenRouter verbatim.
+  // configured effort on the wire. Sonnet 4.6 carries the surviving adaptive clamp, so the
+  // test rides that one — `medium` must not reach OpenRouter verbatim.
   it('sends a model-specific clamp rather than the configured effort', async () => {
+    const stub = makeStubClient();
+    const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
+    const provider = createOpenRouterProvider({
+      getApiKey: () => 'k',
+      getSettings: () => settings({ openrouterPlannerModel: 'anthropic/claude-sonnet-4.6' }),
+      createClient: () => stub,
+    });
+
+    await provider.generate(req({ phase: 'plan', phaseHints: { reasoningEffort: 'medium' } }));
+
+    expect(chatSpy.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        model: 'anthropic/claude-sonnet-4.6',
+        include_reasoning: true,
+        reasoning: { effort: 'high' },
+      }),
+    );
+  });
+
+  // Fable 5 is the opposite case and worth its own row: OpenRouter mandates its reasoning, so
+  // a configured `none` must be lifted to the supported floor instead of switching reasoning
+  // off — and `include_reasoning`, derived from the *normalized* effort, follows it up.
+  it('lifts a none selection to the floor for a mandatory-reasoning model', async () => {
     const stub = makeStubClient();
     const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
     const provider = createOpenRouterProvider({
@@ -376,13 +399,13 @@ describe('createOpenRouterProvider', () => {
       createClient: () => stub,
     });
 
-    await provider.generate(req({ phase: 'plan', phaseHints: { reasoningEffort: 'medium' } }));
+    await provider.generate(req({ phase: 'plan', phaseHints: { reasoningEffort: 'none' } }));
 
     expect(chatSpy.mock.calls[0][0]).toEqual(
       expect.objectContaining({
         model: 'anthropic/claude-fable-5',
         include_reasoning: true,
-        reasoning: { effort: 'high' },
+        reasoning: { effort: 'low' },
       }),
     );
   });
