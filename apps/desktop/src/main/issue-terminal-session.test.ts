@@ -68,7 +68,7 @@ async function makeHarness(overrides: { worktreePath?: string } = {}) {
     overrides.worktreePath ?? (await fs.mkdtemp(path.join(os.tmpdir(), 'sc-term-')));
   const conversations: Array<Record<string, unknown>> = [];
   const terminalEvents: Array<Record<string, unknown>> = [];
-  let thread = makeThread({ worktreePath });
+  let thread: Record<string, unknown> = makeThread({ worktreePath });
   const emitter = new EventEmitter();
   const processManager = Object.assign(emitter, {
     spawn: vi.fn(() => ({ id: 'proc-1' })),
@@ -84,16 +84,16 @@ async function makeHarness(overrides: { worktreePath?: string } = {}) {
   };
   const queries = {
     projects: {
-      getById: vi.fn(() => makeProject()),
+      getById: vi.fn((): unknown => makeProject()),
     },
     githubIssues: {
-      getByNumber: vi.fn(() => makeIssue()),
+      getByNumber: vi.fn((): unknown => makeIssue()),
       linkThread: vi.fn(),
     },
     threads: {
-      getById: vi.fn(() => thread),
-      getByProjectAndGithubIssue: vi.fn(() => thread),
-      create: vi.fn(() => thread),
+      getById: vi.fn((): unknown => thread),
+      getByProjectAndGithubIssue: vi.fn((): unknown => thread),
+      create: vi.fn((): unknown => thread),
       updateIssueContent: vi.fn(),
       setGithubIssue: vi.fn(),
       setWorktree: vi.fn((id: string, branch: string, nextPath: string) => {
@@ -308,9 +308,11 @@ describe('issue terminal session', () => {
       mainWindow: h.mainWindow as never,
     });
 
-    const spawnArgs = h.processManager.spawn.mock.calls[0][2] as string[];
-    expect(spawnArgs).toContain('workspace-write');
-    expect(spawnArgs).toContain('model_reasoning_effort=low');
+    const spawnArgs = (h.processManager.spawn.mock.calls[0] as unknown as unknown[])?.[2] as
+      | string[]
+      | undefined;
+    expect(spawnArgs).toEqual(expect.arrayContaining(['workspace-write']));
+    expect(spawnArgs).toEqual(expect.arrayContaining(['model_reasoning_effort=low']));
 
     h.processManager.emit('exit', 'proc-1', 3);
     await vi.waitFor(() => {
