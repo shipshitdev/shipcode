@@ -286,6 +286,81 @@ describe('root UI components', () => {
     view.cleanup();
   });
 
+  it('saves a trimmed credential and surfaces save failures', async () => {
+    const onSave = vi.fn(async () => undefined);
+    let setDraft = (_value: string) => {};
+    const view = renderIntoDom(
+      <SecureCredentialField
+        ariaLabel="API token"
+        clearLabel="Clear token"
+        configured={false}
+        placeholder="Paste a token"
+        renderInput={({ ariaLabel, onChange, placeholder, value }) => {
+          setDraft = onChange;
+          return (
+            <input
+              aria-label={ariaLabel}
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              placeholder={placeholder}
+              type="password"
+            />
+          );
+        }}
+        saveLabel="Save token"
+        onClear={vi.fn()}
+        onSave={onSave}
+      />,
+    );
+
+    const input = view.container.querySelector('input');
+    const saveButton = Array.from(view.container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Save token',
+    );
+    expect(view.container.querySelector('[role="alert"]')).toBeNull();
+
+    act(() => {
+      saveButton?.click();
+    });
+    expect(onSave).not.toHaveBeenCalled();
+
+    act(() => {
+      setDraft('  secret-token  ');
+    });
+    act(() => {
+      saveButton?.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onSave).toHaveBeenCalledWith('secret-token');
+    expect(input?.value).toBe('');
+
+    onSave.mockRejectedValueOnce(new Error('vault unavailable'));
+    act(() => {
+      setDraft('retry-token');
+    });
+    act(() => {
+      saveButton?.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toBe('vault unavailable');
+
+    onSave.mockRejectedValueOnce('not-an-error');
+    act(() => {
+      saveButton?.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toBe(
+      'Unable to save credential',
+    );
+    view.cleanup();
+  });
+
   it('connects labeled model selectors to their visible labels', () => {
     const labeledSelect = renderIntoDom(
       <LabeledModelSelect
