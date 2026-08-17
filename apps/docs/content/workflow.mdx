@@ -24,7 +24,7 @@ agent:
   max_turns: 10
   execute_orchestration: fan-out
   fan_out_worker_count: 3
-  fan_out_judge_model: claude-opus-4-8
+  fan_out_judge_model: claude-fable-5
 continuation_prompt: |
   Verification failed on turn {{ turn_count }}: {{ prior_failure_reason }}
   Fix only what the verifier flagged. Do not re-read the PRD.
@@ -58,10 +58,18 @@ All keys are optional. Invalid or non-positive numbers fall back to the default.
 | `agent.max_retry_backoff_ms` | built-in | Ceiling for retry backoff between attempts |
 | `agent.execute_orchestration` | `single` | `single` runs one executor. `fan-out` runs parallel workers in isolated worktrees and has a judge pick/merge the best result |
 | `agent.fan_out_worker_count` | `3` | Parallel workers when `execute_orchestration` is `fan-out` (clamped to 8) |
-| `agent.fan_out_judge_model` | `null` | Model id for the fan-out judge; `null` uses the verifier phase model |
+| `agent.fan_out_judge_model` | `claude-fable-5` on Claude runs, otherwise the verifier phase model | Model id for the fan-out judge |
 | `continuation_prompt` | built-in | Template for continuation turns after a verify failure (top-level key, not under `agent`) |
 
 If the front matter fails to parse or is not a YAML map, ShipCode logs a warning and falls back to the full defaults — including skill-based prompts — for that repo.
+
+#### Fan-out judge model
+
+Picking and merging the candidate diffs is the most judgment-dense step of a fan-out execute, so an unset `fan_out_judge_model` resolves to **Fable 5** on a Claude run instead of inheriting the verifier phase model — a repo may have tuned that phase for cost, and the judge should not be downgraded with it.
+
+The default only applies to Claude runs. The judge derives its provider from this model id, so defaulting a Claude id on a Codex, Gemini, Cursor, Grok, or OpenRouter run would force the Claude CLI onto a pipeline that never asked for it. Those executors keep the previous behavior: the judge runs as the verify phase on that provider's own model.
+
+Slug aliases are accepted and normalized — `fable-5` and `fable5` both become `claude-fable-5`. A bare rolling family alias (`fable`, `opus`, `sonnet`, `haiku`) is Claude-CLI-only; on any other executor it is dropped and the judge falls back to the verifier phase model, rather than being handed to a CLI that would reject it.
 
 ### Prompt template (body)
 

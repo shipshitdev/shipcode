@@ -37,6 +37,7 @@ import {
 } from '@shipcode/shared';
 import { computeRetryDelayMs } from '../retry-scheduler';
 import type { ExecutePhaseCarry, PipelineContext, VerifyPhaseCarry } from '../types';
+import { resolveFanOutJudgeModel, resolveFanOutJudgePhase } from '../workflow-loader';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { buildPhasePayload, resetPhaseState } from './context';
 import { captureExecutionCheckpoint } from './execution-checkpoint';
@@ -132,7 +133,13 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
     });
     const baseBranch = context.baseBranch || undefined;
     const signal = context.abort.signal;
-    const judgeModelId = agentPolicy.fanOutJudgeModel;
+    // Unset `fan_out_judge_model` resolves to Fable 5 on a Claude run and stays
+    // null (verifier phase model) on every other executor — see
+    // `resolveFanOutJudgeModel`. The implicit default rides verify, not
+    // execute; only an explicit WORKFLOW.md id takes the execute overlay.
+    const configuredJudgeModel = agentPolicy.fanOutJudgeModel;
+    const judgeModelId = resolveFanOutJudgeModel(configuredJudgeModel, context.executorModel);
+    const judgePhase = resolveFanOutJudgePhase(configuredJudgeModel, judgeModelId);
     const created: Array<{ label: string; worktreePath: string; branch: string }> = [];
 
     const captureDiff = async (worktree: {
@@ -199,21 +206,33 @@ export function createExecutionPhaseHandlers({ deps, contextHelpers, runtime }: 
           baseBranch,
         );
         try {
+          const judgeProvider = judgeModelId
+            ? ((inferProviderFromModel(judgeModelId) ??
+                (judgePhase === 'execute'
+                  ? context.executorModel
+                  : context.verifierModel)) as PipelineContext['executorModel'])
+            : null;
           const judgeCtx: PipelineContext = {
             ...context,
             worktreePath: judgeWt.worktreePath,
-            ...(judgeModelId
+            ...(judgeModelId && judgePhase === 'execute'
               ? {
-                  executorModel: (inferProviderFromModel(judgeModelId) ??
-                    context.executorModel) as PipelineContext['executorModel'],
+                  executorModel: judgeProvider ?? context.executorModel,
                   executorModelOverride: null,
                   executorModelIdOverride: judgeModelId,
                 }
-              : {}),
+              : judgeModelId
+                ? {
+                    verifierModel: judgeProvider ?? context.verifierModel,
+                    verifierModelOverride: null,
+                    verifierModelIdOverride: judgeModelId,
+                    // So `resolveModelIdOverrideForPhase` cannot steal the
+                    // verify override when verifier === executor.
+                    executorModelOverride: null,
+                  }
+                : {}),
           };
-          // With an explicit judge model use the execute payload (carries the
-          // override); otherwise judge as the verifier phase (its configured model).
-          const payload = buildPhasePayload(judgeCtx, judgeModelId ? 'execute' : 'verify');
+          const payload = buildPhasePayload(judgeCtx, judgePhase);
           const resp = await runProviderPhase(
             judgeCtx,
             payload,

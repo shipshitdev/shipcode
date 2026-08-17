@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { CLAUDE_MODEL_IDS, resolveModelAlias } from '@shipcode/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   _internals,
@@ -12,6 +13,8 @@ import {
   loadWorkflowPolicyUncached,
   parseWorkflowPolicy,
   peekWorkflowPolicyCache,
+  resolveFanOutJudgeModel,
+  resolveFanOutJudgePhase,
   resolveWorkflowPath,
   setWorkflowPolicyCache,
 } from './workflow-loader';
@@ -141,14 +144,36 @@ Plan {{ issue.title }} now.
 agent:
   execute_orchestration: fan-out
   fan_out_worker_count: 5
-  fan_out_judge_model: claude-opus-4-8
+  fan_out_judge_model: claude-fable-5
 ---
 body`,
         '/repo/WORKFLOW.md',
       );
       expect(policy.agent.executeOrchestration).toBe('fan-out');
       expect(policy.agent.fanOutWorkerCount).toBe(5);
-      expect(policy.agent.fanOutJudgeModel).toBe('claude-opus-4-8');
+      expect(policy.agent.fanOutJudgeModel).toBe(CLAUDE_MODEL_IDS.fable5);
+    });
+
+    it.each([
+      'fable-5',
+      'fable5',
+      ' FABLE-5 ',
+    ])('normalizes the %s slug alias to the concrete Fable 5 id', (slug) => {
+      const policy = parseWorkflowPolicy(
+        `---\nagent:\n  fan_out_judge_model: "${slug}"\n---\nbody`,
+        '/repo/WORKFLOW.md',
+      );
+      expect(policy.agent.fanOutJudgeModel).toBe(CLAUDE_MODEL_IDS.fable5);
+    });
+
+    it('keeps a bare rolling Claude alias as typed', () => {
+      const policy = parseWorkflowPolicy(
+        '---\nagent:\n  fan_out_judge_model: fable\n---\nbody',
+        '/repo/WORKFLOW.md',
+      );
+      // The loader cannot know the run's executor, so the rolling alias survives
+      // parsing; `resolveFanOutJudgeModel` is what drops it on a non-Claude run.
+      expect(policy.agent.fanOutJudgeModel).toBe('fable');
     });
 
     it('clamps an excessive worker count and ignores unknown orchestration values', () => {
@@ -163,6 +188,67 @@ body`,
       );
       expect(policy.agent.executeOrchestration).toBe('single');
       expect(policy.agent.fanOutWorkerCount).toBe(8); // MAX_FAN_OUT_WORKER_COUNT
+    });
+  });
+
+  describe('resolveFanOutJudgeModel', () => {
+    it('defaults an unset judge to Fable 5 on a Claude run', () => {
+      expect(resolveFanOutJudgeModel(null, 'claude')).toBe(CLAUDE_MODEL_IDS.fable5);
+      expect(
+        resolveFanOutJudgeModel(DEFAULT_WORKFLOW_POLICY.agent.fanOutJudgeModel, 'claude'),
+      ).toBe(CLAUDE_MODEL_IDS.fable5);
+    });
+
+    it.each([
+      'codex',
+      'gemini',
+      'cursor',
+      'grok',
+      'openrouter',
+    ] as const)('leaves an unset judge on the verifier phase model for a %s run', (executor) => {
+      // A Claude id here would force the Claude CLI onto a non-Claude run,
+      // because the judge site infers its provider from this string.
+      expect(resolveFanOutJudgeModel(null, executor)).toBeNull();
+    });
+
+    it('honors an explicit judge model on every executor', () => {
+      expect(resolveFanOutJudgeModel('claude-opus-4-8', 'claude')).toBe('claude-opus-4-8');
+      expect(resolveFanOutJudgeModel('gpt-5.6-sol', 'codex')).toBe('gpt-5.6-sol');
+      expect(resolveFanOutJudgeModel(CLAUDE_MODEL_IDS.fable5, 'codex')).toBe(
+        CLAUDE_MODEL_IDS.fable5,
+      );
+    });
+
+    it('drops a rolling Claude alias on a non-Claude run instead of passing it to that CLI', () => {
+      expect(resolveFanOutJudgeModel('fable', 'claude')).toBe('fable');
+      expect(resolveFanOutJudgeModel('fable', 'codex')).toBeNull();
+      expect(resolveFanOutJudgeModel('opus', 'openrouter')).toBeNull();
+      // Mirrors `resolveModelAlias`, which rejects the same alias outright.
+      expect(() => resolveModelAlias('codex', 'fable')).toThrow();
+      expect(resolveModelAlias('claude', 'fable-5')).toBe(CLAUDE_MODEL_IDS.fable5);
+    });
+  });
+
+  describe('resolveFanOutJudgePhase', () => {
+    it('keeps the implicit Claude default on the verify payload', () => {
+      const resolved = resolveFanOutJudgeModel(null, 'claude');
+      expect(resolved).toBe(CLAUDE_MODEL_IDS.fable5);
+      expect(resolveFanOutJudgePhase(null, resolved)).toBe('verify');
+    });
+
+    it('keeps an unset non-Claude judge on verify', () => {
+      expect(resolveFanOutJudgePhase(null, null)).toBe('verify');
+    });
+
+    it('uses execute only for an explicit resolved judge model', () => {
+      expect(resolveFanOutJudgePhase(CLAUDE_MODEL_IDS.fable5, CLAUDE_MODEL_IDS.fable5)).toBe(
+        'execute',
+      );
+      expect(resolveFanOutJudgePhase('claude-opus-4-8', 'claude-opus-4-8')).toBe('execute');
+    });
+
+    it('does not flip to execute when a rolling alias was dropped', () => {
+      expect(resolveFanOutJudgePhase('fable', null)).toBe('verify');
     });
   });
 
