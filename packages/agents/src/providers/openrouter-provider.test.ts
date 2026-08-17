@@ -362,22 +362,27 @@ describe('createOpenRouterProvider', () => {
     );
   });
 
-  it('disables reasoning for OpenRouter models without reasoning support', async () => {
+  // This used to assert the `['none']` clamp for a model with no reasoning controls, whose
+  // sole member (`qwen/qwen3-coder:free`) OpenRouter delisted. The clamp went with it, but the
+  // behaviour worth pinning is the general one: a *model-specific* normalization overrides the
+  // configured effort on the wire. The adaptive-Claude clamp is the surviving instance, so the
+  // test now rides that one — `medium` must not reach OpenRouter verbatim.
+  it('sends a model-specific clamp rather than the configured effort', async () => {
     const stub = makeStubClient();
     const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
     const provider = createOpenRouterProvider({
       getApiKey: () => 'k',
-      getSettings: () => settings({ openrouterPlannerModel: 'qwen/qwen3.6-plus' }),
+      getSettings: () => settings({ openrouterPlannerModel: 'anthropic/claude-fable-5' }),
       createClient: () => stub,
     });
 
-    await provider.generate(req({ phase: 'plan', phaseHints: { reasoningEffort: 'high' } }));
+    await provider.generate(req({ phase: 'plan', phaseHints: { reasoningEffort: 'medium' } }));
 
     expect(chatSpy.mock.calls[0][0]).toEqual(
       expect.objectContaining({
-        model: 'qwen/qwen3.6-plus',
-        include_reasoning: false,
-        reasoning: { effort: 'none' },
+        model: 'anthropic/claude-fable-5',
+        include_reasoning: true,
+        reasoning: { effort: 'high' },
       }),
     );
   });
