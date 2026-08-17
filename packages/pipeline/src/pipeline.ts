@@ -234,27 +234,31 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     executorModel: PipelineExecutorModel,
     options?: PipelineStartOptions,
   ) {
-    const { settings, worktreePath, baseBranch } = bootstrapPipelineRun(deps, contextHelpers, {
-      threadId,
-      projectPath,
-      githubIssueNumber: issue.number,
-      githubIssueTitle: issue.title,
-      executorModel,
-      options,
-      createRun: () =>
-        createRun({
-          threadId,
-          source: 'github:start-issue',
-          triggerDetail: `issue:${issue.number}`,
-          currentPhase: 'planning',
-          context: {
-            githubIssueNumber: issue.number,
-            githubIssueTitle: issue.title,
-            worktreePath: options?.worktreePath ?? null,
-            executorModel,
-          },
-        }),
-    });
+    const { settings, worktreePath, baseBranch } = await bootstrapPipelineRun(
+      deps,
+      contextHelpers,
+      {
+        threadId,
+        projectPath,
+        githubIssueNumber: issue.number,
+        githubIssueTitle: issue.title,
+        executorModel,
+        options,
+        createRun: () =>
+          createRun({
+            threadId,
+            source: 'github:start-issue',
+            triggerDetail: `issue:${issue.number}`,
+            currentPhase: 'planning',
+            context: {
+              githubIssueNumber: issue.number,
+              githubIssueTitle: issue.title,
+              worktreePath: options?.worktreePath ?? null,
+              executorModel,
+            },
+          }),
+      },
+    );
 
     const thread = deps.threads.getById(threadId);
     const project = thread ? deps.projects.getById(thread.projectId) : null;
@@ -309,7 +313,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     executorModel: PipelineExecutorModel,
     options?: PipelineStartOptions,
   ) {
-    const { settings } = bootstrapPipelineRun(deps, contextHelpers, {
+    const { settings } = await bootstrapPipelineRun(deps, contextHelpers, {
       threadId,
       projectPath,
       // Quick tasks have no real GH issue. Pipeline guards check this with

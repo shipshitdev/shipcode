@@ -36,13 +36,20 @@ const { mockPromptArtifacts } = vi.hoisted(() => ({
   mockPromptArtifacts: new Map<string, string>(),
 }));
 
-const { mockExecSync, runMockedGit } = vi.hoisted(() => {
+const { mockExecSync, runMockedGit, forkPointCandidateRefs } = vi.hoisted(() => {
   const mockExecSync = vi.fn();
   return {
     mockExecSync,
     runMockedGit: async (cwd: string, args: string[]): Promise<string> => {
       const stdout: string = mockExecSync(['git', ...args].join(' '), { cwd });
       return stdout.trim();
+    },
+    // Same candidate ladder as the real resolveForkPointSha: blank base probes
+    // nothing, and an already-remote-qualified base is never double-prefixed.
+    forkPointCandidateRefs: (baseBranch: string): string[] => {
+      const base = baseBranch.trim();
+      if (!base) return [];
+      return Array.from(new Set([base, base.startsWith('origin/') ? base : `origin/${base}`]));
     },
   };
 });
@@ -54,8 +61,23 @@ vi.mock('@shipcode/git', () => {
     assertRegistered = vi.fn().mockResolvedValue(undefined);
   }
   class GitService {
+    constructor(readonly repoPath: string = '/proj') {}
     listBranches = vi.fn().mockResolvedValue([]);
-    getDefaultBranch = vi.fn().mockResolvedValue('main');
+    // Mirrors resolveDefaultBranch through the same execSync sink as the rest of
+    // git, so per-test `symbolic-ref` stubs keep driving the base branch. The
+    // real ladder's tail is 'main', and so is ours when the probe yields nothing.
+    getDefaultBranch = vi.fn(async () => {
+      try {
+        const head = await runMockedGit(this.repoPath, [
+          'symbolic-ref',
+          'refs/remotes/origin/HEAD',
+          '--short',
+        ]);
+        return head.replace('origin/', '') || 'main';
+      } catch {
+        return 'main';
+      }
+    });
   }
   return {
     WorktreeManager,
@@ -69,6 +91,19 @@ vi.mock('@shipcode/git', () => {
     }),
     resolveHeadCommit: vi.fn().mockResolvedValue('head-sha'),
     resolveCurrentBranch: vi.fn().mockResolvedValue('main'),
+    // Same sink as the rest of git: the run bootstrap resolves its fork point
+    // through this helper, so per-test `git rev-parse` stubs keep driving it.
+    resolveForkPointSha: vi.fn(async (cwd: string, baseBranch: string) => {
+      for (const ref of forkPointCandidateRefs(baseBranch)) {
+        try {
+          const sha = await runMockedGit(cwd, ['rev-parse', '--verify', `${ref}^{commit}`]);
+          if (sha) return sha;
+        } catch {
+          // Unstubbed ref: fall through to the remote-qualified candidate.
+        }
+      }
+      return '';
+    }),
     // The execute path drives git through the async transport now; route it to
     // the same mockExecSync sink so per-test git stubs keep one command shape.
     runGit: vi.fn(runMockedGit),
@@ -5519,7 +5554,7 @@ Custom prompt`,
     it('wraps normal GitHub issues in the ShipCode run contract before planning', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('symbolic-ref')) return 'origin/develop';
-        if (cmd === 'git rev-parse develop') return 'forksha';
+        if (cmd === 'git rev-parse --verify develop^{commit}') return 'forksha';
         return '';
       });
 
@@ -5554,7 +5589,7 @@ Custom prompt`,
     it('does not resolve the project checkout branch before a worktree exists', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('symbolic-ref')) return 'origin/develop';
-        if (cmd === 'git rev-parse develop') return 'forksha';
+        if (cmd === 'git rev-parse --verify develop^{commit}') return 'forksha';
         return '';
       });
 
@@ -5879,7 +5914,7 @@ Custom prompt`,
     it('uses an explicit quick-task base branch without probing origin HEAD', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('symbolic-ref')) throw new Error('should not probe remote HEAD');
-        if (cmd.includes('rev-parse develop')) return 'develop-sha';
+        if (cmd.includes('rev-parse --verify develop')) return 'develop-sha';
         return '';
       });
       const pipeline = createPipeline(mock.deps);

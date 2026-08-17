@@ -389,8 +389,15 @@ export class WorktreeManager {
   ): Promise<void> {
     const target = targetBranch ?? (await this.getDefaultBranch());
 
-    // Switch to target branch in main worktree
-    await this.git.checkout(target);
+    // Switch to target branch in main worktree. A clone that has only ever been
+    // driven through ShipCode worktrees can be missing the local trunk even
+    // though `origin/<target>` is present, so materialize it from the remote
+    // ref instead of failing the merge outright.
+    if (await this.branchExists(target)) {
+      await this.git.checkout(target);
+    } else {
+      await this.git.checkout(['-b', target, `origin/${target}`]);
+    }
 
     if (strategy === 'squash') {
       await this.git.raw(['merge', '--squash', branch]);

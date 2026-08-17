@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { GitService, resolveForkPointSha } from '@shipcode/git';
 import type { PipelineDeps, PipelineExecutorModel, PipelineStartOptions } from '../types';
 import type { PipelineContextHelpers } from './shared';
 
@@ -17,7 +17,7 @@ export interface PipelineRunBootstrapInput {
  * Tasks. Keeping branch resolution, thread reset, and context seeding in one
  * path prevents the two entry points from drifting as model options evolve.
  */
-export function bootstrapPipelineRun(
+export async function bootstrapPipelineRun(
   deps: PipelineDeps,
   contextHelpers: PipelineContextHelpers,
   input: PipelineRunBootstrapInput,
@@ -31,25 +31,23 @@ export function bootstrapPipelineRun(
   let baseBranch = options?.baseBranch ?? '';
   if (!baseBranch) {
     try {
-      baseBranch = execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short'], {
-        cwd: projectPath,
-        encoding: 'utf-8',
-      })
-        .trim()
-        .replace('origin/', '');
+      // The shared resolver, not a second copy of it: it reads origin/HEAD and
+      // then walks main → master → current branch, so a repo whose trunk is
+      // `master` no longer gets a hardcoded 'main'. Async by construction —
+      // synchronous git here blocked the Electron main event loop.
+      baseBranch = await new GitService(projectPath).getDefaultBranch();
     } catch {
       baseBranch = 'main';
     }
   }
 
-  let forkPointSha = '';
-  try {
-    forkPointSha = execFileSync('git', ['rev-parse', baseBranch], {
-      cwd: projectPath,
-      encoding: 'utf-8',
-    }).trim();
-  } catch {
-    forkPointSha = '';
+  // Tries `<base>` then `origin/<base>`, so a worktree-only clone with no local
+  // trunk still records a real fork point instead of ''.
+  const forkPointSha = await resolveForkPointSha(projectPath, baseBranch);
+  if (!forkPointSha) {
+    console.debug(
+      `[pipeline] no fork point resolved for base branch "${baseBranch}" in ${projectPath}`,
+    );
   }
 
   deps.threads.updateAutonomousFields(threadId, {

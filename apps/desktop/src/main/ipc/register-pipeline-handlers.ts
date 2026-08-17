@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { resolveForkPointSha } from '@shipcode/git';
 import type {
   ActivePipelineSummary,
   HeatmapQueryArgs,
@@ -17,7 +18,7 @@ import {
   shortHash,
 } from '@shipcode/shared';
 
-import { logEvent } from '../logger.service';
+import log, { logEvent } from '../logger.service';
 import { safeSend } from '../safe-send';
 import {
   assertCliPhaseModelsSupported,
@@ -199,15 +200,14 @@ export function registerPipelineHandlers({
     queries.threads.setPhaseModels(threadId, phaseModels);
 
     const baseBranch = project.defaultBranch;
-    let forkPointSha = '';
-    try {
-      const { stdout } = await execFileAsync('git', ['rev-parse', baseBranch], {
-        cwd: project.path,
-        encoding: 'utf8',
-      });
-      forkPointSha = stdout.trim();
-    } catch {
-      // baseBranch may not exist locally; forkPointSha stays empty
+    // Shared ladder: `<base>` then `origin/<base>`. A clone that only ever ran
+    // ShipCode worktrees has no local trunk, and probing the bare name left
+    // forkPointSha empty for the whole run.
+    const forkPointSha = await resolveForkPointSha(project.path, baseBranch);
+    if (!forkPointSha) {
+      log.debug(
+        `[pipeline:start] no fork point resolved for base branch "${baseBranch}" in ${project.path}`,
+      );
     }
 
     pipeline.initializeContext(threadId, {

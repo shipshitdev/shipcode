@@ -46,6 +46,28 @@ vi.mock('@shipcode/git', () => {
     }),
     resolveHeadCommit: vi.fn().mockResolvedValue('head-sha'),
     resolveCurrentBranch: vi.fn().mockResolvedValue('main'),
+    // Routed through the same execSync sink the rest of this file stubs, so the
+    // bootstrap's fork point still comes from the test's `rev-parse` response.
+    resolveForkPointSha: vi.fn(async (cwd: string, baseBranch: string) => {
+      // Same candidate ladder as the real helper: blank base probes nothing, an
+      // already-remote-qualified base is never double-prefixed, and a missing
+      // local ref falls through to `origin/<base>`.
+      const base = baseBranch.trim();
+      if (!base) return '';
+      const refs = Array.from(
+        new Set([base, base.startsWith('origin/') ? base : `origin/${base}`]),
+      );
+      for (const ref of refs) {
+        try {
+          const stdout: string = mockExecSync(`git rev-parse --verify ${ref}^{commit}`, { cwd });
+          const sha = stdout?.trim() ?? '';
+          if (sha) return sha;
+        } catch {
+          // Unstubbed ref: fall through to the remote-qualified candidate.
+        }
+      }
+      return '';
+    }),
   };
 });
 

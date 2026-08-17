@@ -18,6 +18,7 @@ export type {
   PullRequestSnapshot,
 } from './cleanup-analyzer';
 export { analyzeCleanup } from './cleanup-analyzer';
+export { resolveForkPointSha } from './fork-point';
 export type { GitRunner } from './git-exec';
 export { buildScopedGitEnv, runGit, runGitUnlocked, withGitLock } from './git-exec';
 export { GitService } from './git-service';
