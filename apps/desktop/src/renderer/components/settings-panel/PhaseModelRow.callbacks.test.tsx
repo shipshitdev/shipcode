@@ -99,7 +99,11 @@ describe('PhaseModelRow callback coverage', () => {
     fireEvent.click(screen.getByTestId('select-qwen/qwen3.6-plus-qwen/qwen3.6-plus'));
     expect(onOpenrouterModelChange).toHaveBeenCalledWith('qwen/qwen3.6-plus');
 
-    fireEvent.click(screen.getByTestId('select-none-high'));
+    // The stub encodes the select's current value in its testid, and the reasoning select is fed
+    // the *effective* effort. This was `select-none-...` while the resolved model was
+    // `qwen/qwen3-coder:free`, which clamped every effort to `none`; that model is delisted and the
+    // clamp is gone, so a normal-reasoning model now passes `medium` through untouched.
+    fireEvent.click(screen.getByTestId('select-medium-high'));
     expect(onReasoningEffortChange).toHaveBeenCalledWith('high');
   });
 

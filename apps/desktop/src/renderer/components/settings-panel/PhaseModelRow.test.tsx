@@ -44,7 +44,12 @@ describe('PhaseModelRow', () => {
     expect(
       screen.getByDisplayValue('custom/provider-model') as HTMLInputElement,
     ).toBeInTheDocument();
-    expect(screen.getByText(/does not expose OpenRouter reasoning controls/i)).toBeInTheDocument();
+    // This used to assert the "does not expose OpenRouter reasoning controls" notice, which only
+    // ever rendered for the no-reasoning model set — whose sole member (`qwen/qwen3-coder:free`)
+    // OpenRouter delisted, taking the set and its message with it. What this row is actually
+    // asserting is that an inexact effort resolution surfaces its notice, so it now rides the
+    // surviving generic branch: `medium` is offered but may be remapped upstream.
+    expect(screen.getByText(/may remap unsupported effort levels/i)).toBeInTheDocument();
     expect(screen.getByText('Project override is degraded')).toBeInTheDocument();
     expect(screen.getByText('Model validation failed')).toBeInTheDocument();
 
