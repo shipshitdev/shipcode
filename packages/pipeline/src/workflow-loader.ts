@@ -180,6 +180,22 @@ export function resolveFanOutJudgeModel(
   return executorModel === 'claude' ? DEFAULT_FAN_OUT_JUDGE_CLAUDE_MODEL : null;
 }
 
+/**
+ * Which phase payload the fan-out judge should ride.
+ *
+ * An explicit `fan_out_judge_model` keeps the pre-existing execute overlay
+ * (provider + `executorModelIdOverride`). The implicit Claude default must
+ * NOT take that path: execute is interactive with write tools. It rides
+ * verify instead — programmatic, `maxTurns: 1`, host tools disallowed —
+ * with Fable 5 applied as `verifierModel` / `verifierModelIdOverride`.
+ */
+export function resolveFanOutJudgePhase(
+  configured: string | null,
+  resolved: string | null,
+): 'execute' | 'verify' {
+  return configured && resolved ? 'execute' : 'verify';
+}
+
 function parsePerStateCaps(raw: unknown): Record<string, number> {
   if (!isRecord(raw)) return {};
   const result: Record<string, number> = {};

@@ -14,6 +14,7 @@ import {
   parseWorkflowPolicy,
   peekWorkflowPolicyCache,
   resolveFanOutJudgeModel,
+  resolveFanOutJudgePhase,
   resolveWorkflowPath,
   setWorkflowPolicyCache,
 } from './workflow-loader';
@@ -153,17 +154,16 @@ body`,
       expect(policy.agent.fanOutJudgeModel).toBe(CLAUDE_MODEL_IDS.fable5);
     });
 
-    it.each([
-      'fable-5',
-      'fable5',
-      ' FABLE-5 ',
-    ])('normalizes the %s slug alias to the concrete Fable 5 id', (slug) => {
-      const policy = parseWorkflowPolicy(
-        `---\nagent:\n  fan_out_judge_model: "${slug}"\n---\nbody`,
-        '/repo/WORKFLOW.md',
-      );
-      expect(policy.agent.fanOutJudgeModel).toBe(CLAUDE_MODEL_IDS.fable5);
-    });
+    it.each(['fable-5', 'fable5', ' FABLE-5 '])(
+      'normalizes the %s slug alias to the concrete Fable 5 id',
+      (slug) => {
+        const policy = parseWorkflowPolicy(
+          `---\nagent:\n  fan_out_judge_model: "${slug}"\n---\nbody`,
+          '/repo/WORKFLOW.md',
+        );
+        expect(policy.agent.fanOutJudgeModel).toBe(CLAUDE_MODEL_IDS.fable5);
+      },
+    );
 
     it('keeps a bare rolling Claude alias as typed', () => {
       const policy = parseWorkflowPolicy(
@@ -198,17 +198,14 @@ body`,
       ).toBe(CLAUDE_MODEL_IDS.fable5);
     });
 
-    it.each([
-      'codex',
-      'gemini',
-      'cursor',
-      'grok',
-      'openrouter',
-    ] as const)('leaves an unset judge on the verifier phase model for a %s run', (executor) => {
-      // A Claude id here would force the Claude CLI onto a non-Claude run,
-      // because the judge site infers its provider from this string.
-      expect(resolveFanOutJudgeModel(null, executor)).toBeNull();
-    });
+    it.each(['codex', 'gemini', 'cursor', 'grok', 'openrouter'] as const)(
+      'leaves an unset judge on the verifier phase model for a %s run',
+      (executor) => {
+        // A Claude id here would force the Claude CLI onto a non-Claude run,
+        // because the judge site infers its provider from this string.
+        expect(resolveFanOutJudgeModel(null, executor)).toBeNull();
+      },
+    );
 
     it('honors an explicit judge model on every executor', () => {
       expect(resolveFanOutJudgeModel('claude-opus-4-8', 'claude')).toBe('claude-opus-4-8');
@@ -225,6 +222,29 @@ body`,
       // Mirrors `resolveModelAlias`, which rejects the same alias outright.
       expect(() => resolveModelAlias('codex', 'fable')).toThrow();
       expect(resolveModelAlias('claude', 'fable-5')).toBe(CLAUDE_MODEL_IDS.fable5);
+    });
+  });
+
+  describe('resolveFanOutJudgePhase', () => {
+    it('keeps the implicit Claude default on the verify payload', () => {
+      const resolved = resolveFanOutJudgeModel(null, 'claude');
+      expect(resolved).toBe(CLAUDE_MODEL_IDS.fable5);
+      expect(resolveFanOutJudgePhase(null, resolved)).toBe('verify');
+    });
+
+    it('keeps an unset non-Claude judge on verify', () => {
+      expect(resolveFanOutJudgePhase(null, null)).toBe('verify');
+    });
+
+    it('uses execute only for an explicit resolved judge model', () => {
+      expect(resolveFanOutJudgePhase(CLAUDE_MODEL_IDS.fable5, CLAUDE_MODEL_IDS.fable5)).toBe(
+        'execute',
+      );
+      expect(resolveFanOutJudgePhase('claude-opus-4-8', 'claude-opus-4-8')).toBe('execute');
+    });
+
+    it('does not flip to execute when a rolling alias was dropped', () => {
+      expect(resolveFanOutJudgePhase('fable', null)).toBe('verify');
     });
   });
 
