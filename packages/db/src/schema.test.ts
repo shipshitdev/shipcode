@@ -1701,6 +1701,11 @@ describe('migrateV69', () => {
       INSERT INTO github_issue_cache
         (id, project_id, issue_number, title, labels, state, pipeline_status, executor_model_id_override)
       VALUES ('i1', 'p1', 1, 'Issue', '[]', 'open', 'queued', '${DEAD}');
+      INSERT INTO automations
+        (id, project_id, name, prompt, cron_expr, enabled, executor_provider, executor_model_id,
+         created_at, updated_at)
+      VALUES ('a1', 'p1', 'nightly', 'go', '0 0 * * *', 1, 'openrouter', '${DEAD}',
+              datetime('now'), datetime('now'));
     `);
 
     migrateV69(db);
@@ -1745,6 +1750,15 @@ describe('migrateV69', () => {
           .prepare("SELECT executor_model_id_override AS e FROM github_issue_cache WHERE id = 'i1'")
           .get() as { e: string | null }
       ).e,
+    ).toBeNull();
+
+    // Cron automations resolve this column ahead of project/global defaults.
+    expect(
+      (
+        db.prepare("SELECT executor_model_id AS m FROM automations WHERE id = 'a1'").get() as {
+          m: string | null;
+        }
+      ).m,
     ).toBeNull();
   });
 

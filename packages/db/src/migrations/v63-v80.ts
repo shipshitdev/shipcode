@@ -238,8 +238,10 @@ export function migrateV68(db: DatabaseSync): void {
 /**
  * Clear saved selections of `qwen/qwen3-coder:free`, which OpenRouter delisted (verified
  * absent from the live catalog on 2026-08-17). It was a curated picker option, so a user
- * could have it saved at app, project, or issue scope, and every one of those would 404
- * mid-run against a model that no longer exists.
+ * could have it saved at app, project, issue, or automation scope, and every one of those
+ * would 404 mid-run against a model that no longer exists. `automations.executor_model_id`
+ * is a first-class OpenRouter picker and beats project/global resolution on cron, so it
+ * is cleared the same way as the other override columns.
  *
  * Selections are cleared rather than rewritten to a substitute: which model should replace
  * it is the user's call, and each cleared scope falls back through the normal app default.
@@ -302,6 +304,10 @@ export function migrateV69(db: DatabaseSync): void {
                executor_model_id_override,
                verifier_model_id_override
              );
+
+      UPDATE automations
+         SET executor_model_id = NULLIF(executor_model_id, 'qwen/qwen3-coder:free')
+       WHERE executor_model_id = 'qwen/qwen3-coder:free';
     `);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (69)`);
