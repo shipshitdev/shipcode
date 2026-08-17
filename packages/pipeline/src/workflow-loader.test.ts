@@ -154,16 +154,17 @@ body`,
       expect(policy.agent.fanOutJudgeModel).toBe(CLAUDE_MODEL_IDS.fable5);
     });
 
-    it.each(['fable-5', 'fable5', ' FABLE-5 '])(
-      'normalizes the %s slug alias to the concrete Fable 5 id',
-      (slug) => {
-        const policy = parseWorkflowPolicy(
-          `---\nagent:\n  fan_out_judge_model: "${slug}"\n---\nbody`,
-          '/repo/WORKFLOW.md',
-        );
-        expect(policy.agent.fanOutJudgeModel).toBe(CLAUDE_MODEL_IDS.fable5);
-      },
-    );
+    it.each([
+      'fable-5',
+      'fable5',
+      ' FABLE-5 ',
+    ])('normalizes the %s slug alias to the concrete Fable 5 id', (slug) => {
+      const policy = parseWorkflowPolicy(
+        `---\nagent:\n  fan_out_judge_model: "${slug}"\n---\nbody`,
+        '/repo/WORKFLOW.md',
+      );
+      expect(policy.agent.fanOutJudgeModel).toBe(CLAUDE_MODEL_IDS.fable5);
+    });
 
     it('keeps a bare rolling Claude alias as typed', () => {
       const policy = parseWorkflowPolicy(
@@ -198,14 +199,17 @@ body`,
       ).toBe(CLAUDE_MODEL_IDS.fable5);
     });
 
-    it.each(['codex', 'gemini', 'cursor', 'grok', 'openrouter'] as const)(
-      'leaves an unset judge on the verifier phase model for a %s run',
-      (executor) => {
-        // A Claude id here would force the Claude CLI onto a non-Claude run,
-        // because the judge site infers its provider from this string.
-        expect(resolveFanOutJudgeModel(null, executor)).toBeNull();
-      },
-    );
+    it.each([
+      'codex',
+      'gemini',
+      'cursor',
+      'grok',
+      'openrouter',
+    ] as const)('leaves an unset judge on the verifier phase model for a %s run', (executor) => {
+      // A Claude id here would force the Claude CLI onto a non-Claude run,
+      // because the judge site infers its provider from this string.
+      expect(resolveFanOutJudgeModel(null, executor)).toBeNull();
+    });
 
     it('honors an explicit judge model on every executor', () => {
       expect(resolveFanOutJudgeModel('claude-opus-4-8', 'claude')).toBe('claude-opus-4-8');
