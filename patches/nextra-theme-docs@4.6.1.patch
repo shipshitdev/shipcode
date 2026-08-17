@@ -11,3 +11,29 @@ index 0bc19ce3a6394fbebfa8ba8f2f9ec94b23051603..98a38525ef94580fdb31a9e85b05e688
    copyPageButton: z.boolean().default(true).meta({
      description: "Hide/show copy page content button."
    }),
+diff --git a/dist/components/sidebar.js b/dist/components/sidebar.js
+index b6e7d777ee4b1c0b50e5c1dab305f64f01370b29..01be0c96e586e4942e0722cc1147bd32c49ef9c3 100644
+--- a/dist/components/sidebar.js
++++ b/dist/components/sidebar.js
+@@ -94,7 +94,7 @@
+       updateTreeState();
+     }
+   }, [activeRouteInside, focusedRouteInside, item.route, autoCollapse]);
+-  const isLink = "frontMatter" in item;
++  const isLink = "frontMatter" in item || Boolean(item.href);
+   const ComponentToUse = isLink ? Anchor : Button;
+   const t3 = cn({
+     open,
+@@ -126,10 +126,10 @@
+   }
+   return /* @__PURE__ */ jsxs("li", { className: t3, children: [
+     /* @__PURE__ */ jsxs(ComponentToUse, { ...isLink ? {
+-      href: item.route,
++      href: item.href || item.route,
+       prefetch: false
+     } : {
+-      "data-href": item.route
++      "data-href": item.href || item.route
+     }, className: t6, onClick: handleClick2, onFocus, children: [
+       t7,
+       t10

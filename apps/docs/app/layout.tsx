@@ -4,6 +4,7 @@ import { Layout } from 'nextra-theme-docs';
 import 'nextra-theme-docs/style.css';
 import './globals.css';
 
+import { assignFolderNavHrefs } from '../folder-nav-hrefs';
 import themeConfig from '../theme.config';
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const pageMap = await getPageMap();
+  const pageMap = assignFolderNavHrefs(await getPageMap());
 
   return (
     <html lang="en" suppressHydrationWarning>

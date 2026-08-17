@@ -5,5 +5,21 @@
     "deploymentEnabled": false
   },
   "outputDirectory": "apps/web/out",
-  "installCommand": "bun install"
+  "installCommand": "bun install",
+  "redirects": [
+    { "source": "/desktop", "destination": "/docs/desktop/overview", "permanent": true },
+    { "source": "/desktop/:path*", "destination": "/docs/desktop/:path*", "permanent": true },
+    { "source": "/pipeline", "destination": "/docs/pipeline/overview", "permanent": true },
+    { "source": "/pipeline/:path*", "destination": "/docs/pipeline/:path*", "permanent": true },
+    { "source": "/cli", "destination": "/docs/cli", "permanent": true },
+    { "source": "/cli/:path*", "destination": "/docs/cli/:path*", "permanent": true },
+    { "source": "/models", "destination": "/docs/models", "permanent": true },
+    { "source": "/workflow", "destination": "/docs/workflow", "permanent": true },
+    { "source": "/getting-started", "destination": "/docs/getting-started", "permanent": true },
+    { "source": "/architecture", "destination": "/docs/architecture", "permanent": true },
+    { "source": "/configuration", "destination": "/docs/configuration", "permanent": true },
+    { "source": "/openrouter", "destination": "/docs/openrouter", "permanent": true },
+    { "source": "/docs/desktop", "destination": "/docs/desktop/overview", "permanent": true },
+    { "source": "/docs/pipeline", "destination": "/docs/pipeline/overview", "permanent": true }
+  ]
 }
