@@ -54,9 +54,6 @@ const OPENROUTER_ADAPTIVE_CLAUDE_EFFORTS = [
   'none',
   'high',
 ] as const satisfies readonly ReasoningEffort[];
-const OPENROUTER_DISABLED_REASONING_EFFORTS = [
-  'none',
-] as const satisfies readonly ReasoningEffort[];
 
 const OPENROUTER_MODEL_ALIASES: Record<string, string> = {
   'anthropic/claude-sonnet-4-6': OPENROUTER_MODEL_IDS.claudeSonnet46,
@@ -76,7 +73,11 @@ const OPENROUTER_ADAPTIVE_CLAUDE_MODELS = new Set<string>([
   OPENROUTER_MODEL_IDS.claudeFable5,
 ]);
 
-const OPENROUTER_NO_REASONING_MODELS = new Set<string>([OPENROUTER_MODEL_IDS.qwen3CoderFree]);
+// No curated OpenRouter model currently lacks reasoning support. The set, its `['none']`
+// effort list, and both call sites were removed with `qwen/qwen3-coder:free` (the sole
+// member, delisted upstream) rather than left empty: an empty Set makes every lookup dead
+// code that reads as if a case is still handled. Re-add the pair if a curated model turns up
+// with no reasoning controls — the shape to restore is in git history for this line.
 const REASONING_EFFORT_LABELS: Record<ReasoningEffort, string> = {
   none: 'None',
   minimal: 'Minimal',
@@ -143,10 +144,6 @@ export function getSupportedReasoningEfforts(
 
   if (normalizedModelId && OPENROUTER_ADAPTIVE_CLAUDE_MODELS.has(normalizedModelId)) {
     return OPENROUTER_ADAPTIVE_CLAUDE_EFFORTS;
-  }
-
-  if (normalizedModelId && OPENROUTER_NO_REASONING_MODELS.has(normalizedModelId)) {
-    return OPENROUTER_DISABLED_REASONING_EFFORTS;
   }
 
   return ALL_REASONING_EFFORTS;
@@ -265,18 +262,6 @@ export function resolveProviderReasoningEffort(
       exact: false,
       message:
         'Grok selects reasoning automatically per model; ShipCode does not send a reasoning effort.',
-    };
-  }
-
-  if (normalizedModelId && OPENROUTER_NO_REASONING_MODELS.has(normalizedModelId)) {
-    if (configured === 'none') {
-      return { configured, effective: 'none', exact: true, message: null };
-    }
-    return {
-      configured,
-      effective: 'none',
-      exact: false,
-      message: `${normalizedModelId} does not expose OpenRouter reasoning controls. ShipCode disables reasoning for this model.`,
     };
   }
 

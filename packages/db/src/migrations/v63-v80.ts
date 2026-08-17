@@ -234,3 +234,67 @@ export function migrateV68(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (68)`);
   });
 }
+
+/**
+ * Clear saved selections of `qwen/qwen3-coder:free`, which OpenRouter delisted (verified
+ * absent from the live catalog on 2026-08-17). It was a curated picker option, so a user
+ * could have it saved at app, project, or issue scope, and every one of those would 404
+ * mid-run against a model that no longer exists.
+ *
+ * Selections are cleared rather than rewritten to a substitute: which model should replace
+ * it is the user's call, and each cleared scope falls back through the normal app default.
+ * For `settings` that means deleting the key — the loader reads a missing key as "unset" and
+ * applies DEFAULT_SETTINGS — so a DELETE, not an UPDATE to a sentinel.
+ *
+ * Deliberately does NOT touch threads.*_resolved_model or the cost rows: those record what
+ * actually ran on a past pipeline. They are history, not configuration, and rewriting them
+ * would falsify the telemetry this app is built to trust.
+ */
+export function migrateV69(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 69) return;
+
+  transaction(db, () => {
+    db.exec(`
+      DELETE FROM settings
+       WHERE value = 'qwen/qwen3-coder:free'
+         AND key IN (
+           'openrouterPlannerModel',
+           'openrouterReviewerModel',
+           'openrouterVerifierModel',
+           'openrouterExecutorModel',
+           'openrouterDefaultPaidModel',
+           'openrouterDefaultFreeModel',
+           'openrouterExplicitFallback'
+         );
+
+      UPDATE projects
+         SET planner_model_id_override  = NULLIF(planner_model_id_override,  'qwen/qwen3-coder:free'),
+             reviewer_model_id_override = NULLIF(reviewer_model_id_override, 'qwen/qwen3-coder:free'),
+             executor_model_id_override = NULLIF(executor_model_id_override, 'qwen/qwen3-coder:free'),
+             verifier_model_id_override = NULLIF(verifier_model_id_override, 'qwen/qwen3-coder:free')
+       WHERE 'qwen/qwen3-coder:free' IN (
+               planner_model_id_override,
+               reviewer_model_id_override,
+               executor_model_id_override,
+               verifier_model_id_override
+             );
+
+      UPDATE github_issue_cache
+         SET planner_model_id_override  = NULLIF(planner_model_id_override,  'qwen/qwen3-coder:free'),
+             reviewer_model_id_override = NULLIF(reviewer_model_id_override, 'qwen/qwen3-coder:free'),
+             executor_model_id_override = NULLIF(executor_model_id_override, 'qwen/qwen3-coder:free'),
+             verifier_model_id_override = NULLIF(verifier_model_id_override, 'qwen/qwen3-coder:free')
+       WHERE 'qwen/qwen3-coder:free' IN (
+               planner_model_id_override,
+               reviewer_model_id_override,
+               executor_model_id_override,
+               verifier_model_id_override
+             );
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (69)`);
+  });
+}

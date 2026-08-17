@@ -130,6 +130,17 @@ describe('model-catalog', () => {
     }
   });
 
+  // OpenRouter delisted `qwen/qwen3-coder:free` (absent from the live catalog on 2026-08-17),
+  // so it must not be offered again. It reads like a plausible free-tier default, which is
+  // exactly how a delisted slug gets re-added from memory — this pins the removal.
+  it('never re-offers the delisted Qwen 3 Coder Free slug', () => {
+    const dead = 'qwen/qwen3-coder:free';
+    expect(Object.values<string>({ ...OPENROUTER_MODEL_IDS })).not.toContain(dead);
+    expect(OPENROUTER_MODEL_OPTIONS.map((option) => option.value)).not.toContain(dead);
+    // The label map is exempt on purpose (it serves users holding a stale id), so a
+    // surviving label here is not a leak of the offer.
+  });
+
   // The bare GPT-5.6 tiers stay Codex-CLI ids; OpenRouter needs the vendor prefix. Both
   // spellings must keep resolving so a shared label lookup cannot collapse them.
   it('keeps bare and OpenRouter-prefixed GPT-5.6 slugs distinct', () => {

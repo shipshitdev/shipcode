@@ -101,7 +101,7 @@ function makeStubClient(): OpenRouterClientType {
         '```shipcode-issue-triage\n{"issues":[{"issueNumber":12,"confidence":0.9,"suggestedAgent":"codex","suggestedLabels":["shipcode:agent:codex"],"shouldStart":true,"needsHuman":false,"rationale":"Ready"}]}\n```',
       toolCalls: [],
       finishReason: 'stop',
-      model: 'qwen/qwen3-coder:free',
+      model: 'qwen/qwen3.6-plus',
       usage: null,
     })),
   } as unknown as OpenRouterClientType;
@@ -214,7 +214,7 @@ describe('issue triage', () => {
       issues: [baseIssue],
       apiKey: 'k',
       settings: triageSettings({
-        triageModelId: 'qwen/qwen3-coder:free',
+        triageModelId: 'qwen/qwen3.6-plus',
         triageReasoningEffort: 'high',
       }),
       createOpenRouterClient: () => client,
@@ -222,7 +222,7 @@ describe('issue triage', () => {
 
     expect(chatSpy.mock.calls[0][0]).toEqual(
       expect.objectContaining({
-        model: 'qwen/qwen3-coder:free',
+        model: 'qwen/qwen3.6-plus',
         include_reasoning: false,
         reasoning: { effort: 'none' },
       }),

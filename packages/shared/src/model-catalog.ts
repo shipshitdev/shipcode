@@ -79,7 +79,14 @@ export type GrokFallbackModelId =
 // scans the live catalog for the configured slug and reports `model_deprecated`, so a
 // guessed entry surfaces as a broken preset rather than a caught mistake. Verify against
 // the live list before adding, and never transcribe an ID from memory.
-// Last verified against the live catalog: 2026-08-16.
+//
+// The rule covers this table and OPENROUTER_MODEL_OPTIONS, which are *offers* — a slug here
+// is one ShipCode invites a user to run. It deliberately does not cover KNOWN_MODEL_LABELS,
+// whose extra keys are display-only tolerance for ids a user may already have saved or may
+// paste by hand; see the comment there.
+//
+// Every entry below was re-verified against the live catalog on 2026-08-17 (414 models).
+// `qwen/qwen3-coder:free` was removed in that pass: OpenRouter no longer serves it.
 export const OPENROUTER_MODEL_IDS = {
   autoPaid: 'openrouter/auto',
   autoFree: 'openrouter/free',
@@ -91,7 +98,6 @@ export const OPENROUTER_MODEL_IDS = {
   gpt56Terra: 'openai/gpt-5.6-terra',
   gpt56Luna: 'openai/gpt-5.6-luna',
   qwen36Plus: 'qwen/qwen3.6-plus',
-  qwen3CoderFree: 'qwen/qwen3-coder:free',
 } as const;
 
 export type OpenRouterModelId = (typeof OPENROUTER_MODEL_IDS)[keyof typeof OPENROUTER_MODEL_IDS];
@@ -140,7 +146,6 @@ export const OPENROUTER_MODEL_OPTIONS = [
   { value: OPENROUTER_MODEL_IDS.gpt56Terra, label: 'GPT-5.6 Terra' },
   { value: OPENROUTER_MODEL_IDS.gpt56Luna, label: 'GPT-5.6 Luna' },
   { value: OPENROUTER_MODEL_IDS.qwen36Plus, label: 'Qwen 3.6 Plus' },
-  { value: OPENROUTER_MODEL_IDS.qwen3CoderFree, label: 'Qwen 3 Coder Free' },
 ] as const satisfies readonly KnownModelOption<OpenRouterModelId>[];
 
 // Human-readable CLI names surfaced in availability / reasoning-effort warnings.
@@ -226,6 +231,14 @@ export const KNOWN_MODEL_LABELS: Record<string, string> = {
   // nothing here for `anthropic/claude-fable-5` (no dotted segment) or the
   // `openai/gpt-5.6-*` tiers (Codex publishes those dotted too, so the dotted form is what
   // users type).
+  //
+  // These keys are exempt from the live-catalog rule that governs OPENROUTER_MODEL_IDS, and
+  // several of them are not served by OpenRouter at all (the dash spellings never were;
+  // `openai/gpt-5-codex` was delisted). That is fine — a label is not an offer. Its only job
+  // is to render a friendly name for an id a user already has saved or types by hand, and a
+  // model going away is exactly when someone is most likely to be holding a stale id and
+  // least served by seeing a raw slug. Removing a label breaks that reader without
+  // un-breaking the model, so labels outlive their models on purpose.
   'anthropic/claude-sonnet-4-6': CURATED_MODEL_LABELS[OPENROUTER_MODEL_IDS.claudeSonnet46],
   [OPENROUTER_MODEL_IDS.claudeOpus46]: 'Claude Opus 4.6',
   'anthropic/claude-opus-4-6': 'Claude Opus 4.6',

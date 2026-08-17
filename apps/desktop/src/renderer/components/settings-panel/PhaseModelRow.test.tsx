@@ -21,7 +21,7 @@ describe('PhaseModelRow', () => {
         htmlFor="executor-model"
         modelValue="openrouter"
         openrouterModelValue="custom/provider-model"
-        resolvedModelId="qwen/qwen3-coder:free"
+        resolvedModelId="qwen/qwen3.6-plus"
         reasoningEffortValue="medium"
         validProviders={['claude', 'codex', 'openrouter']}
         onModelChange={onModelChange}
@@ -32,7 +32,7 @@ describe('PhaseModelRow', () => {
         modelCheck={{
           key: 'executor',
           label: 'Executor model',
-          modelId: 'qwen/qwen3-coder:free',
+          modelId: 'qwen/qwen3.6-plus',
           status: 'invalid',
           message: 'Model validation failed',
         }}

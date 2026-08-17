@@ -488,11 +488,11 @@ describe('model-resolution', () => {
       plannerModelOverride: 'claude',
       plannerModelIdOverride: 'claude-opus-4-6',
       verifierModelOverride: 'openrouter',
-      verifierModelIdOverride: 'qwen/qwen3-coder:free',
+      verifierModelIdOverride: 'qwen/qwen3.6-plus',
     });
 
     expect(resolvePhaseModelId(settings, project, 'planner')).toBe('claude-opus-4-6');
-    expect(resolvePhaseModelId(settings, project, 'verifier')).toBe('qwen/qwen3-coder:free');
+    expect(resolvePhaseModelId(settings, project, 'verifier')).toBe('qwen/qwen3.6-plus');
   });
 
   it('falls back to global openrouter model settings when no project model ID is set', () => {

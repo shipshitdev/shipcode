@@ -62,8 +62,17 @@ describe('executorReasoningOptions', () => {
   });
 
   it('respects OpenRouter per-model reasoning support', () => {
-    expect(values('openrouter', 'qwen/qwen3-coder:free')).toEqual(['inherit', 'none']);
     expect(values('openrouter', 'anthropic/claude-opus-4.8')).toEqual(['inherit', 'none', 'high']);
+    expect(values('openrouter', 'anthropic/claude-fable-5')).toEqual(['inherit', 'none', 'high']);
+    expect(values('openrouter', 'qwen/qwen3.6-plus')).toEqual([
+      'inherit',
+      'none',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
   });
 
   it('keeps the form renderable for an incompatible free-form model id', () => {

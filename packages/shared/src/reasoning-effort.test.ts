@@ -295,20 +295,22 @@ describe('reasoning-effort', () => {
     }
   });
 
-  it('disables reasoning entirely for OpenRouter models without reasoning support', () => {
-    expect(getSupportedReasoningEfforts('openrouter', 'qwen/qwen3-coder:free')).toEqual(['none']);
-    expect(resolveProviderReasoningEffort('openrouter', 'none', 'qwen/qwen3-coder:free')).toEqual({
-      configured: 'none',
-      effective: 'none',
-      exact: true,
-      message: null,
-    });
+  // `qwen/qwen3-coder:free` was the only curated model with no reasoning controls, so the
+  // no-reasoning branch went away when OpenRouter delisted it. A delisted slug is now just an
+  // unknown one: it must fall through to the generic ladder rather than keep a private
+  // clamp, since nothing in the catalog can vouch for what it supports.
+  it('gives a delisted OpenRouter slug the generic ladder, not a private clamp', () => {
+    expect(getSupportedReasoningEfforts('openrouter', 'qwen/qwen3-coder:free')).toEqual([
+      'none',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
     expect(
       resolveProviderReasoningEffort('openrouter', 'medium', 'qwen/qwen3-coder:free'),
-    ).toMatchObject({
-      effective: 'none',
-      exact: false,
-    });
+    ).toMatchObject({ effective: 'medium', exact: false });
   });
 
   it('maps Gemini unsupported efforts to supported reasoning levels', () => {

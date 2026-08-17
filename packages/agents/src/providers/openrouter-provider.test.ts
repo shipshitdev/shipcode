@@ -96,11 +96,11 @@ describe('createOpenRouterProvider', () => {
   });
 
   it('execute phase uses the executor model setting when no model hint is present', async () => {
-    const stub = makeStubClient({ content: 'no tools', model: 'qwen/qwen3-coder:free' });
+    const stub = makeStubClient({ content: 'no tools', model: 'qwen/qwen3.6-plus' });
     const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
     const provider = createOpenRouterProvider({
       getApiKey: () => 'k',
-      getSettings: () => settings({ openrouterExecutorModel: 'qwen/qwen3-coder:free' }),
+      getSettings: () => settings({ openrouterExecutorModel: 'qwen/qwen3.6-plus' }),
       createClient: () => stub,
     });
 
@@ -108,7 +108,7 @@ describe('createOpenRouterProvider', () => {
 
     expect(res.exitCode).toBe(1);
     expect(chatSpy.mock.calls[0][0]).toEqual(
-      expect.objectContaining({ model: 'qwen/qwen3-coder:free' }),
+      expect.objectContaining({ model: 'qwen/qwen3.6-plus' }),
     );
   });
 
@@ -200,7 +200,7 @@ describe('createOpenRouterProvider', () => {
     const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
     const provider = createOpenRouterProvider({
       getApiKey: () => 'k',
-      getSettings: () => settings({ openrouterPlannerModel: 'qwen/qwen3-coder:free' }),
+      getSettings: () => settings({ openrouterPlannerModel: 'qwen/qwen3.6-plus' }),
       createClient: () => stub,
     });
 
@@ -367,7 +367,7 @@ describe('createOpenRouterProvider', () => {
     const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
     const provider = createOpenRouterProvider({
       getApiKey: () => 'k',
-      getSettings: () => settings({ openrouterPlannerModel: 'qwen/qwen3-coder:free' }),
+      getSettings: () => settings({ openrouterPlannerModel: 'qwen/qwen3.6-plus' }),
       createClient: () => stub,
     });
 
@@ -375,7 +375,7 @@ describe('createOpenRouterProvider', () => {
 
     expect(chatSpy.mock.calls[0][0]).toEqual(
       expect.objectContaining({
-        model: 'qwen/qwen3-coder:free',
+        model: 'qwen/qwen3.6-plus',
         include_reasoning: false,
         reasoning: { effort: 'none' },
       }),
@@ -387,14 +387,14 @@ describe('createOpenRouterProvider', () => {
     const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
     const provider = createOpenRouterProvider({
       getApiKey: () => 'k',
-      getSettings: () => settings({ openrouterReviewerModel: 'qwen/qwen3-coder:free' }),
+      getSettings: () => settings({ openrouterReviewerModel: 'qwen/qwen3.6-plus' }),
       createClient: () => stub,
     });
 
     await provider.generate(req({ phase: 'review' }));
 
     expect(chatSpy.mock.calls[0][0]).toEqual(
-      expect.objectContaining({ model: 'qwen/qwen3-coder:free' }),
+      expect.objectContaining({ model: 'qwen/qwen3.6-plus' }),
     );
   });
 

@@ -13,7 +13,7 @@ vi.mock('@shipcode/ui', async (importOriginal) => {
     'gemini',
     'openrouter',
     '__default__',
-    'qwen/qwen3-coder:free',
+    'qwen/qwen3.6-plus',
     'high',
   ];
 
@@ -68,8 +68,8 @@ describe('PhaseModelRow callback coverage', () => {
         label="Executor"
         htmlFor="executor-model"
         modelValue="openrouter"
-        openrouterModelValue="qwen/qwen3-coder:free"
-        resolvedModelId="qwen/qwen3-coder:free"
+        openrouterModelValue="qwen/qwen3.6-plus"
+        resolvedModelId="qwen/qwen3.6-plus"
         reasoningEffortValue="medium"
         validProviders={['claude', 'codex', 'gemini', 'openrouter']}
         onModelChange={onModelChange}
@@ -79,7 +79,7 @@ describe('PhaseModelRow callback coverage', () => {
         modelCheck={{
           key: 'executor',
           label: 'Executor model',
-          modelId: 'qwen/qwen3-coder:free',
+          modelId: 'qwen/qwen3.6-plus',
           status: 'valid',
           message: 'Model is available',
         }}
@@ -93,11 +93,11 @@ describe('PhaseModelRow callback coverage', () => {
     fireEvent.click(screen.getAllByTestId('select-openrouter-codex')[0]);
     expect(onModelChange).toHaveBeenCalledWith('codex');
 
-    fireEvent.click(screen.getByTestId('select-qwen/qwen3-coder:free-__default__'));
+    fireEvent.click(screen.getByTestId('select-qwen/qwen3.6-plus-__default__'));
     expect(onOpenrouterModelChange).toHaveBeenCalledWith(null);
 
-    fireEvent.click(screen.getByTestId('select-qwen/qwen3-coder:free-qwen/qwen3-coder:free'));
-    expect(onOpenrouterModelChange).toHaveBeenCalledWith('qwen/qwen3-coder:free');
+    fireEvent.click(screen.getByTestId('select-qwen/qwen3.6-plus-qwen/qwen3.6-plus'));
+    expect(onOpenrouterModelChange).toHaveBeenCalledWith('qwen/qwen3.6-plus');
 
     fireEvent.click(screen.getByTestId('select-none-high'));
     expect(onReasoningEffortChange).toHaveBeenCalledWith('high');
@@ -111,8 +111,8 @@ describe('PhaseModelRow callback coverage', () => {
         label="Planner"
         htmlFor="planner-model"
         modelValue="openrouter"
-        openrouterModelValue="qwen/qwen3-coder:free"
-        resolvedModelId="qwen/qwen3-coder:free"
+        openrouterModelValue="qwen/qwen3.6-plus"
+        resolvedModelId="qwen/qwen3.6-plus"
         reasoningEffortValue="medium"
         validProviders={['openrouter']}
         onModelChange={vi.fn()}
