@@ -22,21 +22,7 @@ export const metadata: Metadata = {
     'Desktop app + CLI for turning GitHub issues into reviewed pull requests with a real plan, review, execute, verify pipeline.',
   metadataBase: new URL(SITE_ORIGIN),
   alternates: homeDiscoveryMetadata.alternates,
-  openGraph: {
-    title: 'ShipCode — Autonomous AI Coding Pipeline',
-    description: 'From issue queue to reviewed PR. Install from the ShipCode Homebrew tap.',
-    url: homeDiscoveryMetadata.openGraph.url,
-    siteName: 'ShipCode',
-    type: 'website',
-    images: [
-      {
-        url: '/og.png',
-        width: 1200,
-        height: 630,
-        alt: 'ShipCode — From issue queue to reviewed PR',
-      },
-    ],
-  },
+  openGraph: homeDiscoveryMetadata.openGraph,
   twitter: {
     card: 'summary_large_image',
     title: 'ShipCode — Autonomous AI Coding Pipeline',

@@ -7,6 +7,7 @@ import { listDocPaths, listPublicPagePaths, mdxFileToDocsPath } from './public-p
 import robots, { dynamic as robotsDynamic } from './robots';
 import {
   homeDiscoveryMetadata,
+  openGraphDefaults,
   SITE_CANONICAL,
   SITE_ORIGIN,
   sitemapUrl,
@@ -21,9 +22,21 @@ describe('public marketing SEO', () => {
     expect(sitemapUrl('/')).toBe('https://shipcode.shipshit.dev/');
     expect(sitemapUrl('/docs')).toBe('https://shipcode.shipshit.dev/docs');
     expect(homeDiscoveryMetadata.alternates.canonical).toBe(SITE_CANONICAL);
-    expect(homeDiscoveryMetadata.openGraph.url).toBe(SITE_CANONICAL);
+    expect(homeDiscoveryMetadata.openGraph).toMatchObject({
+      ...openGraphDefaults,
+      url: SITE_CANONICAL,
+    });
     expect(downloadMetadata.alternates?.canonical).toBe(`${SITE_ORIGIN}/download`);
-    expect(downloadMetadata.openGraph?.url).toBe(`${SITE_ORIGIN}/download`);
+    expect(downloadMetadata.openGraph).toMatchObject({
+      ...openGraphDefaults,
+      url: `${SITE_ORIGIN}/download`,
+    });
+    expect(homeDiscoveryMetadata.openGraph.title).toBe(openGraphDefaults.title);
+    expect(homeDiscoveryMetadata.openGraph.description).toBe(openGraphDefaults.description);
+    expect(homeDiscoveryMetadata.openGraph.images).toEqual(openGraphDefaults.images);
+    expect(downloadMetadata.openGraph?.title).toBe(openGraphDefaults.title);
+    expect(downloadMetadata.openGraph?.description).toBe(openGraphDefaults.description);
+    expect(downloadMetadata.openGraph?.images).toEqual(openGraphDefaults.images);
   });
 
   it('maps real MDX files to public /docs routes and skips folder indexes', () => {
