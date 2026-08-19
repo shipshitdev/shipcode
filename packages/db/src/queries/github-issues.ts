@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import {
+  AGENT_RUNNING_PHASES,
   type ExecutorModel,
   type GitHubIssueCacheRecord,
   type GitHubPrCheckSummary,
@@ -405,11 +406,11 @@ export class GitHubIssueQueries {
   /**
    * When a GH issue flips to `state = 'closed'` externally (via the web UI,
    * `gh issue close`, or a Projects v2 workflow), move the local
-   * `pipeline_status` to `'closed'` — but only from terminal or
-   * not-yet-started source states. In-flight statuses
-   * (planning/reviewing/revising/executing/verifying/shipping) are left alone
-   * so the pipeline writer never races with this flip. The SQL guard makes
-   * the operation race-safe without locks.
+   * `pipeline_status` to `'closed'`.
+   *
+   * A leftover `executing`/`planning` label is not in-flight work. Only a
+   * linked thread in a running phase blocks the flip, so a three-month-old
+   * Done issue cannot occupy the Executing column forever.
    *
    * Returns `true` iff a row was updated.
    */
@@ -419,7 +420,16 @@ export class GitHubIssueQueries {
         `UPDATE github_issue_cache
            SET pipeline_status = ?, last_phase_update = ${ISO_NOW_SQL}
          WHERE id = ?
-           AND pipeline_status IN (?, ?, ?, ?, ?)`,
+           AND (
+             pipeline_status IN (?, ?, ?, ?, ?)
+             OR thread_id IS NULL
+             OR NOT EXISTS (
+               SELECT 1
+                 FROM threads
+                WHERE threads.id = github_issue_cache.thread_id
+                  AND threads.status IN (${AGENT_RUNNING_PHASES.map(() => '?').join(', ')})
+             )
+           )`,
       )
       .run(
         ISSUE_PIPELINE_STATUS.closed,
@@ -429,6 +439,7 @@ export class GitHubIssueQueries {
         ISSUE_PIPELINE_STATUS.approval,
         ISSUE_PIPELINE_STATUS.failed,
         ISSUE_PIPELINE_STATUS.completed,
+        ...AGENT_RUNNING_PHASES,
       );
     return Number(result.changes) > 0;
   }

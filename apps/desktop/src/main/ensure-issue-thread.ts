@@ -1,3 +1,4 @@
+import { GhCli } from '@shipcode/agents';
 import { WorktreeManager } from '@shipcode/git';
 import {
   type GitHubIssueCacheRecord,
@@ -12,6 +13,8 @@ export async function ensureIssueThread(input: {
   project: Project;
   issue: GitHubIssueCacheRecord;
 }): Promise<Thread> {
+  await assertIssueIsOpenForWorktree(input);
+
   const existing = input.issue.threadId
     ? input.queries.threads.getById(input.issue.threadId)
     : input.queries.threads.getByProjectAndGithubIssue(input.project.id, input.issue.issueNumber);
@@ -57,4 +60,27 @@ function persistResolvedDefaultBranch(
   const resolved = baseRef?.replace(/^origin\//, '').trim();
   if (!resolved || resolved === input.project.defaultBranch) return;
   input.queries.projects.updateGitInfo(input.project.id, input.project.gitRemote, resolved);
+}
+
+async function assertIssueIsOpenForWorktree(input: {
+  queries: Queries;
+  project: Project;
+  issue: GitHubIssueCacheRecord;
+}): Promise<void> {
+  if (input.issue.state === 'closed') {
+    throw closedIssueWorktreeError(input.issue.issueNumber);
+  }
+
+  const live = await new GhCli(input.project.path).getIssue(input.issue.issueNumber);
+  if (live.state !== 'closed') return;
+
+  input.queries.githubIssues.updateState(input.issue.id, 'closed');
+  input.queries.githubIssues.markClosedOnClose(input.issue.id);
+  throw closedIssueWorktreeError(input.issue.issueNumber);
+}
+
+function closedIssueWorktreeError(issueNumber: number): Error {
+  return new Error(
+    `Issue #${issueNumber} is closed on GitHub. Reopen it before starting a conversation.`,
+  );
 }

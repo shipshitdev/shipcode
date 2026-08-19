@@ -8,10 +8,24 @@ const mockCreateWorktree = vi.hoisted(() =>
     baseStale: false,
   })),
 );
+const mockGetIssue = vi.hoisted(() =>
+  vi.fn(async () => ({
+    number: 12,
+    title: 'Cover issue chat',
+    body: 'Issue body',
+    state: 'open' as const,
+  })),
+);
 
 vi.mock('@shipcode/git', () => ({
   WorktreeManager: class {
     create = mockCreateWorktree;
+  },
+}));
+
+vi.mock('@shipcode/agents', () => ({
+  GhCli: class {
+    getIssue = mockGetIssue;
   },
 }));
 
@@ -53,6 +67,13 @@ function makeThread(overrides: Record<string, unknown> = {}) {
 describe('ensureIssueThread', () => {
   beforeEach(() => {
     mockCreateWorktree.mockClear();
+    mockGetIssue.mockClear();
+    mockGetIssue.mockResolvedValue({
+      number: 12,
+      title: 'Cover issue chat',
+      body: 'Issue body',
+      state: 'open',
+    });
   });
 
   it('creates a thread, links the issue, and materializes a worktree', async () => {
@@ -72,6 +93,8 @@ describe('ensureIssueThread', () => {
       },
       githubIssues: {
         linkThread: vi.fn(),
+        updateState: vi.fn(),
+        markClosedOnClose: vi.fn(),
       },
       settings: {
         get: vi.fn(() => ({ worktreeRoot: null, worktreeBranchFormat: null })),
@@ -118,6 +141,8 @@ describe('ensureIssueThread', () => {
       },
       githubIssues: {
         linkThread: vi.fn(),
+        updateState: vi.fn(),
+        markClosedOnClose: vi.fn(),
       },
       settings: {
         get: vi.fn(() => ({ worktreeRoot: null, worktreeBranchFormat: null })),
@@ -156,6 +181,8 @@ describe('ensureIssueThread', () => {
       },
       githubIssues: {
         linkThread: vi.fn(),
+        updateState: vi.fn(),
+        markClosedOnClose: vi.fn(),
       },
       settings: {
         get: vi.fn(),
@@ -171,5 +198,50 @@ describe('ensureIssueThread', () => {
     expect(queries.threads.create).not.toHaveBeenCalled();
     expect(mockCreateWorktree).not.toHaveBeenCalled();
     expect(thread.worktreePath).toBe('/tmp/existing-worktree');
+  });
+
+  it('refuses to create a worktree for a cached closed issue', async () => {
+    const queries = {
+      threads: { create: vi.fn() },
+      githubIssues: { linkThread: vi.fn(), updateState: vi.fn(), markClosedOnClose: vi.fn() },
+      settings: { get: vi.fn() },
+      projects: { updateGitInfo: vi.fn() },
+    };
+
+    await expect(
+      ensureIssueThread({
+        queries: queries as never,
+        project: makeProject() as never,
+        issue: makeIssue({ state: 'closed' }) as never,
+      }),
+    ).rejects.toThrow('Issue #12 is closed on GitHub');
+    expect(mockCreateWorktree).not.toHaveBeenCalled();
+    expect(mockGetIssue).not.toHaveBeenCalled();
+  });
+
+  it('heals the cache and refuses a worktree when GitHub says the issue is closed', async () => {
+    mockGetIssue.mockResolvedValueOnce({
+      number: 12,
+      title: 'Cover issue chat',
+      body: 'Issue body',
+      state: 'closed',
+    });
+    const queries = {
+      threads: { create: vi.fn() },
+      githubIssues: { linkThread: vi.fn(), updateState: vi.fn(), markClosedOnClose: vi.fn() },
+      settings: { get: vi.fn() },
+      projects: { updateGitInfo: vi.fn() },
+    };
+
+    await expect(
+      ensureIssueThread({
+        queries: queries as never,
+        project: makeProject() as never,
+        issue: makeIssue({ state: 'open' }) as never,
+      }),
+    ).rejects.toThrow('Issue #12 is closed on GitHub');
+    expect(queries.githubIssues.updateState).toHaveBeenCalledWith('issue-12', 'closed');
+    expect(queries.githubIssues.markClosedOnClose).toHaveBeenCalledWith('issue-12');
+    expect(mockCreateWorktree).not.toHaveBeenCalled();
   });
 });

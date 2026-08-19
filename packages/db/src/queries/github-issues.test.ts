@@ -615,8 +615,19 @@ describe('GitHubIssueQueries', () => {
       expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('closed');
     });
 
-    it('markClosedOnClose() does NOT flip executing (in-flight guard)', () => {
+    it('markClosedOnClose() flips leftover executing when no live thread owns it', () => {
       const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'executing');
+      expect(issues.markClosedOnClose(record.id)).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('closed');
+    });
+
+    it('markClosedOnClose() does NOT flip executing while a thread is in a running phase', () => {
+      const record = issues.upsert(makeIssue());
+      const threads = new ThreadQueries(db);
+      const thread = threads.create(projectId, 'prompt', 'title');
+      threads.updateStatus(thread.id, 'executing');
+      issues.linkThread(record.id, thread.id);
       issues.updatePipelineStatus(record.id, 'executing');
       expect(issues.markClosedOnClose(record.id)).toBe(false);
       expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('executing');
