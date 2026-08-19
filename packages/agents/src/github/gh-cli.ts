@@ -438,18 +438,10 @@ export class GhCli {
   }
 
   async listAllIssues(): Promise<GitHubIssue[]> {
+    const jsonFields = 'number,title,body,labels,assignees,author,state,url,updatedAt';
     const { stdout } = await execFileAsync(
       'gh',
-      [
-        'issue',
-        'list',
-        '--state',
-        'all',
-        '--json',
-        'number,title,body,labels,assignees,author,state,url,updatedAt',
-        '--limit',
-        '200',
-      ],
+      ['issue', 'list', '--state', 'open', '--json', jsonFields, '--limit', '1000'],
       { cwd: this.cwd, env: this.env },
     );
 

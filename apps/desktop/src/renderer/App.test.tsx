@@ -3,7 +3,7 @@
 import { type AppSettings, DEFAULT_SETTINGS } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { useAppStore } from './stores/app-store';
@@ -45,6 +45,9 @@ vi.mock('./components/IssueDetail', () => ({
   IssueDetail: ({ expanded }: { expanded: boolean }) => (
     <div>{expanded ? 'IssueDetailExpanded' : 'IssueDetailPanel'}</div>
   ),
+}));
+vi.mock('./components/NoProjectView', () => ({
+  NoProjectView: () => <div>NoProjectView</div>,
 }));
 vi.mock('./components/NotificationToaster', () => ({
   NotificationToaster: () => <div>NotificationToaster</div>,
@@ -276,26 +279,21 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Decline' })).toBeInTheDocument();
   });
 
-  it('renders the skills view for an active project and applies theme tokens', async () => {
+  it('renders settings for skills and costs', async () => {
     useAppStore.setState({
       activeProjectId: 'project-1',
-      viewMode: 'skills',
+      settingsVisible: true,
+      settingsSection: 'skills',
     });
 
     renderApp();
 
-    expect(await screen.findByText('ProjectSidebar')).toBeInTheDocument();
-    expect(await screen.findByText('SkillsView')).toBeInTheDocument();
-    await waitFor(() => {
-      expect(document.documentElement.dataset.theme).toBe('dark');
-      expect(document.documentElement.dataset.fontStyle).toBe('dm-sans');
-      expect(document.documentElement.dataset.fontSize).toBe('14');
-    });
+    expect(await screen.findByText('SettingsSidebar')).toBeInTheDocument();
+    expect(await screen.findByText('SettingsPanel')).toBeInTheDocument();
   });
 
   it.each([
     ['activity', 'ActivityView'],
-    ['costs', 'CostsView'],
     ['inbox', 'InboxView'],
     ['automations', 'AutomationsView'],
   ] as const)('renders the %s top-level view', async (viewMode, expectedText) => {
@@ -322,6 +320,17 @@ describe('App', () => {
     renderApp();
 
     expect(await screen.findByText('ProjectView')).toBeInTheDocument();
+  });
+
+  it('renders the select-project empty state when a project surface is open without a project', async () => {
+    useAppStore.setState({
+      activeProjectId: null,
+      viewMode: 'project',
+    });
+
+    renderApp();
+
+    expect(await screen.findByText('NoProjectView')).toBeInTheDocument();
   });
 
   it('renders settings, assistant, automation detail, and terminal-only layouts', async () => {
@@ -437,6 +446,7 @@ describe('App', () => {
 
     const issueDetailPanel = await within(view.container).findByText('IssueDetailPanel');
     expect(issueDetailPanel).toBeInTheDocument();
+    expect(screen.getByText('ProjectSidebar')).toBeInTheDocument();
     expect(screen.queryByText('TerminalDrawer')).not.toBeInTheDocument();
     // IssueDetail now replaces center column — no overlay panel
     expect(view.container.querySelector('[data-slot="overlay-panel"]')).toBeNull();

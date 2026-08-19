@@ -12,10 +12,19 @@ import {
 import { TooltipProvider } from '@shipcode/ui';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
 import { IssueDetail } from './IssueDetail';
+
+function openIssueContext(value: string) {
+  const section = screen.getByTestId(`issue-context-${value}`);
+  const trigger = within(section).getByRole('button');
+  if (trigger.getAttribute('aria-expanded') !== 'true') {
+    fireEvent.click(trigger);
+  }
+  return section;
+}
 
 const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord => ({
   id: 'issue-1',
@@ -302,12 +311,7 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    const prdTab = screen.getByRole('tab', { name: 'Issue' });
-    fireEvent.mouseDown(prdTab, { button: 0 });
-    fireEvent.click(prdTab);
-    await waitFor(() => {
-      expect(prdTab).toHaveAttribute('data-state', 'active');
-    });
+    expect(screen.getByTestId('conversation-surface')).toBeInTheDocument();
     expect(screen.getByText('Issue brief')).toBeInTheDocument();
     expect(screen.getByText('GitHub issue #42 source content')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh issue from GitHub' })).toBeInTheDocument();
@@ -955,12 +959,7 @@ describe('IssueDetail', () => {
     });
 
     renderWithProviders();
-    const historyTab = screen.getByRole('tab', { name: /Plans/ });
-    fireEvent.mouseDown(historyTab, { button: 0 });
-    fireEvent.click(historyTab);
-    await waitFor(() => {
-      expect(historyTab).toHaveAttribute('data-state', 'active');
-    });
+    openIssueContext('history');
 
     expect(await screen.findByText('Superseded')).toBeInTheDocument();
     expect(screen.queryByText('pending_review')).not.toBeInTheDocument();
@@ -993,20 +992,14 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Issue' })).toHaveAttribute('data-state', 'active');
+      expect(screen.getByTestId('conversation-surface')).toBeInTheDocument();
     });
     expect(invokeMock).not.toHaveBeenCalledWith('plan:list-for-issue', {
       projectId: 'project-1',
       issueNumber: 42,
     });
 
-    const historyTab = screen.getByRole('tab', { name: /Plans/ });
-    fireEvent.mouseDown(historyTab, { button: 0 });
-    fireEvent.click(historyTab);
-
-    await waitFor(() => {
-      expect(historyTab).toHaveAttribute('data-state', 'active');
-    });
+    openIssueContext('history');
     expect(invokeMock).not.toHaveBeenCalledWith('plan:list-for-issue', {
       projectId: 'project-1',
       issueNumber: 42,
@@ -1042,12 +1035,7 @@ describe('IssueDetail', () => {
     });
 
     renderWithProviders();
-    const historyTab = screen.getByRole('tab', { name: /Plans/ });
-    fireEvent.mouseDown(historyTab, { button: 0 });
-    fireEvent.click(historyTab);
-    await waitFor(() => {
-      expect(historyTab).toHaveAttribute('data-state', 'active');
-    });
+    openIssueContext('history');
 
     expect(await screen.findByText('Needs approval')).toBeInTheDocument();
     expect(screen.queryByText('Changes requested')).not.toBeInTheDocument();
@@ -1073,12 +1061,7 @@ describe('IssueDetail', () => {
     });
 
     renderWithProviders();
-    const historyTab = screen.getByRole('tab', { name: /Plans/ });
-    fireEvent.mouseDown(historyTab, { button: 0 });
-    fireEvent.click(historyTab);
-    await waitFor(() => {
-      expect(historyTab).toHaveAttribute('data-state', 'active');
-    });
+    openIssueContext('history');
 
     expect(await screen.findByText('AI approved')).toBeInTheDocument();
     expect(screen.queryByText('Changes requested')).not.toBeInTheDocument();
@@ -1121,13 +1104,7 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    const historyTab = await screen.findByRole('tab', { name: /Plans/ });
-    fireEvent.mouseDown(historyTab, { button: 0 });
-    fireEvent.click(historyTab);
-
-    await waitFor(() => {
-      expect(historyTab).toHaveAttribute('data-state', 'active');
-    });
+    openIssueContext('history');
 
     fireEvent.click(screen.getByText('v1'));
 
@@ -1259,28 +1236,22 @@ describe('IssueDetail', () => {
     });
   });
 
-  it('renders the shared issue detail tab triggers', async () => {
+  it('renders the conversation as the page and issue details as sidebar cards', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
-    expect(screen.getByRole('tab', { name: 'Issue' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Console' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Comments' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Plans' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Activity' })).toBeInTheDocument();
+    expect(screen.getByTestId('conversation-surface')).toBeInTheDocument();
+    expect(screen.getByTestId('issue-detail-sidebar')).toBeInTheDocument();
+    expect(screen.getByTestId('issue-context-prd')).toBeInTheDocument();
+    expect(screen.getByTestId('issue-context-console')).toBeInTheDocument();
+    expect(screen.getByTestId('issue-context-comments')).toBeInTheDocument();
+    expect(screen.getByTestId('issue-context-history')).toBeInTheDocument();
+    expect(screen.getByTestId('issue-context-activity')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Agent' })).not.toBeInTheDocument();
   });
 
-  it('Issue tab is active by default when no plan history exists', async () => {
-    invokeMock.mockResolvedValue([]);
-
-    renderWithProviders();
-
-    const prdTab = screen.getByRole('tab', { name: 'Issue' });
-    expect(prdTab).toHaveAttribute('data-state', 'active');
-  });
-
-  it('keeps a stable tab order and defaults to Issue even when history exists', async () => {
+  it('keeps conversation as the main column even when plan history exists', async () => {
     const thread = makeThread({ status: 'reviewing' });
     const plan = makePlan();
 
@@ -1300,22 +1271,12 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Issue' })).toHaveAttribute('data-state', 'active');
+      expect(screen.getByTestId('conversation-surface')).toBeInTheDocument();
     });
-
-    const tabLabels = screen.getAllByRole('tab').map((tab) => tab.textContent?.trim());
-    expect(tabLabels).toEqual([
-      'Issue',
-      'Console',
-      'Comments',
-      'Plans',
-      'Findings',
-      'Diff',
-      'Runs',
-      'Activity',
-      'Conversations',
-      'Chat',
-    ]);
+    expect(screen.getByTestId('issue-context-findings')).toBeInTheDocument();
+    expect(screen.getByTestId('issue-context-diff')).toBeInTheDocument();
+    expect(screen.getByTestId('issue-context-runs')).toBeInTheDocument();
+    expect(screen.getByTestId('issue-context-conversations')).toBeInTheDocument();
   });
 
   it('renders persisted console output inside issue detail', async () => {
@@ -1341,9 +1302,7 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    const consoleTab = screen.getByRole('tab', { name: 'Console' });
-    fireEvent.mouseDown(consoleTab, { button: 0 });
-    fireEvent.click(consoleTab);
+    openIssueContext('console');
 
     expect(await screen.findByText('console output from executor')).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith('terminal:list', {
@@ -1352,23 +1311,25 @@ describe('IssueDetail', () => {
     });
   });
 
-  it('pipeline start card is above the tab bar when pipeline not started', async () => {
+  it('keeps pipeline actions in the sidebar next to issue context cards', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
     const startButton = screen.getByRole('button', { name: 'Start pipeline' });
-    const prdTab = screen.getByRole('tab', { name: 'Issue' });
-    // Start button should appear before the tab list in the DOM
-    expect(startButton.compareDocumentPosition(prdTab)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const conversation = screen.getByTestId('conversation-surface');
+    const sidebar = screen.getByTestId('issue-detail-sidebar');
+    expect(sidebar).toContainElement(startButton);
+    expect(sidebar).toContainElement(screen.getByTestId('issue-context-prd'));
+    expect(conversation.compareDocumentPosition(sidebar)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it('back button closes issue detail and returns to board', async () => {
+  it('back button closes issue detail', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Back to board' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(useAppStore.getState().activeIssue).toBeNull();
   });
 

@@ -22,26 +22,29 @@ async function openIssueDetail(harness: Harness): Promise<void> {
   const { page } = harness;
 
   await harness.callStore('selectProject', harness.seed.projectId);
-  await expect(page.getByTestId(`issue-card-${ISSUE_DETAIL.issueNumber}`)).toBeVisible({
+  await expect(page.getByTestId(`thread-row-${ISSUE_DETAIL.issueNumber}`)).toBeVisible({
     timeout: 15_000,
   });
-  await page.getByTestId(`issue-card-${ISSUE_DETAIL.issueNumber}`).click();
+  await page.getByTestId(`thread-row-${ISSUE_DETAIL.issueNumber}`).click();
 
   await expect(page.getByRole('heading', { name: ISSUE_DETAIL.title }).first()).toBeVisible({
     timeout: 15_000,
   });
-  await expect(page.getByRole('tab', { name: /^Chat$/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('conversation-surface')).toBeVisible({ timeout: 15_000 });
 
   expect((await harness.getState()).activeThreadId).toBe(
     harness.seed.issueThreads[ISSUE_DETAIL.issueNumber],
   );
 }
 
-async function openIssueTab(page: Page, name: RegExp): Promise<void> {
-  const tab = page.getByRole('tab', { name });
-  await expect(tab).toBeVisible({ timeout: 15_000 });
-  await tab.click();
-  await expect(tab).toHaveAttribute('data-state', 'active');
+async function openIssueContext(page: Page, testId: string): Promise<void> {
+  const section = page.getByTestId(testId);
+  await expect(section).toBeVisible({ timeout: 15_000 });
+  const trigger = section.getByRole('button').first();
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') {
+    await trigger.click();
+  }
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
 }
 
 test.describe('issue detail behavior contracts', () => {
@@ -49,7 +52,7 @@ test.describe('issue detail behavior contracts', () => {
     const { page } = harness;
 
     await openIssueDetail(harness);
-    await openIssueTab(page, /^Comments$/);
+    await openIssueContext(page, 'issue-context-comments');
 
     await expect(page.getByText('No comments yet.')).toBeVisible({ timeout: 15_000 });
     const composer = page.getByPlaceholder(/Write a comment/);
@@ -64,7 +67,7 @@ test.describe('issue detail behavior contracts', () => {
     const { page } = harness;
 
     await openIssueDetail(harness);
-    await openIssueTab(page, /^Findings/);
+    await openIssueContext(page, 'issue-context-findings');
 
     await expect(page.getByText('1 open / 1 total')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Missing issue-detail behavior assertion')).toBeVisible();
@@ -78,7 +81,7 @@ test.describe('issue detail behavior contracts', () => {
     const { page } = harness;
 
     await openIssueDetail(harness);
-    await openIssueTab(page, /^Diff/);
+    await openIssueContext(page, 'issue-context-diff');
 
     await expect(page.getByText('Code Changes')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('1 file', { exact: true })).toBeVisible();
@@ -100,7 +103,7 @@ test.describe('issue detail behavior contracts', () => {
     const { page } = harness;
 
     await openIssueDetail(harness);
-    await openIssueTab(page, /^Runs$/);
+    await openIssueContext(page, 'issue-context-runs');
 
     await expect(page.getByText('Github Start Issue · issue:802')).toBeVisible({
       timeout: 15_000,
@@ -113,7 +116,7 @@ test.describe('issue detail behavior contracts', () => {
     const { page } = harness;
 
     await openIssueDetail(harness);
-    await openIssueTab(page, /^Activity/);
+    await openIssueContext(page, 'issue-context-activity');
 
     await expect(page.getByText('1 events')).toBeVisible({ timeout: 15_000 });
     await expect(
@@ -126,7 +129,7 @@ test.describe('issue detail behavior contracts', () => {
     const { page } = harness;
 
     await openIssueDetail(harness);
-    await openIssueTab(page, /^Conversations$/);
+    await openIssueContext(page, 'issue-context-conversations');
 
     await expect(page.getByText('issue_chat (2)')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Issue chat seeded answer for behavior coverage.')).toBeVisible();
@@ -144,9 +147,7 @@ test.describe('issue detail behavior contracts', () => {
     const { page } = harness;
 
     await openIssueDetail(harness);
-    await openIssueTab(page, /^Chat$/);
-
-    await expect(page.getByText('Issue Chat', { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('conversation-surface')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Issue chat seeded answer for behavior coverage.')).toBeVisible();
 
     const sendButton = page.getByTitle('Send');
@@ -154,7 +155,9 @@ test.describe('issue detail behavior contracts', () => {
 
     await page.getByLabel('Issue chat provider').click();
     await page.getByRole('option', { name: 'Codex' }).click();
-    await page.getByPlaceholder('Ask the issue agent...').fill('Summarize regression risk.');
+    await page
+      .getByPlaceholder('Message Claude, Codex, or Grok…')
+      .fill('Summarize regression risk.');
 
     await expect(sendButton).toBeEnabled();
   });

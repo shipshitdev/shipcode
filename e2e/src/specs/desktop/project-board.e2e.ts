@@ -41,10 +41,11 @@ test.describe('project board', () => {
   test('renders all 3 seeded issue titles on the kanban board', async ({ harness }) => {
     const { page } = harness;
 
-    // Navigate to the project
     await harness.callStore('selectProject', harness.seed.projectId);
+    expect((await harness.getState()).projectTab).toBe('conversations');
+    await expect(page.getByTestId('conversation-home')).toBeVisible({ timeout: 15_000 });
 
-    // Ensure the issues tab is shown (selectProject already sets viewMode=project and projectTab=issues)
+    await harness.callStore('openBoard');
     const state = await harness.getState();
     expect(state.viewMode).toBe('project');
     expect(state.projectTab).toBe('issues');
@@ -66,6 +67,7 @@ test.describe('project board', () => {
     const { page } = harness;
 
     await harness.callStore('selectProject', harness.seed.projectId);
+    await harness.callStore('openBoard');
 
     // The Backlog column should be present (all seeded issues have todo status by default)
     await expect(page.getByTestId('kanban-column-todo')).toBeVisible({ timeout: 15_000 });
@@ -75,6 +77,7 @@ test.describe('project board', () => {
     const { page } = harness;
 
     await harness.callStore('selectProject', harness.seed.projectId);
+    await harness.callStore('openBoard');
 
     // Wait for the board to load
     await expect(page.getByTestId('kanban-column-todo')).toBeVisible({ timeout: 15_000 });
@@ -89,6 +92,7 @@ test.describe('project board', () => {
     const { page } = harness;
 
     await harness.callStore('selectProject', harness.seed.projectId);
+    await harness.callStore('openBoard');
     // Wait for the full board to render
     await expect(page.getByTestId(`issue-card-${ISSUE_ALPHA.issueNumber}`)).toBeVisible({
       timeout: 15_000,
@@ -134,6 +138,7 @@ test.describe('project board', () => {
     const { page } = harness;
 
     await harness.callStore('selectProject', harness.seed.projectId);
+    await harness.callStore('openBoard');
 
     // Wait for the board to render
     await expect(page.getByTestId(`issue-card-${ISSUE_BETA.issueNumber}`)).toBeVisible({
@@ -157,6 +162,7 @@ test.describe('project board', () => {
     const { page } = harness;
 
     await harness.callStore('selectProject', harness.seed.projectId);
+    await harness.callStore('openBoard');
 
     await expect(page.getByTestId(`issue-card-${ISSUE_GAMMA.issueNumber}`)).toBeVisible({
       timeout: 15_000,
@@ -168,9 +174,7 @@ test.describe('project board', () => {
       timeout: 10_000,
     });
 
-    // Click the "Back to board" button rendered by IssueDetail.
-    // This calls selectIssue(null) which clears activeIssue and returns to the board.
-    await page.getByRole('button', { name: 'Back to board' }).click();
+    await page.getByRole('button', { name: 'Back' }).click();
 
     // Board returns: kanban-column-todo is visible again
     await expect(page.getByTestId('kanban-column-todo')).toBeVisible({ timeout: 10_000 });

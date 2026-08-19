@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest';
-import type { Project, SystemHealth } from '@shipcode/shared';
+import type { SystemHealth } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,47 +15,6 @@ import { Titlebar } from './Titlebar';
 
 function renderWithProviders() {
   return renderWithQueryClient(<Titlebar />);
-}
-
-function makeProject(overrides: Partial<Project> = {}): Project {
-  return {
-    id: 'project-1',
-    name: 'ShipCode',
-    path: '/tmp/shipcode',
-    pathExists: true,
-    gitRemote: 'git@github.com:shipshitdev/shipcode.git',
-    githubRepoId: null,
-    githubRepoFullName: null,
-    starterIssueNumber: null,
-    starterIssueCreatedAt: null,
-    githubProjectUrl: null,
-    githubStatusMapping: null,
-    plannerModelOverride: null,
-    reviewerModelOverride: null,
-    executorModelOverride: null,
-    verifierModelOverride: null,
-    plannerModelIdOverride: null,
-    reviewerModelIdOverride: null,
-    executorModelIdOverride: null,
-    verifierModelIdOverride: null,
-    plannerReasoningEffortOverride: null,
-    reviewerReasoningEffortOverride: null,
-    executorReasoningEffortOverride: null,
-    verifierReasoningEffortOverride: null,
-    revisionCountOverride: null,
-    discordRouting: 'inherit',
-    discordWebhookUrlOverride: null,
-    telegramRouting: 'inherit',
-    telegramChatIdOverride: null,
-    defaultBranch: 'main',
-    pinned: false,
-    archived: false,
-    hidden: false,
-    notifyGithubUser: null,
-    createdAt: '2026-04-16T00:00:00.000Z',
-    updatedAt: '2026-04-16T00:00:00.000Z',
-    ...overrides,
-  };
 }
 
 describe('Titlebar', () => {
@@ -124,6 +83,10 @@ describe('Titlebar', () => {
 
     expect(await screen.findByTitle('Open agent')).toBeInTheDocument();
     expect(await screen.findByTitle('Show terminal')).toBeInTheDocument();
+    expect(screen.getByText('ShipCode')).toBeInTheDocument();
+    expect(screen.queryByTestId('project-switcher')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('nav-board')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('nav-inbox')).not.toBeInTheDocument();
 
     const sidebarButton = screen.getByTitle('Hide sidebar');
     fireEvent.click(sidebarButton);
@@ -414,14 +377,8 @@ describe('Titlebar', () => {
     expect(screen.getAllByText(/Retries on the next check/)).toHaveLength(2);
   });
 
-  it('shows the active project and blocked provider badge when project model selection is exhausted', async () => {
-    const project = makeProject({
-      executorModelOverride: 'codex',
-      name: 'Mission Control',
-    });
-
+  it('shows the blocked CLI pill without a project switcher in the titlebar', async () => {
     invokeMock.mockImplementation(async (channel) => {
-      if (channel === 'project:get') return project;
       if (channel === 'settings:get') return DEFAULT_SETTINGS;
       if (channel === 'health:check') return readyHealth;
       if (channel === 'provider-usage:check') {
@@ -452,16 +409,10 @@ describe('Titlebar', () => {
       return null;
     });
 
-    useAppStore.setState({ activeProjectId: project.id });
-
     renderWithProviders();
 
-    expect(await screen.findByText('Mission Control')).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Project model warnings for Mission Control' }),
-    );
-    expect(await screen.findByText('Selected models vs CLI status')).toBeInTheDocument();
-    expect(screen.getByText('Codex CLI session exhausted')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'CLI availability' })).toBeInTheDocument();
+    expect(screen.queryByTestId('project-switcher')).not.toBeInTheDocument();
     expect(screen.getByText('CLI')).toBeInTheDocument();
   });
 });

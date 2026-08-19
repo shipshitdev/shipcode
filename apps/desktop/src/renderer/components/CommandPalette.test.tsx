@@ -303,6 +303,40 @@ describe('CommandPalette', () => {
       expect(invokeMock).toHaveBeenCalledWith('instant:bare-shell', { projectId: 'project-1' });
     });
 
+    useAppStore.setState({
+      commandPaletteOpen: true,
+      activeProjectId: 'project-1',
+      viewMode: 'inbox',
+      projectTab: 'git',
+      activeIssue: {
+        id: 'issue-1',
+        projectId: 'project-1',
+        issueNumber: 1,
+        title: 'Board issue',
+      } as never,
+    });
+    fireEvent.click(await screen.findByText('Conversations'));
+    expect(useAppStore.getState().viewMode).toBe('project');
+    expect(useAppStore.getState().projectTab).toBe('conversations');
+    expect(useAppStore.getState().activeIssue).toBeNull();
+
+    useAppStore.setState({
+      commandPaletteOpen: true,
+      activeProjectId: 'project-1',
+      viewMode: 'inbox',
+      projectTab: 'git',
+      activeIssue: {
+        id: 'issue-1',
+        projectId: 'project-1',
+        issueNumber: 1,
+        title: 'Board issue',
+      } as never,
+    });
+    fireEvent.click(await screen.findByText('Board'));
+    expect(useAppStore.getState().viewMode).toBe('project');
+    expect(useAppStore.getState().projectTab).toBe('issues');
+    expect(useAppStore.getState().activeIssue).toBeNull();
+
     useAppStore.setState({ commandPaletteOpen: true });
     fireEvent.click(await screen.findByText('Overview'));
     expect(useAppStore.getState().viewMode).toBe('overview');
@@ -316,12 +350,18 @@ describe('CommandPalette', () => {
     expect(useAppStore.getState().viewMode).toBe('activity');
 
     useAppStore.setState({ commandPaletteOpen: true });
-    fireEvent.click(await screen.findByText('Costs'));
-    expect(useAppStore.getState().viewMode).toBe('costs');
+    fireEvent.click(await screen.findByText('Automations'));
+    expect(useAppStore.getState().viewMode).toBe('automations');
 
     useAppStore.setState({ commandPaletteOpen: true });
+    fireEvent.click(await screen.findByText('Costs'));
+    expect(useAppStore.getState().settingsVisible).toBe(true);
+    expect(useAppStore.getState().settingsSection).toBe('costs');
+
+    useAppStore.setState({ commandPaletteOpen: true, settingsVisible: false });
     fireEvent.click(await screen.findByText('Skills'));
-    expect(useAppStore.getState().viewMode).toBe('skills');
+    expect(useAppStore.getState().settingsVisible).toBe(true);
+    expect(useAppStore.getState().settingsSection).toBe('skills');
 
     useAppStore.setState({ commandPaletteOpen: true });
     fireEvent.click(await screen.findByText('Copilot'));

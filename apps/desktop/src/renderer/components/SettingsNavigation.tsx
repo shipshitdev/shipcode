@@ -17,6 +17,23 @@ interface SettingsNavigationProps<TKey extends string> {
   className?: string;
 }
 
+export function SidebarBackButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <div className="px-2 pt-3">
+      <Button
+        variant="ghost"
+        className="h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
+        onClick={onClick}
+      >
+        <span className="shrink-0 text-muted-foreground">
+          <ChevronLeft size={14} />
+        </span>
+        {label}
+      </Button>
+    </div>
+  );
+}
+
 export function SettingsNavigation<TKey extends string>({
   items,
   activeKey,
@@ -32,20 +49,7 @@ export function SettingsNavigation<TKey extends string>({
         className,
       )}
     >
-      {backLabel && onBack ? (
-        <div className="px-2 pt-3">
-          <Button
-            variant="ghost"
-            className="h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
-            onClick={onBack}
-          >
-            <span className="shrink-0 text-muted-foreground">
-              <ChevronLeft size={14} />
-            </span>
-            {backLabel}
-          </Button>
-        </div>
-      ) : null}
+      {backLabel && onBack ? <SidebarBackButton label={backLabel} onClick={onBack} /> : null}
 
       <div className={cn('space-y-0.5', backLabel && onBack ? 'mt-0.5 px-2' : 'px-2 pt-3')}>
         {items.map(({ key, label, icon }) => (

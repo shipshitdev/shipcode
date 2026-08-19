@@ -117,6 +117,7 @@ describe('app-store', () => {
       expect(state.activeIssue).toBeNull();
       expect(state.activeThreadId).toBeNull();
       expect(state.pipelinePhase).toBe('idle');
+      expect(state.projectTab).toBe('conversations');
     });
 
     it('clears activeIssue when switching to null (no project)', () => {
@@ -136,6 +137,95 @@ describe('app-store', () => {
       useAppStore.getState().selectProject('project-2');
 
       expect(useAppStore.getState().githubIssues).toHaveLength(0);
+    });
+  });
+
+  describe('openConversations', () => {
+    it('clears the active issue and shows the conversation home', () => {
+      useAppStore.setState({
+        activeProjectId: 'project-1',
+        viewMode: 'inbox',
+        projectTab: 'git',
+        activeIssue: makeIssue(),
+        activeThreadId: 'thread-1',
+      });
+
+      useAppStore.getState().openConversations();
+
+      const state = useAppStore.getState();
+      expect(state.viewMode).toBe('project');
+      expect(state.projectTab).toBe('conversations');
+      expect(state.activeIssue).toBeNull();
+      expect(state.activeThreadId).toBeNull();
+    });
+  });
+
+  describe('bindIssueThread', () => {
+    it('attaches a thread to the active issue', () => {
+      useAppStore.setState({
+        activeIssue: makeIssue({ threadId: null }),
+        activeThreadId: null,
+        terminalThreadId: null,
+      });
+
+      useAppStore.getState().bindIssueThread('thread-created');
+
+      expect(useAppStore.getState().activeThreadId).toBe('thread-created');
+      expect(useAppStore.getState().terminalThreadId).toBe('thread-created');
+      expect(useAppStore.getState().activeIssue?.threadId).toBe('thread-created');
+    });
+  });
+
+  describe('openSettings', () => {
+    it('opens settings onto the requested section', () => {
+      useAppStore.setState({
+        settingsVisible: false,
+        settingsSection: 'general',
+        terminalVisible: true,
+        terminalMaximized: true,
+      });
+
+      useAppStore.getState().openSettings('skills');
+
+      expect(useAppStore.getState()).toMatchObject({
+        settingsVisible: true,
+        settingsSection: 'skills',
+        terminalVisible: false,
+        terminalMaximized: false,
+      });
+    });
+  });
+
+  describe('openBoard', () => {
+    it('clears the active issue and shows the project issues board', () => {
+      useAppStore.setState({
+        activeProjectId: 'project-1',
+        viewMode: 'inbox',
+        projectTab: 'git',
+        activeIssue: makeIssue(),
+        activeThreadId: 'thread-1',
+      });
+
+      useAppStore.getState().openBoard();
+
+      const state = useAppStore.getState();
+      expect(state.viewMode).toBe('project');
+      expect(state.projectTab).toBe('issues');
+      expect(state.activeIssue).toBeNull();
+      expect(state.activeThreadId).toBeNull();
+    });
+
+    it('falls back to overview when no project is selected', () => {
+      useAppStore.setState({
+        activeProjectId: null,
+        viewMode: 'inbox',
+        activeIssue: makeIssue(),
+      });
+
+      useAppStore.getState().openBoard();
+
+      expect(useAppStore.getState().viewMode).toBe('overview');
+      expect(useAppStore.getState().activeIssue).toBeNull();
     });
   });
 
@@ -534,7 +624,7 @@ describe('app-store', () => {
         currentVerification: null,
       });
 
-      for (const mode of ['activity', 'inbox', 'costs', 'skills', 'automations'] as const) {
+      for (const mode of ['activity', 'inbox', 'automations'] as const) {
         useAppStore.getState().openView(mode);
         expect(useAppStore.getState().viewMode).toBe(mode);
       }
@@ -755,7 +845,7 @@ describe('app-store', () => {
       expect(useAppStore.getState()).toMatchObject({
         activeProjectId: 'project-2',
         viewMode: 'project',
-        projectTab: 'issues',
+        projectTab: 'conversations',
         activeIssue: issue,
         activeThreadId: 'thread-2',
         terminalThreadId: 'thread-2',

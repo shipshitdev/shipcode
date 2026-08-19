@@ -147,7 +147,7 @@ function commitCanonicalStream(
   return { canonicalTerminalStream: next };
 }
 
-type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills' | 'automations';
+type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'automations';
 
 /**
  * Top-level destinations that are not scoped to a project. The `project` view is
@@ -156,7 +156,14 @@ type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skill
  */
 export type GlobalViewMode = Exclude<ViewMode, 'project'>;
 
-export type ProjectTab = 'issues' | 'git' | 'code' | 'pull-requests' | 'terminal' | 'insights';
+export type ProjectTab =
+  | 'conversations'
+  | 'issues'
+  | 'git'
+  | 'code'
+  | 'pull-requests'
+  | 'terminal'
+  | 'insights';
 export type TerminalPaneMode = 'replay' | 'live';
 export type AssistantCli = 'claude' | 'codex';
 export interface AssistantUserMessage {
@@ -172,6 +179,8 @@ export type SettingsSection =
   | 'github'
   | 'notifications'
   | 'pipeline'
+  | 'skills'
+  | 'costs'
   | 'shortcuts'
   | 'archived'
   | 'developer'
@@ -284,6 +293,7 @@ interface AppState {
   openTerminal: () => void;
   setTerminalMaximized: (maximized: boolean) => void;
   toggleSettings: () => void;
+  openSettings: (section: SettingsSection) => void;
   setSettingsSection: (section: SettingsSection) => void;
   openAssistant: () => void;
   closeAssistant: () => void;
@@ -320,6 +330,9 @@ interface AppState {
   clearNotifications: () => void;
   requestCommentComposer: (issueId: string) => void;
   toggleCommandPalette: () => void;
+  openBoard: () => void;
+  openConversations: () => void;
+  bindIssueThread: (threadId: string) => void;
   openCreateIssueModal: () => void;
   openEditPrdModal: (issueNumber: number, body: string, labels: string[]) => void;
   closeCreateIssueModal: () => void;
@@ -398,7 +411,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   createAutomationModalOpen: false,
   editingAutomationId: null,
   addProjectExplorerOpen: false,
-  projectTab: 'issues' as ProjectTab,
+  projectTab: 'conversations' as ProjectTab,
   activePrNumber: null,
   pendingGitWorktreePath: null,
   terminalPaneThreadIds: [],
@@ -419,6 +432,38 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentReview: null,
       currentVerification: null,
     }),
+  openBoard: () =>
+    set((state) => ({
+      viewMode: state.activeProjectId ? 'project' : 'overview',
+      projectTab: 'issues' as ProjectTab,
+      activeIssue: null,
+      activeThreadId: null,
+      activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
+      terminalMaximized: false,
+      currentPlan: null,
+      currentReview: null,
+      currentVerification: null,
+    })),
+  openConversations: () =>
+    set((state) => ({
+      viewMode: state.activeProjectId ? 'project' : 'overview',
+      projectTab: 'conversations' as ProjectTab,
+      activeIssue: null,
+      activeThreadId: null,
+      activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
+      terminalMaximized: false,
+      currentPlan: null,
+      currentReview: null,
+      currentVerification: null,
+    })),
+  bindIssueThread: (threadId) =>
+    set((state) => ({
+      activeThreadId: threadId,
+      terminalThreadId: threadId,
+      activeIssue: state.activeIssue ? { ...state.activeIssue, threadId } : state.activeIssue,
+    })),
   selectProject: (id) =>
     set({
       activeProjectId: id,
@@ -432,7 +477,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentVerification: null,
       pipelinePhase: PIPELINE_PHASE.idle,
       viewMode: 'project',
-      projectTab: 'issues' as ProjectTab,
+      projectTab: 'conversations' as ProjectTab,
       pendingGitWorktreePath: null,
       githubIssues: [],
     }),
@@ -505,6 +550,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         terminalVisible: nextSettingsVisible ? false : s.terminalVisible,
         terminalMaximized: nextSettingsVisible ? false : s.terminalMaximized,
       };
+    }),
+  openSettings: (section) =>
+    set({
+      settingsVisible: true,
+      settingsSection: section,
+      terminalVisible: false,
+      terminalMaximized: false,
     }),
   setSettingsSection: (section) => set({ settingsSection: section }),
   openAssistant: () => set({ assistantVisible: true }),
@@ -712,7 +764,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeAutomationThreadId: null,
       activeAutomationDetailId: null,
       viewMode: 'project',
-      projectTab: 'issues' as ProjectTab,
+      projectTab: 'conversations' as ProjectTab,
       activeIssue: issue,
       activeThreadId: issue.threadId ?? null,
       currentPlan: null,

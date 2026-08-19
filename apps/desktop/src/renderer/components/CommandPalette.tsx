@@ -16,6 +16,7 @@ import {
   Ban,
   CheckCircle2,
   CircleDot,
+  Clock3,
   Cog,
   Columns3,
   FolderPlus,
@@ -161,7 +162,7 @@ function CommandPaletteContent() {
       if (approvedAwaitingExecution) count += 1;
     }
     count += 1; // Open Terminal
-    count += 9; // Go to items
+    count += 10; // Go to items
     count += 2 + (hasDetailView ? 0 : 1) + (activeIssue ? 1 : 0); // Workspace
     if (activeProjectId) count += 2; // Git
     return count;
@@ -437,6 +438,18 @@ function GotoCommandGroup({
 }) {
   const items = [
     {
+      title: 'Conversations',
+      description: 'Talk to Claude, Codex, or Grok on an issue',
+      icon: MessageSquare,
+      action: () => useAppStore.getState().openConversations(),
+    },
+    {
+      title: 'Board',
+      description: 'GitHub issues board for this project',
+      icon: Columns3,
+      action: () => useAppStore.getState().openBoard(),
+    },
+    {
       title: 'Overview',
       description: 'Project dashboard and status',
       icon: LayoutDashboard,
@@ -455,16 +468,22 @@ function GotoCommandGroup({
       action: () => openView('activity'),
     },
     {
+      title: 'Automations',
+      description: 'Scheduled prompts and automation runs',
+      icon: Clock3,
+      action: () => openView('automations'),
+    },
+    {
       title: 'Costs',
       description: 'AI model usage and spend',
       icon: Wallet,
-      action: () => openView('costs'),
+      action: () => useAppStore.getState().openSettings('costs'),
     },
     {
       title: 'Skills',
       description: 'Manage pipeline prompt skills',
       icon: Sparkles,
-      action: () => openView('skills'),
+      action: () => useAppStore.getState().openSettings('skills'),
     },
     {
       title: 'Copilot',

@@ -24,7 +24,14 @@ interface PageCoverageManifest {
   surfaces: CoverageSurface[];
 }
 
-type ProjectTab = 'issues' | 'git' | 'code' | 'pull-requests' | 'terminal' | 'insights';
+type ProjectTab =
+  | 'conversations'
+  | 'issues'
+  | 'git'
+  | 'code'
+  | 'pull-requests'
+  | 'terminal'
+  | 'insights';
 type SettingsSection =
   | 'about'
   | 'general'
@@ -32,6 +39,8 @@ type SettingsSection =
   | 'github'
   | 'notifications'
   | 'pipeline'
+  | 'skills'
+  | 'costs'
   | 'shortcuts'
   | 'archived'
   | 'developer'
@@ -78,24 +87,6 @@ const DESKTOP_VIEW_SURFACES = [
     },
   },
   {
-    id: 'desktop-costs',
-    mode: 'costs',
-    assert: async (page: Page) => {
-      await expect(page.getByRole('heading', { name: 'Costs', exact: true })).toBeVisible({
-        timeout: 15_000,
-      });
-    },
-  },
-  {
-    id: 'desktop-skills',
-    mode: 'skills',
-    assert: async (page: Page) => {
-      await expect(page.getByRole('heading', { name: 'Skills', exact: true })).toBeVisible({
-        timeout: 15_000,
-      });
-    },
-  },
-  {
     id: 'desktop-automations',
     mode: 'automations',
     assert: async (page: Page) => {
@@ -107,6 +98,13 @@ const DESKTOP_VIEW_SURFACES = [
 ] as const;
 
 const PROJECT_TAB_SURFACES = [
+  {
+    id: 'project-conversations',
+    tab: 'conversations',
+    assert: async (page: Page) => {
+      await expect(page.getByTestId('conversation-home')).toBeVisible({ timeout: 15_000 });
+    },
+  },
   {
     id: 'project-issues',
     tab: 'issues',
@@ -173,6 +171,8 @@ const SETTINGS_SURFACES = [
   { id: 'settings-github', section: 'github', heading: /^GitHub$/ },
   { id: 'settings-notifications', section: 'notifications', heading: /^Notifications$/ },
   { id: 'settings-pipeline', section: 'pipeline', heading: /^Pipeline$/ },
+  { id: 'settings-skills', section: 'skills', heading: /^Skills$/ },
+  { id: 'settings-costs', section: 'costs', heading: /^Costs$/ },
   { id: 'settings-auto-commit', section: 'auto-commit', heading: /^Auto-commit & Cleanup$/ },
   { id: 'settings-shortcuts', section: 'shortcuts', heading: /^Keyboard Shortcuts$/ },
   { id: 'settings-archived', section: 'archived', heading: /^Archived$/ },
@@ -185,16 +185,16 @@ const SETTINGS_SURFACES = [
 }>;
 
 const ISSUE_TAB_SURFACES = [
-  { id: 'issue-tab-prd', name: /^Issue$/ },
-  { id: 'issue-tab-console', name: /^Console$/ },
-  { id: 'issue-tab-comments', name: /^Comments$/ },
-  { id: 'issue-tab-history', name: /^Plans/ },
-  { id: 'issue-tab-findings', name: /^Findings/ },
-  { id: 'issue-tab-diff', name: /^Diff/ },
-  { id: 'issue-tab-runs', name: /^Runs$/ },
-  { id: 'issue-tab-activity', name: /^Activity/ },
-  { id: 'issue-tab-conversations', name: /^Conversations$/ },
-  { id: 'issue-tab-chat', name: /^Chat$/ },
+  { id: 'issue-tab-prd', testId: 'issue-context-prd' },
+  { id: 'issue-tab-console', testId: 'issue-context-console' },
+  { id: 'issue-tab-comments', testId: 'issue-context-comments' },
+  { id: 'issue-tab-history', testId: 'issue-context-history' },
+  { id: 'issue-tab-findings', testId: 'issue-context-findings' },
+  { id: 'issue-tab-diff', testId: 'issue-context-diff' },
+  { id: 'issue-tab-runs', testId: 'issue-context-runs' },
+  { id: 'issue-tab-activity', testId: 'issue-context-activity' },
+  { id: 'issue-tab-conversations', testId: 'issue-context-conversations' },
+  { id: 'issue-tab-chat', testId: 'conversation-surface' },
 ] as const;
 
 test.use({
@@ -217,10 +217,10 @@ async function openIssueWithThread(harness: Harness): Promise<void> {
   const { page } = harness;
 
   await harness.callStore('selectProject', harness.seed.projectId);
-  await expect(page.getByTestId(`issue-card-${ISSUE_SURFACE.issueNumber}`)).toBeVisible({
+  await expect(page.getByTestId(`thread-row-${ISSUE_SURFACE.issueNumber}`)).toBeVisible({
     timeout: 15_000,
   });
-  await page.getByTestId(`issue-card-${ISSUE_SURFACE.issueNumber}`).click();
+  await page.getByTestId(`thread-row-${ISSUE_SURFACE.issueNumber}`).click();
   await expect(page.getByRole('heading', { name: ISSUE_SURFACE.title })).toBeVisible({
     timeout: 10_000,
   });
@@ -244,7 +244,7 @@ async function openIssueWithThread(harness: Harness): Promise<void> {
     });
   }, ISSUE_THREAD_ID);
 
-  await expect(page.getByRole('tab', { name: /^Chat$/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('conversation-surface')).toBeVisible({ timeout: 10_000 });
 }
 
 test.describe('desktop page coverage manifest', () => {
@@ -299,10 +299,14 @@ test.describe('desktop page coverage manifest', () => {
     await openIssueWithThread(harness);
 
     for (const surface of ISSUE_TAB_SURFACES) {
-      const tab = harness.page.getByRole('tab', { name: surface.name });
-      await expect(tab).toBeVisible({ timeout: 10_000 });
-      await tab.click();
-      await expect(tab).toHaveAttribute('data-state', 'active');
+      const card = harness.page.getByTestId(surface.testId);
+      await expect(card).toBeVisible({ timeout: 10_000 });
+      if (surface.id === 'issue-tab-chat') continue;
+      const trigger = card.getByRole('button').first();
+      if ((await trigger.getAttribute('aria-expanded')) !== 'true') {
+        await trigger.click();
+      }
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
     }
   });
 });

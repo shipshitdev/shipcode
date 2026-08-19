@@ -8,10 +8,10 @@ import {
   type Project,
   type ReasoningEffort,
   resolveProviderReasoningEffort,
-  THREAD_KIND,
   type Thread,
 } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
+import { ensureIssueThread } from './ensure-issue-thread';
 import type { IpcHandlerDeps, Queries } from './ipc/types';
 import { safeSend } from './safe-send';
 import {
@@ -113,48 +113,6 @@ ${input.issue.body?.trim() || '(empty issue body)'}
 
 ${input.skill}
 `;
-}
-
-async function ensureIssueThread(input: {
-  queries: Queries;
-  project: Project;
-  issue: GitHubIssueCacheRecord;
-}): Promise<Thread> {
-  const existing = input.issue.threadId
-    ? input.queries.threads.getById(input.issue.threadId)
-    : input.queries.threads.getByProjectAndGithubIssue(input.project.id, input.issue.issueNumber);
-  let thread =
-    existing ??
-    input.queries.threads.create(
-      input.project.id,
-      input.issue.body ?? input.issue.title,
-      input.issue.title,
-      THREAD_KIND.pipeline,
-    );
-
-  input.queries.threads.updateIssueContent(
-    thread.id,
-    input.issue.body ?? input.issue.title,
-    input.issue.title,
-  );
-  input.queries.threads.setGithubIssue(thread.id, input.issue.issueNumber, input.project.gitRemote);
-  input.queries.githubIssues.linkThread(input.issue.id, thread.id);
-  thread = input.queries.threads.getById(thread.id) ?? thread;
-
-  if (thread.worktreePath) return thread;
-
-  const settings = input.queries.settings.get();
-  const worktreeManager = new WorktreeManager(input.project.path, {
-    worktreeRoot: settings.worktreeRoot,
-    branchFormat: settings.worktreeBranchFormat,
-  });
-  const created = await worktreeManager.create(
-    input.issue.issueNumber,
-    input.issue.title,
-    input.project.defaultBranch,
-  );
-  input.queries.threads.setWorktree(thread.id, created.branch, created.worktreePath);
-  return input.queries.threads.getById(thread.id) ?? thread;
 }
 
 function buildCliArgs(input: {

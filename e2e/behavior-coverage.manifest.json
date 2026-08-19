@@ -48,14 +48,14 @@
     },
     {
       "id": "costs-display-mode-toggle",
-      "surfaceId": "desktop-costs",
+      "surfaceId": "settings-costs",
       "title": "Costs view switches between token and USD display modes",
       "covered": true,
       "spec": "src/specs/desktop/page-behaviors.e2e.ts"
     },
     {
       "id": "skills-phase-editor-navigation",
-      "surfaceId": "desktop-skills",
+      "surfaceId": "settings-skills",
       "title": "Skills view changes active pipeline phase and exposes unsaved draft state",
       "covered": true,
       "spec": "src/specs/desktop/page-behaviors.e2e.ts"
@@ -73,6 +73,13 @@
       "title": "Automation modal validates custom cron input and creates a persisted automation card",
       "covered": true,
       "spec": "src/specs/desktop/app-shell-behaviors.e2e.ts"
+    },
+    {
+      "id": "project-conversations-home",
+      "surfaceId": "project-conversations",
+      "title": "Selecting a project opens the conversation home with a disabled composer",
+      "covered": true,
+      "spec": "src/specs/desktop/project-board.e2e.ts"
     },
     {
       "id": "project-issues-board-cards",

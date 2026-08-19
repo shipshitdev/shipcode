@@ -27,8 +27,8 @@ export interface WorktreeCreateResult {
   branch: string;
   /**
    * The ref the worktree was actually forked from. Normally `origin/<base>`
-   * (after a fresh fetch); falls back to the local `<base>` when the fetch
-   * failed.
+   * (after a fresh fetch); falls back to a local ref when the fetch failed, or
+   * to the repo default (`main`/`master`) when the stored base no longer exists.
    */
   baseRef: string;
   /**
@@ -130,6 +130,16 @@ export class WorktreeManager {
   private async branchExists(branch: string): Promise<boolean> {
     try {
       await this.git.raw(['rev-parse', '--verify', `refs/heads/${branch}`]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** True when `ref` names a commit — local branch, remote-tracking, or SHA. */
+  private async commitExists(ref: string): Promise<boolean> {
+    try {
+      await this.git.raw(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
       return true;
     } catch {
       return false;
@@ -423,15 +433,47 @@ export class WorktreeManager {
    * On any fetch failure — offline, no `origin` remote, or a base branch that
    * does not exist on the remote — fall back to the local ref and flag it stale
    * so callers can warn the user instead of silently forking from old code.
+   *
+   * If the stored base itself is gone (project still says `develop` after the
+   * repo moved to `master`), try the real default, then `main`/`master`, rather
+   * than handing `git worktree add` an unresolvable name.
    */
   private async resolveForkBase(base: string): Promise<{ ref: string; stale: boolean }> {
     // Already a remote-tracking ref: nothing to freshen locally, use as-is.
     if (base.startsWith('origin/')) return { ref: base, stale: false };
+
+    const fromRemote = await this.fetchOriginBranch(base);
+    if (fromRemote) return { ref: fromRemote, stale: false };
+    if (await this.commitExists(base)) return { ref: base, stale: true };
+
+    const fallbacks: string[] = [];
+    const push = (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed || trimmed === base || trimmed.startsWith('origin/')) return;
+      if (fallbacks.includes(trimmed)) return;
+      fallbacks.push(trimmed);
+    };
+    push(await this.getDefaultBranch());
+    push('main');
+    push('master');
+
+    for (const candidate of fallbacks) {
+      const remote = await this.fetchOriginBranch(candidate);
+      if (remote) return { ref: remote, stale: false };
+      if (await this.commitExists(candidate)) return { ref: candidate, stale: true };
+    }
+
+    throw new Error(
+      `Cannot create worktree: base branch '${base}' does not exist locally or on origin`,
+    );
+  }
+
+  private async fetchOriginBranch(branch: string): Promise<string | null> {
     try {
-      await this.git.fetch('origin', base);
-      return { ref: `origin/${base}`, stale: false };
+      await this.git.fetch('origin', branch);
+      return `origin/${branch}`;
     } catch {
-      return { ref: base, stale: true };
+      return null;
     }
   }
 }

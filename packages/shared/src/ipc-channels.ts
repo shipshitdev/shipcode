@@ -747,7 +747,9 @@ export interface IpcInvokeChannels {
   };
   'issue-chat:start': {
     args: {
-      threadId: string;
+      threadId?: string;
+      projectId?: string;
+      issueNumber?: number;
       provider: 'claude' | 'codex' | 'grok';
       modelId?: string | null;
       reasoningEffort?: ReasoningEffort;

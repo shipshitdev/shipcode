@@ -10,6 +10,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { GenericToaster } from './components/GenericToaster';
 import { HealthBanner } from './components/HealthBanner';
 import { IssueDetail } from './components/IssueDetail';
+import { NoProjectView } from './components/NoProjectView';
 import { NotificationToaster } from './components/NotificationToaster';
 import { OverviewView } from './components/OverviewView';
 import { ProjectMissingView } from './components/ProjectMissingView';
@@ -108,14 +109,8 @@ const ActivityView = lazy(() =>
 const AutomationsView = lazy(() =>
   import('./components/AutomationsView').then((m) => ({ default: m.AutomationsView })),
 );
-const CostsView = lazy(() =>
-  import('./components/CostsView').then((m) => ({ default: m.CostsView })),
-);
 const InboxView = lazy(() =>
   import('./components/InboxView').then((m) => ({ default: m.InboxView })),
-);
-const SkillsView = lazy(() =>
-  import('./components/SkillsView').then((m) => ({ default: m.SkillsView })),
 );
 const OnboardingWizard = lazy(() =>
   import('./components/onboarding/OnboardingWizard').then((m) => ({
@@ -308,7 +303,13 @@ export function App() {
       </div>
     );
   }
-  const showOverview = viewMode === 'overview' || !activeProjectId;
+  const showOverview = viewMode === 'overview';
+  const showNoProject =
+    !activeProjectId &&
+    viewMode !== 'overview' &&
+    viewMode !== 'inbox' &&
+    viewMode !== 'activity' &&
+    viewMode !== 'automations';
   const showMissingProject =
     !settingsVisible &&
     viewMode === 'project' &&
@@ -340,9 +341,7 @@ export function App() {
           {settingsVisible ? (
             <SettingsSidebar />
           ) : (
-            !hasActiveIssue &&
-            !hasActiveAutomationThread &&
-            !hasActiveAutomationDetail && <ProjectSidebar />
+            !hasActiveAutomationThread && !hasActiveAutomationDetail && <ProjectSidebar />
           )}
           {/* Center column — main view above, terminal dock below. */}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -362,16 +361,14 @@ export function App() {
                     <AutomationDetail />
                   ) : viewMode === 'activity' ? (
                     <ActivityView />
-                  ) : viewMode === 'costs' ? (
-                    <CostsView />
-                  ) : viewMode === 'skills' ? (
-                    <SkillsView />
                   ) : viewMode === 'automations' ? (
                     <AutomationsView />
                   ) : viewMode === 'inbox' ? (
                     <InboxView />
                   ) : showOverview ? (
                     <OverviewView />
+                  ) : showNoProject ? (
+                    <NoProjectView />
                   ) : showMissingProject && activeProject ? (
                     <ProjectMissingView project={activeProject} />
                   ) : (

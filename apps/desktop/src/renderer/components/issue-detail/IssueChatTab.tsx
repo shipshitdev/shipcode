@@ -16,8 +16,9 @@ import {
   Textarea,
 } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, RefreshCw, Send, Square } from 'lucide-react';
+import { RefreshCw, Send, Square } from 'lucide-react';
 import { useCallback, useMemo, useReducer } from 'react';
+import { useAppStore } from '../../stores/app-store';
 import { toast } from '../../stores/toast-store';
 import {
   AssistantTimeline,
@@ -43,7 +44,8 @@ interface IssueChatStartResult extends IssueChatSessionMetadata {
 }
 
 interface IssueChatTabProps {
-  threadId: string;
+  threadId: string | null;
+  projectId: string;
   issueNumber: number;
   issueTitle: string;
 }
@@ -128,21 +130,27 @@ function issueChatUiReducer(state: IssueChatUiState, action: IssueChatUiAction):
   }
 }
 
-export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTabProps) {
+export function IssueChatTab({ threadId, projectId, issueNumber, issueTitle }: IssueChatTabProps) {
   const queryClient = useQueryClient();
+  const bindIssueThread = useAppStore((state) => state.bindIssueThread);
   const transcript = useAssistantTranscript(threadId);
   const { data: issueChatConversations = [] } = useQuery<AgentConversationRecord[]>({
     queryKey: ['agent-conversations', threadId, 'issue_chat'],
-    queryFn: () =>
-      window.shipcode.invoke('agent-conversations:list-by-thread', {
+    queryFn: () => {
+      if (!threadId) throw new Error('Missing thread id');
+      return window.shipcode.invoke('agent-conversations:list-by-thread', {
         threadId,
         phase: 'issue_chat',
-      }),
+      });
+    },
     enabled: !!threadId,
   });
   const { data: issueChatSession = null } = useQuery<IssueChatSessionMetadata | null>({
     queryKey: ['issue-chat-session', threadId],
-    queryFn: () => window.shipcode.invoke('issue-chat:get-session', { threadId }),
+    queryFn: () => {
+      if (!threadId) throw new Error('Missing thread id');
+      return window.shipcode.invoke('issue-chat:get-session', { threadId });
+    },
     enabled: !!threadId,
   });
   const [issueChatState, dispatchIssueChat] = useReducer(
@@ -185,19 +193,23 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
     persistedMessages.length > 0 || pendingUserMessages.length > 0 || visibleEvents.length > 0;
   const canResume = issueChatSession != null && !sessionStarted && !isRunning;
 
-  const startOrResumeSession = useCallback(async () => {
+  const startOrResumeSession = useCallback(async (): Promise<string> => {
     const result = await window.shipcode.invoke<IssueChatStartResult>('issue-chat:start', {
-      threadId,
+      ...(threadId ? { threadId } : { projectId, issueNumber }),
       provider,
       modelId: issueChatSession?.modelId ?? undefined,
       reasoningEffort: issueChatSession?.reasoningEffort ?? 'medium',
     });
+    if (result.threadId !== threadId) {
+      bindIssueThread(result.threadId);
+    }
     dispatchIssueChat({ type: 'selected-provider', provider: result.provider });
     dispatchIssueChat({ type: 'session-started', value: true });
     await queryClient.invalidateQueries({
-      queryKey: ['issue-chat-session', threadId],
+      queryKey: ['issue-chat-session', result.threadId],
     });
-  }, [issueChatSession, provider, queryClient, threadId]);
+    return result.threadId;
+  }, [bindIssueThread, issueChatSession, issueNumber, projectId, provider, queryClient, threadId]);
 
   const submitTurn = useCallback(
     async (text: string) => {
@@ -205,22 +217,29 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
       if (!trimmed || isSubmitting || isRunning) return;
       dispatchIssueChat({ type: 'submitting', value: true });
       try {
-        if (!sessionStarted) {
-          await startOrResumeSession();
-        }
+        const ensuredThreadId =
+          sessionStarted && threadId ? threadId : await startOrResumeSession();
+        if (!ensuredThreadId) return;
 
-        dispatchIssueChat({ type: 'queued-user-message', threadId, content: trimmed });
+        dispatchIssueChat({
+          type: 'queued-user-message',
+          threadId: ensuredThreadId,
+          content: trimmed,
+        });
 
-        await window.shipcode.invoke('issue-chat:turn', { threadId, text: trimmed });
+        await window.shipcode.invoke('issue-chat:turn', {
+          threadId: ensuredThreadId,
+          text: trimmed,
+        });
         await Promise.all([
           queryClient.invalidateQueries({
-            queryKey: ['agent-conversations', threadId],
+            queryKey: ['agent-conversations', ensuredThreadId],
           }),
           queryClient.invalidateQueries({
-            queryKey: ['agent-conversations', threadId, 'issue_chat'],
+            queryKey: ['agent-conversations', ensuredThreadId, 'issue_chat'],
           }),
           queryClient.invalidateQueries({
-            queryKey: ['issue-chat-session', threadId],
+            queryKey: ['issue-chat-session', ensuredThreadId],
           }),
         ]);
       } catch (error) {
@@ -237,6 +256,7 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
   }, [draft, submitTurn]);
 
   const handleStop = useCallback(async () => {
+    if (!threadId) return;
     try {
       await window.shipcode.invoke('issue-chat:stop', { threadId });
       dispatchIssueChat({ type: 'session-started', value: false });
@@ -258,28 +278,10 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
   }, []);
 
   return (
-    <section className="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-md border border-border bg-primary">
-      <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-border px-3">
-        <div className="flex size-7 items-center justify-center rounded-md border border-border bg-secondary">
-          <Bot size={14} className="text-primary" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-semibold text-primary">Issue Chat</div>
-          <div className="truncate text-[10px] text-muted-foreground">
-            #{issueNumber} {issueTitle}
-          </div>
-        </div>
-        <Badge variant={isRunning ? 'default' : sessionStarted ? 'done' : 'info'}>
-          {isRunning
-            ? 'Running'
-            : sessionStarted
-              ? 'Ready'
-              : issueChatSession
-                ? 'Resumable'
-                : 'Idle'}
-        </Badge>
-      </div>
-
+    <section
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-primary"
+      data-testid="conversation-surface"
+    >
       <div className="flex min-h-0 flex-1 flex-col">
         {hasVisibleConversation ? (
           <AssistantTimeline
@@ -290,8 +292,13 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
             isRunning={isRunning}
           />
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col justify-center gap-3 px-5 text-sm text-secondary">
-            <p className="text-primary">No chat yet.</p>
+          <div className="flex min-h-0 flex-1 flex-col justify-center gap-3 px-8 text-sm text-secondary">
+            <p className="font-mono text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
+              Waiting
+            </p>
+            <p className="text-[15px] font-medium tracking-tight text-primary">
+              Talk to the official CLI on this issue.
+            </p>
             <div className="space-y-2 text-xs text-muted-foreground">
               <Button
                 type="button"
@@ -329,8 +336,8 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
         )}
       </div>
 
-      <div className="shrink-0 border-t border-border bg-primary p-3">
-        <div className="flex w-full flex-col rounded-lg border border-border bg-elevated">
+      <div className="shrink-0 border-t border-border/70 bg-primary p-3">
+        <div className="flex w-full flex-col rounded-md border border-border/80 bg-elevated/60">
           <Textarea
             value={draft}
             onChange={(event) => dispatchIssueChat({ type: 'draft', value: event.target.value })}
@@ -340,7 +347,7 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
                 handleSubmit();
               }
             }}
-            placeholder="Ask the issue agent..."
+            placeholder="Message Claude, Codex, or Grok…"
             className="min-h-[76px] resize-none border-0 bg-transparent text-xs shadow-none focus-visible:ring-0"
           />
           <div className="flex items-center gap-1 border-t border-border/50 px-2 py-1.5">
@@ -366,6 +373,15 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
                 <SelectItem value="grok">Grok</SelectItem>
               </SelectContent>
             </Select>
+            <Badge variant={isRunning ? 'default' : sessionStarted ? 'done' : 'info'}>
+              {isRunning
+                ? 'Running'
+                : sessionStarted
+                  ? 'Ready'
+                  : issueChatSession
+                    ? 'Resumable'
+                    : 'Idle'}
+            </Badge>
             <div className="flex-1" />
             {canResume ? (
               <Button

@@ -49,4 +49,29 @@ describe('CollapsibleSection', () => {
 
     view.cleanup();
   });
+
+  it('supports a controlled open state', () => {
+    let latestOpen = false;
+    const view = renderIntoDom(
+      <CollapsibleSection
+        title="Issue"
+        open={false}
+        onOpenChange={(next) => {
+          latestOpen = next;
+        }}
+      >
+        <div>Issue body</div>
+      </CollapsibleSection>,
+    );
+
+    const trigger = view.container.querySelector('button');
+    act(() => {
+      trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(latestOpen).toBe(true);
+    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
+
+    view.cleanup();
+  });
 });

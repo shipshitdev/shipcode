@@ -380,6 +380,8 @@ describe('registerGitHubHandlers', () => {
       resetStaleApproval: vi.fn(() => 0),
       markTriageRulesApplied: vi.fn(),
       recordTriageRulesFailure: vi.fn(),
+      updateState: vi.fn(),
+      markClosedOnClose: vi.fn(),
       runInTransaction: vi.fn((fn: () => unknown) => fn()),
       ...overrides,
     };
@@ -1031,9 +1033,8 @@ describe('registerGitHubHandlers', () => {
     const deferredIssue = { ...baseIssue, id: 'deferred', issueNumber: 11, pipelineStatus: 'todo' };
     const doneIssue = { ...baseIssue, id: 'done', issueNumber: 12, pipelineStatus: 'todo' };
     const reviewIssue = { ...baseIssue, id: 'review', issueNumber: 13, pipelineStatus: 'todo' };
-    // Ownership derives from the local pipeline status alone — no claim row is
-    // required. A `needs_review` lane is preserved even though the board moved
-    // this issue to Done.
+    // Leftover pipeline labels without a live thread do not own the lane.
+    // A `needs_review` / `executing` cache row must yield to GitHub Done.
     const claimedReviewIssue = {
       ...baseIssue,
       id: 'claimed-review',
@@ -1079,7 +1080,19 @@ describe('registerGitHubHandlers', () => {
       unknownIssue,
       quickIssue,
     ];
-    listAllIssuesMock.mockResolvedValue([]);
+    listAllIssuesMock.mockResolvedValue(
+      cachedAfterSync
+        .filter((issue) => !issue.isQuickMode)
+        .map((issue) => ({
+          number: issue.issueNumber,
+          title: issue.title,
+          body: issue.body,
+          labels: issue.labels,
+          assignee: null,
+          state: 'open',
+          url: `https://github.com/acme/repo/issues/${issue.issueNumber}`,
+        })),
+    );
     fetchProjectStatusesMock.mockResolvedValue(
       new Map([
         [10, { raw: 'Todo' }],
@@ -1102,7 +1115,12 @@ describe('registerGitHubHandlers', () => {
         {
           list: vi.fn().mockReturnValueOnce([]).mockReturnValue(cachedAfterSync),
           getByNumber: vi.fn(() => null),
-          upsert: vi.fn(),
+          upsert: vi.fn((input: { issueNumber: number; state: 'open' | 'closed' }) => ({
+            ...baseIssue,
+            id: `upsert-${input.issueNumber}`,
+            issueNumber: input.issueNumber,
+            state: input.state,
+          })),
           markClosedOnClose: vi.fn(),
           updateState: vi.fn(),
           clearArchivedAt: vi.fn(),
@@ -1152,22 +1170,69 @@ describe('registerGitHubHandlers', () => {
     );
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
       'claimed-review',
-      'needs_review',
+      'closed',
     );
-    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('active', 'executing');
-    expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith('active', 'closed');
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('active', 'closed');
     expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('labeled', 'queued');
     expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith(
       'unknown',
       expect.anything(),
     );
     expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalledWith('quick', 'closed');
-    expect(syncToGithub).toHaveBeenCalledWith(
+    expect(syncToGithub).not.toHaveBeenCalledWith(
       expect.objectContaining({ issueNumber: 14, pipelineStatus: 'executing' }),
     );
-    expect(syncToGithub).toHaveBeenCalledWith(
-      expect.objectContaining({ issueNumber: 17, pipelineStatus: 'needs_review' }),
-    );
+  });
+
+  it('closes cached open issues that GitHub no longer lists as open', async () => {
+    const zombie = {
+      ...baseIssue,
+      id: 'zombie-13',
+      issueNumber: 13,
+      state: 'open',
+      pipelineStatus: 'executing',
+      labels: ['shipcode:pipeline:executing'],
+      threadId: null,
+    };
+    listAllIssuesMock.mockResolvedValue([]);
+    const queries = {
+      githubIssues: buildGithubIssuesQueries(
+        {
+          list: vi.fn().mockReturnValueOnce([]).mockReturnValue([zombie]),
+          getByNumber: vi.fn(() => null),
+          upsert: vi.fn(),
+          updateState: vi.fn(),
+          markClosedOnClose: vi.fn(),
+          setPriority: vi.fn(),
+          setIssueType: vi.fn(),
+          archiveIssues: vi.fn(),
+        },
+        [zombie],
+      ),
+      issueEdges: { replaceBodyEdges: vi.fn() },
+      threads: {
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const refresh = handlers.get('github:refresh-issues');
+    if (!refresh) throw new Error('github:refresh-issues handler not registered');
+    await refresh(undefined, { projectId: 'project-1', force: true });
+
+    expect(queries.githubIssues.updateState).toHaveBeenCalledWith('zombie-13', 'closed');
+    expect(queries.githubIssues.markClosedOnClose).toHaveBeenCalledWith('zombie-13');
   });
 
   it('rejects refresh when the project is missing or the repo path is gone', async () => {

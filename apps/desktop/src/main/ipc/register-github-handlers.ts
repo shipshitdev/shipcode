@@ -130,14 +130,17 @@ function resolveOpenIssuePipelineStatus(
     : ISSUE_PIPELINE_STATUS.todo;
 }
 
-function hasLocalPipelineOwnership(localPipelineStatus: IssuePipelineStatus): boolean {
-  // Ownership is derived from the resolved pipeline status alone. The
-  // claimed_at/claimed_by columns exist but no production path writes them yet
-  // (tryClaim/releaseClaim are unused outside tests), so gating on them here
-  // made this guard permanently false — an authoritative refresh would then
-  // overwrite an actively-running issue's status with the Projects macro column
-  // and re-queue it for a duplicate pipeline run.
-  return LOCALLY_OWNED_PIPELINE_STATUSES.has(localPipelineStatus);
+function hasLocalPipelineOwnership(
+  localPipelineStatus: IssuePipelineStatus,
+  thread: ReturnType<IpcHandlerDeps['queries']['threads']['getById']> | null | undefined,
+): boolean {
+  // Ownership is a live pipeline thread, not a leftover status label. Gating
+  // on claimed_at was permanently false (no production writer). Gating on the
+  // status alone kept closed GitHub issues in Executing for months after the
+  // Projects column moved to Done.
+  if (!LOCALLY_OWNED_PIPELINE_STATUSES.has(localPipelineStatus)) return false;
+  if (!thread) return false;
+  return !STALE_LINK_THREAD_STATUSES.has(thread.status);
 }
 
 function pipelineStatusForProjectMacroColumn(
@@ -208,13 +211,13 @@ function syncOpenIssueState(
     // add a custom lane without refresh silently translating it to a local lane
     // or overwriting it with stale cached state.
     if (!projectPipelineStatus || !macroColumn) {
-      if (hasLocalPipelineOwnership(localPipelineStatus)) {
+      if (hasLocalPipelineOwnership(localPipelineStatus, thread)) {
         queries.githubIssues.updatePipelineStatus(issue.id, localPipelineStatus);
       }
       return readBackIssue();
     }
 
-    if (!hasLocalPipelineOwnership(localPipelineStatus)) {
+    if (!hasLocalPipelineOwnership(localPipelineStatus, thread)) {
       queries.githubIssues.updatePipelineStatus(issue.id, projectPipelineStatus);
       return readBackIssue();
     }
@@ -429,6 +432,9 @@ export function registerGitHubHandlers({
         const newIssues: Array<{ number: number; url: string; record: GitHubIssueCacheRecord }> =
           [];
         queries.githubIssues.runInTransaction(() => {
+          const listedOpen = new Set(
+            issues.filter((issue) => issue.state === 'open').map((issue) => issue.number),
+          );
           for (const issue of issues) {
             const existingIssue = queries.githubIssues.getByNumber(projectId, issue.number);
             const record = queries.githubIssues.upsert({
@@ -449,6 +455,18 @@ export function registerGitHubHandlers({
             if (!existingIssue && record.state === 'open' && !record.rulesAppliedAt) {
               newIssues.push({ number: issue.number, url: issue.url, record });
             }
+          }
+
+          // `gh issue list --limit 200 --state all` used to drop older closed
+          // issues, so leftover `shipcode:pipeline:executing` labels kept them
+          // on the Executing column. Anything cached as open that GitHub no
+          // longer lists as open is closed — unless a live pipeline thread
+          // still owns it (markClosedOnClose's running-phase guard).
+          for (const cachedIssue of queries.githubIssues.list(projectId)) {
+            if (cachedIssue.isQuickMode || cachedIssue.state !== 'open') continue;
+            if (listedOpen.has(cachedIssue.issueNumber)) continue;
+            queries.githubIssues.updateState(cachedIssue.id, 'closed');
+            queries.githubIssues.markClosedOnClose(cachedIssue.id);
           }
         });
 

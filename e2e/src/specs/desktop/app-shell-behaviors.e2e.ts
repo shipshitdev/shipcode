@@ -125,7 +125,8 @@ test.describe('app shell behavior contracts', () => {
     await expect(page.getByRole('heading', { name: 'Costs', exact: true })).toBeVisible({
       timeout: 15_000,
     });
-    expect((await harness.getState()).viewMode).toBe('costs');
+    expect((await harness.getState()).settingsVisible).toBe(true);
+    expect((await harness.getState()).settingsSection).toBe('costs');
     await expect(dialog).not.toBeVisible();
   });
 
@@ -133,7 +134,7 @@ test.describe('app shell behavior contracts', () => {
     const { page } = harness;
 
     await selectSeedProject(harness);
-    await expect(page.getByTestId(`issue-card-${SHELL_ISSUE.issueNumber}`)).toBeVisible({
+    await expect(page.getByTestId(`thread-row-${SHELL_ISSUE.issueNumber}`)).toBeVisible({
       timeout: 15_000,
     });
     await harness.callStore('openCommandPalette');

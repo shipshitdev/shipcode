@@ -1,3 +1,4 @@
+import { ConversationHome } from '../../components/ConversationHome';
 import { IssuesPanel } from '../../components/IssuesPanel';
 import { PullRequestsPanel } from '../../components/pull-requests/PullRequestsPanel';
 import { TerminalView } from '../../components/TerminalView';
@@ -11,7 +12,9 @@ export function ProjectView() {
 
   return (
     <div className="flex flex-1 min-h-0 min-w-0 flex-col bg-primary">
-      {projectTab === 'issues' ? (
+      {projectTab === 'conversations' ? (
+        <ConversationHome />
+      ) : projectTab === 'issues' ? (
         <IssuesPanel />
       ) : projectTab === 'git' ? (
         <ProjectGitVisualizer />

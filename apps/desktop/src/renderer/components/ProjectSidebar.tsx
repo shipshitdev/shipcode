@@ -1,65 +1,38 @@
-import {
-  type AppSettings,
-  type CliProviderUsageMap,
-  type DashboardStats,
-  filterAttentionRequiredNotifications,
-  getProjectProviderWarnings,
-  type IntegrationStatus,
-  type NotificationRecord,
-  type Project,
-} from '@shipcode/shared';
-import {
-  Badge,
-  Button,
-  cn,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  Skeleton,
-} from '@shipshitdev/ui';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { DashboardStats, NotificationRecord } from '@shipcode/shared';
+import { filterAttentionRequiredNotifications } from '@shipcode/shared';
+import { Button, cn } from '@shipshitdev/ui';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
-  Archive,
-  ArrowUpDown,
-  Check,
   Clock3,
   Code2,
-  DollarSign,
-  Folder,
+  GitBranch,
   GitPullRequest,
   Inbox,
   LayoutGrid,
   LayoutList,
-  MoreHorizontal,
-  Pin,
-  PinOff,
+  MessageSquare,
   Plus,
   Search,
-  Settings,
-  Sparkles,
   Terminal,
-  Trash2,
-  Wrench,
 } from 'lucide-react';
-import type { ComponentType } from 'react';
-import { useEffect, useMemo } from 'react';
-import { useAppSettings } from '../hooks/useAppSettings';
+import type { ComponentType, ReactNode } from 'react';
+import { useEffect } from 'react';
 import { COL_RESIZE_BODY_CLASS_NAMES, useDragResize } from '../hooks/useDragResize';
-import { NOTIFICATIONS_STALE_TIME, STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
+import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { type ProjectTab, useAppStore } from '../stores/app-store';
-import { toast } from '../stores/toast-store';
-import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
+import { ProjectSwitcher } from './ProjectSwitcher';
+import { SidebarBackButton } from './SettingsNavigation';
+import { ThreadList } from './ThreadList';
 
 const PROJECT_TAB_ITEMS: Array<{
   key: ProjectTab;
   label: string;
   icon: ComponentType<{ size?: number; className?: string }>;
 }> = [
-  { key: 'issues', label: 'Issues', icon: LayoutList },
-  { key: 'git', label: 'Git', icon: GitPullRequest },
+  { key: 'conversations', label: 'Conversations', icon: MessageSquare },
+  { key: 'issues', label: 'Board', icon: LayoutList },
+  { key: 'git', label: 'Git', icon: GitBranch },
   { key: 'code', label: 'Code', icon: Code2 },
   { key: 'pull-requests', label: 'Pull Requests', icon: GitPullRequest },
   { key: 'insights', label: 'Insights', icon: Activity },
@@ -67,23 +40,55 @@ const PROJECT_TAB_ITEMS: Array<{
 ];
 
 const SIDEBAR_MIN = 220;
-const SIDEBAR_MAX = 256;
-const SIDEBAR_DEFAULT = SIDEBAR_MAX;
-const PROJECT_LOADING_ROW_KEYS = [
-  'project-loading-1',
-  'project-loading-2',
-  'project-loading-3',
-  'project-loading-4',
-];
+const SIDEBAR_MAX = 280;
+const SIDEBAR_DEFAULT = 256;
 
-type SortOrder = AppSettings['projectSortOrder'];
-type ProjectWithPathState = Project & { pathExists?: boolean };
+function SidebarLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      {children}
+    </div>
+  );
+}
 
-const SORT_LABELS: Record<SortOrder, string> = {
-  recent: 'Recently used',
-  alpha: 'Alphabetical',
-  added: 'Date added',
-};
+function SidebarNavButton({
+  icon: Icon,
+  label,
+  isActive,
+  disabled,
+  badge,
+  shortcut,
+  onClick,
+}: {
+  icon: ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  isActive?: boolean;
+  disabled?: boolean;
+  badge?: ReactNode;
+  shortcut?: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      variant="ghost"
+      disabled={disabled}
+      className={cn(
+        'group/item h-auto w-full justify-start gap-2 px-2.5 py-1.5 text-[13px] font-normal text-secondary app-region-no-drag',
+        isActive && 'bg-tertiary text-primary font-medium',
+      )}
+      onClick={onClick}
+    >
+      <Icon size={14} className="shrink-0 text-secondary" />
+      <span className="flex-1 truncate text-left">{label}</span>
+      {badge}
+      {shortcut ? (
+        <kbd className="hidden group-hover/item:inline font-mono text-[10px] text-muted-foreground">
+          {shortcut}
+        </kbd>
+      ) : null}
+    </Button>
+  );
+}
 
 function useProjectSidebarView() {
   const activeProjectId = useAppStore((state) => state.activeProjectId);
@@ -91,7 +96,6 @@ function useProjectSidebarView() {
   const settingsVisible = useAppStore((state) => state.settingsVisible);
   const selectProject = useAppStore((state) => state.selectProject);
   const openView = useAppStore((state) => state.openView);
-  const openProjectSettingsModal = useAppStore((state) => state.openProjectSettingsModal);
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const openCreateIssueModal = useAppStore((state) => state.openCreateIssueModal);
   const openCommandPalette = useAppStore((state) => state.openCommandPalette);
@@ -99,33 +103,10 @@ function useProjectSidebarView() {
   const setProjectTab = useAppStore((state) => state.setProjectTab);
   const queryClient = useQueryClient();
 
-  const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectWithPathState[]>({
-    queryKey: ['projects-visible'],
-    queryFn: () => window.shipcode.invoke('project:list-visible'),
-    staleTime: STABLE_APP_STATE_STALE_TIME,
-  });
-
-  const { data: settings } = useAppSettings();
-  const sortOrder: SortOrder = settings?.projectSortOrder ?? 'recent';
-
-  const { data: integrations } = useQuery<IntegrationStatus>({
-    queryKey: ['integrations'],
-    queryFn: () => window.shipcode.invoke('integrations:check'),
-    staleTime: 30_000,
-  });
-
-  const { data: providerUsage } = useQuery<CliProviderUsageMap>({
-    queryKey: ['provider-usage'],
-    queryFn: () => window.shipcode.invoke<CliProviderUsageMap>('provider-usage:check'),
-    staleTime: 60_000,
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: true,
-  });
-
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ['dashboard', 'stats'],
     queryFn: () => window.shipcode.invoke<DashboardStats>('dashboard:get-stats'),
-    staleTime: 15_000, // dashboard:invalidate IPC push handles freshness
+    staleTime: 15_000,
   });
 
   const { data: notifs = [] } = useQuery<NotificationRecord[]>({
@@ -134,89 +115,6 @@ function useProjectSidebarView() {
     staleTime: NOTIFICATIONS_STALE_TIME,
   });
 
-  // Shared invalidation across every project query key. Titlebar/IssueDetail
-  // use ['projects'] (full registry), sidebar uses ['projects-visible'],
-  // Settings uses ['projects-archived'] — any project mutation refreshes all three.
-  const invalidateProjects = () => {
-    queryClient.invalidateQueries({ queryKey: ['projects'] });
-    queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
-    queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
-  };
-
-  const openAddProjectExplorer = useAppStore((s) => s.openAddProjectExplorer);
-
-  const setSortOrder = useMutation({
-    mutationFn: (projectSortOrder: SortOrder) =>
-      window.shipcode.invoke('settings:set', { projectSortOrder }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }),
-  });
-
-  const pinProject = useMutation({
-    mutationFn: ({ projectId, pinned }: { projectId: string; pinned: boolean }) =>
-      window.shipcode.invoke('project:pin', { projectId, pinned }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
-      queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
-    },
-  });
-
-  const archiveProject = useMutation({
-    mutationFn: (projectId: string) => window.shipcode.invoke('project:archive', { projectId }),
-    onSuccess: (_data, projectId) => {
-      if (activeProjectId === projectId) {
-        selectProject(null);
-        openView('overview');
-      }
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
-      queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
-    },
-    onError: (error: Error) => {
-      toast.error('Failed to archive project', error.message);
-    },
-  });
-
-  const removeProject = useMutation({
-    mutationFn: (projectId: string) => window.shipcode.invoke('project:remove', { projectId }),
-    onSuccess: (_data, projectId) => {
-      if (activeProjectId === projectId) {
-        selectProject(null);
-        openView('overview');
-      }
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
-      queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
-    },
-    onError: (error: Error) => {
-      toast.error('Failed to remove project', error.message);
-    },
-  });
-
-  const relinkProject = useMutation({
-    mutationFn: async (projectId: string) => {
-      const path = await window.shipcode.invoke<string | null>('dialog:open-directory');
-      if (!path) return null;
-      return window.shipcode.invoke<Project>('project:relink-path', { projectId, path });
-    },
-    onSuccess: (project) => {
-      if (!project) return;
-      invalidateProjects();
-      queryClient.invalidateQueries({ queryKey: ['project', project.id] });
-      queryClient.invalidateQueries({ queryKey: ['github-issues', project.id] });
-      queryClient.invalidateQueries({ queryKey: ['threads', project.id] });
-      queryClient.invalidateQueries({ queryKey: ['git-branches', project.id] });
-      queryClient.invalidateQueries({ queryKey: ['thread-panel-data', project.id] });
-      window.shipcode
-        .invoke('github:refresh-issues', { projectId: project.id, force: true })
-        .catch(() => {});
-    },
-    onError: (error: Error) => {
-      toast.error('Failed to relink project', error.message);
-    },
-  });
-
-  // Left-anchored panel: dragging its right edge rightwards widens it.
   const { size: sidebarWidth, handleResizeMouseDown } = useDragResize({
     initialSize: SIDEBAR_DEFAULT,
     axis: 'x',
@@ -238,21 +136,6 @@ function useProjectSidebarView() {
     };
   }, [queryClient]);
 
-  // Pinned projects always float to top and remain alphabetical; unpinned
-  // projects keep the user's selected sort order.
-  const sortedProjects = useMemo(
-    () =>
-      projects.toSorted((a, b) => {
-        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-        if (a.pinned && b.pinned) return a.name.localeCompare(b.name);
-        if (sortOrder === 'alpha') return a.name.localeCompare(b.name);
-        if (sortOrder === 'added') return a.createdAt.localeCompare(b.createdAt);
-        // 'recent'
-        return b.updatedAt.localeCompare(a.updatedAt);
-      }),
-    [projects, sortOrder],
-  );
-
   const liveCount = stats?.agentsRunning ?? 0;
   const inboxItems = filterAttentionRequiredNotifications(
     notifs.filter((n) => n.dismissedAt === null),
@@ -267,6 +150,25 @@ function useProjectSidebarView() {
     : hasWarning
       ? 'bg-warning/15 text-warning'
       : 'bg-tertiary text-secondary';
+  const workspaceActive = (mode: typeof viewMode) => !settingsVisible && viewMode === mode;
+  const isProjectSurface = !settingsVisible && viewMode === 'project';
+
+  const openProjectSurface = (tab: ProjectTab) => {
+    if (!activeProjectId) return;
+    if (tab === 'conversations') {
+      useAppStore.getState().openConversations();
+      return;
+    }
+    if (tab === 'issues') {
+      useAppStore.getState().openBoard();
+      return;
+    }
+    if (viewMode !== 'project') {
+      selectProject(activeProjectId);
+    }
+    setProjectTab(tab);
+    useAppStore.getState().selectIssue(null);
+  };
 
   return (
     <div
@@ -285,392 +187,106 @@ function useProjectSidebarView() {
         className="relative flex h-full flex-col border-r border-border bg-primary"
         style={{ width: sidebarWidth, minWidth: SIDEBAR_MIN }}
       >
-        <div className="px-2 pt-3 space-y-0.5">
-          {/* New Issue */}
-          <Button
-            variant="ghost"
-            className="group/item h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
-            onClick={() => openCreateIssueModal()}
-            disabled={projects.length === 0}
-          >
-            <Plus size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">New Issue</span>
-            <kbd className="hidden group-hover/item:inline text-[10px] text-muted-foreground font-mono">
-              ⌘N
-            </kbd>
-          </Button>
+        {isProjectSurface ? (
+          <SidebarBackButton label="Back to workspace" onClick={() => openView('overview')} />
+        ) : null}
 
-          {/* Search */}
-          <Button
-            variant="ghost"
-            className="group/item h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
+        <div className={isProjectSurface ? 'shrink-0 px-2 pt-1' : 'shrink-0 px-2 pt-2'}>
+          <ProjectSwitcher />
+        </div>
+
+        <div className="shrink-0 px-1.5 pt-1">
+          <SidebarNavButton
+            icon={Search}
+            label="Search"
+            shortcut="⌘K"
             onClick={() => openCommandPalette()}
-          >
-            <Search size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Search</span>
-            <kbd className="hidden group-hover/item:inline text-[10px] text-muted-foreground font-mono">
-              ⌘K
-            </kbd>
-          </Button>
-
-          {/* Overview */}
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-              !settingsVisible && viewMode === 'overview' && 'bg-tertiary text-primary font-medium',
-            )}
-            onClick={() => openView('overview')}
-          >
-            <LayoutGrid size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Overview</span>
-            {liveCount > 0 && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
-                <span className="relative flex size-1.5 items-center justify-center">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
-                  <span className="relative inline-flex size-1.5 rounded-full bg-agent" />
-                </span>
-                {liveCount} live
-              </span>
-            )}
-          </Button>
-
-          {/* Inbox */}
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-              !settingsVisible && viewMode === 'inbox' && 'bg-tertiary text-primary font-medium',
-            )}
-            onClick={() => openView('inbox')}
-          >
-            <Inbox size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Inbox</span>
-            {inboxCount > 0 && (
-              <span
-                className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${inboxBadgeClass}`}
-              >
-                {inboxCount}
-              </span>
-            )}
-          </Button>
-
-          {/* Activity */}
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-              !settingsVisible && viewMode === 'activity' && 'bg-tertiary text-primary font-medium',
-            )}
-            onClick={() => openView('activity')}
-          >
-            <Activity size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Activity</span>
-          </Button>
-
-          {/* Skills */}
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-              !settingsVisible && viewMode === 'skills' && 'bg-tertiary text-primary font-medium',
-            )}
-            onClick={() => openView('skills')}
-          >
-            <Sparkles size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Skills</span>
-          </Button>
-
-          {/* Automations */}
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-              !settingsVisible &&
-                viewMode === 'automations' &&
-                'bg-tertiary text-primary font-medium',
-            )}
-            onClick={() => openView('automations')}
-          >
-            <Clock3 size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Automations</span>
-          </Button>
-
-          {/* Costs */}
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-              !settingsVisible && viewMode === 'costs' && 'bg-tertiary text-primary font-medium',
-            )}
-            onClick={() => openView('costs')}
-          >
-            <DollarSign size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Costs</span>
-          </Button>
+          />
         </div>
 
-        <div className="mt-3 flex items-center justify-between px-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          <span>Projects</span>
-          <div className="flex items-center gap-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6 text-muted-foreground"
-                  title={`Sort: ${SORT_LABELS[sortOrder]}`}
-                  aria-label="Sort projects"
-                >
-                  <ArrowUpDown size={14} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {(Object.keys(SORT_LABELS) as SortOrder[]).map((key) => (
-                  <DropdownMenuItem key={key} onSelect={() => setSortOrder.mutate(key)}>
-                    <span className="flex size-3.5 items-center justify-center">
-                      {sortOrder === key ? <Check size={12} /> : null}
-                    </span>
-                    {SORT_LABELS[key]}
-                  </DropdownMenuItem>
+        {isProjectSurface ? (
+          activeProjectId ? (
+            <>
+              <div className="shrink-0 px-1.5" data-testid="sidebar-project-nav">
+                <SidebarNavButton
+                  icon={Plus}
+                  label="New Issue"
+                  shortcut="⌘N"
+                  disabled={!activeProjectId}
+                  onClick={() => openCreateIssueModal()}
+                />
+                {PROJECT_TAB_ITEMS.map(({ key, label, icon }) => (
+                  <SidebarNavButton
+                    key={key}
+                    icon={icon}
+                    label={label}
+                    isActive={projectTab === key}
+                    onClick={() => openProjectSurface(key)}
+                  />
                 ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6 text-muted-foreground app-region-no-drag"
-              title="Add repository"
-              aria-label="Add repository"
-              onClick={() => openAddProjectExplorer()}
+              </div>
+              <ThreadList />
+            </>
+          ) : (
+            <div
+              className="flex min-h-0 flex-1 flex-col justify-start px-3 pt-6 text-[12px] leading-5 text-muted-foreground"
+              data-testid="sidebar-no-project"
             >
-              <Plus size={14} />
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-2 py-1" data-project-list>
-          {projectsLoading && projects.length === 0
-            ? PROJECT_LOADING_ROW_KEYS.map((key) => (
-                <div key={key} className="flex items-center gap-2 px-3 py-2">
-                  <Skeleton className="size-3.5 shrink-0 rounded" />
-                  <Skeleton className="h-3.5 flex-1 rounded" />
-                </div>
-              ))
-            : null}
-          {sortedProjects.map((project) => (
-            <div key={project.id} className="group">
-              {(() => {
-                const projectWarnings =
-                  settings && integrations?.system && providerUsage
-                    ? getProjectProviderWarnings(
-                        settings,
-                        project,
-                        integrations.system,
-                        providerUsage,
-                      )
-                    : [];
-                const hasBlockedWarning = projectWarnings.some(
-                  (warning) => warning.severity === 'blocked',
-                );
-                const warningBadgeLabel =
-                  projectWarnings.length === 0 ? null : hasBlockedWarning ? 'Blocked' : 'Low';
-                const warningTitle =
-                  projectWarnings.length === 0
-                    ? undefined
-                    : projectWarnings.map((warning) => warning.message).join(' · ');
-
-                return (
-                  <>
-                    <div className="relative">
-                      <Button
-                        variant="ghost"
-                        className={cn(
-                          'h-auto w-full justify-start gap-2 pl-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-                          warningBadgeLabel ? 'pr-[7.25rem]' : 'pr-8',
-                          project.pathExists === false && 'opacity-50',
-                          viewMode === 'project' &&
-                            activeProjectId === project.id &&
-                            'bg-tertiary text-primary font-medium',
-                        )}
-                        onClick={() => selectProject(project.id)}
-                        title={
-                          project.pathExists === false
-                            ? `Project folder missing: ${project.path}`
-                            : project.path
-                        }
-                      >
-                        {project.pinned ? (
-                          <Pin size={12} className="shrink-0 text-accent fill-accent" />
-                        ) : (
-                          <Folder
-                            size={14}
-                            className={cn(
-                              'shrink-0 text-secondary',
-                              project.pathExists === false && 'text-warning',
-                            )}
-                          />
-                        )}
-                        <span className="flex-1 truncate text-primary">{project.name}</span>
-                        {project.pathExists === false && (
-                          <Badge variant="warning" className="shrink-0 text-[10px]">
-                            Missing
-                          </Badge>
-                        )}
-                        {project.pathExists !== false && project.setupStatus === 'missing' && (
-                          <Badge variant="default" className="shrink-0 text-[10px]">
-                            Setup
-                          </Badge>
-                        )}
-                        {project.pathExists !== false && project.setupStatus === 'invalid' && (
-                          <Badge variant="warning" className="shrink-0 text-[10px]">
-                            Setup!
-                          </Badge>
-                        )}
-                        {(stats?.pendingApprovalsByProject?.[project.id] ?? 0) > 0 && (
-                          <Badge variant="warning" className="shrink-0 text-[10px]">
-                            {stats?.pendingApprovalsByProject[project.id]}{' '}
-                            {stats?.pendingApprovalsByProject[project.id] === 1
-                              ? 'approval'
-                              : 'approvals'}
-                          </Badge>
-                        )}
-                        {(stats?.agentsRunningByProject?.[project.id] ?? 0) > 0 && (
-                          <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
-                            <span className="relative flex size-1.5 items-center justify-center">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
-                              <span className="relative inline-flex size-1.5 rounded-full bg-agent" />
-                            </span>
-                            {stats?.agentsRunningByProject[project.id]} live
-                          </span>
-                        )}
-                      </Button>
-
-                      <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
-                        {warningBadgeLabel && settings ? (
-                          <ProjectProviderWarningPopover
-                            settings={settings}
-                            project={project}
-                            warnings={projectWarnings}
-                            className="app-region-no-drag"
-                          />
-                        ) : null}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={cn(
-                                'h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100',
-                                hasBlockedWarning
-                                  ? 'text-danger'
-                                  : warningBadgeLabel
-                                    ? 'text-warning'
-                                    : 'text-muted-foreground',
-                              )}
-                              aria-label={`More actions for ${project.name}`}
-                              title={warningTitle}
-                            >
-                              <MoreHorizontal size={14} />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="end"
-                            collisionPadding={{ top: 44, right: 8, bottom: 8, left: 8 }}
-                            className="min-w-[220px]"
-                            onInteractOutside={(e) => {
-                              const target = e.target as Element | null;
-                              if (target?.closest('[data-project-list]')) {
-                                e.preventDefault();
-                              }
-                            }}
-                          >
-                            <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
-                              <Settings size={12} /> Settings
-                            </DropdownMenuItem>
-                            {project.pathExists !== false &&
-                            (project.setupStatus === 'missing' ||
-                              project.setupStatus === 'invalid') ? (
-                              <DropdownMenuItem
-                                onSelect={() => openProjectSettingsModal(project.id, 'setup')}
-                              >
-                                <Wrench size={12} /> Setup
-                              </DropdownMenuItem>
-                            ) : null}
-                            {project.pathExists === false && (
-                              <DropdownMenuItem onSelect={() => relinkProject.mutate(project.id)}>
-                                <Wrench size={12} /> Relink folder…
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem
-                              onSelect={() =>
-                                pinProject.mutate({
-                                  projectId: project.id,
-                                  pinned: !project.pinned,
-                                })
-                              }
-                            >
-                              {project.pinned ? (
-                                <>
-                                  <PinOff size={12} /> Unpin
-                                </>
-                              ) : (
-                                <>
-                                  <Pin size={12} /> Pin to top
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => archiveProject.mutate(project.id)}>
-                              <Archive size={12} /> Archive
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onSelect={() => {
-                                if (
-                                  window.confirm(
-                                    `Remove "${project.name}" from ShipCode? This does not delete the repository on disk.`,
-                                  )
-                                ) {
-                                  removeProject.mutate(project.id);
-                                }
-                              }}
-                              className="text-danger"
-                            >
-                              <Trash2 size={12} /> Remove
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-
-                    {viewMode === 'project' && activeProjectId === project.id && (
-                      <div className="ml-5 pb-1">
-                        {PROJECT_TAB_ITEMS.map(({ key, label, icon: Icon }) => (
-                          <Button
-                            key={key}
-                            variant="ghost"
-                            className={cn(
-                              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-1.5 text-[12px] font-normal text-secondary app-region-no-drag',
-                              projectTab === key && 'text-primary font-medium',
-                            )}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setProjectTab(key);
-                            }}
-                          >
-                            <Icon size={12} className="shrink-0" />
-                            {label}
-                          </Button>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
+              Select a project to open its conversations and issues.
             </div>
-          ))}
-        </div>
-        {/* Drag handle for resizing */}
+          )
+        ) : (
+          <>
+            <SidebarLabel>Workspace</SidebarLabel>
+            <div className="shrink-0 px-1.5" data-testid="sidebar-workspace-nav">
+              <SidebarNavButton
+                icon={LayoutGrid}
+                label="Overview"
+                isActive={workspaceActive('overview')}
+                badge={
+                  liveCount > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
+                      <span className="relative flex size-1.5 items-center justify-center">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
+                        <span className="relative inline-flex size-1.5 rounded-full bg-agent" />
+                      </span>
+                      {liveCount} live
+                    </span>
+                  ) : null
+                }
+                onClick={() => openView('overview')}
+              />
+              <SidebarNavButton
+                icon={Inbox}
+                label="Inbox"
+                isActive={workspaceActive('inbox')}
+                badge={
+                  inboxCount > 0 ? (
+                    <span
+                      className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${inboxBadgeClass}`}
+                    >
+                      {inboxCount}
+                    </span>
+                  ) : null
+                }
+                onClick={() => openView('inbox')}
+              />
+              <SidebarNavButton
+                icon={Activity}
+                label="Activity"
+                isActive={workspaceActive('activity')}
+                onClick={() => openView('activity')}
+              />
+              <SidebarNavButton
+                icon={Clock3}
+                label="Automations"
+                isActive={workspaceActive('automations')}
+                onClick={() => openView('automations')}
+              />
+            </div>
+          </>
+        )}
+
         <Button
           type="button"
           variant="ghost"

@@ -6,6 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../../stores/app-store';
 import { ProjectView } from './project-view';
 
+vi.mock('../../components/ConversationHome', () => ({
+  ConversationHome: () => <div>conversations tab</div>,
+}));
+
 vi.mock('../../components/IssuesPanel', () => ({
   IssuesPanel: () => <div>issues tab</div>,
 }));
@@ -36,6 +40,7 @@ describe('ProjectView', () => {
   });
 
   it.each([
+    ['conversations', 'conversations tab'],
     ['issues', 'issues tab'],
     ['git', 'git tab'],
     ['code', 'code tab'],

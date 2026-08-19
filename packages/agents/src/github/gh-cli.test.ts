@@ -421,7 +421,7 @@ describe('GhCli', () => {
   });
 
   describe('listAllIssues', () => {
-    it('returns mapped issues with --limit 200', async () => {
+    it('returns mapped open issues with --limit 1000', async () => {
       const raw = [
         {
           number: 10,
@@ -443,7 +443,7 @@ describe('GhCli', () => {
       expect(issues[0].updatedAt).toBe('2026-04-30T08:00:00Z');
       expect(mockExecFileAsync).toHaveBeenCalledWith(
         'gh',
-        expect.arrayContaining(['--limit', '200']),
+        expect.arrayContaining(['issue', 'list', '--state', 'open', '--limit', '1000']),
         ghExecOptions,
       );
     });
