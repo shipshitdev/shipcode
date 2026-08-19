@@ -320,6 +320,7 @@ interface AppState {
   clearNotifications: () => void;
   requestCommentComposer: (issueId: string) => void;
   toggleCommandPalette: () => void;
+  openBoard: () => void;
   openCreateIssueModal: () => void;
   openEditPrdModal: (issueNumber: number, body: string, labels: string[]) => void;
   closeCreateIssueModal: () => void;
@@ -419,6 +420,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentReview: null,
       currentVerification: null,
     }),
+  openBoard: () =>
+    set((state) => ({
+      viewMode: state.activeProjectId ? 'project' : 'overview',
+      projectTab: 'issues' as ProjectTab,
+      activeIssue: null,
+      activeThreadId: null,
+      activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
+      terminalMaximized: false,
+      currentPlan: null,
+      currentReview: null,
+      currentVerification: null,
+    })),
   selectProject: (id) =>
     set({
       activeProjectId: id,

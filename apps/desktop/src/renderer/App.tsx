@@ -340,9 +340,7 @@ export function App() {
           {settingsVisible ? (
             <SettingsSidebar />
           ) : (
-            !hasActiveIssue &&
-            !hasActiveAutomationThread &&
-            !hasActiveAutomationDetail && <ProjectSidebar />
+            !hasActiveAutomationThread && !hasActiveAutomationDetail && <ProjectSidebar />
           )}
           {/* Center column — main view above, terminal dock below. */}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

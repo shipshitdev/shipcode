@@ -161,7 +161,7 @@ function CommandPaletteContent() {
       if (approvedAwaitingExecution) count += 1;
     }
     count += 1; // Open Terminal
-    count += 9; // Go to items
+    count += 10; // Go to items
     count += 2 + (hasDetailView ? 0 : 1) + (activeIssue ? 1 : 0); // Workspace
     if (activeProjectId) count += 2; // Git
     return count;
@@ -436,6 +436,12 @@ function GotoCommandGroup({
   toggleSettings: () => void;
 }) {
   const items = [
+    {
+      title: 'Board',
+      description: 'GitHub issues board for this project',
+      icon: Columns3,
+      action: () => useAppStore.getState().openBoard(),
+    },
     {
       title: 'Overview',
       description: 'Project dashboard and status',

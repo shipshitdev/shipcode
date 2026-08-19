@@ -993,7 +993,7 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Issue' })).toHaveAttribute('data-state', 'active');
+      expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('data-state', 'active');
     });
     expect(invokeMock).not.toHaveBeenCalledWith('plan:list-for-issue', {
       projectId: 'project-1',
@@ -1271,16 +1271,16 @@ describe('IssueDetail', () => {
     expect(screen.getByRole('tab', { name: 'Activity' })).toBeInTheDocument();
   });
 
-  it('Issue tab is active by default when no plan history exists', async () => {
+  it('Chat tab is active by default when no plan history exists', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
-    const prdTab = screen.getByRole('tab', { name: 'Issue' });
-    expect(prdTab).toHaveAttribute('data-state', 'active');
+    const chatTab = screen.getByRole('tab', { name: 'Chat' });
+    expect(chatTab).toHaveAttribute('data-state', 'active');
   });
 
-  it('keeps a stable tab order and defaults to Issue even when history exists', async () => {
+  it('keeps a stable tab order and defaults to Chat even when history exists', async () => {
     const thread = makeThread({ status: 'reviewing' });
     const plan = makePlan();
 
@@ -1300,11 +1300,12 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Issue' })).toHaveAttribute('data-state', 'active');
+      expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('data-state', 'active');
     });
 
     const tabLabels = screen.getAllByRole('tab').map((tab) => tab.textContent?.trim());
     expect(tabLabels).toEqual([
+      'Chat',
       'Issue',
       'Console',
       'Comments',
@@ -1314,7 +1315,6 @@ describe('IssueDetail', () => {
       'Runs',
       'Activity',
       'Conversations',
-      'Chat',
     ]);
   });
 

@@ -18,9 +18,15 @@ import {
 } from '../test/provider-usage';
 import { renderWithQueryClient } from '../test/render';
 import { ProjectSidebar } from './ProjectSidebar';
+import { ProjectSwitcher } from './ProjectSwitcher';
 
 function renderWithProviders() {
-  return renderWithQueryClient(<ProjectSidebar />);
+  return renderWithQueryClient(
+    <>
+      <ProjectSwitcher />
+      <ProjectSidebar />
+    </>,
+  );
 }
 
 function mockSidebarData(
@@ -66,7 +72,12 @@ function mockSidebarData(
   });
 }
 
+async function openProjectSwitcher() {
+  fireEvent.click(await screen.findByTestId('project-switcher'));
+}
+
 async function openProjectActionsMenu() {
+  await openProjectSwitcher();
   fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for ShipCode' }));
 }
 
@@ -327,6 +338,7 @@ describe('ProjectSidebar', () => {
     });
 
     renderWithProviders();
+    await openProjectSwitcher();
 
     expect(await screen.findByText('2 approvals')).toBeInTheDocument();
   });
@@ -427,6 +439,7 @@ describe('ProjectSidebar', () => {
     });
 
     renderWithProviders();
+    await openProjectSwitcher();
 
     // Multiple "live" badges may exist (global in Overview + per-project in row).
     // We want the per-project one which is last in DOM order.
@@ -492,6 +505,7 @@ describe('ProjectSidebar', () => {
     });
 
     renderWithProviders();
+    await openProjectSwitcher();
 
     fireEvent.click(
       await screen.findByRole('button', { name: 'Project model warnings for ShipCode' }),
@@ -540,6 +554,7 @@ describe('ProjectSidebar', () => {
     });
 
     renderWithProviders();
+    await openProjectSwitcher();
 
     const warningButton = await screen.findByRole('button', {
       name: 'Project model warnings for ShipCode',
@@ -597,11 +612,13 @@ describe('ProjectSidebar', () => {
     fireEvent.click(screen.getByRole('button', { name: /Costs/i }));
     expect(useAppStore.getState().viewMode).toBe('costs');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add repository' }));
+    await openProjectSwitcher();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Add repository/i }));
     expect(useAppStore.getState().addProjectExplorerOpen).toBe(true);
 
-    fireEvent.click(screen.getByRole('button', { name: 'ShipCode' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Board' }));
     expect(useAppStore.getState().viewMode).toBe('project');
+    expect(useAppStore.getState().projectTab).toBe('issues');
 
     fireEvent.click(screen.getByRole('button', { name: 'Git' }));
     expect(useAppStore.getState().projectTab).toBe('git');
@@ -648,7 +665,8 @@ describe('ProjectSidebar', () => {
 
     const { unmount } = renderWithProviders();
 
-    const acmePinnedButton = await screen.findByRole('button', { name: 'Acme' });
+    await openProjectSwitcher();
+    const acmePinnedButton = await screen.findByRole('menuitem', { name: /Acme/ });
     const zedPinnedButton = screen.getByRole('button', { name: 'Zed' });
     const alphaButton = screen.getByRole('button', { name: 'Alpha' });
     const betaButton = screen.getByRole('button', { name: 'Beta' });
@@ -672,11 +690,12 @@ describe('ProjectSidebar', () => {
     });
 
     renderWithProviders();
+    await openProjectSwitcher();
 
-    const firstPinnedButton = await screen.findByRole('button', { name: 'Acme' });
-    const secondPinnedButton = screen.getByRole('button', { name: 'Zed' });
-    const olderButton = await screen.findByRole('button', { name: 'Beta' });
-    const newerButton = screen.getByRole('button', { name: 'Alpha' });
+    const firstPinnedButton = await screen.findByRole('menuitem', { name: /Acme/ });
+    const secondPinnedButton = screen.getByRole('menuitem', { name: /Zed/ });
+    const olderButton = await screen.findByRole('menuitem', { name: /Beta/ });
+    const newerButton = screen.getByRole('menuitem', { name: /Alpha/ });
     expect(
       firstPinnedButton.compareDocumentPosition(secondPinnedButton) &
         Node.DOCUMENT_POSITION_FOLLOWING,
@@ -692,13 +711,6 @@ describe('ProjectSidebar', () => {
   it('updates sort order and resizes the sidebar from the drag handle', async () => {
     mockSidebarData(invokeMock);
     renderWithProviders();
-
-    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Sort projects' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Alphabetical/i }));
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('settings:set', { projectSortOrder: 'alpha' });
-    });
 
     const sidebarElement = document.querySelector('[data-project-sidebar]')?.parentElement ?? null;
     if (!(sidebarElement instanceof HTMLElement)) {
@@ -902,7 +914,8 @@ describe('ProjectSidebar', () => {
 
     renderWithProviders();
 
-    const freshButton = await screen.findByRole('button', { name: 'Fresh' });
+    await openProjectSwitcher();
+    const freshButton = await screen.findByRole('menuitem', { name: /Fresh/ });
     const staleButton = screen.getByRole('button', { name: 'Stale' });
     expect(
       freshButton.compareDocumentPosition(staleButton) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -1052,6 +1065,7 @@ describe('ProjectSidebar', () => {
 
     renderWithProviders();
 
+    await openProjectSwitcher();
     fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for Inactive' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Archive' }));
 

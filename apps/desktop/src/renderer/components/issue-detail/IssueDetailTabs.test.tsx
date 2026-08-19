@@ -168,7 +168,7 @@ function renderTabs(
 }
 
 describe('IssueDetailTabs', () => {
-  it('shows the issue Chat tab only when the issue has an active thread', () => {
+  it('keeps the Chat tab as the conversation home even without a thread', () => {
     const { unmount } = renderTabs('thread-1');
 
     expect(screen.getByRole('tab', { name: 'Chat' })).toBeInTheDocument();
@@ -177,7 +177,8 @@ describe('IssueDetailTabs', () => {
     unmount();
     renderTabs(null);
 
-    expect(screen.queryByRole('tab', { name: 'Chat' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Chat' })).toBeInTheDocument();
+    expect(screen.getByTestId('conversation-surface')).toBeInTheDocument();
   });
 
   it('shows the open review finding count in the Findings tab label', () => {

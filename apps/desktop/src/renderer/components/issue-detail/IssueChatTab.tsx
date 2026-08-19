@@ -16,7 +16,7 @@ import {
   Textarea,
 } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, RefreshCw, Send, Square } from 'lucide-react';
+import { RefreshCw, Send, Square } from 'lucide-react';
 import { useCallback, useMemo, useReducer } from 'react';
 import { toast } from '../../stores/toast-store';
 import {
@@ -258,16 +258,16 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
   }, []);
 
   return (
-    <section className="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-md border border-border bg-primary">
-      <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-border px-3">
-        <div className="flex size-7 items-center justify-center rounded-md border border-border bg-secondary">
-          <Bot size={14} className="text-primary" />
-        </div>
+    <section
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-primary"
+      data-testid="conversation-surface"
+    >
+      <div className="flex min-h-10 shrink-0 items-center gap-2 border-b border-border/70 px-4">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-semibold text-primary">Issue Chat</div>
-          <div className="truncate text-[10px] text-muted-foreground">
-            #{issueNumber} {issueTitle}
+          <div className="truncate font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+            Agent · #{issueNumber}
           </div>
+          <div className="truncate text-[12px] text-secondary">{issueTitle}</div>
         </div>
         <Badge variant={isRunning ? 'default' : sessionStarted ? 'done' : 'info'}>
           {isRunning
@@ -290,8 +290,13 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
             isRunning={isRunning}
           />
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col justify-center gap-3 px-5 text-sm text-secondary">
-            <p className="text-primary">No chat yet.</p>
+          <div className="flex min-h-0 flex-1 flex-col justify-center gap-3 px-8 text-sm text-secondary">
+            <p className="font-mono text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
+              Waiting
+            </p>
+            <p className="text-[15px] font-medium tracking-tight text-primary">
+              Talk to the official CLI on this issue.
+            </p>
             <div className="space-y-2 text-xs text-muted-foreground">
               <Button
                 type="button"
@@ -329,8 +334,8 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
         )}
       </div>
 
-      <div className="shrink-0 border-t border-border bg-primary p-3">
-        <div className="flex w-full flex-col rounded-lg border border-border bg-elevated">
+      <div className="shrink-0 border-t border-border/70 bg-primary p-3">
+        <div className="flex w-full flex-col rounded-md border border-border/80 bg-elevated/60">
           <Textarea
             value={draft}
             onChange={(event) => dispatchIssueChat({ type: 'draft', value: event.target.value })}
@@ -340,7 +345,7 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
                 handleSubmit();
               }
             }}
-            placeholder="Ask the issue agent..."
+            placeholder="Message Claude, Codex, or Grok…"
             className="min-h-[76px] resize-none border-0 bg-transparent text-xs shadow-none focus-visible:ring-0"
           />
           <div className="flex items-center gap-1 border-t border-border/50 px-2 py-1.5">

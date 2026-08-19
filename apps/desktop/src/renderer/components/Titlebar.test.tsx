@@ -124,6 +124,9 @@ describe('Titlebar', () => {
 
     expect(await screen.findByTitle('Open agent')).toBeInTheDocument();
     expect(await screen.findByTitle('Show terminal')).toBeInTheDocument();
+    expect(screen.getByTestId('project-switcher')).toBeInTheDocument();
+    expect(screen.getByTestId('nav-board')).toBeInTheDocument();
+    expect(screen.getByTestId('nav-inbox')).toBeInTheDocument();
 
     const sidebarButton = screen.getByTitle('Hide sidebar');
     fireEvent.click(sidebarButton);

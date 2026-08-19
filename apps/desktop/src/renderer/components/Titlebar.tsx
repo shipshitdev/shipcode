@@ -11,7 +11,9 @@ import { ShipCodeLogoMark } from '@shipcode/ui';
 import { Button, cn, Popover, PopoverContent, PopoverTrigger } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Columns3,
   Cpu,
+  Inbox,
   Loader2,
   MessageSquare,
   PanelLeftClose,
@@ -25,6 +27,7 @@ import { useAppSettings } from '../hooks/useAppSettings';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
+import { ProjectSwitcher } from './ProjectSwitcher';
 
 type ProviderTone = 'claude' | 'codex';
 
@@ -481,6 +484,13 @@ export function Titlebar() {
   const hasDetailView = useAppStore(
     (state) => state.activeIssue !== null || state.activeAutomationThreadId !== null,
   );
+  const viewMode = useAppStore((state) => state.viewMode);
+  const projectTab = useAppStore((state) => state.projectTab);
+  const openBoard = useAppStore((state) => state.openBoard);
+  const openView = useAppStore((state) => state.openView);
+  const isBoardActive =
+    !settingsVisible && !hasDetailView && viewMode === 'project' && projectTab === 'issues';
+  const isInboxActive = !settingsVisible && viewMode === 'inbox';
 
   const { data: activeProject } = useQuery<Project | null>({
     queryKey: ['project', activeProjectId],
@@ -537,33 +547,57 @@ export function Titlebar() {
       <div className="flex min-w-0 items-center gap-2 text-xs">
         <button
           type="button"
-          className="group relative flex size-6 shrink-0 items-center justify-center rounded-md app-region-no-drag hover:bg-elevated disabled:pointer-events-none disabled:opacity-50"
+          className="group relative flex size-6 shrink-0 items-center justify-center rounded-md app-region-no-drag hover:bg-elevated"
           onClick={toggleSidebar}
           title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-          disabled={hasDetailView}
         >
           <ShipCodeLogoMark size={16} className="transition-opacity group-hover:opacity-0" />
           <span className="absolute inset-0 flex items-center justify-center text-secondary opacity-0 transition-opacity group-hover:opacity-100">
             {sidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
           </span>
         </button>
-        {activeProject ? (
-          <>
-            <span className="text-muted-foreground">ShipCode</span>
-            <span className="text-muted-foreground">/</span>
-            <span className="truncate text-primary">{activeProject.name}</span>
-            {projectWarningLabel && settings ? (
-              <ProjectProviderWarningPopover
-                settings={settings}
-                project={activeProject}
-                warnings={projectWarnings}
-                className="shrink-0 app-region-no-drag"
-              />
-            ) : null}
-          </>
-        ) : (
-          <span className="font-semibold tracking-tight text-primary">ShipCode</span>
-        )}
+        <ProjectSwitcher />
+        {activeProject && projectWarningLabel && settings ? (
+          <ProjectProviderWarningPopover
+            settings={settings}
+            project={activeProject}
+            warnings={projectWarnings}
+            className="shrink-0 app-region-no-drag"
+          />
+        ) : null}
+        <div className="ml-1 flex items-center gap-0.5 app-region-no-drag">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="nav-board"
+            aria-current={isBoardActive ? 'page' : undefined}
+            className={cn(
+              'h-7 gap-1.5 rounded-md px-2 text-[12px] font-medium text-secondary',
+              isBoardActive && 'bg-tertiary text-primary',
+            )}
+            disabled={!activeProjectId}
+            onClick={() => openBoard()}
+          >
+            <Columns3 size={13} />
+            Board
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="nav-inbox"
+            aria-current={isInboxActive ? 'page' : undefined}
+            className={cn(
+              'h-7 gap-1.5 rounded-md px-2 text-[12px] font-medium text-secondary',
+              isInboxActive && 'bg-tertiary text-primary',
+            )}
+            onClick={() => openView('inbox')}
+          >
+            <Inbox size={13} />
+            Inbox
+          </Button>
+        </div>
       </div>
       <div className="flex items-center gap-2">
         <ResourceUsageBadge />

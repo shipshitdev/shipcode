@@ -139,6 +139,39 @@ describe('app-store', () => {
     });
   });
 
+  describe('openBoard', () => {
+    it('clears the active issue and shows the project issues board', () => {
+      useAppStore.setState({
+        activeProjectId: 'project-1',
+        viewMode: 'inbox',
+        projectTab: 'git',
+        activeIssue: makeIssue(),
+        activeThreadId: 'thread-1',
+      });
+
+      useAppStore.getState().openBoard();
+
+      const state = useAppStore.getState();
+      expect(state.viewMode).toBe('project');
+      expect(state.projectTab).toBe('issues');
+      expect(state.activeIssue).toBeNull();
+      expect(state.activeThreadId).toBeNull();
+    });
+
+    it('falls back to overview when no project is selected', () => {
+      useAppStore.setState({
+        activeProjectId: null,
+        viewMode: 'inbox',
+        activeIssue: makeIssue(),
+      });
+
+      useAppStore.getState().openBoard();
+
+      expect(useAppStore.getState().viewMode).toBe('overview');
+      expect(useAppStore.getState().activeIssue).toBeNull();
+    });
+  });
+
   describe('toggleTerminal', () => {
     it('clears terminalMaximized when closing the terminal', () => {
       useAppStore.setState({

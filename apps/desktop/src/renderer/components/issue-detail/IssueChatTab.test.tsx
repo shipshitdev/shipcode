@@ -126,7 +126,7 @@ describe('IssueChatTab', () => {
 
     expect(screen.getByText('Explain this issue.')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('Ask the issue agent...'), {
+    fireEvent.change(screen.getByPlaceholderText('Message Claude, Codex, or Grok…'), {
       target: { value: 'Draft a plan' },
     });
     fireEvent.click(screen.getByTitle('Send'));
@@ -145,7 +145,7 @@ describe('IssueChatTab', () => {
     expect(await screen.findByText('Draft a plan')).toBeInTheDocument();
     expect(await screen.findByText('done')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('Ask the issue agent...'), {
+    fireEvent.change(screen.getByPlaceholderText('Message Claude, Codex, or Grok…'), {
       target: { value: 'Now list files' },
     });
     fireEvent.click(screen.getByTitle('Send'));

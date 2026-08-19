@@ -22,7 +22,11 @@ On first import of a GitHub-backed repository, ShipCode creates a small starter 
 
 ## Layout
 
-The app has a fixed left sidebar with projects, a top titlebar, a main content area, and a collapsible terminal drawer at the bottom. The sidebar contains shortcut entries to each of the global views:
+The app chrome is a titlebar project switcher, a left issue list, a main column, and a collapsible terminal drawer.
+
+Switch projects from the titlebar dropdown. **Board** and **Inbox** sit next to the switcher. Opening an issue is a full-page conversation: one issue is one thread is one official CLI session (Claude / Codex / Grok). The GitHub board replica stays a page — cards still move as the pipeline runs.
+
+The left sidebar lists issues for the selected project and keeps shortcuts to the global views:
 
 | Section | What it does |
 |---------|--------------|
@@ -32,7 +36,7 @@ The app has a fixed left sidebar with projects, a top titlebar, a main content a
 | [Costs](/desktop/costs) | Per-thread and per-project token + USD aggregation |
 | [Automations](/desktop/automations) | Cron-like scheduled prompts that launch pipeline runs for a project |
 | [Skills Editor](/desktop/skills) | Edit the PRD / plan / review / verify prompt skills |
-| Project detail | Issues, Git, Code, Pull Requests, Insights, and Terminal tabs for one project |
+| Project detail | Board, Git, Code, Pull Requests, Insights, and Terminal for one project |
 
 ## Per-project views
 

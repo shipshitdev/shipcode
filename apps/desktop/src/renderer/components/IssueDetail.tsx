@@ -126,7 +126,7 @@ function issueDetailUiReducer(
 ): IssueDetailUiState {
   switch (action.type) {
     case 'issue-changed':
-      return { activeTab: 'prd', expandedPlanId: null, showAllPlanRuns: false };
+      return { activeTab: 'chat', expandedPlanId: null, showAllPlanRuns: false };
     case 'active-tab':
       return { ...state, activeTab: action.tab };
     case 'expanded-plan':
@@ -153,7 +153,7 @@ function useIssueDetailView() {
   const openTerminalTab = useAppStore((state) => state.openTerminalTab);
   const terminalPaneCount = useAppStore((state) => state.terminalPaneThreadIds.length);
   const [issueDetailUi, dispatchIssueDetailUi] = useReducer(issueDetailUiReducer, {
-    activeTab: 'prd',
+    activeTab: 'chat',
     expandedPlanId: null,
     showAllPlanRuns: false,
   });
@@ -1131,7 +1131,7 @@ function useIssueDetailView() {
           variant="ghost"
           size="icon"
           className="size-7 text-muted-foreground"
-          onClick={() => selectIssue(null)}
+          onClick={() => useAppStore.getState().openBoard()}
           title="Back to board"
           aria-label="Back to board"
         >
@@ -1703,14 +1703,21 @@ function useIssueDetailView() {
 
   // ─── Full-page layout (Linear-style) ─────────────────────────────────────
 
+  const isConversationTab = activeTab === 'chat';
+
   return (
-    <div className="flex h-full min-w-0 flex-1 flex-col bg-primary">
+    <div
+      className="flex h-full min-w-0 flex-1 flex-col bg-primary"
+      data-testid="issue-conversation"
+    >
       {/* Header — full width */}
-      <div className="relative shrink-0 border-b border-border px-6 py-4">
+      <div className="relative shrink-0 border-b border-border px-5 py-3">
         {headerButtons}
         {/* Title + status badge */}
         <div className="flex flex-wrap items-baseline gap-2 pl-10">
-          <h1 className="text-xl font-semibold leading-snug">{displayIssueTitle}</h1>
+          <h1 className="text-[15px] font-semibold leading-snug tracking-tight">
+            {displayIssueTitle}
+          </h1>
           {issueStatusBadge}
         </div>
         {/* Metadata: #num · state · branch · PR */}
@@ -1718,12 +1725,19 @@ function useIssueDetailView() {
       </div>
       {/* Two-column body — fills remaining height */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Main — scrollable */}
+        {/* Main — conversation fills the page; other tabs still scroll */}
         <div
-          className="flex min-w-0 flex-1 flex-col overflow-y-auto p-6"
+          className={cn(
+            'flex min-w-0 flex-1 flex-col',
+            isConversationTab ? 'overflow-hidden p-0' : 'overflow-y-auto p-6',
+          )}
           data-issue-detail-scroll-region
         >
-          {detailActionStack}
+          {detailActionStack ? (
+            <div className={cn(isConversationTab && 'shrink-0 border-b border-border px-5 pt-4')}>
+              {detailActionStack}
+            </div>
+          ) : null}
           {detailTabs}
         </div>
         {/* Sidebar — full height, own scroll, resizable */}
