@@ -46,5 +46,15 @@ export async function ensureIssueThread(input: {
     input.project.defaultBranch,
   );
   input.queries.threads.setWorktree(thread.id, created.branch, created.worktreePath);
+  persistResolvedDefaultBranch(input, created.baseRef);
   return input.queries.threads.getById(thread.id) ?? thread;
+}
+
+function persistResolvedDefaultBranch(
+  input: { queries: Queries; project: Project },
+  baseRef: string | undefined,
+): void {
+  const resolved = baseRef?.replace(/^origin\//, '').trim();
+  if (!resolved || resolved === input.project.defaultBranch) return;
+  input.queries.projects.updateGitInfo(input.project.id, input.project.gitRemote, resolved);
 }

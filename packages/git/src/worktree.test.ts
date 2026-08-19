@@ -165,6 +165,7 @@ branch refs/heads/shipyard/not-ours
     gitMock.raw
       .mockResolvedValueOnce('')
       .mockRejectedValueOnce(new Error('branch not found'))
+      .mockResolvedValueOnce('abc123')
       .mockResolvedValueOnce('');
     const manager = new WorktreeManager('/repo/project', {
       worktreeRoot: '/tmp/shipcode-worktrees',
@@ -178,7 +179,7 @@ branch refs/heads/shipyard/not-ours
     });
 
     // Forks from the local ref, not origin/*, when the remote is unreachable.
-    expect(gitMock.raw).toHaveBeenNthCalledWith(3, [
+    expect(gitMock.raw).toHaveBeenNthCalledWith(4, [
       '-c',
       'branch.autoSetupMerge=false',
       '-c',
@@ -190,6 +191,59 @@ branch refs/heads/shipyard/not-ours
       '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
       'main',
     ]);
+  });
+
+  it('forks from the repo default when the stored base branch no longer exists', async () => {
+    gitMock.fetch
+      .mockRejectedValueOnce(new Error("couldn't find remote ref develop"))
+      .mockResolvedValueOnce('');
+    gitMock.raw
+      .mockResolvedValueOnce('')
+      .mockRejectedValueOnce(new Error('branch not found'))
+      .mockRejectedValueOnce(new Error('needed a single revision'))
+      .mockResolvedValueOnce('origin/master')
+      .mockResolvedValueOnce('');
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/tmp/shipcode-worktrees',
+    });
+
+    await expect(manager.create(547, 'conversation surface', 'develop')).resolves.toEqual({
+      worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/547-conversation-surface',
+      branch: 'shipcode/547-conversation-surface',
+      baseRef: 'origin/master',
+      baseStale: false,
+    });
+
+    expect(gitMock.fetch).toHaveBeenNthCalledWith(1, 'origin', 'develop');
+    expect(gitMock.fetch).toHaveBeenNthCalledWith(2, 'origin', 'master');
+    expect(gitMock.raw).toHaveBeenLastCalledWith([
+      '-c',
+      'branch.autoSetupMerge=false',
+      '-c',
+      'push.autoSetupRemote=false',
+      'worktree',
+      'add',
+      '-b',
+      'shipcode/547-conversation-surface',
+      '/tmp/shipcode-worktrees/project-9a1fd1/547-conversation-surface',
+      'origin/master',
+    ]);
+  });
+
+  it('rejects worktree create when no candidate base branch exists', async () => {
+    gitMock.fetch.mockRejectedValue(new Error("couldn't find remote ref"));
+    gitMock.raw.mockImplementation(async (args: string[]) => {
+      if (args.includes('prune')) return '';
+      throw new Error('needed a single revision');
+    });
+    gitMock.branchLocal.mockResolvedValue({ all: [], current: '' });
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/tmp/shipcode-worktrees',
+    });
+
+    await expect(manager.create(12, 'missing trunk', 'develop')).rejects.toThrow(
+      "Cannot create worktree: base branch 'develop' does not exist locally or on origin",
+    );
   });
 
   it('forks from an already-remote base ref without double-prefixing or refetching', async () => {

@@ -4,6 +4,8 @@ const mockCreateWorktree = vi.hoisted(() =>
   vi.fn(async () => ({
     branch: 'shipcode/12-issue-chat',
     worktreePath: '/tmp/created-worktree',
+    baseRef: 'origin/master',
+    baseStale: false,
   })),
 );
 
@@ -74,6 +76,9 @@ describe('ensureIssueThread', () => {
       settings: {
         get: vi.fn(() => ({ worktreeRoot: null, worktreeBranchFormat: null })),
       },
+      projects: {
+        updateGitInfo: vi.fn(),
+      },
     };
 
     const thread = await ensureIssueThread({
@@ -90,7 +95,49 @@ describe('ensureIssueThread', () => {
     );
     expect(queries.githubIssues.linkThread).toHaveBeenCalledWith('issue-12', 'thread-1');
     expect(mockCreateWorktree).toHaveBeenCalledWith(12, 'Cover issue chat', 'master');
+    expect(queries.projects.updateGitInfo).not.toHaveBeenCalled();
     expect(thread.worktreePath).toBe('/tmp/created-worktree');
+  });
+
+  it('heals a stale project defaultBranch when the worktree forked from a different ref', async () => {
+    mockCreateWorktree.mockResolvedValueOnce({
+      branch: 'shipcode/12-issue-chat',
+      worktreePath: '/tmp/created-worktree',
+      baseRef: 'origin/master',
+      baseStale: false,
+    });
+    const created = makeThread();
+    const queries = {
+      threads: {
+        getById: vi.fn(() => created),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+        create: vi.fn(() => created),
+        updateIssueContent: vi.fn(),
+        setGithubIssue: vi.fn(),
+        setWorktree: vi.fn(),
+      },
+      githubIssues: {
+        linkThread: vi.fn(),
+      },
+      settings: {
+        get: vi.fn(() => ({ worktreeRoot: null, worktreeBranchFormat: null })),
+      },
+      projects: {
+        updateGitInfo: vi.fn(),
+      },
+    };
+
+    await ensureIssueThread({
+      queries: queries as never,
+      project: { ...makeProject(), defaultBranch: 'develop' } as never,
+      issue: makeIssue() as never,
+    });
+
+    expect(queries.projects.updateGitInfo).toHaveBeenCalledWith(
+      'project-1',
+      'https://github.com/shipshitdev/shipcode.git',
+      'master',
+    );
   });
 
   it('reuses an existing linked thread with a worktree', async () => {
