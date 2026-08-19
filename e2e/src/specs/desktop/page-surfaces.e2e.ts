@@ -199,16 +199,16 @@ const SETTINGS_SURFACES = [
 }>;
 
 const ISSUE_TAB_SURFACES = [
-  { id: 'issue-tab-prd', name: /^Issue$/ },
-  { id: 'issue-tab-console', name: /^Console$/ },
-  { id: 'issue-tab-comments', name: /^Comments$/ },
-  { id: 'issue-tab-history', name: /^Plans/ },
-  { id: 'issue-tab-findings', name: /^Findings/ },
-  { id: 'issue-tab-diff', name: /^Diff/ },
-  { id: 'issue-tab-runs', name: /^Runs$/ },
-  { id: 'issue-tab-activity', name: /^Activity/ },
-  { id: 'issue-tab-conversations', name: /^Conversations$/ },
-  { id: 'issue-tab-chat', name: /^Agent$/ },
+  { id: 'issue-tab-prd', testId: 'issue-context-prd' },
+  { id: 'issue-tab-console', testId: 'issue-context-console' },
+  { id: 'issue-tab-comments', testId: 'issue-context-comments' },
+  { id: 'issue-tab-history', testId: 'issue-context-history' },
+  { id: 'issue-tab-findings', testId: 'issue-context-findings' },
+  { id: 'issue-tab-diff', testId: 'issue-context-diff' },
+  { id: 'issue-tab-runs', testId: 'issue-context-runs' },
+  { id: 'issue-tab-activity', testId: 'issue-context-activity' },
+  { id: 'issue-tab-conversations', testId: 'issue-context-conversations' },
+  { id: 'issue-tab-chat', testId: 'conversation-surface' },
 ] as const;
 
 test.use({
@@ -258,7 +258,7 @@ async function openIssueWithThread(harness: Harness): Promise<void> {
     });
   }, ISSUE_THREAD_ID);
 
-  await expect(page.getByRole('tab', { name: /^Agent$/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('conversation-surface')).toBeVisible({ timeout: 10_000 });
 }
 
 test.describe('desktop page coverage manifest', () => {
@@ -313,10 +313,14 @@ test.describe('desktop page coverage manifest', () => {
     await openIssueWithThread(harness);
 
     for (const surface of ISSUE_TAB_SURFACES) {
-      const tab = harness.page.getByRole('tab', { name: surface.name });
-      await expect(tab).toBeVisible({ timeout: 10_000 });
-      await tab.click();
-      await expect(tab).toHaveAttribute('data-state', 'active');
+      const card = harness.page.getByTestId(surface.testId);
+      await expect(card).toBeVisible({ timeout: 10_000 });
+      if (surface.id === 'issue-tab-chat') continue;
+      const trigger = card.getByRole('button').first();
+      if ((await trigger.getAttribute('aria-expanded')) !== 'true') {
+        await trigger.click();
+      }
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
     }
   });
 });

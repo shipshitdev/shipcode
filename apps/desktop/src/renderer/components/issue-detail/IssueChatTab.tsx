@@ -282,24 +282,6 @@ export function IssueChatTab({ threadId, projectId, issueNumber, issueTitle }: I
       className="flex min-h-0 flex-1 flex-col overflow-hidden bg-primary"
       data-testid="conversation-surface"
     >
-      <div className="flex min-h-10 shrink-0 items-center gap-2 border-b border-border/70 px-4">
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
-            Agent · #{issueNumber}
-          </div>
-          <div className="truncate text-[12px] text-secondary">{issueTitle}</div>
-        </div>
-        <Badge variant={isRunning ? 'default' : sessionStarted ? 'done' : 'info'}>
-          {isRunning
-            ? 'Running'
-            : sessionStarted
-              ? 'Ready'
-              : issueChatSession
-                ? 'Resumable'
-                : 'Idle'}
-        </Badge>
-      </div>
-
       <div className="flex min-h-0 flex-1 flex-col">
         {hasVisibleConversation ? (
           <AssistantTimeline
@@ -391,6 +373,15 @@ export function IssueChatTab({ threadId, projectId, issueNumber, issueTitle }: I
                 <SelectItem value="grok">Grok</SelectItem>
               </SelectContent>
             </Select>
+            <Badge variant={isRunning ? 'default' : sessionStarted ? 'done' : 'info'}>
+              {isRunning
+                ? 'Running'
+                : sessionStarted
+                  ? 'Ready'
+                  : issueChatSession
+                    ? 'Resumable'
+                    : 'Idle'}
+            </Badge>
             <div className="flex-1" />
             {canResume ? (
               <Button

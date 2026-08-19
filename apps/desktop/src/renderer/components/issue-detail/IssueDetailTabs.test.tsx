@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest';
 import type { GitHubIssueCacheRecord, ReviewFindingRecord } from '@shipcode/shared';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IssueDetailTabs } from './IssueDetailTabs';
 
@@ -12,11 +12,6 @@ vi.mock('./ConversationsTab', () => ({ ConversationsTab: () => <div>conversation
 vi.mock('./DiffTab', () => ({ DiffTab: () => <div>diff tab</div> }));
 vi.mock('./FindingsTab', () => ({ FindingsTab: () => <div>findings tab</div> }));
 vi.mock('./IssueHistoryTab', () => ({ IssueHistoryTab: () => <div>activity tab</div> }));
-vi.mock('./IssueChatTab', () => ({
-  IssueChatTab: ({ threadId }: { threadId: string | null }) => (
-    <div data-testid="conversation-surface">chat tab {threadId ?? 'none'}</div>
-  ),
-}));
 vi.mock('./PlanHistoryTab', () => ({ PlanHistoryTab: () => <div>history tab</div> }));
 vi.mock('./PrdTab', () => ({ PrdTab: () => <div>issue tab</div> }));
 vi.mock('./RunsTab', () => ({ RunsTab: () => <div>runs tab</div> }));
@@ -170,26 +165,27 @@ function renderTabs(
 }
 
 describe('IssueDetailTabs', () => {
-  it('keeps the Agent tab as the conversation home even without a thread', () => {
+  it('renders issue context cards without a conversation tab', () => {
     const { unmount } = renderTabs('thread-1');
 
-    expect(screen.getByRole('tab', { name: 'Agent' })).toBeInTheDocument();
-    expect(screen.getByText('chat tab thread-1')).toBeInTheDocument();
+    expect(screen.getByTestId('issue-context-cards')).toBeInTheDocument();
+    expect(screen.getByTestId('issue-context-prd')).toBeInTheDocument();
+    expect(screen.getByText('issue tab')).toBeInTheDocument();
+    expect(screen.queryByTestId('conversation-surface')).not.toBeInTheDocument();
 
     unmount();
     renderTabs(null);
 
-    expect(screen.getByRole('tab', { name: 'Agent' })).toBeInTheDocument();
-    expect(screen.getByTestId('conversation-surface')).toBeInTheDocument();
-    expect(screen.getByText('chat tab none')).toBeInTheDocument();
+    expect(screen.getByTestId('issue-context-prd')).toBeInTheDocument();
+    expect(screen.queryByTestId('issue-context-findings')).not.toBeInTheDocument();
   });
 
-  it('shows the open review finding count in the Findings tab label', () => {
+  it('shows the open review finding count on the Findings card', () => {
     renderTabs('thread-1', [
       makeFinding(),
       makeFinding({ id: 'finding-2', fingerprint: 'finding-2', status: 'fixed' }),
     ]);
 
-    expect(screen.getByRole('tab', { name: 'Findings (1)' })).toBeInTheDocument();
+    expect(within(screen.getByTestId('issue-context-findings')).getByText('1')).toBeInTheDocument();
   });
 });

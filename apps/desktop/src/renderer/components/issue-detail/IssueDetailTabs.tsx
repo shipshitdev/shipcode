@@ -13,14 +13,13 @@ import type {
   TaskGraphWithNodes,
   Thread,
 } from '@shipcode/shared';
-import { cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
-import { Fragment } from 'react';
+import { CollapsibleSection } from '@shipcode/ui';
+import { type ReactNode, useEffect, useState } from 'react';
 import { CommentsTab } from './CommentsTab';
 import { ConsoleTab } from './ConsoleTab';
 import { ConversationsTab } from './ConversationsTab';
 import { DiffTab } from './DiffTab';
 import { FindingsTab } from './FindingsTab';
-import { IssueChatTab } from './IssueChatTab';
 import { IssueHistoryTab } from './IssueHistoryTab';
 import { PlanHistoryTab } from './PlanHistoryTab';
 import { PrdTab } from './PrdTab';
@@ -88,10 +87,42 @@ interface IssueDetailTabsProps {
   onStabilizePr: () => void;
 }
 
+function ContextCard({
+  value,
+  title,
+  count,
+  open,
+  defaultOpen,
+  onOpenChange,
+  children,
+}: {
+  value: IssueDetailTab;
+  title: string;
+  count?: ReactNode;
+  open: boolean;
+  defaultOpen?: boolean;
+  onOpenChange: (value: IssueDetailTab, open: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <div data-testid={`issue-context-${value}`}>
+      <CollapsibleSection
+        title={title}
+        count={count}
+        defaultOpen={defaultOpen}
+        open={open}
+        onOpenChange={(next) => onOpenChange(value, next)}
+        contentClassName="max-h-80 overflow-y-auto"
+      >
+        {children}
+      </CollapsibleSection>
+    </div>
+  );
+}
+
 export function IssueDetailTabs(props: IssueDetailTabsProps) {
   const {
     activeIssue,
-    activeTab,
     activeThreadId,
     approvedAwaitingExecution,
     diffs,
@@ -120,92 +151,82 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
     onShowAllPlanRunsChange,
     onRefreshFromGithub,
   } = props;
-  const orderedTabs: Array<{ value: IssueDetailTab; label: string }> = [
-    { value: 'chat', label: 'Agent' },
-    { value: 'prd', label: 'Issue' },
-    { value: 'console', label: 'Console' },
-    ...(activeIssue.isQuickMode
-      ? []
-      : ([{ value: 'comments' as const, label: 'Comments' }] as const)),
-    {
-      value: 'history',
-      label: `Plans${normalizedPlanHistory.length > 0 ? ` (${normalizedPlanHistory.length})` : ''}`,
-    },
-    ...(activeThreadId
-      ? [
-          {
-            value: 'findings' as const,
-            label:
-              reviewFindings.filter((finding) => finding.status === 'open').length > 0
-                ? `Findings (${reviewFindings.filter((finding) => finding.status === 'open').length})`
-                : 'Findings',
-          },
-        ]
-      : []),
-    ...(activeThreadId
-      ? [{ value: 'diff' as const, label: diffs.length > 0 ? `Diff (${diffs.length})` : 'Diff' }]
-      : []),
-    ...(activeThreadId ? [{ value: 'runs' as const, label: 'Runs' }] : []),
-    {
-      value: 'activity',
-      label: `Activity${normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}`,
-    },
-    ...(activeThreadId ? [{ value: 'conversations' as const, label: 'Conversations' }] : []),
-  ];
+  const openFindings = reviewFindings.filter((finding) => finding.status === 'open').length;
+  const [openCards, setOpenCards] = useState<Set<IssueDetailTab>>(() => new Set(['prd']));
+
+  useEffect(() => {
+    if (!commentComposerRequestId) return;
+    setOpenCards((current) => {
+      if (current.has('comments')) return current;
+      const next = new Set(current);
+      next.add('comments');
+      return next;
+    });
+    onActiveTabChange('comments');
+  }, [commentComposerRequestId, onActiveTabChange]);
+
+  function handleCardOpenChange(value: IssueDetailTab, open: boolean) {
+    setOpenCards((current) => {
+      const next = new Set(current);
+      if (open) next.add(value);
+      else next.delete(value);
+      return next;
+    });
+    if (open) onActiveTabChange(value);
+  }
 
   return (
-    <Tabs
-      value={activeTab}
-      onValueChange={(value) => onActiveTabChange(value as IssueDetailTab)}
-      className="flex min-h-0 flex-1 flex-col"
-    >
-      <div className="shrink-0 overflow-x-auto border-b border-border bg-primary/80 px-3">
-        <TabsList className="h-9 w-full justify-start gap-0.5 bg-transparent p-0">
-          {orderedTabs.map((tab, index) => (
-            <Fragment key={tab.value}>
-              {index === 1 ? (
-                <span className="mx-1 h-4 w-px shrink-0 self-center bg-border" aria-hidden />
-              ) : null}
-              <TabsTrigger
-                value={tab.value}
-                className={cn(
-                  'rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-[12px] shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none',
-                  tab.value === 'chat' && 'font-medium',
-                )}
-              >
-                {tab.label}
-              </TabsTrigger>
-            </Fragment>
-          ))}
-        </TabsList>
-      </div>
-
-      <TabsContent value="prd" className={'mt-0'}>
+    <div className="space-y-3" data-testid="issue-context-cards">
+      <ContextCard
+        value="prd"
+        title="Issue"
+        defaultOpen
+        open={openCards.has('prd')}
+        onOpenChange={handleCardOpenChange}
+      >
         <PrdTab
           activeIssue={activeIssue}
           isRefreshingFromGithub={isRefreshingFromGithub}
           onEditPrd={onEditPrd}
           onRefreshFromGithub={onRefreshFromGithub}
         />
-      </TabsContent>
+      </ContextCard>
 
-      <TabsContent value="console" className="mt-0 overflow-hidden">
+      <ContextCard
+        value="console"
+        title="Console"
+        open={openCards.has('console')}
+        onOpenChange={handleCardOpenChange}
+      >
         <ConsoleTab
           activeThreadId={activeThreadId}
           approvedAwaitingExecution={approvedAwaitingExecution}
           threadPhase={threadPhase}
         />
-      </TabsContent>
+      </ContextCard>
 
-      <TabsContent value="comments" className={'mt-0'}>
-        <CommentsTab
-          projectId={projectId}
-          issueNumber={activeIssue.issueNumber}
-          focusComposerRequestId={commentComposerRequestId}
-        />
-      </TabsContent>
+      {activeIssue.isQuickMode ? null : (
+        <ContextCard
+          value="comments"
+          title="Comments"
+          open={openCards.has('comments')}
+          onOpenChange={handleCardOpenChange}
+        >
+          <CommentsTab
+            projectId={projectId}
+            issueNumber={activeIssue.issueNumber}
+            focusComposerRequestId={commentComposerRequestId}
+          />
+        </ContextCard>
+      )}
 
-      <TabsContent value="history" className={'mt-0'}>
+      <ContextCard
+        value="history"
+        title="Plans"
+        count={normalizedPlanHistory.length > 0 ? normalizedPlanHistory.length : undefined}
+        open={openCards.has('history')}
+        onOpenChange={handleCardOpenChange}
+      >
         <PlanHistoryTab
           activeThreadId={activeThreadId}
           effectiveExpanded={effectiveExpanded}
@@ -224,49 +245,70 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
           onPlanHistoryCollapsedChange={onPlanHistoryCollapsedChange}
           onShowAllPlanRunsChange={onShowAllPlanRunsChange}
         />
-      </TabsContent>
+      </ContextCard>
 
-      {activeThreadId && (
-        <TabsContent value="findings" className={'mt-0'}>
+      {activeThreadId ? (
+        <ContextCard
+          value="findings"
+          title="Findings"
+          count={openFindings > 0 ? openFindings : undefined}
+          open={openCards.has('findings')}
+          onOpenChange={handleCardOpenChange}
+        >
           <FindingsTab threadId={activeThreadId} findings={reviewFindings} />
-        </TabsContent>
-      )}
+        </ContextCard>
+      ) : null}
 
-      <TabsContent value="diff" className={'mt-0'}>
-        <DiffTab diffs={diffs} threadStatus={props.thread?.status} />
-      </TabsContent>
+      {activeThreadId ? (
+        <ContextCard
+          value="diff"
+          title="Diff"
+          count={diffs.length > 0 ? diffs.length : undefined}
+          open={openCards.has('diff')}
+          onOpenChange={handleCardOpenChange}
+        >
+          <DiffTab diffs={diffs} threadStatus={props.thread?.status} />
+        </ContextCard>
+      ) : null}
 
-      {activeThreadId && (
-        <TabsContent value="runs" className={'mt-0'}>
+      {activeThreadId ? (
+        <ContextCard
+          value="runs"
+          title="Runs"
+          open={openCards.has('runs')}
+          onOpenChange={handleCardOpenChange}
+        >
           <RunsTab threadId={activeThreadId} />
-        </TabsContent>
-      )}
+        </ContextCard>
+      ) : null}
 
-      <TabsContent value="activity" className={'mt-0'}>
+      <ContextCard
+        value="activity"
+        title="Activity"
+        count={normalizedIssueActivity.length > 0 ? normalizedIssueActivity.length : undefined}
+        open={openCards.has('activity')}
+        onOpenChange={handleCardOpenChange}
+      >
         <IssueHistoryTab
           normalizedIssueActivity={normalizedIssueActivity}
           runNumberByThreadId={runNumberByThreadId}
         />
-      </TabsContent>
+      </ContextCard>
 
-      {activeThreadId && (
-        <TabsContent value="conversations" className={'mt-0'}>
+      {activeThreadId ? (
+        <ContextCard
+          value="conversations"
+          title="Transcript"
+          open={openCards.has('conversations')}
+          onOpenChange={handleCardOpenChange}
+        >
           <ConversationsTab
             threadId={activeThreadId}
             projectId={projectId}
             issueNumber={activeIssue.issueNumber}
           />
-        </TabsContent>
-      )}
-
-      <TabsContent value="chat" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden">
-        <IssueChatTab
-          threadId={activeThreadId}
-          projectId={projectId}
-          issueNumber={activeIssue.issueNumber}
-          issueTitle={activeIssue.title}
-        />
-      </TabsContent>
-    </Tabs>
+        </ContextCard>
+      ) : null}
+    </div>
   );
 }

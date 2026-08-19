@@ -8,6 +8,8 @@ export interface CollapsibleSectionProps {
   count?: ReactNode;
   children: ReactNode;
   defaultOpen?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   className?: string;
   contentClassName?: string;
 }
@@ -17,10 +19,19 @@ export function CollapsibleSection({
   count,
   children,
   defaultOpen = false,
+  open: openProp,
+  onOpenChange,
   className,
   contentClassName,
 }: CollapsibleSectionProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const isControlled = openProp !== undefined;
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
+  const open = isControlled ? openProp : uncontrolledOpen;
+
+  function setOpen(next: boolean) {
+    if (!isControlled) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  }
 
   return (
     <div
@@ -31,7 +42,7 @@ export function CollapsibleSection({
         type="button"
         variant="ghost"
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => setOpen(!open)}
         className="h-auto w-full rounded-none p-0 text-[11px] font-medium uppercase tracking-wide text-secondary hover:bg-transparent hover:text-secondary"
       >
         <ChevronRight

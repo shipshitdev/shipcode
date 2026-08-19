@@ -80,6 +80,7 @@ import {
   resolveFailingPhaseOutput,
   resolveIssueRetryPresentation,
 } from './issue-detail/helpers';
+import { IssueChatTab } from './issue-detail/IssueChatTab';
 import { buildIssueDetailActions } from './issue-detail/IssueDetailActions';
 import { buildIssueDetailDialogs } from './issue-detail/IssueDetailDialogs';
 import { IssueDetailTabs } from './issue-detail/IssueDetailTabs';
@@ -292,10 +293,10 @@ function useIssueDetailView() {
   const reviewPlanIds = useMemo(() => {
     const ids = new Set<string>();
     if (thread?.status === PIPELINE_PHASE.failed && latestThreadPlanId) ids.add(latestThreadPlanId);
-    if (activeTab === 'history' && expandedPlanId) ids.add(expandedPlanId);
+    if (expandedPlanId) ids.add(expandedPlanId);
     if (fullScreenPlanId) ids.add(fullScreenPlanId);
     return Array.from(ids);
-  }, [activeTab, expandedPlanId, fullScreenPlanId, latestThreadPlanId, thread?.status]);
+  }, [expandedPlanId, fullScreenPlanId, latestThreadPlanId, thread?.status]);
   const { data: reviewsByPlanId = {} } = useQuery<Record<string, ReviewRecord>>({
     queryKey: ['reviews-by-plans', reviewPlanIds.join(',')],
     queryFn: () => window.shipcode.invoke('review:list-by-plans', { planIds: reviewPlanIds }),
@@ -396,10 +397,7 @@ function useIssueDetailView() {
     [effectiveExpanded, normalizedPlanHistory],
   );
   const shouldFetchExpandedPlanDetail =
-    activeTab === 'history' &&
-    !!expandedHistoryPlan &&
-    !expandedHistoryPlan.structured &&
-    !expandedHistoryPlan.rawOutput;
+    !!expandedHistoryPlan && !expandedHistoryPlan.structured && !expandedHistoryPlan.rawOutput;
   const { data: expandedPlanDetail, isLoading: isExpandedPlanDetailLoading } =
     useQuery<PlanRecord | null>({
       queryKey: ['plan-by-id', expandedHistoryPlan?.id],
@@ -1691,7 +1689,7 @@ function useIssueDetailView() {
     clarificationSection ||
     approvalSection ||
     completionSection ? (
-      <div className="space-y-4 mb-6">
+      <div className="space-y-3" data-testid="issue-context-actions">
         {pipelineStartCard}
         {rerunSection}
         {triageFailureSection}
@@ -1701,48 +1699,36 @@ function useIssueDetailView() {
       </div>
     ) : null;
 
-  // ─── Full-page layout (Linear-style) ─────────────────────────────────────
-
-  const isConversationTab = activeTab === 'chat';
-
   return (
     <div
       className="flex h-full min-w-0 flex-1 flex-col bg-primary"
       data-testid="issue-conversation"
     >
-      {/* Header — full width */}
       <div className="relative shrink-0 border-b border-border px-5 py-3">
         {headerButtons}
-        {/* Title + status badge */}
         <div className="flex flex-wrap items-baseline gap-2 pl-10">
           <h1 className="text-[15px] font-semibold leading-snug tracking-tight">
             {displayIssueTitle}
           </h1>
           {issueStatusBadge}
         </div>
-        {/* Metadata: #num · state · branch · PR */}
         {issueIdentityLinks}
       </div>
-      {/* Two-column body — fills remaining height */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Main — conversation fills the page; other tabs still scroll */}
         <div
-          className={cn(
-            'flex min-w-0 flex-1 flex-col',
-            isConversationTab ? 'overflow-hidden p-0' : 'overflow-y-auto p-6',
-          )}
+          className="flex min-w-0 flex-1 flex-col overflow-hidden"
           data-issue-detail-scroll-region
         >
-          {detailActionStack ? (
-            <div className={cn(isConversationTab && 'shrink-0 border-b border-border px-5 pt-4')}>
-              {detailActionStack}
-            </div>
-          ) : null}
-          {detailTabs}
+          <IssueChatTab
+            threadId={activeThreadId}
+            projectId={activeProjectId ?? ''}
+            issueNumber={activeIssue.issueNumber}
+            issueTitle={displayIssueTitle}
+          />
         </div>
-        {/* Sidebar — full height, own scroll, resizable */}
         <div
           className="relative shrink-0 overflow-y-auto border-l border-border"
+          data-testid="issue-detail-sidebar"
           style={{
             width: detailSidebarWidth,
             minWidth: DETAIL_SIDEBAR_MIN,
@@ -1756,17 +1742,16 @@ function useIssueDetailView() {
             className="absolute top-0 left-0 bottom-0 h-auto w-1 cursor-col-resize rounded-none p-0 hover:bg-accent/20 active:bg-accent/30 transition-colors"
             onMouseDown={handleDetailResizeMouseDown}
           />
-          <div className="space-y-8 px-4 pt-4 pb-4">
-            {/* Details */}
+          <div className="space-y-4 px-4 pt-4 pb-4">
+            {detailActionStack}
             {issueMetadataSection}
-            {issueBadges && <div>{issueBadges}</div>}
-            {/* Costs */}
+            {issueBadges ? <div>{issueBadges}</div> : null}
+            {detailTabs}
             <CostsTab
               projectId={activeProjectId ?? ''}
               issueNumber={activeIssue.issueNumber}
               thread={thread}
             />
-            {/* Pipeline */}
             <PipelineTab
               activeIssue={activeIssue}
               activeThreadId={activeThreadId}
