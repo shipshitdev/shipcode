@@ -16,6 +16,7 @@ import {
   Ban,
   CheckCircle2,
   CircleDot,
+  Clock3,
   Cog,
   Columns3,
   FolderPlus,
@@ -467,16 +468,22 @@ function GotoCommandGroup({
       action: () => openView('activity'),
     },
     {
+      title: 'Automations',
+      description: 'Scheduled prompts and automation runs',
+      icon: Clock3,
+      action: () => openView('automations'),
+    },
+    {
       title: 'Costs',
       description: 'AI model usage and spend',
       icon: Wallet,
-      action: () => openView('costs'),
+      action: () => useAppStore.getState().openSettings('costs'),
     },
     {
       title: 'Skills',
       description: 'Manage pipeline prompt skills',
       icon: Sparkles,
-      action: () => openView('skills'),
+      action: () => useAppStore.getState().openSettings('skills'),
     },
     {
       title: 'Copilot',

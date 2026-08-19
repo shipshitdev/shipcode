@@ -25,20 +25,6 @@
       "spec": "src/specs/desktop/page-surfaces.e2e.ts"
     },
     {
-      "id": "desktop-costs",
-      "kind": "desktop-view",
-      "title": "Costs",
-      "covered": true,
-      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
-    },
-    {
-      "id": "desktop-skills",
-      "kind": "desktop-view",
-      "title": "Skills",
-      "covered": true,
-      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
-    },
-    {
       "id": "desktop-automations",
       "kind": "desktop-view",
       "title": "Automations",
@@ -126,6 +112,20 @@
       "id": "settings-pipeline",
       "kind": "settings-section",
       "title": "Pipeline",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-skills",
+      "kind": "settings-section",
+      "title": "Skills",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
+      "id": "settings-costs",
+      "kind": "settings-section",
+      "title": "Costs",
       "covered": true,
       "spec": "src/specs/desktop/page-surfaces.e2e.ts"
     },

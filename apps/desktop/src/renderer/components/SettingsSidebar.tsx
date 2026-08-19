@@ -1,6 +1,7 @@
 import {
   Archive,
   Bell,
+  Coins,
   FolderGit,
   Globe,
   Keyboard,
@@ -40,6 +41,16 @@ const SECTIONS: { key: SettingsSection; label: string; icon: ReactNode }[] = [
     key: 'pipeline',
     label: 'Pipeline',
     icon: <Workflow size={14} />,
+  },
+  {
+    key: 'skills',
+    label: 'Skills',
+    icon: <Sparkles size={14} />,
+  },
+  {
+    key: 'costs',
+    label: 'Costs',
+    icon: <Coins size={14} />,
   },
   {
     key: 'auto-commit',

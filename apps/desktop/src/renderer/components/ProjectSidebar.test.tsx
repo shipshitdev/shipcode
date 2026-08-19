@@ -597,14 +597,11 @@ describe('ProjectSidebar', () => {
     fireEvent.click(screen.getByRole('button', { name: /Inbox/i }));
     expect(useAppStore.getState().viewMode).toBe('inbox');
 
-    fireEvent.click(screen.getByRole('button', { name: /Skills/i }));
-    expect(useAppStore.getState().viewMode).toBe('skills');
-
     fireEvent.click(screen.getByRole('button', { name: /Automations/i }));
     expect(useAppStore.getState().viewMode).toBe('automations');
 
-    fireEvent.click(screen.getByRole('button', { name: /Costs/i }));
-    expect(useAppStore.getState().viewMode).toBe('costs');
+    expect(screen.queryByRole('button', { name: /Skills/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Costs/i })).not.toBeInTheDocument();
 
     await openProjectSwitcher();
     fireEvent.click(screen.getByRole('menuitem', { name: /Add repository/i }));
@@ -637,6 +634,7 @@ describe('ProjectSidebar', () => {
     expect(await screen.findByTestId('sidebar-no-project')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Overview/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Inbox/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Automations/i })).toBeInTheDocument();
     expect(screen.queryByTestId('sidebar-project-nav')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /New Issue/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Conversations' })).not.toBeInTheDocument();

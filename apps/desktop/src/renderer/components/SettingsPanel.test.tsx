@@ -10,6 +10,13 @@ import { useAppStore } from '../stores/app-store';
 import { renderWithQueryClient } from '../test/render';
 import { SettingsPanel } from './SettingsPanel';
 
+vi.mock('./SkillsView', () => ({
+  SkillsView: () => <div>Skills settings view</div>,
+}));
+vi.mock('./CostsView', () => ({
+  CostsView: () => <div>Costs settings view</div>,
+}));
+
 function renderWithProviders() {
   return renderWithQueryClient(<SettingsPanel />);
 }
@@ -646,5 +653,24 @@ describe('SettingsPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open in Finder' }));
     expect(invokeMock).toHaveBeenCalledWith('developer:open-log-directory');
+  });
+
+  it('renders Skills and Costs inside settings', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'telemetry:get-status') {
+        return { enabled: false, initialized: false, envDisabled: false };
+      }
+      return [];
+    });
+
+    useAppStore.setState({ settingsSection: 'skills' });
+    renderWithProviders();
+    expect(await screen.findByText('Skills settings view')).toBeInTheDocument();
+
+    cleanup();
+    useAppStore.setState({ settingsSection: 'costs' });
+    renderWithProviders();
+    expect(await screen.findByText('Costs settings view')).toBeInTheDocument();
   });
 });

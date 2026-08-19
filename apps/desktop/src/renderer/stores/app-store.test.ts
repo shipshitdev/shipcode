@@ -176,6 +176,26 @@ describe('app-store', () => {
     });
   });
 
+  describe('openSettings', () => {
+    it('opens settings onto the requested section', () => {
+      useAppStore.setState({
+        settingsVisible: false,
+        settingsSection: 'general',
+        terminalVisible: true,
+        terminalMaximized: true,
+      });
+
+      useAppStore.getState().openSettings('skills');
+
+      expect(useAppStore.getState()).toMatchObject({
+        settingsVisible: true,
+        settingsSection: 'skills',
+        terminalVisible: false,
+        terminalMaximized: false,
+      });
+    });
+  });
+
   describe('openBoard', () => {
     it('clears the active issue and shows the project issues board', () => {
       useAppStore.setState({
@@ -604,7 +624,7 @@ describe('app-store', () => {
         currentVerification: null,
       });
 
-      for (const mode of ['activity', 'inbox', 'costs', 'skills', 'automations'] as const) {
+      for (const mode of ['activity', 'inbox', 'automations'] as const) {
         useAppStore.getState().openView(mode);
         expect(useAppStore.getState().viewMode).toBe(mode);
       }

@@ -109,14 +109,8 @@ const ActivityView = lazy(() =>
 const AutomationsView = lazy(() =>
   import('./components/AutomationsView').then((m) => ({ default: m.AutomationsView })),
 );
-const CostsView = lazy(() =>
-  import('./components/CostsView').then((m) => ({ default: m.CostsView })),
-);
 const InboxView = lazy(() =>
   import('./components/InboxView').then((m) => ({ default: m.InboxView })),
-);
-const SkillsView = lazy(() =>
-  import('./components/SkillsView').then((m) => ({ default: m.SkillsView })),
 );
 const OnboardingWizard = lazy(() =>
   import('./components/onboarding/OnboardingWizard').then((m) => ({
@@ -315,8 +309,6 @@ export function App() {
     viewMode !== 'overview' &&
     viewMode !== 'inbox' &&
     viewMode !== 'activity' &&
-    viewMode !== 'costs' &&
-    viewMode !== 'skills' &&
     viewMode !== 'automations';
   const showMissingProject =
     !settingsVisible &&
@@ -369,10 +361,6 @@ export function App() {
                     <AutomationDetail />
                   ) : viewMode === 'activity' ? (
                     <ActivityView />
-                  ) : viewMode === 'costs' ? (
-                    <CostsView />
-                  ) : viewMode === 'skills' ? (
-                    <SkillsView />
                   ) : viewMode === 'automations' ? (
                     <AutomationsView />
                   ) : viewMode === 'inbox' ? (

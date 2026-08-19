@@ -41,7 +41,7 @@ test.describe('page behavior contracts', () => {
   test('costs view toggles between tokens and USD display modes', async ({ harness }) => {
     const { page } = harness;
 
-    await harness.callStore('openView', 'costs');
+    await harness.setState({ settingsVisible: true, settingsSection: 'costs' });
     await expect(page.getByRole('heading', { name: 'Costs', exact: true })).toBeVisible({
       timeout: 15_000,
     });
@@ -59,7 +59,7 @@ test.describe('page behavior contracts', () => {
   test('skills view switches phase and exposes unsaved draft state', async ({ harness }) => {
     const { page } = harness;
 
-    await harness.callStore('openView', 'skills');
+    await harness.setState({ settingsVisible: true, settingsSection: 'skills' });
     await expect(page.getByRole('heading', { name: 'Skills', exact: true })).toBeVisible({
       timeout: 15_000,
     });

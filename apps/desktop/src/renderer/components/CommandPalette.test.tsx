@@ -350,12 +350,18 @@ describe('CommandPalette', () => {
     expect(useAppStore.getState().viewMode).toBe('activity');
 
     useAppStore.setState({ commandPaletteOpen: true });
-    fireEvent.click(await screen.findByText('Costs'));
-    expect(useAppStore.getState().viewMode).toBe('costs');
+    fireEvent.click(await screen.findByText('Automations'));
+    expect(useAppStore.getState().viewMode).toBe('automations');
 
     useAppStore.setState({ commandPaletteOpen: true });
+    fireEvent.click(await screen.findByText('Costs'));
+    expect(useAppStore.getState().settingsVisible).toBe(true);
+    expect(useAppStore.getState().settingsSection).toBe('costs');
+
+    useAppStore.setState({ commandPaletteOpen: true, settingsVisible: false });
     fireEvent.click(await screen.findByText('Skills'));
-    expect(useAppStore.getState().viewMode).toBe('skills');
+    expect(useAppStore.getState().settingsVisible).toBe(true);
+    expect(useAppStore.getState().settingsSection).toBe('skills');
 
     useAppStore.setState({ commandPaletteOpen: true });
     fireEvent.click(await screen.findByText('Copilot'));

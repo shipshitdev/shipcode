@@ -48,14 +48,14 @@
     },
     {
       "id": "costs-display-mode-toggle",
-      "surfaceId": "desktop-costs",
+      "surfaceId": "settings-costs",
       "title": "Costs view switches between token and USD display modes",
       "covered": true,
       "spec": "src/specs/desktop/page-behaviors.e2e.ts"
     },
     {
       "id": "skills-phase-editor-navigation",
-      "surfaceId": "desktop-skills",
+      "surfaceId": "settings-skills",
       "title": "Skills view changes active pipeline phase and exposes unsaved draft state",
       "covered": true,
       "spec": "src/specs/desktop/page-behaviors.e2e.ts"

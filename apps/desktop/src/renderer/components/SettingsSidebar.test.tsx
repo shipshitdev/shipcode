@@ -40,4 +40,14 @@ describe('SettingsSidebar', () => {
     expect(screen.getByRole('button', { name: 'Pipeline' }).className).toContain('bg-tertiary');
     expect(screen.getByRole('button', { name: 'General' }).className).not.toContain('bg-tertiary');
   });
+
+  it('exposes Skills and Costs as settings destinations', () => {
+    render(<SettingsSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    expect(useAppStore.getState().settingsSection).toBe('skills');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Costs' }));
+    expect(useAppStore.getState().settingsSection).toBe('costs');
+  });
 });

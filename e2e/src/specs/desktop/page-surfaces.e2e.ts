@@ -39,6 +39,8 @@ type SettingsSection =
   | 'github'
   | 'notifications'
   | 'pipeline'
+  | 'skills'
+  | 'costs'
   | 'shortcuts'
   | 'archived'
   | 'developer'
@@ -82,24 +84,6 @@ const DESKTOP_VIEW_SURFACES = [
     mode: 'inbox',
     assert: async (page: Page) => {
       await expect(page.getByTestId('inbox-view')).toBeVisible({ timeout: 15_000 });
-    },
-  },
-  {
-    id: 'desktop-costs',
-    mode: 'costs',
-    assert: async (page: Page) => {
-      await expect(page.getByRole('heading', { name: 'Costs', exact: true })).toBeVisible({
-        timeout: 15_000,
-      });
-    },
-  },
-  {
-    id: 'desktop-skills',
-    mode: 'skills',
-    assert: async (page: Page) => {
-      await expect(page.getByRole('heading', { name: 'Skills', exact: true })).toBeVisible({
-        timeout: 15_000,
-      });
     },
   },
   {
@@ -187,6 +171,8 @@ const SETTINGS_SURFACES = [
   { id: 'settings-github', section: 'github', heading: /^GitHub$/ },
   { id: 'settings-notifications', section: 'notifications', heading: /^Notifications$/ },
   { id: 'settings-pipeline', section: 'pipeline', heading: /^Pipeline$/ },
+  { id: 'settings-skills', section: 'skills', heading: /^Skills$/ },
+  { id: 'settings-costs', section: 'costs', heading: /^Costs$/ },
   { id: 'settings-auto-commit', section: 'auto-commit', heading: /^Auto-commit & Cleanup$/ },
   { id: 'settings-shortcuts', section: 'shortcuts', heading: /^Keyboard Shortcuts$/ },
   { id: 'settings-archived', section: 'archived', heading: /^Archived$/ },

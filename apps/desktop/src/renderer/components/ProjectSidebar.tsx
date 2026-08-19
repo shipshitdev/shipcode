@@ -6,7 +6,6 @@ import {
   Activity,
   Clock3,
   Code2,
-  DollarSign,
   GitBranch,
   GitPullRequest,
   Inbox,
@@ -15,7 +14,6 @@ import {
   MessageSquare,
   Plus,
   Search,
-  Sparkles,
   Terminal,
 } from 'lucide-react';
 import type { ComponentType, ReactNode } from 'react';
@@ -240,6 +238,12 @@ function useProjectSidebarView() {
             isActive={workspaceActive('activity')}
             onClick={() => openView('activity')}
           />
+          <SidebarNavButton
+            icon={Clock3}
+            label="Automations"
+            isActive={workspaceActive('automations')}
+            onClick={() => openView('automations')}
+          />
         </div>
 
         {activeProjectId ? (
@@ -273,27 +277,6 @@ function useProjectSidebarView() {
             Select a project to open its conversations and issues.
           </div>
         )}
-
-        <div className="mt-auto shrink-0 border-t border-border px-1.5 py-2">
-          <SidebarNavButton
-            icon={Sparkles}
-            label="Skills"
-            isActive={workspaceActive('skills')}
-            onClick={() => openView('skills')}
-          />
-          <SidebarNavButton
-            icon={Clock3}
-            label="Automations"
-            isActive={workspaceActive('automations')}
-            onClick={() => openView('automations')}
-          />
-          <SidebarNavButton
-            icon={DollarSign}
-            label="Costs"
-            isActive={workspaceActive('costs')}
-            onClick={() => openView('costs')}
-          />
-        </div>
 
         <Button
           type="button"

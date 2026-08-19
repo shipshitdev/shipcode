@@ -4,11 +4,14 @@ import type {
   IntegrationStatus,
   Project,
 } from '@shipcode/shared';
+import { cn } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { useTelemetryStatus } from '../hooks/useTelemetryStatus';
 import { useAppStore } from '../stores/app-store';
+import { CostsView } from './CostsView';
+import { SkillsView } from './SkillsView';
 import { AboutSettingsSection } from './settings-panel/AboutSettingsSection';
 import { ArchivedSettingsSection } from './settings-panel/ArchivedSettingsSection';
 import { AutoCommitSettingsSection } from './settings-panel/AutoCommitSettingsSection';
@@ -95,6 +98,7 @@ export function SettingsPanel() {
 
   if (!settings) return null;
 
+  const isWideSection = settingsSection === 'skills' || settingsSection === 'costs';
   const update = (patch: Partial<AppSettings>) => updateSettings.mutate(patch);
   const testChat = async (provider: 'discord' | 'telegram') => {
     const result = await window.shipcode.invoke<{ ok: boolean; message: string }>(
@@ -106,8 +110,11 @@ export function SettingsPanel() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-primary p-8">
-      <div key={settingsSection} className="max-w-2xl animate-settings-enter">
+    <div className={cn('flex-1 overflow-y-auto bg-primary', isWideSection ? 'p-0' : 'p-8')}>
+      <div
+        key={settingsSection}
+        className={cn('animate-settings-enter', !isWideSection && 'max-w-2xl')}
+      >
         {settingsSection === 'general' && (
           <GeneralSettingsSection
             settings={settings}
@@ -154,6 +161,8 @@ export function SettingsPanel() {
             onUpdate={update}
           />
         )}
+        {settingsSection === 'skills' && <SkillsView />}
+        {settingsSection === 'costs' && <CostsView />}
         {settingsSection === 'auto-commit' && (
           <AutoCommitSettingsSection
             settings={settings}
