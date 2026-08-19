@@ -22,6 +22,7 @@ import { COL_RESIZE_BODY_CLASS_NAMES, useDragResize } from '../hooks/useDragResi
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { type ProjectTab, useAppStore } from '../stores/app-store';
 import { ProjectSwitcher } from './ProjectSwitcher';
+import { SidebarBackButton } from './SettingsNavigation';
 import { ThreadList } from './ThreadList';
 
 const PROJECT_TAB_ITEMS: Array<{
@@ -150,6 +151,7 @@ function useProjectSidebarView() {
       ? 'bg-warning/15 text-warning'
       : 'bg-tertiary text-secondary';
   const workspaceActive = (mode: typeof viewMode) => !settingsVisible && viewMode === mode;
+  const isProjectSurface = !settingsVisible && viewMode === 'project';
 
   const openProjectSurface = (tab: ProjectTab) => {
     if (!activeProjectId) return;
@@ -185,7 +187,11 @@ function useProjectSidebarView() {
         className="relative flex h-full flex-col border-r border-border bg-primary"
         style={{ width: sidebarWidth, minWidth: SIDEBAR_MIN }}
       >
-        <div className="shrink-0 px-2 pt-2">
+        {isProjectSurface ? (
+          <SidebarBackButton label="Back to workspace" onClick={() => openView('overview')} />
+        ) : null}
+
+        <div className={isProjectSurface ? 'shrink-0 px-2 pt-1' : 'shrink-0 px-2 pt-2'}>
           <ProjectSwitcher />
         </div>
 
@@ -198,84 +204,87 @@ function useProjectSidebarView() {
           />
         </div>
 
-        <SidebarLabel>Workspace</SidebarLabel>
-        <div className="shrink-0 px-1.5">
-          <SidebarNavButton
-            icon={LayoutGrid}
-            label="Overview"
-            isActive={workspaceActive('overview')}
-            badge={
-              liveCount > 0 ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
-                  <span className="relative flex size-1.5 items-center justify-center">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
-                    <span className="relative inline-flex size-1.5 rounded-full bg-agent" />
-                  </span>
-                  {liveCount} live
-                </span>
-              ) : null
-            }
-            onClick={() => openView('overview')}
-          />
-          <SidebarNavButton
-            icon={Inbox}
-            label="Inbox"
-            isActive={workspaceActive('inbox')}
-            badge={
-              inboxCount > 0 ? (
-                <span
-                  className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${inboxBadgeClass}`}
-                >
-                  {inboxCount}
-                </span>
-              ) : null
-            }
-            onClick={() => openView('inbox')}
-          />
-          <SidebarNavButton
-            icon={Activity}
-            label="Activity"
-            isActive={workspaceActive('activity')}
-            onClick={() => openView('activity')}
-          />
-          <SidebarNavButton
-            icon={Clock3}
-            label="Automations"
-            isActive={workspaceActive('automations')}
-            onClick={() => openView('automations')}
-          />
-        </div>
-
-        {activeProjectId ? (
-          <>
-            <SidebarLabel>Project</SidebarLabel>
-            <div className="shrink-0 px-1.5" data-testid="sidebar-project-nav">
-              <SidebarNavButton
-                icon={Plus}
-                label="New Issue"
-                shortcut="⌘N"
-                disabled={!activeProjectId}
-                onClick={() => openCreateIssueModal()}
-              />
-              {PROJECT_TAB_ITEMS.map(({ key, label, icon }) => (
+        {isProjectSurface ? (
+          activeProjectId ? (
+            <>
+              <div className="shrink-0 px-1.5" data-testid="sidebar-project-nav">
                 <SidebarNavButton
-                  key={key}
-                  icon={icon}
-                  label={label}
-                  isActive={!settingsVisible && viewMode === 'project' && projectTab === key}
-                  onClick={() => openProjectSurface(key)}
+                  icon={Plus}
+                  label="New Issue"
+                  shortcut="⌘N"
+                  disabled={!activeProjectId}
+                  onClick={() => openCreateIssueModal()}
                 />
-              ))}
+                {PROJECT_TAB_ITEMS.map(({ key, label, icon }) => (
+                  <SidebarNavButton
+                    key={key}
+                    icon={icon}
+                    label={label}
+                    isActive={projectTab === key}
+                    onClick={() => openProjectSurface(key)}
+                  />
+                ))}
+              </div>
+              <ThreadList />
+            </>
+          ) : (
+            <div
+              className="flex min-h-0 flex-1 flex-col justify-start px-3 pt-6 text-[12px] leading-5 text-muted-foreground"
+              data-testid="sidebar-no-project"
+            >
+              Select a project to open its conversations and issues.
             </div>
-            <ThreadList />
-          </>
+          )
         ) : (
-          <div
-            className="flex min-h-0 flex-1 flex-col justify-start px-3 pt-6 text-[12px] leading-5 text-muted-foreground"
-            data-testid="sidebar-no-project"
-          >
-            Select a project to open its conversations and issues.
-          </div>
+          <>
+            <SidebarLabel>Workspace</SidebarLabel>
+            <div className="shrink-0 px-1.5" data-testid="sidebar-workspace-nav">
+              <SidebarNavButton
+                icon={LayoutGrid}
+                label="Overview"
+                isActive={workspaceActive('overview')}
+                badge={
+                  liveCount > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
+                      <span className="relative flex size-1.5 items-center justify-center">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
+                        <span className="relative inline-flex size-1.5 rounded-full bg-agent" />
+                      </span>
+                      {liveCount} live
+                    </span>
+                  ) : null
+                }
+                onClick={() => openView('overview')}
+              />
+              <SidebarNavButton
+                icon={Inbox}
+                label="Inbox"
+                isActive={workspaceActive('inbox')}
+                badge={
+                  inboxCount > 0 ? (
+                    <span
+                      className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${inboxBadgeClass}`}
+                    >
+                      {inboxCount}
+                    </span>
+                  ) : null
+                }
+                onClick={() => openView('inbox')}
+              />
+              <SidebarNavButton
+                icon={Activity}
+                label="Activity"
+                isActive={workspaceActive('activity')}
+                onClick={() => openView('activity')}
+              />
+              <SidebarNavButton
+                icon={Clock3}
+                label="Automations"
+                isActive={workspaceActive('automations')}
+                onClick={() => openView('automations')}
+              />
+            </div>
+          </>
         )}
 
         <Button

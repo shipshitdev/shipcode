@@ -560,7 +560,41 @@ describe('ProjectSidebar', () => {
     );
   });
 
-  it('routes top-level navigation, create issue, add repository, and project tabs through the app store', async () => {
+  it('routes project pages from the in-project sidebar', async () => {
+    mockSidebarData(invokeMock);
+    renderWithProviders();
+
+    expect(await screen.findByRole('button', { name: 'Back to workspace' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Overview/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Inbox/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Activity/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Automations/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /New Issue/i }));
+    expect(useAppStore.getState().createIssueModalOpen).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: /Search/i }));
+    expect(useAppStore.getState().commandPaletteOpen).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Conversations' }));
+    expect(useAppStore.getState().viewMode).toBe('project');
+    expect(useAppStore.getState().projectTab).toBe('conversations');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Board' }));
+    expect(useAppStore.getState().viewMode).toBe('project');
+    expect(useAppStore.getState().projectTab).toBe('issues');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Git' }));
+    expect(useAppStore.getState().projectTab).toBe('git');
+
+    const projectNav = screen.getByTestId('sidebar-project-nav');
+    const threadList = screen.getByTestId('thread-list');
+    expect(
+      projectNav.compareDocumentPosition(threadList) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('returns to the workspace sidebar like Settings, then re-enters the project', async () => {
     mockSidebarData(invokeMock, {
       stats: { agentsRunning: 2 },
       notifications: [
@@ -579,14 +613,18 @@ describe('ProjectSidebar', () => {
 
     renderWithProviders();
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Back to workspace' }));
+    expect(useAppStore.getState().viewMode).toBe('overview');
+    expect(useAppStore.getState().activeProjectId).toBe(project.id);
+
     expect(await screen.findByText('2 live')).toBeInTheDocument();
     expect(await screen.findByText('1')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /New Issue/i }));
-    expect(useAppStore.getState().createIssueModalOpen).toBe(true);
-
-    fireEvent.click(screen.getByRole('button', { name: /Search/i }));
-    expect(useAppStore.getState().commandPaletteOpen).toBe(true);
+    expect(screen.getByTestId('sidebar-workspace-nav')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Back to workspace' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar-project-nav')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /New Issue/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Conversations' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Board' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Activity/i }));
     expect(useAppStore.getState().viewMode).toBe('activity');
@@ -607,31 +645,21 @@ describe('ProjectSidebar', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /Add repository/i }));
     expect(useAppStore.getState().addProjectExplorerOpen).toBe(true);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Conversations' }));
+    await openProjectSwitcher();
+    fireEvent.click(screen.getByRole('menuitem', { name: /ShipCode/ }));
     expect(useAppStore.getState().viewMode).toBe('project');
     expect(useAppStore.getState().projectTab).toBe('conversations');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Board' }));
-    expect(useAppStore.getState().viewMode).toBe('project');
-    expect(useAppStore.getState().projectTab).toBe('issues');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Git' }));
-    expect(useAppStore.getState().projectTab).toBe('git');
-
-    const projectNav = screen.getByTestId('sidebar-project-nav');
-    const threadList = screen.getByTestId('thread-list');
-    expect(
-      projectNav.compareDocumentPosition(threadList) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back to workspace' })).toBeInTheDocument();
   });
 
-  it('hides project pages until a project is selected', async () => {
+  it('hides project pages on the workspace sidebar until a project is opened', async () => {
     mockSidebarData(invokeMock);
     useAppStore.setState({ activeProjectId: null, viewMode: 'overview' });
 
     renderWithProviders();
 
-    expect(await screen.findByTestId('sidebar-no-project')).toBeInTheDocument();
+    expect(await screen.findByTestId('sidebar-workspace-nav')).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar-no-project')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Overview/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Inbox/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Automations/i })).toBeInTheDocument();
@@ -639,6 +667,18 @@ describe('ProjectSidebar', () => {
     expect(screen.queryByRole('button', { name: /New Issue/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Conversations' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Board' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Back to workspace' })).not.toBeInTheDocument();
+  });
+
+  it('prompts to select a project when the project surface has none', async () => {
+    mockSidebarData(invokeMock);
+    useAppStore.setState({ activeProjectId: null, viewMode: 'project' });
+
+    renderWithProviders();
+
+    expect(await screen.findByTestId('sidebar-no-project')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to workspace' })).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar-project-nav')).not.toBeInTheDocument();
   });
 
   it('sorts pinned projects first alphabetically and applies selected ordering to unpinned projects', async () => {
@@ -998,6 +1038,7 @@ describe('ProjectSidebar', () => {
       invalidButton.compareDocumentPosition(olderButton) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(screen.getByText('Setup!')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to workspace' }));
     expect(await screen.findByText('1')).toBeInTheDocument();
 
     await openProjectActionsMenu();
