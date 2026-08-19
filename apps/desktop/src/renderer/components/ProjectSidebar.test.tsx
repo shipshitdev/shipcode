@@ -18,15 +18,9 @@ import {
 } from '../test/provider-usage';
 import { renderWithQueryClient } from '../test/render';
 import { ProjectSidebar } from './ProjectSidebar';
-import { ProjectSwitcher } from './ProjectSwitcher';
 
 function renderWithProviders() {
-  return renderWithQueryClient(
-    <>
-      <ProjectSwitcher />
-      <ProjectSidebar />
-    </>,
-  );
+  return renderWithQueryClient(<ProjectSidebar />);
 }
 
 function mockSidebarData(
@@ -622,6 +616,26 @@ describe('ProjectSidebar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Git' }));
     expect(useAppStore.getState().projectTab).toBe('git');
+
+    const projectNav = screen.getByTestId('sidebar-project-nav');
+    const threadList = screen.getByTestId('thread-list');
+    expect(
+      projectNav.compareDocumentPosition(threadList) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('hides project pages until a project is selected', async () => {
+    mockSidebarData(invokeMock);
+    useAppStore.setState({ activeProjectId: null, viewMode: 'overview' });
+
+    renderWithProviders();
+
+    expect(await screen.findByTestId('sidebar-no-project')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Overview/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Inbox/i })).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar-project-nav')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /New Issue/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Board' })).not.toBeInTheDocument();
   });
 
   it('sorts pinned projects first alphabetically and applies selected ordering to unpinned projects', async () => {

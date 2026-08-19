@@ -7,6 +7,7 @@ import {
   Clock3,
   Code2,
   DollarSign,
+  GitBranch,
   GitPullRequest,
   Inbox,
   LayoutGrid,
@@ -16,11 +17,12 @@ import {
   Sparkles,
   Terminal,
 } from 'lucide-react';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { useEffect } from 'react';
 import { COL_RESIZE_BODY_CLASS_NAMES, useDragResize } from '../hooks/useDragResize';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { type ProjectTab, useAppStore } from '../stores/app-store';
+import { ProjectSwitcher } from './ProjectSwitcher';
 import { ThreadList } from './ThreadList';
 
 const PROJECT_TAB_ITEMS: Array<{
@@ -29,7 +31,7 @@ const PROJECT_TAB_ITEMS: Array<{
   icon: ComponentType<{ size?: number; className?: string }>;
 }> = [
   { key: 'issues', label: 'Board', icon: LayoutList },
-  { key: 'git', label: 'Git', icon: GitPullRequest },
+  { key: 'git', label: 'Git', icon: GitBranch },
   { key: 'code', label: 'Code', icon: Code2 },
   { key: 'pull-requests', label: 'Pull Requests', icon: GitPullRequest },
   { key: 'insights', label: 'Insights', icon: Activity },
@@ -39,6 +41,53 @@ const PROJECT_TAB_ITEMS: Array<{
 const SIDEBAR_MIN = 220;
 const SIDEBAR_MAX = 280;
 const SIDEBAR_DEFAULT = 256;
+
+function SidebarLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      {children}
+    </div>
+  );
+}
+
+function SidebarNavButton({
+  icon: Icon,
+  label,
+  isActive,
+  disabled,
+  badge,
+  shortcut,
+  onClick,
+}: {
+  icon: ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  isActive?: boolean;
+  disabled?: boolean;
+  badge?: ReactNode;
+  shortcut?: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      variant="ghost"
+      disabled={disabled}
+      className={cn(
+        'group/item h-auto w-full justify-start gap-2 px-2.5 py-1.5 text-[13px] font-normal text-secondary app-region-no-drag',
+        isActive && 'bg-tertiary text-primary font-medium',
+      )}
+      onClick={onClick}
+    >
+      <Icon size={14} className="shrink-0 text-secondary" />
+      <span className="flex-1 truncate text-left">{label}</span>
+      {badge}
+      {shortcut ? (
+        <kbd className="hidden group-hover/item:inline font-mono text-[10px] text-muted-foreground">
+          {shortcut}
+        </kbd>
+      ) : null}
+    </Button>
+  );
+}
 
 function useProjectSidebarView() {
   const activeProjectId = useAppStore((state) => state.activeProjectId);
@@ -65,7 +114,6 @@ function useProjectSidebarView() {
     staleTime: NOTIFICATIONS_STALE_TIME,
   });
 
-  // Left-anchored panel: dragging its right edge rightwards widens it.
   const { size: sidebarWidth, handleResizeMouseDown } = useDragResize({
     initialSize: SIDEBAR_DEFAULT,
     axis: 'x',
@@ -101,6 +149,20 @@ function useProjectSidebarView() {
     : hasWarning
       ? 'bg-warning/15 text-warning'
       : 'bg-tertiary text-secondary';
+  const workspaceActive = (mode: typeof viewMode) => !settingsVisible && viewMode === mode;
+
+  const openProjectSurface = (tab: ProjectTab) => {
+    if (!activeProjectId) return;
+    if (tab === 'issues') {
+      useAppStore.getState().openBoard();
+      return;
+    }
+    if (viewMode !== 'project') {
+      selectProject(activeProjectId);
+    }
+    setProjectTab(tab);
+    useAppStore.getState().selectIssue(null);
+  };
 
   return (
     <div
@@ -119,165 +181,114 @@ function useProjectSidebarView() {
         className="relative flex h-full flex-col border-r border-border bg-primary"
         style={{ width: sidebarWidth, minWidth: SIDEBAR_MIN }}
       >
-        <div className="px-2 pt-3 space-y-0.5">
-          {/* New Issue */}
-          <Button
-            variant="ghost"
-            className="group/item h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
-            onClick={() => openCreateIssueModal()}
-            disabled={!activeProjectId}
-          >
-            <Plus size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">New Issue</span>
-            <kbd className="hidden group-hover/item:inline text-[10px] text-muted-foreground font-mono">
-              ⌘N
-            </kbd>
-          </Button>
-
-          {/* Search */}
-          <Button
-            variant="ghost"
-            className="group/item h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
-            onClick={() => openCommandPalette()}
-          >
-            <Search size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Search</span>
-            <kbd className="hidden group-hover/item:inline text-[10px] text-muted-foreground font-mono">
-              ⌘K
-            </kbd>
-          </Button>
-
-          {/* Overview */}
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-              !settingsVisible && viewMode === 'overview' && 'bg-tertiary text-primary font-medium',
-            )}
-            onClick={() => openView('overview')}
-          >
-            <LayoutGrid size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Overview</span>
-            {liveCount > 0 && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
-                <span className="relative flex size-1.5 items-center justify-center">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
-                  <span className="relative inline-flex size-1.5 rounded-full bg-agent" />
-                </span>
-                {liveCount} live
-              </span>
-            )}
-          </Button>
-
-          {/* Inbox */}
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-              !settingsVisible && viewMode === 'inbox' && 'bg-tertiary text-primary font-medium',
-            )}
-            onClick={() => openView('inbox')}
-          >
-            <Inbox size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Inbox</span>
-            {inboxCount > 0 && (
-              <span
-                className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${inboxBadgeClass}`}
-              >
-                {inboxCount}
-              </span>
-            )}
-          </Button>
-
-          {/* Activity */}
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-              !settingsVisible && viewMode === 'activity' && 'bg-tertiary text-primary font-medium',
-            )}
-            onClick={() => openView('activity')}
-          >
-            <Activity size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Activity</span>
-          </Button>
-
-          {/* Skills */}
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-              !settingsVisible && viewMode === 'skills' && 'bg-tertiary text-primary font-medium',
-            )}
-            onClick={() => openView('skills')}
-          >
-            <Sparkles size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Skills</span>
-          </Button>
-
-          {/* Automations */}
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-              !settingsVisible &&
-                viewMode === 'automations' &&
-                'bg-tertiary text-primary font-medium',
-            )}
-            onClick={() => openView('automations')}
-          >
-            <Clock3 size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Automations</span>
-          </Button>
-
-          {/* Costs */}
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-              !settingsVisible && viewMode === 'costs' && 'bg-tertiary text-primary font-medium',
-            )}
-            onClick={() => openView('costs')}
-          >
-            <DollarSign size={14} className="shrink-0 text-secondary" />
-            <span className="flex-1 truncate">Costs</span>
-          </Button>
+        <div className="shrink-0 px-2 pt-2">
+          <ProjectSwitcher />
         </div>
 
-        <ThreadList />
+        <div className="shrink-0 px-1.5 pt-1">
+          <SidebarNavButton
+            icon={Search}
+            label="Search"
+            shortcut="⌘K"
+            onClick={() => openCommandPalette()}
+          />
+        </div>
+
+        <SidebarLabel>Workspace</SidebarLabel>
+        <div className="shrink-0 px-1.5">
+          <SidebarNavButton
+            icon={LayoutGrid}
+            label="Overview"
+            isActive={workspaceActive('overview')}
+            badge={
+              liveCount > 0 ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
+                  <span className="relative flex size-1.5 items-center justify-center">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
+                    <span className="relative inline-flex size-1.5 rounded-full bg-agent" />
+                  </span>
+                  {liveCount} live
+                </span>
+              ) : null
+            }
+            onClick={() => openView('overview')}
+          />
+          <SidebarNavButton
+            icon={Inbox}
+            label="Inbox"
+            isActive={workspaceActive('inbox')}
+            badge={
+              inboxCount > 0 ? (
+                <span
+                  className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${inboxBadgeClass}`}
+                >
+                  {inboxCount}
+                </span>
+              ) : null
+            }
+            onClick={() => openView('inbox')}
+          />
+          <SidebarNavButton
+            icon={Activity}
+            label="Activity"
+            isActive={workspaceActive('activity')}
+            onClick={() => openView('activity')}
+          />
+        </div>
 
         {activeProjectId ? (
-          <div className="shrink-0 border-t border-border px-1.5 py-1.5">
-            {PROJECT_TAB_ITEMS.map(({ key, label, icon: Icon }) => (
-              <Button
-                key={key}
-                variant="ghost"
-                className={cn(
-                  'h-auto w-full justify-start gap-2 px-2.5 py-1.5 text-[12px] font-normal text-secondary app-region-no-drag',
-                  !settingsVisible &&
-                    viewMode === 'project' &&
-                    projectTab === key &&
-                    'text-primary font-medium',
-                )}
-                onClick={() => {
-                  if (key === 'issues') {
-                    useAppStore.getState().openBoard();
-                    return;
-                  }
-                  if (viewMode !== 'project') {
-                    selectProject(activeProjectId);
-                  }
-                  setProjectTab(key);
-                  useAppStore.getState().selectIssue(null);
-                }}
-              >
-                <Icon size={12} className="shrink-0" />
-                {label}
-              </Button>
-            ))}
+          <>
+            <SidebarLabel>Project</SidebarLabel>
+            <div className="shrink-0 px-1.5" data-testid="sidebar-project-nav">
+              <SidebarNavButton
+                icon={Plus}
+                label="New Issue"
+                shortcut="⌘N"
+                disabled={!activeProjectId}
+                onClick={() => openCreateIssueModal()}
+              />
+              {PROJECT_TAB_ITEMS.map(({ key, label, icon }) => (
+                <SidebarNavButton
+                  key={key}
+                  icon={icon}
+                  label={label}
+                  isActive={!settingsVisible && viewMode === 'project' && projectTab === key}
+                  onClick={() => openProjectSurface(key)}
+                />
+              ))}
+            </div>
+            <ThreadList />
+          </>
+        ) : (
+          <div
+            className="flex min-h-0 flex-1 flex-col justify-start px-3 pt-6 text-[12px] leading-5 text-muted-foreground"
+            data-testid="sidebar-no-project"
+          >
+            Select a project to open its board and issues.
           </div>
-        ) : null}
-        {/* Drag handle for resizing */}
+        )}
+
+        <div className="mt-auto shrink-0 border-t border-border px-1.5 py-2">
+          <SidebarNavButton
+            icon={Sparkles}
+            label="Skills"
+            isActive={workspaceActive('skills')}
+            onClick={() => openView('skills')}
+          />
+          <SidebarNavButton
+            icon={Clock3}
+            label="Automations"
+            isActive={workspaceActive('automations')}
+            onClick={() => openView('automations')}
+          />
+          <SidebarNavButton
+            icon={DollarSign}
+            label="Costs"
+            isActive={workspaceActive('costs')}
+            onClick={() => openView('costs')}
+          />
+        </div>
+
         <Button
           type="button"
           variant="ghost"

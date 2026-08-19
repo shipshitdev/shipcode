@@ -10,6 +10,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { GenericToaster } from './components/GenericToaster';
 import { HealthBanner } from './components/HealthBanner';
 import { IssueDetail } from './components/IssueDetail';
+import { NoProjectView } from './components/NoProjectView';
 import { NotificationToaster } from './components/NotificationToaster';
 import { OverviewView } from './components/OverviewView';
 import { ProjectMissingView } from './components/ProjectMissingView';
@@ -308,7 +309,15 @@ export function App() {
       </div>
     );
   }
-  const showOverview = viewMode === 'overview' || !activeProjectId;
+  const showOverview = viewMode === 'overview';
+  const showNoProject =
+    !activeProjectId &&
+    viewMode !== 'overview' &&
+    viewMode !== 'inbox' &&
+    viewMode !== 'activity' &&
+    viewMode !== 'costs' &&
+    viewMode !== 'skills' &&
+    viewMode !== 'automations';
   const showMissingProject =
     !settingsVisible &&
     viewMode === 'project' &&
@@ -370,6 +379,8 @@ export function App() {
                     <InboxView />
                   ) : showOverview ? (
                     <OverviewView />
+                  ) : showNoProject ? (
+                    <NoProjectView />
                   ) : showMissingProject && activeProject ? (
                     <ProjectMissingView project={activeProject} />
                   ) : (

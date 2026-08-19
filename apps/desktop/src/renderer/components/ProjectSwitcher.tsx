@@ -163,7 +163,7 @@ export function ProjectSwitcher() {
           variant="ghost"
           data-testid="project-switcher"
           aria-label="Switch project"
-          className="h-7 max-w-[220px] gap-1.5 rounded-md px-2 text-[13px] font-medium text-primary app-region-no-drag"
+          className="h-8 w-full justify-start gap-1.5 rounded-md px-2 text-[13px] font-medium text-primary app-region-no-drag"
         >
           <Folder size={13} className="shrink-0 text-secondary" />
           <span className="min-w-0 truncate">
@@ -174,8 +174,8 @@ export function ProjectSwitcher() {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
-        className="w-[280px] p-1"
-        collisionPadding={{ top: 44, right: 8, bottom: 8, left: 8 }}
+        className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[240px] p-1"
+        collisionPadding={8}
       >
         <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           Projects

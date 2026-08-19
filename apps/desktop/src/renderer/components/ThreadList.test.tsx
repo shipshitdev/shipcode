@@ -93,12 +93,12 @@ describe('ThreadList', () => {
     expect(useAppStore.getState().activeIssue?.issueNumber).toBe(42);
   });
 
-  it('asks the user to pick a project when none is selected', () => {
+  it('renders nothing when no project is selected', () => {
     useAppStore.setState({ activeProjectId: null });
     invokeMock.mockResolvedValue([]);
 
     renderWithQueryClient(<ThreadList />);
 
-    expect(screen.getByText(/Select a project to see its issues/)).toBeInTheDocument();
+    expect(screen.queryByTestId('thread-list')).not.toBeInTheDocument();
   });
 });

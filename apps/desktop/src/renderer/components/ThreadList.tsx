@@ -46,11 +46,7 @@ export function ThreadList() {
   });
 
   if (!activeProjectId) {
-    return (
-      <div className="px-3 py-6 text-[12px] leading-5 text-muted-foreground">
-        Select a project to see its issues.
-      </div>
-    );
+    return null;
   }
 
   return (

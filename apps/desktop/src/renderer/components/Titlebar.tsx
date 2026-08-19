@@ -2,18 +2,14 @@ import type {
   CliProviderUsageMap,
   CliProviderUsageStatus,
   CliProviderUsageWindow,
-  Project,
-  SystemHealth,
   SystemResourceSnapshot,
 } from '@shipcode/shared';
-import { formatBytes, formatRelativeTime, getProjectProviderWarnings } from '@shipcode/shared';
+import { formatBytes, formatRelativeTime } from '@shipcode/shared';
 import { ShipCodeLogoMark } from '@shipcode/ui';
 import { Button, cn, Popover, PopoverContent, PopoverTrigger } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Columns3,
   Cpu,
-  Inbox,
   Loader2,
   MessageSquare,
   PanelLeftClose,
@@ -23,11 +19,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
-import { useAppSettings } from '../hooks/useAppSettings';
-import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
-import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
-import { ProjectSwitcher } from './ProjectSwitcher';
 
 type ProviderTone = 'claude' | 'codex';
 
@@ -473,7 +465,6 @@ export function Titlebar() {
   const queryClient = useQueryClient();
   const settingsVisible = useAppStore((state) => state.settingsVisible);
   const toggleSettings = useAppStore((state) => state.toggleSettings);
-  const activeProjectId = useAppStore((state) => state.activeProjectId);
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
   const assistantVisible = useAppStore((state) => state.assistantVisible);
@@ -481,39 +472,8 @@ export function Titlebar() {
   const closeAssistant = useAppStore((state) => state.closeAssistant);
   const terminalVisible = useAppStore((state) => state.terminalVisible);
   const toggleTerminal = useAppStore((state) => state.toggleTerminal);
-  const hasDetailView = useAppStore(
-    (state) => state.activeIssue !== null || state.activeAutomationThreadId !== null,
-  );
-  const viewMode = useAppStore((state) => state.viewMode);
-  const projectTab = useAppStore((state) => state.projectTab);
-  const openBoard = useAppStore((state) => state.openBoard);
-  const openView = useAppStore((state) => state.openView);
-  const isBoardActive =
-    !settingsVisible && !hasDetailView && viewMode === 'project' && projectTab === 'issues';
-  const isInboxActive = !settingsVisible && viewMode === 'inbox';
 
-  const { data: activeProject } = useQuery<Project | null>({
-    queryKey: ['project', activeProjectId],
-    queryFn: () => {
-      if (!activeProjectId) {
-        throw new Error('Missing active project id');
-      }
-      return window.shipcode.invoke('project:get', { projectId: activeProjectId });
-    },
-    enabled: !!activeProjectId,
-    staleTime: STABLE_APP_STATE_STALE_TIME,
-  });
-
-  const { data: settings } = useAppSettings();
-
-  // Polling owned by HealthBanner (health) and ProjectSidebar (provider-usage).
-  // Titlebar piggybacks via shared query keys — no duplicate refetchInterval.
-  const { data: systemHealth } = useQuery<SystemHealth>({
-    queryKey: ['health'],
-    queryFn: () => window.shipcode.invoke<SystemHealth>('health:check'),
-    staleTime: 30_000,
-  });
-
+  // Provider usage is shared with HealthBanner via the same query key.
   const { data: providerUsage, isFetching: isProviderUsageFetching } =
     useQuery<CliProviderUsageMap>({
       queryKey: ['provider-usage'],
@@ -529,25 +489,16 @@ export function Titlebar() {
     },
   });
 
-  const projectWarnings =
-    activeProject && settings && systemHealth && providerUsage
-      ? getProjectProviderWarnings(settings, activeProject, systemHealth, providerUsage)
-      : [];
-  const hasBlockedProjectWarning = projectWarnings.some(
-    (warning) => warning.severity === 'blocked',
-  );
-  const projectWarningLabel = projectWarnings.length === 0 ? null : hasBlockedProjectWarning;
-
-  // Live-running count intentionally NOT shown here — the sidebar
-  // Mission Control entry already carries a pulsing "N live" badge, and
-  // duplicating it in the titlebar adds noise without information.
+  // Live-running count lives on Overview in the sidebar.
 
   return (
     <div className="relative flex h-[var(--spacing-titlebar)] shrink-0 items-center justify-between border-b border-border bg-primary pl-[84px] pr-2 app-region-drag">
       <div className="flex min-w-0 items-center gap-2 text-xs">
-        <button
+        <Button
           type="button"
-          className="group relative flex size-6 shrink-0 items-center justify-center rounded-md app-region-no-drag hover:bg-elevated"
+          variant="ghost"
+          size="icon"
+          className="group relative size-6 shrink-0 app-region-no-drag hover:bg-elevated"
           onClick={toggleSidebar}
           title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
         >
@@ -555,49 +506,8 @@ export function Titlebar() {
           <span className="absolute inset-0 flex items-center justify-center text-secondary opacity-0 transition-opacity group-hover:opacity-100">
             {sidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
           </span>
-        </button>
-        <ProjectSwitcher />
-        {activeProject && projectWarningLabel && settings ? (
-          <ProjectProviderWarningPopover
-            settings={settings}
-            project={activeProject}
-            warnings={projectWarnings}
-            className="shrink-0 app-region-no-drag"
-          />
-        ) : null}
-        <div className="ml-1 flex items-center gap-0.5 app-region-no-drag">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            data-testid="nav-board"
-            aria-current={isBoardActive ? 'page' : undefined}
-            className={cn(
-              'h-7 gap-1.5 rounded-md px-2 text-[12px] font-medium text-secondary',
-              isBoardActive && 'bg-tertiary text-primary',
-            )}
-            disabled={!activeProjectId}
-            onClick={() => openBoard()}
-          >
-            <Columns3 size={13} />
-            Board
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            data-testid="nav-inbox"
-            aria-current={isInboxActive ? 'page' : undefined}
-            className={cn(
-              'h-7 gap-1.5 rounded-md px-2 text-[12px] font-medium text-secondary',
-              isInboxActive && 'bg-tertiary text-primary',
-            )}
-            onClick={() => openView('inbox')}
-          >
-            <Inbox size={13} />
-            Inbox
-          </Button>
-        </div>
+        </Button>
+        <span className="font-semibold tracking-tight text-primary">ShipCode</span>
       </div>
       <div className="flex items-center gap-2">
         <ResourceUsageBadge />

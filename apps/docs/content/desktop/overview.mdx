@@ -22,11 +22,11 @@ On first import of a GitHub-backed repository, ShipCode creates a small starter 
 
 ## Layout
 
-The app chrome is a titlebar project switcher, a left issue list, a main column, and a collapsible terminal drawer.
+The titlebar stays chrome-only. The **sidebar** holds the project switcher, workspace links, project pages, and the issue list.
 
-Switch projects from the titlebar dropdown. **Board** and **Inbox** sit next to the switcher. Opening an issue is a full-page conversation: one issue is one thread is one official CLI session (Claude / Codex / Grok). The GitHub board replica stays a page — cards still move as the pipeline runs.
+**Workspace** links (Overview, Inbox, Activity, plus Skills / Automations / Costs) work without a repo. **Project** links (New Issue, Board, Git, Code, Pull Requests, Insights, Terminal) and the issue list appear only after you pick a project. Selecting a project opens its board in the content pane.
 
-The left sidebar lists issues for the selected project and keeps shortcuts to the global views:
+Opening an issue is a full-page conversation: one issue is one thread is one official CLI session (Claude / Codex / Grok). The GitHub board replica stays a page — cards still move as the pipeline runs.
 
 | Section | What it does |
 |---------|--------------|

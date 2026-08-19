@@ -46,6 +46,9 @@ vi.mock('./components/IssueDetail', () => ({
     <div>{expanded ? 'IssueDetailExpanded' : 'IssueDetailPanel'}</div>
   ),
 }));
+vi.mock('./components/NoProjectView', () => ({
+  NoProjectView: () => <div>NoProjectView</div>,
+}));
 vi.mock('./components/NotificationToaster', () => ({
   NotificationToaster: () => <div>NotificationToaster</div>,
 }));
@@ -322,6 +325,17 @@ describe('App', () => {
     renderApp();
 
     expect(await screen.findByText('ProjectView')).toBeInTheDocument();
+  });
+
+  it('renders the select-project empty state when a project surface is open without a project', async () => {
+    useAppStore.setState({
+      activeProjectId: null,
+      viewMode: 'project',
+    });
+
+    renderApp();
+
+    expect(await screen.findByText('NoProjectView')).toBeInTheDocument();
   });
 
   it('renders settings, assistant, automation detail, and terminal-only layouts', async () => {
