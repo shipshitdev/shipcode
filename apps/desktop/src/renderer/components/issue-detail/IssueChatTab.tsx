@@ -18,6 +18,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, Send, Square } from 'lucide-react';
 import { useCallback, useMemo, useReducer } from 'react';
+import { useAppStore } from '../../stores/app-store';
 import { toast } from '../../stores/toast-store';
 import {
   AssistantTimeline,
@@ -43,7 +44,8 @@ interface IssueChatStartResult extends IssueChatSessionMetadata {
 }
 
 interface IssueChatTabProps {
-  threadId: string;
+  threadId: string | null;
+  projectId: string;
   issueNumber: number;
   issueTitle: string;
 }
@@ -128,21 +130,27 @@ function issueChatUiReducer(state: IssueChatUiState, action: IssueChatUiAction):
   }
 }
 
-export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTabProps) {
+export function IssueChatTab({ threadId, projectId, issueNumber, issueTitle }: IssueChatTabProps) {
   const queryClient = useQueryClient();
+  const bindIssueThread = useAppStore((state) => state.bindIssueThread);
   const transcript = useAssistantTranscript(threadId);
   const { data: issueChatConversations = [] } = useQuery<AgentConversationRecord[]>({
     queryKey: ['agent-conversations', threadId, 'issue_chat'],
-    queryFn: () =>
-      window.shipcode.invoke('agent-conversations:list-by-thread', {
+    queryFn: () => {
+      if (!threadId) throw new Error('Missing thread id');
+      return window.shipcode.invoke('agent-conversations:list-by-thread', {
         threadId,
         phase: 'issue_chat',
-      }),
+      });
+    },
     enabled: !!threadId,
   });
   const { data: issueChatSession = null } = useQuery<IssueChatSessionMetadata | null>({
     queryKey: ['issue-chat-session', threadId],
-    queryFn: () => window.shipcode.invoke('issue-chat:get-session', { threadId }),
+    queryFn: () => {
+      if (!threadId) throw new Error('Missing thread id');
+      return window.shipcode.invoke('issue-chat:get-session', { threadId });
+    },
     enabled: !!threadId,
   });
   const [issueChatState, dispatchIssueChat] = useReducer(
@@ -185,19 +193,23 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
     persistedMessages.length > 0 || pendingUserMessages.length > 0 || visibleEvents.length > 0;
   const canResume = issueChatSession != null && !sessionStarted && !isRunning;
 
-  const startOrResumeSession = useCallback(async () => {
+  const startOrResumeSession = useCallback(async (): Promise<string> => {
     const result = await window.shipcode.invoke<IssueChatStartResult>('issue-chat:start', {
-      threadId,
+      ...(threadId ? { threadId } : { projectId, issueNumber }),
       provider,
       modelId: issueChatSession?.modelId ?? undefined,
       reasoningEffort: issueChatSession?.reasoningEffort ?? 'medium',
     });
+    if (result.threadId !== threadId) {
+      bindIssueThread(result.threadId);
+    }
     dispatchIssueChat({ type: 'selected-provider', provider: result.provider });
     dispatchIssueChat({ type: 'session-started', value: true });
     await queryClient.invalidateQueries({
-      queryKey: ['issue-chat-session', threadId],
+      queryKey: ['issue-chat-session', result.threadId],
     });
-  }, [issueChatSession, provider, queryClient, threadId]);
+    return result.threadId;
+  }, [bindIssueThread, issueChatSession, issueNumber, projectId, provider, queryClient, threadId]);
 
   const submitTurn = useCallback(
     async (text: string) => {
@@ -205,22 +217,29 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
       if (!trimmed || isSubmitting || isRunning) return;
       dispatchIssueChat({ type: 'submitting', value: true });
       try {
-        if (!sessionStarted) {
-          await startOrResumeSession();
-        }
+        const ensuredThreadId =
+          sessionStarted && threadId ? threadId : await startOrResumeSession();
+        if (!ensuredThreadId) return;
 
-        dispatchIssueChat({ type: 'queued-user-message', threadId, content: trimmed });
+        dispatchIssueChat({
+          type: 'queued-user-message',
+          threadId: ensuredThreadId,
+          content: trimmed,
+        });
 
-        await window.shipcode.invoke('issue-chat:turn', { threadId, text: trimmed });
+        await window.shipcode.invoke('issue-chat:turn', {
+          threadId: ensuredThreadId,
+          text: trimmed,
+        });
         await Promise.all([
           queryClient.invalidateQueries({
-            queryKey: ['agent-conversations', threadId],
+            queryKey: ['agent-conversations', ensuredThreadId],
           }),
           queryClient.invalidateQueries({
-            queryKey: ['agent-conversations', threadId, 'issue_chat'],
+            queryKey: ['agent-conversations', ensuredThreadId, 'issue_chat'],
           }),
           queryClient.invalidateQueries({
-            queryKey: ['issue-chat-session', threadId],
+            queryKey: ['issue-chat-session', ensuredThreadId],
           }),
         ]);
       } catch (error) {
@@ -237,6 +256,7 @@ export function IssueChatTab({ threadId, issueNumber, issueTitle }: IssueChatTab
   }, [draft, submitTurn]);
 
   const handleStop = useCallback(async () => {
+    if (!threadId) return;
     try {
       await window.shipcode.invoke('issue-chat:stop', { threadId });
       dispatchIssueChat({ type: 'session-started', value: false });

@@ -12,6 +12,7 @@ import {
   Inbox,
   LayoutGrid,
   LayoutList,
+  MessageSquare,
   Plus,
   Search,
   Sparkles,
@@ -30,6 +31,7 @@ const PROJECT_TAB_ITEMS: Array<{
   label: string;
   icon: ComponentType<{ size?: number; className?: string }>;
 }> = [
+  { key: 'conversations', label: 'Conversations', icon: MessageSquare },
   { key: 'issues', label: 'Board', icon: LayoutList },
   { key: 'git', label: 'Git', icon: GitBranch },
   { key: 'code', label: 'Code', icon: Code2 },
@@ -153,6 +155,10 @@ function useProjectSidebarView() {
 
   const openProjectSurface = (tab: ProjectTab) => {
     if (!activeProjectId) return;
+    if (tab === 'conversations') {
+      useAppStore.getState().openConversations();
+      return;
+    }
     if (tab === 'issues') {
       useAppStore.getState().openBoard();
       return;
@@ -264,7 +270,7 @@ function useProjectSidebarView() {
             className="flex min-h-0 flex-1 flex-col justify-start px-3 pt-6 text-[12px] leading-5 text-muted-foreground"
             data-testid="sidebar-no-project"
           >
-            Select a project to open its board and issues.
+            Select a project to open its conversations and issues.
           </div>
         )}
 

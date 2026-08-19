@@ -610,6 +610,10 @@ describe('ProjectSidebar', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /Add repository/i }));
     expect(useAppStore.getState().addProjectExplorerOpen).toBe(true);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Conversations' }));
+    expect(useAppStore.getState().viewMode).toBe('project');
+    expect(useAppStore.getState().projectTab).toBe('conversations');
+
     fireEvent.click(screen.getByRole('button', { name: 'Board' }));
     expect(useAppStore.getState().viewMode).toBe('project');
     expect(useAppStore.getState().projectTab).toBe('issues');
@@ -635,6 +639,7 @@ describe('ProjectSidebar', () => {
     expect(screen.getByRole('button', { name: /Inbox/i })).toBeInTheDocument();
     expect(screen.queryByTestId('sidebar-project-nav')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /New Issue/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Conversations' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Board' })).not.toBeInTheDocument();
   });
 

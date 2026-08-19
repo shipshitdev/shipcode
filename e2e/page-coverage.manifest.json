@@ -46,6 +46,13 @@
       "spec": "src/specs/desktop/page-surfaces.e2e.ts"
     },
     {
+      "id": "project-conversations",
+      "kind": "project-tab",
+      "title": "Conversations",
+      "covered": true,
+      "spec": "src/specs/desktop/page-surfaces.e2e.ts"
+    },
+    {
       "id": "project-issues",
       "kind": "project-tab",
       "title": "Issues",
@@ -223,7 +230,7 @@
     {
       "id": "issue-tab-chat",
       "kind": "issue-tab",
-      "title": "Chat",
+      "title": "Agent",
       "covered": true,
       "spec": "src/specs/desktop/page-surfaces.e2e.ts"
     },

@@ -133,7 +133,7 @@ test.describe('app shell behavior contracts', () => {
     const { page } = harness;
 
     await selectSeedProject(harness);
-    await expect(page.getByTestId(`issue-card-${SHELL_ISSUE.issueNumber}`)).toBeVisible({
+    await expect(page.getByTestId(`thread-row-${SHELL_ISSUE.issueNumber}`)).toBeVisible({
       timeout: 15_000,
     });
     await harness.callStore('openCommandPalette');

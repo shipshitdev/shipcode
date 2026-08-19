@@ -156,7 +156,14 @@ type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skill
  */
 export type GlobalViewMode = Exclude<ViewMode, 'project'>;
 
-export type ProjectTab = 'issues' | 'git' | 'code' | 'pull-requests' | 'terminal' | 'insights';
+export type ProjectTab =
+  | 'conversations'
+  | 'issues'
+  | 'git'
+  | 'code'
+  | 'pull-requests'
+  | 'terminal'
+  | 'insights';
 export type TerminalPaneMode = 'replay' | 'live';
 export type AssistantCli = 'claude' | 'codex';
 export interface AssistantUserMessage {
@@ -321,6 +328,8 @@ interface AppState {
   requestCommentComposer: (issueId: string) => void;
   toggleCommandPalette: () => void;
   openBoard: () => void;
+  openConversations: () => void;
+  bindIssueThread: (threadId: string) => void;
   openCreateIssueModal: () => void;
   openEditPrdModal: (issueNumber: number, body: string, labels: string[]) => void;
   closeCreateIssueModal: () => void;
@@ -399,7 +408,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   createAutomationModalOpen: false,
   editingAutomationId: null,
   addProjectExplorerOpen: false,
-  projectTab: 'issues' as ProjectTab,
+  projectTab: 'conversations' as ProjectTab,
   activePrNumber: null,
   pendingGitWorktreePath: null,
   terminalPaneThreadIds: [],
@@ -433,6 +442,25 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentReview: null,
       currentVerification: null,
     })),
+  openConversations: () =>
+    set((state) => ({
+      viewMode: state.activeProjectId ? 'project' : 'overview',
+      projectTab: 'conversations' as ProjectTab,
+      activeIssue: null,
+      activeThreadId: null,
+      activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
+      terminalMaximized: false,
+      currentPlan: null,
+      currentReview: null,
+      currentVerification: null,
+    })),
+  bindIssueThread: (threadId) =>
+    set((state) => ({
+      activeThreadId: threadId,
+      terminalThreadId: threadId,
+      activeIssue: state.activeIssue ? { ...state.activeIssue, threadId } : state.activeIssue,
+    })),
   selectProject: (id) =>
     set({
       activeProjectId: id,
@@ -446,7 +474,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentVerification: null,
       pipelinePhase: PIPELINE_PHASE.idle,
       viewMode: 'project',
-      projectTab: 'issues' as ProjectTab,
+      projectTab: 'conversations' as ProjectTab,
       pendingGitWorktreePath: null,
       githubIssues: [],
     }),
@@ -726,7 +754,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeAutomationThreadId: null,
       activeAutomationDetailId: null,
       viewMode: 'project',
-      projectTab: 'issues' as ProjectTab,
+      projectTab: 'conversations' as ProjectTab,
       activeIssue: issue,
       activeThreadId: issue.threadId ?? null,
       currentPlan: null,

@@ -52,7 +52,7 @@ export function ThreadList() {
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="thread-list">
       <div className="flex items-center justify-between px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        <span>Issues</span>
+        <span>Conversations</span>
         <span className="font-mono font-normal normal-case tracking-normal text-muted-foreground/80">
           {isLoading && issues.length === 0 ? '—' : issues.length}
         </span>

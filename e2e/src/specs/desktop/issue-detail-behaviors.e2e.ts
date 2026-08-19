@@ -22,15 +22,15 @@ async function openIssueDetail(harness: Harness): Promise<void> {
   const { page } = harness;
 
   await harness.callStore('selectProject', harness.seed.projectId);
-  await expect(page.getByTestId(`issue-card-${ISSUE_DETAIL.issueNumber}`)).toBeVisible({
+  await expect(page.getByTestId(`thread-row-${ISSUE_DETAIL.issueNumber}`)).toBeVisible({
     timeout: 15_000,
   });
-  await page.getByTestId(`issue-card-${ISSUE_DETAIL.issueNumber}`).click();
+  await page.getByTestId(`thread-row-${ISSUE_DETAIL.issueNumber}`).click();
 
   await expect(page.getByRole('heading', { name: ISSUE_DETAIL.title }).first()).toBeVisible({
     timeout: 15_000,
   });
-  await expect(page.getByRole('tab', { name: /^Chat$/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('tab', { name: /^Agent$/ })).toBeVisible({ timeout: 15_000 });
 
   expect((await harness.getState()).activeThreadId).toBe(
     harness.seed.issueThreads[ISSUE_DETAIL.issueNumber],
@@ -144,9 +144,9 @@ test.describe('issue detail behavior contracts', () => {
     const { page } = harness;
 
     await openIssueDetail(harness);
-    await openIssueTab(page, /^Chat$/);
+    await openIssueTab(page, /^Agent$/);
 
-    await expect(page.getByText('Issue Chat', { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('conversation-surface')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Issue chat seeded answer for behavior coverage.')).toBeVisible();
 
     const sendButton = page.getByTitle('Send');
@@ -154,7 +154,9 @@ test.describe('issue detail behavior contracts', () => {
 
     await page.getByLabel('Issue chat provider').click();
     await page.getByRole('option', { name: 'Codex' }).click();
-    await page.getByPlaceholder('Ask the issue agent...').fill('Summarize regression risk.');
+    await page
+      .getByPlaceholder('Message Claude, Codex, or Grok…')
+      .fill('Summarize regression risk.');
 
     await expect(sendButton).toBeEnabled();
   });

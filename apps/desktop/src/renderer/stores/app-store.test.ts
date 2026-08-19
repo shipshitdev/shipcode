@@ -117,6 +117,7 @@ describe('app-store', () => {
       expect(state.activeIssue).toBeNull();
       expect(state.activeThreadId).toBeNull();
       expect(state.pipelinePhase).toBe('idle');
+      expect(state.projectTab).toBe('conversations');
     });
 
     it('clears activeIssue when switching to null (no project)', () => {
@@ -136,6 +137,42 @@ describe('app-store', () => {
       useAppStore.getState().selectProject('project-2');
 
       expect(useAppStore.getState().githubIssues).toHaveLength(0);
+    });
+  });
+
+  describe('openConversations', () => {
+    it('clears the active issue and shows the conversation home', () => {
+      useAppStore.setState({
+        activeProjectId: 'project-1',
+        viewMode: 'inbox',
+        projectTab: 'git',
+        activeIssue: makeIssue(),
+        activeThreadId: 'thread-1',
+      });
+
+      useAppStore.getState().openConversations();
+
+      const state = useAppStore.getState();
+      expect(state.viewMode).toBe('project');
+      expect(state.projectTab).toBe('conversations');
+      expect(state.activeIssue).toBeNull();
+      expect(state.activeThreadId).toBeNull();
+    });
+  });
+
+  describe('bindIssueThread', () => {
+    it('attaches a thread to the active issue', () => {
+      useAppStore.setState({
+        activeIssue: makeIssue({ threadId: null }),
+        activeThreadId: null,
+        terminalThreadId: null,
+      });
+
+      useAppStore.getState().bindIssueThread('thread-created');
+
+      expect(useAppStore.getState().activeThreadId).toBe('thread-created');
+      expect(useAppStore.getState().terminalThreadId).toBe('thread-created');
+      expect(useAppStore.getState().activeIssue?.threadId).toBe('thread-created');
     });
   });
 
@@ -788,7 +825,7 @@ describe('app-store', () => {
       expect(useAppStore.getState()).toMatchObject({
         activeProjectId: 'project-2',
         viewMode: 'project',
-        projectTab: 'issues',
+        projectTab: 'conversations',
         activeIssue: issue,
         activeThreadId: 'thread-2',
         terminalThreadId: 'thread-2',

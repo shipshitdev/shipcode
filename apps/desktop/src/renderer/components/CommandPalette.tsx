@@ -437,6 +437,12 @@ function GotoCommandGroup({
 }) {
   const items = [
     {
+      title: 'Conversations',
+      description: 'Talk to Claude, Codex, or Grok on an issue',
+      icon: MessageSquare,
+      action: () => useAppStore.getState().openConversations(),
+    },
+    {
       title: 'Board',
       description: 'GitHub issues board for this project',
       icon: Columns3,

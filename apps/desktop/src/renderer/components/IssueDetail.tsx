@@ -1131,9 +1131,9 @@ function useIssueDetailView() {
           variant="ghost"
           size="icon"
           className="size-7 text-muted-foreground"
-          onClick={() => useAppStore.getState().openBoard()}
-          title="Back to board"
-          aria-label="Back to board"
+          onClick={() => selectIssue(null)}
+          title="Back"
+          aria-label="Back"
         >
           <ArrowLeft size={18} strokeWidth={2.5} />
         </Button>

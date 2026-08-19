@@ -21,7 +21,12 @@ function renderWithClient() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <IssueChatTab threadId="thread-1" issueNumber={196} issueTitle="Add issue Chat tab" />
+      <IssueChatTab
+        threadId="thread-1"
+        projectId="project-1"
+        issueNumber={196}
+        issueTitle="Add issue Chat tab"
+      />
     </QueryClientProvider>,
   );
 }
@@ -119,6 +124,7 @@ describe('IssueChatTab', () => {
 
   afterEach(() => {
     cleanup();
+    useAppStore.setState({ activeIssue: null, activeThreadId: null, terminalThreadId: null });
   });
 
   it('starts the issue chat session on the first turn and reuses it for follow-ups', async () => {
@@ -216,5 +222,54 @@ describe('IssueChatTab', () => {
       });
     });
     expect(invokeMock).not.toHaveBeenCalledWith('issue-chat:turn', expect.anything());
+  });
+
+  it('creates an issue thread on the first send when none is linked', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, refetchOnWindowFocus: false },
+      },
+    });
+    useAppStore.setState({
+      activeIssue: {
+        id: 'issue-196',
+        projectId: 'project-1',
+        issueNumber: 196,
+        title: 'Add issue Chat tab',
+        threadId: null,
+      } as never,
+      activeThreadId: null,
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <IssueChatTab
+          threadId={null}
+          projectId="project-1"
+          issueNumber={196}
+          issueTitle="Add issue Chat tab"
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByTestId('conversation-surface')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('Message Claude, Codex, or Grok…'), {
+      target: { value: 'Draft a plan' },
+    });
+    fireEvent.click(screen.getByTitle('Send'));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('issue-chat:start', {
+        projectId: 'project-1',
+        issueNumber: 196,
+        provider: 'claude',
+        reasoningEffort: 'medium',
+      });
+      expect(invokeMock).toHaveBeenCalledWith('issue-chat:turn', {
+        threadId: 'thread-1',
+        text: 'Draft a plan',
+      });
+    });
+    expect(useAppStore.getState().activeThreadId).toBe('thread-1');
   });
 });

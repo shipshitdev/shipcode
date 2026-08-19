@@ -315,6 +315,23 @@ describe('CommandPalette', () => {
         title: 'Board issue',
       } as never,
     });
+    fireEvent.click(await screen.findByText('Conversations'));
+    expect(useAppStore.getState().viewMode).toBe('project');
+    expect(useAppStore.getState().projectTab).toBe('conversations');
+    expect(useAppStore.getState().activeIssue).toBeNull();
+
+    useAppStore.setState({
+      commandPaletteOpen: true,
+      activeProjectId: 'project-1',
+      viewMode: 'inbox',
+      projectTab: 'git',
+      activeIssue: {
+        id: 'issue-1',
+        projectId: 'project-1',
+        issueNumber: 1,
+        title: 'Board issue',
+      } as never,
+    });
     fireEvent.click(await screen.findByText('Board'));
     expect(useAppStore.getState().viewMode).toBe('project');
     expect(useAppStore.getState().projectTab).toBe('issues');

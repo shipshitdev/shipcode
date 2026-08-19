@@ -13,7 +13,8 @@ import type {
   TaskGraphWithNodes,
   Thread,
 } from '@shipcode/shared';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
+import { cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
+import { Fragment } from 'react';
 import { CommentsTab } from './CommentsTab';
 import { ConsoleTab } from './ConsoleTab';
 import { ConversationsTab } from './ConversationsTab';
@@ -120,7 +121,7 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
     onRefreshFromGithub,
   } = props;
   const orderedTabs: Array<{ value: IssueDetailTab; label: string }> = [
-    { value: 'chat', label: 'Chat' },
+    { value: 'chat', label: 'Agent' },
     { value: 'prd', label: 'Issue' },
     { value: 'console', label: 'Console' },
     ...(activeIssue.isQuickMode
@@ -160,14 +161,21 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
     >
       <div className="shrink-0 overflow-x-auto border-b border-border bg-primary/80 px-3">
         <TabsList className="h-9 w-full justify-start gap-0.5 bg-transparent p-0">
-          {orderedTabs.map((tab) => (
-            <TabsTrigger
-              key={tab.value}
-              value={tab.value}
-              className="rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-[12px] shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
-            >
-              {tab.label}
-            </TabsTrigger>
+          {orderedTabs.map((tab, index) => (
+            <Fragment key={tab.value}>
+              {index === 1 ? (
+                <span className="mx-1 h-4 w-px shrink-0 self-center bg-border" aria-hidden />
+              ) : null}
+              <TabsTrigger
+                value={tab.value}
+                className={cn(
+                  'rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-[12px] shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none',
+                  tab.value === 'chat' && 'font-medium',
+                )}
+              >
+                {tab.label}
+              </TabsTrigger>
+            </Fragment>
           ))}
         </TabsList>
       </div>
@@ -252,29 +260,12 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
       )}
 
       <TabsContent value="chat" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden">
-        {activeThreadId ? (
-          <IssueChatTab
-            threadId={activeThreadId}
-            issueNumber={activeIssue.issueNumber}
-            issueTitle={activeIssue.title}
-          />
-        ) : (
-          <div
-            className="flex min-h-0 flex-1 flex-col items-start justify-center gap-3 px-8"
-            data-testid="conversation-surface"
-          >
-            <p className="font-mono text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
-              Agent
-            </p>
-            <p className="max-w-md text-[15px] font-medium tracking-tight text-primary">
-              Start the pipeline or open Claude, Codex, or Grok on this issue.
-            </p>
-            <p className="max-w-md text-[12px] leading-5 text-secondary">
-              One issue is one thread. The official CLI is the conversation — ShipCode is the window
-              around it.
-            </p>
-          </div>
-        )}
+        <IssueChatTab
+          threadId={activeThreadId}
+          projectId={projectId}
+          issueNumber={activeIssue.issueNumber}
+          issueTitle={activeIssue.title}
+        />
       </TabsContent>
     </Tabs>
   );

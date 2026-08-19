@@ -24,7 +24,14 @@ interface PageCoverageManifest {
   surfaces: CoverageSurface[];
 }
 
-type ProjectTab = 'issues' | 'git' | 'code' | 'pull-requests' | 'terminal' | 'insights';
+type ProjectTab =
+  | 'conversations'
+  | 'issues'
+  | 'git'
+  | 'code'
+  | 'pull-requests'
+  | 'terminal'
+  | 'insights';
 type SettingsSection =
   | 'about'
   | 'general'
@@ -107,6 +114,13 @@ const DESKTOP_VIEW_SURFACES = [
 ] as const;
 
 const PROJECT_TAB_SURFACES = [
+  {
+    id: 'project-conversations',
+    tab: 'conversations',
+    assert: async (page: Page) => {
+      await expect(page.getByTestId('conversation-home')).toBeVisible({ timeout: 15_000 });
+    },
+  },
   {
     id: 'project-issues',
     tab: 'issues',
@@ -194,7 +208,7 @@ const ISSUE_TAB_SURFACES = [
   { id: 'issue-tab-runs', name: /^Runs$/ },
   { id: 'issue-tab-activity', name: /^Activity/ },
   { id: 'issue-tab-conversations', name: /^Conversations$/ },
-  { id: 'issue-tab-chat', name: /^Chat$/ },
+  { id: 'issue-tab-chat', name: /^Agent$/ },
 ] as const;
 
 test.use({
@@ -217,10 +231,10 @@ async function openIssueWithThread(harness: Harness): Promise<void> {
   const { page } = harness;
 
   await harness.callStore('selectProject', harness.seed.projectId);
-  await expect(page.getByTestId(`issue-card-${ISSUE_SURFACE.issueNumber}`)).toBeVisible({
+  await expect(page.getByTestId(`thread-row-${ISSUE_SURFACE.issueNumber}`)).toBeVisible({
     timeout: 15_000,
   });
-  await page.getByTestId(`issue-card-${ISSUE_SURFACE.issueNumber}`).click();
+  await page.getByTestId(`thread-row-${ISSUE_SURFACE.issueNumber}`).click();
   await expect(page.getByRole('heading', { name: ISSUE_SURFACE.title })).toBeVisible({
     timeout: 10_000,
   });
@@ -244,7 +258,7 @@ async function openIssueWithThread(harness: Harness): Promise<void> {
     });
   }, ISSUE_THREAD_ID);
 
-  await expect(page.getByRole('tab', { name: /^Chat$/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('tab', { name: /^Agent$/ })).toBeVisible({ timeout: 10_000 });
 }
 
 test.describe('desktop page coverage manifest', () => {

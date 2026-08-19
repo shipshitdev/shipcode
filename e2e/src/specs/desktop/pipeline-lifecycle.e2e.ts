@@ -34,21 +34,14 @@ test.describe('Pipeline lifecycle — phase transitions', () => {
   test('phase-provider selects are visible in the Pipeline sidebar', async ({ harness }) => {
     const { page } = harness;
 
-    // 1. Select the project — sets viewMode:'project', projectTab:'issues'.
+    // 1. Select the project — conversation home + issue list.
     await harness.callStore('selectProject', harness.seed.projectId);
 
-    // 2. Wait for the kanban board to render the seeded issue card.
-    await expect(page.getByTestId(`issue-card-${ISSUE_NUMBER}`)).toBeVisible({
+    await expect(page.getByTestId(`thread-row-${ISSUE_NUMBER}`)).toBeVisible({
       timeout: 15_000,
     });
-
-    // 3. Click the issue card → IssueDetail opens (selectIssue in the store).
-    await page.getByTestId(`issue-card-${ISSUE_NUMBER}`).click();
-
-    // 4. IssueDetail mounts when activeIssue !== null. Wait for the heading.
-    // Confirm IssueDetail mounted via the unambiguous "Back to board" control.
-    // (A /add dark mode/i heading match would clash with the body-markdown h1.)
-    await expect(page.getByRole('button', { name: 'Back to board' })).toBeVisible({
+    await page.getByTestId(`thread-row-${ISSUE_NUMBER}`).click();
+    await expect(page.getByTestId('issue-conversation')).toBeVisible({
       timeout: 10_000,
     });
 
@@ -72,13 +65,11 @@ test.describe('Pipeline lifecycle — phase transitions', () => {
 
     // ── Setup: open IssueDetail via real card click ───────────────────────────
     await harness.callStore('selectProject', harness.seed.projectId);
-    await expect(page.getByTestId(`issue-card-${ISSUE_NUMBER}`)).toBeVisible({
+    await expect(page.getByTestId(`thread-row-${ISSUE_NUMBER}`)).toBeVisible({
       timeout: 15_000,
     });
-    await page.getByTestId(`issue-card-${ISSUE_NUMBER}`).click();
-    // Confirm IssueDetail mounted via the unambiguous "Back to board" control.
-    // (A /add dark mode/i heading match would clash with the body-markdown h1.)
-    await expect(page.getByRole('button', { name: 'Back to board' })).toBeVisible({
+    await page.getByTestId(`thread-row-${ISSUE_NUMBER}`).click();
+    await expect(page.getByTestId('issue-conversation')).toBeVisible({
       timeout: 10_000,
     });
 

@@ -993,7 +993,7 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('data-state', 'active');
+      expect(screen.getByRole('tab', { name: 'Agent' })).toHaveAttribute('data-state', 'active');
     });
     expect(invokeMock).not.toHaveBeenCalledWith('plan:list-for-issue', {
       projectId: 'project-1',
@@ -1264,6 +1264,7 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
+    expect(screen.getByRole('tab', { name: 'Agent' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Issue' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Console' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Comments' })).toBeInTheDocument();
@@ -1271,16 +1272,16 @@ describe('IssueDetail', () => {
     expect(screen.getByRole('tab', { name: 'Activity' })).toBeInTheDocument();
   });
 
-  it('Chat tab is active by default when no plan history exists', async () => {
+  it('Agent tab is active by default when no plan history exists', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
-    const chatTab = screen.getByRole('tab', { name: 'Chat' });
-    expect(chatTab).toHaveAttribute('data-state', 'active');
+    const agentTab = screen.getByRole('tab', { name: 'Agent' });
+    expect(agentTab).toHaveAttribute('data-state', 'active');
   });
 
-  it('keeps a stable tab order and defaults to Chat even when history exists', async () => {
+  it('keeps a stable tab order and defaults to Agent even when history exists', async () => {
     const thread = makeThread({ status: 'reviewing' });
     const plan = makePlan();
 
@@ -1300,12 +1301,12 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('data-state', 'active');
+      expect(screen.getByRole('tab', { name: 'Agent' })).toHaveAttribute('data-state', 'active');
     });
 
     const tabLabels = screen.getAllByRole('tab').map((tab) => tab.textContent?.trim());
     expect(tabLabels).toEqual([
-      'Chat',
+      'Agent',
       'Issue',
       'Console',
       'Comments',
@@ -1363,12 +1364,12 @@ describe('IssueDetail', () => {
     expect(startButton.compareDocumentPosition(prdTab)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it('back button closes issue detail and returns to board', async () => {
+  it('back button closes issue detail', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Back to board' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(useAppStore.getState().activeIssue).toBeNull();
   });
 

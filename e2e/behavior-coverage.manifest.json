@@ -75,6 +75,13 @@
       "spec": "src/specs/desktop/app-shell-behaviors.e2e.ts"
     },
     {
+      "id": "project-conversations-home",
+      "surfaceId": "project-conversations",
+      "title": "Selecting a project opens the conversation home with a disabled composer",
+      "covered": true,
+      "spec": "src/specs/desktop/project-board.e2e.ts"
+    },
+    {
       "id": "project-issues-board-cards",
       "surfaceId": "project-issues",
       "title": "Issues board renders seeded cards with stable card test ids",

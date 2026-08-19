@@ -13,7 +13,9 @@ vi.mock('./DiffTab', () => ({ DiffTab: () => <div>diff tab</div> }));
 vi.mock('./FindingsTab', () => ({ FindingsTab: () => <div>findings tab</div> }));
 vi.mock('./IssueHistoryTab', () => ({ IssueHistoryTab: () => <div>activity tab</div> }));
 vi.mock('./IssueChatTab', () => ({
-  IssueChatTab: ({ threadId }: { threadId: string }) => <div>chat tab {threadId}</div>,
+  IssueChatTab: ({ threadId }: { threadId: string | null }) => (
+    <div data-testid="conversation-surface">chat tab {threadId ?? 'none'}</div>
+  ),
 }));
 vi.mock('./PlanHistoryTab', () => ({ PlanHistoryTab: () => <div>history tab</div> }));
 vi.mock('./PrdTab', () => ({ PrdTab: () => <div>issue tab</div> }));
@@ -108,7 +110,7 @@ function renderTabs(
   return render(
     <IssueDetailTabs
       activeIssue={makeIssue({ threadId: activeThreadId })}
-      activeTab={activeThreadId ? 'chat' : 'prd'}
+      activeTab="chat"
       activeThreadId={activeThreadId}
       approvedAwaitingExecution={false}
       checkpoints={[]}
@@ -168,17 +170,18 @@ function renderTabs(
 }
 
 describe('IssueDetailTabs', () => {
-  it('keeps the Chat tab as the conversation home even without a thread', () => {
+  it('keeps the Agent tab as the conversation home even without a thread', () => {
     const { unmount } = renderTabs('thread-1');
 
-    expect(screen.getByRole('tab', { name: 'Chat' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Agent' })).toBeInTheDocument();
     expect(screen.getByText('chat tab thread-1')).toBeInTheDocument();
 
     unmount();
     renderTabs(null);
 
-    expect(screen.getByRole('tab', { name: 'Chat' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Agent' })).toBeInTheDocument();
     expect(screen.getByTestId('conversation-surface')).toBeInTheDocument();
+    expect(screen.getByText('chat tab none')).toBeInTheDocument();
   });
 
   it('shows the open review finding count in the Findings tab label', () => {

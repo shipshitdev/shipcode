@@ -8,6 +8,7 @@ const {
   mockStopIssueChatSession,
   mockStartIssueChatCommentSync,
   mockStopIssueChatCommentSync,
+  mockEnsureIssueThread,
 } = vi.hoisted(() => ({
   mockGetIssueChatSessionMetadata: vi.fn(),
   mockStartIssueChatSession: vi.fn(),
@@ -15,6 +16,11 @@ const {
   mockStopIssueChatSession: vi.fn(),
   mockStartIssueChatCommentSync: vi.fn(),
   mockStopIssueChatCommentSync: vi.fn(),
+  mockEnsureIssueThread: vi.fn(),
+}));
+
+vi.mock('../ensure-issue-thread', () => ({
+  ensureIssueThread: mockEnsureIssueThread,
 }));
 
 vi.mock('../issue-chat-comment-sync', () => ({
@@ -40,7 +46,11 @@ describe('registerIssueChatHandlers', () => {
   } as unknown as IpcMain;
   const deps = {
     ipcMain,
-    queries: { threads: {} },
+    queries: {
+      threads: {},
+      projects: { getById: vi.fn() },
+      githubIssues: { getByNumber: vi.fn() },
+    },
     processManager: { kill: vi.fn() },
     mainWindow: { webContents: { send: vi.fn() } },
   };
@@ -79,7 +89,12 @@ describe('registerIssueChatHandlers', () => {
       provider: 'claude',
     });
     expect(mockStartIssueChatSession).toHaveBeenCalledWith({
-      args,
+      args: {
+        threadId: 'thread-1',
+        provider: 'claude',
+        modelId: undefined,
+        reasoningEffort: undefined,
+      },
       queries: deps.queries,
     });
     expect(mockStartIssueChatCommentSync).toHaveBeenCalledWith({
@@ -87,6 +102,35 @@ describe('registerIssueChatHandlers', () => {
       queries: deps.queries,
       processManager: deps.processManager,
       mainWindow: deps.mainWindow,
+    });
+  });
+
+  it('creates an issue thread when start is called without threadId', async () => {
+    const project = { id: 'project-1' };
+    const issue = { id: 'issue-12', issueNumber: 12 };
+    (deps.queries.projects.getById as ReturnType<typeof vi.fn>).mockReturnValue(project);
+    (deps.queries.githubIssues.getByNumber as ReturnType<typeof vi.fn>).mockReturnValue(issue);
+    mockEnsureIssueThread.mockResolvedValue({ id: 'thread-new' });
+    mockStartIssueChatSession.mockResolvedValue({ threadId: 'thread-new', provider: 'claude' });
+
+    const args = { projectId: 'project-1', issueNumber: 12, provider: 'claude' as const };
+    await expect(getHandler('issue-chat:start')(undefined, args)).resolves.toEqual({
+      threadId: 'thread-new',
+      provider: 'claude',
+    });
+    expect(mockEnsureIssueThread).toHaveBeenCalledWith({
+      queries: deps.queries,
+      project,
+      issue,
+    });
+    expect(mockStartIssueChatSession).toHaveBeenCalledWith({
+      args: {
+        threadId: 'thread-new',
+        provider: 'claude',
+        modelId: undefined,
+        reasoningEffort: undefined,
+      },
+      queries: deps.queries,
     });
   });
 
