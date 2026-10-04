@@ -8,7 +8,6 @@ tools:
   - Write
   - Bash
   - LSP
-  - mcp__code-review-graph__*
   - mcp__plugin_context7_context7__*
 ---
 

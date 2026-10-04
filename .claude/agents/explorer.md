@@ -10,7 +10,6 @@ tools:
   - Bash(git blame:*)
   - Bash(bun run test --list:*)
   - LSP
-  - mcp__code-review-graph__*
 ---
 
 # Explorer
@@ -32,7 +31,7 @@ You explore the ShipCode monorepo to answer questions, find patterns, locate cod
 ## How to work
 
 - Use Grep/Glob first, Read for targeted inspection. Minimize token usage.
-- Use code-review-graph MCP tools for structural queries (callers, callees, communities, flows).
+- Use LSP (references, definitions) for structural queries like callers and callees.
 - When asked "find all X", report file paths with line numbers.
 - When asked "how does X work", trace the call chain and summarize.
 - Report findings concisely. Include file paths and line numbers for every claim.

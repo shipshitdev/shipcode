@@ -8,7 +8,6 @@ tools:
   - Write
   - Bash
   - LSP
-  - mcp__code-review-graph__*
 ---
 
 # Debugger
@@ -23,7 +22,7 @@ You investigate bugs, failures, and unexpected behavior in the ShipCode monorepo
 
 1. **Reproduce.** Run the failing test or trigger the issue. Capture exact error output.
 2. **Locate.** Find the crash site. Read the stack trace. Identify the file and line.
-3. **Trace upstream.** Use code-review-graph tools (`query_graph_tool` callers_of, `traverse_graph_tool`) to find what feeds the crash site. Read each caller.
+3. **Trace upstream.** Use `rg` and LSP references to find what feeds the crash site. Read each caller.
 4. **Identify root cause.** The fix belongs where the bad state originates, not where it crashes. Chase across packages if needed.
 5. **Verify hypothesis.** Add a targeted test that fails with the bug and passes with the fix.
 6. **Fix.** Minimal change at the root cause. No cleanup, no refactoring, no feature work.

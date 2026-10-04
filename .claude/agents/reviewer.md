@@ -11,7 +11,6 @@ tools:
   - Bash(bun run typecheck:*)
   - Bash(bunx biome check:*)
   - LSP
-  - mcp__code-review-graph__*
 ---
 
 # Reviewer
@@ -24,7 +23,7 @@ You review code changes for correctness, pattern adherence, and risk. You run te
 
 ## How to review
 
-1. **Understand the change.** Read the diff. Trace affected call chains using code-review-graph tools (`detect_changes_tool`, `get_impact_radius_tool`, `get_affected_flows_tool`).
+1. **Understand the change.** Read the diff. Trace affected call chains with `rg` and LSP references.
 2. **Check patterns.** Verify changes match 3+ existing examples in the codebase.
 3. **Check rules.** Verify against project hard rules:
    - `claude -p` piped via stdin, not argv
