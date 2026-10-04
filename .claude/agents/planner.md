@@ -9,7 +9,6 @@ tools:
   - Bash(git show:*)
   - Bash(bun run test --list:*)
   - LSP
-  - mcp__code-review-graph__*
 ---
 
 # Planner
@@ -38,7 +37,7 @@ You analyze the ShipCode codebase and produce implementation plans. You identify
 ## How to plan
 
 1. **Understand scope.** Read the task. Identify which packages and files are involved.
-2. **Trace dependencies.** Use code-review-graph tools (`traverse_graph_tool`, `get_impact_radius_tool`, `query_graph_tool`) to map the blast radius.
+2. **Trace dependencies.** Use `rg` and LSP references to map the blast radius.
 3. **Find patterns.** Identify 3+ existing examples of similar work. The plan should follow those patterns.
 4. **Identify risks.** Flag hard rules that apply (stdin-not-argv, path-as-truth worktrees, IPC error clamping, verification retry routing).
 5. **Sequence work.** Order changes so each step compiles and tests pass. Types/interfaces first, then implementation, then tests.
